@@ -58,7 +58,9 @@ static uint8_t patch_sd_header_is_valid(const patch_sd_slot_header_t *hdr)
     return (uint8_t)((hdr->magic == PATCH_SD_FILE_MAGIC)
                      && (hdr->version == PATCH_SD_FILE_VERSION)
                      && (hdr->header_size == sizeof(patch_sd_slot_header_t))
-                     && (hdr->payload_size == sizeof(PatchSaveV1)));
+                     && (hdr->payload_size == sizeof(PatchSaveV1))
+                     && (hdr->width >= 1U)
+                     && (hdr->width <= PATCH_POLY_TRACK_MAX));
 }
 
 static void patch_sd_meta_store(uint16_t slot, const patch_sd_slot_header_t *hdr)
@@ -76,6 +78,10 @@ static void patch_sd_meta_store(uint16_t slot, const patch_sd_slot_header_t *hdr
     g_patch_slot_meta[slot].family = hdr->family;
     g_patch_slot_meta[slot].type = hdr->type;
     g_patch_slot_meta[slot].source_track = hdr->source_track;
+    g_patch_slot_meta[slot].width = hdr->width;
+    g_patch_slot_meta[slot].summary_family = hdr->summary_family;
+    g_patch_slot_meta[slot].summary_type = hdr->summary_type;
+    g_patch_slot_meta[slot].summary_width = hdr->summary_width;
 }
 
 static void patch_sd_meta_clear(uint16_t slot)
@@ -349,6 +355,10 @@ uint8_t patch_sd_bank_store_slot(uint16_t slot, const PatchSaveV1 *patch)
     hdr.family = patch->meta.family;
     hdr.type = patch->meta.type;
     hdr.source_track = patch->meta.source_track;
+    hdr.width = patch->meta.width;
+    hdr.summary_family = patch->meta.summary_family;
+    hdr.summary_type = patch->meta.summary_type;
+    hdr.summary_width = patch->meta.summary_width;
     memcpy(hdr.name, patch->meta.name, sizeof(hdr.name));
     hdr.checksum = patch_sd_checksum((const uint8_t *)patch, sizeof(*patch));
 

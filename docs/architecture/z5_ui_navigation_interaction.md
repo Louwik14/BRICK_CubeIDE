@@ -168,6 +168,7 @@ Entrees evenementielles:
 
 Contrats implicites d'ordre:
 - L'ordre `ui_core_service_track_selection_inputs()` puis `hall_keyboard_bridge_process()` (dans `brick6_app_process`) garantit que suppression hall est fixee avant emission notes clavier.
+- Un `SHIFT + HALL` reconnu comme changement de mode/workflow est consommé au niveau central: le service direct marque le hall supprimé, puis le pipeline queue bloque le `UI_EVENT_HALL_PRESS` correspondant avant les chemins routing, seq, track-select, navigation et page locale.
 - Dans `ui_core_tick`, la table de stages + blocage aval (equivalent `continue`) impose la priorite de consommation.
 - `ui_navigation_handle_event` est volontairement execute avant `ui_page_get()->handle_event` pour que le meme event soit traite par la page active apres navigation.
 
@@ -838,6 +839,18 @@ Points factuels:
 - Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
 - `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
 
+## 30b. Contrat UI Patch Poly v2
+
+- Patch reste une categorie de preset sonore assignable; `polyX` designe la largeur en tracks liees, pas la polyphonie audio interne.
+- La seule source autorisee pour creer un Patch Poly est le modele officiel `voice_group_role` de Z2/Z5: `SOLO`, `MASTER`, `SLAVE`, avec groupe contigu master puis slaves a droite.
+- `PATCH_POLY_TRACK_MAX=4`: Save Patch sur `SOLO` capture `P1`; Save Patch sur `MASTER` capture master + slaves contigus jusqu'a `P4`; Save Patch sur `SLAVE` remonte au master effectif et capture le groupe complet.
+- Un groupe incoherent ou plus large que 4 est refuse proprement; aucune selection libre de tracks, aucun target mask Patch Assign et aucun Set partiel ne peuvent creer un Patch Poly.
+- Le browser Patch Assign affiche la largeur `P2/P3/P4` dans la liste; les filtres Family/Type restent inchanges et aucun filtre Width n'est ajoute en v2.
+- Apply `P1` conserve le contrat multi-target existant: le meme patch mono est applique sequentiellement a toutes les targets cochees.
+- Apply `P2/P3/P4` exige une seule target cochee, target role `MASTER`, et un groupe cible deja declare avec exactement la meme largeur; sinon refus court (`NEED 1 TRK`, `NO MASTER`, `NO SLAVES`, `NEED X TRK`).
+- Aucun apply partiel, creation automatique de slaves, preview, rollback ni reload asset Sampler complet n'est ajoute.
+- Rename/delete restent des operations de slot Patch et ne changent pas la largeur.
+
 ## 31. Contrat UI REC CFG START/TEMPO/METRO
 
 - `REC CFG` page 1 expose `START`, `TEMPO`, `SYNC`, `METRO`.
@@ -853,7 +866,17 @@ Points factuels:
 - Premier tap `SHIFT + HALL 1`: arme une action Kit pending; aucun accès SD n'est lancé pendant la fenêtre double tap.
 - Deuxième tap dans `UI_HALL_MODE_DOUBLE_TAP_MS`: annule le pending single et lance un `Save Kit` direct. Le feedback court affiche `KIT SAVE`, puis `KIT SAVED`, `KIT FULL`, `SD BUSY` ou `ERROR`.
 - Expiration sans deuxième tap: ouvre `Kit Browser`, qui liste uniquement les slots Kit valides existants. Les slots vides ne sont pas visibles et la navigation encodeur est bornée sans wrap.
-- `PAGE1` retourne à la page précédente. `PAGE2` est réservé et affiche `APPLY TODO`; aucun apply Kit, apply partiel, target mask, sélection de tracks, preview ou rollback n'existe dans cette étape.
+- `PAGE1` retourne à la page précédente. `PAGE2` applique le Kit valide selectionne et affiche `KIT APPLIED`.
+- `PAGE2` refuse sans mutation sur `NO KIT` ou slot invalide; les autres refus visibles sont `BAD KIT`, `ASSET MISS`, `SD BUSY` ou `ERROR`.
+- L'apply Kit reste complet machine: aucun apply partiel, target mask, selection de tracks, preview ou rollback.
 - `PAGE3` ouvre le `Name Edit` générique pour renommer le slot Kit sélectionné; validation réécrit le payload/header avec checksum recalculé et affiche `KIT RENAMED`, cancel revient sans mutation.
 - `PAGE4` demande confirmation (`DELETE?`) puis supprime le fichier Kit; le browser reste ouvert, sélectionne le prochain Kit valide si possible, sinon affiche `NO KIT`.
 - Le browser affiche le nom Kit et le nombre de tracks depuis les metadata/header, puis une miniature read-only 2x8 issue du summary header. La miniature ne sélectionne aucune track et ne permet aucun apply partiel.
+## 33. Contrat UI Kit Link / ecran principal
+
+- Le header OLED principal affiche maintenant le tempo et la charge CPU sur la meme ligne haute. Le BPM conserve sa valeur et son autorite Z4, mais utilise la police compacte historique du Pattern; la CPU est seulement deplacee visuellement.
+- La ligne principale droite du header affiche le Kit actif sous la forme `Kit: nom`; `Kit: ---` signifie qu'aucun Kit actif propre n'est expose. Un `*` suffixe le nom quand le Kit actif est dirty.
+- Le Pattern actif reste visible sous le Kit en identifiant compact `A-01`, sans redevenir l'element principal de cette zone.
+- Le Kit Browser garde la miniature 2x8 et marque le slot Kit actif par un prefixe `*` dans la liste. La navigation de selection ne change plus le slot Kit actif; seul Apply/Save modifie l'etat actif.
+- `PAGE2 APPLY` applique le Kit complet puis lie le slot selectionne au pattern actif uniquement si l'apply reussit. En echec (`BAD KIT`, `ASSET MISS`, `SD BUSY`, `ERROR`), le lien pattern -> Kit n'est pas change.
+- Delete du Kit actif depuis le browser invalide le Kit actif et clear au minimum le lien du pattern actif; les autres patterns seront refuses proprement au prochain chargement si leur lien pointe vers le slot supprime.

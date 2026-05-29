@@ -33,6 +33,7 @@
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
+#include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
 #include "ui_bootstrap.h"
 #include "ui_event.h"
@@ -504,6 +505,18 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
     return (ev->id < HALL_KEY_COUNT) ? 1U : 0U;
 }
 
+static uint8_t ui_core_is_suppressed_hall_press_event_consumed(const ui_event_t *ev)
+{
+    if ((ev == 0)
+        || (ev->type != UI_EVENT_HALL_PRESS)
+        || (ev->id >= HALL_KEY_COUNT))
+    {
+        return 0U;
+    }
+
+    return (g_ui_track_state.hall_note_suppressed[ev->id] != 0U) ? 1U : 0U;
+}
+
 static uint8_t ui_core_handle_routing_event(const ui_event_t *ev)
 {
     return ui_core_runtime_bridge_handle_routing_event(ev,
@@ -687,6 +700,7 @@ void ui_core_tick(void)
 
     static const ui_core_tick_stage_t k_event_stages[] = {
         { ui_core_handle_mute_event, 1U, 1U },
+        { ui_core_is_suppressed_hall_press_event_consumed, 1U, 1U },
         { ui_core_is_track_hall_event_consumed, 1U, 1U },
         { ui_core_handle_routing_event, 1U, 1U },
         { ui_core_handle_transport_event, 1U, 1U },
@@ -857,6 +871,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
             {
                 return false;
             }
+            kit_v1_mark_dirty();
         }
         if (track == g_ui_track_state.active_track)
         {
@@ -886,6 +901,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
+    kit_v1_mark_dirty();
     return true;
 }
 
@@ -933,6 +949,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
+    kit_v1_mark_dirty();
     return true;
 }
 

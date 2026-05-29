@@ -708,3 +708,14 @@ Dette explicite post-passe 4:
 - `PARAM_CFG_TEMPO` garde l'autorite tempo Z4 (`seq_runtime_set_tempo_bpm_milli`); l'edition REC CFG force `1.00 BPM` sans SHIFT et `0.01 BPM` avec SHIFT, sans nouvelle autorite tempo.
 - `PARAM_CFG_METRO` est un parametre global REC CFG `0..127`: `0=OFF`, `1..127=ON+volume`.
 - `apply_cfg_metro()` clamp explicitement la valeur, appelle `metronome_runtime_set_level_u7()` puis miroir `param_store`; le gain audio reel est calcule cote Z1 avec une courbe carree bornee.
+
+## 41. Contrat restore Kit V1
+
+- L'apply Kit restaure les bases canoniques `track_sound_state` et `track_tone_sound_state`, puis reprojette uniquement les domaines track-aware `COLORS`, `TONE` et `MIX` par `param_registry_apply_track_value`.
+- La config LFO reste restauree uniquement par `mod_lfo_v1_set_track_param`.
+- Le domaine `PLAY` reste exclu de l'apply Kit pour ne pas restaurer seq/pattern/p-locks/transport.
+## 42. Contrat dirty Kit
+
+- Les writes sonores autoritatifs qui passent par `param_registry_apply_track_value` marquent le Kit actif dirty si un slot Kit actif existe: CFG family/type, FILTER/COLORS, TONE, MIX et LFO config.
+- Le dirty Kit appartient a `kit_v1`, pas a Z3: Z3 emet seulement la notification post-apply apres succes. Les restores Kit suspendent ce marquage et nettoient le dirty apres apply/save.
+- Les projections temporaires runtime, p-lock playback, transport, playhead, sequence et navigation UI ne doivent pas marquer le Kit dirty.

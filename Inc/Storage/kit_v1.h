@@ -32,6 +32,8 @@ typedef enum
     KIT_V1_RESULT_SD_FAIL,
     KIT_V1_RESULT_EMPTY,
     KIT_V1_RESULT_BAD_KIT,
+    KIT_V1_RESULT_ASSET_MISS,
+    KIT_V1_RESULT_APPLY_FAIL,
     KIT_V1_RESULT_APPLY_TODO,
     KIT_V1_RESULT_RENAME_TODO,
     KIT_V1_RESULT_DELETE_TODO,
@@ -112,10 +114,15 @@ typedef struct
 void kit_v1_init(void);
 kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit);
 kit_v1_result_t kit_v1_save_direct(uint16_t *out_slot);
+kit_v1_result_t kit_v1_apply_slot(uint16_t slot);
 kit_v1_result_t kit_v1_rename_slot(uint16_t slot, const char *name);
 kit_v1_result_t kit_v1_delete_slot(uint16_t slot, uint16_t *out_next_slot);
 void kit_v1_set_current_slot(uint16_t slot);
 uint16_t kit_v1_get_current_slot(void);
+uint8_t kit_v1_get_current_name(char *out_name, uint32_t out_size);
+uint8_t kit_v1_is_dirty(void);
+void kit_v1_mark_dirty(void);
+void kit_v1_clear_dirty(void);
 const char *kit_v1_result_label(kit_v1_result_t result);
 const char *kit_v1_label_code_short_name(uint8_t label_code);
 

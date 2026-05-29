@@ -929,6 +929,17 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Preview, rollback, reload asset Sampler complet, filtres avances et Kit restent hors perimetre V1.
 - Le niveau produit `Set` est supprime du contrat: l'extension future se limite au `Kit` comme groupe de patches/tracks.
 
+## Addendum 2026-05-29 - Patch Poly v2
+
+- Le format Patch `B6PT` passe en version `2`; les anciens payloads version `1` sont refuses proprement par validation stricte d'en-tete/version/payload.
+- Un Patch porte maintenant `width=1..PATCH_POLY_TRACK_MAX`, avec `PATCH_POLY_TRACK_MAX=4`. `P1` correspond au snapshot mono-track historique; `P2/P3/P4` representent un seul preset sonore compose de tracks liees.
+- Le payload Patch v2 contient `members[4]`. Chaque membre stocke role `SOLO/MASTER/SLAVE`, index relatif, family/type, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO et une reference asset Sampler optionnelle issue de `sample_global_pool`.
+- Le header/cache metadata ajoute la largeur et le summary primaire Family/Type/Width pour le browser Patch Assign. Rename recharge le payload v2, modifie `meta.name`, puis reecrit header/payload avec checksum recalcule; delete reste un unlink de slot.
+- La capture Patch Poly s'appuie uniquement sur `voice_group_role`: focus `SOLO` -> `P1`; focus `MASTER` -> master + slaves contigus; focus `SLAVE` -> remontee au master effectif puis capture du groupe. Les groupes incoherents ou plus larges que 4 sont refuses.
+- L'apply `P1` conserve l'application mono-track vers une ou plusieurs targets. L'apply `P2/P3/P4` exige une seule target role `MASTER` dont le groupe contigu declare a exactement la largeur du Patch.
+- Avant mutation, l'apply valide header/checksum/version, largeur, roles membres, family/type et refs asset Sampler deja `READY`; un asset manquant refuse `ASSET MISS` sans reload SD/page-cache/reader.
+- L'apply ne capture ni ne restaure sequence, pattern, p-lock, playhead, transport, voices, readers SD, page-cache, buffers audio, etat IRQ ni etat UI temporaire. Aucun apply partiel, Set, preview, rollback ou creation automatique de slaves n'est introduit.
+
 ## Addendum 2026-05-29 - Kit V1 étape 2
 
 - `kit_v1` ajoute une persistence Z6 séparée de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sélectionnables.
@@ -936,4 +947,20 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Payload V1: pour les tracks `0..UI_TRACK_COUNT-1`, capture family/type, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO via `mod_lfo_v1_get_track_param`, référence asset Sampler optionnelle issue de `sample_global_pool`, et summary family/type/label/off pour miniature future.
 - Aucun pattern, séquence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, état IRQ ni état UI temporaire n'est capturé.
 - `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accès FatFs restent hors IRQ et exclusifs vis-à-vis des clients SD critiques.
-- Étape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Apply complet, apply partiel, preview, rollback et asset reload restent hors périmètre. Rename recharge le payload, met à jour `meta.name`, puis réécrit header/payload avec checksum recalculé; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
+- Étape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Rename recharge le payload, met à jour `meta.name`, puis réécrit header/payload avec checksum recalculé; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
+
+## Addendum 2026-05-29 - Kit V1 etape 3
+
+- `kit_v1_apply_slot` charge et valide le slot Kit (`B6KT`, version, payload size, checksum via `kit_sd_bank_load_slot`, puis `meta.track_count == UI_TRACK_COUNT` et family/type valides).
+- Avant toute mutation, les refs asset Sampler `RAM/STREAM/MULTI` sont resolues uniquement contre un slot `sample_global_pool` deja `READY`, de meme kind/path; aucun reload SD, reader, page-cache ou streamer n'est cree. Refus: `ASSET MISS`.
+- Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, restaure les deux LFO par `mod_lfo_v1_set_track_param`, puis reprojette les domaines `COLORS`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
+- Le transport, playhead, sequence, pattern et p-locks ne sont ni captures ni restaures. Si une erreur arrive apres mutation structurelle/reapply partiel, le refus final est `ERROR`; aucun rollback complet n'est garanti en V1.
+- Apply partiel, target mask, preview, rollback, reload asset Sampler complet, tags/filtres avances et Patch polyX restent hors perimetre.
+## Addendum 2026-05-29 - Pattern linked Kit
+
+- `PatternSaveV1.globals` porte maintenant `linked_kit_valid` et `linked_kit_slot`. Le pattern stocke uniquement une reference de slot Kit `B6KT`, jamais le payload Kit.
+- `PATTERN_VERSION=28` et `PROJECT_V1_FILE_VERSION=39` marquent la rupture de format; les anciens patterns/projets sont refuses par validation stricte version/taille, sans migration.
+- Au changement de pattern, un lien Kit valide applique le Kit complet via `kit_v1_apply_slot`, positionne le slot actif et nettoie le dirty apres succes. Un pattern sans lien invalide l'affichage Kit actif (`Kit: ---`) et n'applique pas de Kit implicite.
+- Apply Kit depuis le browser et Save Kit direct lient le slot Kit au pattern actif seulement apres succes. Un echec d'apply (`BAD KIT`, `ASSET MISS`, SD) ne change pas le lien.
+- Delete du slot Kit actif clear uniquement le lien du pattern actif; les autres patterns peuvent encore porter une reference devenue invalide et seront refuses proprement au prochain chargement.
+- Le dirty Kit est porte par `kit_v1`: false apres apply/save, true sur edits sonores centraux (CFG family/type, domains COLORS/TONE/MIX, FILTER, LFO). Il ne suit pas transport, playhead, sequence ni navigation UI.

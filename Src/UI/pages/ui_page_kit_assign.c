@@ -8,6 +8,7 @@
 #include "font.h"
 #include "Storage/kit_sd_bank.h"
 #include "Storage/kit_v1.h"
+#include "Storage/pattern_live_ram.h"
 #include "pages/ui_page_name_edit.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
@@ -171,7 +172,6 @@ static void ui_page_kit_assign_ensure_visible_selection(void)
 {
     if (ui_page_kit_assign_slot_visible(g_kit_assign.selected_slot) != 0U)
     {
-        kit_v1_set_current_slot(g_kit_assign.selected_slot);
         return;
     }
 
@@ -179,7 +179,6 @@ static void ui_page_kit_assign_ensure_visible_selection(void)
     if (first_slot < KIT_V1_SLOT_COUNT)
     {
         g_kit_assign.selected_slot = first_slot;
-        kit_v1_set_current_slot(g_kit_assign.selected_slot);
     }
 }
 
@@ -213,17 +212,16 @@ static void ui_page_kit_assign_step_selection(int16_t delta)
     if (slot < KIT_V1_SLOT_COUNT)
     {
         g_kit_assign.selected_slot = slot;
-        kit_v1_set_current_slot(g_kit_assign.selected_slot);
         ui_page_kit_assign_set_status(0);
     }
 }
 
 static void ui_page_kit_assign_begin_rename(void);
 static void ui_page_kit_assign_delete_action(void);
+static void ui_page_kit_assign_apply_action(void);
 
 static void ui_page_kit_assign_enter(void)
 {
-    kit_v1_set_current_slot(g_kit_assign.selected_slot);
 }
 
 void ui_page_kit_assign_open(void)
@@ -264,7 +262,7 @@ static void ui_page_kit_assign_handle_event(const ui_event_t *ev)
 
         case BTN_PAGE_2:
             g_kit_assign.delete_confirm = 0U;
-            ui_page_kit_assign_set_status("APPLY TODO");
+            ui_page_kit_assign_apply_action();
             break;
 
         case BTN_PAGE_3:
@@ -358,6 +356,30 @@ static void ui_page_kit_assign_name_done(ui_page_name_edit_result_t result,
                                   : kit_v1_result_label(rename_result));
 }
 
+static void ui_page_kit_assign_apply_action(void)
+{
+    if (ui_page_kit_assign_visible_count() == 0U)
+    {
+        ui_page_kit_assign_set_status("NO KIT");
+        return;
+    }
+    if (ui_page_kit_assign_slot_visible(g_kit_assign.selected_slot) == 0U)
+    {
+        ui_page_kit_assign_set_status("BAD KIT");
+        return;
+    }
+
+    const kit_v1_result_t result = kit_v1_apply_slot(g_kit_assign.selected_slot);
+    if (result == KIT_V1_RESULT_OK)
+    {
+        (void)pattern_live_link_active_kit(g_kit_assign.selected_slot);
+    }
+    ui_page_kit_assign_ensure_visible_selection();
+    ui_page_kit_assign_set_status((result == KIT_V1_RESULT_OK)
+                                  ? "KIT APPLIED"
+                                  : kit_v1_result_label(result));
+}
+
 static void ui_page_kit_assign_delete_action(void)
 {
     if (ui_page_kit_assign_visible_count() == 0U)
@@ -384,6 +406,7 @@ static void ui_page_kit_assign_delete_action(void)
     const kit_v1_result_t result = kit_v1_delete_slot(g_kit_assign.selected_slot, &next_slot);
     if (result == KIT_V1_RESULT_OK)
     {
+        pattern_live_clear_active_kit_link_if_slot(g_kit_assign.selected_slot);
         g_kit_assign.selected_slot = next_slot;
         ui_page_kit_assign_ensure_visible_selection();
         ui_page_kit_assign_set_status((ui_page_kit_assign_visible_count() == 0U)
@@ -466,7 +489,8 @@ static void ui_page_kit_assign_draw_row(uint8_t row, uint16_t slot, uint8_t sele
         }
         (void)snprintf(line,
                        sizeof(line),
-                       "%-18s %02uT",
+                       "%c%-17s %02uT",
+                       (slot == kit_v1_get_current_slot()) ? '*' : ' ',
                        short_name,
                        (unsigned)meta.track_count);
     }

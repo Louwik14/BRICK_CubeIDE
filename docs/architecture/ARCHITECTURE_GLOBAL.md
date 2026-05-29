@@ -201,8 +201,25 @@ Documents conserves pour tracabilite uniquement:
 - Patch V1 ajoute un seam Z5/Z6: UI Patch Assign + persistence de snapshot canonique d'une track sous slots fichiers separes de Project/Pattern.
 - Kit reste l'extension future multi-track; Set est retire du contrat produit.
 
+## Addendum 2026-05-29 - Kit V1 etape 3
+
+- Kit V1 etend le seam Z5/Z6 avec `PAGE2 APPLY`: le Kit charge un payload complet, pre-valide les assets Sampler deja presents, neutralise les notes/voix, applique la structure tracks en bloc via les autorites track_state/runtime, puis restaure sound/tone/LFO et reprojette les params track-aware.
+- Le contrat reste sans apply partiel, target mask, preview, rollback, Set, sequence, pattern, p-lock, playhead ni transport.
+
+## Addendum 2026-05-29 - Patch Poly v2
+
+- Patch v2 etend le seam Z5/Z6 de mono-track vers `P1..P4`, en consommant uniquement l'autorite `voice_group_role` de Z2 pour les groupes master/slaves contigus.
+- `P1` conserve l'apply multi-target Patch Assign; `P2/P3/P4` s'appliquent uniquement vers une target master dont le groupe declare a la meme largeur.
+- Set reste supprime; Kit reste le snapshot sonore complet machine.
+
 
 ## Addendum 2026-05-29 - Kit V1 etape 2
 
+
 - Kit V1 ajoute un seam Z5/Z6 distinct de Patch: storage/capture/save/browser/rename/delete pour snapshot sonore complet machine, sans apply dans cette etape.
 - HALL1 devient l'entrée workflow Kit en overlay: single tap ouvre le browser après fenêtre double tap, double tap sauvegarde directement; aucun hall mode Kit persistant n'est ajouté.
+## Addendum 2026-05-29 - Kit lie au Pattern
+
+- Z6 etend le seam Pattern/Kit: un Pattern porte une reference de slot Kit, tandis que la banque Kit `B6KT` reste l'autorite durable du contenu sonore complet.
+- Z5 expose ce lien dans le header principal (`Kit: nom`, dirty `*`, Pattern dessous) et le browser Kit lie le slot applique au pattern actif.
+- Set reste retire; Kit reste full-machine sonore, Patch reste separe.

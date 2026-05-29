@@ -13,6 +13,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
 #include "Storage/undo_v2.h"
+#include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "UI/ui_track_catalog.h"
 
@@ -200,22 +201,30 @@ void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control_float_
 void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
 void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
 
-void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEST, v); }
-void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
-void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
-void apply_lfo1_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo1_delay(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DELAY, v); }
-void apply_lfo1_trig(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo1_fade(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_FADE, v); }
-void apply_lfo1_phase_slew(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_PHASE_SLEW, v); }
-void apply_lfo2_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEST, v); }
-void apply_lfo2_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_RATE, v); }
-void apply_lfo2_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEPTH, v); }
-void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo2_delay(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DELAY, v); }
-void apply_lfo2_trig(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo2_fade(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_FADE, v); }
-void apply_lfo2_phase_slew(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_PHASE_SLEW, v); }
+static void apply_lfo_active_track(uint8_t lfo, mod_lfo_param_t param, float v)
+{
+    if (mod_lfo_v1_set_track_param(ui_get_active_track(), lfo, param, v) != 0U)
+    {
+        kit_v1_mark_dirty();
+    }
+}
+
+void apply_lfo1_dest(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_DEST, v); }
+void apply_lfo1_rate(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_RATE, v); }
+void apply_lfo1_depth(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_DEPTH, v); }
+void apply_lfo1_shape(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo1_delay(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_DELAY, v); }
+void apply_lfo1_trig(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_TRIG, v); }
+void apply_lfo1_fade(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_FADE, v); }
+void apply_lfo1_phase_slew(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_PHASE_SLEW, v); }
+void apply_lfo2_dest(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_DEST, v); }
+void apply_lfo2_rate(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_RATE, v); }
+void apply_lfo2_depth(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_DEPTH, v); }
+void apply_lfo2_shape(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo2_delay(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_DELAY, v); }
+void apply_lfo2_trig(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_TRIG, v); }
+void apply_lfo2_fade(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_FADE, v); }
+void apply_lfo2_phase_slew(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_PHASE_SLEW, v); }
 
 void apply_cfg_track(float v)
 {
@@ -246,6 +255,7 @@ void apply_cfg_track(float v)
     {
         return;
     }
+    kit_v1_mark_dirty();
 }
 
 void apply_cfg_track_type(float v)
@@ -283,6 +293,7 @@ void apply_cfg_track_type(float v)
         g_param_cfg_track_type_apply_stage = 4U;
         return;
     }
+    kit_v1_mark_dirty();
     g_param_cfg_track_type_apply_stage = 4U;
 }
 

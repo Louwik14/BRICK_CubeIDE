@@ -4,6 +4,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
+#include "Storage/kit_v1.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
@@ -83,6 +84,7 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t boundary_track,
                                             uint32_t boundary_generation);
 static uint8_t pattern_live_try_take_pending_ready(void);
+static void pattern_live_apply_linked_kit_for_snapshot(const PatternSaveV1 *pattern);
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -446,6 +448,8 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     }
 
     memset(out_pattern, 0, sizeof(*out_pattern));
+    out_pattern->globals.linked_kit_valid = g_current_pattern.globals.linked_kit_valid;
+    out_pattern->globals.linked_kit_slot = g_current_pattern.globals.linked_kit_slot;
 
     const seq_project_data_t *const project = seq_model_get_project();
     if (project == 0)
@@ -857,8 +861,29 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         return 0U;
     }
 
+    memcpy(&g_current_pattern, pattern, sizeof(g_current_pattern));
+    pattern_live_apply_linked_kit_for_snapshot(pattern);
     g_apply_in_progress = 0U;
     return 1U;
+}
+
+static void pattern_live_apply_linked_kit_for_snapshot(const PatternSaveV1 *pattern)
+{
+    if ((pattern != 0)
+            && (pattern->globals.linked_kit_valid != 0U)
+            && (pattern->globals.linked_kit_slot < KIT_V1_SLOT_COUNT))
+    {
+        const kit_v1_result_t result = kit_v1_apply_slot(pattern->globals.linked_kit_slot);
+        if (result != KIT_V1_RESULT_OK)
+        {
+            kit_v1_set_current_slot(KIT_V1_INVALID_SLOT);
+            kit_v1_clear_dirty();
+        }
+        return;
+    }
+
+    kit_v1_set_current_slot(KIT_V1_INVALID_SLOT);
+    kit_v1_clear_dirty();
 }
 
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
@@ -1358,4 +1383,51 @@ void pattern_live_set_active_state(uint8_t active_bank,
 uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;
+}
+
+uint8_t pattern_live_get_active_linked_kit(uint16_t *out_slot)
+{
+    if ((g_current_pattern.globals.linked_kit_valid == 0U)
+            || (g_current_pattern.globals.linked_kit_slot >= KIT_V1_SLOT_COUNT))
+    {
+        return 0U;
+    }
+
+    if (out_slot != 0)
+    {
+        *out_slot = g_current_pattern.globals.linked_kit_slot;
+    }
+    return 1U;
+}
+
+uint8_t pattern_live_link_active_kit(uint16_t slot)
+{
+    if (slot >= KIT_V1_SLOT_COUNT)
+    {
+        return 0U;
+    }
+
+    g_current_pattern.globals.linked_kit_valid = 1U;
+    g_current_pattern.globals.linked_kit_slot = slot;
+    if ((g_queued_valid != 0U)
+            && (g_queued_bank == g_active_bank)
+            && (g_queued_pattern == g_active_pattern))
+    {
+        g_next_pattern.globals.linked_kit_valid = 1U;
+        g_next_pattern.globals.linked_kit_slot = slot;
+    }
+    return 1U;
+}
+
+void pattern_live_clear_active_kit_link_if_slot(uint16_t slot)
+{
+    if ((slot >= KIT_V1_SLOT_COUNT)
+            || (g_current_pattern.globals.linked_kit_valid == 0U)
+            || (g_current_pattern.globals.linked_kit_slot != slot))
+    {
+        return;
+    }
+
+    g_current_pattern.globals.linked_kit_valid = 0U;
+    g_current_pattern.globals.linked_kit_slot = KIT_V1_INVALID_SLOT;
 }

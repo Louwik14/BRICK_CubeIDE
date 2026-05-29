@@ -15,6 +15,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "Storage/kit_v1.h"
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -76,6 +77,27 @@ static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t
 
     const char bank = (char)('A' + (pattern_state.active_bank & 0x0FU));
     (void)snprintf(out, out_len, "%c-%02u", bank, (unsigned int)(pattern_state.active_pattern + 1U));
+}
+
+static void ui_renderer_template_format_active_kit_label(char *out, uint32_t out_len)
+{
+    char name[KIT_V1_NAME_MAX];
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if (kit_v1_get_current_name(name, sizeof(name)) == 0U)
+    {
+        (void)snprintf(out, out_len, "Kit: ---");
+        return;
+    }
+
+    (void)snprintf(out,
+                   out_len,
+                   "Kit: %s%s",
+                   name,
+                   (kit_v1_is_dirty() != 0U) ? "*" : "");
 }
 
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 64U, 96U};
@@ -3226,7 +3248,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     ui_renderer_template_fit_text(cpu_avg_label, 12U);
     if (draw_bpm != 0U)
     {
-        drv_display_set_font(&FONT_5X7);
+        drv_display_set_font(&FONT_4X6);
         const uint8_t bpm_text_w = drv_display_text_width(bpm_label);
         if (bpm_inverted != 0U)
         {
@@ -3234,7 +3256,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
             ui_renderer_template_draw_inverted_label(ui_renderer_template_right_x(0U, bpm_box_w),
                                                      1U,
                                                      bpm_label,
-                                                     &FONT_5X7);
+                                                     &FONT_4X6);
         }
         else
         {
@@ -3243,16 +3265,22 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
+    char kit_label[44];
+    ui_renderer_template_format_active_kit_label(kit_label, sizeof(kit_label));
     drv_display_set_font(&FONT_4X6);
-    const uint8_t pattern_x = ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label));
     const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
-    uint8_t cpu_x = (uint8_t)(104U - cpu_text_w);
-    if ((uint8_t)(cpu_x + cpu_text_w + 1U) > pattern_x)
+    const uint8_t bpm_w = (draw_bpm != 0U) ? drv_display_text_width(bpm_label) : 0U;
+    const uint8_t bpm_x = (draw_bpm != 0U) ? ui_renderer_template_right_x(0U, bpm_w) : OLED_WIDTH;
+    uint8_t cpu_x = (uint8_t)(100U - cpu_text_w);
+    if ((draw_bpm != 0U) && ((uint8_t)(cpu_x + cpu_text_w + 1U) > bpm_x))
     {
-        cpu_x = (pattern_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(pattern_x - cpu_text_w - 1U) : 0U;
+        cpu_x = (bpm_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(bpm_x - cpu_text_w - 1U) : 0U;
     }
-    drv_display_draw_text(cpu_x, 9U, cpu_avg_label);
-    drv_display_draw_text(pattern_x, 9U, pattern_label);
+    drv_display_draw_text(cpu_x, 1U, cpu_avg_label);
+
+    ui_renderer_template_fit_text(kit_label, 42U);
+    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(kit_label)), 8U, kit_label);
+    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)

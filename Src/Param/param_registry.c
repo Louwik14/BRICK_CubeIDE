@@ -31,6 +31,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
+#include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Sampler/multi_sample_pool.h"
 #include "UI/ui_core.h"
@@ -1170,7 +1171,12 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
     {
-        return param_apply_cfg_track_value(id, track, clamped);
+        const uint8_t ok = param_apply_cfg_track_value(id, track, clamped);
+        if (ok != 0U)
+        {
+            kit_v1_mark_dirty();
+        }
+        return ok;
     }
 
     {
@@ -1178,16 +1184,37 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
         if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
         {
-            return mod_lfo_v1_set_track_param(track, lfo_index, lfo_param, clamped);
+            const uint8_t ok = mod_lfo_v1_set_track_param(track, lfo_index, lfo_param, clamped);
+            if (ok != 0U)
+            {
+                kit_v1_mark_dirty();
+            }
+            return ok;
         }
     }
 
     if (param_filter_is_param(id) != 0U)
     {
-        return param_apply_filter_track_value(id, track, clamped);
+        const uint8_t ok = param_apply_filter_track_value(id, track, clamped);
+        if (ok != 0U)
+        {
+            kit_v1_mark_dirty();
+        }
+        return ok;
     }
 
-    return param_apply_non_filter_track_value(id, track, clamped);
+    const uint8_t ok = param_apply_non_filter_track_value(id, track, clamped);
+    if (ok != 0U)
+    {
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS))
+        {
+            kit_v1_mark_dirty();
+        }
+    }
+    return ok;
 }
 
 /* Command surface: UI edit command forwarded to the track-aware apply seam. */

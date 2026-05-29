@@ -307,3 +307,16 @@ Sorties de Z2:
 - `Sampler/Multi` reste bind via `TRACK_RUNTIME_ENGINE_SAMPLER`, sans second backend runtime.
 - Z2 expose une capacite PLAY polyphonique de 4 voix pour `TRACK_RUNTIME_TYPE_MULTI`: les quatre sous-pages PLAY `V1..V4` deviennent autorisees et p-lockables.
 - Cette capacite est une projection de grammaire sequencer uniquement; les limites audio restent portees par `brick6_sampler_runtime` (`4` voix Multi par track, `16` voix Multi globales).
+
+## 26. Contrat Apply Kit V1
+
+- L'apply Kit complet passe par une mutation bulk `track_state` puis par le pipeline structurel `param_registry`, qui invalide et rafraichit explicitement `track_runtime`.
+- Z2 reste l'unique autorite de binding apres apply; aucune autorite Kit parallele ne conserve family/type, mix target ou capacites runtime.
+
+## 27. Contrat voice group / Patch Poly
+
+- `track_state` porte l'autorite des roles `TRACK_VOICE_GROUP_ROLE_SOLO`, `TRACK_VOICE_GROUP_ROLE_MASTER`, `TRACK_VOICE_GROUP_ROLE_SLAVE`.
+- Un groupe valide est contigu: un `MASTER` suivi de `SLAVE` a droite; un `SLAVE` ne peut exister que si sa gauche est `MASTER` ou `SLAVE`.
+- Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master` et `track_runtime_collect_voice_group_members`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
+- Patch Poly v2 consomme ce modele comme source structurelle: capture depuis master/slaves officiels et apply polyX uniquement vers un groupe cible deja declare de meme largeur.
+- Z2 ne stocke aucune reference a un Patch et ne devient pas une autorite de persistence Patch.

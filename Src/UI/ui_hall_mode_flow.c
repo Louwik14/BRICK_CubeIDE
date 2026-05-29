@@ -6,6 +6,7 @@
 #include "Core/track_state.h"
 #include "Param/param_registry.h"
 #include "Storage/kit_v1.h"
+#include "Storage/pattern_live_ram.h"
 #include "Storage/patch_v1.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
@@ -352,7 +353,10 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 
         uint16_t saved_slot = KIT_V1_INVALID_SLOT;
         const kit_v1_result_t result = kit_v1_save_direct(&saved_slot);
-        (void)saved_slot;
+        if ((result == KIT_V1_RESULT_OK) && (saved_slot < KIT_V1_SLOT_COUNT))
+        {
+            (void)pattern_live_link_active_kit(saved_slot);
+        }
         const uint32_t done_ms = HAL_GetTick();
         ui_hall_kit_feedback_end(done_ms);
         g_kit_pending.save_pending = 0U;

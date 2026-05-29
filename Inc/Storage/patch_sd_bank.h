@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PATCH_SD_FILE_MAGIC   0x54503642UL /* B6PT */
-#define PATCH_SD_FILE_VERSION 1U
+#define PATCH_SD_FILE_VERSION 2U
 
 typedef enum
 {
@@ -44,6 +44,10 @@ typedef struct __attribute__((packed))
     uint8_t family;
     uint8_t type;
     uint8_t source_track;
+    uint8_t width;
+    uint8_t summary_family;
+    uint8_t summary_type;
+    uint8_t summary_width;
     uint8_t reserved;
     char name[PATCH_V1_NAME_MAX];
     uint32_t checksum;

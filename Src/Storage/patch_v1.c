@@ -5,10 +5,12 @@
 
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
 #include "Storage/patch_sd_bank.h"
+#include "UI/ui_active_track_sync.h"
 
 static uint16_t g_patch_v1_current_slot = PATCH_V1_INVALID_SLOT;
 
@@ -166,6 +168,50 @@ static uint8_t patch_v1_resolve_loaded_asset(const patch_v1_asset_ref_t *asset,
     return 0U;
 }
 
+static uint8_t patch_v1_track_uses_sampler_asset(ui_track_family_t family,
+                                                 ui_track_type_t type)
+{
+    if (family != UI_TRACK_FAMILY_SAMPLER)
+    {
+        return 0U;
+    }
+
+    return ((type == UI_TRACK_TYPE_RAM)
+            || (type == UI_TRACK_TYPE_STREAM)
+            || (type == UI_TRACK_TYPE_MULTI)) ? 1U : 0U;
+}
+
+static uint8_t patch_v1_sampler_asset_kind_matches_type(uint8_t kind,
+                                                        ui_track_type_t type)
+{
+    switch (type)
+    {
+        case UI_TRACK_TYPE_RAM:
+            return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_RAM) ? 1U : 0U;
+        case UI_TRACK_TYPE_STREAM:
+            return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_STREAM) ? 1U : 0U;
+        case UI_TRACK_TYPE_MULTI:
+            return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_MULTI) ? 1U : 0U;
+        default:
+            return 1U;
+    }
+}
+
+static uint8_t patch_v1_family_type_is_valid(uint8_t family, uint8_t type)
+{
+    if ((family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+            || (type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    {
+        return 0U;
+    }
+    if (family == (uint8_t)UI_TRACK_FAMILY_OFF)
+    {
+        return (type == (uint8_t)UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
+    }
+    return (ui_track_type_is_valid_for_family((ui_track_family_t)family,
+                                              (ui_track_type_t)type) != false) ? 1U : 0U;
+}
+
 static void patch_v1_apply_lfo(uint8_t track, uint8_t lfo, const patch_v1_lfo_lane_t *lane)
 {
     if ((track >= UI_TRACK_COUNT) || (lfo >= 2U) || (lane == 0))
@@ -203,6 +249,82 @@ static void patch_v1_reapply_track_params(uint8_t track)
     param_registry_batch_end();
 }
 
+static patch_v1_result_t patch_v1_capture_member(uint8_t track,
+                                                 uint8_t relative_index,
+                                                 uint8_t role,
+                                                 patch_v1_member_t *out_member)
+{
+    if ((track >= UI_TRACK_COUNT) || (out_member == 0))
+    {
+        return PATCH_V1_RESULT_INVALID_ARG;
+    }
+
+    const track_sound_state_t *const sound = track_sound_state_get_const(track);
+    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
+    if ((sound == 0) || (tone == 0))
+    {
+        return PATCH_V1_RESULT_CAPTURE_FAIL;
+    }
+
+    memset(out_member, 0, sizeof(*out_member));
+    out_member->role = role;
+    out_member->relative_index = relative_index;
+    out_member->family = (uint8_t)ui_get_track_family(track);
+    out_member->type = (uint8_t)ui_get_track_type(track);
+    memcpy(&out_member->sound, sound, sizeof(out_member->sound));
+    memcpy(&out_member->tone, tone, sizeof(out_member->tone));
+    patch_v1_capture_lfo(track, 0U, &out_member->lfo[0]);
+    patch_v1_capture_lfo(track, 1U, &out_member->lfo[1]);
+    patch_v1_capture_sampler_asset(tone, &out_member->asset);
+    return PATCH_V1_RESULT_OK;
+}
+
+static patch_v1_result_t patch_v1_resolve_capture_group(uint8_t focus_track,
+                                                        uint8_t members[PATCH_POLY_TRACK_MAX],
+                                                        uint8_t *out_width)
+{
+    if ((focus_track >= UI_TRACK_COUNT) || (members == 0) || (out_width == 0))
+    {
+        return PATCH_V1_RESULT_INVALID_ARG;
+    }
+
+    const track_voice_group_role_t role = track_state_get_voice_group_role(focus_track);
+    if (role == TRACK_VOICE_GROUP_ROLE_SOLO)
+    {
+        members[0] = focus_track;
+        *out_width = 1U;
+        return PATCH_V1_RESULT_OK;
+    }
+
+    uint8_t master_track = focus_track;
+    if (track_runtime_get_voice_group_effective_master(focus_track, &master_track) == 0U)
+    {
+        return PATCH_V1_RESULT_BAD_PATCH;
+    }
+
+    uint8_t count = 0U;
+    if (track_runtime_collect_voice_group_members(master_track,
+                                                  members,
+                                                  PATCH_POLY_TRACK_MAX,
+                                                  &count) == 0U)
+    {
+        uint8_t full_count = 0U;
+        if (track_runtime_collect_voice_group_members(master_track, 0, 0U, &full_count) != 0U)
+        {
+            return PATCH_V1_RESULT_TOO_WIDE;
+        }
+        return PATCH_V1_RESULT_BAD_PATCH;
+    }
+
+    if (count < 2U)
+    {
+        return PATCH_V1_RESULT_NO_SLAVES;
+    }
+
+    *out_width = count;
+    return PATCH_V1_RESULT_OK;
+}
+
 void patch_v1_init(void)
 {
     g_patch_v1_current_slot = PATCH_V1_INVALID_SLOT;
@@ -216,28 +338,42 @@ patch_v1_result_t patch_v1_capture_track(uint8_t track, PatchSaveV1 *out_patch)
         return PATCH_V1_RESULT_INVALID_ARG;
     }
 
-    const track_sound_state_t *const sound = track_sound_state_get_const(track);
-    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
-    if ((sound == 0) || (tone == 0))
+    uint8_t members[PATCH_POLY_TRACK_MAX] = { 0U };
+    uint8_t width = 0U;
+    patch_v1_result_t result = patch_v1_resolve_capture_group(track, members, &width);
+    if (result != PATCH_V1_RESULT_OK)
     {
-        return PATCH_V1_RESULT_CAPTURE_FAIL;
+        return result;
     }
 
     memset(out_patch, 0, sizeof(*out_patch));
-    out_patch->meta.family = (uint8_t)ui_get_track_family(track);
-    out_patch->meta.type = (uint8_t)ui_get_track_type(track);
-    out_patch->meta.source_track = track;
+    out_patch->meta.family = (uint8_t)ui_get_track_family(members[0]);
+    out_patch->meta.type = (uint8_t)ui_get_track_type(members[0]);
+    out_patch->meta.source_track = members[0];
+    out_patch->meta.width = width;
+    out_patch->meta.summary_family = out_patch->meta.family;
+    out_patch->meta.summary_type = out_patch->meta.type;
+    out_patch->meta.summary_width = width;
     (void)snprintf(out_patch->meta.name,
                    sizeof(out_patch->meta.name),
-                   "T%02u %s",
-                   (unsigned)(track + 1U),
+                   "T%02u P%u %s",
+                   (unsigned)(members[0] + 1U),
+                   (unsigned)width,
                    ui_get_track_family_short_name((ui_track_family_t)out_patch->meta.family));
 
-    memcpy(&out_patch->sound, sound, sizeof(out_patch->sound));
-    memcpy(&out_patch->tone, tone, sizeof(out_patch->tone));
-    patch_v1_capture_lfo(track, 0U, &out_patch->lfo[0]);
-    patch_v1_capture_lfo(track, 1U, &out_patch->lfo[1]);
-    patch_v1_capture_sampler_asset(tone, &out_patch->asset);
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        const uint8_t role = (width == 1U)
+            ? (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO
+            : ((i == 0U)
+                ? (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER
+                : (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE);
+        result = patch_v1_capture_member(members[i], i, role, &out_patch->members[i]);
+        if (result != PATCH_V1_RESULT_OK)
+        {
+            return result;
+        }
+    }
 
     return PATCH_V1_RESULT_OK;
 }
@@ -277,6 +413,181 @@ patch_v1_result_t patch_v1_save_track_direct(uint8_t track, uint16_t *out_slot)
     return PATCH_V1_RESULT_OK;
 }
 
+static patch_v1_result_t patch_v1_validate_loaded_patch(PatchSaveV1 *patch)
+{
+    if (patch == 0)
+    {
+        return PATCH_V1_RESULT_INVALID_ARG;
+    }
+
+    const uint8_t width = patch->meta.width;
+    if ((width == 0U) || (width > PATCH_POLY_TRACK_MAX))
+    {
+        return PATCH_V1_RESULT_BAD_PATCH;
+    }
+    if (patch_v1_family_type_is_valid(patch->meta.family, patch->meta.type) == 0U)
+    {
+        return PATCH_V1_RESULT_BAD_PATCH;
+    }
+
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        patch_v1_member_t *const member = &patch->members[i];
+        const uint8_t expected_role = (width == 1U)
+            ? (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO
+            : ((i == 0U)
+                ? (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER
+                : (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE);
+        if ((member->role != expected_role)
+                || (member->relative_index != i)
+                || (patch_v1_family_type_is_valid(member->family, member->type) == 0U))
+        {
+            return PATCH_V1_RESULT_BAD_PATCH;
+        }
+
+        if (patch_v1_track_uses_sampler_asset((ui_track_family_t)member->family,
+                                              (ui_track_type_t)member->type) == 0U)
+        {
+            memset(&member->asset, 0, sizeof(member->asset));
+            continue;
+        }
+
+        uint16_t resolved_asset_slot = member->asset.global_slot;
+        if ((member->asset.has_asset != 0U)
+                && (patch_v1_sampler_asset_kind_matches_type(member->asset.kind,
+                                                             (ui_track_type_t)member->type) == 0U))
+        {
+            return PATCH_V1_RESULT_BAD_PATCH;
+        }
+        if (patch_v1_resolve_loaded_asset(&member->asset, &resolved_asset_slot) == 0U)
+        {
+            return PATCH_V1_RESULT_ASSET_MISS;
+        }
+        if (member->asset.has_asset != 0U)
+        {
+            member->tone.sample = (float)resolved_asset_slot;
+        }
+    }
+
+    return PATCH_V1_RESULT_OK;
+}
+
+static patch_v1_result_t patch_v1_resolve_apply_targets(uint8_t target_track,
+                                                        uint8_t width,
+                                                        uint8_t targets[PATCH_POLY_TRACK_MAX])
+{
+    if ((target_track >= UI_TRACK_COUNT)
+            || (width == 0U)
+            || (width > PATCH_POLY_TRACK_MAX)
+            || (targets == 0))
+    {
+        return PATCH_V1_RESULT_INVALID_ARG;
+    }
+
+    if (width == 1U)
+    {
+        targets[0] = target_track;
+        return PATCH_V1_RESULT_OK;
+    }
+
+    if (track_state_get_voice_group_role(target_track) != TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        return PATCH_V1_RESULT_NO_MASTER;
+    }
+
+    uint8_t count = 0U;
+    if (track_runtime_collect_voice_group_members(target_track,
+                                                  targets,
+                                                  PATCH_POLY_TRACK_MAX,
+                                                  &count) == 0U)
+    {
+        return PATCH_V1_RESULT_NEED_TRACKS;
+    }
+    if (count < 2U)
+    {
+        return PATCH_V1_RESULT_NO_SLAVES;
+    }
+    if (count != width)
+    {
+        return PATCH_V1_RESULT_NEED_TRACKS;
+    }
+
+    return PATCH_V1_RESULT_OK;
+}
+
+static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV1 *patch,
+                                                                const uint8_t targets[PATCH_POLY_TRACK_MAX])
+{
+    if ((patch == 0) || (targets == 0))
+    {
+        return PATCH_V1_RESULT_INVALID_ARG;
+    }
+
+    const uint8_t width = patch->meta.width;
+    uint8_t family[UI_TRACK_COUNT];
+    uint8_t type[UI_TRACK_COUNT];
+    uint8_t midi_channel[UI_TRACK_COUNT];
+    uint8_t midi_source[UI_TRACK_COUNT];
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        family[track] = (uint8_t)ui_get_track_family(track);
+        type[track] = (uint8_t)ui_get_track_type(track);
+        midi_channel[track] = ui_get_track_midi_channel(track);
+        midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+    }
+
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        const uint8_t target = targets[i];
+        if (target >= UI_TRACK_COUNT)
+        {
+            return PATCH_V1_RESULT_APPLY_FAIL;
+        }
+        family[target] = patch->members[i].family;
+        type[target] = patch->members[i].type;
+    }
+
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        keyboard_engine_all_notes_off_for_track(targets[i]);
+        brick6_sampler_runtime_reset_track(targets[i]);
+    }
+
+    if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
+    {
+        return PATCH_V1_RESULT_APPLY_FAIL;
+    }
+    track_runtime_invalidate_all();
+    track_runtime_refresh_all();
+
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        const uint8_t target = targets[i];
+        const patch_v1_member_t *const member = &patch->members[i];
+        track_sound_state_t *const dst_sound = track_sound_state_get(target);
+        track_tone_sound_state_t *const dst_tone = track_tone_sound_state_get(target);
+        if ((dst_sound == 0) || (dst_tone == 0))
+        {
+            return PATCH_V1_RESULT_APPLY_FAIL;
+        }
+
+        memcpy(dst_sound, &member->sound, sizeof(*dst_sound));
+        memcpy(dst_tone, &member->tone, sizeof(*dst_tone));
+        patch_v1_apply_lfo(target, 0U, &member->lfo[0]);
+        patch_v1_apply_lfo(target, 1U, &member->lfo[1]);
+    }
+
+    for (uint8_t i = 0U; i < width; ++i)
+    {
+        patch_v1_reapply_track_params(targets[i]);
+        track_runtime_refresh_track(targets[i]);
+    }
+    ui_active_track_sync_full_after_reconfigure();
+
+    return PATCH_V1_RESULT_OK;
+}
+
 patch_v1_result_t patch_v1_apply_slot_to_track(uint16_t slot, uint8_t target_track)
 {
     if ((slot >= PATCH_V1_SLOT_COUNT) || (target_track >= UI_TRACK_COUNT))
@@ -304,48 +615,24 @@ patch_v1_result_t patch_v1_apply_slot_to_track(uint16_t slot, uint8_t target_tra
         return PATCH_V1_RESULT_SD_FAIL;
     }
 
-    if ((patch.meta.family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-            || (patch.meta.type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    patch_v1_result_t result = patch_v1_validate_loaded_patch(&patch);
+    if (result != PATCH_V1_RESULT_OK)
     {
-        return PATCH_V1_RESULT_BAD_PATCH;
+        return result;
     }
 
-    uint16_t resolved_asset_slot = (uint16_t)patch.asset.global_slot;
-    if (patch_v1_resolve_loaded_asset(&patch.asset, &resolved_asset_slot) == 0U)
+    uint8_t targets[PATCH_POLY_TRACK_MAX] = { 0U };
+    result = patch_v1_resolve_apply_targets(target_track, patch.meta.width, targets);
+    if (result != PATCH_V1_RESULT_OK)
     {
-        return PATCH_V1_RESULT_ASSET_MISS;
-    }
-    if (patch.asset.has_asset != 0U)
-    {
-        patch.tone.sample = (float)resolved_asset_slot;
+        return result;
     }
 
-    keyboard_engine_all_notes_off_for_track(target_track);
-    brick6_sampler_runtime_reset_track(target_track);
-
-    if (ui_set_track_family(target_track, (ui_track_family_t)patch.meta.family) == false)
+    result = patch_v1_apply_loaded_patch_to_targets(&patch, targets);
+    if (result != PATCH_V1_RESULT_OK)
     {
-        return PATCH_V1_RESULT_APPLY_FAIL;
+        return result;
     }
-    if (ui_set_track_type(target_track, (ui_track_type_t)patch.meta.type) == false)
-    {
-        return PATCH_V1_RESULT_APPLY_FAIL;
-    }
-    track_runtime_refresh_track(target_track);
-
-    track_sound_state_t *const dst_sound = track_sound_state_get(target_track);
-    track_tone_sound_state_t *const dst_tone = track_tone_sound_state_get(target_track);
-    if ((dst_sound == 0) || (dst_tone == 0))
-    {
-        return PATCH_V1_RESULT_APPLY_FAIL;
-    }
-
-    memcpy(dst_sound, &patch.sound, sizeof(*dst_sound));
-    memcpy(dst_tone, &patch.tone, sizeof(*dst_tone));
-    patch_v1_apply_lfo(target_track, 0U, &patch.lfo[0]);
-    patch_v1_apply_lfo(target_track, 1U, &patch.lfo[1]);
-    patch_v1_reapply_track_params(target_track);
-    track_runtime_refresh_track(target_track);
     g_patch_v1_current_slot = slot;
 
     return PATCH_V1_RESULT_OK;
@@ -457,6 +744,11 @@ const char *patch_v1_result_label(patch_v1_result_t result)
         case PATCH_V1_RESULT_APPLY_FAIL: return "APPLY FAIL";
         case PATCH_V1_RESULT_RENAME_FAIL: return "RENAME FAIL";
         case PATCH_V1_RESULT_DELETE_FAIL: return "DELETE FAIL";
+        case PATCH_V1_RESULT_TOO_WIDE: return "POLY > 4";
+        case PATCH_V1_RESULT_NEED_ONE_TARGET: return "NEED 1 TRK";
+        case PATCH_V1_RESULT_NEED_TRACKS: return "NEED X TRK";
+        case PATCH_V1_RESULT_NO_MASTER: return "NO MASTER";
+        case PATCH_V1_RESULT_NO_SLAVES: return "NO SLAVES";
         default: return "ERROR";
     }
 }

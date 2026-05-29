@@ -638,7 +638,10 @@ static void ui_page_patch_assign_format_filter(char *out, uint32_t out_size)
 
 static void ui_page_patch_assign_apply_selected(void)
 {
-    if (ui_page_patch_assign_target_count() == 0U)
+    const uint8_t target_count = ui_page_patch_assign_target_count();
+    patch_v1_metadata_t meta;
+
+    if (target_count == 0U)
     {
         ui_page_patch_assign_set_status("NO TARGET");
         return;
@@ -646,6 +649,18 @@ static void ui_page_patch_assign_apply_selected(void)
     if (ui_page_patch_assign_selection_is_visible() == 0U)
     {
         ui_page_patch_assign_set_status("NO PATCH");
+        return;
+    }
+    if ((patch_sd_bank_get_slot_metadata(g_patch_assign.selected_slot, &meta) == 0U)
+            || (meta.width == 0U)
+            || (meta.width > PATCH_POLY_TRACK_MAX))
+    {
+        ui_page_patch_assign_set_status("BAD PATCH");
+        return;
+    }
+    if ((meta.width > 1U) && (target_count != 1U))
+    {
+        ui_page_patch_assign_set_status(patch_v1_result_label(PATCH_V1_RESULT_NEED_ONE_TARGET));
         return;
     }
 
@@ -976,13 +991,25 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
                 break;
             }
         }
-        (void)snprintf(line,
-                       sizeof(line),
-                       "%-14s %s %s/%s",
-                       short_name,
-                       family,
-                       family,
-                       type);
+        if (meta.width > 1U)
+        {
+            (void)snprintf(line,
+                           sizeof(line),
+                           "%-11s P%u %s/%s",
+                           short_name,
+                           (unsigned)meta.width,
+                           family,
+                           type);
+        }
+        else
+        {
+            (void)snprintf(line,
+                           sizeof(line),
+                           "%-14s %s/%s",
+                           short_name,
+                           family,
+                           type);
+        }
     }
     else if (state == PATCH_SD_SLOT_INVALID)
     {

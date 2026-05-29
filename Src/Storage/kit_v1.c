@@ -3,11 +3,19 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Core/brick6_sampler_runtime.h"
+#include "Core/track_runtime.h"
+#include "Keyboard/keyboard_engine.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Param/param_registry.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Storage/kit_sd_bank.h"
 #include "Storage/memory_layout.h"
+#include "UI/ui_active_track_sync.h"
 
 static uint16_t g_kit_v1_current_slot = KIT_V1_INVALID_SLOT;
+static uint8_t g_kit_v1_dirty;
+static uint8_t g_kit_v1_dirty_suspended;
 STORAGE_STATE_SDRAM static KitSaveV1 g_kit_v1_work;
 
 static void kit_v1_copy_text(char *dst, uint32_t dst_size, const char *src)
@@ -67,6 +75,32 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
         default:
             return KIT_V1_LABEL_UNKNOWN;
     }
+}
+
+static uint8_t kit_v1_track_uses_sampler_asset(ui_track_family_t family,
+                                               ui_track_type_t type)
+{
+    return (uint8_t)((family == UI_TRACK_FAMILY_SAMPLER)
+                    && ((type == UI_TRACK_TYPE_RAM)
+                        || (type == UI_TRACK_TYPE_STREAM)
+                        || (type == UI_TRACK_TYPE_MULTI)));
+}
+
+static uint8_t kit_v1_sampler_asset_kind_matches_type(uint8_t kind, ui_track_type_t type)
+{
+    if (type == UI_TRACK_TYPE_RAM)
+    {
+        return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_RAM) ? 1U : 0U;
+    }
+    if (type == UI_TRACK_TYPE_STREAM)
+    {
+        return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_STREAM) ? 1U : 0U;
+    }
+    if (type == UI_TRACK_TYPE_MULTI)
+    {
+        return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_MULTI) ? 1U : 0U;
+    }
+    return 0U;
 }
 
 static void kit_v1_capture_lfo(uint8_t track, uint8_t lfo, kit_v1_lfo_lane_t *out)
@@ -145,9 +179,331 @@ static void kit_v1_capture_sampler_asset(const track_tone_sound_state_t *tone,
     kit_v1_copy_text(out_asset->path, sizeof(out_asset->path), slot->path);
 }
 
+static uint8_t kit_v1_text_equal(const char *a, const char *b)
+{
+    if ((a == 0) || (b == 0))
+    {
+        return 0U;
+    }
+
+    for (uint32_t i = 0U; i < KIT_V1_ASSET_PATH_MAX; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return 0U;
+        }
+        if (a[i] == '\0')
+        {
+            return 1U;
+        }
+    }
+
+    return 1U;
+}
+
+static uint8_t kit_v1_resolve_loaded_asset(const kit_v1_asset_ref_t *asset,
+                                           uint16_t *out_global_slot)
+{
+    if ((asset == 0) || (out_global_slot == 0))
+    {
+        return 0U;
+    }
+    if ((asset->has_asset == 0U) || (asset->path[0] == '\0'))
+    {
+        return 1U;
+    }
+
+    const uint16_t capacity = sample_global_pool_get_active_slot_capacity();
+    if (asset->global_slot < capacity)
+    {
+        const sample_global_slot_t *const slot = sample_global_pool_get_slot(asset->global_slot);
+        if ((slot != 0)
+                && (slot->kind == (sample_global_kind_t)asset->kind)
+                && (slot->state == SAMPLE_GLOBAL_STATE_READY)
+                && (kit_v1_text_equal(slot->path, asset->path) != 0U))
+        {
+            *out_global_slot = asset->global_slot;
+            return 1U;
+        }
+    }
+
+    for (uint16_t i = 0U; i < capacity; ++i)
+    {
+        const sample_global_slot_t *const slot = sample_global_pool_get_slot(i);
+        if ((slot != 0)
+                && (slot->kind == (sample_global_kind_t)asset->kind)
+                && (slot->state == SAMPLE_GLOBAL_STATE_READY)
+                && (kit_v1_text_equal(slot->path, asset->path) != 0U))
+        {
+            *out_global_slot = i;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static void kit_v1_apply_lfo(uint8_t track, uint8_t lfo, const kit_v1_lfo_lane_t *lane)
+{
+    if ((track >= UI_TRACK_COUNT) || (lfo >= 2U) || (lane == 0))
+    {
+        return;
+    }
+
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEST, (float)lane->dest);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_RATE, lane->rate);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEPTH, (float)lane->depth);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, (float)lane->shape);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DELAY, lane->delay);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_TRIG, (float)lane->trig);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_FADE, lane->fade);
+    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_PHASE_SLEW, lane->phase_slew);
+}
+
+static uint8_t kit_v1_is_reapply_domain(param_id_t id)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+                    || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                    || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
+}
+
+static uint8_t kit_v1_multi_selector_for_global_slot(uint16_t global_slot, float *out_selector)
+{
+    uint16_t backend = MULTI_SAMPLE_POOL_INVALID_ID;
+    uint8_t selector = 1U;
+
+    if (out_selector == 0)
+    {
+        return 0U;
+    }
+    *out_selector = 0.0f;
+
+    if (sample_global_pool_resolve_backend(global_slot,
+                                           SAMPLE_GLOBAL_KIND_MULTI,
+                                           &backend) == 0U)
+    {
+        return 0U;
+    }
+
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    {
+        if (multi_sample_pool_get_instrument(id) == 0)
+        {
+            continue;
+        }
+        if (id == backend)
+        {
+            *out_selector = (float)selector;
+            return 1U;
+        }
+        selector++;
+    }
+
+    return 0U;
+}
+
+static uint8_t kit_v1_track_sample_param_should_apply(const kit_v1_track_payload_t *payload)
+{
+    if (payload == 0)
+    {
+        return 0U;
+    }
+    if (kit_v1_track_uses_sampler_asset((ui_track_family_t)payload->family,
+                                        (ui_track_type_t)payload->type) == 0U)
+    {
+        return 1U;
+    }
+    return (payload->asset.has_asset != 0U) ? 1U : 0U;
+}
+
+static uint8_t kit_v1_reapply_track_params_from_payload(uint8_t track,
+                                                        const kit_v1_track_payload_t *payload)
+{
+    uint8_t ok = 1U;
+
+    param_registry_batch_begin();
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        if (kit_v1_is_reapply_domain(id) == 0U)
+        {
+            continue;
+        }
+        if ((id == PARAM_SAMPLER_SAMPLE)
+                && (kit_v1_track_sample_param_should_apply(payload) == 0U))
+        {
+            continue;
+        }
+        if (track_runtime_get_effective_param_status(track, id) != TRACK_RUNTIME_PARAM_ALLOWED)
+        {
+            continue;
+        }
+
+        float value = 0.0f;
+        if ((id == PARAM_SAMPLER_SAMPLE)
+                && (payload != 0)
+                && (payload->asset.has_asset != 0U)
+                && (payload->asset.kind == (uint8_t)SAMPLE_GLOBAL_KIND_MULTI))
+        {
+            if (kit_v1_multi_selector_for_global_slot((uint16_t)payload->tone.sample, &value) == 0U)
+            {
+                ok = 0U;
+                continue;
+            }
+        }
+        else if (param_registry_get_track_value(id, track, &value) == 0U)
+        {
+            continue;
+        }
+
+        if (param_registry_apply_track_value(id, track, value) == 0U)
+        {
+            ok = 0U;
+        }
+    }
+    param_registry_batch_end();
+
+    return ok;
+}
+
+static kit_v1_result_t kit_v1_restore_loaded_kit_state(const KitSaveV1 *kit)
+{
+    if (kit == 0)
+    {
+        return KIT_V1_RESULT_INVALID_ARG;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        track_sound_state_t *const dst_sound = track_sound_state_get(track);
+        track_tone_sound_state_t *const dst_tone = track_tone_sound_state_get(track);
+        const kit_v1_track_payload_t *const src = &kit->tracks[track];
+        if ((dst_sound == 0) || (dst_tone == 0))
+        {
+            return KIT_V1_RESULT_APPLY_FAIL;
+        }
+
+        memcpy(dst_sound, &src->sound, sizeof(*dst_sound));
+        memcpy(dst_tone, &src->tone, sizeof(*dst_tone));
+        kit_v1_apply_lfo(track, 0U, &src->lfo[0]);
+        kit_v1_apply_lfo(track, 1U, &src->lfo[1]);
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (kit_v1_reapply_track_params_from_payload(track, &kit->tracks[track]) == 0U)
+        {
+            return KIT_V1_RESULT_APPLY_FAIL;
+        }
+    }
+
+    return KIT_V1_RESULT_OK;
+}
+
+static kit_v1_result_t kit_v1_validate_loaded_kit(KitSaveV1 *kit)
+{
+    if (kit == 0)
+    {
+        return KIT_V1_RESULT_INVALID_ARG;
+    }
+    if (kit->meta.track_count != UI_TRACK_COUNT)
+    {
+        return KIT_V1_RESULT_BAD_KIT;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        kit_v1_track_payload_t *const payload = &kit->tracks[track];
+        if ((payload->family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+                || (payload->type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+                || (ui_track_type_is_valid_for_family((ui_track_family_t)payload->family,
+                                                      (ui_track_type_t)payload->type) == false))
+        {
+            return KIT_V1_RESULT_BAD_KIT;
+        }
+
+        if (kit_v1_track_uses_sampler_asset((ui_track_family_t)payload->family,
+                                            (ui_track_type_t)payload->type) == 0U)
+        {
+            memset(&payload->asset, 0, sizeof(payload->asset));
+        }
+        else
+        {
+            uint16_t resolved_asset_slot = payload->asset.global_slot;
+            if ((payload->asset.has_asset != 0U)
+                    && (kit_v1_sampler_asset_kind_matches_type(payload->asset.kind,
+                                                               (ui_track_type_t)payload->type) == 0U))
+            {
+                return KIT_V1_RESULT_BAD_KIT;
+            }
+            if (kit_v1_resolve_loaded_asset(&payload->asset, &resolved_asset_slot) == 0U)
+            {
+                return KIT_V1_RESULT_ASSET_MISS;
+            }
+            if (payload->asset.has_asset != 0U)
+            {
+                payload->tone.sample = (float)resolved_asset_slot;
+            }
+        }
+    }
+
+    return KIT_V1_RESULT_OK;
+}
+
+static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
+{
+    uint8_t family[UI_TRACK_COUNT];
+    uint8_t type[UI_TRACK_COUNT];
+    uint8_t midi_channel[UI_TRACK_COUNT];
+    uint8_t midi_source[UI_TRACK_COUNT];
+
+    if (kit == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        family[track] = kit->tracks[track].family;
+        type[track] = kit->tracks[track].type;
+        midi_channel[track] = ui_get_track_midi_channel(track);
+        midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+    }
+
+    if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
+    {
+        return 0U;
+    }
+
+    track_runtime_invalidate_all();
+    return 1U;
+}
+
+static uint8_t kit_v1_transition_mutate(void *ctx_ptr)
+{
+    const KitSaveV1 *const kit = (const KitSaveV1 *)ctx_ptr;
+    return kit_v1_apply_track_structure(kit);
+}
+
+static uint8_t kit_v1_transition_reapply(void *ctx_ptr)
+{
+    const KitSaveV1 *const kit = (const KitSaveV1 *)ctx_ptr;
+    return (kit_v1_restore_loaded_kit_state(kit) == KIT_V1_RESULT_OK) ? 1U : 0U;
+}
+
+static uint8_t kit_v1_transition_ui_sync(void *ctx_ptr)
+{
+    (void)ctx_ptr;
+    ui_active_track_sync_full_after_global_restore();
+    return 1U;
+}
+
 void kit_v1_init(void)
 {
     g_kit_v1_current_slot = KIT_V1_INVALID_SLOT;
+    g_kit_v1_dirty = 0U;
+    g_kit_v1_dirty_suspended = 0U;
     memset(&g_kit_v1_work, 0, sizeof(g_kit_v1_work));
     kit_sd_bank_init();
 }
@@ -183,7 +539,10 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
         memcpy(&dst->tone, tone, sizeof(dst->tone));
         kit_v1_capture_lfo(track, 0U, &dst->lfo[0]);
         kit_v1_capture_lfo(track, 1U, &dst->lfo[1]);
-        kit_v1_capture_sampler_asset(tone, &dst->asset);
+        if (kit_v1_track_uses_sampler_asset(family, type) != 0U)
+        {
+            kit_v1_capture_sampler_asset(tone, &dst->asset);
+        }
 
         summary->family = (uint8_t)family;
         summary->type = (uint8_t)type;
@@ -226,10 +585,73 @@ kit_v1_result_t kit_v1_save_direct(uint16_t *out_slot)
     }
 
     g_kit_v1_current_slot = slot;
+    g_kit_v1_dirty = 0U;
     if (out_slot != 0)
     {
         *out_slot = slot;
     }
+    return KIT_V1_RESULT_OK;
+}
+
+kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
+{
+    if (slot >= KIT_V1_SLOT_COUNT)
+    {
+        return KIT_V1_RESULT_INVALID_ARG;
+    }
+    if (kit_sd_bank_slot_has_data(slot) == 0U)
+    {
+        return KIT_V1_RESULT_EMPTY;
+    }
+
+    if (kit_sd_bank_load_slot(slot, &g_kit_v1_work) == 0U)
+    {
+        const kit_sd_bank_error_t sd_err = kit_sd_bank_get_last_error();
+        if (sd_err == KIT_SD_BANK_ERR_GATE_BUSY)
+        {
+            return KIT_V1_RESULT_SD_BUSY;
+        }
+        if ((sd_err == KIT_SD_BANK_ERR_INVALID_HEADER)
+                || (sd_err == KIT_SD_BANK_ERR_CHECKSUM_FAIL))
+        {
+            return KIT_V1_RESULT_BAD_KIT;
+        }
+        return KIT_V1_RESULT_SD_FAIL;
+    }
+
+    kit_v1_result_t result = kit_v1_validate_loaded_kit(&g_kit_v1_work);
+    if (result != KIT_V1_RESULT_OK)
+    {
+        return result;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        keyboard_engine_all_notes_off_for_track(track);
+        brick6_sampler_runtime_reset_track(track);
+    }
+
+    const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
+        .prepare_fn = 0,
+        .mutate_fn = kit_v1_transition_mutate,
+        .reapply_fn = kit_v1_transition_reapply,
+        .seq_runtime_sync_fn = 0,
+        .ui_sync_fn = kit_v1_transition_ui_sync,
+        .resume_fn = 0,
+        .ctx = (void *)&g_kit_v1_work
+    };
+
+    g_kit_v1_dirty_suspended++;
+    const uint8_t apply_ok = param_registry_run_track_transition_pipeline(&transition_cmd);
+    g_kit_v1_dirty_suspended--;
+    if (apply_ok == 0U)
+    {
+        return KIT_V1_RESULT_APPLY_FAIL;
+    }
+
+    track_runtime_refresh_all();
+    g_kit_v1_current_slot = slot;
+    g_kit_v1_dirty = 0U;
     return KIT_V1_RESULT_OK;
 }
 
@@ -250,7 +672,6 @@ kit_v1_result_t kit_v1_rename_slot(uint16_t slot, const char *name)
             ? KIT_V1_RESULT_SD_BUSY
             : KIT_V1_RESULT_RENAME_FAIL;
     }
-    g_kit_v1_current_slot = slot;
     return KIT_V1_RESULT_OK;
 }
 
@@ -292,7 +713,11 @@ kit_v1_result_t kit_v1_delete_slot(uint16_t slot, uint16_t *out_next_slot)
         }
     }
 
-    g_kit_v1_current_slot = next;
+    if (g_kit_v1_current_slot == slot)
+    {
+        g_kit_v1_current_slot = KIT_V1_INVALID_SLOT;
+        g_kit_v1_dirty = 0U;
+    }
     if (out_next_slot != 0)
     {
         *out_next_slot = next;
@@ -310,6 +735,45 @@ uint16_t kit_v1_get_current_slot(void)
     return g_kit_v1_current_slot;
 }
 
+uint8_t kit_v1_get_current_name(char *out_name, uint32_t out_size)
+{
+    if ((out_name == 0) || (out_size == 0U) || (g_kit_v1_current_slot >= KIT_V1_SLOT_COUNT))
+    {
+        return 0U;
+    }
+
+    kit_v1_metadata_t meta;
+    if (kit_sd_bank_get_slot_metadata(g_kit_v1_current_slot, &meta) == 0U)
+    {
+        return 0U;
+    }
+
+    kit_v1_copy_text(out_name, out_size, meta.name);
+    if (out_name[0] == '\0')
+    {
+        (void)snprintf(out_name, out_size, "KIT %03u", (unsigned)g_kit_v1_current_slot);
+    }
+    return 1U;
+}
+
+uint8_t kit_v1_is_dirty(void)
+{
+    return ((g_kit_v1_current_slot < KIT_V1_SLOT_COUNT) && (g_kit_v1_dirty != 0U)) ? 1U : 0U;
+}
+
+void kit_v1_mark_dirty(void)
+{
+    if ((g_kit_v1_current_slot < KIT_V1_SLOT_COUNT) && (g_kit_v1_dirty_suspended == 0U))
+    {
+        g_kit_v1_dirty = 1U;
+    }
+}
+
+void kit_v1_clear_dirty(void)
+{
+    g_kit_v1_dirty = 0U;
+}
+
 const char *kit_v1_result_label(kit_v1_result_t result)
 {
     switch (result)
@@ -322,6 +786,8 @@ const char *kit_v1_result_label(kit_v1_result_t result)
         case KIT_V1_RESULT_SD_FAIL: return "ERROR";
         case KIT_V1_RESULT_EMPTY: return "NO KIT";
         case KIT_V1_RESULT_BAD_KIT: return "BAD KIT";
+        case KIT_V1_RESULT_ASSET_MISS: return "ASSET MISS";
+        case KIT_V1_RESULT_APPLY_FAIL: return "ERROR";
         case KIT_V1_RESULT_APPLY_TODO: return "APPLY TODO";
         case KIT_V1_RESULT_RENAME_TODO: return "REN TODO";
         case KIT_V1_RESULT_DELETE_TODO: return "DEL TODO";
