@@ -5,7 +5,9 @@
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Param/param_registry.h"
+#include "Storage/kit_v1.h"
 #include "Storage/patch_v1.h"
+#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "ui_edit_context_sync.h"
 #include "ui_core_feedback.h"
@@ -15,6 +17,7 @@
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_HALL_PATCH_SAVE_ARM_MS 80U
+#define UI_HALL_KIT_SAVE_ARM_MS 80U
 
 typedef struct
 {
@@ -37,7 +40,16 @@ typedef struct
     uint8_t save_track;
 } ui_hall_mode_flow_patch_pending_t;
 
+typedef struct
+{
+    uint8_t active;
+    uint32_t tap_ms;
+    uint8_t save_pending;
+    uint32_t save_due_ms;
+} ui_hall_mode_flow_kit_pending_t;
+
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
+static ui_hall_mode_flow_kit_pending_t g_kit_pending;
 
 static uint8_t ui_hall_mode_flow_capture_track_sound_copy(uint8_t source_track,
                                                           ui_hall_mode_flow_track_sound_copy_t *out_copy)
@@ -234,6 +246,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     if (hall == 0U)
     {
         hall_note_suppressed[hall] = 1U;
+        g_kit_pending.active = 0U;
         if ((g_patch_pending.active != 0U)
                 && ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
         {
@@ -253,7 +266,28 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         return;
     }
 
+    if (hall == 1U)
+    {
+        hall_note_suppressed[hall] = 1U;
+        g_patch_pending.active = 0U;
+        if ((g_kit_pending.active != 0U)
+                && ((now_ms - g_kit_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
+        {
+            ui_hall_kit_feedback_begin(now_ms);
+            ui_core_feedback_set("KIT SAVE", now_ms);
+            g_kit_pending.save_pending = 1U;
+            g_kit_pending.save_due_ms = now_ms + UI_HALL_KIT_SAVE_ARM_MS;
+            g_kit_pending.active = 0U;
+            return;
+        }
+
+        g_kit_pending.active = 1U;
+        g_kit_pending.tap_ms = now_ms;
+        return;
+    }
+
     g_patch_pending.active = 0U;
+    g_kit_pending.active = 0U;
 
     ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
     uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;
@@ -309,25 +343,58 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
         return;
     }
 
-    if (g_patch_pending.active == 0U)
+    if (g_kit_pending.save_pending != 0U)
+    {
+        if ((int32_t)(now_ms - g_kit_pending.save_due_ms) < 0)
+        {
+            return;
+        }
+
+        uint16_t saved_slot = KIT_V1_INVALID_SLOT;
+        const kit_v1_result_t result = kit_v1_save_direct(&saved_slot);
+        (void)saved_slot;
+        const uint32_t done_ms = HAL_GetTick();
+        ui_hall_kit_feedback_end(done_ms);
+        g_kit_pending.save_pending = 0U;
+        ui_core_feedback_set(kit_v1_result_label(result), done_ms);
+        return;
+    }
+
+    if (g_patch_pending.active != 0U)
+    {
+        if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
+        {
+            return;
+        }
+
+        const uint8_t target_track = g_patch_pending.target_track;
+        const ui_hall_mode_t previous_mode = g_patch_pending.previous_mode;
+        g_patch_pending.active = 0U;
+        if (ui_macro_overlay_is_active() != 0U)
+        {
+            ui_macro_overlay_on_hall_mode_changed();
+        }
+        ui_set_hall_mode(UI_HALL_MODE_PATCH);
+        ui_page_patch_assign_open(target_track, previous_mode);
+        return;
+    }
+
+    if (g_kit_pending.active == 0U)
     {
         return;
     }
 
-    if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
+    if ((now_ms - g_kit_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
     {
         return;
     }
 
-    const uint8_t target_track = g_patch_pending.target_track;
-    const ui_hall_mode_t previous_mode = g_patch_pending.previous_mode;
-    g_patch_pending.active = 0U;
+    g_kit_pending.active = 0U;
     if (ui_macro_overlay_is_active() != 0U)
     {
         ui_macro_overlay_on_hall_mode_changed();
     }
-    ui_set_hall_mode(UI_HALL_MODE_PATCH);
-    ui_page_patch_assign_open(target_track, previous_mode);
+    ui_page_kit_assign_open();
 }
 
 void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,

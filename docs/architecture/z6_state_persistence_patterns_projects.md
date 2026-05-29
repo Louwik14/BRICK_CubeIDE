@@ -928,3 +928,12 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - La reference asset Sampler est resolue uniquement si l'asset est deja present et `READY` dans `sample_global_pool` avec kind/path compatible; aucun reload FatFs, page-cache, reader ou voice n'est cree par l'apply Patch.
 - Preview, rollback, reload asset Sampler complet, filtres avances et Kit restent hors perimetre V1.
 - Le niveau produit `Set` est supprime du contrat: l'extension future se limite au `Kit` comme groupe de patches/tracks.
+
+## Addendum 2026-05-29 - Kit V1 étape 2
+
+- `kit_v1` ajoute une persistence Z6 séparée de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sélectionnables.
+- Les slots Kit sont des fichiers indexés sous `0:/BRICK/KIT/K0000.B6K`, format magic `B6KT`, version `1`, header metadata (`name[32]`, `track_count`, summary compact 16 tracks max), `payload_size` et checksum du payload.
+- Payload V1: pour les tracks `0..UI_TRACK_COUNT-1`, capture family/type, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO via `mod_lfo_v1_get_track_param`, référence asset Sampler optionnelle issue de `sample_global_pool`, et summary family/type/label/off pour miniature future.
+- Aucun pattern, séquence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, état IRQ ni état UI temporaire n'est capturé.
+- `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accès FatFs restent hors IRQ et exclusifs vis-à-vis des clients SD critiques.
+- Étape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Apply complet, apply partiel, preview, rollback et asset reload restent hors périmètre. Rename recharge le payload, met à jour `meta.name`, puis réécrit header/payload avec checksum recalculé; delete supprime le fichier et invalide le cache metadata en `EMPTY`.

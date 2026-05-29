@@ -171,6 +171,8 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_sd_bank.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_v1.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/kit_sd_bank.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/kit_v1.c"
 )
 
 file(GLOB SRC_UI_SRC
@@ -191,6 +193,7 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_seq_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_shortcuts.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_kit_assign.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
 )
 

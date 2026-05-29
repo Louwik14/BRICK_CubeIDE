@@ -31,6 +31,7 @@
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
+#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "Storage/sample_capture.h"
 #include "ui_bootstrap.h"
@@ -719,6 +720,10 @@ void ui_core_tick(void)
         else if (ui_page_patch_assign_is_open() != 0U)
         {
             (void)ui_page_patch_assign_handle_encoder(encoder, delta);
+        }
+        else if (ui_page_kit_assign_is_open() != 0U)
+        {
+            (void)ui_page_kit_assign_handle_encoder(encoder, delta);
         }
         else if (ui_page_audio_rec_is_open() != 0U)
         {

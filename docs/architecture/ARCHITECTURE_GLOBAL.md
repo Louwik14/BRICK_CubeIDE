@@ -1,23 +1,23 @@
 # ARCHITECTURE_GLOBAL.md
 
-## 1. Rôle
+## 1. RÃ´le
 
-Ce document est une carte d’orientation.
+Ce document est une carte dâ€™orientation.
 
-Il ne détaille pas l’architecture locale.
-Il sert uniquement à :
+Il ne dÃ©taille pas lâ€™architecture locale.
+Il sert uniquement Ã  :
 - identifier la bonne zone
-- comprendre les dépendances principales entre zones
+- comprendre les dÃ©pendances principales entre zones
 - savoir quels documents lire avant de modifier le code
 
 Lecture cible du projet :
-- état canonique / contrôle
+- Ã©tat canonique / contrÃ´le
 - projection runtime track-aware
-- exécution bornée
+- exÃ©cution bornÃ©e
 
-La trajectoire d’architecture vise des seams explicites et une préparation propre au futur split dual-core, sans créer de bus central ou d’IPC prématuré.
+La trajectoire dâ€™architecture vise des seams explicites et une prÃ©paration propre au futur split dual-core, sans crÃ©er de bus central ou dâ€™IPC prÃ©maturÃ©.
 
-Le détail réel vit dans :
+Le dÃ©tail rÃ©el vit dans :
 - `docs/architecture/z0_plateforme_cadence.md`
 - `docs/architecture/z1_audio_hard_rt_mix.md`
 - `docs/architecture/z2_track_runtime_authority.md`
@@ -28,20 +28,20 @@ Le détail réel vit dans :
 
 ---
 
-## 2. Zones d’architecture
+## 2. Zones dâ€™architecture
 
-## Z0 — Plateforme / Cadence
+## Z0 â€” Plateforme / Cadence
 Lit ce document si le sujet touche :
 - boot
-- init système
-- ordre d’initialisation
+- init systÃ¨me
+- ordre dâ€™initialisation
 - superloop
 - tasklets / cadence hors audio IRQ
 
 Doc :
 - `docs/architecture/z0_plateforme_cadence.md`
 
-## Z1 — Audio Hard-RT / Mix
+## Z1 â€” Audio Hard-RT / Mix
 Lit ce document si le sujet touche :
 - DMA / IRQ audio
 - blocs audio
@@ -55,33 +55,33 @@ Lit ce document si le sujet touche :
 Doc :
 - `docs/architecture/z1_audio_hard_rt_mix.md`
 
-## Z2 — Track Runtime Authority
+## Z2 â€” Track Runtime Authority
 Lit ce document si le sujet touche :
 - track_state autoritatif
 - family / type effectifs
 - binding runtime
 - mix target runtime
-- capacités runtime
-- statut effectif d’un domaine param
+- capacitÃ©s runtime
+- statut effectif dâ€™un domaine param
 - logique track-aware centrale
 
 Doc :
 - `docs/architecture/z2_track_runtime_authority.md`
 
-## Z3 — Param / Modulation / Control
+## Z3 â€” Param / Modulation / Control
 Lit ce document si le sujet touche :
-- écriture param
+- Ã©criture param
 - clamp / dispatch / apply
 - staging / commit
 - modulation LFO
 - coexistence global / track-aware / legacy
-- modèle paramétrique par track
+- modÃ¨le paramÃ©trique par track
 - base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + MIDI simple + TRX BD reserve + BD Analog)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
 
-## Z4 — Seq / Clock / Scheduler
+## Z4 â€” Seq / Clock / Scheduler
 Lit ce document si le sujet touche :
 - transport
 - tempo / clock
@@ -89,32 +89,32 @@ Lit ce document si le sujet touche :
 - boundaries
 - scheduling sample-accurate
 - evenements audio metronome sample-accurate
-- live-rec lié au transport
+- live-rec liÃ© au transport
 
 Doc :
 - `docs/architecture/z4_seq_clock_scheduler.md`
 
-## Z5 — UI / Navigation / Interaction
+## Z5 â€” UI / Navigation / Interaction
 Lit ce document si le sujet touche :
-- état UI
+- Ã©tat UI
 - navigation
 - hall modes
 - track select
-- résolution contextuelle des pages
+- rÃ©solution contextuelle des pages
 - raccourcis
 - clipboard UI
 
 Doc :
 - `docs/architecture/z5_ui_navigation_interaction.md`
 
-## Z6 — State / Persistence / Patterns / Projects
+## Z6 â€” State / Persistence / Patterns / Projects
 Lit ce document si le sujet touche :
 - snapshot live
 - queue/apply pattern
 - save/load pattern
 - save/load project
 - boot context
-- restore global d’état
+- restore global dâ€™Ã©tat
 - writer Looper, reservoirs RAW systeme, export SAVE RAW -> WAV durable, paths finaux
 
 Doc :
@@ -122,53 +122,53 @@ Doc :
 
 ---
 
-## 3. Dépendances principales entre zones
+## 3. DÃ©pendances principales entre zones
 
 - Z0 initialise et cadence tout le reste
 - Z1 consomme surtout Z2, Z3 et Z4
 - En clock interne/externe sequencer, Z1 fournit la consommation finale d'avance step de Z4 (domaine audio bloc)
-- Z2 fournit la vérité runtime aux autres zones
-- Z3 applique des valeurs en s’appuyant sur Z2
-- En PLAY+REC actif, les edits param track-aware sont redirigés vers Z4 (écriture p-lock live), sans write runtime direct Z3 en parallèle
-- Z4 produit les événements temporels consommés par Z1
-- Z4 et Z5 peuvent notifier Z3 des note/trig runtime via le seam explicite LFO, sans devenir autorité de modulation
-- Z5 pilote Z2, Z3, Z4 et Z6 via l’interaction utilisateur
-- Z6 capture/restaure de l’état qui réimpacte Z2, Z3, Z4 et Z5
+- Z2 fournit la vÃ©ritÃ© runtime aux autres zones
+- Z3 applique des valeurs en sâ€™appuyant sur Z2
+- En PLAY+REC actif, les edits param track-aware sont redirigÃ©s vers Z4 (Ã©criture p-lock live), sans write runtime direct Z3 en parallÃ¨le
+- Z4 produit les Ã©vÃ©nements temporels consommÃ©s par Z1
+- Z4 et Z5 peuvent notifier Z3 des note/trig runtime via le seam explicite LFO, sans devenir autoritÃ© de modulation
+- Z5 pilote Z2, Z3, Z4 et Z6 via lâ€™interaction utilisateur
+- Z6 capture/restaure de lâ€™Ã©tat qui rÃ©impacte Z2, Z3, Z4 et Z5
 
-Règle de lecture transversale :
+RÃ¨gle de lecture transversale :
 - Z2 porte la projection runtime track-aware
-- Z3 et Z4 consomment cette projection sans recréer d’autorité locale parallèle
-- Z5 expose des choix utilisateur, mais ne doit pas devenir une seconde autorité de structure
-- Z1 et Z0 restent des zones d’exécution / orchestration bornée, pas des lieux de décision métier
+- Z3 et Z4 consomment cette projection sans recrÃ©er dâ€™autoritÃ© locale parallÃ¨le
+- Z5 expose des choix utilisateur, mais ne doit pas devenir une seconde autoritÃ© de structure
+- Z1 et Z0 restent des zones dâ€™exÃ©cution / orchestration bornÃ©e, pas des lieux de dÃ©cision mÃ©tier
 
 ---
 
 ## 4. Comment choisir quoi lire
 
 ### Si le prompt parle de :
-- **boot / ordre d’init / boucle principale** ? Z0
+- **boot / ordre dâ€™init / boucle principale** ? Z0
 - **IRQ audio / mix / buffer audio / DMA** ? Z1
 - **family / type / mix target / runtime bind** ? Z2
-- **paramètres / LFO / apply / staging** ? Z3 (hors redirection live-rec PLAY+REC)
-- **transport / tempo / scheduler / live rec séquenceur** ? Z4
+- **paramÃ¨tres / LFO / apply / staging** ? Z3 (hors redirection live-rec PLAY+REC)
+- **transport / tempo / scheduler / live rec sÃ©quenceur** ? Z4
 - **UI / halls / navigation / pages / clipboard** ? Z5
 - **save/load / patterns / projects / restore** ? Z6
 
-### Cas transverses fréquents
+### Cas transverses frÃ©quents
 - **Input Audio vs Hybrid** ? Z2 + Z3 + Z5
 - **Master/FX MacroFX** ? Z1 + Z2 + Z3 + Z5
 - **bug track-aware transversal** ? commencer par Z2
-- **bug après load/restore** ? Z6 puis Z2/Z3/Z4/Z5 selon symptôme
+- **bug aprÃ¨s load/restore** ? Z6 puis Z2/Z3/Z4/Z5 selon symptÃ´me
 
-### Philosophie d’architecture attendue
+### Philosophie dâ€™architecture attendue
 - track-aware avant global
-- ownership clair avant confort d’implémentation
+- ownership clair avant confort dâ€™implÃ©mentation
 - canonical state avant projection
-- projection avant exécution
+- projection avant exÃ©cution
 - seams explicites avant abstractions larges
-- future dual-core par séparation réelle, pas par surcouche de transport
-- pas de nœud central ambigu
-- pas d’infra prématurée
+- future dual-core par sÃ©paration rÃ©elle, pas par surcouche de transport
+- pas de nÅ“ud central ambigu
+- pas dâ€™infra prÃ©maturÃ©e
 
 ---
 
@@ -201,3 +201,8 @@ Documents conserves pour tracabilite uniquement:
 - Patch V1 ajoute un seam Z5/Z6: UI Patch Assign + persistence de snapshot canonique d'une track sous slots fichiers separes de Project/Pattern.
 - Kit reste l'extension future multi-track; Set est retire du contrat produit.
 
+
+## Addendum 2026-05-29 - Kit V1 etape 2
+
+- Kit V1 ajoute un seam Z5/Z6 distinct de Patch: storage/capture/save/browser/rename/delete pour snapshot sonore complet machine, sans apply dans cette etape.
+- HALL1 devient l'entrÃ©e workflow Kit en overlay: single tap ouvre le browser aprÃ¨s fenÃªtre double tap, double tap sauvegarde directement; aucun hall mode Kit persistant n'est ajoutÃ©.

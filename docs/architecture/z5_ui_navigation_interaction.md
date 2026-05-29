@@ -846,3 +846,14 @@ Points factuels:
 - `TEMPO` est rendu comme texte numerique a deux decimales et non comme potard.
 - Edition `TEMPO`: encodeur normal = `1.00 BPM`, `SHIFT+encodeur` = `0.01 BPM`; les bornes restent `40.00..300.00`, sans wrap.
 - `METRO`: parametre global REC CFG `0..127`; `0` s'affiche `OFF`, `1..127` s'affiche numeriquement et pilote le volume du metronome MAIN monitor-only. Aucun choix de route CUE/BOTH n'est expose en V1.
+
+## 32. Contrat UI Kit V1 étape 2
+
+- `SHIFT + HALL 1` est l'entrée workflow `Kit` en overlay; aucun hall mode Kit persistant n'est ajouté.
+- Premier tap `SHIFT + HALL 1`: arme une action Kit pending; aucun accès SD n'est lancé pendant la fenêtre double tap.
+- Deuxième tap dans `UI_HALL_MODE_DOUBLE_TAP_MS`: annule le pending single et lance un `Save Kit` direct. Le feedback court affiche `KIT SAVE`, puis `KIT SAVED`, `KIT FULL`, `SD BUSY` ou `ERROR`.
+- Expiration sans deuxième tap: ouvre `Kit Browser`, qui liste uniquement les slots Kit valides existants. Les slots vides ne sont pas visibles et la navigation encodeur est bornée sans wrap.
+- `PAGE1` retourne à la page précédente. `PAGE2` est réservé et affiche `APPLY TODO`; aucun apply Kit, apply partiel, target mask, sélection de tracks, preview ou rollback n'existe dans cette étape.
+- `PAGE3` ouvre le `Name Edit` générique pour renommer le slot Kit sélectionné; validation réécrit le payload/header avec checksum recalculé et affiche `KIT RENAMED`, cancel revient sans mutation.
+- `PAGE4` demande confirmation (`DELETE?`) puis supprime le fichier Kit; le browser reste ouvert, sélectionne le prochain Kit valide si possible, sinon affiche `NO KIT`.
+- Le browser affiche le nom Kit et le nombre de tracks depuis les metadata/header, puis une miniature read-only 2x8 issue du summary header. La miniature ne sélectionne aucune track et ne permet aucun apply partiel.
