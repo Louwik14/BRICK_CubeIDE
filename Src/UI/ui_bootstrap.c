@@ -15,6 +15,7 @@
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
+#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
 #include "ui_page_manager.h"
@@ -59,6 +60,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_audio_rec);
     ui_page_manager_register(&g_ui_page_rec_edit);
     ui_page_manager_register(&g_ui_page_patch_assign);
+    ui_page_manager_register(&g_ui_page_kit_assign);
     ui_page_manager_register(&g_ui_page_name_edit);
     ui_page_manager_register(&g_ui_page_settings);
 
