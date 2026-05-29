@@ -32,7 +32,7 @@ void seq_transport_fsm_init(seq_transport_fsm_t *fsm);
 void seq_transport_fsm_reset(seq_transport_fsm_t *fsm);
 uint8_t seq_transport_fsm_request_start(seq_transport_fsm_t *fsm,
                                         uint8_t rec_armed,
-                                        uint8_t rec_count_in_mode);
+                                        uint8_t rec_roll_mode);
 uint8_t seq_transport_fsm_request_stop(seq_transport_fsm_t *fsm);
 uint8_t seq_transport_fsm_request_continue(seq_transport_fsm_t *fsm);
 /*

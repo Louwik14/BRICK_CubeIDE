@@ -6,6 +6,7 @@
 #include "Seq/seq_types.h"
 
 #define SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE 0xF0U
+#define SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK   0xF1U
 
 typedef struct
 {
@@ -48,6 +49,15 @@ typedef enum
     SEQ_REC_LEN_MODE_PATTERN = 1
 } seq_rec_len_mode_t;
 
+typedef enum
+{
+    SEQ_REC_START_DEFAULT = 0,
+    SEQ_REC_START_TRIG = 1,
+    SEQ_REC_START_ROLL_1_4 = 2,
+    SEQ_REC_START_ROLL_1_2 = 3,
+    SEQ_REC_START_ROLL_1 = 4
+} seq_rec_start_mode_t;
+
 typedef struct
 {
     uint8_t type;
@@ -89,7 +99,7 @@ uint32_t seq_runtime_get_samples_per_step_q16(void);
 void seq_runtime_start(void);
 void seq_runtime_stop(void);
 void seq_runtime_toggle_play_stop(void);
-void seq_runtime_set_rec_count_in_mode(uint8_t mode);
+void seq_runtime_set_rec_start_mode(uint8_t mode);
 void seq_runtime_set_rec_len_mode(uint8_t mode);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
 void seq_runtime_rec_toggle_arm(void);
@@ -120,7 +130,8 @@ void seq_runtime_on_track_pattern_change(uint8_t track);
 uint8_t seq_runtime_is_running(void);
 uint8_t seq_runtime_is_start_pending(void);
 uint8_t seq_runtime_rec_is_armed(void);
-uint8_t seq_runtime_get_rec_count_in_mode(void);
+uint8_t seq_runtime_get_rec_start_mode(void);
+uint8_t seq_runtime_rec_is_waiting_trigger_start(void);
 uint8_t seq_runtime_get_rec_len_mode(void);
 uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
 uint32_t seq_runtime_get_tempo_bpm_milli(void);
@@ -130,4 +141,3 @@ void seq_runtime_diag_reset(void);
 void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
 
 #endif /* SEQ_RUNTIME_H */
-

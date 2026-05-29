@@ -2,6 +2,14 @@
 
 ## 1. Perimetre
 
+Addendum 2026-05-28 - formats REC START:
+- `PatternSaveV1.globals.rec_start_mode` stocke le contrat REC `START` (`DEFAULT/TRIG/ROLL 1/4/ROLL 1/2/ROLL 1`) a la place de l'ancien champ REC launch/count-in.
+- `PATTERN_VERSION` passe a `26` et `PROJECT_V1_FILE_VERSION` passe a `37`; les anciens fichiers sont refuses par validation d'en-tete, sans alias de compatibilite.
+
+Addendum 2026-05-28 - REC METRO:
+- `PARAM_CFG_METRO` est persiste comme parametre global REC CFG via `global_values`, pas par track.
+- `PATTERN_VERSION` passe a `27` et `PROJECT_V1_FILE_VERSION` passe a `38`; les anciens fichiers restent refuses par validation d'en-tete/payload.
+
 Perimetre operationnel de zone (appartient a Z6):
 - `Src/Storage/pattern_live_ram.c`
 - `Src/Storage/pattern_sd_bank.c`
@@ -904,3 +912,19 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `project_v1_load_blank()` neutralise maintenant hors IRQ les etats transitoires non persistables avant de recharger le boot snapshot: preview SD, voix/readers Sampler, runtime Looper, runtime Wave/Braids, voix Drum, mixer lanes/sends, buffers reverb/delay, XFade Looper, MacroFX et bases track sound/tone.
 - Le reset lourd precede `pattern_live_apply_boot_snapshot()`; le boot snapshot reste l'autorite des defaults persistables et reprojette ensuite UI/runtime/params.
 - Depuis `Settings > Project > Load > Blank`, le retour UI force `CFG` pour eviter de rendre une page template devenue invalide apres remise a `Off` des tracks.
+
+## Addendum 2026-05-27 - Patch V1
+
+- `patch_v1` ajoute une persistence Z6 separee de Project/Pattern: un Patch est la photo canonique d'une seule track.
+- Les slots Patch sont des fichiers indexes sous `0:/BRICK/PATCH/P0000.B6P`, format magic `B6PT`, version `1`, header metadata et checksum du payload.
+- Payload V1: family/type/source/name, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO capturees via `mod_lfo_v1_get_track_param`, et une reference asset Sampler optionnelle issue de `sample_global_pool`.
+- Aucun audio brut, sequence, pattern, p-lock, playhead, voice, reader SD, page-cache, buffer audio, pointeur runtime ou etat IRQ n'est capture.
+- `patch_sd_bank` utilise `SD_ACCESS_CLIENT_PATCH`; les acces FatFs restent hors IRQ et exclusifs vis-a-vis des clients SD critiques.
+- L'apply minimal `patch_v1_apply_slot_to_track` charge un slot, valide header/checksum/payload, neutralise les notes/voix de la target, applique family/type via les autorites UI/track_state existantes, rafraichit `track_runtime`, restaure les etats canoniques sound/tone, restaure les LFO via `mod_lfo_v1_set_track_param`, puis reapplique les params autorises via `param_registry_apply_track_value`.
+- La banque Patch V1 expose un slot state minimal `EMPTY/VALID/INVALID`, `patch_sd_bank_rename_slot` et `patch_sd_bank_delete_slot`. Rename recharge le payload, modifie `meta.name` et reecrit le meme fichier avec checksum recalcule; delete supprime le fichier de slot et met le slot en `EMPTY`.
+- Le slot courant reste l'index choisi par le browser/save/apply. Save direct ecrit le slot courant s'il est utilisable, sinon le premier slot vide; apply positionne le slot courant sur le slot applique; delete choisit le prochain slot valide ou conserve le slot devenu vide.
+- Les filtres/tri Patch Assign utilisent uniquement le cache metadata/header de `patch_sd_bank`; aucun payload lourd n'est charge pour construire la liste. Les filtres precis Family/Type listent uniquement les slots `VALID` compatibles; `BAD PATCH` et `EMPTY` restent visibles seulement dans la vue `ALL/ALL`, apres les patches valides.
+- Le multi-target Patch Assign ne change pas le format Patch: un fichier `.B6P` reste mono-track. L'UI applique le meme slot sequentiellement vers les targets cochees via `patch_v1_apply_slot_to_track`, dans l'ordre croissant des track id, et continue apres un echec partiel sans rollback.
+- La reference asset Sampler est resolue uniquement si l'asset est deja present et `READY` dans `sample_global_pool` avec kind/path compatible; aucun reload FatFs, page-cache, reader ou voice n'est cree par l'apply Patch.
+- Preview, rollback, reload asset Sampler complet, filtres avances et Kit restent hors perimetre V1.
+- Le niveau produit `Set` est supprime du contrat: l'extension future se limite au `Kit` comme groupe de patches/tracks.

@@ -37,7 +37,8 @@ typedef struct
 } seq_live_rec_session_pending_note_t;
 
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_armed;
-SEQ_STATE_D2 static uint8_t g_seq_live_rec_count_in_mode;
+SEQ_STATE_D2 static uint8_t g_seq_live_rec_start_mode;
+SEQ_STATE_D2 static uint8_t g_seq_live_rec_waiting_trigger_start;
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_len_mode;
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_pattern_pending_start;
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_pattern_active;
@@ -686,7 +687,8 @@ void seq_live_rec_session_init(void)
 {
     memset(g_seq_live_rec_pending, 0, sizeof(g_seq_live_rec_pending));
     g_seq_live_rec_armed = 0U;
-    g_seq_live_rec_count_in_mode = 0U;
+    g_seq_live_rec_start_mode = (uint8_t)SEQ_REC_START_DEFAULT;
+    g_seq_live_rec_waiting_trigger_start = 0U;
     g_seq_live_rec_len_mode = (uint8_t)SEQ_REC_LEN_MODE_OVERDUB;
     g_seq_live_rec_pattern_pending_start = 0U;
     g_seq_live_rec_pattern_active = 0U;
@@ -717,6 +719,7 @@ void seq_live_rec_session_on_transport_stop(uint64_t stop_sample, uint32_t sampl
 {
     seq_live_rec_session_flush_and_reset(stop_sample, samples_per_step_q16);
     seq_live_rec_session_pattern_rec_cancel();
+    g_seq_live_rec_waiting_trigger_start = 0U;
 }
 
 void seq_live_rec_session_on_step_advanced(const seq_runtime_state_t *runtime_state, uint64_t now_sample)
@@ -738,6 +741,7 @@ void seq_live_rec_session_toggle_arm(uint64_t now_sample, uint32_t samples_per_s
             g_seq_live_rec_armed = 0U;
             seq_live_rec_session_pattern_rec_cancel();
             seq_live_rec_session_flush_and_reset(now_sample, samples_per_step_q16);
+            g_seq_live_rec_waiting_trigger_start = 0U;
             return;
         }
 
@@ -762,6 +766,12 @@ void seq_live_rec_session_toggle_arm(uint64_t now_sample, uint32_t samples_per_s
     {
         seq_live_rec_session_flush_and_reset(now_sample, samples_per_step_q16);
         seq_live_rec_session_pattern_rec_cancel();
+        g_seq_live_rec_waiting_trigger_start = 0U;
+    }
+    else if ((g_seq_live_rec_start_mode == (uint8_t)SEQ_REC_START_TRIG)
+             && (seq_runtime_is_running() == 0U))
+    {
+        g_seq_live_rec_waiting_trigger_start = 1U;
     }
 }
 
@@ -770,19 +780,63 @@ uint8_t seq_live_rec_session_rec_is_armed(void)
     return g_seq_live_rec_armed;
 }
 
-void seq_live_rec_session_set_rec_count_in_mode(uint8_t mode)
+void seq_live_rec_session_set_rec_start_mode(uint8_t mode)
 {
-    if (mode > 3U)
+    if (mode > (uint8_t)SEQ_REC_START_ROLL_1)
     {
-        mode = 3U;
+        mode = (uint8_t)SEQ_REC_START_ROLL_1;
     }
 
-    g_seq_live_rec_count_in_mode = mode;
+    g_seq_live_rec_start_mode = mode;
+    if (mode != (uint8_t)SEQ_REC_START_TRIG)
+    {
+        g_seq_live_rec_waiting_trigger_start = 0U;
+    }
+    else if ((g_seq_live_rec_armed != 0U) && (seq_runtime_is_running() == 0U))
+    {
+        g_seq_live_rec_waiting_trigger_start = 1U;
+    }
 }
 
-uint8_t seq_live_rec_session_get_rec_count_in_mode(void)
+uint8_t seq_live_rec_session_get_rec_start_mode(void)
 {
-    return g_seq_live_rec_count_in_mode;
+    return g_seq_live_rec_start_mode;
+}
+
+uint8_t seq_live_rec_session_rec_should_wait_trigger_start(void)
+{
+    if ((g_seq_live_rec_armed == 0U)
+        || (g_seq_live_rec_start_mode != (uint8_t)SEQ_REC_START_TRIG)
+        || (seq_runtime_is_running() != 0U))
+    {
+        return 0U;
+    }
+
+    g_seq_live_rec_waiting_trigger_start = 1U;
+    return 1U;
+}
+
+uint8_t seq_live_rec_session_consume_trigger_start_note_on(void)
+{
+    if ((g_seq_live_rec_armed == 0U)
+        || (g_seq_live_rec_start_mode != (uint8_t)SEQ_REC_START_TRIG)
+        || (g_seq_live_rec_waiting_trigger_start == 0U))
+    {
+        return 0U;
+    }
+
+    g_seq_live_rec_waiting_trigger_start = 0U;
+    return 1U;
+}
+
+void seq_live_rec_session_clear_trigger_start_wait(void)
+{
+    g_seq_live_rec_waiting_trigger_start = 0U;
+}
+
+uint8_t seq_live_rec_session_rec_is_waiting_trigger_start(void)
+{
+    return g_seq_live_rec_waiting_trigger_start;
 }
 
 void seq_live_rec_session_set_rec_len_mode(uint8_t mode)
@@ -1096,4 +1150,3 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                            runtime_state->samples_per_step_q16);
     }
 }
-

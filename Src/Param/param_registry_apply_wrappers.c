@@ -3,6 +3,7 @@
 #include "Core/track_state.h"
 #include "Core/track_runtime.h"
 #include "audio_float.h"
+#include "Audio/metronome_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
 #include "fx_pool.h"
@@ -318,14 +319,14 @@ void apply_cfg_midi_src(float v)
     param_store_set_active(PARAM_CFG_MIDI_SRC, (float)track_state_get_midi_source(active_track));
 }
 
-void apply_cfg_rec(float v)
+void apply_cfg_start(float v)
 {
-    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
-    /* Command surface: rec-count mode is written explicitly, then mirrored back for UI/store. */
-    seq_runtime_set_rec_count_in_mode(mode);
+    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f);
+    /* Command surface: REC start mode is written explicitly, then mirrored back for UI/store. */
+    seq_runtime_set_rec_start_mode(mode);
     /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
-    mode = seq_runtime_get_rec_count_in_mode();
-    param_store_set_active(PARAM_CFG_REC, (float)mode);
+    mode = seq_runtime_get_rec_start_mode();
+    param_store_set_active(PARAM_CFG_START, (float)mode);
 }
 
 void apply_cfg_tempo(float v)
@@ -384,6 +385,13 @@ void apply_cfg_rec_len(float v)
     /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     mode = seq_runtime_get_rec_len_mode();
     param_store_set_active(PARAM_CFG_REC_LEN, (float)mode);
+}
+
+void apply_cfg_metro(float v)
+{
+    uint8_t level = (uint8_t)(clamp_value(v, 0.0f, 127.0f) + 0.5f);
+    metronome_runtime_set_level_u7(level);
+    param_store_set_active(PARAM_CFG_METRO, (float)level);
 }
 
 void apply_seq_length(float v)

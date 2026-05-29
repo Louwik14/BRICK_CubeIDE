@@ -389,6 +389,7 @@ Call-sites critiques:
 
 - Les destinations Wave directes sont `PARAM_WAVE_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
 - `PARAM_WAVE_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
+- Les labels de ces destinations Wave passent par le helper commun `param_wave_labels`: ils refletent l'etat canonique courant `PARAM_WAVE_EDIT` de la track et restent alignes avec les labels TONE, sans suivre dynamiquement les p-locks/LFO temporaires sur le choix de moteur.
 - Les destinations Drum directes actives sont les quatre controles `BD_ANALOG` exposes par le mapping TONE runtime: `PARAM_DRUM_TRX_BD_PITCH`, `DECAY`, `HARMONICS` et `PITCH_SWEEP`.
 - Les params Drum reserves/TRX (`SWEEP_DECAY`, `ATTACK`, `NOISE`, `DRIVE`) restent generiques/non exposes pour `BD_ANALOG`; ils n'ont pas de setter runtime actif clair dans `drum_synth`.
 - Application modulation runtime:
@@ -699,3 +700,11 @@ Dette explicite post-passe 4:
 - `PHASE_SLEW` est `PHASE` en degres pour les shapes non random et `SLEW` pour `RND`; le slew lisse la valeur sample-and-hold par tick borne.
 - Les triggers LFO arrivent par `mod_lfo_v1_note_trigger(track)`, appele depuis les chemins note sequenceur et clavier apres resolution track, sans dependance UI fragile.
 - En mode window-rate, si une fenetre traverse le wrap, la nouvelle valeur est appliquee a toute la fenetre courante, comme les autres formes tenues par fenetre; aucun ramp ni interpolation random n'est introduit.
+
+## 40. Contrat REC CFG START/TEMPO
+
+- `PARAM_CFG_START` remplace l'ancien ID REC dans le catalogue global REC CFG.
+- `apply_cfg_start()` ecrit l'autorite Z4 via `seq_runtime_set_rec_start_mode()` puis relit `seq_runtime_get_rec_start_mode()` pour miroir UI/store.
+- `PARAM_CFG_TEMPO` garde l'autorite tempo Z4 (`seq_runtime_set_tempo_bpm_milli`); l'edition REC CFG force `1.00 BPM` sans SHIFT et `0.01 BPM` avec SHIFT, sans nouvelle autorite tempo.
+- `PARAM_CFG_METRO` est un parametre global REC CFG `0..127`: `0=OFF`, `1..127=ON+volume`.
+- `apply_cfg_metro()` clamp explicitement la valeur, appelle `metronome_runtime_set_level_u7()` puis miroir `param_store`; le gain audio reel est calcule cote Z1 avec une courbe carree bornee.

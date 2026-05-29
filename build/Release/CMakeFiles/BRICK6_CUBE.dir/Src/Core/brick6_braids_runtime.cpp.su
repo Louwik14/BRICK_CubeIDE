@@ -1,19 +1,19 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:106:16:int16_t {anonymous}::brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voice_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:150:13:0(brick6_braids_runtime_instance_t*)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:188:6:void brick6_braids_runtime_init()	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:196:6:void brick6_braids_runtime_reset_instance(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:201:6:void brick6_braids_runtime_set_edit(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:211:6:void brick6_braids_runtime_set_fine(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:220:6:void brick6_braids_runtime_set_coarse(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:229:6:void brick6_braids_runtime_set_fm(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:238:6:void brick6_braids_runtime_set_timbre(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:247:6:void brick6_braids_runtime_set_modulation(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:256:6:void brick6_braids_runtime_set_color(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:265:6:void brick6_braids_runtime_set_phase_reset(uint8_t, uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:278:6:void brick6_braids_runtime_set_vca_release_seconds(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:317:6:void brick6_braids_runtime_note_off(uint8_t, uint8_t)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:287:6:void brick6_braids_runtime_note_on(uint8_t, float, float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:336:6:void brick6_braids_runtime_all_notes_off(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:351:6:void brick6_braids_runtime_clear_trigger(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:361:6:void brick6_braids_runtime_render_instance(uint8_t, float*, uint32_t)	128	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:433:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:109:16:int16_t {anonymous}::brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voice_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:164:13:0(brick6_braids_runtime_instance_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:203:6:void brick6_braids_runtime_init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:211:6:void brick6_braids_runtime_reset_instance(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:216:6:void brick6_braids_runtime_set_edit(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:227:6:void brick6_braids_runtime_set_fine(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:236:6:void brick6_braids_runtime_set_coarse(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:245:6:void brick6_braids_runtime_set_fm(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:254:6:void brick6_braids_runtime_set_timbre(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:263:6:void brick6_braids_runtime_set_modulation(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:272:6:void brick6_braids_runtime_set_color(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:281:6:void brick6_braids_runtime_set_phase_reset(uint8_t, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:294:6:void brick6_braids_runtime_set_vca_release_seconds(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:333:6:void brick6_braids_runtime_note_off(uint8_t, uint8_t)	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:303:6:void brick6_braids_runtime_note_on(uint8_t, float, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:352:6:void brick6_braids_runtime_all_notes_off(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:368:6:void brick6_braids_runtime_clear_trigger(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:378:6:void brick6_braids_runtime_render_instance(uint8_t, float*, uint32_t)	152	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:476:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	0	static

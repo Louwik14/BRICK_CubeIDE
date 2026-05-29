@@ -50,6 +50,7 @@ Lit ce document si le sujet touche :
 - mixage
 - taps recorder Looper dans le pipeline audio
 - playback Looper via pages RAM pretes dans le pipeline mixer
+- metronome MAIN monitor-only post-capture/post-MasterFX
 
 Doc :
 - `docs/architecture/z1_audio_hard_rt_mix.md`
@@ -87,6 +88,7 @@ Lit ce document si le sujet touche :
 - progression musicale
 - boundaries
 - scheduling sample-accurate
+- evenements audio metronome sample-accurate
 - live-rec lié au transport
 
 Doc :
@@ -193,3 +195,9 @@ Documents conserves pour tracabilite uniquement:
 - Le buffer master dedie est retire des zones Z1/Z2/Z3/Z5/Z6.
 - `audio_xfade` reste rattache au Looper, sans backend buffer master.
 - Le recorder legacy dormant `live_recorder` / `recorder_transport` est retire de Z0/Z1; le record produit conserve uniquement Looper RAW + `multi_record_writer`.
+
+## Addendum 2026-05-27 - Patch V1
+
+- Patch V1 ajoute un seam Z5/Z6: UI Patch Assign + persistence de snapshot canonique d'une track sous slots fichiers separes de Project/Pattern.
+- Kit reste l'extension future multi-track; Set est retire du contrat produit.
+

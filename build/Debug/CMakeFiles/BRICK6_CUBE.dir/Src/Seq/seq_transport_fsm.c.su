@@ -1,4 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c:10:17:seq_transport_fsm_count_in_steps_from_mode	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c:10:17:seq_transport_fsm_roll_steps_from_mode	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c:30:6:seq_transport_fsm_reset	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c:25:6:seq_transport_fsm_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c:42:9:seq_transport_fsm_request_start	8	static

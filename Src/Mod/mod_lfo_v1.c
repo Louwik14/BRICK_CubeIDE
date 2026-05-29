@@ -13,6 +13,7 @@
 #include "Param/param_filter.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
+#include "Param/param_wave_labels.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "mixer.h"
@@ -2154,7 +2155,11 @@ uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uin
         return 0U;
     }
 
-    const char *name = param_registry[dest].name;
+    const char *name = NULL;
+    if (param_wave_label_for_track_param(track, dest, &name) == 0U)
+    {
+        name = param_registry[dest].name;
+    }
     if (name == NULL)
     {
         return 0U;
@@ -2191,10 +2196,6 @@ static const char *mod_lfo_short_label_for_param(param_id_t dest)
         case PARAM_SAMPLER_CLIP_PLAY_MODE: return "Mode";
         case PARAM_SAMPLER_CLIP_STRETCH_MODE: return "Strc";
         case PARAM_SAMPLER_CLIP_GRAIN: return "Gra.";
-        case PARAM_WAVE_COARSE: return "Coa.";
-        case PARAM_WAVE_TIMBRE: return "Tmbr";
-        case PARAM_WAVE_MODULATION: return "Mod";
-        case PARAM_WAVE_COLOR: return "Colr";
         default: return NULL;
     }
 }
@@ -2239,7 +2240,11 @@ uint8_t mod_lfo_v1_dest_short_label(uint8_t track, uint16_t dest_index, char *ou
         return 0U;
     }
 
-    const char *label = mod_lfo_short_label_for_param(dest);
+    const char *label = NULL;
+    if (param_wave_label_for_track_param(track, dest, &label) == 0U)
+    {
+        label = mod_lfo_short_label_for_param(dest);
+    }
     if (label == NULL)
     {
         label = param_registry[dest].name;

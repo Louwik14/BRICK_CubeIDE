@@ -7,7 +7,7 @@
  */
 #include "Seq/seq_transport_fsm.h"
 
-static uint32_t seq_transport_fsm_count_in_steps_from_mode(uint8_t mode)
+static uint32_t seq_transport_fsm_roll_steps_from_mode(uint8_t mode)
 {
     switch (mode)
     {
@@ -41,7 +41,7 @@ void seq_transport_fsm_reset(seq_transport_fsm_t *fsm)
 
 uint8_t seq_transport_fsm_request_start(seq_transport_fsm_t *fsm,
                                         uint8_t rec_armed,
-                                        uint8_t rec_count_in_mode)
+                                        uint8_t rec_roll_mode)
 {
     /* Hybrid seam: transition policy lives here; clock policy only influences when pulses arrive. */
     if (fsm == 0)
@@ -55,7 +55,7 @@ uint8_t seq_transport_fsm_request_start(seq_transport_fsm_t *fsm,
     }
 
     fsm->rec_count_in_remaining_steps = (rec_armed != 0U)
-                                       ? seq_transport_fsm_count_in_steps_from_mode(rec_count_in_mode)
+                                       ? seq_transport_fsm_roll_steps_from_mode(rec_roll_mode)
                                        : 0U;
 
     if (fsm->rec_count_in_remaining_steps > 0U)

@@ -76,9 +76,12 @@ typedef struct
     uint8_t has_note;
     uint8_t phase_reset_enabled;
     uint8_t phase_reset_pending;
+    uint8_t pending_offset;
+    uint8_t pending_count;
     float level;
     float vca_release_s;
     uint32_t tail_samples_remaining;
+    int16_t pending_samples[kBraidsRenderBlockSize];
     braids::MacroOscillator oscillator;
 } brick6_braids_runtime_instance_t;
 
@@ -127,6 +130,17 @@ static uint32_t brick6_braids_runtime_compute_tail_samples(float release_s)
     return (uint32_t)(tail_s * kBraidsSampleRate + 0.5f);
 }
 
+static void brick6_braids_runtime_flush_pending(brick6_braids_runtime_instance_t *instance)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+
+    instance->pending_offset = 0U;
+    instance->pending_count = 0U;
+}
+
 static brick6_braids_runtime_instance_t *brick6_braids_runtime_get_instance_mut(uint8_t instance_id)
 {
     if (instance_id >= BRICK6_BRAIDS_MAX_INSTANCES)
@@ -170,6 +184,7 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
     instance->has_note = 0U;
     instance->phase_reset_enabled = 0U;
     instance->phase_reset_pending = 0U;
+    brick6_braids_runtime_flush_pending(instance);
     instance->level = 0.0f;
     instance->vca_release_s = 0.001f;
     instance->tail_samples_remaining = 0U;
@@ -205,6 +220,7 @@ void brick6_braids_runtime_set_edit(uint8_t instance_id, float edit)
     {
         instance->voice.edit = brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax);
         instance->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(instance->voice.edit));
+        brick6_braids_runtime_flush_pending(instance);
     }
 }
 
@@ -345,6 +361,7 @@ void brick6_braids_runtime_all_notes_off(uint8_t instance_id)
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
     instance->phase_reset_pending = 0U;
+    brick6_braids_runtime_flush_pending(instance);
     instance->tail_samples_remaining = 0U;
 }
 
@@ -395,34 +412,60 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
     uint8_t sync_block[kBraidsRenderBlockSize];
     int16_t sample_block[kBraidsRenderBlockSize];
     uint8_t phase_reset_pending = instance->phase_reset_pending;
+    uint8_t trigger_pending = instance->voice.trigger;
+    uint8_t rendered_block = 0U;
 
     while (offset < frames)
     {
-        const size_t block = ((frames - offset) > kBraidsRenderBlockSize) ? (size_t)kBraidsRenderBlockSize : (size_t)(frames - offset);
-        memset(sync_block, 0, sizeof(sync_block));
-        if (phase_reset_pending != 0U)
+        if (instance->pending_count == 0U)
         {
-            sync_block[0] = 1U;
-            phase_reset_pending = 0U;
-            instance->phase_reset_pending = 0U;
+            memset(sync_block, 0, sizeof(sync_block));
+            if (phase_reset_pending != 0U)
+            {
+                sync_block[0] = 1U;
+                phase_reset_pending = 0U;
+                instance->phase_reset_pending = 0U;
+            }
+            if (trigger_pending != 0U)
+            {
+                instance->oscillator.Strike();
+                trigger_pending = 0U;
+                instance->voice.trigger = 0U;
+            }
+            instance->oscillator.Render(sync_block, sample_block, (size_t)kBraidsRenderBlockSize);
+            memcpy(instance->pending_samples, sample_block, sizeof(sample_block));
+            instance->pending_offset = 0U;
+            instance->pending_count = (uint8_t)kBraidsRenderBlockSize;
+            rendered_block = 1U;
         }
-        instance->oscillator.Render(sync_block, sample_block, block);
 
-        for (size_t i = 0U; i < block; ++i)
+        const uint32_t needed = frames - offset;
+        const uint8_t consume = (needed > (uint32_t)instance->pending_count) ? instance->pending_count : (uint8_t)needed;
+        for (uint8_t i = 0U; i < consume; ++i)
         {
             const float coeff = (gate_target > instance->level) ? 0.05f : (1.0f - kBraidsReleaseCoeff);
             instance->level += (gate_target - instance->level) * coeff;
-            out_mono[offset + i] = brick6_braids_runtime_clamp(((float)sample_block[i] / 32768.0f) * instance->level, -1.0f, 1.0f) * BRAIDS_OUTPUT_TRIM;
+            const int16_t sample = instance->pending_samples[instance->pending_offset + i];
+            out_mono[offset + i] = brick6_braids_runtime_clamp(((float)sample / 32768.0f) * instance->level, -1.0f, 1.0f) * BRAIDS_OUTPUT_TRIM;
             if ((instance->voice.gate == 0U) && (instance->tail_samples_remaining > 0U))
             {
                 instance->tail_samples_remaining--;
             }
         }
 
-        offset += (uint32_t)block;
+        instance->pending_offset = (uint8_t)(instance->pending_offset + consume);
+        instance->pending_count = (uint8_t)(instance->pending_count - consume);
+        if (instance->pending_count == 0U)
+        {
+            instance->pending_offset = 0U;
+        }
+        offset += (uint32_t)consume;
     }
 
-    instance->voice.trigger = 0U;
+    if (rendered_block == 0U)
+    {
+        instance->voice.trigger = trigger_pending;
+    }
     if ((instance->voice.gate == 0U) && (instance->tail_samples_remaining == 0U) && (instance->level <= 1.0e-5f))
     {
         instance->level = 0.0f;

@@ -13,6 +13,7 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Storage/memory_layout.h"
+#include "Audio/metronome_runtime.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
 
@@ -46,6 +47,7 @@ SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_TRACK_COUNT];
 SEQ_STATE_D2 static seq_runtime_diag_t g_seq_runtime_diag;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
+static uint8_t g_seq_runtime_trigger_start_bypass;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
@@ -61,6 +63,7 @@ static uint8_t seq_runtime_clamp_track_div(uint8_t div);
 static uint8_t seq_runtime_clamp_percent(uint8_t value);
 static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *scheduler_event,
                                          const seq_runtime_audio_event_t *event);
+static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
 {
@@ -102,6 +105,23 @@ static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *sched
     scheduler_event->velocity = event->velocity;
     scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
     scheduler_event->event_token = event->event_token;
+}
+
+static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode)
+{
+    switch (mode)
+    {
+        case (uint8_t)SEQ_REC_START_ROLL_1_4:
+            return 1U;
+        case (uint8_t)SEQ_REC_START_ROLL_1_2:
+            return 2U;
+        case (uint8_t)SEQ_REC_START_ROLL_1:
+            return 3U;
+        case (uint8_t)SEQ_REC_START_DEFAULT:
+        case (uint8_t)SEQ_REC_START_TRIG:
+        default:
+            return 0U;
+    }
 }
 
 static void seq_runtime_send_transport_start(void)
@@ -171,6 +191,7 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
+    metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
     {
         seq_output_guard_panic((seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U) ? 1U : 0U);
@@ -256,6 +277,14 @@ void seq_runtime_init(void)
 void seq_runtime_start(void)
 {
     uint8_t begin_running_now = 0U;
+    if (g_seq_runtime_trigger_start_bypass == 0U)
+    {
+        if (seq_live_rec_session_rec_should_wait_trigger_start() != 0U)
+        {
+            return;
+        }
+    }
+    g_seq_runtime_trigger_start_bypass = 0U;
     const uint32_t primask = seq_runtime_enter_critical();
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) == 0U)
     {
@@ -272,7 +301,7 @@ void seq_runtime_start(void)
     /* Orchestration seam: transport FSM owns the start transition and count-in state. */
     if (seq_transport_fsm_request_start(&g_seq_transport_fsm,
                                         seq_live_rec_session_rec_is_armed(),
-                                        seq_live_rec_session_get_rec_count_in_mode()) == 0U)
+                                        seq_runtime_rec_start_mode_to_roll_mode(seq_live_rec_session_get_rec_start_mode())) == 0U)
     {
         seq_runtime_exit_critical(primask);
         return;
@@ -300,6 +329,7 @@ void seq_runtime_stop(void)
     uint8_t apply_stop_lifecycle = 0U;
     uint8_t emit_transport_stop_and_panic = 0U;
     const uint32_t primask = seq_runtime_enter_critical();
+    seq_live_rec_session_clear_trigger_start_wait();
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
     {
         seq_runtime_exit_critical(primask);
@@ -751,14 +781,19 @@ uint8_t seq_runtime_rec_is_armed(void)
     return seq_live_rec_session_rec_is_armed();
 }
 
-void seq_runtime_set_rec_count_in_mode(uint8_t mode)
+void seq_runtime_set_rec_start_mode(uint8_t mode)
 {
-    seq_live_rec_session_set_rec_count_in_mode(mode);
+    seq_live_rec_session_set_rec_start_mode(mode);
 }
 
-uint8_t seq_runtime_get_rec_count_in_mode(void)
+uint8_t seq_runtime_get_rec_start_mode(void)
 {
-    return seq_live_rec_session_get_rec_count_in_mode();
+    return seq_live_rec_session_get_rec_start_mode();
+}
+
+uint8_t seq_runtime_rec_is_waiting_trigger_start(void)
+{
+    return seq_live_rec_session_rec_is_waiting_trigger_start();
 }
 
 void seq_runtime_set_rec_len_mode(uint8_t mode)
@@ -835,6 +870,12 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t note,
                                   uint8_t velocity)
 {
+    if (seq_live_rec_session_consume_trigger_start_note_on() != 0U)
+    {
+        g_seq_runtime_trigger_start_bypass = 1U;
+        seq_runtime_start();
+    }
+
     seq_live_rec_session_live_rec_note_on(source,
                                           channel_zero_based,
                                           note,

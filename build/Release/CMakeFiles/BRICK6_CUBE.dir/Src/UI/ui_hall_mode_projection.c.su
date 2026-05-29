@@ -1,7 +1,9 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:10:24:ui_hall_mode_resolve_rout_context	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:38:31:ui_hall_mode_resolve_effective_view	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:70:9:ui_hall_allows_injection	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:76:9:ui_hall_uses_arp_engine	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:81:9:ui_hall_is_seq_context	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:86:13:ui_get_hall_mode_short_label	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:112:13:ui_get_hall_mode_suffix_label	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:21:6:ui_hall_patch_feedback_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:26:6:ui_hall_patch_feedback_end	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:31:24:ui_hall_mode_resolve_rout_context	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:59:31:ui_hall_mode_resolve_effective_view	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:94:9:ui_hall_allows_injection	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:100:9:ui_hall_uses_arp_engine	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:105:9:ui_hall_is_seq_context	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:110:13:ui_get_hall_mode_short_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:142:13:ui_get_hall_mode_suffix_label	16	static

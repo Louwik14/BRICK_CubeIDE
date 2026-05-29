@@ -5,6 +5,7 @@
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Param/param_registry.h"
+#include "Param/param_wave_labels.h"
 #include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
@@ -83,67 +84,17 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .default_subpage = 0U,
 };
 
-typedef enum
-{
-    UI_WAVE_VALUE_PERCENT = 0,
-    UI_WAVE_VALUE_BIPOLAR_PERCENT,
-    UI_WAVE_VALUE_INTERVAL,
-    UI_WAVE_VALUE_STEPPED,
-    UI_WAVE_VALUE_ENUM,
-    UI_WAVE_VALUE_MORPH,
-    UI_WAVE_VALUE_RATE,
-    UI_WAVE_VALUE_NONE
-} ui_wave_value_kind_t;
+typedef param_wave_label_value_kind_t ui_wave_value_kind_t;
+typedef param_wave_param_label_t ui_wave_param_label_t;
 
-typedef struct
-{
-    const char *label_a;
-    const char *label_b;
-    ui_wave_value_kind_t kind_a;
-    ui_wave_value_kind_t kind_b;
-} ui_wave_param_label_t;
-
-static const ui_wave_param_label_t g_wave_param_labels[] = {
-    { "NWidth", "NDepth", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_BIPOLAR_PERCENT },
-    { "Shape", "ToneDrv", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_PERCENT },
-    { "Shape", "-", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_NONE },
-    { "Fold", "SinTri", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Density", "Detune", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_INTERVAL },
-    { "PW", "Sub Mix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
-    { "Saw Shape", "Sub Mix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
-    { "Slave", "Balance", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_PERCENT },
-    { "Slave", "Balance", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_PERCENT },
-    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
-    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
-    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
-    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
-    { "Mod1", "Mod2", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
-    { "Detune", "Tone", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Rate", "Mask", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
-    { "Formant 1", "Formant 2", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Vowel", "FShift", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_PERCENT },
-    { "Formant Y", "Formant X", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Peak", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Index", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
-    { "Index", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
-    { "Chaos", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
-    { "Decay", "Inharm", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Decay", "ToneNz", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Decay", "Tone", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Cutoff", "NzMix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Body", "Snappy", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Wave", "Bank", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_ENUM },
-    { "X", "Y", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Wave", "Interp", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
-    { "Wave", "Chord", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_ENUM },
-    { "Resonance", "FltMix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
-    { "Q", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_INTERVAL },
-    { "Rate", "Steps", UI_WAVE_VALUE_RATE, UI_WAVE_VALUE_STEPPED },
-    { "Grain", "PVar", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Density", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-    { "Baud", "Data", UI_WAVE_VALUE_RATE, UI_WAVE_VALUE_PERCENT },
-    { "Speed", "Noise", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
-};
+#define UI_WAVE_VALUE_PERCENT          PARAM_WAVE_LABEL_VALUE_PERCENT
+#define UI_WAVE_VALUE_BIPOLAR_PERCENT  PARAM_WAVE_LABEL_VALUE_BIPOLAR_PERCENT
+#define UI_WAVE_VALUE_INTERVAL         PARAM_WAVE_LABEL_VALUE_INTERVAL
+#define UI_WAVE_VALUE_STEPPED          PARAM_WAVE_LABEL_VALUE_STEPPED
+#define UI_WAVE_VALUE_ENUM             PARAM_WAVE_LABEL_VALUE_ENUM
+#define UI_WAVE_VALUE_MORPH            PARAM_WAVE_LABEL_VALUE_MORPH
+#define UI_WAVE_VALUE_RATE             PARAM_WAVE_LABEL_VALUE_RATE
+#define UI_WAVE_VALUE_NONE             PARAM_WAVE_LABEL_VALUE_NONE
 
 static const ui_template_family_t g_ui_template_tone_family_midi = {
     .family_title = "TONE",
@@ -255,7 +206,7 @@ static uint8_t ui_page_template_tone_master_fx_u7(float value)
     return (uint8_t)(value + 0.5f);
 }
 
-#define UI_WAVE_PARAM_LABEL_COUNT ((uint8_t)(sizeof(g_wave_param_labels) / sizeof(g_wave_param_labels[0])))
+#define UI_WAVE_PARAM_LABEL_COUNT param_wave_label_count()
 
 static const int16_t g_wave_triple_intervals_q7[] = {
     -3072, -3072, -3068, -2944, -2816, -2688, -2560, -2432,
@@ -292,30 +243,21 @@ static const uint16_t g_wave_fm_frequency_quantizer[] = {
 static const ui_wave_param_label_t *ui_page_template_tone_wave_labels_for_active_track(uint8_t *out_edit_index)
 {
     const uint8_t active_track = ui_get_active_track();
-    float edit_value = 0.0f;
     uint8_t edit_index = 0U;
 
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
             || (ui_get_track_type(active_track) != UI_TRACK_TYPE_WAVE)
-            || (param_registry_get_track_value(PARAM_WAVE_EDIT, active_track, &edit_value) == 0U))
+            || (param_wave_edit_index_for_track(active_track, &edit_index) == 0U))
     {
         return NULL;
     }
 
-    if (edit_value > 0.0f)
-    {
-        edit_index = (uint8_t)(edit_value + 0.5f);
-    }
-    if (edit_index >= UI_WAVE_PARAM_LABEL_COUNT)
-    {
-        edit_index = (uint8_t)(UI_WAVE_PARAM_LABEL_COUNT - 1U);
-    }
     if (out_edit_index != NULL)
     {
         *out_edit_index = edit_index;
     }
 
-    return &g_wave_param_labels[edit_index];
+    return param_wave_labels_for_edit_index(edit_index);
 }
 
 static uint16_t ui_page_template_tone_wave_u15(float value)
@@ -383,10 +325,7 @@ static void ui_page_template_tone_wave_format_model(float value,
     {
         index = (uint8_t)(value + 0.5f);
     }
-    if (index >= UI_WAVE_PARAM_LABEL_COUNT)
-    {
-        index = (uint8_t)(UI_WAVE_PARAM_LABEL_COUNT - 1U);
-    }
+    (void)param_wave_edit_index_from_value(value, &index);
 
     if (param_registry[PARAM_WAVE_EDIT].labels != NULL)
     {

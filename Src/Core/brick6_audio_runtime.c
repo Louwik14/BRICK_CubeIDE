@@ -17,6 +17,7 @@
 
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
+#include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -190,6 +191,7 @@ void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
     fx_master_macro_init(48000.0f);
+    metronome_runtime_init();
 }
 
 void brick6_audio_runtime_dsp(StereoTrack *tracks,

@@ -24,6 +24,7 @@
 #include "cpu_load.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
+#include "Audio/metronome_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -94,6 +95,12 @@ static void audio_apply_seq_event_at_sample(seq_runtime_audio_event_t *event,
     if (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
     {
         brick6_looper_runtime_on_boundary_edge(event->track, event_sample_time);
+    }
+    else if (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK)
+    {
+        metronome_runtime_trigger_at(0U,
+                                     (event->velocity != 0U) ? METRONOME_CLICK_ACCENT
+                                                             : METRONOME_CLICK_NORMAL);
     }
     else
     {

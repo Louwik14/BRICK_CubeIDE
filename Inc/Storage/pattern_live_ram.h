@@ -78,7 +78,7 @@ typedef struct
     uint8_t global_valid[PARAM_COUNT];
     uint32_t tempo_bpm_milli;
     uint8_t clock_src;
-    uint8_t rec_count_in_mode;
+    uint8_t rec_start_mode;
     uint8_t rec_len_mode;
     uint8_t track_div[SEQ_TRACK_COUNT];
     uint8_t track_quant[SEQ_TRACK_COUNT];

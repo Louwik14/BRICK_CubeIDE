@@ -28,6 +28,7 @@
 #include <string.h>
 #include <arm_acle.h>
 #include "stm32h743xx.h"
+#include "Audio/metronome_runtime.h"
 
 #define AUDIO_TDM_SLOTS 8U
 
@@ -301,20 +302,32 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
         return;
     }
 
-    const float gain_step = (out_gain_end - out_gain_start) / (float)frames;
-    if ((out_gain_start == 0.0f) && (out_gain_end == 0.0f))
+    if (frames > AUDIO_BLOCK_SIZE)
     {
-        memset(tx, 0, frames * AUDIO_TDM_SLOTS * sizeof(int32_t));
-        return;
+        frames = AUDIO_BLOCK_SIZE;
     }
 
-    int32_t *AUDIO_RESTRICT ptx = tx;
+    static float monitor_main_l[AUDIO_BLOCK_SIZE];
+    static float monitor_main_r[AUDIO_BLOCK_SIZE];
+    const float gain_step = (out_gain_end - out_gain_start) / (float)frames;
     float out_gain = out_gain_start;
 
     for(uint32_t n = 0; n < frames; n++)
     {
-        const float main_l = bus_main_l[n] * out_gain;
-        const float main_r = bus_main_r[n] * out_gain;
+        monitor_main_l[n] = bus_main_l[n] * out_gain;
+        monitor_main_r[n] = bus_main_r[n] * out_gain;
+        out_gain += gain_step;
+    }
+
+    metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
+
+    int32_t *AUDIO_RESTRICT ptx = tx;
+    out_gain = out_gain_start;
+
+    for(uint32_t n = 0; n < frames; n++)
+    {
+        const float main_l = monitor_main_l[n];
+        const float main_r = monitor_main_r[n];
         const float cue_l = bus_cue_l[n] * out_gain;
         const float cue_r = bus_cue_r[n] * out_gain;
 

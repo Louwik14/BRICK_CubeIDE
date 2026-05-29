@@ -1,7 +1,7 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:32:24:brick6_map_runtime_type_to_drum_model	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:43:13:brick6_render_synth_tracks	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:84:13:brick6_render_sampler_tracks	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:131:13:brick6_render_looper_tracks	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:162:13:brick6_render_wave_tracks	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:189:6:brick6_audio_runtime_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:195:6:brick6_audio_runtime_dsp	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:33:24:brick6_map_runtime_type_to_drum_model	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:44:13:brick6_render_synth_tracks	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:85:13:brick6_render_sampler_tracks	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:132:13:brick6_render_looper_tracks	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:163:13:brick6_render_wave_tracks	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:190:6:brick6_audio_runtime_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_audio_runtime.c:197:6:brick6_audio_runtime_dsp	32	static

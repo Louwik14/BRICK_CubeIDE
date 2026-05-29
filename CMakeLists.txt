@@ -99,6 +99,7 @@ list(REMOVE_ITEM SRC_AUDIO_SRC
 list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/metronome_runtime.c"
 )
 
 file(GLOB SRC_CORE_SRC
@@ -136,6 +137,7 @@ file(GLOB SRC_PARAM_SRC
 list(APPEND SRC_PARAM_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_transition.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_wave_labels.c"
 )
 
 file(GLOB SRC_SD_SRC
@@ -167,6 +169,8 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_sd_bank.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_v1.c"
 )
 
 file(GLOB SRC_UI_SRC
@@ -186,6 +190,8 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_pattern.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_seq_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_shortcuts.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
 )
 
 # Mutable Instruments

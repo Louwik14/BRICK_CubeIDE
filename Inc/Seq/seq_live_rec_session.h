@@ -13,8 +13,12 @@ void seq_live_rec_session_on_step_advanced(const seq_runtime_state_t *runtime_st
 
 void seq_live_rec_session_toggle_arm(uint64_t now_sample, uint32_t samples_per_step_q16);
 uint8_t seq_live_rec_session_rec_is_armed(void);
-void seq_live_rec_session_set_rec_count_in_mode(uint8_t mode);
-uint8_t seq_live_rec_session_get_rec_count_in_mode(void);
+void seq_live_rec_session_set_rec_start_mode(uint8_t mode);
+uint8_t seq_live_rec_session_get_rec_start_mode(void);
+uint8_t seq_live_rec_session_rec_should_wait_trigger_start(void);
+uint8_t seq_live_rec_session_consume_trigger_start_note_on(void);
+void seq_live_rec_session_clear_trigger_start_wait(void);
+uint8_t seq_live_rec_session_rec_is_waiting_trigger_start(void);
 void seq_live_rec_session_set_rec_len_mode(uint8_t mode);
 uint8_t seq_live_rec_session_get_rec_len_mode(void);
 uint8_t seq_live_rec_session_rec_is_pattern_pending_start(void);
@@ -41,4 +45,3 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                             uint64_t now_sample);
 
 #endif /* SEQ_LIVE_REC_SESSION_H */
-

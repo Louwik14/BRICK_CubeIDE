@@ -2,10 +2,31 @@
 
 #include <stdio.h>
 
+#include "pages/ui_page_patch_assign.h"
+#include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
 #include "ui_core_runtime_bridge.h"
 #include "ui_hall_mode_contract.h"
+
+#define UI_HALL_PATCH_FEEDBACK_MS 1000U
+
+static uint32_t g_ui_hall_patch_feedback_until_ms = 0U;
+
+static uint8_t ui_hall_patch_feedback_active(uint32_t now_ms)
+{
+    return ((int32_t)(g_ui_hall_patch_feedback_until_ms - now_ms) > 0) ? 1U : 0U;
+}
+
+void ui_hall_patch_feedback_begin(uint32_t now_ms)
+{
+    g_ui_hall_patch_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
+}
+
+void ui_hall_patch_feedback_end(uint32_t now_ms)
+{
+    g_ui_hall_patch_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
+}
 
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)
 {
@@ -56,6 +77,9 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
         case UI_HALL_MODE_AUDIO_REC:
             return UI_HALL_MODE_VIEW_AUDIO_REC;
 
+        case UI_HALL_MODE_PATCH:
+            return UI_HALL_MODE_VIEW_PATCH;
+
         case UI_HALL_MODE_PATTERN:
             return UI_HALL_MODE_VIEW_PATTERN;
 
@@ -99,6 +123,12 @@ const char *ui_get_hall_mode_short_label(void)
         return "TRACK";
     }
 
+    if ((ui_page_patch_assign_is_open() != 0U)
+            || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U))
+    {
+        return "PATCH";
+    }
+
     const ui_hall_mode_effective_view_t view =
         ui_hall_mode_resolve_effective_view(active_track, raw_mode);
     if (view == UI_HALL_MODE_VIEW_ROUT)
@@ -121,6 +151,12 @@ const char *ui_get_hall_mode_suffix_label(void)
     }
 
     if (ui_is_track_modifier_held() != 0U)
+    {
+        return "";
+    }
+
+    if ((ui_page_patch_assign_is_open() != 0U)
+            || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U))
     {
         return "";
     }

@@ -233,10 +233,11 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 
     switch (id)
     {
-        case PARAM_CFG_REC:
+        case PARAM_CFG_START:
         case PARAM_CFG_TEMPO:
         case PARAM_CFG_SYNC:
         case PARAM_CFG_REC_LEN:
+        case PARAM_CFG_METRO:
         case PARAM_MIX_SEND0_FX:
         case PARAM_MIX_SEND1_FX:
         case PARAM_MIX_DELAY_TYPE:
@@ -598,7 +599,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
 
     out_pattern->globals.tempo_bpm_milli = seq_runtime_get_tempo_bpm_milli();
     out_pattern->globals.clock_src = (uint8_t)seq_runtime_get_clock_source();
-    out_pattern->globals.rec_count_in_mode = seq_runtime_get_rec_count_in_mode();
+    out_pattern->globals.rec_start_mode = seq_runtime_get_rec_start_mode();
     out_pattern->globals.rec_len_mode = seq_runtime_get_rec_len_mode();
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -779,7 +780,7 @@ static uint8_t pattern_live_transition_seq_runtime_sync(void *ctx_ptr)
 
     seq_runtime_set_tempo_bpm_milli(ctx->pattern->globals.tempo_bpm_milli);
     seq_runtime_set_clock_source((seq_clock_src_t)ctx->pattern->globals.clock_src);
-    seq_runtime_set_rec_count_in_mode(ctx->pattern->globals.rec_count_in_mode);
+    seq_runtime_set_rec_start_mode(ctx->pattern->globals.rec_start_mode);
     seq_runtime_set_rec_len_mode(ctx->pattern->globals.rec_len_mode);
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)

@@ -11,6 +11,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_float.c` et `Inc/Audio/audio_float.h` : frontiere IRQ `int24 <-> float`, ownership des buffers track et callback DSP.
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/audio_io.c` repacke MAIN/CUE sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
+- `Src/Audio/metronome_runtime.c` + `Inc/Audio/metronome_runtime.h` : generateur metronome hard-RT RAM-only, declenche par event Z4, rendu MAIN monitor-only.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
 - `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Wave multi-instances (une instance mono par track Wave) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
@@ -85,6 +86,11 @@ Autorite de rendu runtime applicatif:
 Autorite de mixage final:
 - `mixer_process()` dans `Src/Audio/mixer.c`.
 - Possede la sommation tracks -> MAIN/CUE/SEND/returns et les taps post-insert/post-fader/post-send.
+
+Autorite de monitoring final:
+- `audio_io_pack_ramped()` ajoute le metronome MAIN monitor-only apres `mixer_process()`, `fx_master_macro_process_block()` et `sd_preview_render_main()`, juste avant conversion TX.
+- Cette injection ne touche pas CUE et ne repasse pas par tracks, sends, Master/FX, Looper, Audio Rec ni preview/cache SD.
+- Le metronome bypass le gain de sortie final deja applique au MAIN musical; son gain propre reste borne par `METRO` et `METRO_MAX_GAIN`.
 
 Autorite de flux bloc-a-bloc:
 - Le flux est distribue sur 3 niveaux stricts:
@@ -868,3 +874,10 @@ Clarification START/END/LOOP live:
 - `brick6_audio_runtime_dsp()` lit le cache `track_runtime_get_cached_synth_usage()` au lieu de rescanner les tracks pour le comptage Drum.
 - Le chemin Drum IRQ ne lit plus `ui_get_active_track()`; le diagnostic local suit seulement le nombre de drums effectivement rendus.
 - `mixer_process()` conserve l'appel de projection `mix_track -> logical_track`, mais celui-ci est maintenant une lecture O(1) d'une table Z2 reconstruite hors IRQ.
+
+## Addendum 2026-05-29 - Wave/Braids rendu bloc fixe
+
+- `brick6_braids_runtime_render_instance()` ne transmet plus de taille partielle a `braids::MacroOscillator::Render()`: le wrapper genere uniquement des blocs complets de 24 samples (`kBraidsRenderBlockSize`).
+- Chaque instance Wave/Braids porte un cache de sortie statique de 24 samples avec offset/count pending. Le rendu IRQ consomme d'abord les samples pending, genere un nouveau bloc complet seulement si necessaire, puis conserve le surplus pour le prochain appel.
+- Ce cache reste local a l'instance (`BRICK6_BRAIDS_MAX_INSTANCES`), sans allocation dynamique ni etat global partage. Reset/all-notes-off vident le cache; un changement de shape Wave l'invalide pour eviter de rejouer des samples de l'ancien moteur.
+- Les sous-segments audio Z1 peuvent rester non multiples de 24 a cause des evenements sample-accurate; l'adaptation bloc-fixe appartient au wrapper Wave, pas a `audio.c` ni aux sources Mutable/Braids.

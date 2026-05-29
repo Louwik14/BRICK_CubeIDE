@@ -42,6 +42,7 @@
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
+#include "Storage/patch_v1.h"
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
@@ -135,6 +136,7 @@ void brick6_app_init(void)
     seq_runtime_init();
     ui_core_init();
     pattern_live_init();
+    patch_v1_init();
     project_v1_init();
     ui_boot_loading_begin();
     undo_v2_init();

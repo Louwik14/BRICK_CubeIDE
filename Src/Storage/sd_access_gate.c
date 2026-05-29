@@ -93,11 +93,14 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 
         const uint8_t owner_is_project_pattern =
             ((g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PROJECT)
-             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATTERN))
+             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATTERN)
+             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATCH))
                 ? 1U
                 : 0U;
         const uint8_t requester_is_project_pattern =
-            ((client == SD_ACCESS_CLIENT_PROJECT) || (client == SD_ACCESS_CLIENT_PATTERN))
+            ((client == SD_ACCESS_CLIENT_PROJECT)
+             || (client == SD_ACCESS_CLIENT_PATTERN)
+             || (client == SD_ACCESS_CLIENT_PATCH))
                 ? 1U
                 : 0U;
 
@@ -222,6 +225,8 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "WAVE";
         case SD_ACCESS_CLIENT_SAMPLE_STREAM:
             return "STREAM";
+        case SD_ACCESS_CLIENT_PATCH:
+            return "PATCH";
         default:
             return "NONE";
     }

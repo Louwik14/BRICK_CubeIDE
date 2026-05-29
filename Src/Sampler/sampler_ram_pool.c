@@ -8,7 +8,7 @@
 #include "Storage/wav_parser.h"
 #include "Sampler/sample_page_cache.h"
 
-#define SAMPLER_RAM_IO_BYTES (1536U)
+#define SAMPLER_RAM_IO_BYTES (8192U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
 
 typedef struct
@@ -19,7 +19,7 @@ typedef struct
 } sampler_ram_pool_state_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_pool_state_t g_sampler_ram_pool;
-STORAGE_SCRATCH_SDRAM static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
+AUDIO_WARM ALIGN32 static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
 
 static uint16_t sampler_ram_waveform_abs_i16(int16_t value)
 {

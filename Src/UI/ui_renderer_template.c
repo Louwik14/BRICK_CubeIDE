@@ -281,6 +281,23 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
+    if (id == PARAM_CFG_TEMPO)
+    {
+        ui_renderer_template_format_fixed(value, 2U, "", out, out_len);
+        return;
+    }
+
+    if (id == PARAM_CFG_METRO)
+    {
+        if (value < 0.5f)
+        {
+            (void)snprintf(out, out_len, "OFF");
+            return;
+        }
+        (void)snprintf(out, out_len, "%ld", (long)(value + 0.5f));
+        return;
+    }
+
     if ((desc->display_type == PARAM_DISPLAY_INT)
             && (desc->unit != NULL)
             && (strcmp(desc->unit, "st") == 0))

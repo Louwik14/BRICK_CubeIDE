@@ -1437,6 +1437,11 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
         return (ctx->shift_down != 0U) ? (range / 12700.0f) : (range / 127.0f);
     }
 
+    if (desc->id == PARAM_CFG_TEMPO)
+    {
+        return (ctx->shift_down != 0U) ? 0.01f : 1.0f;
+    }
+
     return desc->step;
 }
 

@@ -57,15 +57,15 @@ static const ui_template_family_t g_ui_template_cfg_slave_proxy_family = {
 
 static const ui_template_family_t g_ui_template_rec_cfg_family = {
     .family_title = "REC CFG",
-    .nav_labels = { "MAIN", "-", "-", "-" },
+    .nav_labels = { "MAIN", "LEN", "-", "-" },
     .subpages = {
         {
             .title = "MAIN",
-            .param_bank = { .params = { PARAM_CFG_REC, PARAM_CFG_TEMPO, PARAM_CFG_SYNC, PARAM_CFG_REC_LEN } },
+            .param_bank = { .params = { PARAM_CFG_START, PARAM_CFG_TEMPO, PARAM_CFG_SYNC, PARAM_CFG_METRO } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "LEN",
+            .param_bank = { .params = { PARAM_CFG_REC_LEN, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -108,6 +108,20 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
     }
 
     return UIW_WIDGET_JACK;
+}
+
+static uiw_widget_type_t ui_page_template_rec_cfg_pick_widget(uint8_t slot,
+                                                              param_id_t id,
+                                                              const char *value_label,
+                                                              uiw_widget_type_t suggested_widget)
+{
+    (void)slot;
+    (void)value_label;
+    if (id == PARAM_CFG_TEMPO)
+    {
+        return UIW_WIDGET_ENUM_TEXT;
+    }
+    return suggested_widget;
 }
 
 static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(uint8_t slot,
@@ -242,7 +256,7 @@ const ui_page_t g_ui_page_template_cfg = {
 static ui_template_page_state_t g_ui_template_rec_cfg_state = {
     .family = &g_ui_template_rec_cfg_family,
     .family_resolver = 0,
-    .widget_picker = 0,
+    .widget_picker = ui_page_template_rec_cfg_pick_widget,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

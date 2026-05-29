@@ -85,14 +85,14 @@ Commandes:
 - `seq_runtime_set_clock_source`
 - `seq_runtime_set_tempo_bpm_milli`
 - `seq_runtime_start` / `seq_runtime_stop` / `seq_runtime_toggle_play_stop`
-- `seq_runtime_set_rec_count_in_mode` / `seq_runtime_set_rec_len_mode`
+- `seq_runtime_set_rec_start_mode` / `seq_runtime_set_rec_len_mode`
 - `seq_runtime_set_pattern_rec_target_track`
 - `seq_runtime_live_rec_param_write`
 
 Queries:
 - `seq_runtime_get_state`
 - `seq_runtime_is_running` / `seq_runtime_is_start_pending`
-- `seq_runtime_get_rec_count_in_mode` / `seq_runtime_get_rec_len_mode`
+- `seq_runtime_get_rec_start_mode` / `seq_runtime_get_rec_len_mode`
 - `seq_runtime_get_rec_count_in_remaining_steps`
 - `seq_runtime_rec_is_armed` / `seq_runtime_rec_is_pattern_pending_start`
 - `seq_runtime_get_track_loop_generation`
@@ -112,6 +112,7 @@ Notifications:
 Projection / miroir:
 - `seq_runtime_audio_collect_block_events` comme projection bloc audio lisible par l'IRQ audio
 - markers `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` comme projection edge-based des boundaries reelles, avec offset sample dans le bloc audio
+- markers `SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK` comme projection metronome sample-accurate depuis l'autorite transport/clock Z4; ils sont emis sur les beats et accents au debut de mesure 16 steps quand le transport reel tourne, sans timer parallele ni recalcul tempo local en Z1.
 - `seq_runtime_get_samples_per_step_q16` comme miroir scalaire explicite pour les conversions step->frames
 - `seq_runtime_exec_state_const` comme miroir readonly de la timeline et de la progression
 
@@ -133,7 +134,7 @@ Contrat:
 ## 2.f Consommateurs non-UI de commande
 
 Commandes runtime explicites, avec readback miroir quand le caller doit resynchroniser son store/UI:
-- `param_registry_apply_wrappers.c`: `apply_cfg_rec`, `apply_cfg_tempo`, `apply_cfg_sync`, `apply_cfg_rec_len`, `apply_seq_div`, `apply_seq_quant`, `apply_seq_swing`.
+- `param_registry_apply_wrappers.c`: `apply_cfg_start`, `apply_cfg_tempo`, `apply_cfg_sync`, `apply_cfg_rec_len`, `apply_seq_div`, `apply_seq_quant`, `apply_seq_swing`.
 - `ui_core_seq_transport.c`: `seq_runtime_toggle_play_stop`, `seq_runtime_set_pattern_rec_target_track`, `seq_runtime_rec_toggle_arm`, et les commandes buffer associées.
 
 Contrat:
@@ -397,7 +398,7 @@ Etat tick/tempo auxiliaire:
 - `g_seq_midi_clock_audio_enabled`, `g_seq_midi_clock_period_q16`, `g_seq_midi_clock_next_sample_q16` (clock MIDI TX aligne sur timeline audio bloc).
 
 Etat live-rec runtime:
-- `g_seq_rec_armed`, `g_seq_rec_count_in_mode`, `g_seq_rec_len_mode`.
+- `g_seq_rec_armed`, `g_seq_rec_start_mode`, `g_seq_rec_len_mode`.
 - `g_seq_pattern_rec_pending_start`, `g_seq_pattern_rec_active`, `g_seq_pattern_rec_track`, `g_seq_pattern_rec_steps_remaining`.
 - Ecriture via `seq_runtime_rec_toggle_arm`, `seq_runtime_set_rec_*`, `seq_runtime_pattern_rec_*`, stop lifecycle.
 - Lecture via getters et conditions de capture note on/off.
@@ -715,3 +716,11 @@ Points factuels observes:
 - Les p-locks PLAY restent lus sur le step cible anticipe et sont donc groupes avec la note anticipee. Les p-locks non-PLAY restent appliques uniquement par `seq_boundary_engine` a la boundary officielle du step.
 - L'ordre a sample identique reste: boundary collectee avant scheduler, puis dans le scheduler note-off avant program avant note-on. Le tri runtime conserve l'ordre stable pour les events de meme offset.
 - Les retrigs dedies ne sont pas un sous-systeme separe dans le code courant; le comportement couvert ici concerne les voix PLAY existantes, leurs note lengths, program changes et forced note-off/token guards.
+
+## Addendum 2026-05-28 - REC START
+
+- Le parametre global REC `START` remplace l'ancien mode de lancement REC.
+- Valeurs: `DEFAULT` lance comme l'ancien mode sans roll, `TRIG` arme un etat explicite `waiting trigger start`, `ROLL 1/4`, `ROLL 1/2` et `ROLL 1` conservent les delais roll existants de 4/8/16 steps.
+- `START=TRIG` est porte par `seq_live_rec_session`: armer REC ou demander PLAY en REC arme depuis STOP place l'attente trigger; le premier note-on interne ou MIDI externe consomme l'attente, demarre le transport via `seq_runtime_start`, puis continue dans le chemin live-rec normal.
+- STOP, desarmement REC et changement de START hors `TRIG` clear l'attente. Changer START vers `TRIG` pendant REC arme et STOP recree l'attente de facon deterministe.
+- Les chemins clavier et MIDI ne decident pas du start: ils notifient seulement `seq_runtime_live_rec_note_on`, le domaine REC consomme eventuellement le trigger.

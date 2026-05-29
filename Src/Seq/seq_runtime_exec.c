@@ -22,11 +22,15 @@
 #include "midi.h"
 
 #define SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP 32U
+#define SEQ_RUNTIME_EXEC_METRO_STEPS_PER_BEAT 4U
+#define SEQ_RUNTIME_EXEC_METRO_STEPS_PER_BAR  16U
 
 typedef struct
 {
     uint64_t due_sample_time;
     uint8_t track;
+    uint8_t type;
+    uint8_t click_type;
 } seq_runtime_exec_boundary_event_t;
 
 static seq_runtime_state_t g_seq_runtime_exec_state;
@@ -37,9 +41,12 @@ static uint64_t g_seq_runtime_exec_midi_clock_next_sample_q16;
 static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
 static seq_runtime_exec_boundary_event_t g_seq_runtime_exec_boundary_events[SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP];
 static uint8_t g_seq_runtime_exec_boundary_event_count;
+static uint32_t g_seq_runtime_exec_metronome_step;
 static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
                                                         const seq_play_scheduler_audio_event_t *scheduler_event);
 static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time);
+static void seq_runtime_exec_push_metronome_click(uint64_t due_sample_time, uint8_t accent);
+static void seq_runtime_exec_push_metronome_for_step(uint64_t due_sample_time);
 static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event_t *out_events,
                                                          uint16_t max_events,
                                                          uint16_t block_frames,
@@ -74,6 +81,7 @@ void seq_runtime_exec_init(void)
     g_seq_runtime_exec_midi_clock_next_sample_q16 = 0U;
     g_seq_runtime_exec_external_step_pulses_pending = 0U;
     g_seq_runtime_exec_boundary_event_count = 0U;
+    g_seq_runtime_exec_metronome_step = 0U;
 }
 
 static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
@@ -103,6 +111,35 @@ static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t d
             &g_seq_runtime_exec_boundary_events[g_seq_runtime_exec_boundary_event_count++];
     event->due_sample_time = due_sample_time;
     event->track = track;
+    event->type = SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE;
+    event->click_type = 0U;
+}
+
+static void seq_runtime_exec_push_metronome_click(uint64_t due_sample_time, uint8_t accent)
+{
+    if (g_seq_runtime_exec_boundary_event_count >= SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP)
+    {
+        return;
+    }
+
+    seq_runtime_exec_boundary_event_t *const event =
+            &g_seq_runtime_exec_boundary_events[g_seq_runtime_exec_boundary_event_count++];
+    event->due_sample_time = due_sample_time;
+    event->track = 0U;
+    event->type = SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK;
+    event->click_type = (accent != 0U) ? 1U : 0U;
+}
+
+static void seq_runtime_exec_push_metronome_for_step(uint64_t due_sample_time)
+{
+    if ((g_seq_runtime_exec_metronome_step % SEQ_RUNTIME_EXEC_METRO_STEPS_PER_BEAT) != 0U)
+    {
+        return;
+    }
+
+    const uint8_t accent =
+            ((g_seq_runtime_exec_metronome_step % SEQ_RUNTIME_EXEC_METRO_STEPS_PER_BAR) == 0U) ? 1U : 0U;
+    seq_runtime_exec_push_metronome_click(due_sample_time, accent);
 }
 
 static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event_t *out_events,
@@ -131,10 +168,10 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
         }
 
         seq_runtime_audio_event_t *const out = &out_events[count++];
-        out->type = SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE;
+        out->type = marker->type;
         out->track = marker->track;
         out->note = 0U;
-        out->velocity = 0U;
+        out->velocity = marker->click_type;
         out->sample_offset_in_block = (uint16_t)(marker->due_sample_time - block_start_sample);
         out->event_token = 0U;
     }
@@ -252,6 +289,7 @@ void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
     seq_output_guard_reset();
     seq_live_rec_session_reset_capture();
     seq_runtime_exec_set_midi_clock_audio_enabled(0U);
+    g_seq_runtime_exec_metronome_step = 0U;
 }
 
 void seq_runtime_exec_set_midi_clock_audio_enabled(uint8_t enabled)
@@ -339,6 +377,8 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
                                            : clock_bridge->internal_next_step_ticks);
     state->step_sample_q16 = start_sample_q16;
     state->running = 1U;
+    g_seq_runtime_exec_metronome_step = 0U;
+    seq_runtime_exec_push_metronome_for_step(state->step_sample_q16 >> 16);
 
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
@@ -376,6 +416,7 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
     state->step_sample_q16 = 0U;
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     seq_play_scheduler_clear();
+    g_seq_runtime_exec_metronome_step = 0U;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -464,6 +505,8 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     }
 
     state->step_sample_q16 = pulse_sample_q16;
+    g_seq_runtime_exec_metronome_step++;
+    seq_runtime_exec_push_metronome_for_step(state->step_sample_q16 >> 16);
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
         /* Progression guard: scheduling follows the same transport running state as advancement. */

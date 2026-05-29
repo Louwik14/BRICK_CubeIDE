@@ -800,6 +800,7 @@ Points factuels:
 - La table UI couvre les 39 moteurs actifs de `brick6_braids_runtime.cpp::kBraidsShapeMap`, incluant `Harm` et sans entree `Warm`.
 - Les formats locaux Wave sont bornes a `PARAM_WAVE_TIMBRE` et `PARAM_WAVE_COLOR`: continu unipolaire normalise `0.00..127.00`, pourcent bipolaire conserve, intervalle en demi-tons/centiemes quand le mapping Braids est prouve, enum discret, stepped, morph et rate normalise.
 - Les controles globaux visibles de `Synth/Wave` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
+- La surface `MOD/LFO DEST` reutilise la meme source de noms Wave que `TONE`: les destinations `MODEL/FINE/PITCH/FM AMT`, `A MOD` et les labels dynamiques `TIMBRE/COLOR` dependent du moteur Wave canonique courant de la track, sans resolution temps reel des changements temporaires p-lock/LFO.
 - `SawSq` garde `PARAM_WAVE_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
 - Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Wave car ils ne sont pas dans le mapping runtime actif.
 
@@ -816,3 +817,32 @@ Points factuels:
 ## 29. Retour UI apres load blank
 
 - `Settings > Project > Load > Blank` revient directement sur `CFG` apres succes. Ce retour est le point produit sur apres remise a blanc des tracks, car une page template precedente (`TONE`, `MIX`, etc.) peut ne plus etre disponible quand la track active repasse sur `Off`.
+
+## 30. Contrat UI Patch V1
+
+- `SHIFT + HALL 0` est l'entree du domaine `Patch`.
+- Premier tap `SHIFT + HALL 0`: arme une action Patch pending; aucun acces SD n'est lance pendant la fenetre double tap.
+- Deuxieme tap dans `UI_HALL_MODE_DOUBLE_TAP_MS`: annule le pending single et lance un `Save Patch` direct de la track focus. `Patch` n'est pas conserve comme hall mode persistant pour ce chemin: l'UI affiche un overlay court `PATCH` + feedback (`PATCH SAVE`, puis resultat), puis le label/rendu du hall mode precedent redevient visible.
+- Expiration sans deuxieme tap: ouvre `Patch Assign`, menu global d'attribution Patch avec target track initialisee sur la track focus. Le hall mode brut `PATCH` est temporaire pendant le browser et le mode precedent est restaure a la sortie.
+- `Patch Assign` liste dynamiquement les patches visibles, affiche `BAD PATCH` en vue globale ou metadata minimale `name + family/type`, et garde `PAGE1` comme retour. Les slots `EMPTY` et `source_track` restent internes a la banque/save et ne polluent pas la navigation normale.
+- Le rendu OLED de `Patch Assign` reprend la grammaire browser Sample: header compact avec filtre actif (`ALL`, `SAMPLER/RAM`, etc.) a la place d'un compteur de slots, bandeau Family horizontal (`SYN`, `SMP`, `DRM`, `IN`, `MST`) avec family active inversee et toutes les families inversees en `ALL`, liste centrale a selection inversee, curseur de position vertical, footer PAGE en quatre zones (`RETURN | APPLY | REN | DEL`) et feedback court sur la ligne basse. Aucun bandeau texte ne rappelle les targets ou la track cible; les targets restent portees par les LEDs Hall.
+- `Patch Assign` expose une selection locale multi-target: a l'entree, seule la track focus est cochee; un appui Hall toggle la target track correspondante sans changer les filtres Family/Type.
+- Pendant `Patch Assign`, le renderer LED Hall lit directement la target mask Patch: LED ON = target cochee, LED OFF = non-target; ce rendu est prioritaire sur le rendu du hall mode precedent et revient au rendu normal a la sortie.
+- `PAGE2` applique le meme slot Patch selectionne vers toutes les targets cochees, dans l'ordre croissant des track id, via `patch_v1_apply_slot_to_track`; aucune copie runtime sauvage, preview, rollback ni audition temporaire n'est ajoutee.
+- Si aucune target n'est cochee, `PAGE2` refuse par `NO TARGET`. En echec partiel, l'UI continue les targets restantes et affiche `AP n/m` avec la premiere cause disponible, afin de garder l'ordre deterministe sans rollback multi-target.
+- `PAGE3` ouvre le mode generique `Name Edit` pour renommer le slot Patch valide selectionne. `Name Edit` recoit buffer initial, longueur max, titre/contexte et callback; `PAGE1` annule sans mutation, `PAGE2` retourne le nom valide a l'appelant. En `Name Edit`, seul `ENC1` change le caractere courant de la frise sans modifier le nom; `ENC2`/`ENC3`/`ENC4` sont no-op. `PAGE3` valide le caractere courant a la position d'ecriture puis avance le curseur si possible. `PAGE4` fait un backspace borne, `SHIFT+PAGE2` valide un espace, `PAGE3`/`PAGE4` avec SHIFT restent no-op. Le curseur represente la prochaine position a ecrire et reste borne aux caracteres existants ou a l'unique position append. Le mode affiche le nom et une frise de caracteres en police lisible, n'ecrit pas la SD lui-meme: `Patch Assign` reste responsable de `patch_v1_rename_slot` et du feedback.
+- `PAGE4` demande confirmation puis delete le slot valide selectionne; le browser reste sur le prochain slot valide ou sur le slot devenu `EMPTY`.
+- Les filtres Patch Assign sont manuels apres l'entree: `ENC1` choisit le slot visible avec navigation bornee sans wrap, `ENC2` choisit Family (`ALL`, `SYNTH`, `SAMPLER`, `DRUM`, `INPUT`, `MASTER`) avec navigation bornee sans wrap, `ENC3` choisit Type selon Family avec navigation bornee sans wrap. A l'entree, Family/Type sont initialises depuis la track focus; changer les targets par Hall ne recale pas les filtres.
+- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/TRX BD/BD Analog`.
+- Regle de visibilite: `Family ALL + Type ALL` montre tous les slots Patch valides puis `BAD PATCH`; les filtres precis montrent uniquement les patches valides correspondants. Si aucun slot n'est visible, le menu affiche `NO PATCH`.
+- Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
+- `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
+
+## 31. Contrat UI REC CFG START/TEMPO/METRO
+
+- `REC CFG` page 1 expose `START`, `TEMPO`, `SYNC`, `METRO`.
+- `LEN` reste expose sur la page 2 `LEN` pour ne pas disparaitre du produit.
+- `START`: `DEFAULT`, `TRIG`, `ROLL 1/4`, `ROLL 1/2`, `ROLL 1`; la surface visible n'expose plus l'ancien libelle ni son ancienne valeur off.
+- `TEMPO` est rendu comme texte numerique a deux decimales et non comme potard.
+- Edition `TEMPO`: encodeur normal = `1.00 BPM`, `SHIFT+encodeur` = `0.01 BPM`; les bornes restent `40.00..300.00`, sans wrap.
+- `METRO`: parametre global REC CFG `0..127`; `0` s'affiche `OFF`, `1..127` s'affiche numeriquement et pilote le volume du metronome MAIN monitor-only. Aucun choix de route CUE/BOTH n'est expose en V1.

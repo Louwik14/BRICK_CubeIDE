@@ -40,6 +40,7 @@
 #include "UI/ui_navigation.h"
 #include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
+#include "UI/pages/ui_page_patch_assign.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
@@ -614,6 +615,27 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
     return 1U;
 }
 
+static uint8_t led_apply_patch_assign_hall_scene(uint8_t hall)
+{
+    uint8_t target_on = 0U;
+    if (ui_page_patch_assign_get_target_hall_led(hall, &target_on) == 0U)
+    {
+        return 0U;
+    }
+
+    const led_id_t led = led_remap_led_for_hall(hall);
+    if (target_on != 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
+    }
+    else
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+    }
+
+    return 1U;
+}
+
 static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
 {
     return (mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP);
@@ -663,7 +685,14 @@ static void led_apply_fixed_scene(void)
         macro_button = led_macro_param_to_button(macro_param);
     }
 
-    if (ui_macro_overlay_is_active() != 0U)
+    if (ui_page_patch_assign_is_open() != 0U)
+    {
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+        {
+            (void)led_apply_patch_assign_hall_scene(hall);
+        }
+    }
+    else if (ui_macro_overlay_is_active() != 0U)
     {
         ui_macro_overlay_submode_t overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
         (void)ui_macro_overlay_get_submode(&overlay_submode);

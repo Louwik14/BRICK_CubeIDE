@@ -11,7 +11,7 @@
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
 #define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
-#define UI_CFG_REC_PARAM ((param_id_t)PARAM_CFG_REC)
+#define UI_CFG_START_PARAM ((param_id_t)PARAM_CFG_START)
 #define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
 #define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
 #define UI_CFG_REC_LEN_PARAM ((param_id_t)PARAM_CFG_REC_LEN)
@@ -41,7 +41,7 @@ void ui_active_track_sync_mirror(void)
                            (float)ui_get_track_type_index_for_family(active_config.family, active_config.type));
     param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)ui_get_track_midi_channel(active_track));
     param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)ui_get_track_midi_source(active_track));
-    param_store_set_active(UI_CFG_REC_PARAM, (float)seq_runtime_get_rec_count_in_mode());
+    param_store_set_active(UI_CFG_START_PARAM, (float)seq_runtime_get_rec_start_mode());
     param_store_set_active(UI_CFG_TEMPO_PARAM, (float)seq_runtime_get_tempo_bpm_milli() / 1000.0f);
     param_store_set_active(UI_CFG_SYNC_PARAM, ui_active_track_sync_clock_source_to_ui_value());
     param_store_set_active(UI_CFG_REC_LEN_PARAM, (float)seq_runtime_get_rec_len_mode());
