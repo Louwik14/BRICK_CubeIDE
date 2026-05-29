@@ -403,11 +403,6 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
         brick6_braids_runtime_float_to_u15(instance->voice.timbre + ((instance->voice.modulation - 0.5f) * 0.5f)),
         brick6_braids_runtime_float_to_u15(instance->voice.color));
 
-    if (instance->voice.trigger != 0U)
-    {
-        instance->oscillator.Strike();
-    }
-
     uint32_t offset = 0U;
     uint8_t sync_block[kBraidsRenderBlockSize];
     int16_t sample_block[kBraidsRenderBlockSize];
