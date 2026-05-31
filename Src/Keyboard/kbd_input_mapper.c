@@ -18,6 +18,20 @@
 
 static bool g_kbd_mapper_omnichord = false;
 
+static const uint8_t g_kbd_omni_type_button_to_chord_index[4] = {
+    3U, /* Dim */
+    1U, /* Min */
+    0U, /* Maj */
+    2U  /* Sus */
+};
+
+static const uint8_t g_kbd_omni_ext_button_to_chord_index[4] = {
+    6U, /* 6 */
+    4U, /* m7 */
+    5U, /* M7 */
+    7U  /* 9 */
+};
+
 void kbd_input_mapper_init(bool omnichord_state)
 {
     g_kbd_mapper_omnichord = omnichord_state;
@@ -45,13 +59,13 @@ void kbd_input_mapper_process(uint8_t seq_index, bool pressed)
 
     if (idx <= 3U)
     {
-        ui_keyboard_app_chord_button(idx, pressed);
+        ui_keyboard_app_chord_button(g_kbd_omni_type_button_to_chord_index[idx], pressed);
         return;
     }
 
     if ((idx >= 8U) && (idx <= 11U))
     {
-        ui_keyboard_app_chord_button((uint8_t)(idx - 4U), pressed);
+        ui_keyboard_app_chord_button(g_kbd_omni_ext_button_to_chord_index[idx - 8U], pressed);
         return;
     }
 

@@ -26,6 +26,7 @@ typedef enum {
 typedef struct {
     bool valid;
     uint8_t root_midi;
+    uint8_t chord_mask;
     uint8_t intervals[12];
     uint8_t interval_count;
 } ui_keyboard_active_chord_t;
@@ -52,6 +53,7 @@ void ui_keyboard_app_chord_button(uint8_t chord_index, bool pressed);
 void ui_keyboard_app_all_notes_off(void);
 void ui_keyboard_app_clear_state_silent(void);
 const ui_keyboard_active_chord_t *ui_keyboard_app_get_active_chord(void);
+void ui_keyboard_app_format_active_chord_label(char *out, uint32_t out_len);
 void ui_keyboard_app_tick(uint32_t elapsed_ms);
 
 #endif /* BRICK_UI_KEYBOARD_APP_H */

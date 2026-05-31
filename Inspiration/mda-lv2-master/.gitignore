@@ -1,0 +1,9 @@
+build/
+.waf*
+*.o
+*.so
+*.pyc
+.lock*
+lv2.h
+manifest.ttl
+debian

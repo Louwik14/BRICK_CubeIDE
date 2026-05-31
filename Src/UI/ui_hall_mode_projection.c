@@ -159,6 +159,13 @@ const char *ui_get_hall_mode_short_label(void)
         return "ROUT";
     }
 
+    if (view == UI_HALL_MODE_VIEW_KEYBOARD)
+    {
+        static char chord_label[8];
+        ui_core_runtime_bridge_get_keyboard_chord_label(chord_label, sizeof(chord_label));
+        return chord_label;
+    }
+
     return ui_hall_mode_get_base_label(raw_mode);
 }
 

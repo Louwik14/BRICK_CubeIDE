@@ -435,6 +435,15 @@ Points factuels:
   - le KBD interne emet sur le canal MIDI de la track focus/play-owner,
   - le routage note interne est canal-aware: toutes les tracks moteur ou `Input/Hybrid` en source `INT`/`ALL` qui partagent ce canal recoivent note-on/note-off,
   - ce routage reutilise le meme dispatch track-aware que l'entree MIDI externe, avec dedoublonnage par owner de voice group pour eviter un double trigger de la source.
+- Contrat Omnichord:
+  - le mapping physique des 8 boutons d'accord est Orchid-compatible: `Dim`, `Min`, `Maj`, `Sus`, puis `6`, `m7`, `M7`, `9`;
+  - les Secret Chords Orchid sont resolus dans le dictionnaire clavier avant la fusion additive generique;
+  - le label court du mode `KEYBOARD` affiche le nom ASCII de l'accord Omnichord actif quand une fondamentale est maintenue, sinon il reste `KBD`;
+  - le label represente l'accord theorique construit avant quantification de gamme; les notes emises peuvent ensuite etre quantifiees si `Chord Override` est inactif.
+  - l'etat sounding du clavier suit les notes MIDI effectivement envoyees, dedupliquees par pitch; a chaque changement note/chord/override, le delta compare ce set reel et eteint explicitement toute note absente du nouveau set.
+  - en accord Omnichord, la root active est la derniere touche root pressee encore maintenue; si elle est relachee, le clavier revient a la root maintenue precedente.
+  - relacher une extension revient a l'accord restant si une base `Dim/Min/Maj/Sus` et une root restent maintenues; les extensions seules restent silencieuses.
+  - la sortie de `KEYBOARD` envoie les note-off locaux du clavier avant de nettoyer l'etat interne; les clears silencieux restent reserves aux sync de focus ou resets deja proprietaires du contexte.
 
 ## 13. Contrat Hybrid UI v1 (borne)
 - `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.

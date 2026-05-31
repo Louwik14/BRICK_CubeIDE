@@ -16,6 +16,7 @@
 
 #include "Keyboard/ui_keyboard_app.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "Keyboard/kbd_chords_dict.h"
@@ -32,6 +33,8 @@ typedef struct
     int8_t octave_shift;
     uint8_t chord_mask;
     uint16_t note_mask;
+    uint8_t root_stack[8];
+    uint8_t root_stack_count;
     ui_keyboard_active_chord_t active;
     uint8_t sounding[UI_KEYBOARD_MAX_ACTIVE_NOTES];
     uint8_t sounding_count;
@@ -55,6 +58,80 @@ static inline void kbd_sink_note_off(uint8_t note)
     {
         g_keyboard_state.sink.note_off(note);
     }
+}
+
+static void kbd_add_note_unique(uint8_t *notes, uint8_t *count, uint8_t note)
+{
+    if ((notes == NULL) || (count == NULL) || (*count >= UI_KEYBOARD_MAX_ACTIVE_NOTES))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < *count; ++i)
+    {
+        if (notes[i] == note)
+        {
+            return;
+        }
+    }
+
+    notes[*count] = note;
+    (*count)++;
+}
+
+static void kbd_root_stack_clear(void)
+{
+    g_keyboard_state.root_stack_count = 0U;
+}
+
+static void kbd_root_stack_remove(uint8_t slot)
+{
+    slot &= 7U;
+    for (uint8_t i = 0U; i < g_keyboard_state.root_stack_count; ++i)
+    {
+        if (g_keyboard_state.root_stack[i] != slot)
+        {
+            continue;
+        }
+
+        for (uint8_t j = i; (uint8_t)(j + 1U) < g_keyboard_state.root_stack_count; ++j)
+        {
+            g_keyboard_state.root_stack[j] = g_keyboard_state.root_stack[j + 1U];
+        }
+        g_keyboard_state.root_stack_count--;
+        return;
+    }
+}
+
+static void kbd_root_stack_press(uint8_t slot)
+{
+    slot &= 7U;
+    kbd_root_stack_remove(slot);
+    if (g_keyboard_state.root_stack_count >= (uint8_t)(sizeof(g_keyboard_state.root_stack) / sizeof(g_keyboard_state.root_stack[0])))
+    {
+        g_keyboard_state.root_stack_count = (uint8_t)((sizeof(g_keyboard_state.root_stack) / sizeof(g_keyboard_state.root_stack[0])) - 1U);
+    }
+    g_keyboard_state.root_stack[g_keyboard_state.root_stack_count] = slot;
+    g_keyboard_state.root_stack_count++;
+}
+
+static bool kbd_root_stack_active_slot(uint8_t *out_slot)
+{
+    while (g_keyboard_state.root_stack_count > 0U)
+    {
+        const uint8_t slot = g_keyboard_state.root_stack[(uint8_t)(g_keyboard_state.root_stack_count - 1U)] & 7U;
+        if (((g_keyboard_state.note_mask >> slot) & 0x1U) != 0U)
+        {
+            if (out_slot != NULL)
+            {
+                *out_slot = slot;
+            }
+            return true;
+        }
+        g_keyboard_state.root_stack_count--;
+    }
+
+    return false;
 }
 
 static void kbd_flush_sounding_notes(void)
@@ -202,6 +279,7 @@ static void kbd_build_current_notes(uint8_t *out,
     out_active->valid = false;
     out_active->interval_count = 0U;
     out_active->root_midi = 0U;
+    out_active->chord_mask = 0U;
 
     if (!g_keyboard_state.omnichord)
     {
@@ -223,8 +301,7 @@ static void kbd_build_current_notes(uint8_t *out,
                 note = kbd_quantize_to_current_scale(note);
             }
 
-            out[*out_count] = note;
-            (*out_count)++;
+            kbd_add_note_unique(out, out_count, note);
         }
         return;
     }
@@ -252,8 +329,7 @@ static void kbd_build_current_notes(uint8_t *out,
                 note = kbd_quantize_to_current_scale(note);
             }
 
-            out[*out_count] = note;
-            (*out_count)++;
+            kbd_add_note_unique(out, out_count, note);
         }
         return;
     }
@@ -265,92 +341,88 @@ static void kbd_build_current_notes(uint8_t *out,
         return;
     }
 
-    for (uint8_t slot = 0U; (slot < 8U) && (*out_count < UI_KEYBOARD_MAX_ACTIVE_NOTES); ++slot)
+    uint8_t slot = 0U;
+    if (!kbd_root_stack_active_slot(&slot))
     {
-        if (((g_keyboard_state.note_mask >> slot) & 0x1U) == 0U)
+        return;
+    }
+
+    int16_t root = (int16_t)g_keyboard_state.ui_root_midi + kbd_slot_to_semitone_offset(slot, false);
+    root = kbd_apply_octave_shift(root);
+
+    out_active->root_midi = (uint8_t)root;
+    out_active->chord_mask = g_keyboard_state.chord_mask;
+    out_active->interval_count = interval_count;
+    for (uint8_t i = 0U; i < interval_count; ++i)
+    {
+        out_active->intervals[i] = intervals[i];
+    }
+    out_active->valid = true;
+
+    for (uint8_t i = 0U; (i < interval_count) && (*out_count < UI_KEYBOARD_MAX_ACTIVE_NOTES); ++i)
+    {
+        int16_t raw = root + intervals[i];
+        if (raw < 0)
         {
-            continue;
+            raw = 0;
+        }
+        else if (raw > 127)
+        {
+            raw = 127;
         }
 
-        int16_t root = (int16_t)g_keyboard_state.ui_root_midi + kbd_slot_to_semitone_offset(slot, false);
-        root = kbd_apply_octave_shift(root);
-
-        out_active->root_midi = (uint8_t)root;
-        out_active->interval_count = interval_count;
-        for (uint8_t i = 0U; i < interval_count; ++i)
+        uint8_t note = (uint8_t)raw;
+        if (!g_keyboard_state.chord_override)
         {
-            out_active->intervals[i] = intervals[i];
+            note = kbd_quantize_to_current_scale(note);
         }
-        out_active->valid = true;
 
-        for (uint8_t i = 0U; (i < interval_count) && (*out_count < UI_KEYBOARD_MAX_ACTIVE_NOTES); ++i)
-        {
-            int16_t raw = root + intervals[i];
-            if (raw < 0)
-            {
-                raw = 0;
-            }
-            else if (raw > 127)
-            {
-                raw = 127;
-            }
-
-            uint8_t note = (uint8_t)raw;
-            if (!g_keyboard_state.chord_override)
-            {
-                note = kbd_quantize_to_current_scale(note);
-            }
-
-            out[*out_count] = note;
-            (*out_count)++;
-        }
+        kbd_add_note_unique(out, out_count, note);
     }
 }
 
 static void kbd_apply_sounding_delta(const uint8_t *notes, uint8_t note_count)
 {
+    uint8_t desired[128] = {0U};
+    uint8_t sounding[128] = {0U};
+
+    if (notes == NULL)
+    {
+        note_count = 0U;
+    }
+
     for (uint8_t i = 0U; i < g_keyboard_state.sounding_count; ++i)
     {
-        const uint8_t old_note = g_keyboard_state.sounding[i];
-        bool still_present = false;
-        for (uint8_t j = 0U; j < note_count; ++j)
+        const uint8_t note = (uint8_t)(g_keyboard_state.sounding[i] & 0x7FU);
+        if (sounding[note] < 0xFFU)
         {
-            if (notes[j] == old_note)
-            {
-                still_present = true;
-                break;
-            }
-        }
-
-        if (!still_present)
-        {
-            kbd_sink_note_off(old_note);
+            sounding[note]++;
         }
     }
 
-    for (uint8_t j = 0U; j < note_count; ++j)
+    for (uint8_t i = 0U; i < note_count; ++i)
     {
-        const uint8_t note = notes[j];
-        bool was_on = false;
-        for (uint8_t i = 0U; i < g_keyboard_state.sounding_count; ++i)
-        {
-            if (g_keyboard_state.sounding[i] == note)
-            {
-                was_on = true;
-                break;
-            }
-        }
+        desired[(uint8_t)(notes[i] & 0x7FU)] = 1U;
+    }
 
-        if (!was_on)
+    for (uint8_t note = 0U; note < 128U; ++note)
+    {
+        while (sounding[note] > desired[note])
+        {
+            kbd_sink_note_off(note);
+            sounding[note]--;
+        }
+        while (sounding[note] < desired[note])
         {
             kbd_sink_note_on(note);
+            sounding[note]++;
         }
     }
 
-    g_keyboard_state.sounding_count = (note_count > UI_KEYBOARD_MAX_ACTIVE_NOTES) ? UI_KEYBOARD_MAX_ACTIVE_NOTES : note_count;
-    for (uint8_t i = 0U; i < g_keyboard_state.sounding_count; ++i)
+    g_keyboard_state.sounding_count = 0U;
+    for (uint8_t i = 0U; (i < note_count) && (g_keyboard_state.sounding_count < UI_KEYBOARD_MAX_ACTIVE_NOTES); ++i)
     {
-        g_keyboard_state.sounding[i] = notes[i];
+        kbd_add_note_unique(g_keyboard_state.sounding, &g_keyboard_state.sounding_count, (uint8_t)(notes[i] & 0x7FU));
     }
 }
 
@@ -362,6 +434,7 @@ static void kbd_refresh_sounding_state(void)
         g_keyboard_state.active.valid = false;
         g_keyboard_state.active.interval_count = 0U;
         g_keyboard_state.active.root_midi = 0U;
+        g_keyboard_state.active.chord_mask = 0U;
         return;
     }
 
@@ -399,9 +472,11 @@ void ui_keyboard_app_set_params(uint8_t root_midi, kbd_scale_t scale, bool omnic
         kbd_flush_sounding_notes();
         g_keyboard_state.chord_mask = 0U;
         g_keyboard_state.note_mask = 0U;
+        kbd_root_stack_clear();
         g_keyboard_state.active.valid = false;
         g_keyboard_state.active.interval_count = 0U;
         g_keyboard_state.active.root_midi = 0U;
+        g_keyboard_state.active.chord_mask = 0U;
         return;
     }
 
@@ -498,10 +573,12 @@ void ui_keyboard_app_note_button(uint8_t note_slot, bool pressed)
     if (pressed)
     {
         g_keyboard_state.note_mask |= bit;
+        kbd_root_stack_press(note_slot);
     }
     else
     {
         g_keyboard_state.note_mask &= (uint16_t)(~bit);
+        kbd_root_stack_remove(note_slot);
     }
 
     ui_keyboard_active_chord_t previous = g_keyboard_state.active;
@@ -510,6 +587,7 @@ void ui_keyboard_app_note_button(uint8_t note_slot, bool pressed)
     if ((g_keyboard_state.observer != NULL)
             && ((previous.valid != g_keyboard_state.active.valid)
                 || (previous.root_midi != g_keyboard_state.active.root_midi)
+                || (previous.chord_mask != g_keyboard_state.active.chord_mask)
                 || (previous.interval_count != g_keyboard_state.active.interval_count)
                 || (memcmp(previous.intervals,
                            g_keyboard_state.active.intervals,
@@ -537,6 +615,7 @@ void ui_keyboard_app_chord_button(uint8_t chord_index, bool pressed)
     if ((g_keyboard_state.observer != NULL)
             && ((previous.valid != g_keyboard_state.active.valid)
                 || (previous.root_midi != g_keyboard_state.active.root_midi)
+                || (previous.chord_mask != g_keyboard_state.active.chord_mask)
                 || (previous.interval_count != g_keyboard_state.active.interval_count)
                 || (memcmp(previous.intervals,
                            g_keyboard_state.active.intervals,
@@ -552,8 +631,10 @@ void ui_keyboard_app_all_notes_off(void)
     g_keyboard_state.active.valid = false;
     g_keyboard_state.active.interval_count = 0U;
     g_keyboard_state.active.root_midi = 0U;
+    g_keyboard_state.active.chord_mask = 0U;
     g_keyboard_state.note_mask = 0U;
     g_keyboard_state.chord_mask = 0U;
+    kbd_root_stack_clear();
 }
 
 void ui_keyboard_app_clear_state_silent(void)
@@ -562,13 +643,42 @@ void ui_keyboard_app_clear_state_silent(void)
     g_keyboard_state.active.valid = false;
     g_keyboard_state.active.interval_count = 0U;
     g_keyboard_state.active.root_midi = 0U;
+    g_keyboard_state.active.chord_mask = 0U;
     g_keyboard_state.note_mask = 0U;
     g_keyboard_state.chord_mask = 0U;
+    kbd_root_stack_clear();
 }
 
 const ui_keyboard_active_chord_t *ui_keyboard_app_get_active_chord(void)
 {
     return &g_keyboard_state.active;
+}
+
+void ui_keyboard_app_format_active_chord_label(char *out, uint32_t out_len)
+{
+    static const char *const k_root_names[12] = {
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+    };
+
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if (!g_keyboard_state.omnichord || !g_keyboard_state.active.valid)
+    {
+        (void)snprintf(out, out_len, "KBD");
+        return;
+    }
+
+    const uint8_t root_pc = (uint8_t)(g_keyboard_state.active.root_midi % 12U);
+    const char *const suffix = kbd_chords_dict_suffix(g_keyboard_state.active.chord_mask);
+    if ((strcmp(suffix, "JAZZ") == 0) || (strcmp(suffix, "WTF") == 0))
+    {
+        (void)snprintf(out, out_len, "%s", suffix);
+        return;
+    }
+    (void)snprintf(out, out_len, "%s%s", k_root_names[root_pc], suffix);
 }
 
 void ui_keyboard_app_tick(uint32_t elapsed_ms)

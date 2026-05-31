@@ -142,6 +142,7 @@ This separation is intentional. Do not add a second authority for the same state
 - track-aware page exposure
 - hall-based interaction model
 - keyboard / arp / pattern / mute workflows
+- Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG` (hall calibration path stays prioritary)

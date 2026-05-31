@@ -1535,6 +1535,11 @@ int8_t ui_core_runtime_bridge_get_keyboard_octave_shift(void)
     return keyboard_runtime_get_octave_shift();
 }
 
+void ui_core_runtime_bridge_get_keyboard_chord_label(char *out, uint32_t out_len)
+{
+    keyboard_runtime_get_active_chord_label(out, out_len);
+}
+
 void ui_core_runtime_bridge_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
 {
     if (out_state == 0)

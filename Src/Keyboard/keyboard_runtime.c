@@ -363,7 +363,7 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
 
     if ((previous_mode == UI_HALL_MODE_KEYBOARD) && (new_mode != UI_HALL_MODE_KEYBOARD))
     {
-        ui_keyboard_app_clear_state_silent();
+        ui_keyboard_app_all_notes_off();
         keyboard_engine_clear_state_silent();
     }
 
@@ -380,6 +380,11 @@ bool keyboard_runtime_get_mono_last(void) { return keyboard_params_get_mono_last
 int8_t keyboard_runtime_get_octave_shift(void)
 {
     return ui_keyboard_app_get_octave_shift();
+}
+
+void keyboard_runtime_get_active_chord_label(char *out, uint32_t out_len)
+{
+    ui_keyboard_app_format_active_chord_label(out, out_len);
 }
 
 bool keyboard_runtime_get_arp_hold_for_track(uint8_t track) { return keyboard_arp_get_hold_for_track(track); }

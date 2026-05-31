@@ -91,6 +91,7 @@ void ui_core_runtime_bridge_update_seq_step_hold(void);
 uint8_t ui_core_runtime_bridge_resolve_filter_target_track(uint8_t *out_track_id);
 uint8_t ui_core_runtime_bridge_get_seq_edit_page(uint8_t track);
 int8_t ui_core_runtime_bridge_get_keyboard_octave_shift(void);
+void ui_core_runtime_bridge_get_keyboard_chord_label(char *out, uint32_t out_len);
 void ui_core_runtime_bridge_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 void ui_core_runtime_bridge_sync_active_track_context(uint8_t include_keyboard_focus_sync);
 void ui_core_runtime_bridge_sync_active_track_mirror(void);

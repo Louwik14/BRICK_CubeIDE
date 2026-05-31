@@ -65,6 +65,7 @@ note_order_t keyboard_runtime_get_note_order(void);
 bool keyboard_runtime_get_chord_override(void);
 bool keyboard_runtime_get_mono_last(void);
 int8_t keyboard_runtime_get_octave_shift(void);
+void keyboard_runtime_get_active_chord_label(char *out, uint32_t out_len);
 bool keyboard_runtime_get_arp_hold_for_track(uint8_t track);
 uint8_t keyboard_runtime_get_arp_rate_for_track(uint8_t track);
 uint8_t keyboard_runtime_get_arp_oct_for_track(uint8_t track);

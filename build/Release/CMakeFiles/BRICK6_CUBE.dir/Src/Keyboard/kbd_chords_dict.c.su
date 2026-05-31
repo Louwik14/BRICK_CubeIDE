@@ -1,3 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:106:13:kbd_add_components	28	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:122:6:kbd_chords_dict_build	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:165:8:kbd_scale_slot_semitone_offset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:75:13:kbd_add_all	20	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:112:13:kbd_add_components	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:178:6:kbd_chords_dict_build	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:216:13:kbd_chords_dict_suffix	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/kbd_chords_dict.c:323:8:kbd_scale_slot_semitone_offset	0	static

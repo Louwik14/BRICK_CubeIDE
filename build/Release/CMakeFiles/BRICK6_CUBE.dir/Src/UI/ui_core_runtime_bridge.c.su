@@ -34,9 +34,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bri
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1514:9:ui_core_runtime_bridge_resolve_filter_target_track	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1528:9:ui_core_runtime_bridge_get_seq_edit_page	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1533:8:ui_core_runtime_bridge_get_keyboard_octave_shift	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1538:6:ui_core_runtime_bridge_get_pattern_stub_state	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1564:6:ui_core_runtime_bridge_sync_active_track_context	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1570:6:ui_core_runtime_bridge_sync_active_track_mirror	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1575:6:ui_core_runtime_bridge_sync_active_track_midi_channel	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1580:6:ui_core_runtime_bridge_sync_active_track_midi_source	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1585:6:ui_core_runtime_bridge_post_track_structure_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1538:6:ui_core_runtime_bridge_get_keyboard_chord_label	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1543:6:ui_core_runtime_bridge_get_pattern_stub_state	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1569:6:ui_core_runtime_bridge_sync_active_track_context	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1575:6:ui_core_runtime_bridge_sync_active_track_mirror	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1580:6:ui_core_runtime_bridge_sync_active_track_midi_channel	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1585:6:ui_core_runtime_bridge_sync_active_track_midi_source	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1590:6:ui_core_runtime_bridge_post_track_structure_change	8	static
