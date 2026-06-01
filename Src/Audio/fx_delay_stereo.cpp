@@ -1,5 +1,6 @@
 #include "fx_delay_stereo.h"
 
+#include "Audio/fx_delay_shared_pool.h"
 #include "Storage/memory_layout.h"
 
 #include <math.h>
@@ -9,15 +10,12 @@ namespace
 {
 constexpr float kDefaultSampleRate = 48000.0f;
 constexpr float kMaxDelaySeconds = 6.0f;
-constexpr uint32_t kDelayBufferSize = 288002U;
+constexpr uint32_t kDelayBufferSize = FX_DELAY_SHARED_CLASSIC_CAPACITY;
 constexpr float kMinDelaySamples = 1.0f;
 constexpr float kFeedbackMax = 0.95f;
 constexpr float kTimeSmooth = 0.0025f;
 constexpr float kLpfMinAlpha = 0.01f;
 constexpr float kLpfMaxAlpha = 0.85f;
-
-AUDIO_COLD_SDRAM ALIGN32 static float g_delay_buffer_l[kDelayBufferSize];
-AUDIO_COLD_SDRAM ALIGN32 static float g_delay_buffer_r[kDelayBufferSize];
 
 typedef struct
 {
@@ -144,9 +142,22 @@ extern "C" void fx_delay_stereo_global_init(float sample_rate)
     g_delay.feedback_lp_l = 0.0f;
     g_delay.feedback_lp_r = 0.0f;
     g_delay.write_index = 0U;
-    memset(g_delay_buffer_l, 0, sizeof(g_delay_buffer_l));
-    memset(g_delay_buffer_r, 0, sizeof(g_delay_buffer_r));
+    fx_delay_shared_pool_acquire(FX_DELAY_SHARED_OWNER_CLASSIC, 1U);
     g_delay.initialized = 1U;
+}
+
+extern "C" void fx_delay_stereo_global_clear(void)
+{
+    fx_delay_shared_pool_acquire(FX_DELAY_SHARED_OWNER_CLASSIC, 1U);
+    g_delay.time_current_samples_l = target_delay_samples(g_delay.time_target_s, g_delay.sample_rate);
+    g_delay.time_current_samples_r = g_delay.time_current_samples_l;
+    g_delay.feedback_hpf_l = 0.0f;
+    g_delay.feedback_hpf_r = 0.0f;
+    g_delay.feedback_hpf_prev_l = 0.0f;
+    g_delay.feedback_hpf_prev_r = 0.0f;
+    g_delay.feedback_lp_l = 0.0f;
+    g_delay.feedback_lp_r = 0.0f;
+    g_delay.write_index = 0U;
 }
 
 extern "C" void fx_delay_stereo_global_set_time(float time_s)
@@ -221,14 +232,16 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     const float rev = g_delay.reverb_send;
     const float width = g_delay.width;
     const uint8_t has_rev = ((rev_l != 0) && (rev_r != 0)) ? 1U : 0U;
+    float *const delay_buffer_l = fx_delay_shared_pool_left();
+    float *const delay_buffer_r = fx_delay_shared_pool_right();
 
     for(uint32_t i = 0U; i < frames; ++i)
     {
         g_delay.time_current_samples_l += (target_l - g_delay.time_current_samples_l) * kTimeSmooth;
         g_delay.time_current_samples_r += (target_r - g_delay.time_current_samples_r) * kTimeSmooth;
 
-        const float dl = read_delay(g_delay_buffer_l, g_delay.write_index, g_delay.time_current_samples_l);
-        const float dr = read_delay(g_delay_buffer_r, g_delay.write_index, g_delay.time_current_samples_r);
+        const float dl = read_delay(delay_buffer_l, g_delay.write_index, g_delay.time_current_samples_l);
+        const float dr = read_delay(delay_buffer_r, g_delay.write_index, g_delay.time_current_samples_r);
 
         float fb_src_l = dl;
         float fb_src_r = dr;
@@ -271,8 +284,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             input_r = 0.0f;
         }
 
-        g_delay_buffer_l[g_delay.write_index] = input_l + (fb_src_l * fb);
-        g_delay_buffer_r[g_delay.write_index] = input_r + (fb_src_r * fb);
+        delay_buffer_l[g_delay.write_index] = input_l + (fb_src_l * fb);
+        delay_buffer_r[g_delay.write_index] = input_r + (fb_src_r * fb);
 
         float wet_l = 0.0f;
         float wet_r = 0.0f;

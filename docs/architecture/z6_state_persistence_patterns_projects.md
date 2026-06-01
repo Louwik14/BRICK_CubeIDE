@@ -575,7 +575,11 @@ TODO policy SD/projet:
 ## Addendum 2026-05-06 - Master/FX UI-only
 
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
+- L'ajout du type Master/FX `COLOR` etend seulement l'enum de valeur stockee dans les params `PARAM_MASTER_FXn_TYPE`; `PARAM_COUNT`, `PatternSaveV1` et `ProjectSaveV1` ne changent pas.
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
+- Le retrait produit de Master/FX `TALK` et `PITCH` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..11`; `PARAM_COUNT` ne change pas, mais les formats pattern/projet/patch/kit sont bumpes pour refuser les anciens fichiers prototype.
+- Le retrait produit de Master/FX `ECHO` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..10`; `PARAM_COUNT` ne change pas. `PATTERN_VERSION=30`, `PROJECT_V1_FILE_VERSION=42`, `PATCH_SD_FILE_VERSION=4` et `KIT_SD_FILE_VERSION=3` refusent les anciens fichiers prototype sans migration legacy.
+- `STUTTER` devient une ressource unique dans les 4 slots Master/FX sans changement de layout: les restaurations multiples sont normalisees par l'apply param Z3, qui conserve le premier slot `STUTTER` et remappe les suivants vers `OFF`. Aucun bump supplementaire de format n'est requis par cette contrainte.
 - L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
 
 ## Addendum 2026-05-08 - contrat SD audio recording multi-client
@@ -898,10 +902,10 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-24 - catalogue global sample produit
 
-- `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 240 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
+- `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 256 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
 - `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`, lui aussi dimensionne sur la capacite active courante. Les limites de 16 pads/voix/pages UI ne bornent pas le nombre de samples RAM residents. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
 - Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. RAM est stocke en `FLOAT32_INTERLEAVED` stereo au load WAV; les anciens slots residents sont volatils et sont donc simplement recharges depuis leur path projet/autoload. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
-- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v35: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades.
+- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v41: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades. `PROJECT_V1_FILE_VERSION=41` marque le passage des backends Stream/RAM actifs a 256 slots et du slot-pool physique a 1024 pages / 16 MiB; les anciens projets prototype sont refuses par version/payload stricts.
 
 - `PATTERN_VERSION=23` et `PROJECT_V1_FILE_VERSION=33` marquent le retrait prototype de `PARAM_SAMPLER_FADE_IN` / `PARAM_SAMPLER_FADE_OUT` de `PARAM_COUNT`; aucune migration ancienne valeur fade n'est conservee.
 - `PATTERN_VERSION=24` et `PROJECT_V1_FILE_VERSION=34` marquent l'ajout append-only de `PARAM_SAMPLER_LOOP_START` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.

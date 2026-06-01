@@ -1,5 +1,6 @@
 #include "Param/param_registry_backends.h"
 
+#include "Audio/fx_master_macro.h"
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
@@ -788,7 +789,7 @@ uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
     switch ((uint8_t)((id - PARAM_MASTER_FX1_TYPE) % 4U))
     {
         case 0U:
-            state->master_fx.type[slot] = param_backend_clamp_value(value, 0.0f, 12.0f);
+            state->master_fx.type[slot] = param_backend_clamp_value(value, 0.0f, (float)(FX_MASTER_MACRO_TYPE_COUNT - 1U));
             return 1U;
         case 1U:
             state->master_fx.level[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);

@@ -1324,6 +1324,7 @@ void mixer_reset_runtime_state(void)
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
+    fx_delay_stereo_global_clear();
     audio_xfade_set(0.0f);
     g_looper_xfade_smoothed = 0.0f;
     g_looper_xfade_prev = 0.0f;
@@ -1651,6 +1652,10 @@ void mixer_set_delay_type(uint8_t type)
     if(g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
     {
         fx_delay_dual_global_clear();
+    }
+    else
+    {
+        fx_delay_stereo_global_clear();
     }
 }
 

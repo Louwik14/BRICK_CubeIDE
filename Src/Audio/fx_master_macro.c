@@ -17,7 +17,9 @@
 #define FX_MASTER_MACRO_DC_ALPHA 0.995f
 #define FX_MASTER_MACRO_DELAY_MAX_SAMPLES 48000U
 #define FX_MASTER_MACRO_DELAY_MAX_F ((float)(FX_MASTER_MACRO_DELAY_MAX_SAMPLES - 2U))
-#define FX_MASTER_MACRO_TALK_FORMANT_COUNT 3U
+#define FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES 24000U
+#define FX_MASTER_MACRO_STUTTER_HISTORY_F ((float)(FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES - 2U))
+#define FX_MASTER_MACRO_STUTTER_OWNER_NONE 0xFFU
 
 typedef struct
 {
@@ -36,14 +38,13 @@ typedef struct
     float stutter_start;
     float stutter_loop_samples;
     uint8_t stutter_active;
-    float pitch_phase_a;
-    float pitch_phase_b;
-    float talk_low_l[FX_MASTER_MACRO_TALK_FORMANT_COUNT];
-    float talk_band_l[FX_MASTER_MACRO_TALK_FORMANT_COUNT];
-    float talk_low_r[FX_MASTER_MACRO_TALK_FORMANT_COUNT];
-    float talk_band_r[FX_MASTER_MACRO_TALK_FORMANT_COUNT];
+    float color_smooth_l;
+    float color_smooth_r;
+    float color_amount;
+    float color_coeff;
     float crush_hold_l;
     float crush_hold_r;
+    uint8_t color_init;
     uint16_t crush_count;
     uint32_t delay_write;
     uint32_t delay_filled;
@@ -53,8 +54,29 @@ typedef struct
     float dc_y_r;
 } fx_master_macro_slot_state_t;
 
+typedef struct
+{
+    uint8_t owner_slot;
+    uint8_t playing;
+    uint8_t relatch_pending;
+    uint8_t xfade_active;
+    uint32_t write;
+    uint32_t filled;
+    float pos;
+    float start;
+    float loop_samples;
+    float pending_loop_samples;
+    float old_pos;
+    float old_start;
+    float old_loop_samples;
+    float xfade_pos;
+} fx_master_macro_stutter_state_t;
+
 AUDIO_HOT static fx_master_macro_slot_state_t g_slots[FX_MASTER_MACRO_SLOT_COUNT];
+AUDIO_HOT static fx_master_macro_stutter_state_t g_stutter;
 AUDIO_COLD_SDRAM static float g_delay[FX_MASTER_MACRO_SLOT_COUNT][FX_MASTER_MACRO_DELAY_MAX_SAMPLES];
+AUDIO_HISTORY_SDRAM static float g_stutter_history_l[FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES];
+AUDIO_HISTORY_SDRAM static float g_stutter_history_r[FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES];
 static float g_sample_rate = FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT;
 
 static float fxmm_clampf(float v, float lo, float hi)
@@ -92,20 +114,41 @@ static uint8_t fxmm_type_is_active(uint8_t type)
     {
         case FX_MASTER_MACRO_DRIVE:
         case FX_MASTER_MACRO_CRUSH:
-        case FX_MASTER_MACRO_ECHO:
         case FX_MASTER_MACRO_WOBBLE:
         case FX_MASTER_MACRO_COMB:
         case FX_MASTER_MACRO_RING:
         case FX_MASTER_MACRO_CHOP:
         case FX_MASTER_MACRO_PUMP:
-        case FX_MASTER_MACRO_PITCH:
-        case FX_MASTER_MACRO_TALK:
         case FX_MASTER_MACRO_STUTTER:
         case FX_MASTER_MACRO_FREEZE:
+        case FX_MASTER_MACRO_COLOR:
             return 1U;
         default:
             return 0U;
     }
+}
+
+static uint8_t fxmm_type_is_unique_history(uint8_t type)
+{
+    return (type == FX_MASTER_MACRO_STUTTER) ? 1U : 0U;
+}
+
+static void fxmm_reset_stutter_state(void)
+{
+    g_stutter.owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
+    g_stutter.playing = 0U;
+    g_stutter.relatch_pending = 0U;
+    g_stutter.xfade_active = 0U;
+    g_stutter.write = 0U;
+    g_stutter.filled = 0U;
+    g_stutter.pos = 0.0f;
+    g_stutter.start = 0.0f;
+    g_stutter.loop_samples = 1200.0f;
+    g_stutter.pending_loop_samples = 1200.0f;
+    g_stutter.old_pos = 0.0f;
+    g_stutter.old_start = 0.0f;
+    g_stutter.old_loop_samples = 1200.0f;
+    g_stutter.xfade_pos = 0.0f;
 }
 
 static void fxmm_reset_slot_state(fx_master_macro_slot_state_t *slot)
@@ -129,17 +172,13 @@ static void fxmm_reset_slot_state(fx_master_macro_slot_state_t *slot)
     slot->stutter_start = 0.0f;
     slot->stutter_loop_samples = 1200.0f;
     slot->stutter_active = 0U;
-    slot->pitch_phase_a = 0.0f;
-    slot->pitch_phase_b = 0.5f;
-    for (uint32_t i = 0U; i < FX_MASTER_MACRO_TALK_FORMANT_COUNT; ++i)
-    {
-        slot->talk_low_l[i] = 0.0f;
-        slot->talk_band_l[i] = 0.0f;
-        slot->talk_low_r[i] = 0.0f;
-        slot->talk_band_r[i] = 0.0f;
-    }
+    slot->color_smooth_l = 0.0f;
+    slot->color_smooth_r = 0.0f;
+    slot->color_amount = 0.0f;
+    slot->color_coeff = 0.0f;
     slot->crush_hold_l = 0.0f;
     slot->crush_hold_r = 0.0f;
+    slot->color_init = 0U;
     slot->crush_count = 0U;
     slot->delay_write = 0U;
     slot->delay_filled = 0U;
@@ -270,11 +309,6 @@ static float fxmm_comb_delay_samples(float tune)
     return fxmm_clampf(g_sample_rate / freq, 12.0f, 560.0f);
 }
 
-static float fxmm_echo_feedback(float feedback_norm)
-{
-    return fxmm_clampf(feedback_norm * 0.74f, 0.0f, 0.74f);
-}
-
 static float fxmm_stutter_size_samples(float size_norm, float bpm_milli)
 {
     static const float beats[] = { 0.03125f, 0.0625f, 0.125f, 0.1666667f, 0.25f, 0.3333333f, 0.5f, 0.75f };
@@ -282,7 +316,7 @@ static float fxmm_stutter_size_samples(float size_norm, float bpm_milli)
     const float bpm = (bpm_milli > 0.0f) ? (bpm_milli * 0.001f) : 120.0f;
     float seconds = (60.0f / bpm) * beats[(idx < 8U) ? idx : 7U];
     seconds = fxmm_clampf(seconds, 0.010f, 0.500f);
-    return fxmm_clampf(seconds * g_sample_rate, 32.0f, 24000.0f);
+    return fxmm_clampf(seconds * g_sample_rate, 32.0f, FX_MASTER_MACRO_STUTTER_HISTORY_F);
 }
 
 static float fxmm_stutter_rate_mul(float rate_norm)
@@ -292,27 +326,72 @@ static float fxmm_stutter_rate_mul(float rate_norm)
     return rates[(idx < 8U) ? idx : 7U];
 }
 
-static float fxmm_delay_read_abs(uint8_t slot_index, float pos)
+static void fxmm_stutter_history_write(float left, float right)
 {
-    if (slot_index >= FX_MASTER_MACRO_SLOT_COUNT)
+    g_stutter_history_l[g_stutter.write] = fxmm_clampf(left, -1.15f, 1.15f);
+    g_stutter_history_r[g_stutter.write] = fxmm_clampf(right, -1.15f, 1.15f);
+    g_stutter.write++;
+    if (g_stutter.write >= FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES)
     {
-        return 0.0f;
+        g_stutter.write = 0U;
     }
+    if (g_stutter.filled < FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES)
+    {
+        g_stutter.filled++;
+    }
+}
+
+static void fxmm_stutter_stop_playback(void)
+{
+    g_stutter.playing = 0U;
+    g_stutter.relatch_pending = 0U;
+    g_stutter.xfade_active = 0U;
+}
+
+static void fxmm_stutter_update_pending_loop(float loop_samples)
+{
+    loop_samples = fxmm_clampf(loop_samples, 32.0f, FX_MASTER_MACRO_STUTTER_HISTORY_F);
+    if (fabsf(loop_samples - g_stutter.pending_loop_samples) > 0.5f)
+    {
+        g_stutter.pending_loop_samples = loop_samples;
+        if (g_stutter.playing != 0U)
+        {
+            g_stutter.relatch_pending = 1U;
+        }
+    }
+}
+
+static void fxmm_stutter_read_abs(float pos, float *out_l, float *out_r)
+{
     while (pos < 0.0f)
     {
-        pos += (float)FX_MASTER_MACRO_DELAY_MAX_SAMPLES;
+        pos += (float)FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES;
     }
-    while (pos >= (float)FX_MASTER_MACRO_DELAY_MAX_SAMPLES)
+    while (pos >= (float)FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES)
     {
-        pos -= (float)FX_MASTER_MACRO_DELAY_MAX_SAMPLES;
+        pos -= (float)FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES;
     }
 
     const uint32_t i0 = (uint32_t)pos;
-    const uint32_t i1 = (i0 + 1U) % FX_MASTER_MACRO_DELAY_MAX_SAMPLES;
     const float frac = pos - (float)i0;
-    const float y0 = g_delay[slot_index][i0];
-    const float y1 = g_delay[slot_index][i1];
-    return y0 + ((y1 - y0) * frac);
+    float l = g_stutter_history_l[i0];
+    float r = g_stutter_history_r[i0];
+    if (frac != 0.0f)
+    {
+        const uint32_t i1 = (i0 + 1U) % FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES;
+        const float l1 = g_stutter_history_l[i1];
+        const float r1 = g_stutter_history_r[i1];
+        l += (l1 - l) * frac;
+        r += (r1 - r) * frac;
+    }
+    if (out_l != NULL)
+    {
+        *out_l = l;
+    }
+    if (out_r != NULL)
+    {
+        *out_r = r;
+    }
 }
 
 static float fxmm_loop_xfade_gain(float pos, float len)
@@ -333,71 +412,174 @@ static float fxmm_loop_xfade_gain(float pos, float len)
     return 1.0f;
 }
 
-static float fxmm_talk_formant(float in, float freq, float damp, float *low, float *band)
+static void fxmm_stutter_capture(float len)
 {
-    const float f = fxmm_clampf((2.0f * freq) / g_sample_rate, 0.001f, 0.42f);
-    *low += f * *band;
-    const float high = in - *low - (damp * *band);
-    *band += f * high;
-    *low = fxmm_clampf(*low, -2.0f, 2.0f);
-    *band = fxmm_clampf(*band, -2.0f, 2.0f);
-    return *band;
-}
-
-static float fxmm_talk_process(fx_master_macro_slot_state_t *slot, float in, uint8_t right, float vowel, float tone)
-{
-    static const float formants[5U][FX_MASTER_MACRO_TALK_FORMANT_COUNT] = {
-        { 730.0f, 1090.0f, 2440.0f },
-        { 530.0f, 1840.0f, 2480.0f },
-        { 270.0f, 2290.0f, 3010.0f },
-        { 570.0f, 840.0f, 2410.0f },
-        { 300.0f, 870.0f, 2240.0f }
-    };
-    static const float gains[FX_MASTER_MACRO_TALK_FORMANT_COUNT] = { 0.58f, 0.34f, 0.20f };
-    const float scaled = vowel * 4.0f;
-    uint32_t idx = (uint32_t)scaled;
-    if (idx >= 4U)
+    len = fxmm_clampf(len, 32.0f, FX_MASTER_MACRO_STUTTER_HISTORY_F);
+    if (g_stutter.filled < ((uint32_t)len + 2U))
     {
-        idx = 4U;
-    }
-    const uint32_t next = (idx < 4U) ? (idx + 1U) : idx;
-    const float frac = scaled - (float)idx;
-    const float shift = 0.72f + (tone * 0.62f);
-    const float damp = 0.28f - (tone * 0.10f);
-    float out = in * (0.12f + (0.18f * (1.0f - tone)));
-
-    for (uint32_t i = 0U; i < FX_MASTER_MACRO_TALK_FORMANT_COUNT; ++i)
-    {
-        const float f0 = formants[idx][i];
-        const float f1 = formants[next][i];
-        const float freq = (f0 + ((f1 - f0) * frac)) * shift;
-        float *low = (right != 0U) ? &slot->talk_low_r[i] : &slot->talk_low_l[i];
-        float *band = (right != 0U) ? &slot->talk_band_r[i] : &slot->talk_band_l[i];
-        out += fxmm_talk_formant(in, freq, damp, low, band) * gains[i];
+        return;
     }
 
-    return fxmm_clampf(out * (0.82f + (tone * 0.34f)), -1.15f, 1.15f);
+    g_stutter.playing = 1U;
+    g_stutter.relatch_pending = 0U;
+    g_stutter.xfade_active = 0U;
+    g_stutter.pos = 0.0f;
+    g_stutter.loop_samples = len;
+    g_stutter.pending_loop_samples = len;
+    g_stutter.start = (float)g_stutter.write - len;
 }
 
-static float fxmm_pitch_ratio(float semi_norm, float fine_norm)
+static void fxmm_stutter_begin_relatch(float len)
 {
-    uint32_t semi_step = (uint32_t)(semi_norm * 24.0f + 0.5f);
-    if (semi_step > 24U)
+    len = fxmm_clampf(len, 32.0f, FX_MASTER_MACRO_STUTTER_HISTORY_F);
+    if (g_stutter.filled < ((uint32_t)len + 2U))
     {
-        semi_step = 24U;
+        return;
     }
-    const float semis = (float)((int32_t)semi_step - 12);
-    const float cents = ((fine_norm * 2.0f) - 1.0f) * 100.0f;
-    return powf(2.0f, (semis + (cents * 0.01f)) * (1.0f / 12.0f));
+
+    g_stutter.old_pos = g_stutter.pos;
+    g_stutter.old_start = g_stutter.start;
+    g_stutter.old_loop_samples = g_stutter.loop_samples;
+    g_stutter.pos = 0.0f;
+    g_stutter.start = (float)g_stutter.write - len;
+    g_stutter.loop_samples = len;
+    g_stutter.pending_loop_samples = len;
+    g_stutter.xfade_pos = 0.0f;
+    g_stutter.xfade_active = 1U;
+    g_stutter.relatch_pending = 0U;
 }
 
-static float fxmm_pitch_voice(const fx_master_macro_slot_state_t *slot, uint8_t slot_index, float phase, float ratio)
+static void fxmm_stutter_process_sample(float dry_l,
+                                        float dry_r,
+                                        float rate,
+                                        float *wet_l,
+                                        float *wet_r)
 {
-    const float window = fxmm_clampf(g_sample_rate * 0.045f, 512.0f, 4096.0f);
-    const float base = window + 8.0f;
-    const float sweep = (ratio >= 1.0f) ? (1.0f - phase) : phase;
-    const float delay = base + (sweep * window);
-    return fxmm_delay_read(slot, slot_index, delay);
+    if ((wet_l == NULL) || (wet_r == NULL))
+    {
+        return;
+    }
+
+    if (g_stutter.playing == 0U)
+    {
+        fxmm_stutter_capture(g_stutter.pending_loop_samples);
+    }
+
+    if (g_stutter.playing == 0U)
+    {
+        fxmm_stutter_history_write(dry_l, dry_r);
+        *wet_l = dry_l;
+        *wet_r = dry_r;
+        return;
+    }
+
+    float new_l = dry_l;
+    float new_r = dry_r;
+    fxmm_stutter_read_abs(g_stutter.start + g_stutter.pos, &new_l, &new_r);
+    const float new_gain = fxmm_loop_xfade_gain(g_stutter.pos, g_stutter.loop_samples);
+    new_l *= new_gain;
+    new_r *= new_gain;
+
+    if (g_stutter.xfade_active != 0U)
+    {
+        float old_l = dry_l;
+        float old_r = dry_r;
+        fxmm_stutter_read_abs(g_stutter.old_start + g_stutter.old_pos, &old_l, &old_r);
+        const float old_gain = fxmm_loop_xfade_gain(g_stutter.old_pos, g_stutter.old_loop_samples);
+        old_l *= old_gain;
+        old_r *= old_gain;
+
+        const float fade_samples = fxmm_clampf(g_sample_rate * 0.0025f, 8.0f, 128.0f);
+        const float mix = fxmm_clampf(g_stutter.xfade_pos / fade_samples, 0.0f, 1.0f);
+        *wet_l = old_l + ((new_l - old_l) * mix);
+        *wet_r = old_r + ((new_r - old_r) * mix);
+
+        g_stutter.old_pos += rate;
+        while (g_stutter.old_pos >= g_stutter.old_loop_samples)
+        {
+            g_stutter.old_pos -= g_stutter.old_loop_samples;
+        }
+        g_stutter.xfade_pos += 1.0f;
+        if (g_stutter.xfade_pos >= fade_samples)
+        {
+            g_stutter.xfade_active = 0U;
+        }
+    }
+    else
+    {
+        *wet_l = new_l;
+        *wet_r = new_r;
+    }
+
+    g_stutter.pos += rate;
+    if (g_stutter.pos >= g_stutter.loop_samples)
+    {
+        while (g_stutter.pos >= g_stutter.loop_samples)
+        {
+            g_stutter.pos -= g_stutter.loop_samples;
+        }
+        if (g_stutter.relatch_pending != 0U)
+        {
+            fxmm_stutter_begin_relatch(g_stutter.pending_loop_samples);
+        }
+    }
+}
+
+static float fxmm_color_focus_hz(float focus_norm)
+{
+    const float shaped = focus_norm * focus_norm;
+    return 2500.0f + (shaped * 11500.0f);
+}
+
+static float fxmm_color_amount_from_macro(float macro)
+{
+    const uint8_t raw = fxmm_u7(macro);
+    if (raw == 64U)
+    {
+        return 0.0f;
+    }
+    if (raw < 64U)
+    {
+        return -(((float)(64U - raw) * (1.0f / 64.0f)) * 0.85f);
+    }
+    return ((float)(raw - 64U) * (1.0f / 63.0f)) * 0.85f;
+}
+
+static float fxmm_color_coeff_from_hz(float hz)
+{
+    const float omega = fxmm_clampf(hz / g_sample_rate, 0.0001f, 0.45f);
+    return omega / (1.0f + omega);
+}
+
+static void fxmm_process_color_sample(fx_master_macro_slot_state_t *slot,
+                                      float dry_l,
+                                      float dry_r,
+                                      float target_amount,
+                                      float target_coeff,
+                                      float *out_l,
+                                      float *out_r)
+{
+    if ((slot == NULL) || (out_l == NULL) || (out_r == NULL))
+    {
+        return;
+    }
+
+    if (slot->color_init == 0U)
+    {
+        slot->color_smooth_l = dry_l;
+        slot->color_smooth_r = dry_r;
+        slot->color_amount = target_amount;
+        slot->color_coeff = target_coeff;
+        slot->color_init = 1U;
+    }
+
+    slot->color_amount = fxmm_smooth(slot->color_amount, target_amount, 0.0030f);
+    slot->color_coeff = fxmm_smooth(slot->color_coeff, target_coeff, 0.0020f);
+    slot->color_smooth_l += slot->color_coeff * (dry_l - slot->color_smooth_l);
+    slot->color_smooth_r += slot->color_coeff * (dry_r - slot->color_smooth_r);
+
+    *out_l = fxmm_clampf(dry_l + (slot->color_amount * (dry_l - slot->color_smooth_l)), -1.15f, 1.15f);
+    *out_r = fxmm_clampf(dry_r + (slot->color_amount * (dry_r - slot->color_smooth_r)), -1.15f, 1.15f);
 }
 
 static uint32_t fxmm_get_bpm_milli(void)
@@ -519,7 +701,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                               float *left,
                               float *right,
                               uint32_t frames,
-                              float bpm_milli)
+                              float bpm_milli,
+                              uint8_t stutter_owner_slot)
 {
     const uint8_t active_type = fxmm_type_is_active(type);
     const float target_wet = ((active_type == 0U) || (level_raw <= 0.0f))
@@ -540,26 +723,54 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         return;
     }
 
-    const uint8_t keeps_history = ((type == FX_MASTER_MACRO_STUTTER) || (type == FX_MASTER_MACRO_PITCH)) ? 1U : 0U;
+    if ((fxmm_type_is_unique_history(type) != 0U) && (slot_index != stutter_owner_slot))
+    {
+        slot->wet = 0.0f;
+        return;
+    }
+
+    if (type == FX_MASTER_MACRO_STUTTER)
+    {
+        const float stutter_loop = fxmm_stutter_size_samples(a, bpm_milli);
+        const float stutter_rate = fxmm_stutter_rate_mul(b);
+        fxmm_stutter_update_pending_loop(stutter_loop);
+        slot->wet = (level_raw > 0.0f) ? 1.0f : 0.0f;
+
+        if (level_raw <= 0.0f)
+        {
+            fxmm_stutter_stop_playback();
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                fxmm_stutter_history_write(left[i], right[i]);
+            }
+            return;
+        }
+
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            float wet_l = left[i];
+            float wet_r = right[i];
+            fxmm_stutter_process_sample(left[i], right[i], stutter_rate, &wet_l, &wet_r);
+            left[i] = fxmm_clampf(wet_l, -1.20f, 1.20f);
+            right[i] = fxmm_clampf(wet_r, -1.20f, 1.20f);
+        }
+        return;
+    }
+
+    const uint8_t keeps_history = ((type == FX_MASTER_MACRO_STUTTER) && (slot_index == stutter_owner_slot)) ? 1U : 0U;
     if ((target_wet <= 0.0f) && (slot->wet <= 0.000001f) && (keeps_history == 0U))
     {
         slot->wet = 0.0f;
         return;
     }
 
-    float echo_target_delay = 0.0f;
     float freeze_target_delay = 0.0f;
     float comb_target_delay = 0.0f;
     float wobble_rate = 0.0f;
     float wobble_depth_samples = 0.0f;
-    float stutter_loop = 0.0f;
-    float stutter_rate = 1.0f;
-    float pitch_ratio = 1.0f;
-    if (type == FX_MASTER_MACRO_ECHO)
-    {
-        echo_target_delay = fxmm_time_samples_from_macro(macro_a, bpm_milli, 0.040f, 0.950f);
-    }
-    else if (type == FX_MASTER_MACRO_FREEZE)
+    float color_amount = 0.0f;
+    float color_coeff = 0.0f;
+    if (type == FX_MASTER_MACRO_FREEZE)
     {
         freeze_target_delay = fxmm_time_samples_from_macro(macro_a, bpm_milli, 0.060f, 0.800f);
     }
@@ -572,14 +783,10 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         wobble_rate = 0.06f + (a * a * 7.5f);
         wobble_depth_samples = (0.0008f + (b * 0.0105f)) * g_sample_rate;
     }
-    else if (type == FX_MASTER_MACRO_STUTTER)
+    else if (type == FX_MASTER_MACRO_COLOR)
     {
-        stutter_loop = fxmm_stutter_size_samples(a, bpm_milli);
-        stutter_rate = fxmm_stutter_rate_mul(b);
-    }
-    else if (type == FX_MASTER_MACRO_PITCH)
-    {
-        pitch_ratio = fxmm_pitch_ratio(a, b);
+        color_amount = fxmm_color_amount_from_macro(macro_a);
+        color_coeff = fxmm_color_coeff_from_hz(fxmm_color_focus_hz(b));
     }
 
     for (uint32_t i = 0U; i < frames; ++i)
@@ -587,7 +794,6 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         slot->wet = fxmm_smooth(slot->wet, target_wet, FX_MASTER_MACRO_SMOOTH_FAST);
         const float dry_l = left[i];
         const float dry_r = right[i];
-        const float dry_m = (dry_l + dry_r) * 0.5f;
         float wet_l = dry_l;
         float wet_r = dry_r;
 
@@ -613,20 +819,6 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                 break;
             }
 
-            case FX_MASTER_MACRO_ECHO:
-            {
-                slot->delay_samples = fxmm_smooth(slot->delay_samples, echo_target_delay, 0.0015f);
-                const float delayed = fxmm_delay_read(slot, slot_index, slot->delay_samples);
-                const float side = fxmm_delay_read(slot, slot_index, slot->delay_samples + 31.0f);
-                slot->delay_feedback_lp += (delayed - slot->delay_feedback_lp) * 0.18f;
-                const float fb = fxmm_echo_feedback(b);
-                const float input = (dry_l + dry_r) * 0.5f;
-                fxmm_delay_write(slot, slot_index, input + (slot->delay_feedback_lp * fb));
-                wet_l = delayed + (side * 0.18f);
-                wet_r = delayed - (side * 0.18f);
-                break;
-            }
-
             case FX_MASTER_MACRO_WOBBLE:
             {
                 slot->wobble_phase += wobble_rate / g_sample_rate;
@@ -641,87 +833,6 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                 fxmm_delay_write(slot, slot_index, (dry_l + dry_r) * 0.5f);
                 wet_l = delayed;
                 wet_r = delayed;
-                break;
-            }
-
-            case FX_MASTER_MACRO_PITCH:
-            {
-                fxmm_delay_write(slot, slot_index, dry_m);
-                if (fabsf(pitch_ratio - 1.0f) < 0.006f)
-                {
-                    wet_l = dry_l;
-                    wet_r = dry_r;
-                    break;
-                }
-                const float phase_inc = fxmm_clampf(fabsf(pitch_ratio - 1.0f) * 0.42f, 0.00004f, 0.018f);
-                slot->pitch_phase_a += phase_inc;
-                slot->pitch_phase_b += phase_inc;
-                while (slot->pitch_phase_a >= 1.0f)
-                {
-                    slot->pitch_phase_a -= 1.0f;
-                }
-                while (slot->pitch_phase_b >= 1.0f)
-                {
-                    slot->pitch_phase_b -= 1.0f;
-                }
-                const float a_gain = 1.0f - fabsf((slot->pitch_phase_a * 2.0f) - 1.0f);
-                const float b_gain = 1.0f - fabsf((slot->pitch_phase_b * 2.0f) - 1.0f);
-                const float shifted_a = fxmm_pitch_voice(slot, slot_index, slot->pitch_phase_a, pitch_ratio);
-                const float shifted_b = fxmm_pitch_voice(slot, slot_index, slot->pitch_phase_b, pitch_ratio);
-                const float denom = fxmm_clampf(a_gain + b_gain, 0.001f, 2.0f);
-                const float shifted = ((shifted_a * a_gain) + (shifted_b * b_gain)) / denom;
-                wet_l = shifted;
-                wet_r = shifted;
-                break;
-            }
-
-            case FX_MASTER_MACRO_TALK:
-            {
-                const float vowel = (float)((uint32_t)(a * 4.0f + 0.5f)) * 0.25f;
-                wet_l = fxmm_talk_process(slot, dry_l, 0U, vowel, b);
-                wet_r = fxmm_talk_process(slot, dry_r, 1U, vowel, b);
-                break;
-            }
-
-            case FX_MASTER_MACRO_STUTTER:
-            {
-                if ((target_wet > 0.000001f) && (slot->stutter_active == 0U))
-                {
-                    const float len = fxmm_clampf(stutter_loop, 32.0f, 24000.0f);
-                    if (slot->delay_filled >= ((uint32_t)len + 2U))
-                    {
-                        slot->stutter_active = 1U;
-                        slot->stutter_pos = 0.0f;
-                        slot->stutter_loop_samples = len;
-                        slot->stutter_start = (float)slot->delay_write - len;
-                    }
-                }
-                else if (target_wet <= 0.000001f)
-                {
-                    slot->stutter_active = 0U;
-                }
-
-                if (slot->stutter_active != 0U)
-                {
-                    const float len = fxmm_clampf(slot->stutter_loop_samples, 32.0f, 24000.0f);
-                    if (slot->delay_filled >= ((uint32_t)len + 2U))
-                    {
-                        const float read_pos = slot->stutter_start + slot->stutter_pos;
-                        const float loop = fxmm_delay_read_abs(slot_index, read_pos);
-                        const float gain = fxmm_loop_xfade_gain(slot->stutter_pos, len);
-                        wet_l = loop * gain;
-                        wet_r = loop * gain;
-                        slot->stutter_pos += stutter_rate;
-                        while (slot->stutter_pos >= len)
-                        {
-                            slot->stutter_pos -= len;
-                        }
-                    }
-                }
-                if (slot->stutter_active == 0U)
-                {
-                    fxmm_delay_write(slot, slot_index, dry_m);
-                }
                 break;
             }
 
@@ -805,6 +916,16 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                 break;
             }
 
+            case FX_MASTER_MACRO_COLOR:
+                fxmm_process_color_sample(slot,
+                                          dry_l,
+                                          dry_r,
+                                          color_amount,
+                                          color_coeff,
+                                          &wet_l,
+                                          &wet_r);
+                break;
+
             default:
                 wet_l = dry_l;
                 wet_r = dry_r;
@@ -824,6 +945,9 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
 void fx_master_macro_init(float sample_rate)
 {
     memset(g_slots, 0, sizeof(g_slots));
+    memset(g_stutter_history_l, 0, sizeof(g_stutter_history_l));
+    memset(g_stutter_history_r, 0, sizeof(g_stutter_history_r));
+    fxmm_reset_stutter_state();
     g_sample_rate = (sample_rate > 1000.0f) ? sample_rate : FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT;
 }
 
@@ -846,6 +970,21 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     }
 
     const float bpm_milli = (float)fxmm_get_bpm_milli();
+    uint8_t stutter_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
+    for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
+    {
+        const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
+        if ((type == FX_MASTER_MACRO_STUTTER) && (stutter_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
+        {
+            stutter_owner_slot = slot;
+        }
+    }
+    if (g_stutter.owner_slot != stutter_owner_slot)
+    {
+        fxmm_reset_stutter_state();
+        g_stutter.owner_slot = stutter_owner_slot;
+    }
+
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
         const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
@@ -858,6 +997,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
                           left,
                           right,
                           frames,
-                          bpm_milli);
+                          bpm_milli,
+                          stutter_owner_slot);
     }
 }

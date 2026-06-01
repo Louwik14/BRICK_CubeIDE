@@ -91,7 +91,7 @@ Familles d'autorite:
   - `PARAM_WAVE_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime,
   - source unique de re-projection des params Wave apres reset/rebind d'instance runtime.
-  - Pour `PARAM_SAMPLER_SAMPLE` hors Multi, la valeur canonique utilisateur est un slot `sample_global_pool` actif; l'apply Sampler resout ensuite `STREAM -> backend_index sample_pool` avant de toucher le runtime audio Classic.
+  - Pour `PARAM_SAMPLER_SAMPLE` hors Multi, la valeur canonique utilisateur est un slot `sample_global_pool` actif `0..255`; l'apply Sampler resout ensuite `STREAM -> backend_index sample_pool` avant de toucher le runtime audio Classic.
 
 ## 2.c Contrat public du seam `param_registry`
 
@@ -583,9 +583,13 @@ Dette explicite post-passe 4:
 - Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
 - Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants.
 - Z3 conserve uniquement l'autorite de stockage/apply param; l'execution DSP lit la base `track_tone_sound_state` en Z1 sans ajouter de seconde autorite param.
-- `LVL` est interprete par le DSP comme profondeur/intensite du slot. `A/B` restent deux macros dependantes du type FX.
-- Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK`, `PITCH`.
-- Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `ECHO`, `WOBBLE`, `COMB`, `RING`, `PITCH`, `TALK`, `STUTTER`, `FREEZE`.
+- `LVL` est interprete par le DSP comme profondeur/intensite du slot, sauf pour `STUTTER` ou il est on/off: `LVL=0` coupe la sortie audible tout en laissant l'historique se remplir, `LVL>0` active une sortie full wet sans mix dry/wet progressif. `A/B` restent deux macros dependantes du type FX.
+- Cote edition UI, `STUTTER LVL` reste stocke en brut `0..127` mais est quantifie en deux etats: `0` pour OFF, `127` pour ON. Les autres types Master/FX conservent l'edition continue de `LVL`.
+- Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER`, `COLOR`.
+- Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`.
+- `TALK`, `PITCH` et `ECHO` sont retires sans tombstone produit; la plage `PARAM_MASTER_FXn_TYPE` est compacte `0..10`.
+- `STUTTER` est un type a ressource unique dans les 4 slots Master/FX: l'apply Z3 normalise une tentative de second `STUTTER` vers `OFF` pour eviter un etat canonique mensonger apres restore/load. Les autres types, y compris `FREEZE`, restent slot-local dans cette passe.
+- `COLOR` reutilise les macros de slot existantes: `A=AMT` bipolaire sombre/brillant centre a 64, `B=FOCUS` continu large/aigu. Aucun nouveau parametre ni changement `PARAM_COUNT` n'est introduit.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.
 
 ## 30. Contrat Drum params finaux

@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define KIT_SD_FILE_MAGIC   0x544B3642UL /* B6KT */
-#define KIT_SD_FILE_VERSION 1U
+#define KIT_SD_FILE_VERSION 3U
 
 typedef enum
 {

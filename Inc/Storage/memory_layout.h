@@ -99,4 +99,10 @@
 /* Large cold audio history (delay/grain/reverb tails) */
 #define AUDIO_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
 
+/* Shared global send-delay pool. */
+#define AUDIO_DELAY_SDRAM SEC_ATTR(".audio_delay_sdram") ALIGN32
+
+/* Dedicated SDRAM arena for audio history buffers with direct IRQ access. */
+#define AUDIO_HISTORY_SDRAM SEC_ATTR(".audio_history_sdram") ALIGN32
+
 #endif /* MEMORY_LAYOUT_H */

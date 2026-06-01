@@ -98,6 +98,7 @@ list(REMOVE_ITEM SRC_AUDIO_SRC
 
 list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_delay_shared_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/metronome_runtime.c"
 )

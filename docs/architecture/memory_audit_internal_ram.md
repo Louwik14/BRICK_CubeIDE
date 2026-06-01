@@ -116,6 +116,7 @@ Les macros principales dans `Inc/Storage/memory_layout.h` sont :
 | `RECORDER_SCRATCH_SDRAM` | `.recorder_scratch_sdram` | scratch recorder/export hors IRQ producteurs | `ALIGN32` |
 | `SDRAM_SAMPLES` | `.sdram_samples` | arena samples rÃ©sidents | `ALIGN32` |
 | `AUDIO_COLD_SDRAM` | `.sdram_audio_cold` | large cold audio history | `ALIGN32` |
+| `AUDIO_HISTORY_SDRAM` | `.audio_history_sdram` | audio history buffers with direct IRQ access | `ALIGN32` |
 
 Observation linker importante :
 

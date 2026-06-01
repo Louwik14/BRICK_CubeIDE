@@ -93,6 +93,11 @@ static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
                                                 float current_value,
                                                 int16_t delta,
                                                 float *out_value);
+static uint8_t ui_param_master_fx_step_type(uint8_t track,
+                                            param_id_t param,
+                                            float current_value,
+                                            int16_t delta,
+                                            float *out_value);
 
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
 {
@@ -569,6 +574,90 @@ static float ui_param_step_cfg_track_type(float current_value,
     return (float)candidate;
 }
 
+static uint8_t ui_param_master_fx_type_slot_from_param(param_id_t param, uint8_t *out_slot)
+{
+    if ((param != PARAM_MASTER_FX1_TYPE)
+            && (param != PARAM_MASTER_FX2_TYPE)
+            && (param != PARAM_MASTER_FX3_TYPE)
+            && (param != PARAM_MASTER_FX4_TYPE))
+    {
+        return 0U;
+    }
+    if (out_slot != 0)
+    {
+        *out_slot = (uint8_t)((param - PARAM_MASTER_FX1_TYPE) / 4U);
+    }
+    return 1U;
+}
+
+static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint8_t slot, uint8_t type)
+{
+    if (type != (uint8_t)FX_MASTER_MACRO_STUTTER)
+    {
+        return 0U;
+    }
+
+    for (uint8_t other = 0U; other < 4U; ++other)
+    {
+        float value = 0.0f;
+        const param_id_t other_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (other * 4U));
+        if ((other != slot)
+                && (param_registry_get_track_value(other_param, track, &value) != 0U)
+                && ((uint8_t)(value + 0.5f) == (uint8_t)FX_MASTER_MACRO_STUTTER))
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_param_master_fx_step_type(uint8_t track,
+                                            param_id_t param,
+                                            float current_value,
+                                            int16_t delta,
+                                            float *out_value)
+{
+    uint8_t slot = 0U;
+    if ((out_value == 0)
+            || (delta == 0)
+            || (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
+            || (ui_get_track_type(track) != UI_TRACK_TYPE_MASTER_FX)
+            || (ui_param_master_fx_type_slot_from_param(param, &slot) == 0U))
+    {
+        return 0U;
+    }
+
+    const int8_t direction = ui_param_signum(delta);
+    int16_t candidate = (int16_t)(current_value + 0.5f);
+    for (uint8_t step = 0U; step < (uint8_t)FX_MASTER_MACRO_TYPE_COUNT; ++step)
+    {
+        candidate = (int16_t)(candidate + direction);
+        if (candidate < 0)
+        {
+            candidate = 0;
+        }
+        if (candidate >= (int16_t)FX_MASTER_MACRO_TYPE_COUNT)
+        {
+            candidate = (int16_t)FX_MASTER_MACRO_TYPE_COUNT - 1;
+        }
+
+        if (ui_param_master_fx_type_is_used_by_other_slot(track, slot, (uint8_t)candidate) == 0U)
+        {
+            *out_value = (float)candidate;
+            return 1U;
+        }
+
+        if ((candidate == 0) || (candidate == ((int16_t)FX_MASTER_MACRO_TYPE_COUNT - 1)))
+        {
+            break;
+        }
+    }
+
+    *out_value = current_value;
+    return 1U;
+}
+
 static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out_slot, uint8_t *out_macro)
 {
     if ((param < PARAM_MASTER_FX1_TYPE) || (param > PARAM_MASTER_FX4_B))
@@ -578,7 +667,7 @@ static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out
 
     const uint8_t offset = (uint8_t)(param - PARAM_MASTER_FX1_TYPE);
     const uint8_t macro = (uint8_t)(offset % 4U);
-    if (macro < 2U)
+    if (macro == 0U)
     {
         return 0U;
     }
@@ -596,6 +685,11 @@ static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out
 
 static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
 {
+    if (macro == 1U)
+    {
+        return (fx_type == (uint8_t)FX_MASTER_MACRO_STUTTER) ? 2U : 0U;
+    }
+
     if (macro == 2U)
     {
         switch (fx_type)
@@ -605,14 +699,9 @@ static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
             case FX_MASTER_MACRO_PUMP:
             case FX_MASTER_MACRO_CHOP:
                 return 10U;
-            case FX_MASTER_MACRO_ECHO:
             case FX_MASTER_MACRO_FREEZE:
             case FX_MASTER_MACRO_STUTTER:
                 return 8U;
-            case FX_MASTER_MACRO_TALK:
-                return 5U;
-            case FX_MASTER_MACRO_PITCH:
-                return 25U;
             default:
                 return 0U;
         }
@@ -1966,7 +2055,11 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     {
         const float current_value = value;
-        if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
+        if (ui_param_master_fx_step_type(ctx->active_track, param, current_value, delta, &value) != 0U)
+        {
+            /* Master/FX TYPE has slot-level availability constraints such as unique STUTTER. */
+        }
+        else if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
         {
             value = ui_param_apply_delta_value(param,
                                                current_value,

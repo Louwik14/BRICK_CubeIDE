@@ -215,7 +215,7 @@ Etat browser Settings/Sample:
 - `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/RAM`, normal ou sliced via `Slice Count`.
 - `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Stream`.
 - Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
-- Dans ces headers, `X/240` represente la capacite de slots actifs du catalogue global sample (`sample_global_pool`); `X/16MB` represente le budget memoire produit RAM/page-cache du meme pool. Un refus de chargement par saturation de slots fait flasher seulement `X/240`; un refus par budget memoire RAM/page-cache fait flasher seulement `X/16MB`. Le backend remonte la cause exacte (`GLOBAL_SLOT_FULL` vs `GLOBAL_BUDGET_FULL`/`RAM_POOL_FULL`), l'UI ne la devine pas apres coup.
+- Dans ces headers, `X/256` represente la capacite de slots actifs du catalogue global sample (`sample_global_pool`); `X/16MB` represente le budget memoire produit RAM/page-cache du meme pool. Un refus de chargement par saturation de slots fait flasher seulement `X/256`; un refus par budget memoire RAM/page-cache fait flasher seulement `X/16MB`. Le backend remonte la cause exacte (`GLOBAL_SLOT_FULL` vs `GLOBAL_BUDGET_FULL`/`RAM_POOL_FULL`), l'UI ne la devine pas apres coup.
 - Les trois browsers sample sont des vues filtrees du catalogue global: Stream liste `kind=STREAM`, Multi liste `kind=MULTI`, RAM liste `kind=RAM`. Les actions utilisateur manipulent des slots globaux; les refs backend restent internes.
 - Le browser RAM ne cree pas de parametre parallele: il charge/remplace/clear des slots globaux `kind=RAM`, dont `backend_index` pointe vers un slot interne `sampler_ram_pool`.
 - Le selecteur TONE `PARAM_SAMPLER_SAMPLE` hors Multi edite un slot global actif. La selection n'est jouable en Stream que si ce slot global est `STREAM/READY` et pointe vers un backend `sample_pool` charge. Le backend Stream Classic couvre la capacite globale active courante.
@@ -408,14 +408,16 @@ Points factuels:
   - `FX2`: `FX2`, `LVL`, macro A, macro B
   - `FX3`: `FX3`, `LVL`, macro A, macro B
   - `FX4`: `FX4`, `LVL`, macro A, macro B
-- Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `TONE/SHAPE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, ECHO `TIME/FB`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, PITCH `SEMI/FINE`, TALK `VOWL/TONE`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`.
+- Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `TONE/SHAPE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`, COLOR `AMT/FOCUS`.
 - `RING COLOR` expose quatre positions nettes `SIN/TRI/SQR/DIRT`.
 - Les valeurs visibles de `LVL` et des macros A/B sont formatees par la page TONE selon le type FX courant et le mapping DSP reel, sans modifier le stockage `0..127` ni les plages DSP.
+- Pour `STUTTER`, `LVL` est un controle UI on/off: `OFF` si la valeur brute vaut `0`, `ON` si elle vaut `>0`. Le stockage reste `0..127`; le DSP interprete `0` comme audible OFF avec historique actif, et toute valeur `>0` comme audible ON full wet.
+- Le selecteur `TYPE` Master/FX saute `STUTTER` si un autre slot Master/FX l'utilise deja; `STUTTER` reste selectionnable uniquement par le slot owner courant ou par le premier slot libre de cette ressource unique.
 - Les macros Master/FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
-- `LVL` et les macros A/B gardent le rendu parametre standard du template, avec widget potard normal; la contextualisation ne doit remplacer que le nom et le texte de valeur.
+- `LVL` garde le rendu parametre standard du template pour les autres MacroFX. Exception locale: `STUTTER LVL` remplace le potard par un switch et quantifie l'edition encodeur en OFF/ON; les macros A/B gardent leur rendu contextuel existant.
 - `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
 - Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
-- Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH`. Les labels UI existants restent l'autorite visible de mapping A/B; `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
+- Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR`. Les labels UI existants restent l'autorite visible de mapping A/B; `ECHO`, `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
 
 
 ## 12. Contrat MIDI UI v1 (canonique)

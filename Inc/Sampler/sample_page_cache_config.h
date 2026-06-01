@@ -12,7 +12,7 @@
  * windows and margin pages stay in their reserved ranges.
  */
 
-#define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES (19U * 1024U * 1024U)
+#define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES (20U * 1024U * 1024U)
 #define SAMPLE_PAGE_FRAMES                    (2048U)
 #define SAMPLE_PAGE_CHANNELS                  (2U)
 #define SAMPLE_PAGE_SAMPLE_BYTES              (4U)

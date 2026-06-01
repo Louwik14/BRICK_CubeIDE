@@ -25,4 +25,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_run
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:352:6:void brick6_braids_runtime_all_notes_off(uint8_t)	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:368:6:void brick6_braids_runtime_clear_trigger(uint8_t)	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:378:6:void brick6_braids_runtime_render_instance(uint8_t, float*, uint32_t)	128	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:476:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:471:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	8	static

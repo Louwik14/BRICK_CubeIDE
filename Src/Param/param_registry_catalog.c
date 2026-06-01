@@ -36,7 +36,7 @@
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
-static const char *const g_master_fx_type_labels[] = {"OFF", "DRIVE", "CRUSH", "PUMP", "CHOP", "ECHO", "WOBBLE", "COMB", "RING", "PITCH", "TALK", "STUTTER", "FREEZE", NULL};
+static const char *const g_master_fx_type_labels[] = {"OFF", "DRIVE", "CRUSH", "PUMP", "CHOP", "WOBBLE", "COMB", "RING", "STUTTER", "FREEZE", "COLOR", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_reverb_type_labels[] = {"RevB", NULL};
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
@@ -302,19 +302,19 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_GRAIN, "Grain", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_grain_labels, apply_sampler_clip_grain),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_HOP, "Hop", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 3.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_hop_labels, apply_sampler_clip_hop),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
-    PARAM_DESC_EX(PARAM_MASTER_FX1_TYPE, "FX1", PARAM_TYPE_ENUM, 0.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_MASTER_FX1_TYPE, "FX1", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX1_LEVEL, "LVL", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX1_A, "A", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX1_B, "B", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MASTER_FX2_TYPE, "FX2", PARAM_TYPE_ENUM, 0.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_MASTER_FX2_TYPE, "FX2", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX2_LEVEL, "LVL", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX2_A, "A", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX2_B, "B", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MASTER_FX3_TYPE, "FX3", PARAM_TYPE_ENUM, 0.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_MASTER_FX3_TYPE, "FX3", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX3_LEVEL, "LVL", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX3_A, "A", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX3_B, "B", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MASTER_FX4_TYPE, "FX4", PARAM_TYPE_ENUM, 0.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_MASTER_FX4_TYPE, "FX4", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_master_fx_type_labels, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX4_LEVEL, "LVL", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX4_A, "A", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX4_B, "B", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),

@@ -30,7 +30,8 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Stream` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
-- `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER` et `PITCH`, et formants SVF legers pour `TALK`.
+- `Src/Audio/fx_delay_shared_pool.c` + `Inc/Audio/fx_delay_shared_pool.h` : pool SDRAM L/R commun aux delays globaux CLASSIC et DUAL, avec ownership exclusif controle par le mixer.
+- `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE` et `FREEZE`, STUTTER stereo global unique, et coloration sombre/brillant par slot pour `COLOR`.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
@@ -57,10 +58,10 @@ Contrat page-cache/streamer:
 - Le scratch du backend contigu est statique, aligne 32 octets, en SDRAM de scratch storage, et dimensionne a 9 secteurs de 512 octets pour couvrir une page source maximale actuelle plus un offset secteur.
 - `Sampler/Looper` utilise `domain=LOOPER`; son `cache_id` restant est un identifiant legacy/diagnostic, pas l'autorite cache.
 - Capacites logiques: `CLASSIC` garde 64 ids, `LOOPER` garde une fenetre 64 ids, `MULTI` reserve 512 ids (`object_id 0..511`) sans reserver physiquement 512 pages au boot.
-- Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 512 frames, le plafond theorique est 4096 pages; preparer 16 pages pour 512 samples Multi consommerait tout le budget theorique, donc les presets Multi reels doivent rester bornes par le nombre de samples declenchables et la taille des samples courts.
-- Le budget global reste fixe a 16 MiB; les pages stereo float font 512 frames / 4 KiB et le pool physique passe a 4096 pages sans augmenter la RAM audio globale.
+- Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 20 MiB / pages stereo float de 2048 frames, le plafond theorique est 1280 pages; preparer 16 pages pour 512 samples Multi consommerait 8192 pages virtuelles et reste donc hors contrat produit.
+- Le budget global utilisateur reste fixe a 16 MiB pour les slots sample longs; les pages stereo float font 2048 frames / 16 KiB et le pool physique total page-cache est de 1280 pages.
 - Une requete `MULTI` ne peut pas evincer une page non-`MULTI`; si le pool est plein a cause de Classic/Looper, l'allocation Multi echoue proprement au lieu de degrader les comportements existants.
-- Le pool produit partageable est strictement `SAMPLE_PAGE_SLOT_POOL_COUNT` pages, soit `SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES=960` pages de `SAMPLE_PAGE_BYTES=16384` octets dans la configuration courante: 15 728 640 octets (15 MiB). Les ranges `SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES=128` et `SAMPLE_PAGE_PRODUCT_MARGIN_PAGES=128` restent fixes et hors consommation permanente des samples RAM.
+- Le pool produit partageable est strictement `SAMPLE_PAGE_SLOT_POOL_COUNT` pages, soit `SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES=1024` pages de `SAMPLE_PAGE_BYTES=16384` octets dans la configuration courante: 16 777 216 octets (16 MiB). Les ranges `SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES=128` et `SAMPLE_PAGE_PRODUCT_MARGIN_PAGES=128` restent fixes et hors consommation permanente des samples RAM.
 - RAM v1 utilise ce meme `SAMPLE_PAGE_SLOT_POOL` que les presocles Stream/Multi: `sampler_ram_pool` demande des runs contigus de pages via `sample_page_cache_alloc_slot_pool_bytes()`, les garde pinnees comme pages permanentes brutes, stocke le WAV converti en `FLOAT32_INTERLEAVED` stereo, construit ensuite une overview waveform slot-owned hors IRQ, et libere ces pages au clear/reset via `sample_page_cache_release_slot_pool_allocation()`.
 - Le cout RAM enregistre dans `sample_global_pool.cost_bytes` est la capacite physique reelle allouee en pages SLOT_POOL (`ceil(data_bytes / SAMPLE_PAGE_BYTES) * SAMPLE_PAGE_BYTES`), pas un alignement logique de petit buffer. Aucun fallback vers `sample_cache`, `sample_voice_reader`, `sample_cache_start_voice_at` ou le streamer Classic; `Sampler/RAM` et `Sampler/RAM sliced mode` RAM lisent directement le `FLOAT32_INTERLEAVED` stereo resident.
 
@@ -316,7 +317,8 @@ Granular / fx_pool:
 - Les samples longs en `READY_PARTIAL` gardent une preparation reverse tail legacy dans `sample_cache`, mais RAM ne la consomment plus. Le prefetch hors IRQ utilise aussi une fenetre reverse plus large que le forward pour couvrir les transitions `page N -> N-1`; les pages stream non pinnees peuvent etre reclamees avant un chargement `READY_FULL`, mais les pages de samples full deja chargees ne doivent pas etre evincees par le stream.
 - Les autres modes (`slice`) ne sont plus streamables et ne demarrent plus de reader Classic: RAM slicing attend le futur sampler RAM dedie.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
-- Les delays MacroFX sont monophoniques par slot, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `STUTTER` et `PITCH` reutilisent ce core mono: `STUTTER` capture une fenetre recente bornee avec crossfade court de boucle, `PITCH` utilise deux lectures delay/grain simples. `TALK` utilise des formants fixes/morphables bornes, sans FFT ni analyse vocale.
+- Les delays MacroFX restent monophoniques par slot pour `COMB`, `WOBBLE` et `FREEZE`, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `ECHO` est retire de `Master/FX`; les delays globaux `CLASSIC`/`DUAL` restent portes par le pool SDRAM partage du mixer.
+- `STUTTER` est une ressource Master/FX globale unique: le premier slot `TYPE=STUTTER` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Son historique stereo circulaire unique fait 24000 frames a 48 kHz, soit environ 192 KiB en float stereo, place dans `.audio_history_sdram` via `AUDIO_HISTORY_SDRAM`. `LVL` est volontairement on/off pour STUTTER: `LVL=0` coupe la sortie audible et remplit seulement l'historique L/R, `LVL>0` rend STUTTER full wet sans mix dry/wet progressif. En lecture, `RATE` est lu en continu et `SIZE` arme une relatch au prochain wrap interne avec crossfade court.
 - Integration courante `Sampler/Stream`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
 - `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
 - Le runtime lourd `Sampler/Stream` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Stream` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
@@ -377,7 +379,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La reverb globale est processee uniquement selon l'autorite `Wet`: `fx_reverb_global_is_active()` retourne vrai si `Wet > 0`, et `mixer_process()` appelle alors `fx_reverb_global_process_block()` a chaque bloc audio, meme si `send_l/r[0]` est silencieux.
 - `Wet=0` coupe immediatement le cout reverb; aucun gate local base sur l'entree et aucun tail mixer local ne participent a la decision.
 - L'entree de la reverb globale est filtree en place par les params globaux `PARAM_MIX_REVERB_HPF` / `PARAM_MIX_REVERB_LPF` dans `mixer_process()`, apres l'eventuel wet delay `REV` et juste avant `fx_reverb_global_process_block()`.
-- Le DSP delay vit dans `fx_delay_stereo.*`; ses buffers L/R sont statiques, alignes et places en `AUDIO_COLD_SDRAM`, dimensionnes pour le `1 bar` a 40 BPM.
+- Le DSP delay CLASSIC vit dans `fx_delay_stereo.*`; ses lignes L/R utilisent le pool partage `fx_delay_shared_pool.*` place en `.audio_delay_sdram`, dimensionne par le besoin DUAL. CLASSIC ne consomme que sa capacite historique.
 - V1 expose le contrat 8 params `TIME`, `X`, `WID`, `FDBK`, `HPF`, `LPF`, `REV`, `VOL`; `TIME` est une division musicale sync BPM stockee comme enum et convertie en secondes via l'autorite tempo `seq_runtime`, tandis que le smoothing/interpolation reste dans le DSP delay.
 - `X` est un bool ping-pong, `HPF/LPF` filtrent la boucle feedback, `WID` est bipolaire et agit uniquement sur le retour wet hors boucle feedback.
 - `VOL=0` garde le retour master inaudible; le delay reste traite si `REV>0` afin d'alimenter la reverb globale.
@@ -403,7 +405,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `FBW` mappe le croisement/largeur de feedback; `WID` reste la largeur wet/haas/pingpong selon le mode.
 - `SWING` et `ACCENT` sont retires du backend DUAL produit V1; les IDs param restent reserves pour ne pas renumeroter le stockage indexe par `PARAM_COUNT`.
 - Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
-- Les buffers longs DUAL sont statiques en `AUDIO_COLD_SDRAM`; aucune allocation runtime audio n'est introduite.
+- Les buffers longs DUAL utilisent le meme pool partage `fx_delay_shared_pool.*` en `.audio_delay_sdram`; DUAL consomme toute la capacite du pool. CLASSIC et DUAL restent mutuellement exclusifs dans `mixer_process()`.
 
 ## 14.b Addendum - reverb send RevB unique
 
@@ -604,7 +606,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-19 - Sampler pages 512 frames
 
-- Configuration actuelle: `SAMPLE_PAGE_FRAMES = 2048`, `SAMPLE_PAGE_BYTES = 16384`, `SAMPLE_PAGE_MAX_COUNT = 1024`; le pool audio decode reste 16 MiB.
+- Configuration actuelle: `SAMPLE_PAGE_FRAMES = 2048`, `SAMPLE_PAGE_BYTES = 16384`, `SAMPLE_PAGE_MAX_COUNT = 1280`; le pool audio decode total fait 20 MiB, dont 16 MiB de slot-pool produit.
 - Les fenetres temporelles suivent la ration produit actuelle: Classic forward = span 8192 frames, Classic reverse = span 8192 frames depuis la position reverse reelle (16 ou 17 petites pages selon alignement), Multi = 28 petites pages total (`current + 27`).
 - `SAMPLE_STREAM_SERVICE_MAX_PAGES` passe a 16 pour ne plus plafonner artificiellement le nombre de petites pages servies sous le budget existant; les caps FatFs ops (16), byte budget appelant et max 2 ms restent actifs.
 - Le pool de locks de fenetre suit la plus grande fenetre active (`SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2`) pour couvrir 16 voix Multi x 28 pages courantes plus 16 fenetres loop-begin optionnelles.
@@ -804,7 +806,7 @@ Clarification START/END/LOOP live:
 - Z1 ne force plus les evenements sequenceur PLAY au debut d'une fenetre 64: `audio.c` collecte les events avec offsets relatifs reels, rend le segment avant event, applique les events au sample de segment, puis rend la suite.
 - Quand aucun event ni boundary interne ne tombe dans le demi-buffer, le rendu peut rester un demi-buffer complet de 64 frames.
 - Pour eviter que les p-locks non-PLAY de boundary soient appliques trop tot, `audio.c` coupe aussi la collecte avant le prochain pulse interne connu, puis collecte/applique le boundary au segment suivant.
-- Les clears mixer/sends/delay restent complets; aucun clear partiel de `send_l/send_r` ou buffers delay n'est introduit.
+- Les clears mixer/sends restent complets; le delay global CLASSIC/DUAL partage maintenant un pool SDRAM unique et le reset du pool se fait lors du changement de type via l'API de controle, pas dans la boucle sample IRQ.
 - Les filtres track biquad LP/HP/BP stereo et mono restent traites par chunks de `MIXER_FILTER_UPDATE_PERIOD`: l'enveloppe ADSR avance toujours a la cadence sample, mais les appels `fx_biquad_filter*_process_block()` ne sont plus relances sample par sample.
 
 ## Addendum 2026-05-26 - LFO window-rate experimental

@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 void fx_delay_stereo_global_init(float sample_rate);
+void fx_delay_stereo_global_clear(void);
 void fx_delay_stereo_global_set_time(float time_s);
 void fx_delay_stereo_global_set_feedback(float feedback);
 void fx_delay_stereo_global_set_hpf(float hpf);

@@ -1,5 +1,6 @@
 #include "fx_delay_dual.h"
 
+#include "Audio/fx_delay_shared_pool.h"
 #include "Storage/memory_layout.h"
 
 #include <math.h>
@@ -9,7 +10,7 @@ namespace
 {
 constexpr float kDefaultSampleRate = 48000.0f;
 constexpr float kMaxDelaySeconds = 6.0f;
-constexpr uint32_t kDelayBufferSize = 432002U;
+constexpr uint32_t kDelayBufferSize = FX_DELAY_SHARED_DUAL_CAPACITY;
 constexpr uint32_t kHaasBufferSize = 2402U;
 constexpr float kMinDelaySamples = 4.0f;
 constexpr float kTimeSmoothSeconds = 0.15f;
@@ -18,8 +19,6 @@ constexpr float kNeutralEpsilon = 1.0e-6f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 constexpr float kInvSqrt2 = 0.70710678118f;
 
-AUDIO_COLD_SDRAM ALIGN32 static float g_delay_l[kDelayBufferSize];
-AUDIO_COLD_SDRAM ALIGN32 static float g_delay_r[kDelayBufferSize];
 AUDIO_HOT ALIGN32 static float g_haas_l[kHaasBufferSize];
 AUDIO_HOT ALIGN32 static float g_haas_r[kHaasBufferSize];
 
@@ -292,8 +291,9 @@ extern "C" void fx_delay_dual_global_init(float sample_rate)
     g_dual.time_r_s = 0.25f;
     g_dual.time_l_samples = target_delay_samples(g_dual.time_l_s, g_dual.sample_rate);
     g_dual.time_r_samples = target_delay_samples(g_dual.time_r_s, g_dual.sample_rate);
-    delay_line_init(&g_dual.delay_l, g_delay_l, kDelayBufferSize);
-    delay_line_init(&g_dual.delay_r, g_delay_r, kDelayBufferSize);
+    fx_delay_shared_pool_acquire(FX_DELAY_SHARED_OWNER_DUAL, 0U);
+    delay_line_init(&g_dual.delay_l, fx_delay_shared_pool_left(), kDelayBufferSize);
+    delay_line_init(&g_dual.delay_r, fx_delay_shared_pool_right(), kDelayBufferSize);
     delay_line_init(&g_dual.haas_l, g_haas_l, kHaasBufferSize);
     delay_line_init(&g_dual.haas_r, g_haas_r, kHaasBufferSize);
     fx_delay_dual_global_clear();
@@ -302,8 +302,9 @@ extern "C" void fx_delay_dual_global_init(float sample_rate)
 
 extern "C" void fx_delay_dual_global_clear(void)
 {
-    delay_line_clear(&g_dual.delay_l);
-    delay_line_clear(&g_dual.delay_r);
+    fx_delay_shared_pool_acquire(FX_DELAY_SHARED_OWNER_DUAL, 1U);
+    delay_line_init(&g_dual.delay_l, fx_delay_shared_pool_left(), kDelayBufferSize);
+    delay_line_init(&g_dual.delay_r, fx_delay_shared_pool_right(), kDelayBufferSize);
     delay_line_clear(&g_dual.haas_l);
     delay_line_clear(&g_dual.haas_r);
     memset(&g_dual.filter_delay_l, 0, sizeof(g_dual.filter_delay_l));

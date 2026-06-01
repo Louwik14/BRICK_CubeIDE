@@ -6,7 +6,7 @@
 #include "Storage/sd_access_gate.h"
 
 #define SAMPLE_POOL_PROJECT_CAPACITY (1024U)
-#define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (240U)
+#define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (256U)
 
 /*
  * Stream backend capacity follows the current active product catalogue size.

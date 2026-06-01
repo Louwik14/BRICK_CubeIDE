@@ -207,6 +207,14 @@ SECTIONS
     . = ALIGN(32);
   } >RAM_D3
 
+  .audio_history_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.audio_history_sdram)
+    *(.audio_history_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);

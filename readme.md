@@ -102,13 +102,14 @@ This separation is intentional. Do not add a second authority for the same state
 - sends and returns
 - insert-style processing
 - master-oriented performance processing
-- `Master/FX` existe comme contrat UI MacroFX 4 slots, sans traitement DSP actif dans cette passe
+- `Master/FX` expose 4 slots MacroFX DSP: `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`; `STUTTER` is a single shared Master/FX resource, with UI `LVL` shown as `OFF/ON`, `LVL=0` as audible off/history fill, and `LVL>0` as full-wet on
 
 ### Sampler
 - stereo runtime playback through the normal track-aware mixer path
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
 - `RAM` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; it plays global `kind=RAM/READY` slots from `sampler_ram_pool`
+- sample slots expose 256 active global slots backed by a 16 MiB product slot-pool; Stream, RAM and Multi share this catalogue while voice reserve and page-cache margin remain separate
 - RAM slicing is enabled by `Slice Count`: `Off` plays the global `Start`/`End` window normally, while `2..64` slices that same global window in a regular grid selected by `note % slice_count`; `Tune` and `Gain` remain global
 - `Stream` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, `Tune`, and `Sync Len`
 - `Stream` supports forward `Gate`/`Launch` playback with three stretch modes:

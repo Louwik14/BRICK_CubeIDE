@@ -360,6 +360,22 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .audio_delay_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.audio_delay_sdram)
+    *(.audio_delay_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .audio_history_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.audio_history_sdram)
+    *(.audio_history_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);
