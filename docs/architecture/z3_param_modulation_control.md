@@ -583,12 +583,14 @@ Dette explicite post-passe 4:
 - Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
 - Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants.
 - Z3 conserve uniquement l'autorite de stockage/apply param; l'execution DSP lit la base `track_tone_sound_state` en Z1 sans ajouter de seconde autorite param.
-- `LVL` est interprete par le DSP comme profondeur/intensite du slot, sauf pour `STUTTER` ou il est on/off: `LVL=0` coupe la sortie audible tout en laissant l'historique se remplir, `LVL>0` active une sortie full wet sans mix dry/wet progressif. `A/B` restent deux macros dependantes du type FX.
-- Cote edition UI, `STUTTER LVL` reste stocke en brut `0..127` mais est quantifie en deux etats: `0` pour OFF, `127` pour ON. Les autres types Master/FX conservent l'edition continue de `LVL`.
+- `LVL` est interprete par le DSP comme profondeur/intensite du slot. Exception locale: `STUTTER LVL` reste on/off (`0` OFF, `>0` full wet), tandis que `FREEZE LVL` utilise le seuil `>0` pour engager le freeze et conserve la valeur `1..127` comme niveau progressif de retour wet/freeze et de duck dry; a `127`, le dry est coupe pour un comportement repeater dominant.
+- Cote edition UI, `STUTTER LVL` reste stocke en brut `0..127` mais quantifie en deux etats: `0` pour OFF, `127` pour ON. `FREEZE LVL` reste edite en continu `0..127`: affichage `OFF` a zero, puis pourcentage au-dessus de zero. Les autres types Master/FX conservent l'edition continue de `LVL`.
+- Pour `FREEZE`, `A=TIME` reste la division temporelle et `B=HOLD` reste un choix discret `SHORT/MID/LONG/INF`; le DSP consomme la valeur raw `B` quantifiee en 4 modes de feedback distincts, dont `INF` quasi maintenu mais borne.
 - Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER`, `COLOR`.
 - Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`.
 - `TALK`, `PITCH` et `ECHO` sont retires sans tombstone produit; la plage `PARAM_MASTER_FXn_TYPE` est compacte `0..10`.
-- `STUTTER` est un type a ressource unique dans les 4 slots Master/FX: l'apply Z3 normalise une tentative de second `STUTTER` vers `OFF` pour eviter un etat canonique mensonger apres restore/load. Les autres types, y compris `FREEZE`, restent slot-local dans cette passe.
+- `STUTTER` et `FREEZE` sont des types a ressource unique dans les 4 slots Master/FX: l'apply Z3 normalise une tentative de doublon vers `OFF` pour eviter un etat canonique mensonger apres restore/load. Les autres types restent slot-local.
+- Pour `DRIVE`, le mapping visible est `A=DRIVE` et `B=TONE`; `LVL` reste la profondeur/wet du slot et ne pilote plus le pre-gain interne.
 - `COLOR` reutilise les macros de slot existantes: `A=AMT` bipolaire sombre/brillant centre a 64, `B=FOCUS` continu large/aigu. Aucun nouveau parametre ni changement `PARAM_COUNT` n'est introduit.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.
 

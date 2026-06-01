@@ -408,13 +408,14 @@ Points factuels:
   - `FX2`: `FX2`, `LVL`, macro A, macro B
   - `FX3`: `FX3`, `LVL`, macro A, macro B
   - `FX4`: `FX4`, `LVL`, macro A, macro B
-- Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `TONE/SHAPE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`, COLOR `AMT/FOCUS`.
+- Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `DRIVE/TONE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`, COLOR `AMT/FOCUS`.
 - `RING COLOR` expose quatre positions nettes `SIN/TRI/SQR/DIRT`.
 - Les valeurs visibles de `LVL` et des macros A/B sont formatees par la page TONE selon le type FX courant et le mapping DSP reel, sans modifier le stockage `0..127` ni les plages DSP.
-- Pour `STUTTER`, `LVL` est un controle UI on/off: `OFF` si la valeur brute vaut `0`, `ON` si elle vaut `>0`. Le stockage reste `0..127`; le DSP interprete `0` comme audible OFF avec historique actif, et toute valeur `>0` comme audible ON full wet.
-- Le selecteur `TYPE` Master/FX saute `STUTTER` si un autre slot Master/FX l'utilise deja; `STUTTER` reste selectionnable uniquement par le slot owner courant ou par le premier slot libre de cette ressource unique.
+- Pour `STUTTER`, `LVL` est un controle UI on/off: `OFF` si la valeur brute vaut `0`, `ON` si elle vaut `>0`, avec edition encodeur quantifiee en `0/127`. Pour `FREEZE`, `LVL` reste un controle continu: `OFF` si la valeur brute vaut `0`, puis affichage progressif en pourcentage pour `1..127`; le DSP utilise `>0` comme seuil d'engagement du freeze et la valeur comme niveau de retour wet/freeze + duck dry, avec dry coupe au maximum.
+- Pour `FREEZE`, `B=HOLD` affiche les 4 choix discrets `SHORT/MID/LONG/INF`; ces choix restent envoyes comme raw `0..127` et sont re-quantifies cote DSP en modes de feedback clairement distincts.
+- Le selecteur `TYPE` Master/FX saute `STUTTER` ou `FREEZE` si un autre slot Master/FX utilise deja le meme type; ces types restent selectionnables uniquement par leur slot owner courant ou par le premier slot libre de cette ressource unique.
 - Les macros Master/FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
-- `LVL` garde le rendu parametre standard du template pour les autres MacroFX. Exception locale: `STUTTER LVL` remplace le potard par un switch et quantifie l'edition encodeur en OFF/ON; les macros A/B gardent leur rendu contextuel existant.
+- `LVL` garde le rendu parametre standard du template pour les autres MacroFX. Exception locale: `STUTTER LVL` remplace le potard par un switch et quantifie l'edition encodeur en OFF/ON; `FREEZE LVL` garde le potard continu avec texte `OFF` a zero puis pourcentage. Les macros A/B gardent leur rendu contextuel existant.
 - `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
 - Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
 - Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR`. Les labels UI existants restent l'autorite visible de mapping A/B; `ECHO`, `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.

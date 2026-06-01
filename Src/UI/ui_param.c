@@ -592,7 +592,8 @@ static uint8_t ui_param_master_fx_type_slot_from_param(param_id_t param, uint8_t
 
 static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint8_t slot, uint8_t type)
 {
-    if (type != (uint8_t)FX_MASTER_MACRO_STUTTER)
+    if ((type != (uint8_t)FX_MASTER_MACRO_STUTTER)
+            && (type != (uint8_t)FX_MASTER_MACRO_FREEZE))
     {
         return 0U;
     }
@@ -603,7 +604,7 @@ static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint
         const param_id_t other_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (other * 4U));
         if ((other != slot)
                 && (param_registry_get_track_value(other_param, track, &value) != 0U)
-                && ((uint8_t)(value + 0.5f) == (uint8_t)FX_MASTER_MACRO_STUTTER))
+                && ((uint8_t)(value + 0.5f) == type))
         {
             return 1U;
         }
@@ -711,7 +712,6 @@ static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
     {
         switch (fx_type)
         {
-            case FX_MASTER_MACRO_DRIVE:
             case FX_MASTER_MACRO_FREEZE:
             case FX_MASTER_MACRO_RING:
                 return 4U;
@@ -2057,7 +2057,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         const float current_value = value;
         if (ui_param_master_fx_step_type(ctx->active_track, param, current_value, delta, &value) != 0U)
         {
-            /* Master/FX TYPE has slot-level availability constraints such as unique STUTTER. */
+            /* Master/FX TYPE has slot-level availability constraints for unique FX resources. */
         }
         else if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
         {

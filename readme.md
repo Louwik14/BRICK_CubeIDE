@@ -102,7 +102,8 @@ This separation is intentional. Do not add a second authority for the same state
 - sends and returns
 - insert-style processing
 - master-oriented performance processing
-- `Master/FX` expose 4 slots MacroFX DSP: `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`; `STUTTER` is a single shared Master/FX resource, with UI `LVL` shown as `OFF/ON`, `LVL=0` as audible off/history fill, and `LVL>0` as full-wet on
+- `Master/FX` expose 4 slots MacroFX DSP: `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`; `STUTTER` and `FREEZE` are single Master/FX resources. `STUTTER LVL` remains `OFF/ON` full wet. `FREEZE LVL=0` is audible off/history fill, while `FREEZE LVL=1..127` engages freeze, raises the wet/freeze return, and ducks dry until `LVL=127` behaves as repeater-dominant dry-off. `FREEZE B=HOLD` selects `SHORT/MID/LONG/INF` feedback modes; `INF` is a bounded quasi-hold. `FREEZE` reuses the existing per-slot MacroFX delay history and does not share STUTTER history.
+- `Master/FX DRIVE` uses `LVL` as slot wet/depth, `A=DRIVE` as overdrive-to-fuzz amount, and `B=TONE` as dark/bright guitar-style color.
 
 ### Sampler
 - stereo runtime playback through the normal track-aware mixer path

@@ -39,7 +39,8 @@ static float param_backend_normalize_master_fx_type(uint8_t track, param_id_t id
         type = (uint8_t)FX_MASTER_MACRO_COLOR;
     }
 
-    if (type != (uint8_t)FX_MASTER_MACRO_STUTTER)
+    if ((type != (uint8_t)FX_MASTER_MACRO_STUTTER)
+            && (type != (uint8_t)FX_MASTER_MACRO_FREEZE))
     {
         return (float)type;
     }
@@ -52,7 +53,7 @@ static float param_backend_normalize_master_fx_type(uint8_t track, param_id_t id
 
     for (uint8_t other = 0U; other < slot; ++other)
     {
-        if ((uint8_t)(state->master_fx.type[other] + 0.5f) == (uint8_t)FX_MASTER_MACRO_STUTTER)
+        if ((uint8_t)(state->master_fx.type[other] + 0.5f) == type)
         {
             return (float)FX_MASTER_MACRO_OFF;
         }

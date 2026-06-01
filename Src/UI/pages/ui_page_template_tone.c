@@ -166,7 +166,7 @@ static void ui_page_template_tone_master_fx_macro_labels(uint8_t fx_type,
 {
     static const char *const k_labels[][2] = {
         { "---", "---" },
-        { "TONE", "SHAPE" },
+        { "DRIVE", "TONE" },
         { "BITS", "RATE" },
         { "RATE", "REL" },
         { "RATE", "SHAPE" },
@@ -888,12 +888,12 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
         case FX_MASTER_MACRO_DRIVE:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_signed(raw, -64, 63, "", out, out_len);
+                const uint32_t drive_x10 = 10U + (((uint32_t)raw * (uint32_t)raw * 420U + 8064U) / 16129U);
+                (void)snprintf(out, out_len, "%lu.%lux", (unsigned long)(drive_x10 / 10U), (unsigned long)(drive_x10 % 10U));
             }
             else
             {
-                static const char *const k_shape[] = { "SOFT", "CLIP", "HARD", "FOLD" };
-                ui_page_template_tone_master_fx_format_choice(raw, k_shape, (uint8_t)(sizeof(k_shape) / sizeof(k_shape[0])), out, out_len);
+                ui_page_template_tone_master_fx_format_signed(raw, -64, 63, "", out, out_len);
             }
             break;
 
@@ -1242,9 +1242,21 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         const uint8_t raw_value = ui_page_template_tone_master_fx_u7(value);
         if (slot == 1U)
         {
-            if ((uint8_t)(fx_type_value + 0.5f) == (uint8_t)FX_MASTER_MACRO_STUTTER)
+            const uint8_t fx_type = (uint8_t)(fx_type_value + 0.5f);
+            if (fx_type == (uint8_t)FX_MASTER_MACRO_STUTTER)
             {
                 (void)snprintf(out_value, out_value_len, "%s", (raw_value == 0U) ? "OFF" : "ON");
+            }
+            else if (fx_type == (uint8_t)FX_MASTER_MACRO_FREEZE)
+            {
+                if (raw_value == 0U)
+                {
+                    (void)snprintf(out_value, out_value_len, "OFF");
+                }
+                else
+                {
+                    ui_page_template_tone_master_fx_format_percent(raw_value, 100U, out_value, out_value_len);
+                }
             }
             else
             {

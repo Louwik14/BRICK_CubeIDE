@@ -133,6 +133,11 @@ static uint8_t fxmm_type_is_unique_history(uint8_t type)
     return (type == FX_MASTER_MACRO_STUTTER) ? 1U : 0U;
 }
 
+static uint8_t fxmm_type_is_unique_freeze(uint8_t type)
+{
+    return (type == FX_MASTER_MACRO_FREEZE) ? 1U : 0U;
+}
+
 static void fxmm_reset_stutter_state(void)
 {
     g_stutter.owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
@@ -186,24 +191,6 @@ static void fxmm_reset_slot_state(fx_master_macro_slot_state_t *slot)
     slot->dc_y_l = 0.0f;
     slot->dc_x_r = 0.0f;
     slot->dc_y_r = 0.0f;
-}
-
-static float fxmm_softclip(float x)
-{
-    return x / (1.0f + fabsf(x));
-}
-
-static float fxmm_fold(float x)
-{
-    if (x > 1.0f)
-    {
-        x = 2.0f - x;
-    }
-    else if (x < -1.0f)
-    {
-        x = -2.0f - x;
-    }
-    return fxmm_clampf(x, -1.0f, 1.0f);
 }
 
 static float fxmm_phase_sine(float phase)
@@ -412,7 +399,17 @@ static float fxmm_loop_xfade_gain(float pos, float len)
     return 1.0f;
 }
 
-static void fxmm_stutter_capture(float len)
+static float fxmm_stutter_recent_pos(float len)
+{
+    const float fade = fxmm_clampf(g_sample_rate * 0.0025f, 8.0f, 128.0f);
+    if (len <= (fade + 1.0f))
+    {
+        return 0.0f;
+    }
+    return len - fade;
+}
+
+static void fxmm_stutter_latch_from_history(float len)
 {
     len = fxmm_clampf(len, 32.0f, FX_MASTER_MACRO_STUTTER_HISTORY_F);
     if (g_stutter.filled < ((uint32_t)len + 2U))
@@ -423,10 +420,10 @@ static void fxmm_stutter_capture(float len)
     g_stutter.playing = 1U;
     g_stutter.relatch_pending = 0U;
     g_stutter.xfade_active = 0U;
-    g_stutter.pos = 0.0f;
     g_stutter.loop_samples = len;
     g_stutter.pending_loop_samples = len;
     g_stutter.start = (float)g_stutter.write - len;
+    g_stutter.pos = fxmm_stutter_recent_pos(len);
 }
 
 static void fxmm_stutter_begin_relatch(float len)
@@ -440,10 +437,10 @@ static void fxmm_stutter_begin_relatch(float len)
     g_stutter.old_pos = g_stutter.pos;
     g_stutter.old_start = g_stutter.start;
     g_stutter.old_loop_samples = g_stutter.loop_samples;
-    g_stutter.pos = 0.0f;
     g_stutter.start = (float)g_stutter.write - len;
     g_stutter.loop_samples = len;
     g_stutter.pending_loop_samples = len;
+    g_stutter.pos = fxmm_stutter_recent_pos(len);
     g_stutter.xfade_pos = 0.0f;
     g_stutter.xfade_active = 1U;
     g_stutter.relatch_pending = 0U;
@@ -462,7 +459,7 @@ static void fxmm_stutter_process_sample(float dry_l,
 
     if (g_stutter.playing == 0U)
     {
-        fxmm_stutter_capture(g_stutter.pending_loop_samples);
+        fxmm_stutter_latch_from_history(g_stutter.pending_loop_samples);
     }
 
     if (g_stutter.playing == 0U)
@@ -471,6 +468,11 @@ static void fxmm_stutter_process_sample(float dry_l,
         *wet_l = dry_l;
         *wet_r = dry_r;
         return;
+    }
+
+    if (g_stutter.relatch_pending != 0U)
+    {
+        fxmm_stutter_begin_relatch(g_stutter.pending_loop_samples);
     }
 
     float new_l = dry_l;
@@ -517,10 +519,6 @@ static void fxmm_stutter_process_sample(float dry_l,
         while (g_stutter.pos >= g_stutter.loop_samples)
         {
             g_stutter.pos -= g_stutter.loop_samples;
-        }
-        if (g_stutter.relatch_pending != 0U)
-        {
-            fxmm_stutter_begin_relatch(g_stutter.pending_loop_samples);
         }
     }
 }
@@ -626,28 +624,98 @@ static uint8_t fxmm_find_master_fx_track(uint8_t *out_track)
     return 0U;
 }
 
-static float fxmm_process_drive(float in, float level, float tone, float shape)
+static float fxmm_drive_sat(float x)
 {
-    const float drive = 1.0f + (level * level * 5.0f);
-    const uint32_t shape_idx = (uint32_t)(shape * 3.0f + 0.5f);
-    float shaped = fxmm_softclip(in * drive);
-    switch ((shape_idx < 4U) ? shape_idx : 3U)
+    if (x > 1.0f)
     {
-        case 1U:
-            shaped = fxmm_clampf(in * drive * 0.75f, -1.0f, 1.0f);
-            break;
-        case 2U:
-            shaped = fxmm_clampf(in * drive * 1.20f, -1.0f, 1.0f);
-            break;
-        case 3U:
-            shaped = fxmm_fold(in * (1.0f + (level * 3.0f)));
-            break;
-        default:
-            break;
+        return 1.0f;
     }
-    const float comp = 1.0f / (1.0f + (level * 1.6f));
-    const float dark = shaped * (0.62f + (0.38f * tone));
-    return dark * comp;
+    if (x < -1.0f)
+    {
+        return -1.0f;
+    }
+    const float x2 = x * x;
+    return x * (1.5f - (0.5f * x2));
+}
+
+static float fxmm_drive_clip(float x, float clip_gain)
+{
+    x *= clip_gain;
+    if (x > 1.08f)
+    {
+        x = 1.08f;
+    }
+    else if (x < -1.08f)
+    {
+        x = -1.08f;
+    }
+    return x;
+}
+
+static float fxmm_drive_limit(float x)
+{
+    if (x > 0.82f)
+    {
+        x = 0.82f + ((x - 0.82f) * 0.28f);
+        return (x > 1.03f) ? 1.03f : x;
+    }
+    if (x < -0.82f)
+    {
+        x = -0.82f + ((x + 0.82f) * 0.28f);
+        return (x < -1.03f) ? -1.03f : x;
+    }
+    return x;
+}
+
+static void fxmm_process_drive_stereo(float dry_l,
+                                      float dry_r,
+                                      float drive,
+                                      float bias,
+                                      float bias_sat,
+                                      float comp,
+                                      float out_gain,
+                                      float pre_coeff,
+                                      float pre_amt,
+                                      float tone_coeff,
+                                      float tone_amt,
+                                      float clip_gain,
+                                      uint8_t fast,
+                                      float *pre_l,
+                                      float *pre_r,
+                                      float *tone_l,
+                                      float *tone_r,
+                                      float *out_l,
+                                      float *out_r)
+{
+    *pre_l += pre_coeff * (dry_l - *pre_l);
+    *pre_r += pre_coeff * (dry_r - *pre_r);
+
+    float in_l = dry_l;
+    float in_r = dry_r;
+    if (fast == 0U)
+    {
+        in_l += (dry_l - *pre_l) * pre_amt;
+        in_r += (dry_r - *pre_r) * pre_amt;
+    }
+
+    float driven_l = (fxmm_drive_sat((in_l * drive) + bias) - bias_sat) * comp;
+    float driven_r = (fxmm_drive_sat((in_r * drive) + bias) - bias_sat) * comp;
+
+    if (fast == 0U)
+    {
+        driven_l = fxmm_drive_clip(driven_l, clip_gain);
+        driven_r = fxmm_drive_clip(driven_r, clip_gain);
+    }
+
+    *tone_l += tone_coeff * (driven_l - *tone_l);
+    *tone_r += tone_coeff * (driven_r - *tone_r);
+    driven_l += (driven_l - *tone_l) * tone_amt;
+    driven_r += (driven_r - *tone_r) * tone_amt;
+    driven_l = fxmm_drive_limit(driven_l * out_gain);
+    driven_r = fxmm_drive_limit(driven_r * out_gain);
+
+    *out_l = fxmm_clampf(driven_l, -1.15f, 1.15f);
+    *out_r = fxmm_clampf(driven_r, -1.15f, 1.15f);
 }
 
 static float fxmm_process_crush_sample(float in, float bits_norm)
@@ -702,7 +770,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                               float *right,
                               uint32_t frames,
                               float bpm_milli,
-                              uint8_t stutter_owner_slot)
+                              uint8_t stutter_owner_slot,
+                              uint8_t freeze_owner_slot)
 {
     const uint8_t active_type = fxmm_type_is_active(type);
     const float target_wet = ((active_type == 0U) || (level_raw <= 0.0f))
@@ -724,6 +793,11 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
     }
 
     if ((fxmm_type_is_unique_history(type) != 0U) && (slot_index != stutter_owner_slot))
+    {
+        slot->wet = 0.0f;
+        return;
+    }
+    if ((fxmm_type_is_unique_freeze(type) != 0U) && (slot_index != freeze_owner_slot))
     {
         slot->wet = 0.0f;
         return;
@@ -757,7 +831,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         return;
     }
 
-    const uint8_t keeps_history = ((type == FX_MASTER_MACRO_STUTTER) && (slot_index == stutter_owner_slot)) ? 1U : 0U;
+    const uint8_t keeps_history = (((type == FX_MASTER_MACRO_STUTTER) && (slot_index == stutter_owner_slot))
+            || ((type == FX_MASTER_MACRO_FREEZE) && (slot_index == freeze_owner_slot))) ? 1U : 0U;
     if ((target_wet <= 0.0f) && (slot->wet <= 0.000001f) && (keeps_history == 0U))
     {
         slot->wet = 0.0f;
@@ -770,9 +845,56 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
     float wobble_depth_samples = 0.0f;
     float color_amount = 0.0f;
     float color_coeff = 0.0f;
+    float drive_gain = 1.0f;
+    float drive_bias = 0.0f;
+    float drive_bias_sat = 0.0f;
+    float drive_comp = 1.0f;
+    float drive_out_gain = 1.0f;
+    float drive_pre_coeff = 0.0f;
+    float drive_pre_amt = 0.0f;
+    float drive_tone_coeff = 0.0f;
+    float drive_tone_amt = 0.0f;
+    float drive_clip_gain = 1.0f;
+    uint8_t drive_fast = 0U;
     if (type == FX_MASTER_MACRO_FREEZE)
     {
         freeze_target_delay = fxmm_time_samples_from_macro(macro_a, bpm_milli, 0.060f, 0.800f);
+        slot->delay_samples = fxmm_smooth(slot->delay_samples, freeze_target_delay, 0.0012f);
+        const float freeze_target_wet = target_wet;
+        const float freeze_target_gate = (level_raw > 0.0f) ? 1.0f : 0.0f;
+        const uint8_t hold_step = (uint8_t)(((uint32_t)fxmm_u7(macro_b) * 3U + 63U) / 127U);
+        static const float k_freeze_feedback[] = { 0.68f, 0.88f, 0.965f, 0.9995f };
+        static const float k_freeze_return_gain[] = { 1.35f, 1.35f, 1.42f, 1.48f };
+        const float hold_fb = k_freeze_feedback[(hold_step < 4U) ? hold_step : 3U];
+        const float return_gain = k_freeze_return_gain[(hold_step < 4U) ? hold_step : 3U];
+        const uint32_t needed = (uint32_t)fxmm_clampf(slot->delay_samples, 1.0f, FX_MASTER_MACRO_DELAY_MAX_F) + 2U;
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            slot->wet = fxmm_smooth(slot->wet, freeze_target_wet, FX_MASTER_MACRO_SMOOTH_FAST);
+            slot->freeze_gate = fxmm_smooth(slot->freeze_gate, freeze_target_gate, 0.015f);
+
+            const float dry_l = left[i];
+            const float dry_r = right[i];
+            if (slot->delay_filled < needed)
+            {
+                fxmm_delay_write(slot, slot_index, (dry_l + dry_r) * 0.5f);
+                continue;
+            }
+
+            const float delayed = fxmm_delay_read(slot, slot_index, slot->delay_samples);
+            const float input = (dry_l + dry_r) * 0.5f;
+            slot->delay_feedback_lp += (delayed - slot->delay_feedback_lp) * 0.12f;
+            const float input_send = 1.0f - (slot->freeze_gate * (0.20f + (0.80f * slot->wet)));
+            const float dry_gain = 1.0f - (slot->wet * slot->wet);
+            const float repeat_gain = slot->wet * return_gain;
+            const float write = (input * input_send)
+                    + (slot->delay_feedback_lp * hold_fb * slot->freeze_gate);
+            fxmm_delay_write(slot, slot_index, write);
+            const float wet_return = delayed * repeat_gain;
+            left[i] = fxmm_clampf((dry_l * dry_gain) + wet_return, -1.20f, 1.20f);
+            right[i] = fxmm_clampf((dry_r * dry_gain) + wet_return, -1.20f, 1.20f);
+        }
+        return;
     }
     else if (type == FX_MASTER_MACRO_COMB)
     {
@@ -788,6 +910,20 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         color_amount = fxmm_color_amount_from_macro(macro_a);
         color_coeff = fxmm_color_coeff_from_hz(fxmm_color_focus_hz(b));
     }
+    else if (type == FX_MASTER_MACRO_DRIVE)
+    {
+        drive_fast = (a < 0.58f) ? 1U : 0U;
+        drive_gain = 1.0f + (a * a * 42.0f);
+        drive_bias = (0.15f * a) + (0.12f * a * a);
+        drive_bias_sat = fxmm_drive_sat(drive_bias);
+        drive_comp = 1.0f / (1.0f + (a * 0.06f) + (a * a * 0.06f));
+        drive_out_gain = 1.0f / (1.0f + (a * 0.18f) + (a * a * 2.60f));
+        drive_pre_coeff = 0.016f + (b * 0.110f);
+        drive_pre_amt = (drive_fast != 0U) ? 0.0f : (a * (-0.25f + (b * 1.85f)));
+        drive_tone_coeff = 0.040f + (b * 0.230f);
+        drive_tone_amt = (b - 0.45f) * 1.70f;
+        drive_clip_gain = 1.0f + (a * a * 0.22f);
+    }
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
@@ -800,8 +936,33 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         switch (type)
         {
             case FX_MASTER_MACRO_DRIVE:
-                wet_l = fxmm_process_drive(dry_l, slot->wet, a, b);
-                wet_r = fxmm_process_drive(dry_r, slot->wet, a, b);
+                if (slot->color_init == 0U)
+                {
+                    slot->color_smooth_l = dry_l;
+                    slot->color_smooth_r = dry_r;
+                    slot->dc_x_l = dry_l;
+                    slot->dc_x_r = dry_r;
+                    slot->color_init = 1U;
+                }
+                fxmm_process_drive_stereo(dry_l,
+                                          dry_r,
+                                          drive_gain,
+                                          drive_bias,
+                                          drive_bias_sat,
+                                          drive_comp,
+                                          drive_out_gain,
+                                          drive_pre_coeff,
+                                          drive_pre_amt,
+                                          drive_tone_coeff,
+                                          drive_tone_amt,
+                                          drive_clip_gain,
+                                          drive_fast,
+                                          &slot->dc_x_l,
+                                          &slot->dc_x_r,
+                                          &slot->color_smooth_l,
+                                          &slot->color_smooth_r,
+                                          &wet_l,
+                                          &wet_r);
                 break;
 
             case FX_MASTER_MACRO_CRUSH:
@@ -899,23 +1060,6 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                 break;
             }
 
-            case FX_MASTER_MACRO_FREEZE:
-            {
-                slot->delay_samples = fxmm_smooth(slot->delay_samples, freeze_target_delay, 0.0012f);
-                const float delayed = fxmm_delay_read(slot, slot_index, slot->delay_samples);
-                const float target_gate = (target_wet > 0.000001f) ? 1.0f : 0.0f;
-                slot->freeze_gate = fxmm_smooth(slot->freeze_gate, target_gate, 0.015f);
-                const float hold_fb = 0.88f + (b * b * 0.118f);
-                const float input = (dry_l + dry_r) * 0.5f;
-                slot->delay_feedback_lp += (delayed - slot->delay_feedback_lp) * 0.12f;
-                const float write = (input * (1.0f - slot->freeze_gate))
-                        + (slot->delay_feedback_lp * hold_fb * slot->freeze_gate);
-                fxmm_delay_write(slot, slot_index, write);
-                wet_l = delayed;
-                wet_r = delayed;
-                break;
-            }
-
             case FX_MASTER_MACRO_COLOR:
                 fxmm_process_color_sample(slot,
                                           dry_l,
@@ -971,12 +1115,17 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
 
     const float bpm_milli = (float)fxmm_get_bpm_milli();
     uint8_t stutter_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
+    uint8_t freeze_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
         const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
         if ((type == FX_MASTER_MACRO_STUTTER) && (stutter_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
         {
             stutter_owner_slot = slot;
+        }
+        if ((type == FX_MASTER_MACRO_FREEZE) && (freeze_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
+        {
+            freeze_owner_slot = slot;
         }
     }
     if (g_stutter.owner_slot != stutter_owner_slot)
@@ -998,6 +1147,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
                           right,
                           frames,
                           bpm_milli,
-                          stutter_owner_slot);
+                          stutter_owner_slot,
+                          freeze_owner_slot);
     }
 }

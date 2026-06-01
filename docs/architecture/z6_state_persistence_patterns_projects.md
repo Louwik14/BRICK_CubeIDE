@@ -579,7 +579,7 @@ TODO policy SD/projet:
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
 - Le retrait produit de Master/FX `TALK` et `PITCH` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..11`; `PARAM_COUNT` ne change pas, mais les formats pattern/projet/patch/kit sont bumpes pour refuser les anciens fichiers prototype.
 - Le retrait produit de Master/FX `ECHO` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..10`; `PARAM_COUNT` ne change pas. `PATTERN_VERSION=30`, `PROJECT_V1_FILE_VERSION=42`, `PATCH_SD_FILE_VERSION=4` et `KIT_SD_FILE_VERSION=3` refusent les anciens fichiers prototype sans migration legacy.
-- `STUTTER` devient une ressource unique dans les 4 slots Master/FX sans changement de layout: les restaurations multiples sont normalisees par l'apply param Z3, qui conserve le premier slot `STUTTER` et remappe les suivants vers `OFF`. Aucun bump supplementaire de format n'est requis par cette contrainte.
+- `STUTTER` et `FREEZE` sont des ressources uniques dans les 4 slots Master/FX sans changement de layout: les restaurations multiples sont normalisees par l'apply param Z3, qui conserve le premier slot du type unique concerne et remappe les suivants vers `OFF`. Aucun bump supplementaire de format n'est requis par cette contrainte.
 - L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
 
 ## Addendum 2026-05-08 - contrat SD audio recording multi-client
