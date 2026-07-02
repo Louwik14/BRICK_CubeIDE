@@ -70,6 +70,10 @@ file(GLOB DRV_APP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.cpp"
 )
+list(APPEND DRV_APP_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/pcm3168a.c"
+)
+list(REMOVE_DUPLICATES DRV_APP_SRC)
 
 file(GLOB U8G2_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2/*.c"

@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdio.h>
 
-extern SPI_HandleTypeDef hspi5;
+extern SPI_HandleTypeDef hspi4;
 
 /* ====================================================================== */
 /*                          FRAMEBUFFER                                   */
@@ -72,7 +72,7 @@ static void transport_end(void)
 
 static uint8_t transport_tx(const uint8_t *data, size_t len, uint32_t timeout_ms)
 {
-    HAL_StatusTypeDef rc = HAL_SPI_Transmit(&hspi5, (uint8_t *)data, (uint16_t)len, timeout_ms);
+    HAL_StatusTypeDef rc = HAL_SPI_Transmit(&hspi4, (uint8_t *)data, (uint16_t)len, timeout_ms);
     if (rc == HAL_OK)
     {
         g_display_stats.tx_ok++;
@@ -126,7 +126,7 @@ static uint8_t send_data_burst_dma(const uint8_t *data, size_t len)
     transport_begin(1U);
     g_dma_payload_busy = 1U;
     g_dma_payload_done = 0U;
-    rc = HAL_SPI_Transmit_DMA(&hspi5, (uint8_t *)data, (uint16_t)len);
+    rc = HAL_SPI_Transmit_DMA(&hspi4, (uint8_t *)data, (uint16_t)len);
     if (rc == HAL_OK)
     {
         return 1U;
@@ -371,7 +371,7 @@ void drv_display_init(void)
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    if ((hspi == &hspi4) && (g_dma_payload_busy != 0U))
     {
         transport_end();
         g_dma_payload_busy = 0U;
@@ -382,7 +382,7 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
-    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    if ((hspi == &hspi4) && (g_dma_payload_busy != 0U))
     {
         transport_end();
         g_dma_payload_busy = 0U;

@@ -36,7 +36,7 @@ Memory region         Used Size  Region Size  %age Used
           RAM_D1:      430752 B       512 KB     82.16%
           RAM_D2:      233984 B       288 KB     79.34%
           RAM_D3:       48480 B        64 KB     73.97%
-           SDRAM:    24485984 B        32 MB     72.97%
+           SDRAM:    24485984 B        32 MB     72.97%  (ancien artefact Release; Debug courant expose 64 MiB)
          ITCMRAM:           0 B        64 KB      0.00%
 ```
 
@@ -86,7 +86,7 @@ Il dÃ©finit les rÃ©gions utiles suivantes :
 | `RAM_D1` | `0x24000000` | `512K` | `xrw` |
 | `RAM_D2` | `0x30000000` | `288K` | `xrw` |
 | `RAM_D3` | `0x38000000` | `64K` | `xrw` |
-| `SDRAM` | `0xC0000000` | `32M` | `xrw` |
+| `SDRAM` | `0xC0000000` | `64M` | `xrw` |
 | `ITCMRAM` | `0x00000000` | `64K` | `xrw` |
 
 La stack top `_estack` est placÃ©e Ã  la fin de `RAM_D1`, pas en DTCM.
@@ -301,8 +301,8 @@ D2 est dominÃ©e par du sÃ©quenceur/param runtime interne, pas par le DMA.
 
 | Symbole | Taille | Fichier | RÃ´le | Statut | Justification |
 |---|---:|---|---|---|---|
-| `flush_snapshot` | 1 024 B | `drv_display.c` | source SPI5 TX DMA OLED | garder D2 DMA | payload SPI DMA non-cacheable |
-| `pwm_buffer` | 2 800 B | `led_hw.c` | WS2812 TIM2 PWM DMA | garder D2 DMA | payload TIM DMA |
+| `flush_snapshot` | 1 024 B | `drv_display.c` | source SPI4 TX DMA OLED | garder D2 DMA | payload SPI DMA non-cacheable |
+| `pwm_buffer` | 2 800 B | `led_hw.c` | WS2812 TIM1_CH3 PWM DMA | garder D2 DMA | payload TIM DMA |
 | `adc2_dma` | 2 B | `hall_adc.c` | mailbox ADC DMA | garder D2 DMA | ADC DMA circulaire |
 | `adc1_dma` | 2 B | `hall_adc.c` | mailbox ADC DMA | garder D2 DMA | ADC DMA circulaire |
 | `g_pattern_write_chunk` | 4 096 B | `pattern_sd_bank.c` | staging `f_write` 4 KiB | vÃ©rification SD/cache | pas audio, mais chemin SD/FatFs/SDMMC Ã  valider |

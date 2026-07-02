@@ -34,7 +34,7 @@
 #include <stdint.h>
 
 /* ============================================================
-   CONFIG AUDIO : STM32H743 + CS42448 TDM8
+   CONFIG AUDIO : STM32H743 + PCM3168A x2 TDM8
    ============================================================ */
 
 /* TDM8 = 8 slots x 32-bit */
@@ -70,6 +70,8 @@
  */
 static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
 static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_CACHEABLE int32_t aux_rx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_CACHEABLE int32_t aux_tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
@@ -77,6 +79,8 @@ static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 static SAI_HandleTypeDef *sai_tx = NULL;
 static SAI_HandleTypeDef *sai_rx = NULL;
+static SAI_HandleTypeDef *sai_tx_aux = NULL;
+static SAI_HandleTypeDef *sai_rx_aux = NULL;
 static audio_seq_diag_t g_audio_seq_diag;
 
 /* ============================================================
@@ -317,16 +321,28 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
 {
     sai_tx = hsai_tx;
     sai_rx = hsai_rx;
+    sai_tx_aux = NULL;
+    sai_rx_aux = NULL;
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
+    memset(aux_rx_buffer, 0, sizeof(aux_rx_buffer));
+    memset(aux_tx_buffer, 0, sizeof(aux_tx_buffer));
     g_audio_seq_diag = (audio_seq_diag_t){0};
 
     /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
     dcache_clean_by_addr_aligned(tx_buffer, sizeof(tx_buffer));
+    dcache_clean_by_addr_aligned(aux_tx_buffer, sizeof(aux_tx_buffer));
 
     /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
     cpu_load_init();
+}
+
+void audio_init_aux(SAI_HandleTypeDef *hsai_tx_aux,
+                    SAI_HandleTypeDef *hsai_rx_aux)
+{
+    sai_tx_aux = hsai_tx_aux;
+    sai_rx_aux = hsai_rx_aux;
 }
 
 /**
@@ -350,14 +366,27 @@ void audio_start(void)
     if(!sai_tx || !sai_rx)
         return;
 
-    /* Démarrage RX puis TX pour remplir d'abord les données entrantes. */
-    HAL_SAI_Receive_DMA(sai_rx,
-                        (uint8_t *)rx_buffer,
-                        AUDIO_BUFFER_WORDS);
+    if(sai_rx_aux)
+    {
+        HAL_SAI_Receive_DMA(sai_rx_aux,
+                            (uint8_t *)aux_rx_buffer,
+                            AUDIO_BUFFER_WORDS);
+    }
+
+    if(sai_tx_aux)
+    {
+        HAL_SAI_Transmit_DMA(sai_tx_aux,
+                             (uint8_t *)aux_tx_buffer,
+                             AUDIO_BUFFER_WORDS);
+    }
 
     HAL_SAI_Transmit_DMA(sai_tx,
                          (uint8_t *)tx_buffer,
                          AUDIO_BUFFER_WORDS);
+
+    HAL_SAI_Receive_DMA(sai_rx,
+                        (uint8_t *)rx_buffer,
+                        AUDIO_BUFFER_WORDS);
 }
 
 void audio_seq_diag_reset(void)

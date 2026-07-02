@@ -14,7 +14,7 @@
 #include "usb_device.h"
 #include "audio.h"
 #include "audio_float.h"
-#include "cs42448.h"
+#include "pcm3168a.h"
 #include "mixer.h"
 #include "param_store.h"
 #include "control_events.h"
@@ -92,7 +92,8 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     //MX_USB_HOST_Init();
 
-    CS42448_Init(0x48);
+    (void)PCM3168A_Init(PCM3168A1_ADDR_7BIT);
+    (void)PCM3168A_Init(PCM3168A2_ADDR_7BIT);
 
     mixer_init();
     brick6_boot_fx_policy_init();
@@ -128,7 +129,8 @@ void brick6_app_init(void)
 
     brick6_audio_runtime_init();
 
-    audio_init(&hsai_BlockA2, &hsai_BlockB2);
+    audio_init(&hsai_BlockA1, &hsai_BlockB1);
+    audio_init_aux(&hsai_BlockA2, &hsai_BlockB2);
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);

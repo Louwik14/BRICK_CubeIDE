@@ -1,34 +1,27 @@
 #include "App/mux_pots.h"
 
 #include "adc.h"
-#include "main.h"
 
-#define MUX_POTS_COUNT        6U
-#define MUX_POTS_SETTLE_MS    1U
-#define MUX_POTS_DEADBAND     768U
-
-typedef enum
-{
-  MUX_POTS_STATE_SELECT = 0,
-  MUX_POTS_STATE_SETTLE,
-  MUX_POTS_STATE_DUMMY_CONVERT,
-  MUX_POTS_STATE_CONVERT
-} mux_pots_state_t;
+#define MUX_POTS_COUNT     2U
+#define MUX_POTS_DEADBAND  768U
 
 static uint16_t pot_values[MUX_POTS_COUNT];
 static uint8_t pot_valid_mask;
 static uint8_t current_channel;
-static mux_pots_state_t scan_state;
-static uint32_t settle_started_ms;
+static uint8_t scan_active;
 
-static void mux_pots_select_channel(uint8_t channel)
+static void mux_pots_store(uint8_t pot, uint16_t raw)
 {
-  HAL_GPIO_WritePin(MUX_POT_S0_GPIO_Port, MUX_POT_S0_Pin,
-                    (channel & 0x01U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(MUX_POT_S1_GPIO_Port, MUX_POT_S1_Pin,
-                    (channel & 0x02U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(MUX_POT_S2_GPIO_Port, MUX_POT_S2_Pin,
-                    (channel & 0x04U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  if (((raw > pot_values[pot]) &&
+       ((raw - pot_values[pot]) >= MUX_POTS_DEADBAND)) ||
+      ((pot_values[pot] > raw) &&
+       ((pot_values[pot] - raw) >= MUX_POTS_DEADBAND)) ||
+      ((pot_valid_mask & (uint8_t)(1U << pot)) == 0U))
+  {
+    pot_values[pot] = raw;
+  }
+
+  pot_valid_mask |= (uint8_t)(1U << pot);
 }
 
 void mux_pots_init(void)
@@ -40,78 +33,35 @@ void mux_pots_init(void)
 
   current_channel = 0U;
   pot_valid_mask = 0U;
-  scan_state = MUX_POTS_STATE_SELECT;
-  settle_started_ms = 0U;
-
-  mux_pots_select_channel(current_channel);
+  scan_active = 0U;
 }
 
 void mux_pots_scan(void)
 {
-  switch (scan_state)
+  if (scan_active == 0U)
   {
-    case MUX_POTS_STATE_SELECT:
-      mux_pots_select_channel(current_channel);
-      settle_started_ms = HAL_GetTick();
-      scan_state = MUX_POTS_STATE_SETTLE;
-      break;
+    if (HAL_ADC_Start(&hadc3) == HAL_OK)
+    {
+      current_channel = 0U;
+      scan_active = 1U;
+    }
+    return;
+  }
 
-    case MUX_POTS_STATE_SETTLE:
-      if ((HAL_GetTick() - settle_started_ms) >= MUX_POTS_SETTLE_MS)
-      {
-        if (HAL_ADC_Start(&hadc3) == HAL_OK)
-        {
-          scan_state = MUX_POTS_STATE_DUMMY_CONVERT;
-        }
-      }
-      break;
+  if (HAL_ADC_PollForConversion(&hadc3, 0U) != HAL_OK)
+  {
+    return;
+  }
 
-    case MUX_POTS_STATE_DUMMY_CONVERT:
-      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
-      {
-        (void)HAL_ADC_GetValue(&hadc3);
-        (void)HAL_ADC_Stop(&hadc3);
+  const uint16_t raw = (uint16_t)(65535U - HAL_ADC_GetValue(&hadc3));
+  mux_pots_store(current_channel, raw);
 
-        if (HAL_ADC_Start(&hadc3) == HAL_OK)
-        {
-          scan_state = MUX_POTS_STATE_CONVERT;
-        }
-        else
-        {
-          scan_state = MUX_POTS_STATE_SELECT;
-        }
-      }
-      break;
-
-    case MUX_POTS_STATE_CONVERT:
-      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
-      {
-        uint16_t raw = (uint16_t)(65535U - HAL_ADC_GetValue(&hadc3));
-
-        if (((raw > pot_values[current_channel]) &&
-             ((raw - pot_values[current_channel]) >= MUX_POTS_DEADBAND)) ||
-            ((pot_values[current_channel] > raw) &&
-             ((pot_values[current_channel] - raw) >= MUX_POTS_DEADBAND)) ||
-            ((pot_valid_mask & (uint8_t)(1U << current_channel)) == 0U))
-        {
-          pot_values[current_channel] = raw;
-        }
-
-        pot_valid_mask |= (uint8_t)(1U << current_channel);
-        (void)HAL_ADC_Stop(&hadc3);
-
-        current_channel++;
-        if (current_channel >= MUX_POTS_COUNT)
-        {
-          current_channel = 0U;
-        }
-        scan_state = MUX_POTS_STATE_SELECT;
-      }
-      break;
-
-    default:
-      scan_state = MUX_POTS_STATE_SELECT;
-      break;
+  current_channel++;
+  if (current_channel >= MUX_POTS_COUNT)
+  {
+    (void)HAL_ADC_Stop(&hadc3);
+    current_channel = 0U;
+    scan_active = 0U;
   }
 }
 

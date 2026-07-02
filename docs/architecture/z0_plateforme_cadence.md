@@ -57,7 +57,8 @@ Autorite init sous-systemes projet:
 
 Autorite wiring global inter-zones:
 - `brick6_app_init()`:
-  - `audio_init(&hsai_BlockA2, &hsai_BlockB2)`
+  - `audio_init(&hsai_BlockA1, &hsai_BlockB1)` pour le couple SAI1 principal
+  - `audio_init_aux(&hsai_BlockA2, &hsai_BlockB2)` pour le couple SAI2 auxiliaire/dummy
   - `audio_set_float_callback(brick6_audio_runtime_dsp)`
   - ordre d'init runtime (drum/sampler/Wave, puis param/seq/storage/undo/control/hall/etc.).
 - `brick6_audio_runtime_dsp()`:
@@ -164,7 +165,7 @@ Z0 appelle principalement:
 - Verification bornes region DMA D2.
 - `MPU_Config()` (region non-cacheable DMA), activation I/D cache.
 - `HAL_Init()`, clocks system/periph.
-- Initialisation peripheriques `MX_*` (GPIO, DMA, USART, FMC, SDMMC, SPI, I2C, ADC, SAI, TIM...).
+- Initialisation peripheriques `MX_*` (GPIO, DMA, FMC, SDMMC, SPI4, I2C2, ADC, SAI1/SAI2, TIM...); aucun init USART debug n'est observe.
 
 3. Lancement services bas niveau:
 - Start timers dans `main()`:
@@ -174,7 +175,7 @@ Z0 appelle principalement:
 
 4. Init sous-systemes projet:
 - `brick6_app_init()`:
-  - SDRAM, USB device, codec,
+  - SDRAM, USB device, codecs PCM3168A,
   - mixer/fx policy,
   - audio float tracks,
   - gate SD,
@@ -326,4 +327,24 @@ Z0 appelle principalement:
 - Aucun sample n'est scanne au boot et aucun `.brkwave` n'est genere au boot; un echec SD/mkdir reste non bloquant.
 - La superloop cadence `waveform_cache_service()` hors IRQ, apres les services sample/writer/refill/pattern prioritaires et avant la preview opportuniste.
 - Apres une finalisation Audio Rec, les services SD Rec Edit et `.wavecache` sont explicitement differes de deux passes pour laisser `TAKE_READY -> Rec Edit` initialiser le modele et produire le premier rendu sans FatFs.
+
+## Addendum - SDRAM FMC 32-bit
+
+- La SDRAM externe produit est un bank FMC SDRAM1 a `0xC0000000`, configure en bus 32-bit sur deux W9825G6KH x16 montees en parallele.
+- La profondeur d'adressage reste celle d'une puce (`A0..A12`, `BA0/BA1`, 4 banks internes, 9 bits colonne, 13 bits ligne); la capacite logique exposee au CPU est donc 64 MiB.
+- Les timings FMC restent ceux de la SDRAM x16 historique (`CAS=3`, `SDClockPeriod=2`, `tMRD=2`, `tXSR=7`, `tRAS=4`, `tRC=7`, `tWR=3`, `tRP=2`, `tRCD=2`); le refresh est recalcule pour SDCLK 120 MHz avec `REFRESH_COUNT=0x0396`.
+- `MPU_Config()` garde la fenetre D2 DMA non-cacheable existante et ajoute la region SDRAM 64 MiB en normal cacheable/write-back. Aucun DMA applicatif observe ne cible la SDRAM; les tests SDRAM forcent clean/invalidate D-cache sur les plages verifiees.
+
+## Addendum - pinout nouvelle board H743
+
+- OLED est sur SPI4: PE2=SCK, PE6=MOSI, PE3=OLED_DC, PE4=OLED_RES, PE5=OLED_CS. Le code expose `hspi4`; aucun `hspi5` OLED n'est observe.
+- DATALED utilise TIM1_CH3 sur PA10 via DMA TIM1_CH3. L'ancien chemin TIM2_CH4/PA3 n'est plus le pinout courant.
+- Shift-register: PD5=`SR_DATA` input pull-up, PD4=`SCK_SR` output, PD3=`CS_SR` output.
+- Encodeurs: ENC1 PB0/PB1, ENC2 PH6/PH7, ENC3 PB12/PB13, ENC4 PD12/PD13.
+- Pots directs: POT1 PH5, POT2 PH4.
+- Hall mux: S0 PA5, S1 PA6, S2 PC5, ANALOG PC4, ANALOG2 PA7.
+- `POWER_HOLD` PA9 sort LOW depuis `MX_GPIO_Init()`, puis `main()` attend environ 2 s et force HIGH dans un bloc USER CODE.
+- `HOST_EN` PA15 sort HIGH depuis `MX_GPIO_Init()`; AP2161 est actif bas, donc HIGH maintient VBUS host coupe.
+- PB7/BOOT0 n'est pas alloue comme GPIO push-pull dans le pinout observe.
+- Le code observe conserve USB Host/Device CubeMX; aucune migration USB volontaire n'est documentee ici.
 

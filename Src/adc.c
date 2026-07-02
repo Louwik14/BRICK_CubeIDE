@@ -78,7 +78,7 @@ void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_10;
+  sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -133,7 +133,7 @@ void MX_ADC2_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Channel = ADC_CHANNEL_7;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -168,11 +168,11 @@ void MX_ADC3_Init(void)
   hadc3.Instance = ADC3;
   hadc3.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV2;
   hadc3.Init.Resolution = ADC_RESOLUTION_16B;
-  hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc3.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc3.Init.LowPowerAutoWait = DISABLE;
   hadc3.Init.ContinuousConvMode = DISABLE;
-  hadc3.Init.NbrOfConversion = 1;
+  hadc3.Init.NbrOfConversion = 2;
   hadc3.Init.DiscontinuousConvMode = DISABLE;
   hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -188,13 +188,22 @@ void MX_ADC3_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_16;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
   sConfig.OffsetSignedSaturation = DISABLE;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_15;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -224,7 +233,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
     /**ADC1 GPIO Configuration
-    PC0     ------> ADC1_INP10
+    PC4     ------> ADC1_INP4
     */
     GPIO_InitStruct.Pin = MUX_HALL_ANALO1_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
@@ -265,9 +274,9 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
       __HAL_RCC_ADC12_CLK_ENABLE();
     }
 
-    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
     /**ADC2 GPIO Configuration
-    PC1     ------> ADC2_INP11
+    PA7     ------> ADC2_INP7
     */
     GPIO_InitStruct.Pin = MUX_HALL_ANALO2_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
@@ -305,11 +314,15 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     /* ADC3 clock enable */
     __HAL_RCC_ADC3_CLK_ENABLE();
 
-    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOH_CLK_ENABLE();
     /**ADC3 GPIO Configuration
-    PC3_C     ------> ADC3_INP1
+    PH4     ------> ADC3_INP15
+    PH5     ------> ADC3_INP16
     */
-    HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC3, SYSCFG_SWITCH_PC3_OPEN);
+    GPIO_InitStruct.Pin = POT2_Pin|POT1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /* USER CODE BEGIN ADC3_MspInit 1 */
 
@@ -332,7 +345,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
     }
 
     /**ADC1 GPIO Configuration
-    PC0     ------> ADC1_INP10
+    PC4     ------> ADC1_INP4
     */
     HAL_GPIO_DeInit(MUX_HALL_ANALO1_GPIO_Port, MUX_HALL_ANALO1_Pin);
 
@@ -354,7 +367,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
     }
 
     /**ADC2 GPIO Configuration
-    PC1     ------> ADC2_INP11
+    PA7     ------> ADC2_INP7
     */
     HAL_GPIO_DeInit(MUX_HALL_ANALO2_GPIO_Port, MUX_HALL_ANALO2_Pin);
 
@@ -371,6 +384,12 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
   /* USER CODE END ADC3_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_ADC3_CLK_DISABLE();
+
+    /**ADC3 GPIO Configuration
+    PH4     ------> ADC3_INP15
+    PH5     ------> ADC3_INP16
+    */
+    HAL_GPIO_DeInit(GPIOH, POT2_Pin|POT1_Pin);
 
   /* USER CODE BEGIN ADC3_MspDeInit 1 */
 

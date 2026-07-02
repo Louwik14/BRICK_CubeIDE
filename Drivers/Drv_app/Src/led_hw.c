@@ -39,7 +39,7 @@
 /*
  * Shared CPU/DMA emission buffer:
  * - CPU writes PWM symbols
- * - TIM2 DMA reads payload
+ * - TIM1 DMA reads payload
  * Kept in DMA section and 32B aligned for future D-cache enablement.
  */
 static DMA_BUFFER uint32_t pwm_buffer[LED_HW_BUFFER_SIZE];
@@ -107,9 +107,9 @@ static void led_hw_encode(const uint8_t *rgb, uint32_t count)
  */
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
-    if (htim->Instance == TIM2)
+    if (htim->Instance == TIM1)
     {
-        HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_4);
+        HAL_TIM_PWM_Stop_DMA(&htim1, TIM_CHANNEL_3);
         dma_busy = 0U;
     }
 }
@@ -126,7 +126,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
  */
 void led_hw_init(void)
 {
-    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_3);
     memset(pwm_buffer, 0, sizeof(pwm_buffer));
     dma_busy = 0U;
 }
@@ -173,10 +173,10 @@ void led_hw_send(const uint8_t *rgb, uint32_t count)
 
     dma_busy = 1U;
 
-    HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_4);
-    __HAL_TIM_SET_COUNTER(&htim2, 0U);
+    HAL_TIM_PWM_Stop_DMA(&htim1, TIM_CHANNEL_3);
+    __HAL_TIM_SET_COUNTER(&htim1, 0U);
 
-    if (HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_4, pwm_buffer, LED_HW_BUFFER_SIZE) != HAL_OK)
+    if (HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_3, pwm_buffer, LED_HW_BUFFER_SIZE) != HAL_OK)
     {
         dma_busy = 0U;
     }

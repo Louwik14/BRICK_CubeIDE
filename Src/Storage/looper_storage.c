@@ -7,7 +7,6 @@
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
-#include "usart.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -103,7 +102,7 @@ static void looper_storage_raw_export_log(const char *fmt, ...)
     {
         n = (int)sizeof(line) - 1;
     }
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)n, 50U);
+    (void)line;
 #else
     (void)fmt;
 #endif

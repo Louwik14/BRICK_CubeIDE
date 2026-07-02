@@ -44,7 +44,7 @@
 /** @addtogroup W9825G6KH_Exported_Constants
   * @{
   */
-#define REFRESH_COUNT       ((uint32_t)0x030D)
+#define REFRESH_COUNT       ((uint32_t)0x0396)
 #define W9825G6KH_TIMEOUT   ((uint32_t)0xFFFF)
 
 #ifdef __cplusplus

@@ -1,4 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:189:13:Fill_Buffer	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:127:13:SDRAM_Initialization_Sequence	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:61:6:SDRAM_Init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:76:6:SDRAM_Test	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:125:13:Fill_Buffer	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:229:13:SDRAM_CleanInvalidate_Range	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:133:16:SDRAM_Test_Window	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:191:16:SDRAM_Test_AddressLines	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:85:13:SDRAM_Initialization_Sequence	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:27:6:SDRAM_Init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:37:9:SDRAM_Test_Quick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/sdram.c:32:9:SDRAM_Test	8	static

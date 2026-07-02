@@ -35,10 +35,10 @@ typedef struct
 } encoder_hw_pin_t;
 
 static const encoder_hw_pin_t enc_hw_pins[ENC_COUNT] = {
-    {GPIOB, GPIO_PIN_6, GPIOD, GPIO_PIN_12},
-    {GPIOH, GPIO_PIN_8, GPIOH, GPIO_PIN_12},
-    {GPIOH, GPIO_PIN_10, GPIOH, GPIO_PIN_11},
-    {GPIOA, GPIO_PIN_2, GPIOA, GPIO_PIN_1},
+    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1},
+    {GPIOH, GPIO_PIN_6, GPIOH, GPIO_PIN_7},
+    {GPIOB, GPIO_PIN_12, GPIOB, GPIO_PIN_13},
+    {GPIOD, GPIO_PIN_12, GPIOD, GPIO_PIN_13},
 };
 
 static uint8_t enc_prev_state[ENC_COUNT];

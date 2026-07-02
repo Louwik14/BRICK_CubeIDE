@@ -1,7 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:234:13:process_half	1616	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:315:6:audio_init	8	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:348:6:audio_start	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:363:6:audio_seq_diag_reset	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:368:6:audio_seq_diag_snapshot	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:405:6:HAL_SAI_RxHalfCpltCallback	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:443:6:HAL_SAI_RxCpltCallback	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:238:13:process_half	1616	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:319:6:audio_init	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:341:6:audio_init_aux	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:364:6:audio_start	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:392:6:audio_seq_diag_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:397:6:audio_seq_diag_snapshot	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:434:6:HAL_SAI_RxHalfCpltCallback	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:472:6:HAL_SAI_RxCpltCallback	8	static

@@ -15,7 +15,7 @@ extern "C" {
  * The allocator does not free individual blocks by design.
  */
 
-#define SDRAM_ALLOC_DEFAULT_SIZE_BYTES (32U * 1024U * 1024U)
+#define SDRAM_ALLOC_DEFAULT_SIZE_BYTES (64U * 1024U * 1024U)
 
 void SDRAM_Alloc_Init(uint32_t base_address, uint32_t size_bytes);
 void SDRAM_Alloc_Reset(void);

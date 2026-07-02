@@ -25,7 +25,6 @@
 #include "sdmmc.h"
 #include "spi.h"
 #include "tim.h"
-#include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -33,7 +32,6 @@
 /* USER CODE BEGIN Includes */
 #include "usb_device.h"
 #include "usb_host.h"
-#include "cs42448.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
@@ -85,6 +83,7 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
+#define SDRAM_MPU_BASE                    (0xC0000000UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 
@@ -105,6 +104,20 @@ static void MPU_Config(void)
   MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
   MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+  MPU_InitStruct.BaseAddress = SDRAM_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_64MB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
@@ -160,22 +173,24 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  /* USER CODE BEGIN 2 */
+  HAL_Delay(2000U);
+  HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_SET);
   MX_DMA_Init();
-  MX_USART1_UART_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
-  MX_SPI5_Init();
+  MX_SPI4_Init();
   MX_I2C2_Init();
   MX_ADC2_Init();
+  MX_SAI1_Init();
   MX_SAI2_Init();
   MX_ADC1_Init();
   MX_ADC3_Init();
-  MX_TIM2_Init();
+  MX_TIM1_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
   MX_TIM5_Init();
   MX_TIM12_Init();
-  /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);
@@ -297,7 +312,8 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI2;
+                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI1
+                              |RCC_PERIPHCLK_SAI2;
   PeriphClkInitStruct.PLL2.PLL2M = 5;
   PeriphClkInitStruct.PLL2.PLL2N = 144;
   PeriphClkInitStruct.PLL2.PLL2P = 20;
@@ -316,6 +332,7 @@ void PeriphCommonClock_Config(void)
   PeriphClkInitStruct.PLL3.PLL3FRACN = 4260;
   PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
   PeriphClkInitStruct.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL2;
+  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL3;
   PeriphClkInitStruct.Sai23ClockSelection = RCC_SAI23CLKSOURCE_PLL3;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)

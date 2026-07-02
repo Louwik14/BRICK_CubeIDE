@@ -33,7 +33,7 @@ Guiding rule:
 
 ### Hardware
 - MCU: STM32H743 @ 480 MHz
-- codec: CS42448 via SAI TDM
+- codecs: 2x PCM3168A via SAI TDM
 - audio format: 24-bit / 48 kHz
 - DMA: double buffer (ping-pong)
 - block size: 64 or 128 frames depending on configuration

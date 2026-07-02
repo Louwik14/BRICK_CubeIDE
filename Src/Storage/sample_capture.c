@@ -16,7 +16,6 @@
 
 #if SAMPLE_CAPTURE_DEBUG_UART
 #include "stm32h7xx_hal.h"
-#include "usart.h"
 #include <stdarg.h>
 #endif
 #include <math.h>
@@ -284,7 +283,7 @@ static void sample_capture_debug_log(const char *fmt, ...)
     {
         n = (int)sizeof(line) - 1;
     }
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)n, 20U);
+    (void)line;
 }
 
 static void sample_capture_debug_reset(void)

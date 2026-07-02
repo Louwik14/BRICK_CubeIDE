@@ -36,6 +36,8 @@
  */
 void audio_init(SAI_HandleTypeDef *hsai_tx,
                 SAI_HandleTypeDef *hsai_rx);
+void audio_init_aux(SAI_HandleTypeDef *hsai_tx_aux,
+                    SAI_HandleTypeDef *hsai_rx_aux);
 
 /**
  * @brief Démarre les flux DMA audio RX puis TX.

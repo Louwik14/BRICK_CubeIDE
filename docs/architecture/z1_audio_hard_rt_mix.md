@@ -48,6 +48,14 @@ Exclusions explicites:
 - Persistence (`Src/Storage/*`) : hors chemin IRQ audio.
 - Shim legacy `runtime_target` : hors autorite du pipeline hard-RT.
 
+Contrat hardware audio courant:
+- Le hardware audio cible utilise deux codecs PCM3168A sur I2C2 PB10/PB11, adresses 7-bit `0x44` et `0x45`; l'ancien CS42448 n'est plus appele au boot ni inclus comme source build active.
+- Le bus audio reste TDM8 48 kHz, donnees 24-bit dans slots 32-bit, frame 256 bits. STM32 est maitre des clocks audio; les PCM3168A sont esclaves audio.
+- `SAI1_B` est le bloc maitre des horloges communes et recoit le flux ADC du PCM3168A #2: PF7=MCLK, PF8=SCK/BCLK, PF9=FS/LRCK, PF6=RX DOUT1. `SAI1_A` transmet vers PCM3168A #2 via PC1=TX DIN1.
+- `SAI2_A` transmet vers PCM3168A #1 via PD11=TX DIN1 et `SAI2_B` recoit via PA0=RX DOUT1; les deux blocs SAI2 sont esclaves synchronises sur SAI1. Les pins PI4/PI5/PI6/PI7 appartiennent au FMC SDRAM (`NBL2`, `NBL3`, `D28`, `D29`), pas a SAI.
+- Le runtime hard-RT principal traite encore le couple SAI1; SAI2 est demarre avec buffers auxiliaires zero/dummy en attendant l'integration complete des canaux `audio_io`.
+- Cible produit audio restante: 12 ADC mono maximum via les deux PCM3168A, et 6 DAC mono utilises (PCM2 deux paires stereo, PCM1 une paire stereo).
+
 Contrat page-cache/streamer:
 - L'identite cache audio est `sample_audio_key_t {domain, object_id}` + `page_index`, pas un `sample_id` brut.
 - Domaines prevus: `CLASSIC` pour les samples Sampler existants, `LOOPER` pour les transients Looper, `MULTI` reserve au futur Sampler/Multi.
@@ -308,7 +316,7 @@ Granular / fx_pool:
 - La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`. Depuis le retrait runtime RAM, ces comportements ne sont plus contractuels pour RAM; Stream garde le flux Classic provisoire.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` signifie STREAM enregistre + pages initiales queuees, puis chargees hors audio par le `sample_stream_manager` via `sample_cache_service()`.
-- Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = SAMPLE_PAGE_MIN_READY_PAGES`, soit 16 pages de 512 frames avec la configuration actuelle, donc 8192 frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM pour les consommateurs Classic encore streamables (Stream), meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient le span forward 8192 calcule par le helper commun et le span reverse 8192 calcule depuis la frame tail; en reverse, un depart non aligne peut demander 17 pages physiques pour couvrir 8192 frames utiles.
+- Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = SAMPLE_PAGE_MIN_READY_PAGES`, soit 4 pages de 2048 frames avec la configuration actuelle, donc 8192 frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM pour les consommateurs Classic encore streamables (Stream), meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient le span forward 8192 calcule par le helper commun et le span reverse 8192 calcule depuis la frame tail; en reverse, un depart non aligne peut demander 5 pages physiques pour couvrir 8192 frames utiles.
 - Retrigger Classic streamable (Stream/compat): le runtime coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` juge rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
 - Limitations actuelles `READY_PARTIAL` pour le chemin Classic streamable restant: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24/32-bit, forward simple et pitch lineaire selon le mode consommateur; reverse/slices historiques ne sont plus un contrat produit RAM.
 - `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_peek_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
@@ -606,12 +614,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le cursor Classic ne conserve plus de slot lookahead opportuniste; les transitions de page restent RAM-only via acquire direct de la page READY courante.
 - Les anciennes pages d'entree RAM slicing via `sample_stream_manager_request_page()` sont retirees du runtime STREAM: RAM sliced mode-only ne cree plus de pending STREAM.
 
-## Addendum 2026-05-19 - Sampler pages 512 frames
+## Addendum 2026-05-19 - Sampler pages 2048 frames
 
 - Configuration actuelle: `SAMPLE_PAGE_FRAMES = 2048`, `SAMPLE_PAGE_BYTES = 16384`, `SAMPLE_PAGE_MAX_COUNT = 1280`; le pool audio decode total fait 20 MiB, dont 16 MiB de slot-pool produit.
-- Les fenetres temporelles suivent la ration produit actuelle: Classic forward = span 8192 frames, Classic reverse = span 8192 frames depuis la position reverse reelle (16 ou 17 petites pages selon alignement), Multi = 28 petites pages total (`current + 27`).
+- Les fenetres temporelles suivent la ration produit actuelle: Classic forward = span 8192 frames, Classic reverse = span 8192 frames depuis la position reverse reelle (4 ou 5 pages selon alignement), Multi = 4 pages total (`current + 3`).
 - `SAMPLE_STREAM_SERVICE_MAX_PAGES` passe a 16 pour ne plus plafonner artificiellement le nombre de petites pages servies sous le budget existant; les caps FatFs ops (16), byte budget appelant et max 2 ms restent actifs.
-- Le pool de locks de fenetre suit la plus grande fenetre active (`SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2`) pour couvrir 16 voix Multi x 28 pages courantes plus 16 fenetres loop-begin optionnelles.
+- Le pool de locks de fenetre suit la plus grande fenetre active (`SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2`) pour couvrir 16 voix Multi x 4 pages courantes plus 16 fenetres loop-begin optionnelles.
 - Le grand index hash page-cache (`g_sample_page_index`, 8192 entrees / 96 KiB) est place en SDRAM storage-state: les lecteurs audio conservent deja une reference de slot/page courante et ne consultent l'index qu'a l'acquisition initiale, aux transitions de page ou aux lookups de service hors IRQ.
 - Les ecritures de `sample_audio_key_t` dans cet index restent champ-par-champ: `sample_page_index_entry_t` place `key` a l'offset 2, donc une affectation de struct peut generer un store 32-bit non aligne et trapper en Debug si `UNALIGN_TRP` est actif.
 - Les structs SDRAM du streamer (`sample_stream_pending_t`, `sample_stream_reader_t`) gardent `sample_audio_key_t` et les champs `uint32_t` sur offsets multiples de 4; les tableaux readers/pending restent en SDRAM sans acces 32-bit non aligne.
@@ -677,7 +685,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-19 - preparation froide 8192 frames Sampler
 
-- La ration minimale produit reste `SAMPLE_PREP_MIN_READY_FRAMES = 8192` frames. Avec l'implementation actuelle `SAMPLE_PAGE_FRAMES = 512`, cela donne 16 pages, mais la taille de page reste un detail interne.
+- La ration minimale produit reste `SAMPLE_PREP_MIN_READY_FRAMES = 8192` frames. Avec l'implementation actuelle `SAMPLE_PAGE_FRAMES = 2048`, cela donne 4 pages, mais la taille de page reste un detail interne.
 - `SAMPLE_PAGE_MIN_READY_PAGES` est seulement la conversion de la ration logique vers les pages internes actuelles.
 - Classic STREAM prepare encore la base forward correspondant a 8192 frames depuis le debut du sample, ou tout le sample s'il est plus court, pour les consommateurs Classic streamables restants; RAM refusent `READY_PARTIAL`.
 - Multi LOAD ne se limite plus a page0: chaque sample du preset demande la ration logique 8192 frames convertie en pages internes, ou toutes ses pages si le sample est plus court, avant de passer l'instrument en `READY`.
@@ -693,7 +701,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `SAMPLE_PREP_PROFILE_MULTI` couvre l'instrument Multi: preparation predictable depuis frame 0, sans start/end/reverse utilisateur, avec ration 8192 frames ou sample court complet.
 - Option B est le modele privilegie: ration logique 8192 frames, implementee par plusieurs pages internes et potentiellement lisible/servie de facon groupee si les pages sont contigues.
 - Option C reste testable plus tard: une page physique/logique de 8192 frames ne doit pas changer le contrat produit, seulement la conversion interne.
-- Le budget Multi explicite est `SAMPLE_PREP_MULTI_BUDGET_BYTES = 8 MiB`, converti en `SAMPLE_PREP_MULTI_BUDGET_PAGES` selon `SAMPLE_PAGE_BYTES`; avec les pages actuelles de 4096 B, cela donne 2048 pages.
+- Le budget Multi explicite est `SAMPLE_PREP_MULTI_BUDGET_BYTES = 8 MiB`, converti en `SAMPLE_PREP_MULTI_BUDGET_PAGES` selon `SAMPLE_PAGE_BYTES`; avec les pages actuelles de 16384 B, cela donne 512 pages.
 - Le LOAD Multi additionne `ceil(min(total_frames, 8192) / SAMPLE_PAGE_FRAMES)` pour tous les samples du preset. Si le total depasse le budget, le preset est refuse avec `MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED`; il n'y a pas de fallback silencieux a page0.
 - Les diagnostics de load exposent les pages requises, le budget pages et le nombre de samples preparables.
 
