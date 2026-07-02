@@ -22,6 +22,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
 - `Src/Core/brick6_app_init.c`: chargement boot de la photo catalogue samples persistante via `wav_loader_catalog_init_load()`, sans scan automatique de `0:/Samples`.
 - `Src/Core/brick6_app_init.c`: le recorder legacy `live_recorder` / `recorder_transport` n'est plus initialise ni servi; le record produit passe par Looper RAW + `multi_record_writer`.
+- `Src/spi.c` + `Inc/spi.h` + `Src/gpio.c`: init CubeMX SPI1/SPI6 reservee au futur SPILink Ksoloti master, sans protocole runtime ni DMA SPILink dans cette phase; CS de base en GPIO manuel.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -105,6 +106,7 @@ Contrats implicites d'ordre:
 Z0 appelle principalement:
 - System/HAL/Cube:
   - `HAL_Init`, clocks config, `MX_*_Init`, timers start (`HAL_TIM_Base_Start`, `HAL_TIM_OC_Start`, `HAL_TIM_Base_Start_IT`).
+  - `MX_SPI1_Init()` et `MX_SPI6_Init()` activent uniquement les peripheriques/pins du futur SPILink Ksoloti master; aucun transfert audio, DMA SPILink, MCO ni protocole n'est lance en Z0 courant.
 - Boot produit via `brick6_app_init()`:
   - init audio runtime, synths, sampler, sequencer, storage, undo, controls, hall, MIDI.
 - Runtime via `brick6_app_process()`:

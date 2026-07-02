@@ -73,6 +73,8 @@ void Error_Handler(void);
 #define MUX_HALL_ANALO1_GPIO_Port GPIOC
 #define MUX_HALL_ANALO2_Pin GPIO_PIN_7
 #define MUX_HALL_ANALO2_GPIO_Port GPIOA
+#define SPILINK_SPI6_CS0_Pin GPIO_PIN_4
+#define SPILINK_SPI6_CS0_GPIO_Port GPIOA
 #define MUX_HALL_S0_Pin GPIO_PIN_5
 #define MUX_HALL_S0_GPIO_Port GPIOA
 #define MUX_HALL_S1_Pin GPIO_PIN_6
@@ -111,6 +113,8 @@ void Error_Handler(void);
 #define SCK_SR_GPIO_Port SR_SCK_GPIO_Port
 #define SR_DATA_Pin GPIO_PIN_5
 #define SR_DATA_GPIO_Port GPIOD
+#define SPILINK_SPI1_CS0_Pin GPIO_PIN_10
+#define SPILINK_SPI1_CS0_GPIO_Port GPIOG
 
 /* USER CODE BEGIN Private defines */
 

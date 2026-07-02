@@ -179,7 +179,9 @@ int main(void)
   MX_DMA_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
+  MX_SPI1_Init();
   MX_SPI4_Init();
+  MX_SPI6_Init();
   MX_I2C2_Init();
   MX_ADC2_Init();
   MX_SAI1_Init();
