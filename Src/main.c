@@ -26,6 +26,7 @@
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -33,7 +34,7 @@
 /* USER CODE BEGIN Includes */
 #include "usb_device.h"
 #include "usb_host.h"
-#include "cs42448.h"
+#include "usb_role_manager.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
@@ -72,6 +73,7 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void MPU_Config(void);
+static void power_wait_for_long_press(void);
 //void MX_USB_HOST_Process(void);
 //void MX_USB_HOST_Init(void);
 void MX_USB_DEVICE_Init(void);
@@ -87,6 +89,8 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
+#define POWER_LONG_PRESS_MS               (3000UL)
+#define POWER_BUTTON_DEBOUNCE_MS          (30UL)
 
 static void MPU_Config(void)
 {
@@ -108,6 +112,47 @@ static void MPU_Config(void)
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+
+static void power_wait_for_long_press(void)
+{
+  uint32_t high_start_ms = 0U;
+  uint8_t high_seen = 0U;
+
+  HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_RESET);
+
+  while (1)
+  {
+    const uint32_t now_ms = HAL_GetTick();
+    const GPIO_PinState button_state =
+        HAL_GPIO_ReadPin(POWER_BUTTON_SENSE_GPIO_Port, POWER_BUTTON_SENSE_Pin);
+
+    if (button_state != GPIO_PIN_SET)
+    {
+      HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_RESET);
+      high_seen = 0U;
+      high_start_ms = 0U;
+      continue;
+    }
+
+    if (high_seen == 0U)
+    {
+      high_seen = 1U;
+      high_start_ms = now_ms;
+      continue;
+    }
+
+    if ((now_ms - high_start_ms) < POWER_BUTTON_DEBOUNCE_MS)
+    {
+      continue;
+    }
+
+    if ((now_ms - high_start_ms) >= POWER_LONG_PRESS_MS)
+    {
+      HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_SET);
+      return;
+    }
+  }
 }
 /* USER CODE END 0 */
 
@@ -161,20 +206,20 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USART1_UART_Init();
+  MX_UART4_Init();
   MX_FMC_Init();
-  MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
-  MX_I2C2_Init();
+  MX_I2C1_Init();
   MX_ADC2_Init();
-  MX_SAI2_Init();
+  MX_SAI1_Init();
   MX_ADC1_Init();
-  MX_ADC3_Init();
   MX_TIM2_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
   MX_TIM5_Init();
   MX_TIM12_Init();
+  MX_USB_OTG_FS_PCD_Init();
+  MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
@@ -199,8 +244,11 @@ int main(void)
 
 	     brick6_app_process();
 
-	     //MX_USB_HOST_Process();
-	     midi_host_poll_bounded(8);
+	     if (usb_role_manager_is_host_active() != 0U)
+	     {
+	         MX_USB_HOST_Process();
+	         midi_host_poll_bounded(8);
+	     }
 
 	     uint32_t ui_ticks_processed = 0U;
 	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
@@ -254,8 +302,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 5;
-  RCC_OscInitStruct.PLL.PLLN = 192;
+  RCC_OscInitStruct.PLL.PLLM = 3;
+  RCC_OscInitStruct.PLL.PLLN = 240;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 20;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -297,16 +345,16 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI2;
-  PeriphClkInitStruct.PLL2.PLL2M = 5;
-  PeriphClkInitStruct.PLL2.PLL2N = 144;
+                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI1;
+  PeriphClkInitStruct.PLL2.PLL2M = 3;
+  PeriphClkInitStruct.PLL2.PLL2N = 180;
   PeriphClkInitStruct.PLL2.PLL2P = 20;
   PeriphClkInitStruct.PLL2.PLL2Q = 1;
   PeriphClkInitStruct.PLL2.PLL2R = 3;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
   PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
-  PeriphClkInitStruct.PLL3.PLL3M = 25;
+  PeriphClkInitStruct.PLL3.PLL3M = 12;
   PeriphClkInitStruct.PLL3.PLL3N = 491;
   PeriphClkInitStruct.PLL3.PLL3P = 40;
   PeriphClkInitStruct.PLL3.PLL3Q = 2;
@@ -316,7 +364,7 @@ void PeriphCommonClock_Config(void)
   PeriphClkInitStruct.PLL3.PLL3FRACN = 4260;
   PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
   PeriphClkInitStruct.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL2;
-  PeriphClkInitStruct.Sai23ClockSelection = RCC_SAI23CLKSOURCE_PLL3;
+  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL3;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {

@@ -175,7 +175,7 @@ Sorties de Z2:
 
 ## 12. Contrat de stabilite mix-target (runtime)
 - `track_runtime_refresh_all` preserve prioritairement le `mix_track_id` precedent de chaque track quand la lane reste disponible.
-- Les lanes fixes Input proto (`Input1..Input3` -> lanes mixer 0..2) sont reservees et ne peuvent plus etre allouees aux tracks non-Input; les engines/musical tracks prennent les lanes dynamiques restantes.
+- La seule lane fixe Input produit low-cost (`Input1` -> lane mixer 0) est reservee et ne peut plus etre allouee aux tracks non-Input; les engines/musical tracks prennent les lanes dynamiques restantes.
 - Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/COLORS) lors des changements family/type.
 - Lorsqu'un rebind de lane reste necessaire, la migration/reconciliation du runtime per-lane est une etape explicite aval; Z2 ne garantit pas a lui seul la coherence du state DSP si cette passe n'est pas executee.
 

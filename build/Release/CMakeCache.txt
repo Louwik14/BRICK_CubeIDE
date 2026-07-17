@@ -229,6 +229,10 @@ CMAKE_TOOLCHAIN_FILE:FILEPATH=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
+//STM32CubeH7 firmware package used as fallback for files pruned
+// by CubeMX regeneration
+STM32CUBE_H7_FW_ROOT:PATH=C:/Users/developpeur/STM32Cube/Repository/STM32Cube_FW_H7_V1.12.1
+
 
 ########################
 # INTERNAL cache entries

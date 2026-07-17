@@ -54,16 +54,6 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             out_target->filter_target_track = 0U;
             break;
 
-        case UI_TRACK_FAMILY_INPUT2:
-            out_target->has_filter_target = 1U;
-            out_target->filter_target_track = 1U;
-            break;
-
-        case UI_TRACK_FAMILY_INPUT3:
-            out_target->has_filter_target = 1U;
-            out_target->filter_target_track = 2U;
-            break;
-
         case UI_TRACK_FAMILY_SYNTH:
         case UI_TRACK_FAMILY_SAMPLER:
         case UI_TRACK_FAMILY_DRUM:
@@ -76,15 +66,6 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
                 out_target->has_filter_target = 1U;
                 out_target->filter_target_track = 3U;
             }
-            break;
-
-        case UI_TRACK_FAMILY_INPUT4:
-            /*
-             * Product model keeps Input4 as a real physical stereo input
-             * resource, but current proto wiring does not expose a dedicated
-             * filter target lane yet in this legacy shim.
-             * (Authoritative path: track_runtime.)
-             */
             break;
 
         default:

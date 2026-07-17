@@ -2,6 +2,11 @@
 
 ## 1. Perimetre
 
+Addendum 2026-07-17 - variante low-cost audio:
+- Les anciens Pattern/Project peuvent etre invalides sans migration complexe: `PATTERN_VERSION` passe a `31` et `PROJECT_V1_FILE_VERSION` passe a `43`.
+- Le payload conserve les tracks logiques, mais les familles `Input2..Input4` ne sont plus des entrees ligne produit exposables; l'unique entree ligne persistable est `Input1`.
+- Aucun etat de route utilisateur CUE/BOTH ne reste dans le produit; les captures Looper/Audio Rec, preview SD, sends/returns, inserts et Master/FX restent des routages internes conserves.
+
 Addendum 2026-05-28 - formats REC START:
 - `PatternSaveV1.globals.rec_start_mode` stocke le contrat REC `START` (`DEFAULT/TRIG/ROLL 1/4/ROLL 1/2/ROLL 1`) a la place de l'ancien champ REC launch/count-in.
 - `PATTERN_VERSION` passe a `26` et `PROJECT_V1_FILE_VERSION` passe a `37`; les anciens fichiers sont refuses par validation d'en-tete, sans alias de compatibilite.

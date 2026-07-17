@@ -32,6 +32,7 @@ USBH_HandleTypeDef hUsbHostHS;
 ApplicationTypeDef Appli_state = APPLICATION_IDLE;
 
 /* USER CODE BEGIN 0 */
+static uint8_t g_usb_host_started = 0U;
 /* USER CODE END 0 */
 
 /* user callback declaration */
@@ -46,25 +47,59 @@ void MX_USB_HOST_Init(void)
   /* USER CODE BEGIN USB_HOST_Init_PreTreatment */
   /* USER CODE END USB_HOST_Init_PreTreatment */
 
+  (void)usb_host_start();
+}
+
+uint8_t usb_host_start(void)
+{
+  if (g_usb_host_started != 0U)
+  {
+    return 1U;
+  }
+
   USBH_StatusTypeDef status;
 
-  status = USBH_Init(&hUsbHostHS, USBH_UserProcess, HOST_HS);
+  status = USBH_Init(&hUsbHostHS, USBH_UserProcess, HOST_FS);
   if (status != USBH_OK)
   {
-    Error_Handler();
+    return 0U;
   }
 
   status = USBH_RegisterClass(&hUsbHostHS, &USBH_MIDI_Class);
   if (status != USBH_OK)
   {
-    Error_Handler();
+    (void)USBH_DeInit(&hUsbHostHS);
+    return 0U;
   }
 
   status = USBH_Start(&hUsbHostHS);
   if (status != USBH_OK)
   {
-    Error_Handler();
+    (void)USBH_DeInit(&hUsbHostHS);
+    return 0U;
   }
+
+  g_usb_host_started = 1U;
+  return 1U;
+}
+
+uint8_t usb_host_stop(void)
+{
+  if (g_usb_host_started == 0U)
+  {
+    return 1U;
+  }
+
+  (void)USBH_Stop(&hUsbHostHS);
+  (void)USBH_DeInit(&hUsbHostHS);
+  Appli_state = APPLICATION_IDLE;
+  g_usb_host_started = 0U;
+  return 1U;
+}
+
+uint8_t usb_host_is_started(void)
+{
+  return g_usb_host_started;
 }
 
 /*
@@ -72,7 +107,10 @@ void MX_USB_HOST_Init(void)
  */
 void MX_USB_HOST_Process(void)
 {
-  USBH_Process(&hUsbHostHS);
+  if (g_usb_host_started != 0U)
+  {
+    USBH_Process(&hUsbHostHS);
+  }
 }
 
 void usb_host_tasklet_poll_bounded(uint32_t max_packets)
@@ -81,6 +119,11 @@ void usb_host_tasklet_poll_bounded(uint32_t max_packets)
   brick6_usb_host_poll_count++;
 #endif
   uint32_t n = 0U;
+  if (g_usb_host_started == 0U)
+  {
+    return;
+  }
+
   for (; n < max_packets; n++)
   {
     USBH_Process(&hUsbHostHS);

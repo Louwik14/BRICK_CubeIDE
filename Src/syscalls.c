@@ -179,7 +179,7 @@ int _execve(char *name, char **argv, char **env)
 
 __attribute__((weak)) int __io_putchar(int ch)
 {
-  if (huart1.Instance == 0)
+  if (huart4.Instance == 0)
   {
     return ch;
   }
@@ -188,10 +188,10 @@ __attribute__((weak)) int __io_putchar(int ch)
   if (c == '\n')
   {
     const uint8_t cr = '\r';
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)&cr, 1U, 10U);
+    (void)HAL_UART_Transmit(&huart4, (uint8_t *)&cr, 1U, 10U);
   }
 
-  (void)HAL_UART_Transmit(&huart1, &c, 1U, 10U);
+  (void)HAL_UART_Transmit(&huart4, &c, 1U, 10U);
   return ch;
 }
 
@@ -205,13 +205,13 @@ int _getentropy(void *buffer, size_t length)
 
 __attribute__((weak)) int __io_getchar(void)
 {
-  if (huart1.Instance == 0)
+  if (huart4.Instance == 0)
   {
     return -1;
   }
 
   uint8_t c = 0U;
-  if (HAL_UART_Receive(&huart1, &c, 1U, HAL_MAX_DELAY) != HAL_OK)
+  if (HAL_UART_Receive(&huart4, &c, 1U, HAL_MAX_DELAY) != HAL_OK)
   {
     return -1;
   }

@@ -25,9 +25,6 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     switch (family)
     {
         case UI_TRACK_FAMILY_INPUT1:
-        case UI_TRACK_FAMILY_INPUT2:
-        case UI_TRACK_FAMILY_INPUT3:
-        case UI_TRACK_FAMILY_INPUT4:
             *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
             return k_input_types;
 
@@ -102,10 +99,7 @@ static uint8_t ui_track_catalog_count_sampler_clip_tracks(uint8_t track,
 
 bool ui_track_catalog_family_is_input(ui_track_family_t family)
 {
-    return (family == UI_TRACK_FAMILY_INPUT1)
-            || (family == UI_TRACK_FAMILY_INPUT2)
-            || (family == UI_TRACK_FAMILY_INPUT3)
-            || (family == UI_TRACK_FAMILY_INPUT4);
+    return (family == UI_TRACK_FAMILY_INPUT1);
 }
 
 bool ui_track_catalog_family_is_engine(ui_track_family_t family)
@@ -402,15 +396,6 @@ const char *ui_track_catalog_family_display_name(ui_track_family_t family)
         case UI_TRACK_FAMILY_INPUT1:
             return "Input1";
 
-        case UI_TRACK_FAMILY_INPUT2:
-            return "Input2";
-
-        case UI_TRACK_FAMILY_INPUT3:
-            return "Input3";
-
-        case UI_TRACK_FAMILY_INPUT4:
-            return "Input4";
-
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
         case UI_TRACK_FAMILY_SAMPLER:
@@ -436,15 +421,6 @@ const char *ui_track_catalog_family_short_name(ui_track_family_t family)
 
         case UI_TRACK_FAMILY_INPUT1:
             return "In1";
-
-        case UI_TRACK_FAMILY_INPUT2:
-            return "In2";
-
-        case UI_TRACK_FAMILY_INPUT3:
-            return "In3";
-
-        case UI_TRACK_FAMILY_INPUT4:
-            return "In4";
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";

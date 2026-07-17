@@ -81,6 +81,9 @@ void MX_USB_DEVICE_Init(void);
  * -- Insert functions declaration here --
  */
 /* USER CODE BEGIN FD */
+uint8_t usb_device_start(void);
+uint8_t usb_device_stop(void);
+uint8_t usb_device_is_started(void);
 
 /* USER CODE END FD */
 /**

@@ -46,15 +46,6 @@ static uint8_t ui_core_input_family_wired_mute_track(ui_track_family_t family, u
         case UI_TRACK_FAMILY_INPUT1:
             mix_track = 0U;
             break;
-        case UI_TRACK_FAMILY_INPUT2:
-            mix_track = 1U;
-            break;
-        case UI_TRACK_FAMILY_INPUT3:
-            mix_track = 2U;
-            break;
-        case UI_TRACK_FAMILY_INPUT4:
-            mix_track = 3U;
-            break;
         default:
             return 0U;
     }

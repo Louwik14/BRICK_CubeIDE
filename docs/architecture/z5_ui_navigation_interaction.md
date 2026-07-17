@@ -449,7 +449,7 @@ Points factuels:
   - la sortie de `KEYBOARD` envoie les note-off locaux du clavier avant de nettoyer l'etat interne; les clears silencieux restent reserves aux sync de focus ou resets deja proprietaires du contexte.
 
 ## 13. Contrat Hybrid UI v1 (borne)
-- `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.
+- `Hybrid` n'est pas une nouvelle family: dans la variante low-cost, `family=Input1`, `type=Hybrid`; `Input2..4` ne sont plus des entrees ligne produit exposables.
 - Exposition UI pour `Input/Hybrid`:
   - exposes: `PLAY`, `MOD`, `TONE`, `VCA`, `COLORS`, `MIX`, `CFG`.
 - `TONE` Hybrid utilise une famille template dediee (pas fallback Synth):

@@ -32,15 +32,15 @@ extern "C" {
 
 /* USER CODE END Includes */
 
-extern SAI_HandleTypeDef hsai_BlockA2;
+extern SAI_HandleTypeDef hsai_BlockA1;
 
-extern SAI_HandleTypeDef hsai_BlockB2;
+extern SAI_HandleTypeDef hsai_BlockB1;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
-void MX_SAI2_Init(void);
+void MX_SAI1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 

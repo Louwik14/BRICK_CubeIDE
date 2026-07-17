@@ -70,6 +70,9 @@ typedef enum {
 void MX_USB_HOST_Init(void);
 
 void MX_USB_HOST_Process(void);
+uint8_t usb_host_start(void);
+uint8_t usb_host_stop(void);
+uint8_t usb_host_is_started(void);
 void usb_host_tasklet_poll_bounded(uint32_t max_packets);
 
 /**

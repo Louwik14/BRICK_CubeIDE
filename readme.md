@@ -7,9 +7,9 @@ Standalone embedded audio machine for live use.
 The project is track-aware by construction: the meaningful unit is the logical track, not a hidden global node and not a physical lane.
 
 Core use:
-- real-time audio mixer for external synths
+- real-time audio mixer for the low-cost hardware profile
 - performance FX and routing
-- cue / main style routing
+- single MAIN output routing
 - track-aware sequencer and modulation
 - contextual UI driven by the active track identity
 
@@ -33,7 +33,11 @@ Guiding rule:
 
 ### Hardware
 - MCU: STM32H743 @ 480 MHz
-- codec: CS42448 via SAI TDM
+- codec: TLV320AIC3204 via SAI/I2S stereo
+- inputs: 1 stereo line input; 1 mono mic input is present/planned in hardware but not exposed as a second line input yet
+- outputs: 1 stereo MAIN output; no physical CUE output
+- power: battery + USB-C
+- boot: validated by holding the power button for 3 seconds
 - audio format: 24-bit / 48 kHz
 - DMA: double buffer (ping-pong)
 - block size: 64 or 128 frames depending on configuration
@@ -58,23 +62,20 @@ Current model:
 
 Current logical layout:
 - 8 flexible musical tracks
-- 4 input-oriented tracks
+- 1 input-oriented line track; the remaining logical tracks stay musical/runtime-capable
 - 2 reserved master/global slots
 
 ### Families
 Current families:
 - `Off`
 - `Input1`
-- `Input2`
-- `Input3`
-- `Input4`
 - `Synth`
 - `Drum`
 - `Master`
 - `Sampler`
 
 ### Notable types
-- `InputX`: `Audio`, `Hybrid`
+- `Input1`: `Audio`, `Hybrid`
 - `Synth`: `Wave`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
@@ -98,7 +99,7 @@ This separation is intentional. Do not add a second authority for the same state
 
 ### Audio / mixer
 - track-aware audio routing
-- main / cue separation
+- single stereo MAIN output; no user route to physical CUE
 - sends and returns
 - insert-style processing
 - master-oriented performance processing

@@ -34,11 +34,11 @@
 #include <stdint.h>
 
 /* ============================================================
-   CONFIG AUDIO : STM32H743 + CS42448 TDM8
+   CONFIG AUDIO : STM32H743 + TLV320AIC3204 I2S stereo
    ============================================================ */
 
-/* TDM8 = 8 slots x 32-bit */
-#define AUDIO_TDM_SLOTS          8
+/* I2S stereo = 2 slots x 32-bit */
+#define AUDIO_TDM_SLOTS          2
 
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */

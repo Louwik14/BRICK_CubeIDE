@@ -499,15 +499,9 @@ static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboa
 
 static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
 {
-    for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT4; ++family)
-    {
-        if (ui_count_tracks_with_family(family) == 0U)
-        {
-            return family;
-        }
-    }
-
-    return UI_TRACK_FAMILY_COUNT;
+    return (ui_count_tracks_with_family(UI_TRACK_FAMILY_INPUT1) == 0U)
+        ? UI_TRACK_FAMILY_INPUT1
+        : UI_TRACK_FAMILY_COUNT;
 }
 
 static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_track,

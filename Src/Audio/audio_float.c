@@ -3,9 +3,9 @@
  * @brief Moteur frontière int24 <-> float, architecture tracks stéréo actives.
  *
  * Rôle du module:
- * - Convertir le flux DMA TDM8 (int24 right-aligned) en buffers float par track.
+ * - Convertir le flux DMA stéréo (int24 right-aligned) en buffers float par track.
  * - Exécuter le callback DSP utilisateur sur les tracks.
- * - Réaliser le mix vers buses internes (MAIN/CUE/SEND) et le remappage de sortie TDM.
+ * - Réaliser le mix vers bus MAIN et le remappage de sortie stéréo.
  *
  * Architecture (appelant -> appelé):
  * - audio.c (IRQ DMA RX) -> audio_process_block_int32().
@@ -13,15 +13,10 @@
  *
  * Modèle audio track-based:
  * - Track 0 lit slots TDM 0/1 (L/R).
- * - Track 1 lit slots TDM 2/3 (L/R).
- * - Track 2 lit slots TDM 4/5 (L/R).
- * - Les slots 6/7 en entrée ne sont pas exploités.
+ * - Tracks 1..3 ne sont pas alimentées par l'entrée codec dans cette passe.
  *
  * Mapping sortie TDM:
  * - MAIN L/R -> slots 0/1.
- * - CUE L/R (copie MAIN par défaut) -> slots 2/3.
- * - Copie MAIN L/R -> slots 4/5.
- * - slots 6/7 forcés à 0.
  *
  * Contraintes temps réel:
  * - Fonction principale exécutée en IRQ audio.
@@ -526,7 +521,7 @@ float audio_float_get_master_gain(void)
    audio_dsp_process():
    - Appelle le callback DSP utilisateur
    - Réalise la somme tracks -> bus_main
-   - Copie bus_main -> bus_cue (par défaut)
+   - Le résultat MAIN est exposé dans tracks[0]
    ============================================================ */
 
 /**
@@ -584,8 +579,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     audio_io_pack_ramped(tx,
                          tracks[0].L,
                          tracks[0].R,
-                         tracks[1].L,
-                         tracks[1].R,
                          frames,
                          out_gain_start,
                          out_gain_end);

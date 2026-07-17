@@ -12,9 +12,10 @@
 #include "stm32h7xx_hal.h"
 #include "usb_host.h"
 #include "usb_device.h"
+#include "usb_role_manager.h"
 #include "audio.h"
 #include "audio_float.h"
-#include "cs42448.h"
+#include "tlv320aic3204.h"
 #include "mixer.h"
 #include "param_store.h"
 #include "control_events.h"
@@ -89,10 +90,9 @@ void brick6_app_init(void)
 {
     SDRAM_Init();
 
-    MX_USB_DEVICE_Init();
-    //MX_USB_HOST_Init();
+    usb_role_manager_init();
 
-    CS42448_Init(0x48);
+    (void)TLV320AIC3204_InitDefault();
 
     mixer_init();
     brick6_boot_fx_policy_init();
@@ -128,7 +128,7 @@ void brick6_app_init(void)
 
     brick6_audio_runtime_init();
 
-    audio_init(&hsai_BlockA2, &hsai_BlockB2);
+    audio_init(&hsai_BlockA1, &hsai_BlockB1);
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
@@ -220,5 +220,9 @@ void brick6_app_process(void)
 
     voice_manager_service();
 
-    midi_poll();
+    usb_role_manager_process();
+    if (usb_role_manager_is_device_active() != 0U)
+    {
+        midi_poll();
+    }
 }

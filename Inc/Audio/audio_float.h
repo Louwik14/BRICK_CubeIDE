@@ -13,12 +13,12 @@ extern "C" {
 
 /**
  * @file audio_float.h
- * @brief Frontière DSP float track-based (stéréo) pour moteur audio TDM8.
+ * @brief Frontière DSP float track-based (stéréo) pour codec stéréo.
  *
  * Rôle du module:
  * - Convertir le flux int24 (DMA/SAI) <-> float.
  * - Exposer un modèle de traitement par tracks stéréo actives.
- * - Effectuer le mixage master et le mapping de sortie TDM.
+ * - Effectuer le mixage master et le mapping de sortie stéréo.
  *
  * Architecture:
  * - Appelé par: audio.c (IRQ DMA RX half/full).
@@ -35,10 +35,8 @@ extern "C" {
 
 #define AUDIO_BLOCK_SIZE 64U
 /*
- * DSP engine exposes 4 stereo tracks. Tracks 0..2 come from TDM slots
- * (0/1, 2/3, 4/5) and track 3 is reserved for internal sources.
- * Product target keeps Input1..Input4 as physical stereo resources, but the
- * current devboard proto wiring only feeds 3 stereo input pairs to this layer.
+ * DSP engine keeps 4 stereo lanes for the existing callback contract. Lane 0
+ * receives the single product line input; lanes 1..3 are internal/silent here.
  */
 #define MAX_TRACKS       4U
 
@@ -202,7 +200,7 @@ void audio_float_set_bus_comp_auto_makeup(uint8_t enabled);
  * 1) Unpack TDM -> tracks actives.
  * 2) Callback DSP utilisateur.
  * 3) Somme tracks actives + gains.
- * 4) Pack master/cue vers slots TDM de sortie.
+ * 4) Pack MAIN vers sortie stéréo.
  */
 void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,

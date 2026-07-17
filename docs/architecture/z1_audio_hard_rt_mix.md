@@ -9,8 +9,8 @@ Perimetre operationnel de zone (appartient a Z1):
 
 Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_float.c` et `Inc/Audio/audio_float.h` : frontiere IRQ `int24 <-> float`, ownership des buffers track et callback DSP.
-- `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
-- `Src/Audio/audio_io.c` repacke MAIN/CUE sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
+- `Src/Audio/audio_io.c` : preuve unpack/pack stereo et mapping slots.
+- `Src/Audio/audio_io.c` repacke MAIN stereo sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
 - `Src/Audio/metronome_runtime.c` + `Inc/Audio/metronome_runtime.h` : generateur metronome hard-RT RAM-only, declenche par event Z4, rendu MAIN monitor-only.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
@@ -33,7 +33,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/fx_delay_shared_pool.c` + `Inc/Audio/fx_delay_shared_pool.h` : pool SDRAM L/R commun aux delays globaux CLASSIC et DUAL, avec ownership exclusif controle par le mixer.
 - `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE` et `FREEZE`, STUTTER stereo global unique, et coloration sombre/brillant par slot pour `COLOR`.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
-- `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
+- `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)` et de l'init codec TLV320AIC3204 hors IRQ.
 
 Dependances de Z1 sans appartenir a Z1:
 - Engines synth/sampler (`drum`, `voice_manager`, wrappers Wave/Sampler).
@@ -67,6 +67,10 @@ Contrat page-cache/streamer:
 
 ## 2. Autorite(s) de verite
 
+Configuration hardware audio ciblee:
+- `.ioc` migre l'interface codec de SAI2/TDM8 vers SAI1 I2S stereo 48 kHz, STM32 maitre, Block A TX et Block B RX.
+- Le codec produit cible est TLV320AIC3204 sur I2C1 adresse 7-bit `0x18`; entree ligne `IN1_L/IN1_R`, sorties `LOL/LOR` et `HPL/HPR`, MCLK 12.288 MHz, ADC/DAC 48 kHz sans PLL. CS42448 et PCM5100A ne sont plus des dependances applicatives.
+
 Autorite d'entree hard-RT (IRQ DMA):
 - `HAL_SAI_RxHalfCpltCallback()` et `HAL_SAI_RxCpltCallback()` dans `Src/Audio/audio.c`.
 - Les deux callbacks appellent `process_half(0|1)`.
@@ -86,11 +90,11 @@ Autorite de rendu runtime applicatif:
 
 Autorite de mixage final:
 - `mixer_process()` dans `Src/Audio/mixer.c`.
-- Possede la sommation tracks -> MAIN/CUE/SEND/returns et les taps post-insert/post-fader/post-send.
+- Possede la sommation tracks -> MAIN/SEND/returns et les taps post-insert/post-fader/post-send.
 
 Autorite de monitoring final:
 - `audio_io_pack_ramped()` ajoute le metronome MAIN monitor-only apres `mixer_process()`, `fx_master_macro_process_block()` et `sd_preview_render_main()`, juste avant conversion TX.
-- Cette injection ne touche pas CUE et ne repasse pas par tracks, sends, Master/FX, Looper, Audio Rec ni preview/cache SD.
+- Cette injection ne repasse pas par tracks, sends, Master/FX, Looper, Audio Rec ni preview/cache SD.
 - Le metronome bypass le gain de sortie final deja applique au MAIN musical; son gain propre reste borne par `METRO` et `METRO_MAX_GAIN`.
 
 Autorite de flux bloc-a-bloc:
@@ -175,7 +179,7 @@ Contrats timing sortants:
   - Role: etat filter/EQ/VCA par track.
   - Contrat `mixer_set_track_filter_type`: idempotent sur type identique (no-op) et reconfiguration sans reset DSP brutal, pour eviter les transitoires audibles sur re-apply redondant.
 - Lors d'un rebind logique->lane, la migration du state lane-bound (`g_tracks` + `g_track_filters`) doit etre faite explicitement avant re-apply des params autoritatifs; sinon le state FILTER/VCA reste attache a l'ancienne lane.
-- Les lanes mixer 0..2 restent reservees aux entrees Input proto; une track moteur ne doit pas y stocker son state lane-bound, sinon un scroll CFG passant par `Input1..3` peut reinitialiser la lane d'une autre track.
+- La lane mixer 0 reste reservee a l'entree ligne `Input1`; les tracks moteur prennent les lanes dynamiques restantes.
 - Les changements structurels locaux utilisent le rebind cible d'une seule lane logique; les lanes des autres tracks restent no-op et ne sont plus reset/recopiees.
 - Apres un rebind local neuf, `mixer_snap_track_runtime_state()` aligne uniquement la lane cible sur les targets reappliquees (`gain/pan/sends`, cutoff/resonance/EQ) pour ne pas entendre les defaults internes du mixer avant la prochaine rampe.
 - Apres copie d'un `g_track_filters` vers une nouvelle lane, les instances DSP internes qui portent des pointeurs vers leur stockage local (notamment `EQ3` CMSIS stereo/mono) doivent etre rebindees vers le stockage de la lane destination avant tout traitement audio.
@@ -191,11 +195,11 @@ Contrats timing sortants:
   - Ecriture/Lecture: calcule localement a chaque bloc par `mixer_build_lane_plan`.
   - Role: autorite locale mono/stereo par lane, sans nouveau param UI ni autorite globale parallele.
   - Discipline: une lane mono-native ne reste mono que si tous les blocs actifs de la lane ont une variante mono reelle; sinon la lane repasse localement sur le fallback stereo de reference.
-- buffers bus statiques dans `mixer_process`: `bus_main_*`, `bus_cue_*`, `send_*`, `reverb_return_*`
+- buffers bus statiques dans `mixer_process`: `bus_main_*`, `send_*`, `reverb_return_*`
   - Role: accumulation et rendu final du bloc.
 
-Possession du routage main/cue/send:
-- Oui, c'est porte dans `mixer.c` (routes track, sends, returns, copie vers `tracks[0]` et `tracks[1]`).
+Possession du routage MAIN/send:
+- Oui, c'est porte dans `mixer.c` (route MAIN track, sends, returns, copie vers `tracks[0]`).
 
 - Oui, implementee directement dans Z1 (`brick6_audio_runtime.c` + `mixer.c`) comme appels de service synchrones bloc.
 
@@ -214,8 +218,8 @@ Flux nominal prouve par code:
 
 3) Unpack / conversion
 - `audio_process_block_int32` -> `audio_io_unpack`:
-  - int24 TDM slots (0/1,2/3,4/5) -> `tracks[0..2].L/R` float.
-  - lane 3 (interne) est explicitement zeroee.
+  - int24 stereo slots 0/1 -> `tracks[0].L/R` float.
+  - lanes 1..3 sont explicitement zeroees a cette frontiere.
 
 4) Collecte des events/sources
 - Dans `brick6_audio_runtime_dsp`:
@@ -231,13 +235,13 @@ Flux nominal prouve par code:
 6) Mixage bus / sends / master
 - `mixer_process`:
   - calcule un `lane_plan` local par lane (`source mono-native`, `source stereo`, `promotion stereo requise`, `fallback stereo`)
-  - per-track stereo: inserts -> filter/EQ/VCA -> gains/pan -> sends -> route MAIN/CUE
-  - per-track mono-native: filtre biquad mono ou EQ3 mono -> inserts mono-compatibles -> VCA+gain dans la boucle commune -> projection vers `L/R` seulement au point utile pour taps, sends, routing MAIN/CUE et accumulation bus
+  - per-track stereo: inserts -> filter/EQ/VCA -> gains/pan -> sends -> route MAIN
+  - per-track mono-native: filtre biquad mono ou EQ3 mono -> inserts mono-compatibles -> VCA+gain dans la boucle commune -> projection vers `L/R` seulement au point utile pour taps, sends, routing MAIN et accumulation bus
   - `EQ3` mono est un bloc mono reel pris directement par le `lane_plan`; une lane mono-native avec `EQ3` actif ne doit plus etre promue stereo pour appeler `EQ3` stereo avec `L/R` dupliques
   - la projection `mono -> L/R` reste tardive et centralisee: taps `POST_INSERT`, boucle commune `VCA+gain+pan`, puis consommation `POST_FADER`, sends et bus
   - le chemin stereo reste la reference fonctionnelle et ne met plus a jour les etats mono auxiliaires (`biquad_mono`, `eq3_mono`) quand la lane execute deja en stereo
   - returns reverb/send FX
-  - ecrit resultat dans `tracks[0]` (MAIN) et `tracks[1]` (CUE)
+  - ecrit resultat dans `tracks[0]` (MAIN)
 
 - post-mix: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]`, puis preview SD.
 - La preview SD est un chemin d'audition UI temporaire: `sd_preview_render_main()` lit `g_sd_preview_ring` place en `AUDIO_COLD_SDRAM`; le cout SDRAM en IRQ n'existe que pendant une preview active et ne concerne pas le playback principal ni le streaming Sampler.
@@ -245,9 +249,6 @@ Flux nominal prouve par code:
 8) Pack / sortie
 - `audio_process_block_int32` -> `audio_io_pack_ramped`:
   - MAIN -> slots TX 0/1
-  - CUE -> slots TX 2/3
-  - copie MAIN -> slots TX 4/5
-  - slots 6/7 a zero
 - `process_half` nettoie D-cache TX puis DMA consomme.
 
 ## 7. Contraintes RT/CPU/memoire
@@ -266,7 +267,7 @@ Contraintes CPU/worst-case:
 - Decoupe en sous-segments peut multiplier les appels `audio_process_block_int32` par half selon densite d'evenements seq.
 - Sends/reverb et inserts sont conditionnels mais dans le chemin IRQ.
 - Aucun calcul VU/peak meter produit n'est conserve dans le chemin IRQ (`mixer_process` ni `audio_io_pack_ramped`).
-- Le profiler `cpu_load` historique entoure l'IRQ audio avec `DWT->CYCCNT`. Les IRQ audio SAI2/DMA1 Stream3/4 sont placees a priorite 1 et USB Host OTG_HS a 7 afin que l'audio reste prioritaire.
+- Le profiler `cpu_load` historique entoure l'IRQ audio avec `DWT->CYCCNT`. La cible `.ioc` place les IRQ audio SAI1/DMA1 Stream3/4 a priorite 1 afin que l'audio reste prioritaire.
 
 Memoire:
 - Scratch bus dans `mixer_process` en statique fonction.
@@ -305,7 +306,7 @@ Granular / fx_pool:
 - Les blocs track-level mono reels autorises dans ce corridor sont actuellement biquad mono, `EQ3` mono, `VCA` et `gain`; l'ancien insert track `FX_SAT` lie a `COLORS/CRUNCH` n'est plus active par la policy boot produit.
 - L'ordre DSP mono aligne le chemin stereo de reference: filtre/EQ puis inserts, puis `VCA+gain`, puis projection tardive `mono -> L/R`.
 - Un bloc mono ne doit jamais appeler un traitement stereo avec `L/R` identiques pour simuler du mono.
-- La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
+- La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN` et accumulation bus.
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`. Depuis le retrait runtime RAM, ces comportements ne sont plus contractuels pour RAM; Stream garde le flux Classic provisoire.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` signifie STREAM enregistre + pages initiales queuees, puis chargees hors audio par le `sample_stream_manager` via `sample_cache_service()`.
 - Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = SAMPLE_PAGE_MIN_READY_PAGES`, soit 16 pages de 512 frames avec la configuration actuelle, donc 8192 frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM pour les consommateurs Classic encore streamables (Stream), meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient le span forward 8192 calcule par le helper commun et le span reverse 8192 calcule depuis la frame tail; en reverse, un depart non aligne peut demander 17 pages physiques pour couvrir 8192 frames utiles.
@@ -499,10 +500,10 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `audio_xfade` reste le seam neutre de courbe/smoothing utilise par l'ecoute `Sampler/Looper`; aucun appel audio runtime a l'ancien backend n'est conserve.
 - Le chemin Looper dans `mixer_process()` garde ROUT et sortie separes: ROUT alimente seulement la capture REC, tandis que le playback Looper est rendu sur la lane Looper puis retenu hors bus live normal.
 - `PARAM_LOOPER_XFADE` agit sur le bus final apres accumulation live/sends/returns et avant copie vers `tracks[0]` / `tracks[1]`: `0%` conserve le bus live MAIN, `100%` conserve seulement le bus playback Looper disponible sur MAIN, et les valeurs intermediaires font un crossfade live/playback.
-- CUE n'est traite par XFade que si le playback Looper est effectivement route vers CUE; sinon le bus CUE live reste hors cout et hors attenuation XFade.
+- Aucun bus CUE physique n'est traite par XFade dans la variante low-cost.
 - Si aucun playback Looper ne sort et que `XFade > 0`, la cible playback MAIN est le silence: le live MAIN est attenue selon la meme courbe. Si `XFade=0`, aucun blend n'est applique.
 - Le cout idle reste borne: avec `XFade=0`, les buffers bus Looper ne sont pas nettoyes, la copie playback Looper vers le bus XFADE est sautee, et `audio_xfade_smooth_next()` n'est appele que si la cible ou le smoothing courant peut encore modifier la sortie.
-- Quand `XFade>0`, la lane playback Looper est accumulee directement dans les bus XFade MAIN/CUE utiles pendant le passage mixer; il n'existe pas de cache intermediaire par track Looper a nettoyer/copier avant le blend final.
+- Quand `XFade>0`, la lane playback Looper est accumulee directement dans le bus XFade MAIN utile pendant le passage mixer; il n'existe pas de cache intermediaire par track Looper a nettoyer/copier avant le blend final.
 - Les etats stables ont des fast paths: `100%` stable remplace/mute par `memcpy`/`memset`, et les valeurs intermediaires stables calculent les gains une seule fois par bloc.
 - Les diagnostics temporaires Looper RAW ne sont plus appeles depuis l'IRQ audio ni depuis les transitions writer/UI; les compteurs CPU/perf existants restent conserves.
 - Le recorder legacy dormant `live_recorder` / `recorder_transport` est retire avec son buffer SDRAM_RECORDER; le record actif reste uniquement Looper RAW via `multi_record_writer`.

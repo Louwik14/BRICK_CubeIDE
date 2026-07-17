@@ -6,12 +6,11 @@
 
 #define UI_TRACK_COUNT 14U
 /*
- * Product model: 4 physical stereo input resources (Input1..Input4).
- * Devboard proto currently wires only 3 stereo inputs in the audio front-end.
- * Keep Input4 as a valid future physical resource at UI/runtime level.
+ * Low-cost product model: 1 physical stereo line input resource.
+ * A mono mic input exists at hardware level but is not exposed as line input.
  */
-#define UI_AUDIO_INPUT_RESOURCE_COUNT 4U
-#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT 3U
+#define UI_AUDIO_INPUT_RESOURCE_COUNT 1U
+#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT 1U
 
 typedef enum
 {

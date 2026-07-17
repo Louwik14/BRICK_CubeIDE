@@ -36,6 +36,12 @@ add_executable(${CMAKE_PROJECT_NAME})
 # CubeMX-generated base
 add_subdirectory(cmake/stm32cubemx)
 
+get_target_property(BRICK6_GENERATED_SOURCES ${CMAKE_PROJECT_NAME} SOURCES)
+if(BRICK6_GENERATED_SOURCES)
+    list(FILTER BRICK6_GENERATED_SOURCES EXCLUDE REGEX "Src[/\\\\]usb_otg\\.c$")
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOURCES "${BRICK6_GENERATED_SOURCES}")
+endif()
+
 # --------------------------------------------------------------------------
 # User sources
 # --------------------------------------------------------------------------
@@ -64,6 +70,42 @@ file(GLOB FATFS_SRC
 set(CMSIS_DSP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_f32.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c"
+)
+
+set(STM32CUBE_H7_FW_ROOT "$ENV{USERPROFILE}/STM32Cube/Repository/STM32Cube_FW_H7_V1.12.1"
+    CACHE PATH "STM32CubeH7 firmware package used as fallback for files pruned by CubeMX regeneration")
+
+function(brick6_cube_h7_source out_var relative_path)
+    set(local_path "${CMAKE_CURRENT_SOURCE_DIR}/${relative_path}")
+    set(package_path "${STM32CUBE_H7_FW_ROOT}/${relative_path}")
+    if(EXISTS "${local_path}")
+        set(${out_var} "${local_path}" PARENT_SCOPE)
+    elseif(EXISTS "${package_path}")
+        set(${out_var} "${package_path}" PARENT_SCOPE)
+    else()
+        message(FATAL_ERROR "Missing ${relative_path}; set STM32CUBE_H7_FW_ROOT or regenerate/copy the STM32CubeH7 package")
+    endif()
+endfunction()
+
+brick6_cube_h7_source(HAL_USB_HCD_SRC "Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hcd.c")
+brick6_cube_h7_source(HAL_SD_SRC "Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sd.c")
+brick6_cube_h7_source(HAL_SD_EX_SRC "Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sd_ex.c")
+brick6_cube_h7_source(HAL_SDMMC_LL_SRC "Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_sdmmc.c")
+brick6_cube_h7_source(HAL_DELAYBLOCK_LL_SRC "Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_delayblock.c")
+
+set(HAL_USB_DRIVER_SRC
+    "${HAL_USB_HCD_SRC}"
+)
+
+set(HAL_SD_DRIVER_SRC
+    "${HAL_SD_SRC}"
+    "${HAL_SD_EX_SRC}"
+    "${HAL_SDMMC_LL_SRC}"
+    "${HAL_DELAYBLOCK_LL_SRC}"
+)
+
+set(RESTORED_CUBEMX_COMPAT_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/sdmmc.c"
 )
 
 file(GLOB DRV_APP_SRC
@@ -284,6 +326,7 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
 # Exclusions
 # --------------------------------------------------------------------------
 set(EXCLUDED_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/usb_stack/usbh_conf.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/live_recorder.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/recorder_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_recorder_runtime.c"
@@ -295,6 +338,7 @@ set(ALL_USER_SOURCES
     ${USB_HOST_LIB_SRC}
     ${FATFS_SRC}
     ${CMSIS_DSP_SRC}
+    ${HAL_USB_DRIVER_SRC}
     ${DRV_APP_SRC}
     ${U8G2_SRC}
     ${SRC_APP_SRC}
@@ -350,6 +394,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
+    ${STM32CUBE_H7_FW_ROOT}/Drivers/STM32H7xx_HAL_Driver/Inc
+    ${STM32CUBE_H7_FW_ROOT}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude
@@ -367,6 +413,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     USE_PWR_LDO_SUPPLY
     USE_HAL_DRIVER
     STM32H743xx
+    HAL_HCD_MODULE_ENABLED
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

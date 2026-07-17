@@ -27,6 +27,7 @@
 #include "encoders_hw.h"
 #include "Core/rec_live_debug.h"
 #include "usbh_conf.h"
+#include "usb_role_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,20 +63,21 @@ void midi_usb_tx_deferred_service_from_isr(void);
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
 extern DMA_HandleTypeDef hdma_adc2;
-extern DMA_HandleTypeDef hdma_sai2_a;
-extern DMA_HandleTypeDef hdma_sai2_b;
-extern DMA_HandleTypeDef hdma_spi5_tx;
-extern SAI_HandleTypeDef hsai_BlockA2;
-extern SAI_HandleTypeDef hsai_BlockB2;
+extern DMA_HandleTypeDef hdma_sai1_a;
+extern DMA_HandleTypeDef hdma_sai1_b;
+extern SAI_HandleTypeDef hsai_BlockA1;
+extern SAI_HandleTypeDef hsai_BlockB1;
 extern SD_HandleTypeDef hsd1;
+extern DMA_HandleTypeDef hdma_spi5_tx;
+extern SPI_HandleTypeDef hspi5;
 extern DMA_HandleTypeDef hdma_tim2_ch4;
 extern TIM_HandleTypeDef htim5;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim12;
-extern SPI_HandleTypeDef hspi5;
+extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* USER CODE BEGIN EV */
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
-extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
+extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 
 /* USER CODE END EV */
 
@@ -226,6 +228,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles EXTI line4 interrupt.
+  */
+void EXTI4_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI4_IRQn 0 */
+
+  /* USER CODE END EXTI4_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(FUSB302_INT_N_Pin);
+  /* USER CODE BEGIN EXTI4_IRQn 1 */
+
+  /* USER CODE END EXTI4_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA1 stream0 global interrupt.
   */
 void DMA1_Stream0_IRQHandler(void)
@@ -275,7 +291,7 @@ void DMA1_Stream3_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream3_IRQn 0 */
 
   /* USER CODE END DMA1_Stream3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sai2_a);
+  HAL_DMA_IRQHandler(&hdma_sai1_a);
   /* USER CODE BEGIN DMA1_Stream3_IRQn 1 */
 
   /* USER CODE END DMA1_Stream3_IRQn 1 */
@@ -289,7 +305,7 @@ void DMA1_Stream4_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
 
   /* USER CODE END DMA1_Stream4_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sai2_b);
+  HAL_DMA_IRQHandler(&hdma_sai1_b);
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
 
   /* USER CODE END DMA1_Stream4_IRQn 1 */
@@ -388,18 +404,33 @@ void SPI5_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles SAI2 global interrupt.
+  * @brief This function handles SAI1 global interrupt.
   */
-void SAI2_IRQHandler(void)
+void SAI1_IRQHandler(void)
 {
-  /* USER CODE BEGIN SAI2_IRQn 0 */
+  /* USER CODE BEGIN SAI1_IRQn 0 */
 
-  /* USER CODE END SAI2_IRQn 0 */
-  HAL_SAI_IRQHandler(&hsai_BlockA2);
-  HAL_SAI_IRQHandler(&hsai_BlockB2);
-  /* USER CODE BEGIN SAI2_IRQn 1 */
+  /* USER CODE END SAI1_IRQn 0 */
+  HAL_SAI_IRQHandler(&hsai_BlockA1);
+  HAL_SAI_IRQHandler(&hsai_BlockB1);
+  /* USER CODE BEGIN SAI1_IRQn 1 */
 
-  /* USER CODE END SAI2_IRQn 1 */
+  /* USER CODE END SAI1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USB On The Go FS global interrupt.
+  */
+void OTG_FS_IRQHandler(void)
+{
+  /* USER CODE BEGIN OTG_FS_IRQn 0 */
+  usb_role_irq_dispatch();
+  return;
+  /* USER CODE END OTG_FS_IRQn 0 */
+  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
+  /* USER CODE BEGIN OTG_FS_IRQn 1 */
+
+  /* USER CODE END OTG_FS_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
@@ -410,14 +441,6 @@ void hardfault_c(uint32_t *sp)
   rec_live_debug_hardfault(sp);
 
   while (1);
-}void OTG_HS_IRQHandler(void)
-{
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
-}
-
-void OTG_FS_IRQHandler(void)
-{
-	  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
 }
 
 /* USER CODE END 1 */

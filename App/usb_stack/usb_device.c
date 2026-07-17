@@ -46,6 +46,7 @@ USBD_HandleTypeDef hUsbDeviceFS;
  * -- Insert your variables declaration here --
  */
 /* USER CODE BEGIN 0 */
+static uint8_t g_usb_device_started = 0U;
 
 /* USER CODE END 0 */
 
@@ -66,24 +67,56 @@ void MX_USB_DEVICE_Init(void)
 
   /* USER CODE END USB_DEVICE_Init_PreTreatment */
 
+  (void)usb_device_start();
+}
+
+uint8_t usb_device_start(void)
+{
+  if (g_usb_device_started != 0U)
+  {
+    return 1U;
+  }
+
   /* Init Device Library, add supported class and start the library. */
   if (USBD_Init(&hUsbDeviceFS, &FS_Desc, DEVICE_FS) != USBD_OK)
   {
-    Error_Handler();
+    return 0U;
   }
   if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_MIDI) != USBD_OK)
   {
-    Error_Handler();
+    (void)USBD_DeInit(&hUsbDeviceFS);
+    return 0U;
   }
   if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
   {
-    Error_Handler();
+    (void)USBD_DeInit(&hUsbDeviceFS);
+    return 0U;
   }
 
   /* USER CODE BEGIN USB_DEVICE_Init_PostTreatment */
   HAL_PWREx_EnableUSBVoltageDetector();
 
   /* USER CODE END USB_DEVICE_Init_PostTreatment */
+  g_usb_device_started = 1U;
+  return 1U;
+}
+
+uint8_t usb_device_stop(void)
+{
+  if (g_usb_device_started == 0U)
+  {
+    return 1U;
+  }
+
+  (void)USBD_Stop(&hUsbDeviceFS);
+  (void)USBD_DeInit(&hUsbDeviceFS);
+  g_usb_device_started = 0U;
+  return 1U;
+}
+
+uint8_t usb_device_is_started(void)
+{
+  return g_usb_device_started;
 }
 
 /**

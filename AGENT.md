@@ -143,15 +143,12 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 
 ### Layout logique actuel
 - 8 tracks musicales flexibles
-- 4 tracks orientées input
+- 1 track orientée entrée ligne; les autres tracks logiques restent disponibles pour les usages musicaux/runtime
 - 2 slots réservés master/global
 
 ### Families actuelles
 - `Off`
 - `Input1`
-- `Input2`
-- `Input3`
-- `Input4`
 - `Synth`
 - `Sampler`
 - `Drum`
@@ -159,7 +156,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 
 ### Types actuels
 
-#### Pour `InputX`
+#### Pour `Input1`
 - `Audio`
 - `Hybrid`
 
@@ -181,10 +178,8 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 
 ### Notes
 - `Off` = vraie désactivation runtime.
-- `Input1..4` = ressources physiques exclusives produit.
-- modèle produit : 4 entrées stéréo physiques visées (`Input1..4`)
-- proto actuelle : 3 entrées stéréo effectivement câblées côté front-end DSP
-- `Input4` reste une ressource valide côté modèle produit
+- `Input1` = unique ressource physique ligne stéréo produit.
+- La version low-cost vise 1 entrée ligne stéréo, 1 entrée micro mono prévue/présente matériellement mais non exposée comme deuxième entrée ligne, 1 sortie stéréo MAIN, aucun CUE physique, codec TLV320AIC3204, batterie + USB-C, boot validé par appui continu 3 secondes.
 - `Hybrid` = track audio + chemin note/midi amené à évoluer
 - une vraie family `MIDI` viendra plus tard
 - `runtime_target` est un shim legacy de compat, hors chemin opérationnel in-tree
@@ -330,7 +325,7 @@ toujours utiliser des tables explicites.
 
 ### Ressources exclusives
 - `Sampler/RAM` : paste direct (non exclusif)
-- `Input1..4` : priorité à un input libre, sinon move-on-paste
+- `Input1` : ressource exclusive; paste direct si libre, sinon move-on-paste
 - après move réussi, le clipboard reste chaînable
 
 ---

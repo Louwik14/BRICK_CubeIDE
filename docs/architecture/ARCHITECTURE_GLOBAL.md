@@ -223,3 +223,9 @@ Documents conserves pour tracabilite uniquement:
 - Z6 etend le seam Pattern/Kit: un Pattern porte une reference de slot Kit, tandis que la banque Kit `B6KT` reste l'autorite durable du contenu sonore complet.
 - Z5 expose ce lien dans le header principal (`Kit: nom`, dirty `*`, Pattern dessous) et le browser Kit lie le slot applique au pattern actif.
 - Set reste retire; Kit reste full-machine sonore, Patch reste separe.
+
+## Addendum 2026-07-17 - Variante produit low-cost
+
+- Le modele materiel produit devient: 1 entree ligne stereo (`Input1`), 1 entree micro mono prevue/presente materiellement mais non exposee comme deuxieme ligne, codec TLV320AIC3204, batterie + USB-C, boot valide par appui continu 3 secondes.
+- Z1 expose une seule sortie physique stereo MAIN; CUE physique, choix UI CUE/BOTH, buffers et packing TX CUE sont retires. Les bus internes necessaires a Master/FX, Sampler/Looper XFade, Audio Rec, preview SD, sends/returns, inserts et metronome MAIN restent conserves.
+- Z2 reserve uniquement la lane mixer fixe d'`Input1`; les tracks musicales restent logiques et ne sont pas reduites arbitrairement.

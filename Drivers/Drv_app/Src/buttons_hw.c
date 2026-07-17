@@ -91,7 +91,7 @@ static const uint8_t button_physical_to_logical[BTN_COUNT] = {
  */
 static inline void sr_pl_low(void)
 {
-    SR_CS_GPIO_Port->BSRR = ((uint32_t)SR_CS_Pin << 16U);
+    CS_SR_GPIO_Port->BSRR = ((uint32_t)CS_SR_Pin << 16U);
 }
 
 /**
@@ -106,7 +106,7 @@ static inline void sr_pl_low(void)
  */
 static inline void sr_pl_high(void)
 {
-    SR_CS_GPIO_Port->BSRR = SR_CS_Pin;
+    CS_SR_GPIO_Port->BSRR = CS_SR_Pin;
 }
 
 /**
@@ -121,7 +121,7 @@ static inline void sr_pl_high(void)
  */
 static inline void sr_sck_low(void)
 {
-    SR_SCK_GPIO_Port->BSRR = ((uint32_t)SR_SCK_Pin << 16U);
+    SCK_SR_GPIO_Port->BSRR = ((uint32_t)SCK_SR_Pin << 16U);
 }
 
 /**
@@ -136,7 +136,7 @@ static inline void sr_sck_low(void)
  */
 static inline void sr_sck_high(void)
 {
-    SR_SCK_GPIO_Port->BSRR = SR_SCK_Pin;
+    SCK_SR_GPIO_Port->BSRR = SCK_SR_Pin;
 }
 
 /**

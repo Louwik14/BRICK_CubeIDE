@@ -52,12 +52,18 @@ Autorite init systeme MCU/HAL:
   - `SystemClock_Config()`, `PeriphCommonClock_Config()`,
   - puis `MX_*_Init()`.
 
+Contrat materiel produit low-cost:
+- codec TLV320AIC3204, 1 entree ligne stereo, 1 entree micro mono prevue/presente materiellement mais non exposee comme deuxieme entree ligne dans cette passe;
+- 1 sortie stereo MAIN, aucun CUE physique;
+- alimentation batterie + USB-C;
+- boot produit valide par maintien du bouton pendant 3 secondes.
+
 Autorite init sous-systemes projet:
 - `brick6_app_init()` dans `Src/Core/brick6_app_init.c`.
 
 Autorite wiring global inter-zones:
 - `brick6_app_init()`:
-  - `audio_init(&hsai_BlockA2, &hsai_BlockB2)`
+  - `audio_init(&hsai_BlockA1, &hsai_BlockB1)` apres regeneration CubeMX SAI1
   - `audio_set_float_callback(brick6_audio_runtime_dsp)`
   - ordre d'init runtime (drum/sampler/Wave, puis param/seq/storage/undo/control/hall/etc.).
 - `brick6_audio_runtime_dsp()`:
@@ -72,7 +78,7 @@ Tasklets/timers periodiques observes:
 - TIM5 OC IRQ -> `HAL_TIM_OC_DelayElapsedCallback` -> `midi_clock_on_timer_tick()`.
 - `engine_tasklet_notify_frames()` (alimente depuis IRQ audio Z1) -> `engine_tasklet_poll()` en superloop.
 - `PendSV` -> `midi_usb_tx_deferred_service_from_isr()` pour lancer un premier flush TX USB MIDI hors superloop apres enqueue ISR.
-- `OTG_HS_IRQn` -> `HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS)` pour USB Host; priorite 7, sous SAI2/DMA audio a 1.
+- USB produit cible sur `USB_OTG_FS`; le role Host/Device USB-C sera arbitre plus tard via FUSB302, hors logique CubeMX actuelle.
 
 Seconde autorite concurrente:
 - Aucune seconde autorite concurrente complete pour la sequence boot/system init/superloop.
@@ -275,12 +281,11 @@ Z0 appelle principalement:
 - `usb_host_tasklet_poll_bounded(4)` reste disponible comme API mais n'est plus appele par la boucle principale: il etait redondant avec `MX_USB_HOST_Process()` et pouvait enchainer plusieurs `USBH_Process()` bloquants dans un meme tour (ex. 200 ms + 100 ms + transitions), aggravant le freeze UI sans borner le cout interne d'un appel.
 - `midi_host_poll_bounded(8)` borne le nombre de paquets USB-MIDI sortis de la queue host par passage; chaque message peut encore appeler le dispatch MIDI interne et le miroir `midi_send_raw(MIDI_DEST_USB, ...)`, donc le cout par message depend du chemin MIDI interne/USB device.
 - `midi_poll()` cote device traite au plus `MIDI_USB_MAX_BURST` paquets RX et tente au plus un flush TX batch jusqu'a `MIDI_USB_MAX_BURST` paquets; il est borne par compteur mais son cout par message depend du dispatch MIDI interne et de l'etat USB device.
-- Priorites IRQ actuelles observees dans le code:
-  - USB Host `OTG_HS_IRQn`: 7.
-  - USB Device `OTG_FS_IRQn`: 6.
-  - Audio SAI2 et DMA1 Stream3/4: 1.
+- Priorites IRQ ciblees dans `.ioc` pour la carte STM32H743ZITx:
+  - USB `OTG_FS_IRQn`.
+  - Audio SAI1 et DMA1 Stream3/4: 1.
   - TIM5/TIM12: 5, TIM7 encodeurs: 6, PendSV MIDI USB TX differe: 15.
-- Consequence audit historique: un clavier USB Host branche peut generer une activite HCD continue (bulk IN arme puis etats URB/NAK/not-ready selon le peripherique). L'ancien placement `OTG_HS_IRQn` a 0 pouvait preempter l'IRQ audio; le placement courant met SAI2/DMA a 1 et OTG_HS a 7.
+- Consequence audit historique: un clavier USB Host branche peut generer une activite HCD continue (bulk IN arme puis etats URB/NAK/not-ready selon le peripherique). L'audio SAI1/DMA reste prioritaire.
 - Contrat split seq mis a jour:
   - progression step interne en domaine audio bloc (deterministe sample),
   - progression step externe consommee en domaine audio bloc a partir de pulses MIDI pending,

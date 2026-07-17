@@ -29,6 +29,7 @@
 #include "midi.h"
 #include "main.h"
 #include "tim.h"
+#include "usb_device.h"
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
@@ -266,6 +267,9 @@ static inline bool usb_packet_is_realtime_clock_transport(const uint8_t packet[4
  * - init / main loop / tasklet selon le module.
  */
 static bool usb_device_ready(void) {
+  if (usb_device_is_started() == 0U) {
+    return false;
+  }
   return (USBD_MIDI_GetState(&hUsbDeviceFS) == MIDI_IDLE);
 }
 
