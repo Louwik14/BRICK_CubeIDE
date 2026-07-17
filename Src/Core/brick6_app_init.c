@@ -8,11 +8,11 @@
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "usb_host.h"
-#include "usb_device.h"
 #include "audio.h"
 #include "audio_float.h"
 #include "Board/board_audio.h"
+#include "Board/board_power.h"
+#include "Board/board_usb.h"
 #include "mixer.h"
 #include "param_store.h"
 #include "control_events.h"
@@ -87,7 +87,7 @@ void brick6_app_init(void)
 {
     SDRAM_Init();
 
-    MX_USB_DEVICE_Init();
+    board_usb_device_init();
     //MX_USB_HOST_Init();
 
     board_audio_codec_init();
@@ -154,7 +154,7 @@ void brick6_app_init(void)
 
     audio_start();
 
-    HAL_Delay(200);
+    board_power_delay_ms(200U);
 
     cpu_load_reset_peak();
 
