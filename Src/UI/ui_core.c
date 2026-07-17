@@ -651,6 +651,8 @@ void ui_core_service_track_selection_inputs(void)
     {
         g_ui_track_state.track_select_armed = 0U;
     }
+
+    hall_surface_refresh();
     ui_core_service_macro_overlay_inputs(shift_down, track_modifier_down);
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
