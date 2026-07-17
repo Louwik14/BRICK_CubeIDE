@@ -98,9 +98,11 @@ set(BRICK6_VARIANT_DRIVER_SOURCES "")
 if(BRICK6_VARIANT STREQUAL "premium")
     list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src"
     )
     list(APPEND BRICK6_VARIANT_DRIVER_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers/cs42448.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_product_premium.c"
     )
 endif()
 
@@ -375,6 +377,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Core
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI
