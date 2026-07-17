@@ -3,7 +3,7 @@
 ## 1. Perimetre
 
 Perimetre operationnel de zone (appartient a Z0):
-- `Src/main.c`
+- `Board/<Variant>/Generated/Src/main.c`
 - `Src/Core/brick6_app_init.c`
 - `Inc/Core/brick6_app_init.h`
 
@@ -14,9 +14,9 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/UI/display_flush_service.c`: service periodique display flush (16 ms) appele en superloop, hors continuation d'un flush DMA deja actif.
 - `Src/MIDI/midi.c`: callback IRQ TIM12 et callback TIM5 utilises par la cadence globale.
 - `Src/MIDI/midi.c` + `Src/MIDI/midi_host.c`: services MIDI device/host cadences hors IRQ.
-- `App/usb_stack/usb_host.c` + `App/usb_stack/usbh_conf.c` + `Src/MIDI/usbh_midi.c`: service USB Host CubeMX, IRQ HCD et classe MIDI host.
-- `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
-- `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
+- `Board/<Variant>/UsbStack/usb_host.c` + `Board/<Variant>/UsbStack/usbh_conf.c` + `Src/MIDI/usbh_midi.c`: service USB Host CubeMX, IRQ HCD et classe MIDI host.
+- `Board/<Variant>/Generated/Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
+- `Board/<Variant>/Generated/Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 - `Src/Core/brick6_app_init.c`: init et service cooperatif du `multi_record_writer` global, hors IRQ et sans client actif par defaut; le writer porte maintenant `LOOPER_RAW` et le backend `SAMPLE_WAV` utilise par Audio Rec.
 - `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
@@ -29,7 +29,8 @@ Sous-roles internes dans `brick6_app_init.c`:
 - Service loop applicative: aggregation des services hors IRQ audio.
 
 Dependances de Z0 sans appartenance:
-- HAL/CubeMX (`MX_*`, `HAL_*`, clocks, peripherals).
+- HAL/CubeMX (`MX_*`, `HAL_*`, clocks, peripherals) selectionne par `BRICK6_VARIANT`.
+- Interfaces Board (`Inc/Board/*`) et implementations `Board/Premium/*` / `Board/LowCost/*`.
 - Z1 audio (`audio_*`, `brick6_audio_runtime_*`, mixer/synth).
 - Z2/Z3/Z4/Z5/Z6 via appels d'init/service delegues.
 - USB host/device et MIDI host.
@@ -42,7 +43,8 @@ Exclusions explicites:
 ## 2. Autorite(s) de verite
 
 Autorite boot principal:
-- `main()` dans `Src/main.c` est le point d'entree unique observe.
+- `main()` dans `Board/<Variant>/Generated/Src/main.c` est le point d'entree unique observe.
+- `BRICK6_VARIANT=premium|lowcost` selectionne un seul arbre Generated, un seul startup et un seul linker.
 
 Autorite init systeme MCU/HAL:
 - Dans `main()`:
@@ -54,6 +56,7 @@ Autorite init systeme MCU/HAL:
 
 Autorite init sous-systemes projet:
 - `brick6_app_init()` dans `Src/Core/brick6_app_init.c`.
+- Les frontieres physiques audio, USB, power, controls, surface, LED et display passent par `Inc/Board/*`; la variante premium conserve CS42448/SAI2/TDM8, la variante low-cost apporte TLV320AIC3204/SAI1/I2S, FUSB302/role USB dynamique et POWER_HOLD.
 
 Autorite wiring global inter-zones:
 - `brick6_app_init()`:

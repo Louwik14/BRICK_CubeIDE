@@ -9,7 +9,8 @@ Perimetre operationnel de zone (appartient a Z1):
 
 Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_float.c` et `Inc/Audio/audio_float.h` : frontiere IRQ `int24 <-> float`, ownership des buffers track et callback DSP.
-- `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
+- `Src/Audio/audio_io.c` : preuve unpack/pack via `board_audio_unpack_input` / `board_audio_pack_output` et mapping slots par variante.
+- `Inc/Board/board_audio*.h`, `Board/Premium/Src/board_audio_premium.c`, `Board/LowCost/Src/board_audio_lowcost.c`: frontiere codec/SAI/DMA/format physique. Premium = CS42448 SAI2 TDM8 MAIN/CUE physique; low-cost = TLV320AIC3204 SAI1 I2S stereo, MAIN physique uniquement, CUE conserve en bus interne.
 - `Src/Audio/audio_io.c` repacke MAIN/CUE sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
 - `Src/Audio/metronome_runtime.c` + `Inc/Audio/metronome_runtime.h` : generateur metronome hard-RT RAM-only, declenche par event Z4, rendu MAIN monitor-only.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.

@@ -35,6 +35,7 @@ Elargissements necessaires (preuves de frontieres et contrats):
 - `Src/UI/ui_system_sync_internal.c` + `Src/UI/ui_system_sync_internal.h`: noyau interne de sync systeme track/config (module prive Z5).
 - `Src/App/Hall/hall_keyboard_bridge.c`: consommation de `ui_get_hall_mode` et suppression notes hall (`ui_core_hall_note_is_suppressed`).
 - `Src/Core/brick6_app_init.c`: ordre d'appel runtime (`ui_core_service_track_selection_inputs` puis `hall_keyboard_bridge_process`).
+- `Inc/Board/board_controls.h`, `Inc/Board/board_surface.h`, `Inc/Board/board_led_transport.h`, `Inc/Board/board_display_transport.h`: frontiere physique variante. La Board fournit des lectures normalisees, jamais des `UI_EVENT_*`.
 
 Dependances de Z5 sans appartenir a Z5:
 - Z2 `track_runtime` (track validity/bind pour mute, routing, labels).
@@ -44,6 +45,7 @@ Dependances de Z5 sans appartenir a Z5:
 - Keyboard runtime/hall engine pour comportements mode hall.
 - Z6 `wav_loader` / `sample_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
 - Z6 `multi_sample_index` / `multi_sample_import` / `multi_sample_pool` pour le browser Settings/Sampler/Multi: Z5 affiche les dossiers instrument, prepare/load les indexes et expose `CLEAR` page 3 pour supprimer uniquement les `.brickmulti` directs du dossier courant apres confirmation.
+- Board low-cost: les 16 STEP binaires sont exposes comme lanes `0..15` par `board_surface_snapshot()` avec pression 0/max. Le pipeline commun Hall/UI reste responsable des transitions press/release, modes, track select, mute/pattern et pression logique.
 
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
