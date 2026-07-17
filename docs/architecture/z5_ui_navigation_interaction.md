@@ -902,3 +902,15 @@ Points factuels:
 - Le Kit Browser garde la miniature 2x8 et marque le slot Kit actif par un prefixe `*` dans la liste. La navigation de selection ne change plus le slot Kit actif; seul Apply/Save modifie l'etat actif.
 - `PAGE2 APPLY` applique le Kit complet puis lie le slot selectionne au pattern actif uniquement si l'apply reussit. En echec (`BAD KIT`, `ASSET MISS`, `SD BUSY`, `ERROR`), le lien pattern -> Kit n'est pas change.
 - Delete du Kit actif depuis le browser invalide le Kit actif et clear au minimum le lien du pattern actif; les autres patterns seront refuses proprement au prochain chargement si leur lien pointe vers le slot supprime.
+
+## 35. Surface low-cost STEP / clavier Hall
+
+- `hall_surface` est l'adaptateur commun qui expose les 16 lanes logiques Hall a Z5: premium lit les Hall analogiques via `hall_engine`, low-cost lit les STEP binaires via `board_surface_snapshot()`.
+- La Board low-cost ne genere jamais `UI_EVENT_HALL_*` et n'appelle pas `ui_set_hall_mode`; elle fournit seulement `down` et `pressure` normalisee 0/max pour les lanes `0..15`.
+- `ui_core_service_track_selection_inputs` rafraichit `hall_surface` avant les chemins macro overlay, track-select et `ui_hall_input_service`; `ui_event_from_inputs` rafraichit la meme surface avant de produire la queue UI.
+- Les STEP low-cost alimentent donc le pipeline commun: press/release, `SHIFT` avant lane, `TRACK` avant lane, mute/pattern, selection de track, edition step et p-lock restent portes par Z5/Z4, pas par Board.
+- En low-cost, `SHIFT + STEP 1..8` mappe les workflows produit dans `ui_hall_mode_flow`: `KEYBOARD`, `SEQ`, `KIT`, `PATCH`, `SAMPLE`, `REC`, `ARP`, `MACRO`. Les modes/pages existants sont reutilises; les workflows browser restent proprietaires de leurs details.
+- `hall_keyboard_bridge` laisse le clavier Hall separe low-cost alimenter le runtime clavier meme en mode `SEQ`, sans utiliser la suppression de notes STEP reservee aux lanes UI.
+- `keyboard_input` conserve le chemin premium `kbd_input_mapper_process`; en low-cost, le clavier Hall separe joue chromatique en `KEYBOARD/ARP`, joue les 16 degres de la gamme courante en `SEQ` via le resolveur musical existant, et route le groupe Omni low-cost vers le dictionnaire d'accords commun.
+- Le rendu LED garde une seule autorite logique: `led_remap_led_for_hall()` projette les lanes Hall sur les LEDs Hall premium ou sur les LEDs STEP low-cost selon les capabilities produit.
+- `ui_macro_interaction` utilise les capabilities produit: Hall analogique premium garde hysteresis/amount continu, STEP low-cost devient une source binaire 0/1 pour scene/assign, sans pot Macro dedie ni interpolation de pression.
