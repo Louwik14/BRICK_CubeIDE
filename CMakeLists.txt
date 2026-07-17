@@ -9,6 +9,15 @@ project(${CMAKE_PROJECT_NAME} LANGUAGES C CXX ASM)
 
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
+set(BRICK6_VARIANT "premium" CACHE STRING "Firmware product variant")
+set_property(CACHE BRICK6_VARIANT PROPERTY STRINGS premium lowcost)
+
+if(NOT BRICK6_VARIANT STREQUAL "premium" AND NOT BRICK6_VARIANT STREQUAL "lowcost")
+    message(FATAL_ERROR "Unsupported BRICK6_VARIANT='${BRICK6_VARIANT}'. Expected 'premium' or 'lowcost'.")
+endif()
+
+message("BRICK6 variant: ${BRICK6_VARIANT}")
+
 # --------------------------------------------------------------------------
 # Standards
 # --------------------------------------------------------------------------
@@ -372,6 +381,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
 )
+
+if(BRICK6_VARIANT STREQUAL "premium")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_PREMIUM)
+endif()
 
 # --------------------------------------------------------------------------
 # Compile options aligned with CubeIDE
