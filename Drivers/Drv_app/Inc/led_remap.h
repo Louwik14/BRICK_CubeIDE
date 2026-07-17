@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "App/Hall/hall_engine.h"
+#include "Board/board_product.h"
 #include "buttons_ids.h"
 #include "led_ids.h"
 
@@ -103,6 +104,12 @@ static inline led_id_t led_remap_led_for_hall(uint8_t hall)
     if (hall >= HALL_KEY_COUNT)
     {
         return LED_COUNT_TOTAL;
+    }
+
+    const board_product_capabilities_t *caps = board_product_capabilities();
+    if ((caps != 0) && (caps->has_step_binary_lanes != 0U))
+    {
+        return (led_id_t)((uint32_t)LED_STEP_1 + (uint32_t)hall);
     }
 
     return g_led_remap_led_for_hall[hall];
