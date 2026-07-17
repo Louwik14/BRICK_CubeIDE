@@ -14,7 +14,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_param_iface.h"
-#include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_surface.h"
 #include "param_registry.h"
 #include "Storage/undo_v2.h"
 
@@ -338,7 +338,7 @@ void seq_edit_step_hold_update(void)
             continue;
         }
 
-        if (hall_engine_is_pressed(hall) == 0U)
+        if (hall_surface_is_pressed(hall) == 0U)
         {
             const uint32_t held_ticks = now_tick - g_seq_hold_state.press_tick[hall];
             if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)

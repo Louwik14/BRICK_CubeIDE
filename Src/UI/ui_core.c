@@ -52,7 +52,7 @@
 #include "ui_param.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
-#include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_surface.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
 
@@ -618,6 +618,7 @@ void ui_core_init(void)
         g_ui_track_state.mode_tap_ms[mode] = 0U;
     }
 
+    hall_surface_refresh();
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
         g_ui_track_state.hall_prev_pressed[hall] = 0U;
@@ -654,7 +655,7 @@ void ui_core_service_track_selection_inputs(void)
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
-        const uint8_t pressed = hall_engine_is_pressed(hall);
+        const uint8_t pressed = hall_surface_is_pressed(hall);
         const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
         ui_hall_input_service_handle_hall(hall,
                                           pressed,

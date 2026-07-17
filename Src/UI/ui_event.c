@@ -23,7 +23,7 @@
 
 #include "buttons.h"
 #include "ui_core.h"
-#include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_surface.h"
 
 #define UI_EVENT_Q_LEN 32U
 
@@ -87,9 +87,10 @@ void ui_event_from_inputs(void)
         }
     }
 
+    hall_surface_refresh();
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
-        const uint8_t pressed = hall_engine_is_pressed(hall);
+        const uint8_t pressed = hall_surface_is_pressed(hall);
         if ((g_ui_hall_prev_pressed[hall] == 0U) && (pressed != 0U))
         {
             ev.type = UI_EVENT_HALL_PRESS;
