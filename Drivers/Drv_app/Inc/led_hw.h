@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define LED_HW_COUNT 25U
+#include "Board/board_led_transport.h"
+
+#define LED_HW_COUNT BOARD_LED_TRANSPORT_COUNT
 
 void led_hw_init(void);
 void led_hw_send(const uint8_t *rgb, uint32_t count);
