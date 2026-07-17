@@ -458,7 +458,7 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -mfpu=fpv5-d16
     -mfloat-abi=hard
     -mthumb
-    -T${CMAKE_CURRENT_SOURCE_DIR}/STM32H743IITX_FLASH.ld
+    -T${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Generated/Linker/STM32H743IITX_FLASH.ld
     --specs=nosys.specs
     --specs=nano.specs
     -Wl,-Map=${CMAKE_PROJECT_NAME}.map

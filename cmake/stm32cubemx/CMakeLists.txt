@@ -9,9 +9,15 @@ set(MX_Defines_Syms
     $<$<CONFIG:Debug>:DEBUG>
 )
 
+if(BRICK6_VARIANT STREQUAL "premium")
+    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Premium/Generated")
+else()
+    message(FATAL_ERROR "BRICK6_VARIANT='${BRICK6_VARIANT}' has no CubeMX generated source set")
+endif()
+
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Inc
+    ${BRICK6_GENERATED_ROOT}/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32H7xx/Include
@@ -20,27 +26,27 @@ set(MX_Include_Dirs
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/main.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/gpio.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/adc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/dma.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/fmc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/i2c.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/sai.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/sdmmc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/spi.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/tim.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/usart.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/stm32h7xx_it.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/stm32h7xx_hal_msp.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/sysmem.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/syscalls.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../startup_stm32h743xx.s
+    ${BRICK6_GENERATED_ROOT}/Src/main.c
+    ${BRICK6_GENERATED_ROOT}/Src/gpio.c
+    ${BRICK6_GENERATED_ROOT}/Src/adc.c
+    ${BRICK6_GENERATED_ROOT}/Src/dma.c
+    ${BRICK6_GENERATED_ROOT}/Src/fmc.c
+    ${BRICK6_GENERATED_ROOT}/Src/i2c.c
+    ${BRICK6_GENERATED_ROOT}/Src/sai.c
+    ${BRICK6_GENERATED_ROOT}/Src/sdmmc.c
+    ${BRICK6_GENERATED_ROOT}/Src/spi.c
+    ${BRICK6_GENERATED_ROOT}/Src/tim.c
+    ${BRICK6_GENERATED_ROOT}/Src/usart.c
+    ${BRICK6_GENERATED_ROOT}/Src/stm32h7xx_it.c
+    ${BRICK6_GENERATED_ROOT}/Src/stm32h7xx_hal_msp.c
+    ${BRICK6_GENERATED_ROOT}/Src/sysmem.c
+    ${BRICK6_GENERATED_ROOT}/Src/syscalls.c
+    ${BRICK6_GENERATED_ROOT}/Startup/startup_stm32h743xx.s
 )
 
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/system_stm32h7xx.c
+    ${BRICK6_GENERATED_ROOT}/Src/system_stm32h7xx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c
