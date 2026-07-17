@@ -295,9 +295,6 @@ static void process_half(uint32_t half_index)
 /**
  * @brief Initialise la couche audio matérielle et les buffers DMA.
  *
- * @param hsai_tx Handle SAI TX.
- * @param hsai_rx Handle SAI RX.
- *
  * Contexte d'appel:
  * - Main loop (boot).
  */
@@ -306,9 +303,6 @@ static void process_half(uint32_t half_index)
  *
  * Rôle:
  * - Exécuter le traitement associé à audio_init.
- *
- * @param hsai_tx Paramètre d'entrée de l'API.
- * @param hsai_rx Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.

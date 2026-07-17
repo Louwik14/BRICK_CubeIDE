@@ -23,9 +23,6 @@
 /**
  * @brief Initialise la couche audio bas niveau.
  *
- * @param hsai_tx Handle SAI de transmission (DAC/TX).
- * @param hsai_rx Handle SAI de réception (ADC/RX).
- *
  * Contexte d'appel:
  * - Main loop uniquement (phase d'init).
  *
@@ -42,7 +39,7 @@ void audio_init(void);
  * - Main loop uniquement.
  *
  * Effets de bord:
- * - Lance HAL_SAI_Receive_DMA() puis HAL_SAI_Transmit_DMA().
+ * - Lance le streaming RX/TX via le backend Board.
  * - Active les interruptions half/full transfer via HAL.
  */
 void audio_start(void);

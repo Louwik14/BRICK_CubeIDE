@@ -885,3 +885,9 @@ Clarification START/END/LOOP live:
 - Chaque instance Wave/Braids porte un cache de sortie statique de 24 samples avec offset/count pending. Le rendu IRQ consomme d'abord les samples pending, genere un nouveau bloc complet seulement si necessaire, puis conserve le surplus pour le prochain appel.
 - Ce cache reste local a l'instance (`BRICK6_BRAIDS_MAX_INSTANCES`), sans allocation dynamique ni etat global partage. Reset/all-notes-off vident le cache; un changement de shape Wave l'invalide pour eviter de rejouer des samples de l'ancien moteur.
 - Les sous-segments audio Z1 peuvent rester non multiples de 24 a cause des evenements sample-accurate; l'adaptation bloc-fixe appartient au wrapper Wave, pas a `audio.c` ni aux sources Mutable/Braids.
+
+## Addendum 2026-07-17 - frontiere Board audio premium
+
+- `audio.c` conserve l'autorite IRQ, les buffers DMA, la maintenance cache, le decoupage en sous-segments et les callbacks HAL half/full; l'identification du handle RX et le demarrage SAI DMA passent par `board_audio_*`.
+- Le backend premium `Board/Premium/Src/board_audio_premium.c` porte CS42448, SAI2, demarrage RX/TX DMA et mapping physique TDM8.
+- `audio_io.c` garde le monitoring metronome MAIN et delegue le pack/unpack physique a `board_audio_unpack_input()` / `board_audio_pack_output()`. MAIN/CUE restent des bus mixer communs; CUE physique premium reste mappe sur les slots TX 2/3.

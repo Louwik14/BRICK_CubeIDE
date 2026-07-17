@@ -889,6 +889,14 @@ Points factuels:
 - Le header OLED principal affiche maintenant le tempo et la charge CPU sur la meme ligne haute. Le BPM conserve sa valeur et son autorite Z4, mais utilise la police compacte historique du Pattern; la CPU est seulement deplacee visuellement.
 - La ligne principale droite du header affiche le Kit actif sous la forme `Kit: nom`; `Kit: ---` signifie qu'aucun Kit actif propre n'est expose. Un `*` suffixe le nom quand le Kit actif est dirty.
 - Le Pattern actif reste visible sous le Kit en identifiant compact `A-01`, sans redevenir l'element principal de cette zone.
+
+## 34. Frontiere Board surface/transport premium
+
+- Les drivers communs conservent debounce boutons, quadrature encodeurs, logique Hall, generation `UI_EVENT_HALL_*`, framebuffer OLED et layers/framebuffer LED.
+- `Board/Premium/Src/board_controls_premium.c` porte uniquement le shift-register boutons, les pins encodeurs, le timer de polling rapide et le mux/ADC des pots.
+- `Board/Premium/Src/board_surface_premium.c` porte le mux Hall, ADC1/ADC2 DMA, timer de scan et snapshot normalise des 16 lanes; il ne genere aucun evenement UI.
+- `Board/Premium/Src/board_led_transport_premium.c` porte le transport WS2812 TIM2/DMA/busy/callback. Le mapping LED logique reste dans les drivers/app communs.
+- `Board/Premium/Src/board_display_transport_premium.c` porte reset OLED, SPI5 TX/TX DMA, CS/DC et identification callbacks. Le framebuffer, U8g2, stats et etat d'affichage restent communs.
 - Le Kit Browser garde la miniature 2x8 et marque le slot Kit actif par un prefixe `*` dans la liste. La navigation de selection ne change plus le slot Kit actif; seul Apply/Save modifie l'etat actif.
 - `PAGE2 APPLY` applique le Kit complet puis lie le slot selectionne au pattern actif uniquement si l'apply reussit. En echec (`BAD KIT`, `ASSET MISS`, `SD BUSY`, `ERROR`), le lien pattern -> Kit n'est pas change.
 - Delete du Kit actif depuis le browser invalide le Kit actif et clear au minimum le lien du pattern actif; les autres patterns seront refuses proprement au prochain chargement si leur lien pointe vers le slot supprime.

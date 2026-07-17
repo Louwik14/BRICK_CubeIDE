@@ -327,3 +327,9 @@ Z0 appelle principalement:
 - La superloop cadence `waveform_cache_service()` hors IRQ, apres les services sample/writer/refill/pattern prioritaires et avant la preview opportuniste.
 - Apres une finalisation Audio Rec, les services SD Rec Edit et `.wavecache` sont explicitement differes de deux passes pour laisser `TAKE_READY -> Rec Edit` initialiser le modele et produire le premier rendu sans FatFs.
 
+## Addendum 2026-07-17 - couche Board premium
+
+- La selection variante CMake compile les sources premium depuis `Board/Premium` et expose les contrats publics `Inc/Board/*`; aucune source low-cost n'est compilee dans cette phase.
+- `brick6_app_init.c` ne reference plus directement CS42448, SAI ni USB CubeMX pour l'init produit: le codec, le demarrage audio physique, USB Device et le delai power passent par `board_audio_*`, `board_usb_*` et `board_power_*`.
+- Le CubeMX premium et ses handles restent sous `Board/Premium/Generated`; les appels `MX_*_Init()` generes ne sont pas wrappers ni modifies.
+
