@@ -4363,6 +4363,14 @@ void ui_page_settings_open(uint8_t return_page_id)
     ui_page_set(UI_PAGE_SETTINGS);
 }
 
+void ui_page_settings_open_sample_browser(uint8_t return_page_id)
+{
+    g_ui_settings.return_page_id = return_page_id;
+    ui_page_set(UI_PAGE_SETTINGS);
+    g_ui_settings.depth = 0U;
+    ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE);
+}
+
 uint8_t ui_page_settings_is_open(void)
 {
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;

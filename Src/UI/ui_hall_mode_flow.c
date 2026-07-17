@@ -4,12 +4,14 @@
 
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "Board/board_product.h"
 #include "Param/param_registry.h"
 #include "Storage/kit_v1.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/patch_v1.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
+#include "pages/ui_page_settings.h"
 #include "ui_edit_context_sync.h"
 #include "ui_core_feedback.h"
 #include "ui_core_navigation_bridge.h"
@@ -51,6 +53,98 @@ typedef struct
 
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
 static ui_hall_mode_flow_kit_pending_t g_kit_pending;
+
+static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
+{
+    const board_product_capabilities_t *caps = board_product_capabilities();
+    return ((caps != 0)
+            && (caps->has_step_binary_lanes != 0U)
+            && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
+}
+
+static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
+                                            uint8_t target_page,
+                                            uint8_t is_double_tap)
+{
+    if (ui_macro_overlay_is_active() != 0U)
+    {
+        ui_macro_overlay_on_hall_mode_changed();
+    }
+    ui_set_hall_mode(target_mode);
+    ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
+}
+
+static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
+                                                           uint32_t now_ms,
+                                                           uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
+                                                           uint8_t hall_note_suppressed[HALL_KEY_COUNT])
+{
+    if ((ui_hall_mode_flow_has_lowcost_step_modes() == 0U) || (hall >= 8U))
+    {
+        return 0U;
+    }
+
+    hall_note_suppressed[hall] = 1U;
+    g_patch_pending.active = 0U;
+    g_kit_pending.active = 0U;
+
+    ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
+    uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;
+    switch (hall)
+    {
+        case 0U:
+            target_mode = UI_HALL_MODE_KEYBOARD;
+            target_page = UI_PAGE_TEMPLATE_KEYBOARD;
+            break;
+
+        case 1U:
+            target_mode = UI_HALL_MODE_SEQ;
+            target_page = UI_PAGE_TEMPLATE_SEQ;
+            break;
+
+        case 2U:
+            ui_page_kit_assign_open();
+            return 1U;
+
+        case 3U:
+            if (ui_macro_overlay_is_active() != 0U)
+            {
+                ui_macro_overlay_on_hall_mode_changed();
+            }
+            ui_set_hall_mode(UI_HALL_MODE_PATCH);
+            ui_page_patch_assign_open(ui_get_active_track(), UI_HALL_MODE_PATCH);
+            return 1U;
+
+        case 4U:
+            ui_page_settings_open_sample_browser(ui_page_get_id());
+            return 1U;
+
+        case 5U:
+            target_mode = UI_HALL_MODE_AUDIO_REC;
+            target_page = UI_PAGE_AUDIO_REC;
+            break;
+
+        case 6U:
+            target_mode = UI_HALL_MODE_ARP;
+            target_page = UI_PAGE_TEMPLATE_ARP;
+            break;
+
+        case 7U:
+            target_mode = UI_HALL_MODE_MACRO;
+            target_page = UI_PAGE_TEMPLATE_MACRO;
+            break;
+
+        default:
+            return 0U;
+    }
+
+    const uint32_t last_tap = mode_tap_ms[target_mode];
+    const uint8_t is_double_tap = ((last_tap != 0U)
+                                   && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+    mode_tap_ms[target_mode] = now_ms;
+    ui_hall_mode_flow_activate_mode(target_mode, target_page, is_double_tap);
+    return 1U;
+}
 
 static uint8_t ui_hall_mode_flow_capture_track_sound_copy(uint8_t source_track,
                                                           ui_hall_mode_flow_track_sound_copy_t *out_copy)
@@ -244,6 +338,11 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         return;
     }
 
+    if (ui_hall_mode_flow_handle_lowcost_shift_step(hall, now_ms, mode_tap_ms, hall_note_suppressed) != 0U)
+    {
+        return;
+    }
+
     if (hall == 0U)
     {
         hall_note_suppressed[hall] = 1U;
@@ -316,12 +415,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     const uint8_t is_double_tap = ((last_tap != 0U)
                                    && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
     mode_tap_ms[target_mode] = now_ms;
-    if (ui_macro_overlay_is_active() != 0U)
-    {
-        ui_macro_overlay_on_hall_mode_changed();
-    }
-    ui_set_hall_mode(target_mode);
-    ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
+    ui_hall_mode_flow_activate_mode(target_mode, target_page, is_double_tap);
 }
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
