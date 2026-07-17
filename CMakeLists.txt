@@ -51,8 +51,8 @@ add_subdirectory(cmake/stm32cubemx)
 
 # App / middleware
 file(GLOB APP_USB_STACK_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/usb_stack/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/usb_stack/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/*.cpp"
 )
 
 file(GLOB USB_DEVICE_LIB_SRC
@@ -377,7 +377,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
 # --------------------------------------------------------------------------
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App
-    ${CMAKE_CURRENT_SOURCE_DIR}/App/usb_stack
+    ${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc

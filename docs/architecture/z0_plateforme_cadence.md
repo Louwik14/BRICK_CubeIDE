@@ -330,6 +330,7 @@ Z0 appelle principalement:
 ## Addendum 2026-07-17 - couche Board premium
 
 - La selection variante CMake compile les sources premium depuis `Board/Premium` et expose les contrats publics `Inc/Board/*`; aucune source low-cost n'est compilee dans cette phase.
+- La pile USB Cube premium vit maintenant dans `Board/Premium/UsbStack`; le commun passe uniquement par `board_usb_*` pour l'init/process de role expose.
 - `brick6_app_init.c` ne reference plus directement CS42448, SAI ni USB CubeMX pour l'init produit: le codec, le demarrage audio physique, USB Device et le delai power passent par `board_audio_*`, `board_usb_*` et `board_power_*`.
 - Le CubeMX premium et ses handles restent sous `Board/Premium/Generated`; les appels `MX_*_Init()` generes ne sont pas wrappers ni modifies.
 
