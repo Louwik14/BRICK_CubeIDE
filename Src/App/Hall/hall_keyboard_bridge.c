@@ -1,6 +1,7 @@
 #include "App/Hall/hall_keyboard_bridge.h"
 
 #include "App/Hall/hall_engine.h"
+#include "Board/board_product.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "ui_core.h"
 
@@ -11,6 +12,10 @@ void hall_keyboard_bridge_init(void)
 
 void hall_keyboard_bridge_process(void)
 {
+    const board_product_capabilities_t *caps = board_product_capabilities();
+    const uint8_t has_separate_hall_keyboard =
+        ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
+
     for (uint8_t key = 0U; key < HALL_KEY_COUNT; ++key)
     {
         const uint8_t note_on_pending = hall_engine_consume_note_on(key);
@@ -21,7 +26,7 @@ void hall_keyboard_bridge_process(void)
             velocity = 100U;
         }
 
-        if (ui_core_hall_note_is_suppressed(key) != 0U)
+        if ((has_separate_hall_keyboard == 0U) && (ui_core_hall_note_is_suppressed(key) != 0U))
         {
             if (note_off_pending != 0U)
             {
@@ -30,7 +35,13 @@ void hall_keyboard_bridge_process(void)
             continue;
         }
 
-        if (ui_hall_allows_injection(ui_get_active_track(), ui_get_hall_mode()) == 0U)
+        uint8_t injection_allowed = ui_hall_allows_injection(ui_get_active_track(), ui_get_hall_mode());
+        if ((has_separate_hall_keyboard != 0U) && (ui_get_hall_mode() == UI_HALL_MODE_SEQ))
+        {
+            injection_allowed = 1U;
+        }
+
+        if (injection_allowed == 0U)
         {
             continue;
         }
