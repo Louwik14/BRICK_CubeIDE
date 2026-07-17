@@ -80,6 +80,18 @@ file(GLOB DRV_APP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.cpp"
 )
 
+set(BRICK6_VARIANT_DRIVER_INC_DIRS "")
+set(BRICK6_VARIANT_DRIVER_SOURCES "")
+
+if(BRICK6_VARIANT STREQUAL "premium")
+    list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers"
+    )
+    list(APPEND BRICK6_VARIANT_DRIVER_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers/cs42448.c"
+    )
+endif()
+
 file(GLOB U8G2_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2/*.c"
 )
@@ -305,6 +317,7 @@ set(ALL_USER_SOURCES
     ${FATFS_SRC}
     ${CMSIS_DSP_SRC}
     ${DRV_APP_SRC}
+    ${BRICK6_VARIANT_DRIVER_SOURCES}
     ${U8G2_SRC}
     ${SRC_APP_SRC}
     ${SRC_AUDIO_SRC}
@@ -359,6 +372,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
+    ${BRICK6_VARIANT_DRIVER_INC_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude
