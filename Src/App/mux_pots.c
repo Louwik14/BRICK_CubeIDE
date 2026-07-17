@@ -1,7 +1,6 @@
 #include "App/mux_pots.h"
 
-#include "adc.h"
-#include "main.h"
+#include "Board/board_controls.h"
 
 #define MUX_POTS_COUNT        6U
 #define MUX_POTS_SETTLE_MS    1U
@@ -23,12 +22,7 @@ static uint32_t settle_started_ms;
 
 static void mux_pots_select_channel(uint8_t channel)
 {
-  HAL_GPIO_WritePin(MUX_POT_S0_GPIO_Port, MUX_POT_S0_Pin,
-                    (channel & 0x01U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(MUX_POT_S1_GPIO_Port, MUX_POT_S1_Pin,
-                    (channel & 0x02U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(MUX_POT_S2_GPIO_Port, MUX_POT_S2_Pin,
-                    (channel & 0x04U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  board_controls_mux_pot_select(channel);
 }
 
 void mux_pots_init(void)
@@ -52,14 +46,14 @@ void mux_pots_scan(void)
   {
     case MUX_POTS_STATE_SELECT:
       mux_pots_select_channel(current_channel);
-      settle_started_ms = HAL_GetTick();
+      settle_started_ms = board_controls_millis();
       scan_state = MUX_POTS_STATE_SETTLE;
       break;
 
     case MUX_POTS_STATE_SETTLE:
-      if ((HAL_GetTick() - settle_started_ms) >= MUX_POTS_SETTLE_MS)
+      if ((board_controls_millis() - settle_started_ms) >= MUX_POTS_SETTLE_MS)
       {
-        if (HAL_ADC_Start(&hadc3) == HAL_OK)
+        if (board_controls_pot_adc_start() != 0U)
         {
           scan_state = MUX_POTS_STATE_DUMMY_CONVERT;
         }
@@ -67,12 +61,12 @@ void mux_pots_scan(void)
       break;
 
     case MUX_POTS_STATE_DUMMY_CONVERT:
-      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
+      if (board_controls_pot_adc_poll() != 0U)
       {
-        (void)HAL_ADC_GetValue(&hadc3);
-        (void)HAL_ADC_Stop(&hadc3);
+        (void)board_controls_pot_adc_read_raw();
+        board_controls_pot_adc_stop();
 
-        if (HAL_ADC_Start(&hadc3) == HAL_OK)
+        if (board_controls_pot_adc_start() != 0U)
         {
           scan_state = MUX_POTS_STATE_CONVERT;
         }
@@ -84,9 +78,9 @@ void mux_pots_scan(void)
       break;
 
     case MUX_POTS_STATE_CONVERT:
-      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
+      if (board_controls_pot_adc_poll() != 0U)
       {
-        uint16_t raw = (uint16_t)(65535U - HAL_ADC_GetValue(&hadc3));
+        uint16_t raw = (uint16_t)(65535U - board_controls_pot_adc_read_raw());
 
         if (((raw > pot_values[current_channel]) &&
              ((raw - pot_values[current_channel]) >= MUX_POTS_DEADBAND)) ||
@@ -98,7 +92,7 @@ void mux_pots_scan(void)
         }
 
         pot_valid_mask |= (uint8_t)(1U << current_channel);
-        (void)HAL_ADC_Stop(&hadc3);
+        board_controls_pot_adc_stop();
 
         current_channel++;
         if (current_channel >= MUX_POTS_COUNT)

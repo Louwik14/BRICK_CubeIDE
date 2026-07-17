@@ -20,7 +20,7 @@
  */
 
 #include "buttons_hw.h"
-#include "main.h"
+#include "Board/board_controls.h"
 
 #define BUTTONS_HW_REG_COUNT 3U
 #define BUTTONS_HW_BITS_PER_REG 8U
@@ -91,7 +91,7 @@ static const uint8_t button_physical_to_logical[BTN_COUNT] = {
  */
 static inline void sr_pl_low(void)
 {
-    SR_CS_GPIO_Port->BSRR = ((uint32_t)SR_CS_Pin << 16U);
+    board_controls_buttons_latch_low();
 }
 
 /**
@@ -106,7 +106,7 @@ static inline void sr_pl_low(void)
  */
 static inline void sr_pl_high(void)
 {
-    SR_CS_GPIO_Port->BSRR = SR_CS_Pin;
+    board_controls_buttons_latch_high();
 }
 
 /**
@@ -121,7 +121,7 @@ static inline void sr_pl_high(void)
  */
 static inline void sr_sck_low(void)
 {
-    SR_SCK_GPIO_Port->BSRR = ((uint32_t)SR_SCK_Pin << 16U);
+    board_controls_buttons_clock_low();
 }
 
 /**
@@ -136,7 +136,7 @@ static inline void sr_sck_low(void)
  */
 static inline void sr_sck_high(void)
 {
-    SR_SCK_GPIO_Port->BSRR = SR_SCK_Pin;
+    board_controls_buttons_clock_high();
 }
 
 /**
@@ -153,7 +153,7 @@ static inline void sr_sck_high(void)
  */
 static inline uint32_t sr_data_read(void)
 {
-    return (SR_DATA_GPIO_Port->IDR & SR_DATA_Pin) ? 1U : 0U;
+    return board_controls_buttons_data_read();
 }
 
 /* --------- Init --------- */
@@ -195,19 +195,19 @@ void buttons_hw_read(void)
 
     /* Latch parallel inputs */
     sr_pl_low();
-    __NOP();
+    board_controls_io_barrier();
     sr_pl_high();
 
     for(uint32_t i = 0; i < BUTTONS_HW_TOTAL_BITS; i++)
     {
         sr_sck_low();
-        __NOP();
+        board_controls_io_barrier();
 
         raw <<= 1;
         raw |= sr_data_read();
 
         sr_sck_high();
-        __NOP();
+        board_controls_io_barrier();
     }
 
     /* active LOW buttons */
