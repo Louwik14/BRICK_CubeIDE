@@ -75,9 +75,21 @@ set(CMSIS_DSP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c"
 )
 
-file(GLOB DRV_APP_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.cpp"
+set(DRV_APP_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons_hw.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_display.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders_hw.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_anim.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_framebuffer.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_hw.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_layer.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_rgb.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram_alloc.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/w9825g6kh.c"
 )
 
 set(BRICK6_VARIANT_DRIVER_INC_DIRS "")
