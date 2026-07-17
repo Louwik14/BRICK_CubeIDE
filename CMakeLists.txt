@@ -106,6 +106,7 @@ if(BRICK6_VARIANT STREQUAL "premium")
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_controls_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_power_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_product_premium.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_surface_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_usb_premium.c"
     )
 endif()

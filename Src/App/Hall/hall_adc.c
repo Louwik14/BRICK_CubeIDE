@@ -1,9 +1,8 @@
 #include "App/Hall/hall_adc.h"
 
-#include "adc.h"
-#include "main.h"
+#include "Board/board_surface.h"
 #include "Storage/memory_layout.h"
-#include "tim.h"
+#include "stm32h7xx_hal.h"
 
 #define HALL_MUX_COUNT         8U
 #define HALL_SAMPLE_FIFO_SIZE  512U
@@ -82,16 +81,7 @@ static const uint8_t hall_key_from_mux[HALL_KEY_COUNT] =
 
 static void hall_mux_select(uint8_t index)
 {
-    const uint8_t mux = index & 0x07U;
-
-    HAL_GPIO_WritePin(MUX_HALL_S0_GPIO_Port, MUX_HALL_S0_Pin,
-                      (mux & 0x01U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
-    HAL_GPIO_WritePin(MUX_HALL_S1_GPIO_Port, MUX_HALL_S1_Pin,
-                      (mux & 0x02U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
-    HAL_GPIO_WritePin(MUX_HALL_S2_GPIO_Port, MUX_HALL_S2_Pin,
-                      (mux & 0x04U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    board_surface_select_hall_mux(index);
 }
 
 static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
@@ -103,6 +93,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 
     hall_raw[key] = raw;
     hall_sample_count[key] = sample_count;
+    board_surface_update_lane(key, raw, sample_count);
 
     if (depth >= HALL_SAMPLE_FIFO_SIZE)
     {
@@ -182,17 +173,12 @@ void hall_adc_init(void)
         hall_sample_count[i] = 0U;
     }
 
-    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc1_dma, 1U) != HAL_OK)
+    if (board_surface_start_hall_adc_dma(&adc1_dma, &adc2_dma) == 0U)
     {
         return;
     }
 
-    if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&adc2_dma, 1U) != HAL_OK)
-    {
-        return;
-    }
-
-    if (HAL_TIM_Base_Start(&htim6) != HAL_OK)
+    if (board_surface_start_hall_scan_timer() == 0U)
     {
         return;
     }
@@ -279,11 +265,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         return;
     }
 
-    if (hadc->Instance == ADC1)
+    if (board_surface_is_hall_adc1_callback(hadc) != 0U)
     {
         adc1_ready = 1U;
     }
-    else if (hadc->Instance == ADC2)
+    else if (board_surface_is_hall_adc2_callback(hadc) != 0U)
     {
         adc2_ready = 1U;
     }
