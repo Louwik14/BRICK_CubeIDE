@@ -1,15 +1,12 @@
 #include "drv_display.h"
 
-#include "spi.h"
-#include "gpio.h"
+#include "Board/board_display_transport.h"
 #include "sdram.h"
 #include "Storage/memory_layout.h"
 #include "../../U8g2/u8g2.h"
 
 #include <string.h>
 #include <stdio.h>
-
-extern SPI_HandleTypeDef hspi5;
 
 /* ====================================================================== */
 /*                          FRAMEBUFFER                                   */
@@ -32,55 +29,27 @@ static uint8_t g_flush_page;
 /*                             SPI / GPIO                                 */
 /* ====================================================================== */
 
-static inline void cs_low(void)
-{
-    HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET);
-}
-
-static inline void cs_high(void)
-{
-    HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_SET);
-}
-
-static inline void dc_cmd(void)
-{
-    HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, GPIO_PIN_RESET);
-}
-
-static inline void dc_data(void)
-{
-    HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, GPIO_PIN_SET);
-}
-
 static void transport_begin(uint8_t is_data)
 {
-    if (is_data != 0U)
-    {
-        dc_data();
-    }
-    else
-    {
-        dc_cmd();
-    }
-    cs_low();
+    board_display_transport_begin(is_data);
 }
 
 static void transport_end(void)
 {
-    cs_high();
+    board_display_transport_end();
 }
 
 static uint8_t transport_tx(const uint8_t *data, size_t len, uint32_t timeout_ms)
 {
-    HAL_StatusTypeDef rc = HAL_SPI_Transmit(&hspi5, (uint8_t *)data, (uint16_t)len, timeout_ms);
-    if (rc == HAL_OK)
+    board_display_tx_status_t rc = board_display_transport_tx(data, len, timeout_ms);
+    if (rc == BOARD_DISPLAY_TX_OK)
     {
         g_display_stats.tx_ok++;
         return 1U;
     }
 
     g_display_stats.tx_err++;
-    if (rc == HAL_TIMEOUT)
+    if (rc == BOARD_DISPLAY_TX_TIMEOUT)
     {
         g_display_stats.timeout_err++;
     }
@@ -111,7 +80,7 @@ static uint8_t send_cmd_burst(const uint8_t *cmds, size_t len)
 
 static uint8_t send_data_burst_dma(const uint8_t *data, size_t len)
 {
-    HAL_StatusTypeDef rc;
+    board_display_tx_status_t rc;
 
     if ((data == NULL) || (len == 0U))
     {
@@ -126,8 +95,8 @@ static uint8_t send_data_burst_dma(const uint8_t *data, size_t len)
     transport_begin(1U);
     g_dma_payload_busy = 1U;
     g_dma_payload_done = 0U;
-    rc = HAL_SPI_Transmit_DMA(&hspi5, (uint8_t *)data, (uint16_t)len);
-    if (rc == HAL_OK)
+    rc = board_display_transport_tx_dma(data, len);
+    if (rc == BOARD_DISPLAY_TX_OK)
     {
         return 1U;
     }
@@ -335,10 +304,7 @@ void drv_display_init(void)
      */
 
     /* Reset OLED */
-    HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_RESET);
-    HAL_Delay(50);
-    HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_SET);
-    HAL_Delay(50);
+    board_display_transport_reset();
 
     if (ssd1309_init_sequence() == 0U)
     {
@@ -371,7 +337,7 @@ void drv_display_init(void)
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    if ((board_display_transport_is_tx_callback(hspi) != 0U) && (g_dma_payload_busy != 0U))
     {
         transport_end();
         g_dma_payload_busy = 0U;
@@ -382,7 +348,7 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
-    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    if ((board_display_transport_is_tx_callback(hspi) != 0U) && (g_dma_payload_busy != 0U))
     {
         transport_end();
         g_dma_payload_busy = 0U;
