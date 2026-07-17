@@ -1,6 +1,5 @@
 #pragma once
 
-#include "stm32h7xx_hal.h"
 #include <stdint.h>
 
 /**
@@ -34,8 +33,7 @@
  * - Mémorise les handles SAI dans l'état statique du module.
  * - Remet à zéro les buffers DMA RX/TX internes.
  */
-void audio_init(SAI_HandleTypeDef *hsai_tx,
-                SAI_HandleTypeDef *hsai_rx);
+void audio_init(void);
 
 /**
  * @brief Démarre les flux DMA audio RX puis TX.

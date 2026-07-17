@@ -25,6 +25,8 @@
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
+#include "Board/board_audio.h"
+#include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -32,17 +34,18 @@
 
 #include <string.h>
 #include <stdint.h>
+#include "stm32h7xx_hal.h"
 
 /* ============================================================
    CONFIG AUDIO : STM32H743 + CS42448 TDM8
    ============================================================ */
 
 /* TDM8 = 8 slots x 32-bit */
-#define AUDIO_TDM_SLOTS          8
+#define AUDIO_TDM_SLOTS          BOARD_AUDIO_TDM_SLOTS
 
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
-#define AUDIO_FRAMES_PER_HALF    64
+#define AUDIO_FRAMES_PER_HALF    BOARD_AUDIO_FRAMES_PER_HALF
 
 /* Double buffer DMA: [half0 | half1] */
 #define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)
@@ -75,8 +78,6 @@ static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
    SAI HANDLES
    ============================================================ */
 
-static SAI_HandleTypeDef *sai_tx = NULL;
-static SAI_HandleTypeDef *sai_rx = NULL;
 static audio_seq_diag_t g_audio_seq_diag;
 
 /* ============================================================
@@ -312,11 +313,9 @@ static void process_half(uint32_t half_index)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_init(SAI_HandleTypeDef *hsai_tx,
-                SAI_HandleTypeDef *hsai_rx)
+void audio_init(void)
 {
-    sai_tx = hsai_tx;
-    sai_rx = hsai_rx;
+    board_audio_init();
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
@@ -347,17 +346,7 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
  */
 void audio_start(void)
 {
-    if(!sai_tx || !sai_rx)
-        return;
-
-    /* Démarrage RX puis TX pour remplir d'abord les données entrantes. */
-    HAL_SAI_Receive_DMA(sai_rx,
-                        (uint8_t *)rx_buffer,
-                        AUDIO_BUFFER_WORDS);
-
-    HAL_SAI_Transmit_DMA(sai_tx,
-                         (uint8_t *)tx_buffer,
-                         AUDIO_BUFFER_WORDS);
+    (void)board_audio_start_stream(rx_buffer, tx_buffer, AUDIO_BUFFER_WORDS);
 }
 
 void audio_seq_diag_reset(void)
@@ -404,7 +393,7 @@ void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag)
  */
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
-    if(hsai == sai_rx)
+    if(board_audio_is_rx_callback_handle(hsai) != 0U)
     {
         cpu_load_irq_begin();
 
@@ -442,7 +431,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
  */
 void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
-    if(hsai == sai_rx)
+    if(board_audio_is_rx_callback_handle(hsai) != 0U)
     {
         cpu_load_irq_begin();
 

@@ -102,6 +102,7 @@ if(BRICK6_VARIANT STREQUAL "premium")
     )
     list(APPEND BRICK6_VARIANT_DRIVER_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers/cs42448.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_audio_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_product_premium.c"
     )
 endif()
