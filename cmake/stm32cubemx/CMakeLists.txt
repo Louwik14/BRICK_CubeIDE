@@ -11,6 +11,8 @@ set(MX_Defines_Syms
 
 if(BRICK6_VARIANT STREQUAL "premium")
     set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Premium/Generated")
+elseif(BRICK6_VARIANT STREQUAL "lowcost")
+    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/LowCost/Generated")
 else()
     message(FATAL_ERROR "BRICK6_VARIANT='${BRICK6_VARIANT}' has no CubeMX generated source set")
 endif()

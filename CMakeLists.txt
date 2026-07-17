@@ -50,10 +50,8 @@ add_subdirectory(cmake/stm32cubemx)
 # --------------------------------------------------------------------------
 
 # App / middleware
-file(GLOB APP_USB_STACK_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/*.cpp"
-)
+set(APP_USB_STACK_SRC "")
+set(BRICK6_VARIANT_USB_INC_DIR "")
 
 file(GLOB USB_DEVICE_LIB_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Src/*.c"
@@ -111,6 +109,41 @@ if(BRICK6_VARIANT STREQUAL "premium")
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_surface_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_usb_premium.c"
     )
+    set(APP_USB_STACK_SRC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usb_device.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usb_host.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbd_conf.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbd_desc.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbh_conf.c"
+    )
+    set(BRICK6_VARIANT_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack")
+elseif(BRICK6_VARIANT STREQUAL "lowcost")
+    list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack"
+    )
+    list(APPEND BRICK6_VARIANT_DRIVER_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_audio_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_controls_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_display_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_leds_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_power_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_product_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_surface_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_usb_lowcost.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/fusb302.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_role_manager.c"
+    )
+    set(APP_USB_STACK_SRC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_device.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_host.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbd_conf.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbd_desc.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbh_conf.c"
+    )
+    set(BRICK6_VARIANT_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
 endif()
 
 file(GLOB U8G2_SRC
@@ -377,7 +410,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
 # --------------------------------------------------------------------------
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App
-    ${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack
+    ${BRICK6_VARIANT_USB_INC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc
@@ -420,6 +453,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 if(BRICK6_VARIANT STREQUAL "premium")
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_PREMIUM)
+elseif(BRICK6_VARIANT STREQUAL "lowcost")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_LOWCOST)
 endif()
 
 # --------------------------------------------------------------------------
@@ -494,7 +529,7 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -mfpu=fpv5-d16
     -mfloat-abi=hard
     -mthumb
-    -T${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Generated/Linker/STM32H743IITX_FLASH.ld
+    -T${CMAKE_CURRENT_SOURCE_DIR}/Board/$<IF:$<STREQUAL:${BRICK6_VARIANT},premium>,Premium,LowCost>/Generated/Linker/STM32H743IITX_FLASH.ld
     --specs=nosys.specs
     --specs=nano.specs
     -Wl,-Map=${CMAKE_PROJECT_NAME}.map
