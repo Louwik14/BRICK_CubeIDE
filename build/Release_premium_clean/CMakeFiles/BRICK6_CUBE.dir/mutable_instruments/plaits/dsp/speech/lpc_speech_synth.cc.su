@@ -1,0 +1,3 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:43:6:void plaits::LPCSpeechSynth::Init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:56:6:void plaits::LPCSpeechSynth::Render(float, float, float*, float*, size_t)	88	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:132:6:void plaits::LPCSpeechSynth::PlayFrame(const Frame&, const Frame&, float)	0	static

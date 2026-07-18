@@ -892,3 +892,11 @@ Clarification START/END/LOOP live:
 - `audio.c` conserve l'autorite IRQ, les buffers DMA, la maintenance cache, le decoupage en sous-segments et les callbacks HAL half/full; l'identification du handle RX et le demarrage SAI DMA passent par `board_audio_*`.
 - Le backend premium `Board/Premium/Src/board_audio_premium.c` porte CS42448, SAI2, demarrage RX/TX DMA et mapping physique TDM8.
 - `audio_io.c` garde le monitoring metronome MAIN et delegue le pack/unpack physique a `board_audio_unpack_input()` / `board_audio_pack_output()`. MAIN/CUE restent des bus mixer communs; CUE physique premium reste mappe sur les slots TX 2/3.
+
+## Addendum 2026-07-17 - lot 4B low-cost ressources audio
+
+- La variante low-cost compile avec `UI_AUDIO_INPUT_RESOURCE_COUNT=1` et `UI_AUDIO_INPUT_PROTO_WIRED_COUNT=1`: seule la ressource logique `Input1` reste exposable/routable comme entree physique produit.
+- Le backend low-cost conserve le flux TLV320AIC3204 SAI1 I2S stereo: slots RX 0/1 -> `Input1` L/R, slots TX 0/1 <- MAIN L/R. Le codec reste configure en 24-bit / 48 kHz, STM32 maitre MCLK/BCLK/FS, TLV esclave.
+- Les tracks d'entree inexistantes low-cost `Input2..4` ne sont plus activees par le bridge runtime audio et ne sont plus reservees par Z2; leurs buffers bloc sont zeroes par le backend board au lieu d'etre parcourus comme entrees physiques.
+- Low-cost compile `MIXER_HAS_CUE_BUS=0`: les buffers bloc CUE et Looper-CUE ne sont pas instancies, les accumulations CUE/XFade CUE sont compilees hors chemin IRQ, et `board_audio_pack_output()` ignore toute donnee CUE. Premium garde MAIN/CUE physique et bus CUE inchanges.
+- Gain mesure apres build Release: low-cost DTCMRAM 83584 B contre premium 84608 B, soit 1024 B de buffers CUE bloc retires dans Z1. Les buffers DMA low-cost restent reduits par `BOARD_AUDIO_TDM_SLOTS=2` contre TDM8 premium.

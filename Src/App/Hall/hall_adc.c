@@ -1,5 +1,6 @@
 #include "App/Hall/hall_adc.h"
 
+#include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
@@ -15,7 +16,7 @@
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
-static DMA_BUFFER volatile uint16_t adc1_dma;
+static DMA_BUFFER volatile uint16_t adc1_dma[2U];
 static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
@@ -71,14 +72,6 @@ static volatile uint8_t adc2_ready;
  * mux 14 -> hall 9
  * mux 15 -> hall 10
  */
-static const uint8_t hall_key_from_mux[HALL_KEY_COUNT] =
-{
-    5U,  6U,  7U,  4U,
-    0U,  3U,  1U,  2U,
-    13U, 14U, 15U, 12U,
-    8U,  11U, 9U,  10U
-};
-
 static void hall_mux_select(uint8_t index)
 {
     board_surface_select_hall_mux(index);
@@ -122,8 +115,9 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 
 static void hall_adc_process_pair(void)
 {
-    const uint16_t v1 = adc1_dma;
+    const uint16_t v1 = adc1_dma[0U];
     const uint16_t v2 = adc2_dma;
+    const uint16_t v3 = adc1_dma[1U];
 
     if (hall_discard_count != 0U)
     {
@@ -132,13 +126,22 @@ static void hall_adc_process_pair(void)
     }
 
     {
-        const uint8_t mux_a = hall_mux_index;
-        const uint8_t mux_b = (uint8_t)(mux_a + HALL_MUX_COUNT);
-        const uint8_t key_a = hall_key_from_mux[mux_a];
-        const uint8_t key_b = hall_key_from_mux[mux_b];
+        uint8_t key_a = 0U;
+        uint8_t key_b = 0U;
+        uint8_t key_c = 0U;
 
-        hall_adc_queue_sample(key_a, v1);
-        hall_adc_queue_sample(key_b, v2);
+        if (hall_keymap_key_for_mux_channel(0U, hall_mux_index, &key_a) != 0U)
+        {
+            hall_adc_queue_sample(key_a, v1);
+        }
+        if (hall_keymap_key_for_mux_channel(1U, hall_mux_index, &key_b) != 0U)
+        {
+            hall_adc_queue_sample(key_b, v2);
+        }
+        if (hall_keymap_key_for_mux_channel(2U, hall_mux_index, &key_c) != 0U)
+        {
+            hall_adc_queue_sample(key_c, v3);
+        }
 
         hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
         hall_mux_select(hall_mux_index);
@@ -156,7 +159,8 @@ void hall_adc_init(void)
     hall_mux_index = 0U;
     hall_discard_count = 6U;
 
-    adc1_dma = 0U;
+    adc1_dma[0U] = 0U;
+    adc1_dma[1U] = 0U;
     adc2_dma = 0U;
 
     hall_fifo_head = 0U;
@@ -173,7 +177,7 @@ void hall_adc_init(void)
         hall_sample_count[i] = 0U;
     }
 
-    if (board_surface_start_hall_adc_dma(&adc1_dma, &adc2_dma) == 0U)
+    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
     {
         return;
     }

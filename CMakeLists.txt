@@ -159,6 +159,7 @@ file(GLOB SRC_APP_SRC
 )
 
 list(APPEND SRC_APP_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_keymap.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_keyboard_bridge.c"
 )
 

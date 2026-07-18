@@ -58,6 +58,42 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     }
 }
 
+static uint8_t ui_track_catalog_input_family_index(ui_track_family_t family, uint8_t *out_index)
+{
+    uint8_t index = 0U;
+
+    if (out_index == 0)
+    {
+        return 0U;
+    }
+
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+            index = 0U;
+            break;
+        case UI_TRACK_FAMILY_INPUT2:
+            index = 1U;
+            break;
+        case UI_TRACK_FAMILY_INPUT3:
+            index = 2U;
+            break;
+        case UI_TRACK_FAMILY_INPUT4:
+            index = 3U;
+            break;
+        default:
+            return 0U;
+    }
+
+    if (index >= UI_AUDIO_INPUT_RESOURCE_COUNT)
+    {
+        return 0U;
+    }
+
+    *out_index = index;
+    return 1U;
+}
+
 static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
                                                  ui_track_family_t family,
                                                  ui_track_type_t type,
@@ -102,10 +138,8 @@ static uint8_t ui_track_catalog_count_sampler_clip_tracks(uint8_t track,
 
 bool ui_track_catalog_family_is_input(ui_track_family_t family)
 {
-    return (family == UI_TRACK_FAMILY_INPUT1)
-            || (family == UI_TRACK_FAMILY_INPUT2)
-            || (family == UI_TRACK_FAMILY_INPUT3)
-            || (family == UI_TRACK_FAMILY_INPUT4);
+    uint8_t index = 0U;
+    return (ui_track_catalog_input_family_index(family, &index) != 0U);
 }
 
 bool ui_track_catalog_family_is_engine(ui_track_family_t family)

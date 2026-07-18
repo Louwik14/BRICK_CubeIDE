@@ -19,6 +19,47 @@ static const board_encoder_pin_t g_encoder_pins[] = {
     {GPIOA, GPIO_PIN_2, GPIOA, GPIO_PIN_1},
 };
 
+static const button_id_t g_button_physical_to_logical[] = {
+    [0]  = BTN_TRANSPOSE_DOWN,
+    [1]  = BTN_TRANSPOSE_UP,
+    [2]  = BTN_PAGE_2,
+    [3]  = BTN_PAGE_1,
+    [4]  = BTN_SETTINGS,
+    [5]  = BTN_COPY,
+    [6]  = BTN_PASTE,
+    [7]  = BTN_SHIFT,
+    [8]  = BTN_UNUSED_5,
+    [9]  = BTN_PLAY,
+    [10] = BTN_REC,
+    [11] = BTN_PAGE_3,
+    [12] = BTN_PAGE_4,
+    [13] = BTN_UNUSED_6,
+    [14] = BTN_UNUSED_7,
+    [15] = BTN_UNUSED_8,
+    [16] = BTN_PARAM_7,
+    [17] = BTN_PARAM_8,
+    [18] = BTN_PARAM_4,
+    [19] = BTN_PARAM_3,
+    [20] = BTN_PARAM_2,
+    [21] = BTN_PARAM_1,
+    [22] = BTN_PARAM_5,
+    [23] = BTN_PARAM_6,
+};
+
+uint8_t board_controls_button_physical_count(void)
+{
+    return (uint8_t)(sizeof(g_button_physical_to_logical) / sizeof(g_button_physical_to_logical[0]));
+}
+
+button_id_t board_controls_button_logical_for_physical(uint8_t physical_idx)
+{
+    if (physical_idx >= board_controls_button_physical_count())
+    {
+        return BOARD_CONTROLS_BUTTON_INVALID;
+    }
+    return g_button_physical_to_logical[physical_idx];
+}
+
 void board_controls_buttons_latch_low(void) { SR_CS_GPIO_Port->BSRR = ((uint32_t)SR_CS_Pin << 16U); }
 void board_controls_buttons_latch_high(void) { SR_CS_GPIO_Port->BSRR = SR_CS_Pin; }
 void board_controls_buttons_clock_low(void) { SR_SCK_GPIO_Port->BSRR = ((uint32_t)SR_SCK_Pin << 16U); }
@@ -52,4 +93,3 @@ uint8_t board_controls_pot_adc_start(void) { return (HAL_ADC_Start(&hadc3) == HA
 uint8_t board_controls_pot_adc_poll(void) { return (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK) ? 1U : 0U; }
 uint16_t board_controls_pot_adc_read_raw(void) { return (uint16_t)HAL_ADC_GetValue(&hadc3); }
 void board_controls_pot_adc_stop(void) { (void)HAL_ADC_Stop(&hadc3); }
-

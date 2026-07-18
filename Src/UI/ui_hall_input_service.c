@@ -9,7 +9,7 @@
 #include "ui_hall_mode_flow.h"
 
 static uint8_t ui_hall_input_service_find_held_master_candidate(uint8_t hall,
-                                                                const uint8_t hall_prev_pressed[HALL_KEY_COUNT],
+                                                                const uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT],
                                                                 uint8_t *out_track)
 {
     if ((hall_prev_pressed == 0) || (out_track == 0))
@@ -51,10 +51,10 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t shift_down,
                                        uint8_t track_select_armed,
                                        uint8_t mute_active,
-                                       uint8_t hall_prev_pressed[HALL_KEY_COUNT],
+                                       uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT],
                                        uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                        uint32_t cfg_tap_ms[UI_TRACK_COUNT],
-                                       uint8_t hall_note_suppressed[HALL_KEY_COUNT],
+                                       uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT],
                                        ui_hall_input_service_set_active_track_fn set_active_track,
                                        ui_hall_input_service_feedback_fn feedback)
 {
@@ -114,7 +114,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    if ((hall < HALL_KEY_COUNT) && (hall < UI_TRACK_COUNT))
+    if ((hall < HALL_UI_LANE_COUNT) && (hall < UI_TRACK_COUNT))
     {
         uint8_t held_master_candidate = 0U;
         const uint8_t has_held_master_candidate =

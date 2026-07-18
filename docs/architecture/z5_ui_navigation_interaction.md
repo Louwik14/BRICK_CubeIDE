@@ -911,6 +911,29 @@ Points factuels:
 - Les STEP low-cost alimentent donc le pipeline commun: press/release, `SHIFT` avant lane, `TRACK` avant lane, mute/pattern, selection de track, edition step et p-lock restent portes par Z5/Z4, pas par Board.
 - En low-cost, `SHIFT + STEP 1..8` mappe les workflows produit dans `ui_hall_mode_flow`: `KEYBOARD`, `SEQ`, `KIT`, `PATCH`, `SAMPLE`, `REC`, `ARP`, `MACRO`. Les modes/pages existants sont reutilises; les workflows browser restent proprietaires de leurs details.
 - `hall_keyboard_bridge` laisse le clavier Hall separe low-cost alimenter le runtime clavier meme en mode `SEQ`, sans utiliser la suppression de notes STEP reservee aux lanes UI.
-- `keyboard_input` conserve le chemin premium `kbd_input_mapper_process`; en low-cost, le clavier Hall separe joue chromatique en `KEYBOARD/ARP`, joue les 16 degres de la gamme courante en `SEQ` via le resolveur musical existant, et route le groupe Omni low-cost vers le dictionnaire d'accords commun.
+- `keyboard_input` conserve le chemin premium `kbd_input_mapper_process`; en low-cost, le clavier Hall separe joue chromatique en `KEYBOARD/ARP`, joue les 14 degres blancs consecutifs de la gamme courante en `SEQ` via le resolveur musical existant, et route le groupe Omni low-cost vers le dictionnaire d'accords commun.
 - Le rendu LED garde une seule autorite logique: `led_remap_led_for_hall()` projette les lanes Hall sur les LEDs Hall premium ou sur les LEDs STEP low-cost selon les capabilities produit.
 - `ui_macro_interaction` utilise les capabilities produit: Hall analogique premium garde hysteresis/amount continu, STEP low-cost devient une source binaire 0/1 pour scene/assign, sans pot Macro dedie ni interpolation de pression.
+
+## 36. Mapping physique low-cost SR / clavier Hall
+
+- La variante low-cost expose le mapping SR physique dans `Board/LowCost/Src/board_controls_lowcost.c`: SR1 porte Plus/Minus/Paste/Copy/Rec/PlayStop/Shift/Track, SR2/SR3 portent les 16 STEP, SR4 porte Page1..4 et les quatre boutons push encodeur. Le driver SR ne code aucune fonction `SHIFT`: il retourne seulement des `button_id_t`.
+- Les STEP low-cost sont aussi reprojetes vers les 16 lanes Hall UI par `board_surface_snapshot()`, via les IDs `BTN_STEP_1..BTN_STEP_16`; debounce/pressed/released restent dans le driver commun boutons et les press/release Hall restent dans le pipeline Z5.
+- Le clavier Hall low-cost separe utilise une table autoritative `mux index + channel -> logical key ID` dans `hall_keymap`: MUX1/MUX2/MUX3 couvrent les 24 touches `B1..B14` et `N1..N10`. Les metadonnees de touche portent explicitement type blanche/noire, index blanc/noir, position chromatique et validite.
+- Z5 conserve 16 lanes UI (`HALL_UI_LANE_COUNT`) distinctes des 24 touches clavier (`HALL_KEY_COUNT`); le pipeline UI commun ne deduit jamais blanche/noire depuis le mux, le canal ADC ou l'ordre d'acquisition.
+- Les raccourcis serigraphies des touches noires low-cost sont portes par `keyboard_input`, pas par Board: en `KEYBOARD`, `SHIFT + N1..N10`; en `SEQ`, `N1..N10` sans `SHIFT`. Une touche noire consommee reste marquee jusqu'au release et ne produit ni `note-on` ni `note-off`.
+- Table raccourcis low-cost: `N1 Tone`, `N2 Env` (ensemble interne `COLORS`, libelle visuel `ENV`), `N3 Play`, `N4 Mod`, `N5 Mix`, `N6 Undo`, `N7 Redo`, `N8` sans action, `N9 Rec Config` via le meme chemin que `SHIFT + REC`, `N10 Settings`. Les actions reutilisent la navigation, les pages et l'undo existants.
+
+## Addendum 2026-07-17 - lot 4B ressources produit low-cost
+
+- La resolution de families track est maintenant bornee par les ressources compilees: low-cost ne propose plus `Input2`, `Input3` ni `Input4` dans les choix CFG; premium garde le catalogue complet.
+- La sync audio runtime low-cost active uniquement la track physique `Input1` pour les entrees audio. Les lanes d'entree 1/2 sont forcees inactives, et la lane interne moteur reste separee pour les tracks Synth/Sampler/Drum.
+- Les routes CUE/BOTH ne sont plus exposables en low-cost via les descripteurs route; premium conserve la grammaire de routing existante.
+
+## Addendum 2026-07-17 - LEDs physiques low-cost
+
+- Le framebuffer LED reste logique et conserve les IDs `LED_PARAM_1..8`, `LED_REC`, `LED_STEP_1..16` et `LED_SEQ_1..4`; le transport WS2812 low-cost envoie exactement 21 LEDs physiques.
+- Le remap logique -> physique low-cost est explicite: `LED_REC -> 0`, `LED_STEP_1..16 -> 1..16`, `LED_SEQ_1..4 -> 17..20`. Les LEDs PARAM sont explicitement non mappees en low-cost et ne consomment aucun slot WS2812.
+- La projection des 16 lanes Hall/STEP reste unique via `led_remap_led_for_hall()`: premium garde le remap physique Hall existant, low-cost projette directement les lanes `0..15` vers `LED_STEP_1..16`.
+- La LED REC reutilise uniquement l'etat REC existant de Z4 (`seq_runtime_rec_*`); aucune autorite REC LED separee n'est ajoutee.
+- Les quatre LEDs SEQ sont rendues par la logique commune `seq_led`: elles indiquent le nombre de pages actives, la page editee et, pendant le transport, l'ecart entre page editee et page de lecture. La Board ne porte que le transport physique.

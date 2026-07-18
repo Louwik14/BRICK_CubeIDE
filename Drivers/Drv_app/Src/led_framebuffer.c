@@ -23,7 +23,10 @@
 
 #include <string.h>
 
+#include "led_remap.h"
+
 static uint8_t led_fb_rgb[LED_FB_COUNT * 3U];
+static uint8_t led_hw_rgb[LED_HW_COUNT * 3U];
 
 /**
  * @brief Point d'entrée led_fb_init.
@@ -120,5 +123,20 @@ void led_fb_commit(void)
         return;
     }
 
-    led_hw_send(led_fb_rgb, LED_FB_COUNT);
+    memset(led_hw_rgb, 0, sizeof(led_hw_rgb));
+
+    for (uint32_t led = 0U; led < LED_FB_COUNT; ++led)
+    {
+        uint8_t physical_index = LED_REMAP_PHYSICAL_UNMAPPED;
+        if (led_remap_physical_index((led_id_t)led, &physical_index) == 0U)
+        {
+            continue;
+        }
+
+        led_hw_rgb[((uint32_t)physical_index * 3U) + 0U] = led_fb_rgb[(led * 3U) + 0U];
+        led_hw_rgb[((uint32_t)physical_index * 3U) + 1U] = led_fb_rgb[(led * 3U) + 1U];
+        led_hw_rgb[((uint32_t)physical_index * 3U) + 2U] = led_fb_rgb[(led * 3U) + 2U];
+    }
+
+    led_hw_send(led_hw_rgb, LED_HW_COUNT);
 }

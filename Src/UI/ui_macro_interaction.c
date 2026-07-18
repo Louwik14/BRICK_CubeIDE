@@ -31,7 +31,7 @@ typedef struct
 } ui_macro_interaction_state_t;
 
 static ui_macro_interaction_state_t g_ui_macro_interaction;
-static uint8_t g_hall_pressure_active[HALL_KEY_COUNT];
+static uint8_t g_hall_pressure_active[HALL_UI_LANE_COUNT];
 
 static float ui_macro_interaction_clampf(float value, float min_value, float max_value)
 {
@@ -72,7 +72,7 @@ static uint8_t hall_pressure_update(uint8_t hall)
     const uint16_t on_delta = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR + HALL_PRESSURE_RAW_NOISE_MARGIN);
     const uint16_t off_delta = (on_delta > HALL_PRESSURE_HYST) ? (uint16_t)(on_delta - HALL_PRESSURE_HYST) : 0U;
 
-    if (hall >= HALL_KEY_COUNT)
+    if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
@@ -118,7 +118,7 @@ static float hall_pressure_amount(uint8_t hall)
     float start = 0.0f;
     float amount = 0.0f;
 
-    if (hall >= HALL_KEY_COUNT)
+    if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0.0f;
     }
@@ -384,7 +384,7 @@ void ui_macro_interaction_reset(void)
         param_macro_release_scene_source(scene);
     }
 
-    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; ++hall)
+    for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; ++hall)
     {
         g_hall_pressure_active[hall] = 0U;
     }
@@ -401,7 +401,7 @@ void ui_macro_interaction_reset(void)
 
 void ui_macro_interaction_note_hall_press(uint8_t hall)
 {
-    if (hall >= HALL_KEY_COUNT)
+    if (hall >= HALL_UI_LANE_COUNT)
     {
         return;
     }
@@ -601,7 +601,7 @@ void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed)
 {
     (void)pressed;
 
-    if ((hall >= HALL_KEY_COUNT) || (ui_macro_interaction_is_switch_mode() == 0U))
+    if ((hall >= HALL_UI_LANE_COUNT) || (ui_macro_interaction_is_switch_mode() == 0U))
     {
         return;
     }

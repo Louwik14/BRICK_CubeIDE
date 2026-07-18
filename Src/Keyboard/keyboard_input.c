@@ -14,6 +14,7 @@
 
 #include "Keyboard/keyboard_input.h"
 
+#include "App/Hall/hall_keymap.h"
 #include "Board/board_product.h"
 #include "Keyboard/kbd_chords_dict.h"
 #include "Keyboard/kbd_input_mapper.h"
@@ -21,12 +22,20 @@
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/ui_keyboard_app.h"
+#include "Storage/undo_v2.h"
+#include "buttons.h"
 #include "ui_core.h"
+#include "ui_event.h"
+#include "ui_navigation.h"
+#include "ui_page_manager.h"
+#include "pages/ui_page_settings.h"
+#include "pages/ui_page_template_cfg.h"
 
-#define LOWCOST_KEY_COUNT 16U
+#define LOWCOST_KEY_COUNT HALL_KEY_COUNT
 
 static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_down[LOWCOST_KEY_COUNT];
+static uint8_t g_lowcost_key_consumed[LOWCOST_KEY_COUNT];
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
@@ -55,15 +64,22 @@ static uint8_t keyboard_input_scale_period(uint8_t scale)
 
 static uint8_t keyboard_input_lowcost_seq_note(uint8_t key)
 {
+    hall_key_metadata_t meta;
+    if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_WHITE))
+    {
+        return 0U;
+    }
+
     const uint8_t scale = keyboard_params_get_scale_index();
     const uint8_t period = keyboard_input_scale_period(scale);
-    const uint8_t degree = (period != 0U) ? (uint8_t)(key % period) : 0U;
-    const uint8_t octave = (period != 0U) ? (uint8_t)(key / period) : 0U;
+    const uint8_t white_zero = (uint8_t)(meta.white_index - 1U);
+    const uint8_t degree = (period != 0U) ? (uint8_t)(white_zero % period) : 0U;
+    const uint8_t octave = (period != 0U) ? (uint8_t)(white_zero / period) : 0U;
     int16_t note = (int16_t)(60U + (keyboard_params_get_root_index() % 12U));
 
     if (scale == (uint8_t)KBD_SCALE_CHROMATIC)
     {
-        note = (int16_t)(note + key);
+        note = (int16_t)(note + white_zero);
     }
     else
     {
@@ -82,9 +98,98 @@ static uint8_t keyboard_input_lowcost_seq_note(uint8_t key)
     return (uint8_t)note;
 }
 
+static void keyboard_input_lowcost_nav_button(button_id_t button)
+{
+    const ui_event_t ev = {
+        .type = UI_EVENT_BUTTON_PRESS,
+        .id = (uint8_t)button,
+        .value = 1
+    };
+    ui_navigation_handle_event(&ev);
+}
+
+static void keyboard_input_lowcost_trigger_black_shortcut(uint8_t black_index)
+{
+    switch (black_index)
+    {
+        case 1U:
+            keyboard_input_lowcost_nav_button(BTN_PARAM_2); /* Tone */
+            break;
+
+        case 2U:
+            keyboard_input_lowcost_nav_button(BTN_PARAM_1); /* Env, internal COLORS ensemble */
+            break;
+
+        case 3U:
+            keyboard_input_lowcost_nav_button(BTN_PARAM_5); /* Play */
+            break;
+
+        case 4U:
+            keyboard_input_lowcost_nav_button(BTN_PARAM_3); /* Mod */
+            break;
+
+        case 5U:
+            keyboard_input_lowcost_nav_button(BTN_PARAM_4); /* Mix */
+            break;
+
+        case 6U:
+            (void)ui_core_request_undo();
+            break;
+
+        case 7U:
+            (void)undo_v2_redo();
+            break;
+
+        case 8U:
+            break;
+
+        case 9U:
+            ui_page_template_rec_cfg_open_main();
+            ui_page_set(UI_PAGE_TEMPLATE_REC_CFG);
+            break;
+
+        case 10U:
+            if (ui_page_settings_is_open() == 0U)
+            {
+                ui_page_settings_open(ui_page_get_id());
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t mode)
+{
+    hall_key_metadata_t meta;
+    if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_BLACK))
+    {
+        return 0U;
+    }
+
+    const uint8_t shortcut_active =
+        (uint8_t)(((mode == UI_HALL_MODE_SEQ)
+                   || ((mode == UI_HALL_MODE_KEYBOARD) && (button_down(BTN_SHIFT) != 0U)))
+                  ? 1U : 0U);
+    if (shortcut_active == 0U)
+    {
+        return 0U;
+    }
+
+    keyboard_input_lowcost_trigger_black_shortcut(meta.black_index);
+    return 1U;
+}
+
 static uint8_t keyboard_input_lowcost_chromatic_note(uint8_t key)
 {
-    int16_t note = (int16_t)(60U + (keyboard_params_get_root_index() % 12U) + key);
+    hall_key_metadata_t meta;
+    if (hall_keymap_metadata(key, &meta) == 0U)
+    {
+        return 0U;
+    }
+
+    int16_t note = (int16_t)(60U + (keyboard_params_get_root_index() % 12U) + meta.chromatic_position);
     note = (int16_t)(note + ((int16_t)ui_keyboard_app_get_octave_shift() * 12));
     if (note < 0)
     {
@@ -109,13 +214,29 @@ static void keyboard_input_lowcost_omni(uint8_t key, bool pressed)
         5U  /* M7 */
     };
 
-    if (key < (uint8_t)(sizeof(chord_for_left_group) / sizeof(chord_for_left_group[0])))
+    hall_key_metadata_t meta;
+    if (hall_keymap_metadata(key, &meta) == 0U)
     {
-        ui_keyboard_app_chord_button(chord_for_left_group[key], pressed);
         return;
     }
 
-    ui_keyboard_app_note_button((uint8_t)(key - 7U), pressed);
+    uint8_t group = 0xFFU;
+    if ((meta.kind == HALL_KEY_KIND_WHITE) && (meta.white_index >= 1U) && (meta.white_index <= 4U))
+    {
+        group = (uint8_t)(meta.white_index - 1U);
+    }
+    else if ((meta.kind == HALL_KEY_KIND_BLACK) && (meta.black_index >= 1U) && (meta.black_index <= 3U))
+    {
+        group = (uint8_t)(4U + meta.black_index - 1U);
+    }
+
+    if (group < (uint8_t)(sizeof(chord_for_left_group) / sizeof(chord_for_left_group[0])))
+    {
+        ui_keyboard_app_chord_button(chord_for_left_group[group], pressed);
+        return;
+    }
+
+    ui_keyboard_app_note_button(meta.chromatic_position, pressed);
 }
 
 static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_t velocity)
@@ -126,6 +247,22 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
     }
 
     ui_keyboard_app_set_velocity(velocity);
+
+    if (pressed)
+    {
+        const ui_hall_mode_t mode = ui_get_hall_mode();
+        if (keyboard_input_lowcost_shortcut_press(key, mode) != 0U)
+        {
+            g_lowcost_key_consumed[key] = 1U;
+            return;
+        }
+    }
+    else if (g_lowcost_key_consumed[key] != 0U)
+    {
+        g_lowcost_key_consumed[key] = 0U;
+        return;
+    }
+
     if (keyboard_params_get_omnichord())
     {
         keyboard_input_lowcost_omni(key, pressed);
@@ -135,6 +272,14 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
     if (pressed)
     {
         const ui_hall_mode_t mode = ui_get_hall_mode();
+        if (mode == UI_HALL_MODE_SEQ)
+        {
+            hall_key_metadata_t meta;
+            if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_WHITE))
+            {
+                return;
+            }
+        }
         const uint8_t note = (mode == UI_HALL_MODE_SEQ)
             ? keyboard_input_lowcost_seq_note(key)
             : keyboard_input_lowcost_chromatic_note(key);

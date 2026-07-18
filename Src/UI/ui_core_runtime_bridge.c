@@ -1057,8 +1057,16 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 #endif
 
     track_enable(0U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT1) > 0U);
+#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 1U
     track_enable(1U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT2) > 0U);
+#else
+    track_enable(1U, 0U);
+#endif
+#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 2U
     track_enable(2U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT3) > 0U);
+#else
+    track_enable(2U, 0U);
+#endif
     const uint8_t has_engine_track = (uint8_t)((track_state_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) > 0U)
             || (track_state_count_tracks_with_family(UI_TRACK_FAMILY_SAMPLER) > 0U)
             || (track_state_count_tracks_with_family(UI_TRACK_FAMILY_DRUM) > 0U));

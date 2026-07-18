@@ -762,6 +762,10 @@ static void led_apply_fixed_scene(void)
         {
             continue;
         }
+        else if (led_remap_is_seq_led((led_id_t)led))
+        {
+            continue;
+        }
         else if (led_remap_is_param_led((led_id_t)led))
         {
             led_apply_param_button_scene((led_id_t)led,

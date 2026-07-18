@@ -1,8 +1,6 @@
 #ifndef LED_IDS_H
 #define LED_IDS_H
 
-#include "led_hw.h"
-
 typedef enum
 {
     LED_PARAM_1 = 0,
@@ -33,9 +31,12 @@ typedef enum
     LED_STEP_15,
     LED_STEP_16,
 
+    LED_SEQ_1,
+    LED_SEQ_2,
+    LED_SEQ_3,
+    LED_SEQ_4,
+
     LED_COUNT_TOTAL
 } led_id_t;
-
-_Static_assert((uint32_t)LED_COUNT_TOTAL == LED_HW_COUNT, "LED IDs must match LED hardware count");
 
 #endif

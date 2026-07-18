@@ -19,6 +19,78 @@ static const board_encoder_pin_t g_encoder_pins[] = {
     {GPIOF, GPIO_PIN_8, GPIOF, GPIO_PIN_6},
 };
 
+static const button_id_t g_button_physical_to_logical[] = {
+    [0]  = BTN_TRANSPOSE_UP,
+    [1]  = BTN_TRANSPOSE_DOWN,
+    [2]  = BTN_PASTE,
+    [3]  = BTN_COPY,
+    [4]  = BTN_REC,
+    [5]  = BTN_PLAY,
+    [6]  = BTN_SHIFT,
+    [7]  = BTN_PARAM_8,
+    [8]  = BTN_STEP_8,
+    [9]  = BTN_STEP_7,
+    [10] = BTN_STEP_6,
+    [11] = BTN_STEP_5,
+    [12] = BTN_STEP_4,
+    [13] = BTN_STEP_3,
+    [14] = BTN_STEP_2,
+    [15] = BTN_STEP_1,
+    [16] = BTN_STEP_12,
+    [17] = BTN_STEP_11,
+    [18] = BTN_STEP_10,
+    [19] = BTN_STEP_9,
+    [20] = BTN_STEP_16,
+    [21] = BTN_STEP_15,
+    [22] = BTN_STEP_14,
+    [23] = BTN_STEP_13,
+    [24] = BTN_PAGE_4,
+    [25] = BTN_PAGE_3,
+    [26] = BTN_ENCODER_4_PUSH,
+    [27] = BTN_ENCODER_3_PUSH,
+    [28] = BTN_ENCODER_1_PUSH,
+    [29] = BTN_ENCODER_2_PUSH,
+    [30] = BTN_PAGE_2,
+    [31] = BTN_PAGE_1,
+};
+
+#define STEP_MASK (((1ULL << BTN_STEP_1) | (1ULL << BTN_STEP_2) | (1ULL << BTN_STEP_3) | (1ULL << BTN_STEP_4) | \
+                    (1ULL << BTN_STEP_5) | (1ULL << BTN_STEP_6) | (1ULL << BTN_STEP_7) | (1ULL << BTN_STEP_8) | \
+                    (1ULL << BTN_STEP_9) | (1ULL << BTN_STEP_10) | (1ULL << BTN_STEP_11) | (1ULL << BTN_STEP_12) | \
+                    (1ULL << BTN_STEP_13) | (1ULL << BTN_STEP_14) | (1ULL << BTN_STEP_15) | (1ULL << BTN_STEP_16)))
+#define ENCODER_PUSH_MASK (((1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH) | \
+                            (1ULL << BTN_ENCODER_3_PUSH) | (1ULL << BTN_ENCODER_4_PUSH)))
+#define LOWCOST_STEP_MASK_PRESENT (((1ULL << BTN_STEP_8) | (1ULL << BTN_STEP_7) | \
+                                    (1ULL << BTN_STEP_6) | (1ULL << BTN_STEP_5) | \
+                                    (1ULL << BTN_STEP_4) | (1ULL << BTN_STEP_3) | \
+                                    (1ULL << BTN_STEP_2) | (1ULL << BTN_STEP_1) | \
+                                    (1ULL << BTN_STEP_12) | (1ULL << BTN_STEP_11) | \
+                                    (1ULL << BTN_STEP_10) | (1ULL << BTN_STEP_9) | \
+                                    (1ULL << BTN_STEP_16) | (1ULL << BTN_STEP_15) | \
+                                    (1ULL << BTN_STEP_14) | (1ULL << BTN_STEP_13)))
+#define LOWCOST_ENCODER_PUSH_MASK_PRESENT (((1ULL << BTN_ENCODER_4_PUSH) | (1ULL << BTN_ENCODER_3_PUSH) | \
+                                            (1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH)))
+
+_Static_assert((sizeof(g_button_physical_to_logical) / sizeof(g_button_physical_to_logical[0])) == 32U,
+               "Low-cost SR mapping must define 32 physical positions");
+_Static_assert(LOWCOST_STEP_MASK_PRESENT == STEP_MASK, "Low-cost SR mapping must contain each STEP exactly once");
+_Static_assert(LOWCOST_ENCODER_PUSH_MASK_PRESENT == ENCODER_PUSH_MASK,
+               "Low-cost SR mapping must contain each encoder push exactly once");
+
+uint8_t board_controls_button_physical_count(void)
+{
+    return (uint8_t)(sizeof(g_button_physical_to_logical) / sizeof(g_button_physical_to_logical[0]));
+}
+
+button_id_t board_controls_button_logical_for_physical(uint8_t physical_idx)
+{
+    if (physical_idx >= board_controls_button_physical_count())
+    {
+        return BOARD_CONTROLS_BUTTON_INVALID;
+    }
+    return g_button_physical_to_logical[physical_idx];
+}
+
 void board_controls_buttons_latch_low(void) { CS_SR_GPIO_Port->BSRR = ((uint32_t)CS_SR_Pin << 16U); }
 void board_controls_buttons_latch_high(void) { CS_SR_GPIO_Port->BSRR = CS_SR_Pin; }
 void board_controls_buttons_clock_low(void) { SCK_SR_GPIO_Port->BSRR = ((uint32_t)SCK_SR_Pin << 16U); }

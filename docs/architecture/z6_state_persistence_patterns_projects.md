@@ -968,3 +968,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Apply Kit depuis le browser et Save Kit direct lient le slot Kit au pattern actif seulement apres succes. Un echec d'apply (`BAD KIT`, `ASSET MISS`, SD) ne change pas le lien.
 - Delete du slot Kit actif clear uniquement le lien du pattern actif; les autres patterns peuvent encore porter une reference devenue invalide et seront refuses proprement au prochain chargement.
 - Le dirty Kit est porte par `kit_v1`: false apres apply/save, true sur edits sonores centraux (CFG family/type, domains COLORS/TONE/MIX, FILTER, LFO). Il ne suit pas transport, playhead, sequence ni navigation UI.
+
+## Addendum 2026-07-17 - lot 4B persistence low-cost
+
+- Aucun changement de structure `PatternSaveV1` / `ProjectSaveV1` n'est introduit dans ce lot: les versions restent celles du format courant.
+- En low-cost, les valeurs persistantes qui referencent `Input2..4` ou une route CUE/BOTH sont refusees/normalisees par les validations catalogue et les clamps runtime existants lors de l'application, sans migration inter-variante.
+- Premium conserve le format et les ressources exposees inchanges.

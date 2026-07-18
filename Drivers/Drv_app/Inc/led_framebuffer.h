@@ -6,7 +6,7 @@
 #include "led_hw.h"
 #include "led_ids.h"
 
-#define LED_FB_COUNT LED_HW_COUNT
+#define LED_FB_COUNT LED_COUNT_TOTAL
 
 void led_fb_init(void);
 void led_fb_clear(void);

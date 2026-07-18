@@ -63,8 +63,8 @@ typedef struct
     uint8_t track_select_armed;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     uint32_t cfg_tap_ms[UI_TRACK_COUNT];
-    uint8_t hall_prev_pressed[HALL_KEY_COUNT];
-    uint8_t hall_note_suppressed[HALL_KEY_COUNT];
+    uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT];
+    uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT];
     uint8_t macro_overlay_active;
     uint8_t macro_overlay_latched;
     ui_macro_overlay_submode_t macro_overlay_submode;
@@ -96,7 +96,7 @@ static void ui_core_set_active_track(uint8_t track);
 
 static void ui_core_mute_suppress_hall_note(uint8_t hall)
 {
-    if (hall < HALL_KEY_COUNT)
+    if (hall < HALL_UI_LANE_COUNT)
     {
         g_ui_track_state.hall_note_suppressed[hall] = 1U;
     }
@@ -502,14 +502,14 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
         return 0U;
     }
 
-    return (ev->id < HALL_KEY_COUNT) ? 1U : 0U;
+    return (ev->id < HALL_UI_LANE_COUNT) ? 1U : 0U;
 }
 
 static uint8_t ui_core_is_suppressed_hall_press_event_consumed(const ui_event_t *ev)
 {
     if ((ev == 0)
         || (ev->type != UI_EVENT_HALL_PRESS)
-        || (ev->id >= HALL_KEY_COUNT))
+        || (ev->id >= HALL_UI_LANE_COUNT))
     {
         return 0U;
     }
@@ -584,7 +584,7 @@ static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
         return 0U;
     }
 
-    if (ev->id >= HALL_KEY_COUNT)
+    if (ev->id >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
@@ -619,7 +619,7 @@ void ui_core_init(void)
     }
 
     hall_surface_refresh();
-    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+    for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; hall++)
     {
         g_ui_track_state.hall_prev_pressed[hall] = 0U;
         g_ui_track_state.hall_note_suppressed[hall] = 0U;
@@ -655,7 +655,7 @@ void ui_core_service_track_selection_inputs(void)
     hall_surface_refresh();
     ui_core_service_macro_overlay_inputs(shift_down, track_modifier_down);
 
-    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+    for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; hall++)
     {
         const uint8_t pressed = hall_surface_is_pressed(hall);
         const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
@@ -1080,7 +1080,7 @@ void ui_macro_overlay_on_hall_mode_changed(void)
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
 {
-    if (hall >= HALL_KEY_COUNT)
+    if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
@@ -1090,7 +1090,7 @@ uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
 
 void ui_core_clear_hall_note_suppression(uint8_t hall)
 {
-    if (hall >= HALL_KEY_COUNT)
+    if (hall >= HALL_UI_LANE_COUNT)
     {
         return;
     }

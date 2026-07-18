@@ -320,3 +320,9 @@ Sorties de Z2:
 - Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master` et `track_runtime_collect_voice_group_members`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
 - Patch Poly v2 consomme ce modele comme source structurelle: capture depuis master/slaves officiels et apply polyX uniquement vers un groupe cible deja declare de meme largeur.
 - Z2 ne stocke aucune reference a un Patch et ne devient pas une autorite de persistence Patch.
+
+## Addendum 2026-07-17 - lot 4B catalogue input low-cost
+
+- Le catalogue produit est variant-aware a la compilation: premium conserve `Input1..Input4` comme families produit, tandis que low-cost expose uniquement `Input1`.
+- En low-cost, `track_runtime_input_family_mix_track()` ne mappe que `Input1 -> mix lane 0`; `Input2..4` restent des valeurs enum historiques mais ne sont plus des families input disponibles ni des ressources routables.
+- La reservation de lanes fixes d'entree suit `UI_AUDIO_INPUT_PROTO_WIRED_COUNT`: low-cost reserve uniquement la lane 0, premium garde les lanes proto 0..2.

@@ -35,7 +35,13 @@
                   (_apply))
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
+#if defined(BRICK6_VARIANT_LOWCOST)
+static const char *const g_route_labels[] = {"None", "Master", NULL};
+#define PARAM_MIX_ROUTE_MAX 1.0f
+#else
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
+#define PARAM_MIX_ROUTE_MAX 3.0f
+#endif
 static const char *const g_master_fx_type_labels[] = {"OFF", "DRIVE", "CRUSH", "PUMP", "CHOP", "WOBBLE", "COMB", "RING", "STUTTER", "FREEZE", "COLOR", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_reverb_type_labels[] = {"RevB", NULL};
@@ -97,10 +103,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_TRACK2_MUTE, "T2 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK3_MUTE, "T3 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
 
-    PARAM_DESC_EX(PARAM_MIX_TRACK0_ROUTE, "T0 Route", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK1_ROUTE, "T1 Route", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK2_ROUTE, "T2 Route", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK3_ROUTE, "T3 Route", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK0_ROUTE, "T0 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK1_ROUTE, "T1 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK2_ROUTE, "T2 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK3_ROUTE, "T3 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
 
     PARAM_DESC(PARAM_MIX_TRACK0_INSERT0, "T0 Insert0", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_TRACK0_INSERT1, "T0 Insert1", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),

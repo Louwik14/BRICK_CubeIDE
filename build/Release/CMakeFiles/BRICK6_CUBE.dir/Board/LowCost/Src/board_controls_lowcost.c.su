@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:80:9:board_controls_button_physical_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:85:13:board_controls_button_logical_for_physical	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:94:6:board_controls_buttons_latch_low	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:95:6:board_controls_buttons_latch_high	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:96:6:board_controls_buttons_clock_low	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:97:6:board_controls_buttons_clock_high	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:98:9:board_controls_buttons_data_read	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:99:6:board_controls_io_barrier	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:101:9:board_controls_encoder_state	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:110:6:board_controls_start_encoder_fast_poll_timer	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:115:6:board_controls_mux_pot_select	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:125:10:board_controls_millis	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:126:9:board_controls_pot_adc_start	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:127:9:board_controls_pot_adc_poll	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:128:10:board_controls_pot_adc_read_raw	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_controls_lowcost.c:129:6:board_controls_pot_adc_stop	8	static

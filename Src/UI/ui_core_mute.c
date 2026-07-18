@@ -390,7 +390,7 @@ ui_mute_state_t ui_core_mute_get_state(void)
 
 uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
 {
-    if ((out_led == 0) || (hall >= HALL_KEY_COUNT))
+    if ((out_led == 0) || (hall >= HALL_UI_LANE_COUNT))
     {
         return 0U;
     }

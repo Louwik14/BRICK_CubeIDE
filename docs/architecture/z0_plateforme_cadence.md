@@ -337,3 +337,8 @@ Z0 appelle principalement:
 - `brick6_app_init.c` ne reference plus directement CS42448, SAI ni USB CubeMX pour l'init produit: le codec, le demarrage audio physique, USB Device et le delai power passent par `board_audio_*`, `board_usb_*` et `board_power_*`.
 - Le CubeMX premium et ses handles restent sous `Board/Premium/Generated`; les appels `MX_*_Init()` generes ne sont pas wrappers ni modifies.
 
+## Addendum 2026-07-17 - mapping controles low-cost
+
+- La frontiere Board porte maintenant le mapping physique explicite des shift-registers par variante via `board_controls_button_logical_for_physical()`: premium conserve son mapping 24 positions existant, low-cost expose 32 positions SR.
+- Le backend Hall commun separe le nombre de lanes UI Hall (`HALL_UI_LANE_COUNT=16`) du nombre de touches Hall clavier (`HALL_KEY_COUNT=24`) afin de garder le pipeline Z5 commun tout en autorisant le clavier low-cost 24 touches.
+

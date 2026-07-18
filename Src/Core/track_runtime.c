@@ -17,7 +17,7 @@
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
-#define TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT 3U
+#define TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT UI_AUDIO_INPUT_PROTO_WIRED_COUNT
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 static volatile uint8_t g_track_runtime_global_dirty = 1U;
@@ -153,12 +153,16 @@ static uint8_t track_runtime_input_family_mix_track(track_runtime_family_t famil
         case UI_TRACK_FAMILY_INPUT1:
             *out_mix_track = 0U;
             return 1U;
+#if UI_AUDIO_INPUT_RESOURCE_COUNT > 1U
         case UI_TRACK_FAMILY_INPUT2:
             *out_mix_track = 1U;
             return 1U;
+#endif
+#if UI_AUDIO_INPUT_RESOURCE_COUNT > 2U
         case UI_TRACK_FAMILY_INPUT3:
             *out_mix_track = 2U;
             return 1U;
+#endif
         default:
             return 0U;
     }

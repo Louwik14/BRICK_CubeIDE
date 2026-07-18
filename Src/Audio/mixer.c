@@ -30,6 +30,12 @@
 #include "fx_reverb.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/track_runtime.h"
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define MIXER_HAS_CUE_BUS 0
+#else
+#define MIXER_HAS_CUE_BUS 1
+#endif
 #include "Storage/multi_record_writer.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core_runtime_bridge.h"
@@ -1521,6 +1527,9 @@ void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+    route = ((route & MIXER_ROUTE_MASTER) != 0U) ? MIXER_ROUTE_MASTER : MIXER_ROUTE_NONE;
+#endif
     g_tracks[track_id].route_master = ((route & MIXER_ROUTE_MASTER) != 0U) ? 1U : 0U;
     g_tracks[track_id].route_cue = ((route & MIXER_ROUTE_CUE) != 0U) ? 1U : 0U;
 }
@@ -2182,8 +2191,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float ext_mono_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
+#if MIXER_HAS_CUE_BUS
     AUDIO_HOT ALIGN32 static float bus_cue_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_cue_r[AUDIO_BLOCK_SIZE];
+#endif
     AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float reverb_return_l[AUDIO_BLOCK_SIZE];
@@ -2196,8 +2207,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float looper_record_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_r[AUDIO_BLOCK_SIZE];
+#if MIXER_HAS_CUE_BUS
     AUDIO_HOT ALIGN32 static float looper_bus_cue_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_cue_r[AUDIO_BLOCK_SIZE];
+#endif
     AUDIO_HOT ALIGN32 static float sample_capture_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float sample_capture_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * MULTI_RECORD_WRITER_CHANNELS];
@@ -2228,8 +2241,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
+#if MIXER_HAS_CUE_BUS
     memset(bus_cue_l, 0, sizeof(bus_cue_l));
     memset(bus_cue_r, 0, sizeof(bus_cue_r));
+#endif
     if(send_bus_active != 0U)
     {
         memset(send_l, 0, sizeof(send_l));
@@ -2268,7 +2283,9 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     uint8_t looper_playback_active = 0U;
     uint8_t looper_playback_mix_active = 0U;
     uint8_t looper_playback_routes_main = 0U;
+#if MIXER_HAS_CUE_BUS
     uint8_t looper_playback_routes_cue = 0U;
+#endif
     for(uint8_t logical_track = 0U; logical_track < MIXER_MAX_TRACKS; ++logical_track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
@@ -2284,10 +2301,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             {
                 looper_playback_routes_main = 1U;
             }
+#if MIXER_HAS_CUE_BUS
             if(g_tracks[ctx->mix_track_id].route_cue != 0U)
             {
                 looper_playback_routes_cue = 1U;
             }
+#endif
         }
     }
     looper_playback_mix_active =
@@ -2300,11 +2319,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
         memset(looper_bus_main_r, 0, sizeof(looper_bus_main_r));
     }
+#if MIXER_HAS_CUE_BUS
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_cue != 0U))
     {
         memset(looper_bus_cue_l, 0, sizeof(looper_bus_cue_l));
         memset(looper_bus_cue_r, 0, sizeof(looper_bus_cue_r));
     }
+#endif
     if(looper_record_active != 0U)
     {
         memset(looper_record_l, 0, sizeof(looper_record_l));
@@ -2430,6 +2451,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                             looper_bus_main_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
                         }
                     }
+#if MIXER_HAS_CUE_BUS
                     if(mt->route_cue != 0U)
                     {
                         for(uint32_t i = 0U; i < frames; ++i)
@@ -2438,6 +2460,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                             looper_bus_cue_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
                         }
                     }
+#endif
                 }
                 continue;
             }
@@ -2507,8 +2530,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
                 bus_main_l[i] += l_nom;
                 bus_main_r[i] += r_nom;
+#if MIXER_HAS_CUE_BUS
                 bus_cue_l[i] += l_nom;
                 bus_cue_r[i] += r_nom;
+#endif
             }
         }
         else if(mt->route_master)
@@ -2521,6 +2546,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 bus_main_r[i] += r_nom;
             }
         }
+#if MIXER_HAS_CUE_BUS
         else if(mt->route_cue)
         {
             for(uint32_t i = 0; i < frames; i++)
@@ -2531,6 +2557,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 bus_cue_r[i] += r_nom;
             }
         }
+#endif
     }
 
     if(looper_record_active != 0U)
@@ -2624,7 +2651,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     if(looper_xfade_apply_active != 0U)
     {
         const uint8_t cue_xfade_active =
+#if MIXER_HAS_CUE_BUS
             ((looper_playback_mix_active != 0U) && (looper_playback_routes_cue != 0U)) ? 1U : 0U;
+#else
+            0U;
+#endif
 
         if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)
                 && (mixer_looper_xfade_value_is_full(looper_xfade_end) != 0U))
@@ -2641,8 +2672,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             }
             if(cue_xfade_active != 0U)
             {
+#if MIXER_HAS_CUE_BUS
                 memcpy(bus_cue_l, looper_bus_cue_l, sizeof(float) * frames);
                 memcpy(bus_cue_r, looper_bus_cue_r, sizeof(float) * frames);
+#endif
             }
         }
         else if(mixer_looper_xfade_values_are_stable(looper_xfade_start, looper_xfade_end) != 0U)
@@ -2673,11 +2706,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
             if(cue_xfade_active != 0U)
             {
+#if MIXER_HAS_CUE_BUS
                 for(uint32_t i = 0U; i < frames; ++i)
                 {
                     bus_cue_l[i] = (bus_cue_l[i] * live_gain) + (looper_bus_cue_l[i] * loop_gain);
                     bus_cue_r[i] = (bus_cue_r[i] * live_gain) + (looper_bus_cue_r[i] * loop_gain);
                 }
+#endif
             }
         }
         else
@@ -2708,8 +2743,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 bus_main_r[i] = (bus_main_r[i] * live_gain) + (loop_main_r * xfade);
                 if(cue_xfade_active != 0U)
                 {
+#if MIXER_HAS_CUE_BUS
                     bus_cue_l[i] = (bus_cue_l[i] * live_gain) + (looper_bus_cue_l[i] * xfade);
                     bus_cue_r[i] = (bus_cue_r[i] * live_gain) + (looper_bus_cue_r[i] * xfade);
+#endif
                 }
                 xfade += xfade_step;
             }
@@ -2733,9 +2770,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memcpy(tracks[0].R, bus_main_r, sizeof(float) * frames);
     }
 
+#if MIXER_HAS_CUE_BUS
     if(track_count > 1U)
     {
         memcpy(tracks[1].L, bus_cue_l, sizeof(float) * frames);
         memcpy(tracks[1].R, bus_cue_r, sizeof(float) * frames);
     }
+#endif
 }

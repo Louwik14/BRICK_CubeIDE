@@ -1,0 +1,13 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:139:16:ui_page_name_edit_name_len	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:157:13:ui_page_name_edit_clamp_pos	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:269:13:ui_page_name_edit_finish	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:181:16:ui_page_name_edit_glyph_w	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:92:13:ui_page_name_edit_draw_centered_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:47:13:ui_page_name_edit_fit_label	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:516:13:ui_page_name_edit_render	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:166:13:ui_page_name_edit_sync_char_to_pos	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:193:13:ui_page_name_edit_commit_char	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:371:13:ui_page_name_edit_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:290:9:ui_page_name_edit_open	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:340:9:ui_page_name_edit_is_open	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c:345:9:ui_page_name_edit_handle_encoder	0	static

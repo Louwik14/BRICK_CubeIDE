@@ -712,8 +712,15 @@ Dette explicite post-passe 4:
 - `PARAM_CFG_START` remplace l'ancien ID REC dans le catalogue global REC CFG.
 - `apply_cfg_start()` ecrit l'autorite Z4 via `seq_runtime_set_rec_start_mode()` puis relit `seq_runtime_get_rec_start_mode()` pour miroir UI/store.
 - `PARAM_CFG_TEMPO` garde l'autorite tempo Z4 (`seq_runtime_set_tempo_bpm_milli`); l'edition REC CFG force `1.00 BPM` sans SHIFT et `0.01 BPM` avec SHIFT, sans nouvelle autorite tempo.
+
 - `PARAM_CFG_METRO` est un parametre global REC CFG `0..127`: `0=OFF`, `1..127=ON+volume`.
 - `apply_cfg_metro()` clamp explicitement la valeur, appelle `metronome_runtime_set_level_u7()` puis miroir `param_store`; le gain audio reel est calcule cote Z1 avec une courbe carree bornee.
+
+## Addendum 2026-07-17 - lot 4B catalogue param low-cost
+
+- Le catalogue CFG/MIX consomme les macros de variante issues de `ui_core.h`: en low-cost, seuls les choix de family disponibles peuvent atteindre `Input1`; `Input2..4` ne sont plus des choix valides via le catalogue UI.
+- Les tombstones legacy `PARAM_MIX_TRACK0..3_ROUTE` restent dans `PARAM_COUNT` pour ne pas renumeroter le layout, mais leurs labels/bornes low-cost sont limites a `None/Master`. Les routes `Cue` et `Both` ne sont plus exposables dans cette variante.
+- Premium conserve les labels et bornes `None/Master/Cue/Both` inchanges.
 
 ## 41. Contrat restore Kit V1
 

@@ -951,7 +951,7 @@ uint8_t ui_page_patch_assign_is_open(void)
 
 uint8_t ui_page_patch_assign_get_target_hall_led(uint8_t hall, uint8_t *out_on)
 {
-    if ((out_on == 0) || (ui_page_patch_assign_is_open() == 0U) || (hall >= HALL_KEY_COUNT))
+    if ((out_on == 0) || (ui_page_patch_assign_is_open() == 0U) || (hall >= HALL_UI_LANE_COUNT))
     {
         return 0U;
     }

@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include "App/Hall/hall_adc.h"
 
-#define HALL_KEY_COUNT 16U
+#define HALL_UI_LANE_COUNT 16U
+#define HALL_KEY_COUNT 24U
 
 typedef enum
 {

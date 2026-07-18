@@ -7,7 +7,7 @@
 #include "Core/track_runtime.h"
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
-    .family_title = "COLORS",
+    .family_title = "ENV",
     .nav_labels = { "MAIN", "ADSR", "-", "-" },
     .subpages = {
         {

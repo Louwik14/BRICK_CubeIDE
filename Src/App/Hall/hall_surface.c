@@ -5,8 +5,8 @@
 #include "Board/board_product.h"
 #include "Board/board_surface.h"
 
-static uint8_t g_hall_surface_pressed[HALL_KEY_COUNT];
-static uint16_t g_hall_surface_pressure[HALL_KEY_COUNT];
+static uint8_t g_hall_surface_pressed[HALL_UI_LANE_COUNT];
+static uint16_t g_hall_surface_pressure[HALL_UI_LANE_COUNT];
 static uint8_t g_hall_surface_binary;
 
 static const board_product_capabilities_t *hall_surface_caps(void)
@@ -23,7 +23,7 @@ void hall_surface_refresh(void)
     {
         board_surface_snapshot_t snapshot;
         board_surface_snapshot(&snapshot);
-        for (uint8_t lane = 0U; lane < HALL_KEY_COUNT; ++lane)
+        for (uint8_t lane = 0U; lane < HALL_UI_LANE_COUNT; ++lane)
         {
             const uint8_t down = (snapshot.raw[lane] != 0U) ? 1U : 0U;
             g_hall_surface_pressed[lane] = down;
@@ -32,7 +32,7 @@ void hall_surface_refresh(void)
         return;
     }
 
-    for (uint8_t lane = 0U; lane < HALL_KEY_COUNT; ++lane)
+    for (uint8_t lane = 0U; lane < HALL_UI_LANE_COUNT; ++lane)
     {
         g_hall_surface_pressed[lane] = hall_engine_is_pressed(lane);
         g_hall_surface_pressure[lane] = (uint16_t)((uint32_t)hall_engine_get_value(lane) * 655U);
@@ -41,7 +41,7 @@ void hall_surface_refresh(void)
 
 uint8_t hall_surface_is_pressed(uint8_t lane)
 {
-    if (lane >= HALL_KEY_COUNT)
+    if (lane >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
@@ -51,7 +51,7 @@ uint8_t hall_surface_is_pressed(uint8_t lane)
 
 uint16_t hall_surface_pressure_u16(uint8_t lane)
 {
-    if (lane >= HALL_KEY_COUNT)
+    if (lane >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
