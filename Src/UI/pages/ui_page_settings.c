@@ -15,6 +15,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/project_v1.h"
+#include "Audio/audio_control_command.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
@@ -1548,7 +1549,10 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD)
     {
-        brick6_sampler_runtime_stop_multi_instrument(g_ui_settings.confirm_slot);
+        audio_control_command_submit_sampler_param(0U,
+                                                   AUDIO_CONTROL_SAMPLER_STOP_MULTI_INSTRUMENT,
+                                                   0.0f,
+                                                   g_ui_settings.confirm_slot);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -2148,7 +2152,10 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
         return 0U;
     }
 
-    brick6_sampler_runtime_set_multi_instrument(track, instrument_id);
+    audio_control_command_submit_sampler_param(track,
+                                               AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                               0.0f,
+                                               instrument_id);
     return 1U;
 }
 
@@ -2379,7 +2386,10 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
 
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
-        brick6_sampler_runtime_stop_multi_instrument(slot);
+        audio_control_command_submit_sampler_param(0U,
+                                                   AUDIO_CONTROL_SAMPLER_STOP_MULTI_INSTRUMENT,
+                                                   0.0f,
+                                                   slot);
         (void)multi_sample_pool_clear_instrument(slot);
     }
 

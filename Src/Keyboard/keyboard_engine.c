@@ -15,6 +15,7 @@
 #include "Keyboard/keyboard_engine.h"
 
 #include "Audio/mixer.h"
+#include "Audio/audio_control_command.h"
 #include "Audio/drum_synth.h"
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
@@ -192,24 +193,24 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     }
     if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
     {
-        mixer_track_filter_all_notes_off(filter_track);
+        audio_control_command_submit_mixer_filter(filter_track, AUDIO_CONTROL_FILTER_ALL_NOTES_OFF, 0.0f);
     }
     if ((track_runtime_supports_vca_gate(ctx) != 0U)
             && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
     {
-        mixer_track_vca_all_notes_off(mix_track);
+        audio_control_command_submit_mixer_vca(mix_track, AUDIO_CONTROL_VCA_ALL_NOTES_OFF, 0.0f);
     }
     if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
-        brick6_sampler_runtime_stop(track);
+        audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_STOP, 0.0f, 0U);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
     {
-        brick6_braids_runtime_all_notes_off(ctx->instance_id);
+        audio_control_command_submit_wave_note(ctx->instance_id, AUDIO_CONTROL_NOTE_ALL_OFF, 0U, 0U);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
-        drum_synth_all_notes_off_for_instance(ctx->instance_id);
+        audio_control_command_submit_drum_note(ctx->instance_id, AUDIO_CONTROL_NOTE_ALL_OFF, 0U, 0U);
     }
 }
 
@@ -286,11 +287,11 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         g_keyboard_engine_sounding_drum_instance = ctx->instance_id;
         if (is_note_on != 0U)
         {
-            drum_synth_note_on_for_instance(g_keyboard_engine_sounding_drum_instance, note, velocity);
+            audio_control_command_submit_drum_note(g_keyboard_engine_sounding_drum_instance, AUDIO_CONTROL_NOTE_ON, note, velocity);
         }
         else
         {
-            drum_synth_note_off_for_instance(g_keyboard_engine_sounding_drum_instance, note);
+            audio_control_command_submit_drum_note(g_keyboard_engine_sounding_drum_instance, AUDIO_CONTROL_NOTE_OFF, note, 0U);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
@@ -310,22 +311,22 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
 
         if (is_note_on != 0U)
         {
-            brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);
+            audio_control_command_submit_sampler_note(track, AUDIO_CONTROL_NOTE_ON, note, velocity);
         }
         else
         {
-            brick6_sampler_runtime_note_off_note(track, note);
+            audio_control_command_submit_sampler_note(track, AUDIO_CONTROL_NOTE_OFF, note, 0U);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
     {
         if (is_note_on != 0U)
         {
-            brick6_braids_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            audio_control_command_submit_wave_note(ctx->instance_id, AUDIO_CONTROL_NOTE_ON, note, velocity);
         }
         else
         {
-            brick6_braids_runtime_note_off(ctx->instance_id, note);
+            audio_control_command_submit_wave_note(ctx->instance_id, AUDIO_CONTROL_NOTE_OFF, note, 0U);
         }
     }
 }
@@ -772,7 +773,7 @@ void keyboard_engine_all_notes_off_for_track(uint8_t track)
 void keyboard_engine_all_notes_off(void)
 {
     keyboard_engine_mono_clear();
-    drum_synth_all_notes_off_all();
+    audio_control_command_submit_panic_all();
     memset(g_keyboard_engine_group_note_count, 0, sizeof(g_keyboard_engine_group_note_count));
     memset(g_keyboard_engine_group_track_active_count, 0, sizeof(g_keyboard_engine_group_track_active_count));
 

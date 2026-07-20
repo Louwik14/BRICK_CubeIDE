@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Audio/audio_control_command.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Keyboard/keyboard_engine.h"
@@ -628,7 +629,10 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         keyboard_engine_all_notes_off_for_track(track);
-        brick6_sampler_runtime_reset_track(track);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_RESET_TRACK,
+                                                   0.0f,
+                                                   0U);
     }
 
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {

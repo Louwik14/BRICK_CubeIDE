@@ -26,7 +26,6 @@
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
-#include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
@@ -118,31 +117,12 @@ static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
 
 static float param_registry_multi_instrument_selector_value(uint8_t track)
 {
-    uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    if (brick6_sampler_runtime_get_multi_instrument(track, &instrument_id) == 0U)
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    if (state == NULL)
     {
         return 0.0f;
     }
-    if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
-    {
-        return 0.0f;
-    }
-
-    uint8_t selector = 1U;
-    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
-    {
-        if (multi_sample_pool_get_instrument(id) == NULL)
-        {
-            continue;
-        }
-        if (id == instrument_id)
-        {
-            return (float)selector;
-        }
-        selector++;
-    }
-
-    return 0.0f;
+    return state->sample;
 }
 
 /**
@@ -384,7 +364,7 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
             const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {
-                *out_value = brick6_sampler_runtime_get_multi_gain(track);
+                *out_value = state->gain;
                 return 1U;
             }
             *out_value = state->gain;

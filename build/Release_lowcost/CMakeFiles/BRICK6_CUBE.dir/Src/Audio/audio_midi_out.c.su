@@ -1,0 +1,12 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:71:6:audio_midi_out_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:81:9:audio_midi_out_submit_raw	20	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:144:9:audio_midi_out_note_on	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:154:9:audio_midi_out_note_off	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:164:9:audio_midi_out_program_change	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:174:9:audio_midi_out_clock	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:179:9:audio_midi_out_start	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:184:9:audio_midi_out_stop	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:189:9:audio_midi_out_all_notes_off	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:199:6:audio_midi_out_process	48	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:229:6:audio_midi_out_diag_snapshot	4	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_midi_out.c:247:6:audio_midi_out_diag_reset	4	static

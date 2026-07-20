@@ -214,6 +214,16 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
+
+## 5.b Projection audio des etats canonique Z3
+
+- `track_sound_state` et `track_tone_sound_state` restent les autorites canoniques controle/persistence.
+- Le chemin audio ne lit plus directement ces structures pour LFO et MasterFX:
+  - config LFO et base de destination courante sont copiees dans `audio_control_snapshot.mod[]`;
+  - Master/FX copie uniquement `type/level/macro_a/macro_b` dans `audio_control_snapshot.master_fx[]`.
+- Le staging est rempli hors IRQ depuis les etats canoniques et publie par generation; l'IRQ applique seulement l'index pending au debut du bloc DSP.
+- `mod_lfo_v1_process_block()` utilise la config/base snapshot pour le tick audio et conserve ses etats runtime internes (`phase`, `base_valid`, `last_dest`, calibration, temp edits).
+- Les writes Z3 restent inchanges: setters, transitions, `param_registry_apply_track_value`, resync LFO et restore continuent d'ecrire les autorites canoniques et les runtimes backend existants. Les files de commandes param ne sont volontairement pas introduites dans cette passe.
 - P-lock playback:
   - la valeur UI est toujours la base canonique editable,
   - la valeur p-lock est une projection runtime temporaire,
@@ -732,3 +742,16 @@ Dette explicite post-passe 4:
 - Les writes sonores autoritatifs qui passent par `param_registry_apply_track_value` marquent le Kit actif dirty si un slot Kit actif existe: CFG family/type, FILTER/COLORS, TONE, MIX et LFO config.
 - Le dirty Kit appartient a `kit_v1`, pas a Z3: Z3 emet seulement la notification post-apply apres succes. Les restores Kit suspendent ce marquage et nettoient le dirty apres apply/save.
 - Les projections temporaires runtime, p-lock playback, transport, playhead, sequence et navigation UI ne doivent pas marquer le Kit dirty.
+
+## Addendum 2026-07-18 - apply param controle via file audio locale
+
+- Les writes Z3 autoritatifs continuent de mettre a jour `track_sound_state`, `track_tone_sound_state`, `param_store` et les resync LFO cote controle.
+- La projection runtime vers mixer, FILTER/VCA, Wave, Drum, Sampler, Looper et XFade passe maintenant par `audio_control_command` quand l'appel vient hors IRQ. Si l'appel vient du chemin audio, la commande execute directement pour ne pas degrader les p-locks et modulations sample-domain existants.
+- Les params continus ou frequents sont coalescables; les commandes note/panic/rebind restent ordonnees. Les chemins LFO directs restent audio-owned et ne sont pas deplaces dans cette passe.
+- Dette restante: wrappers FILTER legacy par active track, chemins UI/settings directs d'affectation Multi et resets storage globaux restent a migrer apres clarification du contrat sampler/pool.
+
+## Addendum 2026-07-19 - selectors Multi sans lecture runtime audio
+
+- `PARAM_SAMPLER_SAMPLE` pour `Sampler/Multi` met a jour la base canonique `track_tone_sound_state.sample` avant publication de la commande audio `AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT`.
+- Les queries Z3 de selecteur/gain Multi lisent maintenant `track_tone_sound_state`, pas `brick6_sampler_runtime_get_multi_instrument()` ni `brick6_sampler_runtime_get_multi_gain()`.
+- Les resets Sampler declenches par Kit/Patch/Project passent par `AUDIO_CONTROL_SAMPLER_RESET_TRACK`; Z3 ne conserve pas d'autorite parallele sur l'etat de voix audio.

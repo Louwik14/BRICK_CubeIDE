@@ -35,6 +35,7 @@ Lit ce document si le sujet touche :
 - boot
 - init système
 - ordre d’initialisation
+- separation shared / domaine audio / domaine systeme
 - superloop
 - tasklets / cadence hors audio IRQ
 
@@ -124,7 +125,7 @@ Doc :
 
 ## 3. Dépendances principales entre zones
 
-- Z0 initialise et cadence tout le reste
+- Z0 initialise et cadence tout le reste via des entry points shared/audio/systeme explicites
 - Z1 consomme surtout Z2, Z3 et Z4
 - En clock interne/externe sequencer, Z1 fournit la consommation finale d'avance step de Z4 (domaine audio bloc)
 - Z2 fournit la vérité runtime aux autres zones

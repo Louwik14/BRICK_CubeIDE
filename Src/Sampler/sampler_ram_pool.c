@@ -10,10 +10,24 @@
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
+#define SAMPLER_RAM_RETIRED_ALLOCATION_MAX (32U)
+
+typedef struct
+{
+    uint8_t used;
+    uint16_t ram_slot;
+    uint16_t first_page_slot;
+    uint16_t page_count;
+    uint32_t generation;
+    uint16_t audio_users;
+} sampler_ram_retired_allocation_t;
 
 typedef struct
 {
     sampler_ram_slot_t slots[SAMPLER_RAM_POOL_MAX_SLOTS];
+    uint16_t audio_users[SAMPLER_RAM_POOL_MAX_SLOTS];
+    sampler_ram_retired_allocation_t retired[SAMPLER_RAM_RETIRED_ALLOCATION_MAX];
+    sampler_ram_pool_audio_diag_t audio_diag;
     sampler_ram_result_t last_result;
     uint32_t generation_counter;
 } sampler_ram_pool_state_t;
@@ -261,6 +275,108 @@ static uint32_t sampler_ram_next_generation(void)
     return g_sampler_ram_pool.generation_counter;
 }
 
+static void sampler_ram_audio_publish_hook(const sampler_ram_slot_t *slot)
+{
+    (void)slot;
+}
+
+static void sampler_ram_audio_acquire_hook(const sampler_ram_audio_sample_t *sample)
+{
+    (void)sample;
+}
+
+static void sampler_ram_release_allocation(uint16_t first_page_slot, uint16_t page_count)
+{
+    if (page_count != 0U)
+    {
+        sample_page_cache_release_slot_pool_allocation(first_page_slot, page_count);
+    }
+}
+
+static uint32_t sampler_ram_audio_user_total(void)
+{
+    uint32_t total = 0U;
+    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
+    {
+        total += g_sampler_ram_pool.audio_users[i];
+    }
+    for (uint16_t i = 0U; i < SAMPLER_RAM_RETIRED_ALLOCATION_MAX; ++i)
+    {
+        if (g_sampler_ram_pool.retired[i].used != 0U)
+        {
+            total += g_sampler_ram_pool.retired[i].audio_users;
+        }
+    }
+    return total;
+}
+
+static void sampler_ram_audio_note_users(void)
+{
+    const uint32_t total = sampler_ram_audio_user_total();
+    if (total > g_sampler_ram_pool.audio_diag.max_audio_users)
+    {
+        g_sampler_ram_pool.audio_diag.max_audio_users = total;
+    }
+}
+
+static void sampler_ram_retire_allocation(uint16_t ram_slot,
+                                          uint32_t generation,
+                                          uint16_t first_page_slot,
+                                          uint16_t page_count,
+                                          uint16_t audio_users)
+{
+    if (page_count == 0U)
+    {
+        return;
+    }
+    if (audio_users == 0U)
+    {
+        sampler_ram_release_allocation(first_page_slot, page_count);
+        return;
+    }
+
+    for (uint16_t i = 0U; i < SAMPLER_RAM_RETIRED_ALLOCATION_MAX; ++i)
+    {
+        sampler_ram_retired_allocation_t *const retired = &g_sampler_ram_pool.retired[i];
+        if (retired->used == 0U)
+        {
+            retired->used = 1U;
+            retired->ram_slot = ram_slot;
+            retired->first_page_slot = first_page_slot;
+            retired->page_count = page_count;
+            retired->generation = generation;
+            retired->audio_users = audio_users;
+            g_sampler_ram_pool.audio_diag.clear_deferred++;
+            g_sampler_ram_pool.audio_diag.retained_allocations++;
+            return;
+        }
+    }
+
+    g_sampler_ram_pool.audio_diag.clear_deferred++;
+    g_sampler_ram_pool.audio_diag.retained_allocations++;
+}
+
+static uint8_t sampler_ram_slot_publish_ready(sampler_ram_slot_t *slot)
+{
+    if ((slot == 0)
+        || (slot->state != SAMPLER_RAM_SLOT_LOADING)
+        || (slot->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+        || (slot->data == 0)
+        || (slot->frames == 0U)
+        || (slot->channels != 2U)
+        || (slot->page_count == 0U)
+        || (slot->generation == 0U))
+    {
+        g_sampler_ram_pool.audio_diag.incomplete_publish_refused++;
+        return 0U;
+    }
+
+    sampler_ram_audio_publish_hook(slot);
+    slot->state = SAMPLER_RAM_SLOT_READY;
+    g_sampler_ram_pool.audio_diag.published_generations++;
+    return 1U;
+}
+
 static uint8_t sampler_ram_copy_path(char *dst, uint32_t dst_size, const char *src)
 {
     if ((dst == 0) || (dst_size == 0U) || (src == 0) || (src[0] == '\0'))
@@ -330,13 +446,19 @@ static void sampler_ram_slot_error_at(uint16_t ram_slot,
     if (ram_slot < SAMPLER_RAM_POOL_MAX_SLOTS)
     {
         uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        const uint16_t audio_users = g_sampler_ram_pool.audio_users[ram_slot];
+        const uint32_t old_generation = g_sampler_ram_pool.slots[ram_slot].generation;
         g_sampler_ram_pool.slots[ram_slot].generation = sampler_ram_next_generation();
         if (g_sampler_ram_pool.slots[ram_slot].page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sampler_ram_retire_allocation(
+                ram_slot,
+                old_generation,
                 g_sampler_ram_pool.slots[ram_slot].first_page_slot,
-                g_sampler_ram_pool.slots[ram_slot].page_count);
+                g_sampler_ram_pool.slots[ram_slot].page_count,
+                audio_users);
         }
+        g_sampler_ram_pool.audio_users[ram_slot] = 0U;
         g_sampler_ram_pool.slots[ram_slot].format = SAMPLER_RAM_FORMAT_NONE;
         g_sampler_ram_pool.slots[ram_slot].data = 0;
         g_sampler_ram_pool.slots[ram_slot].data_offset = 0U;
@@ -375,28 +497,37 @@ void sampler_ram_pool_init(void)
 
 void sampler_ram_pool_reset(void)
 {
-    uint32_t generation_seed = g_sampler_ram_pool.generation_counter;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
-        g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
+        const uint16_t audio_users = g_sampler_ram_pool.audio_users[i];
+        const uint32_t old_generation = g_sampler_ram_pool.slots[i].generation;
         if (g_sampler_ram_pool.slots[i].page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sampler_ram_retire_allocation(
+                i,
+                old_generation,
                 g_sampler_ram_pool.slots[i].first_page_slot,
-                g_sampler_ram_pool.slots[i].page_count);
+                g_sampler_ram_pool.slots[i].page_count,
+                audio_users);
         }
         sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_RAM, i);
-    }
-    generation_seed = g_sampler_ram_pool.generation_counter;
-    memset(&g_sampler_ram_pool, 0, sizeof(g_sampler_ram_pool));
-    g_sampler_ram_pool.generation_counter = (generation_seed == 0U) ? 1U : generation_seed;
-    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
-    {
+        memset(&g_sampler_ram_pool.slots[i], 0, sizeof(g_sampler_ram_pool.slots[i]));
+        g_sampler_ram_pool.audio_users[i] = 0U;
         g_sampler_ram_pool.slots[i].state = SAMPLER_RAM_SLOT_EMPTY;
         g_sampler_ram_pool.slots[i].global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        g_sampler_ram_pool.slots[i].first_page_slot = UINT16_MAX;
         g_sampler_ram_pool.slots[i].error = SAMPLER_RAM_RESULT_OK;
         g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
         sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[i]);
+    }
+    for (uint16_t i = 0U; i < SAMPLER_RAM_RETIRED_ALLOCATION_MAX; ++i)
+    {
+        sampler_ram_retired_allocation_t *const retired = &g_sampler_ram_pool.retired[i];
+        if ((retired->used != 0U) && (retired->audio_users == 0U))
+        {
+            sampler_ram_release_allocation(retired->first_page_slot, retired->page_count);
+            memset(retired, 0, sizeof(*retired));
+        }
     }
     sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
 }
@@ -657,7 +788,12 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
         return SAMPLER_RAM_RESULT_REGISTER_FAIL;
     }
 
-    slot->state = SAMPLER_RAM_SLOT_READY;
+    if (sampler_ram_slot_publish_ready(slot) == 0U)
+    {
+        sampler_ram_pool_clear(ram_slot);
+        sampler_ram_set_last(SAMPLER_RAM_RESULT_REGISTER_FAIL);
+        return SAMPLER_RAM_RESULT_REGISTER_FAIL;
+    }
     slot->global_slot = (forced_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
                             ? forced_global_slot
                             : global_slot;
@@ -713,13 +849,18 @@ void sampler_ram_pool_clear(uint16_t ram_slot)
         return;
     }
     const sampler_ram_slot_t *const old = &g_sampler_ram_pool.slots[ram_slot];
+    const uint16_t audio_users = g_sampler_ram_pool.audio_users[ram_slot];
     const uint32_t generation = sampler_ram_next_generation();
     g_sampler_ram_pool.slots[ram_slot].generation = generation;
     if (old->page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old->first_page_slot,
-                                                       old->page_count);
+        sampler_ram_retire_allocation(ram_slot,
+                                      old->generation,
+                                      old->first_page_slot,
+                                      old->page_count,
+                                      audio_users);
     }
+    g_sampler_ram_pool.audio_users[ram_slot] = 0U;
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_RAM, ram_slot);
     memset(&g_sampler_ram_pool.slots[ram_slot], 0, sizeof(g_sampler_ram_pool.slots[ram_slot]));
     g_sampler_ram_pool.slots[ram_slot].state = SAMPLER_RAM_SLOT_EMPTY;
@@ -746,8 +887,134 @@ sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot)
 
 const float *sampler_ram_pool_get_data(uint16_t ram_slot)
 {
+    if (__get_IPSR() != 0U)
+    {
+        g_sampler_ram_pool.audio_diag.legacy_irq_access++;
+    }
     const sampler_ram_slot_t *const slot = sampler_ram_pool_get_slot(ram_slot);
     return ((slot != 0) && (slot->state == SAMPLER_RAM_SLOT_READY)) ? slot->data : 0;
+}
+
+uint8_t sampler_ram_pool_audio_acquire(uint16_t ram_slot,
+                                       uint16_t global_slot,
+                                       sampler_ram_audio_sample_t *out_sample)
+{
+    if (out_sample != 0)
+    {
+        memset(out_sample, 0, sizeof(*out_sample));
+    }
+    if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS) || (out_sample == 0))
+    {
+        g_sampler_ram_pool.audio_diag.acquire_refused++;
+        return 0U;
+    }
+
+    const sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[ram_slot];
+    if ((slot->state != SAMPLER_RAM_SLOT_READY)
+        || (slot->global_slot != global_slot)
+        || (slot->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+        || (slot->data == 0)
+        || (slot->frames == 0U)
+        || (slot->channels != 2U)
+        || (slot->generation == 0U))
+    {
+        g_sampler_ram_pool.audio_diag.acquire_refused++;
+        return 0U;
+    }
+
+    if (g_sampler_ram_pool.audio_users[ram_slot] == UINT16_MAX)
+    {
+        g_sampler_ram_pool.audio_diag.acquire_refused++;
+        return 0U;
+    }
+
+    sampler_ram_audio_sample_t sample;
+    memset(&sample, 0, sizeof(sample));
+    sample.ram_slot = ram_slot;
+    sample.global_slot = global_slot;
+    sample.generation = slot->generation;
+    sample.data = slot->data;
+    sample.frames = slot->frames;
+    sample.sample_rate = slot->sample_rate;
+    sample.channels = slot->channels;
+    sample.format = slot->format;
+    sample.playable = 1U;
+
+    sampler_ram_audio_acquire_hook(&sample);
+    g_sampler_ram_pool.audio_users[ram_slot]++;
+    g_sampler_ram_pool.audio_diag.acquire_ok++;
+    sampler_ram_audio_note_users();
+    *out_sample = sample;
+    return 1U;
+}
+
+void sampler_ram_pool_audio_release(uint16_t ram_slot, uint32_t generation)
+{
+    if ((ram_slot == SAMPLER_RAM_POOL_INVALID_SLOT) || (generation == 0U))
+    {
+        g_sampler_ram_pool.audio_diag.release_rejected++;
+        return;
+    }
+
+    if ((ram_slot < SAMPLER_RAM_POOL_MAX_SLOTS)
+        && (g_sampler_ram_pool.slots[ram_slot].generation == generation))
+    {
+        if (g_sampler_ram_pool.audio_users[ram_slot] != 0U)
+        {
+            g_sampler_ram_pool.audio_users[ram_slot]--;
+            g_sampler_ram_pool.audio_diag.release_ok++;
+            return;
+        }
+        g_sampler_ram_pool.audio_diag.release_rejected++;
+        return;
+    }
+
+    for (uint16_t i = 0U; i < SAMPLER_RAM_RETIRED_ALLOCATION_MAX; ++i)
+    {
+        sampler_ram_retired_allocation_t *const retired = &g_sampler_ram_pool.retired[i];
+        if ((retired->used != 0U)
+            && (retired->ram_slot == ram_slot)
+            && (retired->generation == generation))
+        {
+            if (retired->audio_users > 1U)
+            {
+                retired->audio_users--;
+                g_sampler_ram_pool.audio_diag.release_ok++;
+                return;
+            }
+            sampler_ram_release_allocation(retired->first_page_slot, retired->page_count);
+            memset(retired, 0, sizeof(*retired));
+            g_sampler_ram_pool.audio_diag.release_ok++;
+            return;
+        }
+    }
+
+    if (ram_slot < SAMPLER_RAM_POOL_MAX_SLOTS)
+    {
+        g_sampler_ram_pool.audio_diag.release_stale++;
+    }
+    else
+    {
+        g_sampler_ram_pool.audio_diag.release_rejected++;
+    }
+}
+
+void sampler_ram_pool_audio_retire(uint16_t ram_slot)
+{
+    sampler_ram_pool_clear(ram_slot);
+}
+
+void sampler_ram_pool_audio_diag_snapshot(sampler_ram_pool_audio_diag_t *out_diag)
+{
+    if (out_diag != 0)
+    {
+        *out_diag = g_sampler_ram_pool.audio_diag;
+    }
+}
+
+void sampler_ram_pool_audio_diag_reset(void)
+{
+    memset(&g_sampler_ram_pool.audio_diag, 0, sizeof(g_sampler_ram_pool.audio_diag));
 }
 
 uint32_t sampler_ram_pool_get_cost(uint16_t ram_slot)

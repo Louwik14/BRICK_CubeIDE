@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_telemetry.c:17:6:audio_telemetry_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_telemetry.c:22:6:audio_telemetry_publish_ram_playhead_from_audio	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_telemetry.c:53:9:audio_telemetry_get_ram_playhead	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_telemetry.c:78:6:audio_telemetry_diag_snapshot	0	static

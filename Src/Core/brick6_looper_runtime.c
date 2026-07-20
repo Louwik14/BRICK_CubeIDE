@@ -50,6 +50,9 @@ typedef struct
     uint32_t recorded_steps_q16;
     uint32_t source_samples_per_step_q16;
     uint32_t source_bpm_milli;
+    uint32_t content_generation;
+    uint32_t published_generation;
+    uint32_t applied_generation;
     uint64_t record_start_sample;
     uint64_t record_stop_sample;
     uint64_t playback_start_sample;
@@ -59,6 +62,7 @@ typedef struct
     uint32_t resync_old_frac_q16;
     sample_audio_key_t cache_key;
     sample_page_ref_t current_page_ref;
+    sample_audio_page_t current_page;
     const float *current_base;
     uint32_t current_start_frame;
     uint32_t current_frame_count;
@@ -129,6 +133,8 @@ static float g_looper_stretch_l[AUDIO_BLOCK_SIZE];
 static float g_looper_stretch_r[AUDIO_BLOCK_SIZE];
 static brick6_looper_preroll_state_t g_looper_preroll;
 static brick6_looper_record_boundary_state_t g_looper_record_boundary;
+static uint32_t g_looper_content_generation_counter;
+static uint32_t g_looper_render_acquire_count;
 
 static void looper_request_playhead_pages(const brick6_looper_track_state_t *state);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
@@ -198,6 +204,31 @@ static void looper_store_take_metadata(brick6_looper_track_state_t *state,
     state->record_stop_sample = record_stop_sample;
 }
 
+static uint32_t looper_next_content_generation(void)
+{
+    uint32_t generation = ++g_looper_content_generation_counter;
+    if(generation == 0U)
+    {
+        generation = ++g_looper_content_generation_counter;
+    }
+    return generation;
+}
+
+static void looper_publish_generation(brick6_looper_track_state_t *state)
+{
+    if((state == 0) || (state->content_generation == 0U)
+            || (state->frames_total == 0U)
+            || (state->is_raw == 0U)
+            || (state->cache_registered == 0U))
+    {
+        g_looper_runtime_diag.incomplete_publish_rejected++;
+        return;
+    }
+
+    state->published_generation = state->content_generation;
+    g_looper_runtime_diag.published_generation = state->published_generation;
+}
+
 static uint8_t looper_track_valid(uint8_t track_id)
 {
     return (track_id < BRICK6_LOOPER_TRACK_CAP) ? 1U : 0U;
@@ -249,6 +280,9 @@ static void looper_diag_update_take(uint8_t track_id,
     g_looper_runtime_diag.recorded_steps_q16 = state->recorded_steps_q16;
     g_looper_runtime_diag.source_samples_per_step_q16 = state->source_samples_per_step_q16;
     g_looper_runtime_diag.source_bpm_milli = state->source_bpm_milli;
+    g_looper_runtime_diag.content_generation = state->content_generation;
+    g_looper_runtime_diag.published_generation = state->published_generation;
+    g_looper_runtime_diag.applied_generation = state->applied_generation;
     g_looper_runtime_diag.current_page_start_frame = state->current_start_frame;
     g_looper_runtime_diag.current_page_frame_count = state->current_frame_count;
     g_looper_runtime_diag.record_start_sample = state->record_start_sample;
@@ -557,8 +591,10 @@ static void looper_release_reader(brick6_looper_track_state_t *state)
         return;
     }
 
-    sample_page_cache_release_page_ref_key(state->cache_key, &state->current_page_ref);
+    sample_page_cache_audio_release_ref_key(state->cache_key, &state->current_page_ref);
+    g_looper_runtime_diag.release_ok++;
     memset(&state->current_page_ref, 0, sizeof(state->current_page_ref));
+    memset(&state->current_page, 0, sizeof(state->current_page));
     state->current_base = 0;
     state->current_start_frame = 0U;
     state->current_frame_count = 0U;
@@ -585,6 +621,12 @@ static void looper_reset_take_state(brick6_looper_track_state_t *state)
     looper_shifter_release(track_id);
     state->path[0] = '\0';
     looper_store_take_metadata(state, 0U, 0U, 0U, 0U, 0U, 0U);
+    state->content_generation = looper_next_content_generation();
+    state->published_generation = 0U;
+    state->applied_generation = 0U;
+    g_looper_runtime_diag.content_generation = state->content_generation;
+    g_looper_runtime_diag.published_generation = 0U;
+    g_looper_runtime_diag.applied_generation = 0U;
     state->playhead = 0U;
     state->playhead_frac_q16 = 0U;
     state->playback_start_sample = 0U;
@@ -639,6 +681,7 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     }
 
     state->cache_registered = 1U;
+    looper_publish_generation(state);
     uint32_t page_count = (state->frames_total + SAMPLE_PAGE_FRAMES - 1U)
         / SAMPLE_PAGE_FRAMES;
     if(page_count > BRICK6_LOOPER_PREFETCH_PAGES)
@@ -780,7 +823,6 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     g_looper_runtime_diag.raw_slot = state->raw_slot;
     g_looper_runtime_diag.play_auto = state->play_auto;
     g_looper_runtime_diag.scheduled_start_valid = start_was_scheduled;
-    looper_request_playhead_pages(state);
 }
 
 static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
@@ -807,21 +849,37 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
 
     looper_release_reader(state);
 
-    sample_page_span_t span;
-    if(sample_page_cache_try_acquire_page_key(state->cache_key,
-                                              frame / SAMPLE_PAGE_FRAMES,
-                                              &span) == 0U)
+    if(state->published_generation == 0U)
     {
+        g_looper_runtime_diag.stale_generation++;
         return 0U;
     }
 
-    state->current_page_ref.page_index = span.page_index;
-    state->current_page_ref.page_generation = span.page_generation;
-    state->current_page_ref.slot_index = span.slot_index;
-    state->current_base = span.frames_interleaved;
-    state->current_start_frame = span.start_frame;
-    state->current_frame_count = span.frame_count;
+    sample_audio_page_t page;
+    if(sample_page_cache_audio_acquire_key(state->cache_key,
+                                           frame / SAMPLE_PAGE_FRAMES,
+                                           &page) == 0U)
+    {
+        g_looper_runtime_diag.page_miss_count++;
+        return 0U;
+    }
+
+    state->current_page_ref.page_index = page.page_index;
+    state->current_page_ref.page_generation = page.generation;
+    state->current_page_ref.slot_index = page.slot_index;
+    state->current_page = page;
+    state->current_base = page.frames_interleaved;
+    state->current_start_frame = page.start_frame;
+    state->current_frame_count = page.frame_count;
     state->current_acquired = 1U;
+    state->applied_generation = state->published_generation;
+    g_looper_runtime_diag.applied_generation = state->applied_generation;
+    g_looper_runtime_diag.acquire_ok++;
+    g_looper_render_acquire_count++;
+    if(g_looper_render_acquire_count > g_looper_runtime_diag.max_pages_acquired_per_block)
+    {
+        g_looper_runtime_diag.max_pages_acquired_per_block = g_looper_render_acquire_count;
+    }
     return 1U;
 }
 
@@ -912,12 +970,8 @@ static void looper_record_stop_at_boundary(uint64_t sample_time)
     if(g_looper_record_boundary.recording == 0U)
         return;
 
-    multi_record_writer_status_t status;
-    if(multi_record_writer_get_status(0U, &status) == 0U)
-        return;
-
     const uint8_t track = g_looper_record_boundary.track_id;
-    const uint8_t raw_slot = status.raw_slot;
+    const uint8_t raw_slot = g_looper_record_boundary.raw_slot;
     const uint32_t span_frames =
         (sample_time > g_looper_record_boundary.actual_start_sample)
             ? (uint32_t)(sample_time - g_looper_record_boundary.actual_start_sample)
@@ -1129,6 +1183,9 @@ void brick6_looper_runtime_notify_raw_take_ready(uint8_t track_id,
     state->scheduled_start_sample =
         (state->scheduled_start_valid != 0U) ? scheduled_start_sample : 0U;
     state->frames_total = recorded_frames;
+    state->content_generation = looper_next_content_generation();
+    state->published_generation = 0U;
+    state->applied_generation = 0U;
 
     if(live_preroll_take != 0U)
     {
@@ -1193,10 +1250,18 @@ void brick6_looper_runtime_notify_preroll_take_ready(uint8_t track_id,
     state->scheduled_start_sample =
         (state->scheduled_start_valid != 0U) ? scheduled_start_sample : 0U;
     state->frames_total = expected_frames;
+    state->content_generation = looper_next_content_generation();
+    state->published_generation = 0U;
+    state->applied_generation = 0U;
     state->playhead = 0U;
     looper_adopt_preroll_take(state, track_id, raw_slot, expected_frames);
     state->preroll_consumed = 0U;
     state->raw_relay_done = 0U;
+    if(state->preroll_valid != 0U)
+    {
+        state->published_generation = state->content_generation;
+        g_looper_runtime_diag.published_generation = state->published_generation;
+    }
     state->state = (state->preroll_valid != 0U)
         ? BRICK6_LOOPER_RUNTIME_STATE_READY
         : BRICK6_LOOPER_RUNTIME_STATE_EMPTY;
@@ -1306,13 +1371,6 @@ uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track)
     if((out_track == 0)
             || (g_looper_record_boundary.recording == 0U)
             || (g_looper_record_boundary.track_id >= BRICK6_LOOPER_TRACK_CAP))
-    {
-        return 0U;
-    }
-
-    multi_record_writer_status_t status;
-    if((multi_record_writer_get_status(0U, &status) == 0U)
-            || (status.state != MULTI_RECORD_WRITER_STATE_RECORDING))
     {
         return 0U;
     }
@@ -1934,7 +1992,6 @@ static void looper_try_consume_resync(brick6_looper_track_state_t *state,
             : (uint8_t)BRICK6_LOOPER_RESYNC_XFADE_FRAMES;
     state->resync_pending = 0U;
     state->resync_stable_blocks = 0U;
-    looper_request_playhead_pages(state);
 }
 
 static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
@@ -2017,6 +2074,8 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
     if(looper_track_valid(track) == 0U)
         return;
 
+    g_looper_render_acquire_count = 0U;
+
     brick6_looper_track_state_t *state = &g_looper_tracks[track];
     if((state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
             || (state->frames_total == 0U)
@@ -2053,6 +2112,11 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
 
     if(state->cache_registered == 0U)
     {
+        return;
+    }
+    if(state->published_generation == 0U)
+    {
+        g_looper_runtime_diag.stale_generation++;
         return;
     }
 

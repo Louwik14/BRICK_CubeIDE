@@ -74,6 +74,35 @@ typedef struct
 
 typedef struct
 {
+    uint16_t ram_slot;
+    uint16_t global_slot;
+    uint32_t generation;
+    const float *data;
+    uint32_t frames;
+    uint32_t sample_rate;
+    uint16_t channels;
+    sampler_ram_format_t format;
+    uint8_t playable;
+    uint8_t reserved;
+} sampler_ram_audio_sample_t;
+
+typedef struct
+{
+    uint32_t published_generations;
+    uint32_t acquire_ok;
+    uint32_t acquire_refused;
+    uint32_t release_ok;
+    uint32_t release_rejected;
+    uint32_t release_stale;
+    uint32_t clear_deferred;
+    uint32_t retained_allocations;
+    uint32_t incomplete_publish_refused;
+    uint32_t max_audio_users;
+    uint32_t legacy_irq_access;
+} sampler_ram_pool_audio_diag_t;
+
+typedef struct
+{
     sampler_ram_slot_state_t state;
     uint16_t global_slot;
     char path[SAMPLER_RAM_POOL_PATH_MAX];
@@ -112,6 +141,13 @@ void sampler_ram_pool_clear(uint16_t ram_slot);
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot);
 const float *sampler_ram_pool_get_data(uint16_t ram_slot);
+uint8_t sampler_ram_pool_audio_acquire(uint16_t ram_slot,
+                                       uint16_t global_slot,
+                                       sampler_ram_audio_sample_t *out_sample);
+void sampler_ram_pool_audio_release(uint16_t ram_slot, uint32_t generation);
+void sampler_ram_pool_audio_retire(uint16_t ram_slot);
+void sampler_ram_pool_audio_diag_snapshot(sampler_ram_pool_audio_diag_t *out_diag);
+void sampler_ram_pool_audio_diag_reset(void);
 uint32_t sampler_ram_pool_get_cost(uint16_t ram_slot);
 uint32_t sampler_ram_pool_get_used_bytes(void);
 uint32_t sampler_ram_pool_get_free_bytes(void);

@@ -20,8 +20,52 @@
 #define MRW_FINALIZE_PHASE_CLOSE 3U
 #define MRW_FINALIZE_PHASE_RENAME_WAV 4U
 #define MRW_WAV_JUNK_BYTES (MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 52U)
+#define MRW_MARKER_RING_CAP 16U
 #define MRW_WAV_MAX_FRAMES \
     ((UINT32_MAX - (MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 8U)) / MULTI_RECORD_WRITER_BYTES_PER_FRAME)
+
+typedef struct
+{
+    multi_record_writer_marker_t type;
+    uint32_t generation;
+    uint32_t frames_received;
+} multi_record_writer_marker_event_t;
+
+typedef struct
+{
+    volatile uint32_t write_index;
+    volatile uint32_t read_index;
+    volatile uint8_t emergency_valid;
+    multi_record_writer_marker_event_t events[MRW_MARKER_RING_CAP];
+    multi_record_writer_marker_event_t emergency_event;
+} multi_record_writer_marker_ring_t;
+
+typedef struct
+{
+    volatile uint32_t generation;
+    volatile uint8_t session_active;
+    volatile uint8_t accepts_blocks;
+    volatile uint8_t client_id;
+    volatile uint8_t backend;
+    volatile uint32_t frame_limit;
+    volatile uint32_t frames_received;
+} multi_record_writer_audio_projection_t;
+
+typedef struct
+{
+    uint32_t high_watermark;
+    uint32_t overflow_count;
+    uint32_t dropped_frames;
+    uint32_t blocks_produced;
+    uint32_t blocks_consumed;
+    uint32_t markers_produced;
+    uint32_t markers_consumed;
+    uint32_t marker_critical_failures;
+    uint32_t stale_generation;
+    uint32_t sessions_abandoned;
+    uint32_t max_blocks_drained_per_service;
+    uint32_t legacy_writer_calls_from_irq;
+} multi_record_writer_diag_t;
 
 typedef struct
 {
@@ -46,6 +90,7 @@ typedef struct
     uint32_t bytes_written;
     uint32_t frame_limit;
     uint32_t recorded_frames;
+    uint32_t session_generation;
     FIL file;
     char raw_path[MULTI_RECORD_WRITER_PATH_MAX];
     char final_path[MULTI_RECORD_WRITER_PATH_MAX];
@@ -54,6 +99,9 @@ typedef struct
 SDRAM_RECORDER static int32_t
     g_record_rings[MULTI_RECORD_WRITER_MAX_CLIENTS][MULTI_RECORD_WRITER_RING_FRAMES * MULTI_RECORD_WRITER_CHANNELS];
 static multi_record_writer_client_t g_record_clients[MULTI_RECORD_WRITER_MAX_CLIENTS];
+static multi_record_writer_marker_ring_t g_record_markers[MULTI_RECORD_WRITER_MAX_CLIENTS];
+static multi_record_writer_audio_projection_t g_record_audio_projection[MULTI_RECORD_WRITER_MAX_CLIENTS];
+static multi_record_writer_diag_t g_record_diag[MULTI_RECORD_WRITER_MAX_CLIENTS];
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_pcm24_pack[MRW_PACK_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
 _Static_assert(MULTI_RECORD_WRITER_MAX_CLIENTS > 0U, "record writer needs at least one client");
@@ -68,9 +116,141 @@ _Static_assert(SAMPLE_CAPTURE_RECORD_CLIENT_ID < MULTI_RECORD_WRITER_MAX_CLIENTS
 _Static_assert(SAMPLE_CAPTURE_RECORD_CLIENT_ID != 0U,
                "sample capture must not share the Looper RAW writer client");
 
+static uint8_t close_file_if_open(multi_record_writer_client_t *client);
+
 static uint8_t client_id_valid(uint8_t client_id)
 {
     return (client_id < MULTI_RECORD_WRITER_MAX_CLIENTS) ? 1U : 0U;
+}
+
+static uint8_t writer_in_irq(void)
+{
+    return (__get_IPSR() != 0U) ? 1U : 0U;
+}
+
+static void record_writer_barrier_release(void)
+{
+    __DMB();
+}
+
+static void record_writer_barrier_acquire(void)
+{
+    __DMB();
+}
+
+static void record_writer_publish_producer(void)
+{
+    record_writer_barrier_release();
+}
+
+static void record_writer_acquire_consumer(void)
+{
+    record_writer_barrier_acquire();
+}
+
+static void record_writer_release_consumer(void)
+{
+    record_writer_barrier_release();
+}
+
+static uint32_t next_session_generation(multi_record_writer_client_t *client)
+{
+    uint32_t generation = client->session_generation + 1U;
+    if(generation == 0U)
+    {
+        generation = 1U;
+    }
+    client->session_generation = generation;
+    return generation;
+}
+
+static void publish_audio_projection(uint8_t client_id,
+                                     const multi_record_writer_client_t *client,
+                                     uint8_t active,
+                                     uint8_t accepts_blocks)
+{
+    multi_record_writer_audio_projection_t *projection = &g_record_audio_projection[client_id];
+    projection->client_id = client_id;
+    projection->backend = (uint8_t)client->backend;
+    projection->frame_limit = client->frame_limit;
+    projection->frames_received = 0U;
+    projection->generation = client->session_generation;
+    projection->accepts_blocks = (accepts_blocks != 0U) ? 1U : 0U;
+    projection->session_active = (active != 0U) ? 1U : 0U;
+    record_writer_publish_producer();
+}
+
+static uint8_t marker_ring_push(uint8_t client_id, multi_record_writer_marker_t marker)
+{
+    multi_record_writer_marker_ring_t *ring = &g_record_markers[client_id];
+    multi_record_writer_audio_projection_t *projection = &g_record_audio_projection[client_id];
+    multi_record_writer_diag_t *diag = &g_record_diag[client_id];
+    const uint32_t wr = ring->write_index;
+    uint32_t next = wr + 1U;
+    if(next >= MRW_MARKER_RING_CAP)
+    {
+        next = 0U;
+    }
+    if(next == ring->read_index)
+    {
+        if(ring->emergency_valid != 0U)
+        {
+            diag->marker_critical_failures++;
+            return 0U;
+        }
+        ring->emergency_event.type = marker;
+        ring->emergency_event.generation = projection->generation;
+        ring->emergency_event.frames_received = projection->frames_received;
+        record_writer_publish_producer();
+        ring->emergency_valid = 1U;
+        diag->markers_produced++;
+        return 1U;
+    }
+
+    ring->events[wr].type = marker;
+    ring->events[wr].generation = projection->generation;
+    ring->events[wr].frames_received = projection->frames_received;
+    record_writer_publish_producer();
+    ring->write_index = next;
+    diag->markers_produced++;
+    return 1U;
+}
+
+static uint8_t marker_ring_pop(uint8_t client_id, multi_record_writer_marker_event_t *out_event)
+{
+    multi_record_writer_marker_ring_t *ring = &g_record_markers[client_id];
+    const uint32_t rd = ring->read_index;
+    if(rd == ring->write_index)
+    {
+        if(ring->emergency_valid != 0U)
+        {
+            record_writer_acquire_consumer();
+            if(out_event != 0)
+            {
+                *out_event = ring->emergency_event;
+            }
+            ring->emergency_valid = 0U;
+            record_writer_release_consumer();
+            g_record_diag[client_id].markers_consumed++;
+            return 1U;
+        }
+        return 0U;
+    }
+
+    record_writer_acquire_consumer();
+    if(out_event != 0)
+    {
+        *out_event = ring->events[rd];
+    }
+    uint32_t next = rd + 1U;
+    if(next >= MRW_MARKER_RING_CAP)
+    {
+        next = 0U;
+    }
+    ring->read_index = next;
+    record_writer_release_consumer();
+    g_record_diag[client_id].markers_consumed++;
+    return 1U;
 }
 
 static const char *client_debug_path(const multi_record_writer_client_t *client)
@@ -109,6 +289,13 @@ static void ring_reset(multi_record_writer_client_t *client)
 {
     client->write_index = 0U;
     client->read_index = 0U;
+}
+
+static void marker_ring_reset(uint8_t client_id)
+{
+    g_record_markers[client_id].write_index = 0U;
+    g_record_markers[client_id].read_index = 0U;
+    g_record_markers[client_id].emergency_valid = 0U;
 }
 
 static void set_error(multi_record_writer_client_t *client, multi_record_writer_error_t error)
@@ -293,6 +480,128 @@ static void reset_client_take_fields(multi_record_writer_client_t *client)
     client->raw_take_valid = 0U;
     client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
     ring_reset(client);
+}
+
+static void reset_client_diag(uint8_t client_id)
+{
+    memset(&g_record_diag[client_id], 0, sizeof(g_record_diag[client_id]));
+}
+
+static uint8_t start_client_recording(uint8_t client_id, uint8_t reset_audio_ring)
+{
+    multi_record_writer_client_t *client = &g_record_clients[client_id];
+    if((client->state != MULTI_RECORD_WRITER_STATE_PREPARED) || (client->file_open == 0U))
+    {
+        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+        return 0U;
+    }
+
+    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
+    {
+        if(i == client_id)
+        {
+            continue;
+        }
+
+        const multi_record_writer_state_t other_state = g_record_clients[i].state;
+        if((other_state == MULTI_RECORD_WRITER_STATE_RECORDING)
+                || (other_state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
+                || (other_state == MULTI_RECORD_WRITER_STATE_DRAINING)
+                || (other_state == MULTI_RECORD_WRITER_STATE_FINALIZING))
+        {
+            set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+            return 0U;
+        }
+    }
+
+    if(reset_audio_ring != 0U)
+    {
+        ring_reset(client);
+    }
+    client->state = MULTI_RECORD_WRITER_STATE_RECORDING;
+    publish_audio_projection(client_id, client, 1U, 1U);
+    return 1U;
+}
+
+static uint8_t request_stop_client(uint8_t client_id)
+{
+    multi_record_writer_client_t *client = &g_record_clients[client_id];
+    if(client->state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED ||
+       client->state == MULTI_RECORD_WRITER_STATE_DRAINING ||
+       client->state == MULTI_RECORD_WRITER_STATE_FINALIZING ||
+       client->state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
+    {
+        publish_audio_projection(client_id, client, 0U, 0U);
+        return 1U;
+    }
+
+    if(client->state != MULTI_RECORD_WRITER_STATE_RECORDING)
+    {
+        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+        publish_audio_projection(client_id, client, 0U, 0U);
+        return 0U;
+    }
+
+    client->state = MULTI_RECORD_WRITER_STATE_STOP_REQUESTED;
+    publish_audio_projection(client_id, client, 0U, 0U);
+    writer_debug_mark(client,
+                      REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
+                      client->frames_received);
+    return 1U;
+}
+
+static void process_marker_event(uint8_t client_id, const multi_record_writer_marker_event_t *event)
+{
+    if(event == 0)
+    {
+        return;
+    }
+
+    multi_record_writer_client_t *client = &g_record_clients[client_id];
+    if(event->generation != client->session_generation)
+    {
+        g_record_diag[client_id].stale_generation++;
+        return;
+    }
+
+    switch(event->type)
+    {
+        case MULTI_RECORD_WRITER_MARKER_START:
+            client->last_operation = MULTI_RECORD_WRITER_OP_MARKER_START;
+            (void)start_client_recording(client_id, 0U);
+            break;
+        case MULTI_RECORD_WRITER_MARKER_STOP:
+            client->last_operation = MULTI_RECORD_WRITER_OP_MARKER_STOP;
+            client->frames_received = event->frames_received;
+            client->overflow_count = g_record_diag[client_id].overflow_count;
+            client->dropped_frames = g_record_diag[client_id].dropped_frames;
+            client->high_watermark = g_record_diag[client_id].high_watermark;
+            if(client->overflow_count != 0U)
+            {
+                client->degraded = 1U;
+                client->error = MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
+            }
+            (void)request_stop_client(client_id);
+            break;
+        case MULTI_RECORD_WRITER_MARKER_ABORT:
+            client->last_operation = MULTI_RECORD_WRITER_OP_MARKER_ABORT;
+            g_record_diag[client_id].sessions_abandoned++;
+            client->frames_received = event->frames_received;
+            client->overflow_count = g_record_diag[client_id].overflow_count;
+            client->dropped_frames = g_record_diag[client_id].dropped_frames;
+            client->high_watermark = g_record_diag[client_id].high_watermark;
+            client->degraded = 1U;
+            client->error = MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
+            client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+            (void)close_file_if_open(client);
+            publish_audio_projection(client_id, client, 0U, 0U);
+            break;
+        case MULTI_RECORD_WRITER_MARKER_END:
+            client->last_operation = MULTI_RECORD_WRITER_OP_MARKER_END;
+            break;
+        default:
+            break;
+    }
 }
 
 static uint8_t close_file_if_open(multi_record_writer_client_t *client)
@@ -496,6 +805,9 @@ void multi_record_writer_init(void)
 {
     memset(g_record_clients, 0, sizeof(g_record_clients));
     memset(g_record_rings, 0, sizeof(g_record_rings));
+    memset(g_record_markers, 0, sizeof(g_record_markers));
+    memset(g_record_audio_projection, 0, sizeof(g_record_audio_projection));
+    memset(g_record_diag, 0, sizeof(g_record_diag));
     memset(g_pcm24_pack, 0, sizeof(g_pcm24_pack));
 
     for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
@@ -506,6 +818,7 @@ void multi_record_writer_init(void)
         g_record_clients[i].last_operation = MULTI_RECORD_WRITER_OP_NONE;
         g_record_clients[i].last_sd_error = FR_OK;
         g_record_clients[i].raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
+        g_record_audio_projection[i].client_id = (uint8_t)i;
     }
 }
 
@@ -601,8 +914,12 @@ raw_prepare_done:
             expected_frames : raw_capacity;
         client->raw_slot = raw_slot;
         client->final_path[0] = '\0';
+        (void)next_session_generation(client);
+        reset_client_diag(client_id);
+        marker_ring_reset(client_id);
         reset_client_take_fields(client);
         client->state = MULTI_RECORD_WRITER_STATE_PREPARED;
+        publish_audio_projection(client_id, client, 0U, 1U);
     }
     else
     {
@@ -688,8 +1005,12 @@ uint8_t multi_record_writer_prepare_sample_wav(uint8_t client_id,
             ((frame_limit != 0U) && (frame_limit < MRW_WAV_MAX_FRAMES)) ?
                 frame_limit : MRW_WAV_MAX_FRAMES;
         client->raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
+        (void)next_session_generation(client);
+        reset_client_diag(client_id);
+        marker_ring_reset(client_id);
         reset_client_take_fields(client);
         client->state = MULTI_RECORD_WRITER_STATE_PREPARED;
+        publish_audio_projection(client_id, client, 0U, 1U);
     }
     else
     {
@@ -706,34 +1027,28 @@ uint8_t multi_record_writer_start(uint8_t client_id)
     if(client_id_valid(client_id) == 0U)
         return 0U;
 
-    multi_record_writer_client_t *client = &g_record_clients[client_id];
-    if((client->state != MULTI_RECORD_WRITER_STATE_PREPARED) || (client->file_open == 0U))
+    if(writer_in_irq() != 0U)
     {
-        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
-        return 0U;
-    }
-
-    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
-    {
-        if(i == client_id)
+        g_record_diag[client_id].legacy_writer_calls_from_irq++;
+        multi_record_writer_audio_projection_t *projection = &g_record_audio_projection[client_id];
+        if((projection->accepts_blocks == 0U) || (projection->generation == 0U))
         {
-            continue;
-        }
-
-        const multi_record_writer_state_t other_state = g_record_clients[i].state;
-        if((other_state == MULTI_RECORD_WRITER_STATE_RECORDING)
-                || (other_state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
-                || (other_state == MULTI_RECORD_WRITER_STATE_DRAINING)
-                || (other_state == MULTI_RECORD_WRITER_STATE_FINALIZING))
-        {
-            set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+            g_record_diag[client_id].marker_critical_failures++;
             return 0U;
         }
+
+        if(marker_ring_push(client_id, MULTI_RECORD_WRITER_MARKER_START) == 0U)
+        {
+            return 0U;
+        }
+        projection->session_active = 1U;
+        projection->accepts_blocks = 1U;
+        projection->frames_received = 0U;
+        record_writer_publish_producer();
+        return 1U;
     }
 
-    ring_reset(client);
-    client->state = MULTI_RECORD_WRITER_STATE_RECORDING;
-    return 1U;
+    return start_client_recording(client_id, 1U);
 }
 
 uint8_t multi_record_writer_request_stop(uint8_t client_id)
@@ -741,26 +1056,20 @@ uint8_t multi_record_writer_request_stop(uint8_t client_id)
     if(client_id_valid(client_id) == 0U)
         return 0U;
 
-    multi_record_writer_client_t *client = &g_record_clients[client_id];
-    if(client->state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED ||
-       client->state == MULTI_RECORD_WRITER_STATE_DRAINING ||
-       client->state == MULTI_RECORD_WRITER_STATE_FINALIZING ||
-       client->state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
+    if(writer_in_irq() != 0U)
     {
+        g_record_diag[client_id].legacy_writer_calls_from_irq++;
+        if(marker_ring_push(client_id, MULTI_RECORD_WRITER_MARKER_STOP) == 0U)
+        {
+            return 0U;
+        }
+        g_record_audio_projection[client_id].accepts_blocks = 0U;
+        g_record_audio_projection[client_id].session_active = 0U;
+        record_writer_publish_producer();
         return 1U;
     }
 
-    if(client->state != MULTI_RECORD_WRITER_STATE_RECORDING)
-    {
-        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
-        return 0U;
-    }
-
-    client->state = MULTI_RECORD_WRITER_STATE_STOP_REQUESTED;
-    writer_debug_mark(client,
-                      REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
-                      client->frames_received);
-    return 1U;
+    return request_stop_client(client_id);
 }
 
 uint8_t multi_record_writer_push_audio_block_from_irq(uint8_t client_id,
@@ -770,29 +1079,45 @@ uint8_t multi_record_writer_push_audio_block_from_irq(uint8_t client_id,
     if((client_id_valid(client_id) == 0U) || (lr_interleaved == 0) || (frames == 0U))
         return 0U;
 
-    multi_record_writer_client_t *client = &g_record_clients[client_id];
-    if(client->state != MULTI_RECORD_WRITER_STATE_RECORDING)
+    multi_record_writer_audio_projection_t *projection = &g_record_audio_projection[client_id];
+    multi_record_writer_diag_t *diag = &g_record_diag[client_id];
+    if((projection->session_active == 0U) || (projection->accepts_blocks == 0U)
+            || (projection->generation == 0U))
         return 0U;
 
     uint32_t frames_to_store = frames;
-    if(client->frame_limit != 0U)
+    const uint32_t generation = projection->generation;
+    const uint32_t frame_limit = projection->frame_limit;
+    const uint32_t frames_received = projection->frames_received;
+    if(frame_limit != 0U)
     {
-        if(client->frames_received >= client->frame_limit)
+        if(frames_received >= frame_limit)
             return 1U;
 
-        const uint32_t remaining = client->frame_limit - client->frames_received;
+        const uint32_t remaining = frame_limit - frames_received;
         if(frames_to_store > remaining)
             frames_to_store = remaining;
     }
 
+    multi_record_writer_client_t *client = &g_record_clients[client_id];
     const uint32_t pending = ring_pending_frames(client);
     const uint32_t available_frames = MRW_RING_USABLE_FRAMES - pending;
     if(frames_to_store > available_frames)
     {
-        client->overflow_count++;
-        client->dropped_frames += frames_to_store;
-        client->degraded = 1U;
-        client->error = MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
+        diag->marker_critical_failures += (projection->backend == MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW) ? 1U : 0U;
+        diag->overflow_count++;
+        diag->dropped_frames += frames_to_store;
+        projection->accepts_blocks = 0U;
+        if(projection->backend == MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW)
+        {
+            projection->session_active = 0U;
+            (void)marker_ring_push(client_id, MULTI_RECORD_WRITER_MARKER_ABORT);
+        }
+        else
+        {
+            (void)marker_ring_push(client_id, MULTI_RECORD_WRITER_MARKER_STOP);
+        }
+        record_writer_publish_producer();
         return 0U;
     }
 
@@ -808,13 +1133,18 @@ uint8_t multi_record_writer_push_audio_block_from_irq(uint8_t client_id,
             wr = 0U;
     }
 
-    __DMB();
+    record_writer_publish_producer();
     client->write_index = wr;
-    client->frames_received += frames_to_store;
+    projection->frames_received = frames_received + frames_to_store;
+    if(generation != client->session_generation)
+    {
+        diag->stale_generation++;
+    }
+    diag->blocks_produced++;
 
     const uint32_t new_pending = ring_pending_frames(client);
-    if(new_pending > client->high_watermark)
-        client->high_watermark = new_pending;
+    if(new_pending > diag->high_watermark)
+        diag->high_watermark = new_pending;
 
     return 1U;
 }
@@ -822,6 +1152,16 @@ uint8_t multi_record_writer_push_audio_block_from_irq(uint8_t client_id,
 void multi_record_writer_service(uint32_t byte_budget)
 {
     uint8_t finalized_one = 0U;
+    uint32_t blocks_drained_this_service[MULTI_RECORD_WRITER_MAX_CLIENTS] = {0U};
+
+    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
+    {
+        multi_record_writer_marker_event_t event;
+        while(marker_ring_pop((uint8_t)i, &event) != 0U)
+        {
+            process_marker_event((uint8_t)i, &event);
+        }
+    }
 
     for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
     {
@@ -848,7 +1188,13 @@ void multi_record_writer_service(uint32_t byte_budget)
         const int32_t picked = pick_most_filled_client();
         if(picked >= 0)
         {
+            const uint32_t before = g_record_clients[(uint32_t)picked].frames_drained;
             (void)write_audio_chunk((uint32_t)picked, &byte_budget);
+            if(g_record_clients[(uint32_t)picked].frames_drained != before)
+            {
+                g_record_diag[(uint32_t)picked].blocks_consumed++;
+                blocks_drained_this_service[(uint32_t)picked]++;
+            }
         }
     }
 
@@ -875,6 +1221,14 @@ void multi_record_writer_service(uint32_t byte_budget)
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
+
+    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
+    {
+        if(blocks_drained_this_service[i] > g_record_diag[i].max_blocks_drained_per_service)
+        {
+            g_record_diag[i].max_blocks_drained_per_service = blocks_drained_this_service[i];
+        }
+    }
 }
 
 uint8_t multi_record_writer_get_status(uint8_t client_id,
@@ -884,20 +1238,42 @@ uint8_t multi_record_writer_get_status(uint8_t client_id,
         return 0U;
 
     const multi_record_writer_client_t *client = &g_record_clients[client_id];
+    const multi_record_writer_audio_projection_t *projection = &g_record_audio_projection[client_id];
+    const multi_record_writer_diag_t *diag = &g_record_diag[client_id];
     out_status->state = client->state;
     out_status->backend = client->backend;
-    out_status->error = client->error;
+    out_status->error = (diag->overflow_count != 0U)
+        ? MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW
+        : client->error;
     out_status->last_operation = client->last_operation;
     out_status->last_sd_error = (uint32_t)client->last_sd_error;
-    out_status->degraded = client->degraded;
+    out_status->degraded = ((client->degraded != 0U) || (diag->overflow_count != 0U)) ? 1U : 0U;
     out_status->frames_pending = ring_pending_frames(client);
-    out_status->high_watermark = client->high_watermark;
-    out_status->overflow_count = client->overflow_count;
-    out_status->dropped_frames = client->dropped_frames;
-    out_status->frames_received = client->frames_received;
+    out_status->high_watermark = (diag->high_watermark > client->high_watermark)
+        ? diag->high_watermark
+        : client->high_watermark;
+    out_status->overflow_count = (diag->overflow_count > client->overflow_count)
+        ? diag->overflow_count
+        : client->overflow_count;
+    out_status->dropped_frames = (diag->dropped_frames > client->dropped_frames)
+        ? diag->dropped_frames
+        : client->dropped_frames;
+    out_status->frames_received = (projection->frames_received > client->frames_received)
+        ? projection->frames_received
+        : client->frames_received;
     out_status->frames_drained = client->frames_drained;
     out_status->frames_written = client->frames_written;
     out_status->bytes_written = client->bytes_written;
+    out_status->session_generation = client->session_generation;
+    out_status->blocks_produced = diag->blocks_produced;
+    out_status->blocks_consumed = diag->blocks_consumed;
+    out_status->markers_produced = diag->markers_produced;
+    out_status->markers_consumed = diag->markers_consumed;
+    out_status->marker_critical_failures = diag->marker_critical_failures;
+    out_status->stale_generation = diag->stale_generation;
+    out_status->sessions_abandoned = diag->sessions_abandoned;
+    out_status->max_blocks_drained_per_service = diag->max_blocks_drained_per_service;
+    out_status->legacy_writer_calls_from_irq = diag->legacy_writer_calls_from_irq;
     out_status->raw_slot = client->raw_slot;
     return 1U;
 }

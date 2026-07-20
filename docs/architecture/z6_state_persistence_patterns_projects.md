@@ -974,3 +974,53 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Aucun changement de structure `PatternSaveV1` / `ProjectSaveV1` n'est introduit dans ce lot: les versions restent celles du format courant.
 - En low-cost, les valeurs persistantes qui referencent `Input2..4` ou une route CUE/BOTH sont refusees/normalisees par les validations catalogue et les clamps runtime existants lors de l'application, sans migration inter-variante.
 - Premium conserve le format et les ressources exposees inchanges.
+
+## Addendum 2026-07-18 - ownership pages Sampler publiees
+
+- Z6/systeme reste proprietaire de l'allocation des slots page-cache, du chargement SD, de la conversion, des etats `QUEUED/LOADING/ERROR`, des pins permanents RAM/Multi page0, des window locks de streaming et de la politique d'eviction.
+- Une page chargee devient visible audio uniquement apres publication `READY`; avant cela, les lecteurs audio obtiennent un miss/underrun et ne lisent pas de donnees partielles.
+- Les pages READY publiees sont traitees comme immutables pendant leur visibilite audio. Un clear/reset/projet qui retire une cle invalide l'index systeme, mais une generation deja acquise par l'audio reste protegee par lease jusqu'a release.
+- Les chemins RAM permanents restent charges hors IRQ dans `sampler_ram_pool` via le `SAMPLE_PAGE_SLOT_POOL`; l'audio RAM lit encore le slot RAM resident versionne par generation de slot, sans passer par le nouveau handle page-cache.
+- `sample_stream_manager` reste le seul service SD STREAM: il coalesce les demandes, remplit les targets hors IRQ, puis publie READY. Le backend contigu ne possede pas de queue parallele; il ne fait que remplir le target systeme avant publication.
+- Multi conserve ses cles `{domain=MULTI, object_id=multi_sample_id}` et Looper ses cles `{domain=LOOPER, object_id}`. Les page0 Multi pinnees et les window locks runtime restent des metadata systeme, non modifiees par le release audio local.
+- Les overviews waveform et caches d'affichage restent hors IRQ et continuent a lire les metadata systeme/pool; ils ne font pas partie de la projection audio READY.
+
+## Addendum 2026-07-18 - wrappers Classic audio versionnes
+
+- `sample_cache` ne devient pas une autorite de duree de vie: il conserve les etats produit Classic et les voix legacy, mais les pages physiques READY restent acquises/releasees via `sample_page_cache_audio_acquire_*` / `sample_page_cache_audio_release_*`.
+- Les clears/projets/evictions conservent la regle systeme: les nouvelles acquisitions Classic voient la nouvelle generation ou un miss; une lecture deja leasee continue sur sa page immuable jusqu'a release.
+- Les wrappers Classic par `sample_id` restent autorises pour les loaders, diagnostics et compat hors IRQ. Les chemins audio migres stockent le couple `slot_index/generation` retourne par la projection audio et ne releasent plus par page mutable seule.
+- Looper RAW, `sampler_ram_pool` resident et overview waveform restent volontairement hors contrat page-cache audio de cette passe.
+
+## Addendum 2026-07-18 - publication Looper RAW versionnee
+
+- Z6/systeme reste proprietaire des reservoirs RAW Looper, de la preparation writer, de la finalisation, de l'enregistrement metadata `recorded_frames/path/raw_slot` et du remplissage des pages LOOPER dans le `sample_page_cache`.
+- `brick6_looper_runtime_notify_raw_take_ready()` cree une nouvelle generation de contenu, attache le reservoir RAW finalise, enregistre la cle `sample_audio_key_t {domain=LOOPER, object_id=track_id}`, puis publie seulement si la registration RAW est coherente. Une publication incomplete est rejetee et diagnostiquee.
+- `clear` / replace / re-record incrementent la generation de contenu et retirent la cle LOOPER cote systeme. Les nouvelles acquisitions voient la generation courante ou un miss; les pages deja acquises par l'audio restent non reutilisables jusqu'au release versionne du page-cache.
+- Le passage record -> playback conserve le comportement actuel: `PLAY=Auto` peut demarrer sur preroll RAM pendant la finalisation/backing RAW; le RAW finalise s'attache ensuite sans reset de playhead. Hors preroll, le Looper devient playable seulement apres page READY coherente.
+- L'export RAW -> WAV reste hors IRQ, lit `recorded_frames` depuis le reservoir RAW finalise et ne modifie pas les pages deja leasees par le playback transient.
+
+## Addendum 2026-07-18 - ownership Sampler/RAM resident
+
+- `sample_page_cache` reste l'unique proprietaire physique du `SAMPLE_PAGE_SLOT_POOL`. `sampler_ram_pool` demande seulement des allocations permanentes de pages slot-pool et ne cree ni second allocator ni politique d'eviction.
+- L'autoload projet RAM recharge synchroniquement hors IRQ par `sampler_ram_pool_load_wav_at()`. Le slot global RAM n'est utile aux nouvelles voix qu'apres chargement/conversion complet et publication READY du slot RAM resident.
+- Clear/reload/remplacement retirent d'abord la visibilite produit via `sample_global_pool_clear_backend()` et une nouvelle generation de slot. Si une voix audio tient encore l'ancienne generation, le range physique est conserve en allocation retiree jusqu'au release audio; une nouvelle allocation ne reutilise donc pas ce range prematurement.
+- Les overviews waveform restent system-owned: elles sont construites hors IRQ depuis le slot RAM resident et ne font pas partie de la projection audio.
+- En cas d'echec reload/autoload, le slot global sauvegarde peut etre marque `RAM/ERROR` sans publier de projection jouable; aucune voix nouvelle ne recoit de pointeur vers une conversion partielle ou invalide.
+
+## Addendum 2026-07-18 - contrat writer record audio -> systeme
+
+- `multi_record_writer` est maintenant le contrat local M7->systeme pour l'enregistrement: rings PCM24 stereo SPSC par client, ring marker SPSC borne par client, projection audio versionnee et diagnostics par session.
+- Le systeme reste seul proprietaire de FatFs, des chemins RAW/WAV, de l'ouverture, du drain, du patch header WAV, du close, du rename et de la finalisation `TAKE_READY/FAILED`.
+- La preparation `LOOPER_RAW` / `SAMPLE_WAV` cree une nouvelle `session_generation`, reset les rings/diagnostics et publie une projection audio minimale. Aucun pointeur vers `multi_record_writer_client_t`, `FIL` ou path mutable n'est expose a l'audio.
+- Depuis l'IRQ, `multi_record_writer_start()` et `multi_record_writer_request_stop()` ne changent plus l'etat writer: ils publient respectivement des markers START/STOP versionnes. Le service consomme ces markers avant le drain et applique les transitions `PREPARED -> RECORDING` puis `RECORDING -> STOP_REQUESTED -> DRAINING -> FINALIZING`.
+- Les blocs audio publies avant que le service ait consomme START restent valides pour la meme generation; le service ne reset pas le ring lors d'un START issu du marker audio. STOP coupe l'acceptation audio puis laisse le service drainer les frames deja publiees avant finalisation.
+- Politique plein: aucune attente IRQ et aucun overwrite. Audio Rec `SAMPLE_WAV` publie STOP et conserve une prise degradee/finalisable; Looper RAW publie ABORT pour abandonner la session incoherente. Un marker critique non publie incremente `marker_critical_failures`.
+- `brick6_looper_runtime_get_record_capture_track()` ne lit plus le statut writer en audio; la capture Looper suit l'etat boundary local. Le raw slot utilise au STOP vient de l'intention Looper armee, pas d'une lecture writer.
+
+## Addendum 2026-07-19 - storage sans mutation directe des runtimes audio actifs
+
+- Kit/Patch/Project ne reset plus directement les tracks Sampler: les restores publient `AUDIO_CONTROL_SAMPLER_RESET_TRACK`.
+- Le reset transient runtime d'un projet blank publie `AUDIO_CONTROL_COMMAND_AUDIO_RUNTIME_RESET_ALL`; Z1 applique les resets Sampler/Looper/Wave/Drum/Mixer/FX et etats sonores depuis le domaine audio.
+- Les restores Project Multi publient set/stop/gain Multi par `audio_control_command`; la recherche d'instrument restaure ne lit plus l'instrument courant du runtime audio.
+- Les clear/reload de storage gardent l'ownership systeme des pools, fichiers et metadata; seuls les effets sur voix/runtimes actifs traversent la commande audio.

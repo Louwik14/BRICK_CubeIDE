@@ -58,6 +58,18 @@ typedef struct
     uint32_t playback_normal_used;
     uint32_t fallback_miss;
     uint32_t wrap_count;
+    uint32_t content_generation;
+    uint32_t published_generation;
+    uint32_t applied_generation;
+    uint32_t acquire_ok;
+    uint32_t release_ok;
+    uint32_t stale_generation;
+    uint32_t page_miss_count;
+    uint32_t incomplete_publish_rejected;
+    uint32_t finalizing_transition_refused;
+    uint32_t retained_pages_for_lease;
+    uint32_t max_pages_acquired_per_block;
+    uint32_t legacy_irq_access_detected;
     char active_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
 } brick6_looper_runtime_diag_snapshot_t;
 

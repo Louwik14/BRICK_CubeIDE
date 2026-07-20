@@ -29,7 +29,7 @@
 #include "fx_delay_stereo.h"
 #include "fx_reverb.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/track_runtime.h"
+#include "Audio/audio_control_snapshot.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define MIXER_HAS_CUE_BUS 0
@@ -277,7 +277,7 @@ static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
 
 static uint8_t mixer_track_is_looper(uint8_t logical_track)
 {
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
+    const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(logical_track);
     return (uint8_t)((ctx != 0)
             && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
             && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
@@ -2288,7 +2288,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 #endif
     for(uint8_t logical_track = 0U; logical_track < MIXER_MAX_TRACKS; ++logical_track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(logical_track);
         if((ctx != 0)
                 && (ctx->mix_track_id < MIXER_MAX_TRACKS)
                 && (mixer_track_is_looper(logical_track) != 0U)
@@ -2428,7 +2428,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         {
             uint8_t source_track = (uint8_t)t;
-            (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track);
+            (void)audio_control_snapshot_get_logical_track_for_mix_track((uint8_t)t, &source_track);
             if((source_track < MIXER_MAX_TRACKS) && (mixer_track_is_looper(source_track) != 0U))
             {
                 if((sample_capture_active != 0U)

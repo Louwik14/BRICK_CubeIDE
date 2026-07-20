@@ -15,6 +15,5 @@ void board_usb_host_init(void)
 
 void board_usb_host_process(void)
 {
-    MX_USB_HOST_Process();
+    /* Premium host process remains disabled until the generated host stack is started. */
 }
-

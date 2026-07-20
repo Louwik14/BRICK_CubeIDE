@@ -62,11 +62,24 @@ typedef enum
     MULTI_RECORD_WRITER_OP_NONE = 0,
     MULTI_RECORD_WRITER_OP_PREPARE_RAW,
     MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV,
+    MULTI_RECORD_WRITER_OP_MARKER_START,
+    MULTI_RECORD_WRITER_OP_MARKER_STOP,
+    MULTI_RECORD_WRITER_OP_MARKER_ABORT,
+    MULTI_RECORD_WRITER_OP_MARKER_END,
     MULTI_RECORD_WRITER_OP_WRITE_AUDIO,
     MULTI_RECORD_WRITER_OP_FINALIZE,
     MULTI_RECORD_WRITER_OP_PATCH_WAV_HEADER,
     MULTI_RECORD_WRITER_OP_RENAME_WAV
 } multi_record_writer_operation_t;
+
+typedef enum
+{
+    MULTI_RECORD_WRITER_MARKER_NONE = 0,
+    MULTI_RECORD_WRITER_MARKER_START,
+    MULTI_RECORD_WRITER_MARKER_STOP,
+    MULTI_RECORD_WRITER_MARKER_ABORT,
+    MULTI_RECORD_WRITER_MARKER_END
+} multi_record_writer_marker_t;
 
 typedef struct
 {
@@ -84,6 +97,16 @@ typedef struct
     uint32_t frames_drained;
     uint32_t frames_written;
     uint32_t bytes_written;
+    uint32_t session_generation;
+    uint32_t blocks_produced;
+    uint32_t blocks_consumed;
+    uint32_t markers_produced;
+    uint32_t markers_consumed;
+    uint32_t marker_critical_failures;
+    uint32_t stale_generation;
+    uint32_t sessions_abandoned;
+    uint32_t max_blocks_drained_per_service;
+    uint32_t legacy_writer_calls_from_irq;
     uint8_t raw_slot;
 } multi_record_writer_status_t;
 

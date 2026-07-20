@@ -16,6 +16,7 @@
 
 #include "App/mux_pots.h"
 #include "mixer.h"
+#include "Audio/audio_control_command.h"
 #include "Param/param_macro.h"
 
 void brick6_master_control_process(void)
@@ -76,7 +77,7 @@ void brick6_master_control_process(void)
     {
         if ((initialized == 0U) || (last_step != 0U))
         {
-            mixer_set_master(0.0f);
+            audio_control_command_submit_mixer_master(0.0f);
             last_step = 0U;
             initialized = 1U;
         }
@@ -102,7 +103,7 @@ void brick6_master_control_process(void)
     const float level = (float)step / (float)(POT_MASTER_STEPS - 1U);
     const float gain = level * level;
 
-    mixer_set_master(gain);
+    audio_control_command_submit_mixer_master(gain);
 
     last_step = step;
     initialized = 1U;

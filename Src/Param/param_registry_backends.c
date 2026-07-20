@@ -1,4 +1,5 @@
 #include "Param/param_registry_backends.h"
+#include "Audio/audio_control_command.h"
 
 #include "Audio/fx_master_macro.h"
 #include "Audio/audio_xfade.h"
@@ -172,10 +173,7 @@ static void param_backend_project_looper_stretch(uint8_t track,
 
     const uint8_t mode = (uint8_t)(param_backend_clamp_value(stretch, 0.0f, 2.0f) + 0.5f);
     const uint8_t grain_index = (uint8_t)(param_backend_clamp_value(grain, 0.0f, 5.0f) + 0.5f);
-    brick6_looper_runtime_set_stretch(track,
-                                      mode,
-                                      param_backend_clamp_value(pitch, -12.0f, 12.0f),
-                                      param_backend_clip_grain_size_value(grain_index));
+    audio_control_command_submit_looper_stretch(track, mode, param_backend_clamp_value(pitch, -12.0f, 12.0f), param_backend_clip_grain_size_value(grain_index));
 }
 
 static uint8_t param_backend_clip_search_index(float value)
@@ -206,7 +204,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.edit = (float)(uint8_t)(clamped + 0.5f);
             }
-            brick6_braids_runtime_set_edit(instance_id, (float)(uint8_t)(clamped + 0.5f));
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_EDIT, (float)(uint8_t)(clamped + 0.5f));
             return 1U;
         }
         case PARAM_WAVE_FINE:
@@ -216,7 +214,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.fine = clamped;
             }
-            brick6_braids_runtime_set_fine(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_FINE, clamped);
             return 1U;
         }
         case PARAM_WAVE_COARSE:
@@ -226,7 +224,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.coarse = clamped;
             }
-            brick6_braids_runtime_set_coarse(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_COARSE, clamped);
             return 1U;
         }
         case PARAM_WAVE_FM:
@@ -236,7 +234,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.fm = clamped;
             }
-            brick6_braids_runtime_set_fm(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_FM, clamped);
             return 1U;
         }
         case PARAM_WAVE_TIMBRE:
@@ -246,7 +244,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.timbre = clamped;
             }
-            brick6_braids_runtime_set_timbre(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_TIMBRE, clamped);
             return 1U;
         }
         case PARAM_WAVE_MODULATION:
@@ -256,7 +254,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.modulation = clamped;
             }
-            brick6_braids_runtime_set_modulation(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_MODULATION, clamped);
             return 1U;
         }
         case PARAM_WAVE_COLOR:
@@ -266,7 +264,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.color = clamped;
             }
-            brick6_braids_runtime_set_color(instance_id, clamped);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_COLOR, clamped);
             return 1U;
         }
         case PARAM_WAVE_PHASE_RESET:
@@ -276,7 +274,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.phase_reset = clamped;
             }
-            brick6_braids_runtime_set_phase_reset(instance_id, (clamped >= 0.5f) ? 1U : 0U);
+            audio_control_command_submit_wave_param(instance_id, AUDIO_CONTROL_WAVE_PHASE_RESET, (clamped >= 0.5f) ? 1.0f : 0.0f);
             return 1U;
         }
         default:
@@ -379,7 +377,11 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         case PARAM_SAMPLER_SAMPLE:
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {
-                brick6_sampler_runtime_set_multi_instrument(track,
+                if ((update_base_state != 0U) && (state != NULL))
+                {
+                    state->sample = param_backend_clamp_value(value, 0.0f, 127.0f);
+                }
+                audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT, 0.0f,
                                                             param_backend_multi_instrument_from_selector(value));
                 return 1U;
             }
@@ -392,14 +394,14 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                                                                       &global_slot,
                                                                       &stream_slot) == 0U)
                 {
-                    brick6_sampler_runtime_stop(track);
+                    audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_STOP, 0.0f, 0U);
                     return 0U;
                 }
                 if ((update_base_state != 0U) && (state != NULL))
                 {
                     state->sample = (float)global_slot;
                 }
-                brick6_sampler_runtime_set_sample(track, stream_slot);
+                audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_SAMPLE, 0.0f, stream_slot);
                 return 1U;
             }
 
@@ -408,7 +410,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->sample = (float)global_slot;
             }
-            brick6_sampler_runtime_set_sample(track, global_slot);
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_SAMPLE, 0.0f, global_slot);
             return 1U;
         }
         case PARAM_SAMPLER_GAIN:
@@ -419,28 +421,28 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                 {
                     state->gain = gain;
                 }
-                brick6_sampler_runtime_set_multi_gain(track, gain);
+                audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_MULTI_GAIN, gain, 0U);
                 return 1U;
             }
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->gain = param_backend_clamp_value(value, 0.0f, 2.0f);
             }
-            brick6_sampler_runtime_set_gain(track, param_backend_clamp_value(value, 0.0f, 2.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_GAIN, param_backend_clamp_value(value, 0.0f, 2.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_START:
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->start = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            brick6_sampler_runtime_set_start(track, param_backend_clamp_value(value, 0.0f, 1.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_START, param_backend_clamp_value(value, 0.0f, 1.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_END:
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->end = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            brick6_sampler_runtime_set_end(track, param_backend_clamp_value(value, 0.0f, 1.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_END, param_backend_clamp_value(value, 0.0f, 1.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_MODE:
         {
@@ -453,7 +455,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->mode = (float)mode;
             }
-            brick6_sampler_runtime_set_mode(track, mode);
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_MODE, (float)mode, 0U);
             return 1U;
         }
         case PARAM_SAMPLER_TUNE:
@@ -461,7 +463,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->tune = param_backend_clamp_value(value, -24.0f, 24.0f);
             }
-            brick6_sampler_runtime_set_tune(track, param_backend_clamp_value(value, -24.0f, 24.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_TUNE, param_backend_clamp_value(value, -24.0f, 24.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
         {
@@ -471,7 +473,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->slice_count = (float)idx;
             }
-            brick6_sampler_runtime_set_slice_count(track, counts[idx]);
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_SLICE_COUNT, (float)counts[idx], 0U);
             return 1U;
         }
         case PARAM_SAMPLER_LOOP_START:
@@ -479,7 +481,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->loop_start = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            brick6_sampler_runtime_set_loop_start(track, param_backend_clamp_value(value, 0.0f, 1.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_LOOP_START, param_backend_clamp_value(value, 0.0f, 1.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
@@ -490,7 +492,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.source_bpm = param_backend_clamp_value(value, 40.0f, 300.0f);
             }
-            brick6_sampler_runtime_set_clip_source_bpm(track, param_backend_clamp_value(value, 40.0f, 300.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_SOURCE_BPM, param_backend_clamp_value(value, 40.0f, 300.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
@@ -501,8 +503,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.sync_length = param_backend_clamp_value(value, 0.0f, 4.0f);
             }
-            brick6_sampler_runtime_set_clip_sync_length(track,
-                                                        (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_SYNC_LENGTH, (float)((uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f)), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_PITCH:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
@@ -513,7 +514,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.pitch = param_backend_clamp_value(value, -12.0f, 12.0f);
             }
-            brick6_sampler_runtime_set_clip_pitch(track, param_backend_clamp_value(value, -12.0f, 12.0f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_PITCH, param_backend_clamp_value(value, -12.0f, 12.0f), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_PLAY_MODE:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
@@ -524,8 +525,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.play_mode = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            brick6_sampler_runtime_set_clip_play_mode(track,
-                                                      (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_PLAY_MODE, (float)((uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f)), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_LOOP:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
@@ -536,8 +536,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.loop = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            brick6_sampler_runtime_set_clip_loop(track,
-                                                 (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_LOOP, (float)((uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f)), 0U);
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         {
@@ -552,7 +551,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.stretch_mode = (float)stretch_mode;
             }
-            brick6_sampler_runtime_set_clip_stretch_mode(track, stretch_mode);
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_STRETCH_MODE, (float)stretch_mode, 0U);
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_GRAIN:
@@ -571,7 +570,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                 state->clip.grain_size = (float)grain_index;
             }
 
-            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_grain_size_value(grain_index));
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_CLIP_GRAIN, 0.0f, param_backend_clip_grain_size_value(grain_index));
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_HOP:
@@ -625,7 +624,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->multi.loop = enabled != 0U ? 1.0f : 0.0f;
             }
-            brick6_sampler_runtime_set_multi_loop(track, enabled);
+            audio_control_command_submit_sampler_param(track, AUDIO_CONTROL_SAMPLER_MULTI_LOOP, (float)enabled, 0U);
             return 1U;
         }
         default:
@@ -667,7 +666,7 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
                 return 1U;
             }
             state->looper.play = param_backend_clamp_value(value, 0.0f, 1.0f);
-            brick6_looper_runtime_set_play_auto(track, (state->looper.play >= 0.5f) ? 1U : 0U);
+            audio_control_command_submit_looper_param(track, AUDIO_CONTROL_LOOPER_PLAY_AUTO, (state->looper.play >= 0.5f) ? 1.0f : 0.0f, 0U);
             return 1U;
         case PARAM_LOOPER_XFADE:
         {
@@ -676,7 +675,7 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
             {
                 state->looper.xfade = clamped;
             }
-            audio_xfade_set(clamped);
+            audio_control_command_submit_xfade(clamped);
             return 1U;
         }
         case PARAM_LOOPER_STRETCH:
@@ -757,7 +756,7 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
         }
     }
 
-    return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
+    return audio_control_command_submit_drum_param(ctx->instance_id, id, value);
 }
 
 uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
@@ -819,8 +818,8 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
     if ((param_backend_is_vca_param(id) != 0U)
             && (param_backend_ctx_is_sampler_clip_or_looper(ctx) != 0U))
     {
-        mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
-        mixer_set_track_vca_enabled((uint32_t)ctx->mix_track_id, 0U);
+        audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_ALL_NOTES_OFF, 0.0f);
+        audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_ENABLED, 0.0f);
         return 0U;
     }
 
@@ -833,7 +832,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_level = param_backend_clamp_value(value, 0.0f, 2.0f);
             }
-            mixer_set_track_gain(ctx->mix_track_id, param_backend_clamp_value(value, 0.0f, 2.0f));
+            audio_control_command_submit_mixer_track_gain(ctx->mix_track_id, param_backend_clamp_value(value, 0.0f, 2.0f));
             return 1U;
         }
 
@@ -844,7 +843,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_pan = param_backend_clamp_value(value, -1.0f, 1.0f);
             }
-            mixer_set_track_pan(ctx->mix_track_id, param_backend_clamp_value(value, -1.0f, 1.0f));
+            audio_control_command_submit_mixer_track_pan(ctx->mix_track_id, param_backend_clamp_value(value, -1.0f, 1.0f));
             return 1U;
         }
 
@@ -855,7 +854,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_send1 = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            mixer_set_track_send_level(ctx->mix_track_id, 0U, param_backend_clamp_value(value, 0.0f, 1.0f));
+            audio_control_command_submit_mixer_track_send_level(ctx->mix_track_id, 0U, param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         }
 
@@ -866,7 +865,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_send2 = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            mixer_set_track_send_level(ctx->mix_track_id, 1U, param_backend_clamp_value(value, 0.0f, 1.0f));
+            audio_control_command_submit_mixer_track_send_level(ctx->mix_track_id, 1U, param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         }
 
@@ -877,7 +876,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_mute = (value >= 0.5f) ? 1.0f : 0.0f;
             }
-            mixer_set_track_mute(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
+            audio_control_command_submit_mixer_track_mute(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
             return 1U;
         }
 
@@ -894,10 +893,10 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                     state->input.hybrid_gate = (value >= 0.5f) ? 1.0f : 0.0f;
                 }
             }
-            mixer_set_track_vca_enabled(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
+            audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_ENABLED, (value >= 0.5f) ? 1.0f : 0.0f);
             if (value < 0.5f)
             {
-                mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
+                audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_ALL_NOTES_OFF, 0.0f);
             }
             return 1U;
 
@@ -908,7 +907,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_attack = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_attack(ctx->mix_track_id, param_filter_ui127_to_attack_s(value));
+            audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_ATTACK, param_filter_ui127_to_attack_s(value));
             return 1U;
         }
 
@@ -919,7 +918,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_decay = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_decay(ctx->mix_track_id, param_filter_ui127_to_decay_s(value));
+            audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_DECAY, param_filter_ui127_to_decay_s(value));
             return 1U;
         }
 
@@ -930,7 +929,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_sustain = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_sustain(ctx->mix_track_id, param_filter_ui127_to_sustain(value));
+            audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_SUSTAIN, param_filter_ui127_to_sustain(value));
             return 1U;
         }
 
@@ -942,10 +941,10 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_release(ctx->mix_track_id, release_s);
+            audio_control_command_submit_mixer_vca(ctx->mix_track_id, AUDIO_CONTROL_VCA_RELEASE, release_s);
             if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             {
-                brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
+                audio_control_command_submit_wave_param(ctx->instance_id, AUDIO_CONTROL_WAVE_VCA_RELEASE, release_s);
             }
             return 1U;
         }
@@ -965,7 +964,7 @@ uint8_t param_backend_apply_colors_track(const track_runtime_ctx_t *ctx, param_i
     switch (ctx->engine)
     {
         case (uint8_t)TRACK_RUNTIME_ENGINE_DRUM:
-            return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
+            return audio_control_command_submit_drum_param(ctx->instance_id, id, value);
         default:
             return 0U;
     }

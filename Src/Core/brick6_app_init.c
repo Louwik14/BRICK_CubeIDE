@@ -18,9 +18,17 @@
 #include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/drum_synth.h"
+#include "Audio/audio_control_snapshot.h"
+#include "Audio/audio_control_command.h"
+#include "Audio/audio_midi_out.h"
+#include "Audio/audio_telemetry.h"
 #include "ui_core.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
+#include "ui_tasklet.h"
+#include "ui_renderer_oled.h"
+#include "display_flush_service.h"
+#include "led_rgb.h"
 
 #include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
@@ -56,6 +64,12 @@
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 
+#define UI_TASKLET_ENGINE_DIVIDER  (4UL)
+#define UI_TASKLET_CATCHUP_BUDGET  (8UL)
+
+static uint32_t g_system_ui_last_tick = 0U;
+static uint32_t g_system_ui_tasklet_divider = 0U;
+
 static void brick6_process_hall_ui_keyboard_chain(void)
 {
     /*
@@ -83,13 +97,13 @@ static void brick6_process_hall_ui_keyboard_chain(void)
  * Rôle:
  * - Initialisation globale de l'application.
  */
-void brick6_app_init(void)
+void brick6_platform_shared_init(void)
 {
     SDRAM_Init();
+}
 
-    board_usb_device_init();
-    //MX_USB_HOST_Init();
-
+void brick6_audio_domain_init(void)
+{
     board_audio_codec_init();
 
     mixer_init();
@@ -99,6 +113,28 @@ void brick6_app_init(void)
     audio_float_set_output_compensation(1.0f);
 
     audio_tracks_init();
+
+    drum_synth_init(48000.0f);
+
+    brick6_sampler_bootstrap_init_voices();
+    brick6_sampler_runtime_init();
+    brick6_looper_runtime_init();
+    brick6_braids_runtime_init();
+    mixer_set_master(0.0f);
+
+    brick6_audio_runtime_init();
+    audio_control_snapshot_init();
+    audio_control_command_init();
+    audio_midi_out_init();
+    audio_telemetry_init();
+
+    audio_init();
+    audio_set_float_callback(brick6_audio_runtime_dsp);
+}
+
+void brick6_system_domain_init(void)
+{
+    board_usb_device_init();
 
     sd_access_gate_init();
     waveform_cache_init();
@@ -112,27 +148,13 @@ void brick6_app_init(void)
     sample_global_pool_init();
     sampler_ram_pool_init();
     multi_sample_pool_init();
-
     brick6_sampler_bootstrap_load_pool();
-
-    drum_synth_init(48000.0f);
-    hall_keyboard_bridge_init();
-
-    brick6_sampler_bootstrap_init_voices();
-    brick6_sampler_runtime_init();
-    brick6_looper_runtime_init();
-    brick6_braids_runtime_init();
-    mixer_set_master(0.0f);
-
-    brick6_audio_runtime_init();
-
-    audio_init();
-    audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
     param_store_init();
     brick6_boot_apply_param_defaults();
     seq_runtime_init();
+    seq_runtime_prepare_control_actions();
     ui_core_init();
     pattern_live_init();
     patch_v1_init();
@@ -143,6 +165,7 @@ void brick6_app_init(void)
     control_event_init();
 
     hall_loop_init();
+    hall_keyboard_bridge_init();
     if (hall_calibration_load() != 0U)
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -152,13 +175,32 @@ void brick6_app_init(void)
         ui_page_set(UI_PAGE_CALIBRATION);
     }
 
+    (void)audio_control_snapshot_publish_from_control();
+    audio_control_snapshot_force_apply_latest();
+}
+
+void brick6_audio_domain_start(void)
+{
     audio_start();
 
     board_power_delay_ms(200U);
 
     cpu_load_reset_peak();
+}
 
+void brick6_system_domain_start(void)
+{
     midi_init();
+    led_init();
+}
+
+void brick6_app_init(void)
+{
+    brick6_platform_shared_init();
+    brick6_audio_domain_init();
+    brick6_system_domain_init();
+    brick6_audio_domain_start();
+    brick6_system_domain_start();
 
 
 }
@@ -174,7 +216,7 @@ void brick6_app_init(void)
  * Rôle:
  * - Boucle principale applicative.
  */
-void brick6_app_process(void)
+static void brick6_system_domain_process_services(void)
 {
     engine_tasklet_poll();
     /*
@@ -204,6 +246,7 @@ void brick6_app_process(void)
         sd_preview_process();
     }
     pattern_live_service();
+    seq_runtime_prepare_control_actions();
     brick6_master_control_process();
 
     ui_boot_loading_service();
@@ -218,5 +261,43 @@ void brick6_app_process(void)
 
     voice_manager_service();
 
+    (void)audio_control_snapshot_publish_from_control();
+
+    audio_midi_out_process(32U);
     midi_poll();
+}
+
+void brick6_system_domain_process(void)
+{
+    brick6_system_domain_process_services();
+
+    board_usb_host_process();
+    midi_host_poll_bounded(8);
+
+    uint32_t ui_ticks_processed = 0U;
+    while ((engine_tick_count != g_system_ui_last_tick) &&
+           (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
+    {
+        g_system_ui_last_tick++;
+        g_system_ui_tasklet_divider++;
+        if (g_system_ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
+        {
+            continue;
+        }
+
+        g_system_ui_tasklet_divider = 0U;
+        ui_tasklet_poll();
+        ui_ticks_processed++;
+    }
+
+    if (ui_tasklet_is_initialized() != 0U)
+    {
+        ui_renderer_oled_service_poll();
+        display_flush_service_poll();
+    }
+}
+
+void brick6_app_process(void)
+{
+    brick6_system_domain_process();
 }

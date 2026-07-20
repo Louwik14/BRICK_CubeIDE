@@ -57,6 +57,44 @@ typedef struct
 
 typedef struct
 {
+    sample_audio_key_t key;
+    uint32_t page_index;
+    uint32_t slot_index;
+    uint32_t generation;
+    const float *frames_interleaved;
+    uint32_t start_frame;
+    uint32_t frame_count;
+    uint16_t frame_stride;
+    uint16_t flags;
+} sample_audio_page_t;
+
+#define SAMPLE_AUDIO_PAGE_FLAG_READY     (1U << 0)
+#define SAMPLE_AUDIO_PAGE_FLAG_IMMUTABLE (1U << 1)
+#define SAMPLE_AUDIO_PAGE_FLAG_FLOAT32   (1U << 2)
+
+typedef struct
+{
+    uint32_t pages_published;
+    uint32_t audio_acquire_ok;
+    uint32_t audio_acquire_refused;
+    uint32_t audio_release_ok;
+    uint32_t audio_release_rejected;
+    uint32_t audio_release_stale;
+    uint32_t audio_misses;
+    uint32_t audio_span_ok;
+    uint32_t audio_span_refused;
+    uint32_t audio_span_rollback;
+    uint32_t audio_span_pages_max;
+    uint32_t audio_lease_high_water;
+    uint32_t audio_lease_full;
+    uint32_t conservative_eviction_kept;
+    uint32_t stale_generation_seen;
+    uint32_t max_acquire_scan;
+    uint32_t max_release_scan;
+} sample_page_cache_audio_diag_t;
+
+typedef struct
+{
     uint32_t page_index;
     uint32_t page_generation;
     uint32_t slot_index;
@@ -161,10 +199,27 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
 uint8_t sample_page_cache_try_acquire_page_ref(uint16_t sample_id,
                                                const sample_page_ref_t *ref,
                                                sample_page_span_t *out_span);
+uint8_t sample_page_cache_audio_acquire_key(sample_audio_key_t key,
+                                            uint32_t page_index,
+                                            sample_audio_page_t *out_page);
+uint8_t sample_page_cache_audio_acquire_ref_key(sample_audio_key_t key,
+                                                const sample_page_ref_t *ref,
+                                                sample_audio_page_t *out_page);
+void sample_page_cache_audio_release_key(sample_audio_key_t key,
+                                         uint32_t page_index,
+                                         uint32_t slot_index,
+                                         uint32_t generation);
+void sample_page_cache_audio_release_ref_key(sample_audio_key_t key,
+                                             const sample_page_ref_t *ref);
+void sample_page_cache_audio_note_span_ok(uint32_t pages_acquired);
+void sample_page_cache_audio_note_span_refused(void);
+void sample_page_cache_audio_note_span_rollback(uint32_t pages_released);
 void sample_page_cache_release_page_key(sample_audio_key_t key, uint32_t page_index);
 void sample_page_cache_release_page(uint16_t sample_id, uint32_t page_index);
 void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample_page_ref_t *ref);
 void sample_page_cache_release_page_ref(uint16_t sample_id, const sample_page_ref_t *ref);
+void sample_page_cache_audio_diag_snapshot(sample_page_cache_audio_diag_t *out_diag);
+void sample_page_cache_audio_diag_reset(void);
 uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
                                                 sample_page_raw_allocation_t *out_allocation);
 void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Audio/audio_xfade.h"
+#include "Audio/audio_control_snapshot.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_audio_event_grid.h"
 #include "Core/brick6_braids_runtime.h"
@@ -766,6 +767,22 @@ static param_id_t mod_lfo_track_settings_dest(uint8_t track, uint8_t lfo_index)
     return (param_id_t)((uint16_t)(s->dest + 0.5f));
 }
 
+static uint8_t mod_lfo_track_settings_audio(uint8_t track, uint8_t lfo_index, track_mod_lfo_state_t *out_settings)
+{
+    return audio_control_snapshot_get_lfo_settings(track, lfo_index, out_settings);
+}
+
+static param_id_t mod_lfo_track_settings_dest_audio(uint8_t track, uint8_t lfo_index)
+{
+    track_mod_lfo_state_t s;
+    if (mod_lfo_track_settings_audio(track, lfo_index, &s) == 0U)
+    {
+        return MOD_LFO_DEST_NONE;
+    }
+
+    return (param_id_t)((uint16_t)(s.dest + 0.5f));
+}
+
 static uint8_t mod_lfo_runtime_param_mask(mod_lfo_param_t param)
 {
     return (uint8_t)(1U << (uint8_t)param);
@@ -807,18 +824,18 @@ static float mod_lfo_effective_field(const mod_lfo_runtime_state_t *rt,
     }
 }
 
-static param_id_t mod_lfo_effective_dest(uint8_t track, uint8_t lfo_index)
+static param_id_t mod_lfo_effective_dest_audio(uint8_t track, uint8_t lfo_index)
 {
-    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    track_mod_lfo_state_t s;
     const mod_lfo_runtime_state_t *const rt =
         ((track < SEQ_TRACK_COUNT) && (lfo_index < MOD_LFO_COUNT_PER_TRACK)) ? &g_mod_lfo_runtime[track][lfo_index] : NULL;
 
-    if (s == NULL)
+    if (mod_lfo_track_settings_audio(track, lfo_index, &s) == 0U)
     {
         return MOD_LFO_DEST_NONE;
     }
 
-    return (param_id_t)((uint16_t)(mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_DEST) + 0.5f));
+    return (param_id_t)((uint16_t)(mod_lfo_effective_field(rt, &s, MOD_LFO_PARAM_DEST) + 0.5f));
 }
 
 static uint8_t mod_lfo_is_internal_param(param_id_t id)
@@ -1374,6 +1391,33 @@ static uint8_t mod_lfo_is_effectively_active(uint8_t track,
     return mod_lfo_dest_supported_fast(track, dest, family, type, ctx);
 }
 
+static uint8_t mod_lfo_is_effectively_active_audio(uint8_t track,
+                                                   uint8_t lfo_index,
+                                                   ui_track_family_t family,
+                                                   ui_track_type_t type,
+                                                   const track_runtime_ctx_t *ctx)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return 0U;
+    }
+
+    track_mod_lfo_state_t s;
+    if (mod_lfo_track_settings_audio(track, lfo_index, &s) == 0U)
+    {
+        return 0U;
+    }
+
+    const param_id_t dest = mod_lfo_track_settings_dest_audio(track, lfo_index);
+    if ((dest == MOD_LFO_DEST_NONE) || (s.depth == 0.0f)
+            || (mod_lfo_phase_inc_from_rate(s.rate) == 0U))
+    {
+        return 0U;
+    }
+
+    return mod_lfo_dest_supported_fast(track, dest, family, type, ctx);
+}
+
 static void mod_lfo_release_last_destination(uint8_t track,
                                              uint8_t lfo_index,
                                              ui_track_family_t family,
@@ -1427,6 +1471,59 @@ static void mod_lfo_release_last_destination(uint8_t track,
     rt->depth_scale = 0.0f;
 }
 
+static void mod_lfo_release_last_destination_audio(uint8_t track,
+                                                   uint8_t lfo_index,
+                                                   ui_track_family_t family,
+                                                   ui_track_type_t type,
+                                                   const track_runtime_ctx_t *ctx)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return;
+    }
+
+    mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    const param_id_t previous_dest = (param_id_t)rt->last_dest;
+
+    if ((previous_dest >= PARAM_COUNT) || (rt->base_valid == 0U))
+    {
+        rt->base_valid = 0U;
+        rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+        rt->calib_valid = 0U;
+        rt->depth_scale = 0.0f;
+        return;
+    }
+
+    uint8_t other_active_same_dest = 0U;
+    for (uint8_t other = 0U; other < MOD_LFO_COUNT_PER_TRACK; ++other)
+    {
+        if (other == lfo_index)
+        {
+            continue;
+        }
+        if (mod_lfo_is_effectively_active_audio(track, other, family, type, ctx) == 0U)
+        {
+            continue;
+        }
+        if (mod_lfo_track_settings_dest_audio(track, other) == previous_dest)
+        {
+            other_active_same_dest = 1U;
+            break;
+        }
+    }
+
+    if ((other_active_same_dest == 0U)
+            && (mod_lfo_dest_supported_fast(track, previous_dest, family, type, ctx) != 0U))
+    {
+        (void)mod_lfo_apply_destination_rt(track, previous_dest, ctx, rt->base_value);
+    }
+
+    rt->base_valid = 0U;
+    rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+    rt->calib_valid = 0U;
+    rt->depth_scale = 0.0f;
+}
+
 static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 {
     if (param_registry_track_structure_transition_is_global_active() != 0U)
@@ -1442,16 +1539,20 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             continue;
         }
 
-        track_runtime_refresh_track(track);
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        const ui_track_family_t family = ui_get_track_family(track);
-        const ui_track_type_t type = ui_get_track_type(track);
+        const audio_control_snapshot_t *const snapshot = audio_control_snapshot_get_active();
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(track);
+        const ui_track_family_t family =
+            (snapshot != NULL) ? (ui_track_family_t)snapshot->ui_family[track] : UI_TRACK_FAMILY_OFF;
+        const ui_track_type_t type =
+            (snapshot != NULL) ? (ui_track_type_t)snapshot->ui_type[track] : UI_TRACK_TYPE_AUDIO;
 
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
-            const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+            track_mod_lfo_state_t settings;
+            const track_mod_lfo_state_t *const s =
+                (mod_lfo_track_settings_audio(track, lfo, &settings) != 0U) ? &settings : NULL;
             mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
-            const param_id_t dest = mod_lfo_effective_dest(track, lfo);
+            const param_id_t dest = mod_lfo_effective_dest_audio(track, lfo);
 
             if (s == NULL)
             {
@@ -1461,7 +1562,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if ((rt->last_dest != (uint16_t)MOD_LFO_DEST_NONE)
                     && (rt->last_dest != (uint16_t)(dest + 0.5f)))
             {
-                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                mod_lfo_release_last_destination_audio(track, lfo, family, type, ctx);
             }
 
             const float depth = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_DEPTH);
@@ -1470,14 +1571,13 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             {
                 rt->active = 0U;
                 rt->hold_capture_pending = 0U;
-                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                mod_lfo_release_last_destination_audio(track, lfo, family, type, ctx);
                 continue;
             }
 
             if ((rt->base_valid == 0U) || (rt->last_dest != (uint16_t)(dest + 0.5f)))
             {
-                /* Query seam: seed the modulation base from the pure value surface only. */
-                if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
+                if (audio_control_snapshot_get_lfo_base(track, lfo, dest, &rt->base_value) == 0U)
                 {
                     continue;
                 }
@@ -1499,7 +1599,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             {
                 rt->active = 0U;
                 rt->hold_capture_pending = 0U;
-                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                mod_lfo_release_last_destination_audio(track, lfo, family, type, ctx);
                 continue;
             }
 
@@ -1527,7 +1627,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 
             if ((trig == MOD_LFO_TRIG_ONE) && (rt->one_done != 0U))
             {
-                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                mod_lfo_release_last_destination_audio(track, lfo, family, type, ctx);
                 continue;
             }
 
@@ -1536,7 +1636,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 if (rt->delay_remaining_frames > elapsed_frames)
                 {
                     rt->delay_remaining_frames -= elapsed_frames;
-                    mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                    mod_lfo_release_last_destination_audio(track, lfo, family, type, ctx);
                     continue;
                 }
                 rt->delay_remaining_frames = 0U;

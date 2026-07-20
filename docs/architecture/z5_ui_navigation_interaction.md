@@ -937,3 +937,9 @@ Points factuels:
 - La projection des 16 lanes Hall/STEP reste unique via `led_remap_led_for_hall()`: premium garde le remap physique Hall existant, low-cost projette directement les lanes `0..15` vers `LED_STEP_1..16`.
 - La LED REC reutilise uniquement l'etat REC existant de Z4 (`seq_runtime_rec_*`); aucune autorite REC LED separee n'est ajoutee.
 - Les quatre LEDs SEQ sont rendues par la logique commune `seq_led`: elles indiquent le nombre de pages actives, la page editee et, pendant le transport, l'ecart entre page editee et page de lecture. La Board ne porte que le transport physique.
+
+## Addendum 2026-07-19 - UI sans queries audio mutables actives
+
+- Le rendu RAM de la page template lit le playhead via `audio_telemetry_get_ram_playhead()`, projection audio ecrasable, au lieu de lire directement les voix Sampler.
+- La page Tone Multi derive l'instrument affiche depuis `PARAM_SAMPLER_SAMPLE` et le pool instrument systeme, pas depuis `brick6_sampler_runtime_get_multi_instrument()`.
+- La page Settings publie stop/set Multi via `audio_control_command`; elle ne mute plus directement le runtime Sampler depuis le domaine UI.

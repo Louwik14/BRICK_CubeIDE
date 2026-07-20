@@ -17,20 +17,31 @@ typedef struct
     uint8_t velocity;
     uint16_t sample_offset_in_block;
     uint32_t event_token;
+    uint64_t sample_time;
 } seq_play_scheduler_audio_event_t;
 
 typedef struct
 {
     uint16_t queue_high_water;
     uint16_t max_events_collected_per_call;
+    uint16_t max_prepared_actions_per_step;
     uint32_t queue_overflow_drop_count;
     uint32_t overdue_event_count;
     uint32_t offset_clamp_count;
     uint32_t stale_generation_drop_count;
+    uint32_t prepared_lots_published;
+    uint32_t prepared_lots_consumed;
+    uint32_t prepared_lots_missing;
+    uint32_t prepared_generation_reject_count;
+    uint32_t prepared_action_reject_count;
+    uint32_t prepared_critical_failure_count;
+    uint32_t max_prepare_cycles;
+    uint32_t max_place_cycles;
 } seq_play_scheduler_diag_t;
 
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
+void seq_play_scheduler_prepare_all_steps_from_control(void);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.

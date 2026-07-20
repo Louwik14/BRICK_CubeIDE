@@ -16,6 +16,8 @@
 #include <string.h>
 
 #include "Audio/drum_synth.h"
+#include "Audio/audio_control_command.h"
+#include "Audio/audio_control_snapshot.h"
 #include "Audio/fx_master_macro.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
@@ -24,7 +26,6 @@
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
-#include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
@@ -49,10 +50,10 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (audio_control_snapshot_is_audio_routable(track) == 0U))
         {
             continue;
         }
@@ -90,11 +91,11 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (audio_control_snapshot_is_audio_routable(track) == 0U))
         {
             continue;
         }
@@ -137,11 +138,11 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
-                || (track_runtime_is_audio_routable(track) == 0U)
+                || (audio_control_snapshot_is_audio_routable(track) == 0U)
                 || (brick6_looper_runtime_is_playing(track) == 0U))
         {
             continue;
@@ -167,11 +168,11 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *const ctx = audio_control_snapshot_get_track_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (audio_control_snapshot_is_audio_routable(track) == 0U))
         {
             continue;
         }
@@ -199,8 +200,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t frames)
 {
     track_runtime_synth_usage_t synth_usage = { 0U };
-    (void)track_runtime_refresh_if_dirty();
-    track_runtime_get_cached_synth_usage(&synth_usage);
+    audio_control_snapshot_apply_pending_from_audio();
+    audio_control_command_process_from_audio();
+    audio_control_snapshot_get_synth_usage(&synth_usage);
     const uint8_t synth_runtime_enabled = (synth_usage.drum_tracks > 0U) ? 1U : 0U;
 
     if (((synth_runtime_enabled == 0U) && (g_runtime_track_enabled != 0U))

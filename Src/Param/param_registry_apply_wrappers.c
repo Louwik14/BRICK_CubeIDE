@@ -1,4 +1,5 @@
 #include "Param/param_registry_apply_bindings.h"
+#include "Audio/audio_control_command.h"
 #include "Param/param_registry.h"
 #include "Core/track_state.h"
 #include "Core/track_runtime.h"
@@ -104,31 +105,31 @@ static float delay_time_sync_index_to_seconds(float v)
 
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 
-void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
-void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
+void apply_mix_send0_fx(float v) { (void)audio_control_command_submit_mixer_send_fx_slot(0U, control_float_to_slot(v)); }
+void apply_mix_send1_fx(float v) { (void)audio_control_command_submit_mixer_send_fx_slot(1U, control_float_to_slot(v)); }
 
-void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_type(float v) { (void)v; mixer_set_reverb_type(0U); }
-void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
-void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
-void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }
-void apply_mix_delay_time_r(float v) { mixer_set_delay_time_r(delay_time_sync_index_to_seconds(v)); }
-void apply_mix_delay_feedback(float v) { mixer_set_delay_feedback(clamp_value(v, 0.0f, 1.20f)); }
-void apply_mix_delay_hpf(float v) { mixer_set_delay_hpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_lpf(float v) { mixer_set_delay_lpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_pingpong(float v) { mixer_set_delay_pingpong((v >= 0.5f) ? 1U : 0U); }
-void apply_mix_delay_rev(float v) { mixer_set_delay_reverb_send(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_width(float v) { mixer_set_delay_width(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_feedback_width(float v) { mixer_set_delay_feedback_width(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_mod(float v) { mixer_set_delay_mod_depth(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_mod_rate(float v) { mixer_set_delay_mod_rate(clamp_value(v, 0.01f, 12.0f)); }
-void apply_mix_delay_vol(float v) { mixer_set_delay_volume(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_wet(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_WET, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_size(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_SIZE, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_decay(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_DECAY, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_pred(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_PRE_DELAY, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_type(float v) { (void)v; (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_TYPE, 0.0f); }
+void apply_mix_reverb_surr(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_SURROUND, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_hpf(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_HPF, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_lpf(float v) { (void)audio_control_command_submit_mixer_reverb(AUDIO_CONTROL_REVERB_LPF, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_type(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_TYPE, (float)((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f))); }
+void apply_mix_delay_mode(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_MODE, (float)((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f))); }
+void apply_mix_delay_time(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_TIME, delay_time_sync_index_to_seconds(v)); }
+void apply_mix_delay_time_r(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_TIME_R, delay_time_sync_index_to_seconds(v)); }
+void apply_mix_delay_feedback(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_FEEDBACK, clamp_value(v, 0.0f, 1.20f)); }
+void apply_mix_delay_hpf(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_HPF, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_lpf(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_LPF, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_pingpong(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_PINGPONG, (v >= 0.5f) ? 1.0f : 0.0f); }
+void apply_mix_delay_rev(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_REVERB_SEND, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_width(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_WIDTH, clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_feedback_width(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_FEEDBACK_WIDTH, clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_mod(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_MOD_DEPTH, clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_mod_rate(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_MOD_RATE, clamp_value(v, 0.01f, 12.0f)); }
+void apply_mix_delay_vol(float v) { (void)audio_control_command_submit_mixer_delay(AUDIO_CONTROL_DELAY_VOLUME, clamp_value(v, 0.0f, 1.0f)); }
 
 void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }

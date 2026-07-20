@@ -1,4 +1,5 @@
 #include "Param/param_filter.h"
+#include "Audio/audio_control_command.h"
 #include "param_store.h"
 #include "ui_core.h"
 #include "Core/track_tone_sound_state.h"
@@ -267,43 +268,43 @@ static uint8_t param_filter_apply_runtime(param_id_t id,
     switch (id)
     {
         case PARAM_FILTER_TYPE:
-            mixer_set_track_filter_type(target->target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(clamped, 0.0f, 4.0f) + 0.5f)));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_TYPE, (float)((uint32_t)(clamp_value(clamped, 0.0f, 4.0f) + 0.5f)));
             return 1U;
         case PARAM_FILTER_CUTOFF:
-            mixer_set_track_filter_cutoff(target->target_track, filter_ui127_to_cutoff_hz(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_CUTOFF, filter_ui127_to_cutoff_hz(clamped));
             return 1U;
         case PARAM_FILTER_RESONANCE:
-            mixer_set_track_filter_resonance(target->target_track, filter_ui127_to_resonance(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_RESONANCE, filter_ui127_to_resonance(clamped));
             return 1U;
         case PARAM_FILTER_EG_AMT:
-            mixer_set_track_filter_eg_amount(target->target_track, filter_ui127_to_eg_amount(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_EG_AMOUNT, filter_ui127_to_eg_amount(clamped));
             return 1U;
         case PARAM_FILTER_ATTACK:
-            mixer_set_track_filter_attack(target->target_track, filter_ui127_to_attack_s(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_ATTACK, filter_ui127_to_attack_s(clamped));
             return 1U;
         case PARAM_FILTER_DECAY:
-            mixer_set_track_filter_decay(target->target_track, filter_ui127_to_decay_s(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_DECAY, filter_ui127_to_decay_s(clamped));
             return 1U;
         case PARAM_FILTER_SUSTAIN:
-            mixer_set_track_filter_sustain(target->target_track, filter_ui127_to_sustain(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_SUSTAIN, filter_ui127_to_sustain(clamped));
             return 1U;
         case PARAM_FILTER_RELEASE:
-            mixer_set_track_filter_release(target->target_track, filter_ui127_to_release_s(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_RELEASE, filter_ui127_to_release_s(clamped));
             return 1U;
         case PARAM_FILTER_KEYTRK:
-            mixer_set_track_filter_keytrack(target->target_track, filter_ui127_to_keytrack(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_KEYTRACK, filter_ui127_to_keytrack(clamped));
             return 1U;
         case PARAM_FILTER_ENVRST:
         case PARAM_FILTER_ENVDLY:
             return 1U;
         case PARAM_FILTER_EQ_LOW:
-            mixer_set_track_filter_eq_low(target->target_track, filter_eq_ui127_to_db(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_EQ_LOW, filter_eq_ui127_to_db(clamped));
             return 1U;
         case PARAM_FILTER_EQ_MID:
-            mixer_set_track_filter_eq_mid(target->target_track, filter_eq_ui127_to_db(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_EQ_MID, filter_eq_ui127_to_db(clamped));
             return 1U;
         case PARAM_FILTER_EQ_HIGH:
-            mixer_set_track_filter_eq_high(target->target_track, filter_eq_ui127_to_db(clamped));
+            audio_control_command_submit_mixer_filter((uint8_t)target->target_track, AUDIO_CONTROL_FILTER_EQ_HIGH, filter_eq_ui127_to_db(clamped));
             return 1U;
         default:
             return 0U;

@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:269:16:ui_hall_mode_flow_apply_group_role_add	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:310:25:ui_hall_mode_flow_resolve_direct_action	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:331:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:421:6:ui_hall_mode_flow_service_pending	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:498:6:ui_hall_mode_flow_handle_track_hall_action	1608	static

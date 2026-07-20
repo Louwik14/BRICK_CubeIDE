@@ -53,6 +53,8 @@ typedef struct
 {
     uint16_t max_events_collected_per_half;
     uint16_t max_subsegments_per_half;
+    uint32_t max_collect_cycles;
+    uint32_t max_apply_cycles;
 } audio_seq_diag_t;
 
 /**

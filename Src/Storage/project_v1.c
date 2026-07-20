@@ -10,6 +10,7 @@
 #include "Storage/project_sd_bank.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
+#include "Audio/audio_control_command.h"
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
@@ -442,7 +443,10 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
     {
         if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
         {
-            brick6_sampler_runtime_stop_multi_instrument(slot);
+            audio_control_command_submit_sampler_param(0U,
+                                                       AUDIO_CONTROL_SAMPLER_STOP_MULTI_INSTRUMENT,
+                                                       0.0f,
+                                                       slot);
             (void)multi_sample_pool_clear_instrument(slot);
         }
     }
@@ -529,8 +533,14 @@ static void project_v1_multi_clear_assignments(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         g_project_multi_assign[track].gain = 1.0f;
-        brick6_sampler_runtime_set_multi_gain(track, 1.0f);
-        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_MULTI_GAIN,
+                                                   1.0f,
+                                                   0U);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                   0.0f,
+                                                   MULTI_SAMPLE_POOL_INVALID_ID);
     }
 }
 
@@ -538,18 +548,7 @@ static void project_v1_reset_blank_transient_runtime(void)
 {
     sd_preview_stop();
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        brick6_sampler_runtime_reset_track(track);
-    }
-    brick6_sampler_runtime_service();
-    brick6_looper_runtime_init();
-    brick6_braids_runtime_init();
-    drum_synth_all_notes_off_all();
-    mixer_reset_runtime_state();
-    fx_master_macro_init(48000.0f);
-    track_sound_state_init();
-    track_tone_sound_state_init();
+    audio_control_command_submit_audio_runtime_reset_all();
 }
 
 static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *project,
@@ -580,20 +579,6 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
         }
     }
 
-    for (uint8_t prev = 0U; prev < track; ++prev)
-    {
-        if ((project->multi[prev].path[0] != '\0')
-            && (project_v1_text_equal(project->multi[prev].path,
-                                      project->multi[track].path) != 0U))
-        {
-            uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-            if (brick6_sampler_runtime_get_multi_instrument(prev, &instrument_id) != 0U)
-            {
-                return instrument_id;
-            }
-        }
-    }
-
     return track;
 }
 
@@ -620,19 +605,28 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
         {
             dst->gain = 4.0f;
         }
-        brick6_sampler_runtime_set_multi_gain(track, dst->gain);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_MULTI_GAIN,
+                                                   dst->gain,
+                                                   0U);
 
         if (src->path[0] == '\0')
         {
             dst->path[0] = '\0';
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            audio_control_command_submit_sampler_param(track,
+                                                       AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                       0.0f,
+                                                       MULTI_SAMPLE_POOL_INVALID_ID);
             continue;
         }
 
         if (project_v1_copy_text(dst->path, sizeof(dst->path), src->path) == 0U)
         {
             dst->path[0] = '\0';
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            audio_control_command_submit_sampler_param(track,
+                                                       AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                       0.0f,
+                                                       MULTI_SAMPLE_POOL_INVALID_ID);
             g_project_multi_restore_diag.restore_missing_path = 1U;
             continue;
         }
@@ -640,12 +634,18 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
         const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, track);
         if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
         {
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            audio_control_command_submit_sampler_param(track,
+                                                       AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                       0.0f,
+                                                       MULTI_SAMPLE_POOL_INVALID_ID);
             g_project_multi_restore_diag.restore_load_error = 1U;
             continue;
         }
 
-        brick6_sampler_runtime_set_multi_instrument(track, instrument_id);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                   0.0f,
+                                                   instrument_id);
         (void)project_v1_copy_text(g_project_multi_restore_diag.restored_multi_path,
                                    sizeof(g_project_multi_restore_diag.restored_multi_path),
                                    dst->path);
@@ -674,7 +674,10 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
             }
             else
             {
-                brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+                audio_control_command_submit_sampler_param(track,
+                                                           AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                           0.0f,
+                                                           MULTI_SAMPLE_POOL_INVALID_ID);
                 g_project_multi_restore_diag.restore_load_error = 1U;
             }
         }
@@ -1093,7 +1096,10 @@ uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path)
     if ((path == 0) || (path[0] == '\0'))
     {
         g_project_multi_assign[track].path[0] = '\0';
-        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+        audio_control_command_submit_sampler_param(track,
+                                                   AUDIO_CONTROL_SAMPLER_MULTI_INSTRUMENT,
+                                                   0.0f,
+                                                   MULTI_SAMPLE_POOL_INVALID_ID);
         project_v1_set_error(PROJECT_V1_ERR_NONE);
         return 1U;
     }
@@ -1380,7 +1386,10 @@ uint8_t project_v1_load_blank(void)
     {
         if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
         {
-            brick6_sampler_runtime_stop_multi_instrument(slot);
+            audio_control_command_submit_sampler_param(0U,
+                                                       AUDIO_CONTROL_SAMPLER_STOP_MULTI_INSTRUMENT,
+                                                       0.0f,
+                                                       slot);
             (void)multi_sample_pool_clear_instrument(slot);
         }
     }

@@ -14,6 +14,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/metronome_runtime.h"
+#include "Audio/audio_midi_out.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
 
@@ -67,8 +68,18 @@ static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
 {
-    const uint8_t msg[1] = { status };
-    midi_send_raw(MIDI_DEST_BOTH, msg, sizeof(msg));
+    if (status == 0xFAU)
+    {
+        (void)audio_midi_out_start(seq_runtime_exec_get_audio_timeline_sample());
+    }
+    else if (status == 0xFCU)
+    {
+        (void)audio_midi_out_stop(seq_runtime_exec_get_audio_timeline_sample());
+    }
+    else
+    {
+        (void)audio_midi_out_submit_raw(status, 0U, 0U, 1U, seq_runtime_exec_get_audio_timeline_sample(), AUDIO_MIDI_OUT_PRIORITY_CRITICAL);
+    }
 }
 
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void)
@@ -105,6 +116,7 @@ static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *sched
     scheduler_event->velocity = event->velocity;
     scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
     scheduler_event->event_token = event->event_token;
+    scheduler_event->sample_time = event->sample_time;
 }
 
 static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode)
@@ -417,6 +429,10 @@ void seq_runtime_time_adapter_process(void)
     seq_runtime_process_core();
 }
 
+void seq_runtime_prepare_control_actions(void)
+{
+    seq_play_scheduler_prepare_all_steps_from_control();
+}
 void seq_runtime_time_adapter_process_internal_from_irq(void)
 {
     if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
@@ -448,6 +464,38 @@ uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_e
                                                  g_seq_runtime.running);
 }
 
+uint8_t seq_runtime_audio_prepare_event_block(seq_runtime_audio_event_block_t *out_block,
+                                              uint16_t block_frames)
+{
+    if (out_block == NULL)
+    {
+        return 0U;
+    }
+
+    memset(out_block, 0, sizeof(*out_block));
+    out_block->generation = g_seq_runtime_diag.prepared_block_count + 1U;
+    out_block->block_frames = block_frames;
+
+    const uint16_t event_count = seq_runtime_audio_collect_block_events(out_block->events,
+                                                                        SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP,
+                                                                        block_frames);
+    out_block->event_count = event_count;
+    out_block->block_start_sample = seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)block_frames;
+    g_seq_runtime_diag.prepared_block_count++;
+    g_seq_runtime_diag.prepared_event_count += event_count;
+    if (event_count > g_seq_runtime_diag.prepared_event_max)
+    {
+        g_seq_runtime_diag.prepared_event_max = event_count;
+    }
+    if (event_count >= SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP)
+    {
+        out_block->rejected_events = 1U;
+        out_block->critical_failures = 1U;
+        g_seq_runtime_diag.prepared_block_saturated_count++;
+        g_seq_runtime_diag.prepared_critical_failure_count++;
+    }
+    return 1U;
+}
 void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
 {
     if (event == NULL)

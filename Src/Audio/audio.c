@@ -55,7 +55,7 @@
 
 /* Taille totale des buffers DMA (en int32) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
-#define AUDIO_SEQ_MAX_BLOCK_EVENTS 128U
+#define AUDIO_SEQ_MAX_BLOCK_EVENTS SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP
 
 /* ============================================================
    DMA BUFFERS
@@ -79,6 +79,7 @@ static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
    ============================================================ */
 
 static audio_seq_diag_t g_audio_seq_diag;
+static seq_runtime_audio_event_block_t g_audio_seq_event_block;
 
 /* ============================================================
    INTERNAL PROCESSING
@@ -106,6 +107,7 @@ static void audio_apply_seq_event_at_sample(seq_runtime_audio_event_t *event,
     else
     {
         event->sample_offset_in_block = 0U;
+        event->sample_time = event_sample_time;
         seq_runtime_audio_apply_event(event);
     }
 }
@@ -258,21 +260,30 @@ static void process_half(uint32_t half_index)
             block_frames = 1U;
         }
 
-        seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
-        const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
-                                                                            AUDIO_SEQ_MAX_BLOCK_EVENTS,
-                                                                            block_frames);
-        const uint64_t block_start_sample =
-            seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)block_frames;
+        const uint32_t collect_t0 = DWT->CYCCNT;
+        (void)seq_runtime_audio_prepare_event_block(&g_audio_seq_event_block, block_frames);
+        const uint32_t collect_cycles = DWT->CYCCNT - collect_t0;
+        const uint16_t event_count = g_audio_seq_event_block.event_count;
+        const uint64_t block_start_sample = g_audio_seq_event_block.block_start_sample;
+        if (collect_cycles > g_audio_seq_diag.max_collect_cycles)
+        {
+            g_audio_seq_diag.max_collect_cycles = collect_cycles;
+        }
         half_event_count = (uint16_t)(half_event_count + event_count);
+        const uint32_t apply_t0 = DWT->CYCCNT;
         segment_count = (uint16_t)(segment_count
             + audio_process_seq_event_segment(rx,
                                               tx,
                                               half_cursor,
                                               block_start_sample,
                                               block_frames,
-                                              block_events,
+                                              g_audio_seq_event_block.events,
                                               event_count));
+        const uint32_t apply_cycles = DWT->CYCCNT - apply_t0;
+        if (apply_cycles > g_audio_seq_diag.max_apply_cycles)
+        {
+            g_audio_seq_diag.max_apply_cycles = apply_cycles;
+        }
         half_cursor += block_frames;
     }
 

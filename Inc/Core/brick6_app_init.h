@@ -9,6 +9,13 @@
  * - Déclarer l'API d'init applicative hors CubeMX.
  */
 
+void brick6_platform_shared_init(void);
+void brick6_audio_domain_init(void);
+void brick6_system_domain_init(void);
+void brick6_audio_domain_start(void);
+void brick6_system_domain_start(void);
+void brick6_system_domain_process(void);
+
 void brick6_app_init(void);
 void brick6_app_process(void);
 

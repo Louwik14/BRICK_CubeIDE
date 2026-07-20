@@ -1,4 +1,5 @@
 #include "Param/param_registry.h"
+#include "Audio/audio_control_command.h"
 
 #include <string.h>
 
@@ -229,7 +230,7 @@ static void param_registry_snap_reapplied_runtime_for_track(uint8_t track)
         return;
     }
 
-    mixer_snap_track_runtime_state((uint32_t)mix_track);
+    audio_control_command_submit_mixer_snap_track(mix_track);
 }
 
 static void param_registry_reapply_track_runtime_params(uint8_t track)
@@ -322,13 +323,13 @@ static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_track
     }
 
     param_registry_capture_runtime_mix_targets(next_mix_tracks);
-    mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
+    audio_control_command_submit_mixer_rebind_all(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
 }
 
 static void param_registry_rebind_lane_runtime_track(uint8_t previous_mix_track,
                                                      uint8_t next_mix_track)
 {
-    mixer_rebind_track_state(previous_mix_track, next_mix_track);
+    audio_control_command_submit_mixer_rebind_one(previous_mix_track, next_mix_track);
 }
 
 static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
@@ -357,8 +358,8 @@ static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
         return;
     }
 
-    mixer_set_track_filter_type((uint32_t)mix_track, MIXER_TRACK_FILTER_OFF);
-    mixer_track_filter_all_notes_off((uint32_t)mix_track);
+    audio_control_command_submit_mixer_filter(mix_track, AUDIO_CONTROL_FILTER_TYPE, (float)MIXER_TRACK_FILTER_OFF);
+    audio_control_command_submit_mixer_filter(mix_track, AUDIO_CONTROL_FILTER_ALL_NOTES_OFF, 0.0f);
 }
 
 static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
@@ -395,8 +396,8 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
         return;
     }
 
-    mixer_track_vca_all_notes_off((uint32_t)mix_track);
-    mixer_set_track_vca_enabled((uint32_t)mix_track, 0U);
+    audio_control_command_submit_mixer_vca(mix_track, AUDIO_CONTROL_VCA_ALL_NOTES_OFF, 0.0f);
+    audio_control_command_submit_mixer_vca(mix_track, AUDIO_CONTROL_VCA_ENABLED, 0.0f);
 }
 
 static void param_registry_finalize_track_structure_change(const uint8_t *previous_mix_tracks)

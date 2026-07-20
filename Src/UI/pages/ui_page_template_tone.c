@@ -3,13 +3,41 @@
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/fx_master_macro.h"
-#include "Core/brick6_sampler_runtime.h"
 #include "Param/param_registry.h"
 #include "Param/param_wave_labels.h"
 #include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
 #include "ui_template_page.h"
+
+static uint16_t ui_page_template_tone_multi_instrument_from_selector(float value)
+{
+    if (value < 0.5f)
+    {
+        return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    const uint8_t selector = (uint8_t)(value + 0.5f);
+    uint8_t current = 1U;
+    uint16_t last_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    {
+        if (multi_sample_pool_get_instrument(id) == NULL)
+        {
+            continue;
+        }
+
+        last_instrument_id = id;
+        if (current == selector)
+        {
+            return id;
+        }
+        current++;
+    }
+
+    return last_instrument_id;
+}
 
 static const ui_template_family_t g_ui_template_tone_family_master_fx = {
     .family_title = "TONE",
@@ -1095,7 +1123,11 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 (void)snprintf(out_name, out_name_len, "INST");
             }
 
-            (void)brick6_sampler_runtime_get_multi_instrument(active_track, &instrument_id);
+            float selector = 0.0f;
+            if (param_registry_get_track_value(PARAM_SAMPLER_SAMPLE, active_track, &selector) != 0U)
+            {
+                instrument_id = ui_page_template_tone_multi_instrument_from_selector(selector);
+            }
             if (instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
             {
                 instrument = multi_sample_pool_get_instrument(instrument_id);

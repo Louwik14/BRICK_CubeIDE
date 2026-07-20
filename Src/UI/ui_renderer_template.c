@@ -12,6 +12,7 @@
 #include "ui_macro_interaction.h"
 #include "ui_param.h"
 #include "ui_widgets.h"
+#include "Audio/audio_telemetry.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -2610,10 +2611,10 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
                                                            int inner_w,
                                                            int inner_h)
 {
-    brick6_sampler_ram_playhead_snapshot_t playhead;
-    if ((brick6_sampler_runtime_get_ram_playhead(ui_get_active_track(),
-                                                 global_slot,
-                                                 &playhead) == 0U)
+    audio_telemetry_ram_playhead_t playhead;
+    if ((audio_telemetry_get_ram_playhead(ui_get_active_track(),
+                                          global_slot,
+                                          &playhead) == 0U)
         || (playhead.active == 0U)
         || (playhead.frame_count == 0U))
     {

@@ -179,6 +179,14 @@ Sorties de Z2:
 - Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/COLORS) lors des changements family/type.
 - Lorsqu'un rebind de lane reste necessaire, la migration/reconciliation du runtime per-lane est une etape explicite aval; Z2 ne garantit pas a lui seul la coherence du state DSP si cette passe n'est pas executee.
 
+## 12.b Projection locale audio
+
+- `track_runtime` reste l'autorite controle du binding track-aware: refresh, dirty flags, allocation engine/lane, reason et revisions restent dans Z2.
+- Le chemin audio ne lit plus directement `g_track_runtime_ctx[]`, la table inverse `mix_track -> logical_track`, ni le dirty runtime. Il consomme `audio_control_snapshot`, publie hors IRQ.
+- La projection contient uniquement les champs runtime consommes par Z1/Z4 audio apply: `track_runtime_ctx_t`, `synth_usage`, table inverse mixer, channel MIDI, routability, resolution track et role voice-group.
+- La publication est un double-buffer local sans IPC: staging rempli en superloop, pending publie par section critique courte hors IRQ, bascule active au debut de `brick6_audio_runtime_dsp()`.
+- Les getters Z2 restent valides pour UI/Param/Seq preparation/Storage hors IRQ. Les appels directs restants dans `seq_play_scheduler` et `mod_lfo_v1` appartiennent aux chemins controle, cache UI ou preparation scheduler, pas au rendu bloc.
+
 ## 13. Contrat Sampler v0
 - Nouvelle identite runtime branchee:
   - `TRACK_RUNTIME_FAMILY_SAMPLER`,
@@ -326,3 +334,15 @@ Sorties de Z2:
 - Le catalogue produit est variant-aware a la compilation: premium conserve `Input1..Input4` comme families produit, tandis que low-cost expose uniquement `Input1`.
 - En low-cost, `track_runtime_input_family_mix_track()` ne mappe que `Input1 -> mix lane 0`; `Input2..4` restent des valeurs enum historiques mais ne sont plus des families input disponibles ni des ressources routables.
 - La reservation de lanes fixes d'entree suit `UI_AUDIO_INPUT_PROTO_WIRED_COUNT`: low-cost reserve uniquement la lane 0, premium garde les lanes proto 0..2.
+
+## Addendum 2026-07-18 - commandes structurelles vers Z1
+
+- Les refresh/bindings `track_runtime` restent l'autorite Z2, mais les effets audio lane-bound d'une transition structurelle ne sont plus appliques directement par Z3 hors IRQ.
+- Les rebinds mixer, neutralisations FILTER/VCA et snaps de lane passent par la file locale `audio_control_command`; la commande porte la revision runtime courante et l'audio ignore une commande devenue obsolete.
+- Dette restante: certains chemins de restore/storage qui manipulent sampler/pool ou reset global restent documentes comme ambigus tant que le contrat de publication sampler/page-cache n'est pas separe.
+
+## Addendum 2026-07-19 - reset Wave structurel par commande audio
+
+- Les changements de binding Wave restent decides par `track_runtime`, mais le reset d'instance Braids n'est plus appele directement depuis Z2.
+- Z2 publie `AUDIO_CONTROL_WAVE_RESET_INSTANCE` avec l'instance concernee; Z1 applique le reset depuis le domaine audio et rejette la commande si sa generation runtime est stale.
+- `track_runtime_get_revision()` reste une source de coherence controle/snapshot; le chemin audio consomme la revision deja publiee dans `audio_control_snapshot`.

@@ -41,7 +41,7 @@ Dependances de Z1 sans appartenir a Z1:
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
-- `track_tone_sound_state` pour les valeurs `Master/FX` type/LVL/A/B lues par `fx_master_macro`.
+- `audio_control_snapshot` pour la projection audio locale des donnees `track_runtime`, MOD/LFO et Master/FX consommees en IRQ.
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
 
 Exclusions explicites:
@@ -84,6 +84,7 @@ Autorite de rendu DSP principal:
 
 Autorite de rendu runtime applicatif:
 - `brick6_audio_runtime_dsp()` dans `Src/Core/brick6_audio_runtime.c`.
+- Bascule la projection controle->audio par `audio_control_snapshot_apply_pending_from_audio()` au debut du bloc DSP, avant LFO, engines, mixer et MasterFX.
 
 Autorite de mixage final:
 - `mixer_process()` dans `Src/Audio/mixer.c`.
@@ -165,6 +166,30 @@ Contrats timing sortants:
   - Lecture/mix: `brick6_sampler_runtime_render_track`, dans le buffer Sampler pre-mixer.
   - Role: eviter les discontinuites de coupure sans garder reader/cache/streamer vivant.
   - Contraintes: RAM-only, pas de SD, pas d'allocation, pas de pression page-cache.
+
+### `Src/Audio/audio_control_snapshot.c`
+- `g_audio_control_snapshot_buffers[2]`
+  - Ecriture staging: superloop uniquement via `audio_control_snapshot_publish_from_control()`.
+  - Lecture active: IRQ audio uniquement via les getters `audio_control_snapshot_*`.
+  - Role: projection locale coherente des donnees controle necessaires au rendu.
+- Contenu projete:
+  - `track_runtime_ctx_t runtime[SEQ_TRACK_COUNT]`;
+  - `track_runtime_synth_usage_t`;
+  - table inverse `mix_track -> logical_track`;
+  - `ui_family/ui_type` seulement pour le filtrage des destinations LFO;
+  - role voice-group pour la preparation sample-domain des notes sequenceur encore locale au H743;
+  - config LFO par track et base de destination LFO courante;
+  - valeurs Master/FX `type/level/macro_a/macro_b`.
+- Publication:
+  - le staging est rempli hors IRQ depuis `track_runtime`, `track_sound_state` et `track_tone_sound_state`;
+  - une section critique courte hors IRQ publie uniquement l'index pending et la generation;
+  - l'IRQ ne copie pas le snapshot: elle bascule l'index actif au debut du bloc DSP;
+  - si aucune generation complete n'est pending, l'audio garde l'ancienne version.
+- Diagnostics legers:
+  - generation publiee/appliquee;
+  - compteur de publications/applications;
+  - blocs ayant conserve une ancienne generation;
+  - publications sautees car une generation etait deja pending.
 
 ### `Src/Audio/mixer.c`
 - `g_tracks[MIXER_MAX_TRACKS]` (gain/pan/mute/routes/inserts/sends + smoothing)
@@ -900,3 +925,81 @@ Clarification START/END/LOOP live:
 - Les tracks d'entree inexistantes low-cost `Input2..4` ne sont plus activees par le bridge runtime audio et ne sont plus reservees par Z2; leurs buffers bloc sont zeroes par le backend board au lieu d'etre parcourus comme entrees physiques.
 - Low-cost compile `MIXER_HAS_CUE_BUS=0`: les buffers bloc CUE et Looper-CUE ne sont pas instancies, les accumulations CUE/XFade CUE sont compilees hors chemin IRQ, et `board_audio_pack_output()` ignore toute donnee CUE. Premium garde MAIN/CUE physique et bus CUE inchanges.
 - Gain mesure apres build Release: low-cost DTCMRAM 83584 B contre premium 84608 B, soit 1024 B de buffers CUE bloc retires dans Z1. Les buffers DMA low-cost restent reduits par `BOARD_AUDIO_TDM_SLOTS=2` contre TDM8 premium.
+
+## Addendum 2026-07-18 - file locale commandes controle -> audio
+
+- Z1 consomme maintenant `audio_control_command_process_from_audio()` au debut de `brick6_audio_runtime_dsp()`, apres bascule `audio_control_snapshot` et avant LFO/engines/mixer.
+- La file locale H743 reste statique et bornee: 64 commandes imperatives ordonnees, 48 slots coalescables, consommation maximale `AUDIO_CONTROL_COMMANDS_PER_BLOCK_MAX=32` par bloc, sans malloc ni attente.
+- Les commandes coalescables utilisent la politique derniere valeur gagne: mixer track/global, FILTER/VCA params, Wave/Drum/Sampler/Looper params, XFade et snap lane. Les commandes imperatives conservent l'ordre: notes clavier hors sample-accurate, panic/all-notes-off, rebind mixer et transitions structurelles.
+- En cas de plein, une commande coalescable est rejetee avec diagnostic; une commande imperative pleine incremente aussi `critical_failures`. L'IRQ ne prend pas de lock: un appel deja en IRQ execute directement afin de conserver les events sample-accurate existants.
+- Diagnostics exposes par `audio_control_command_diag_snapshot()`: profondeur courante/max, coalescing, rejets, echecs critiques, generations obsoletes ignorees, max commandes consommees par bloc.
+
+## Addendum 2026-07-18 - bloc events Z4 et sortie MIDI hors IRQ
+
+- `audio.c` ne consomme plus un tableau temporaire libre: il acquiert un `seq_runtime_audio_event_block_t` complet, statique et borne (`SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP=128`), portant generation, debut de bloc, longueur, nombre d'evenements, offsets intra-bloc, type/track/donnees utiles et compteurs de saturation.
+- L'application sample-accurate reste en Z1: boundary Looper, metronome, note-on/off, p-lock apply/release et transport PLAY sont appliques aux offsets fournis par le bloc immutable courant.
+- Le chemin IRQ ne fait plus d'appel direct a la pile MIDI/USB pour les emissions issues de Z4: note-on/off, Program, MIDI clock, Start/Stop, panic et all-notes-off sont publies dans `audio_midi_out`, file locale statique consommee hors IRQ dans `brick6_app_process()`.
+- Politique plein `audio_midi_out`: capacite 128 evenements, note-off/stop/panic/all-notes-off critiques; un critique peut remplacer un evenement normal, mais un echec critique est compte explicitement. Aucun malloc, attente ou flush USB depuis l'IRQ.
+- Diagnostics ajoutes: profondeur/high-water MIDI out, soumis/draines/rejets/echecs critiques/remplacements low-priority; cote `audio_seq_diag`, maximum cycles collecte et application par bloc.
+
+## Addendum 2026-07-18 - projection audio locale des pages Sampler
+
+- `sample_page_cache` expose maintenant une projection audio locale `sample_audio_page_t` pour les pages READY: cle `{domain, object_id}`, `page_index`, `slot_index`, generation, adresse float stereo, `start_frame`, `frame_count`, stride et flags READY/IMMUTABLE/FLOAT32.
+- Le fast path migre de `sample_voice_reader` utilise `sample_page_cache_audio_acquire_*` / `sample_page_cache_audio_release_*`; il ne lit plus de pointeur vers `sample_page_desc_t` mutable et ne modifie plus `use_count`, `last_touch` ou les metadata LRU systeme.
+- La publication reste locale H743: le systeme remplit une page en `LOADING`, appelle le hook local de preparation cache/coherence, puis bascule `READY` en une etape via `sample_page_cache_set_state`; l'audio ne voit que READY avec generation non nulle.
+- Les releases audio sont versionnees par generation et portees par une table locale bornee de leases audio. Une release obsolete est ignoree; une page retiree pendant lecture reste non reutilisable tant que le lease audio correspondant n'est pas libere.
+- Saturation: si la table de leases audio est pleine, l'acquire refuse et le lecteur conserve le comportement silence/underrun existant. L'eviction systeme est conservative: une page avec lease audio est gardee au lieu d'etre reutilisee.
+- Les seams futurs de coherence bicore sont explicites mais no-op sur H743 mono-coeur: hooks locaux avant publication et avant consommation, sans IPC, lock, malloc ni attente.
+- Acces directs restant justifies: `sample_cache` legacy Classic, `sample_page_cache_begin_read_block`, Looper RAW playback et les vues overview hors IRQ continuent d'utiliser les APIs historiques tant que leurs chemins ne sont pas migres vers la projection audio.
+- Diagnostics page-cache ajoutes: pages publiees, acquire OK/refus/miss, releases OK/rejetees/stale, leases high-water/full, pages conservees par eviction conservative et cout scan max acquire/release.
+
+## Addendum 2026-07-18 - Classic legacy sur projection page-cache audio
+
+- Les chemins Classic audio encore utilises par `sample_cache` ont ete bascules sur la projection `sample_audio_page_t`: cursor de voix, `begin_read_block`, `try_acquire_span`, `read_voice_frame` et `peek_frame` n'acquierent plus `sample_page_desc_t`, ne lisent plus ses champs mutables et releasent par `{key,page,slot,generation}`.
+- Les wrappers historiques par `sample_id` restent des facades Classic temporaires autour de la cle `sample_audio_key_classic(sample_id)`; l'identite physique reste `sample_audio_key_t + page_index` dans `sample_page_cache`.
+- Les spans Classic audio restent bornes a une page par acquire; pour un besoin de voisin page-boundary, le lecteur acquiert deterministiquement la page courante puis la page voisine et rollback la page courante si la voisine manque.
+- Une page retiree/clearee est retiree de l'index systeme et marquee `ERROR` si un lease audio actif existe; elle n'est nettoyee/reutilisee qu'apres release du lease versionne.
+- Les misses, handles stale, saturation de leases et rollbacks conservent le comportement audio existant: silence/underrun, aucun SD, malloc, lock ou attente en IRQ.
+- Diagnostics ajoutes/etendus: spans Classic OK/refuses/rollback, max pages par span, misses Classic audio, appels legacy detectes en IRQ, acquisitions/releases versionnees et releases stale.
+- Chemins directs maintenus hors migration: Looper RAW playback, `sampler_ram_pool` resident, overviews/caches waveform, loaders/diagnostics hors IRQ et `sample_cache_get_legacy_data()` pour compat catalogue/pool hors audio.
+
+## Addendum 2026-07-18 - Looper RAW playback sur projection page-cache audio
+
+- Le playback RAW de `Sampler/Looper` consomme maintenant `sample_audio_key_t {domain=LOOPER, object_id=track_id}` et des projections `sample_audio_page_t` READY immutables via `sample_page_cache_audio_acquire_key()` / `sample_page_cache_audio_release_ref_key()`.
+- Le chemin IRQ Looper ne lit plus `sample_page_desc_t`, ne modifie plus `use_count`/`last_touch` et ne release plus par descripteur mutable. Les demandes de prefetch restent cote service Looper hors IRQ; un miss audio produit silence/underrun local et avance le playhead comme avant.
+- La projection Looper audio minimale porte l'identite logique, la generation de contenu, la generation publiee/appliquee, la longueur valide, le format RAW PCM24 stereo 48 kHz via la cle LOOPER, l'etat playable et les parametres de loop/render strictement necessaires.
+- Une prise RAW n'est publiee normale qu'apres `register_raw_pcm24_stereo_sample_key()` reussi; le pont preroll RAM reste le seul comportement autorise pendant finalisation/backing RAW non encore attache. Une ancienne page leasee reste protegee par le lease page-cache jusqu'au release.
+- Diagnostics exposes par le snapshot Looper: generations contenu/publiee/appliquee, acquire/release, stale generation, page misses, publication incomplete rejetee, transitions refusees pendant finalisation, pages conservees pour lease actif, max pages acquises par rendu et acces legacy IRQ detectes.
+
+## Addendum 2026-07-18 - Sampler/RAM resident publie
+
+- `Sampler/RAM` normal et sliced ne consomment plus `sampler_ram_slot_t` dans le rendu: au trigger, `brick6_sampler_runtime` acquiert une projection `sampler_ram_audio_sample_t` minimale (`ram_slot`, `global_slot`, generation, adresse float stereo, frames, sample rate, canaux, format, playable), puis la voix garde seulement cette projection.
+- `sampler_ram_pool` reste system-owner pour import WAV, allocation dans `SAMPLE_PAGE_SLOT_POOL`, conversion float stereo, overview waveform, clear/reload et inscription `sample_global_pool`. L'audio ne modifie pas la metadata mutable du slot et release seulement par `{ram_slot,generation}`.
+- La publication RAM est locale et versionnee: un slot reste invisible pendant `LOADING`; la generation READY est publiee apres conversion complete et hook de coherence local. Une publication incomplete est refusee et diagnostiquee.
+- Clear/reload invalide les nouvelles acquisitions via retrait du slot global et nouvelle generation. Une allocation ancienne avec utilisateur audio actif est retiree et conservee dans une table bornee jusqu'au release; aucune attente, lock, malloc ou liberation physique n'est faite depuis l'IRQ.
+- Les modes OneShot, Reverse, Loop, PingPong et Slicer lisent l'adresse immutable portee par la projection acquise. Voice stop, steal, fin de region et reset track releasent la generation RAM si la voix en portait une.
+- Acces directs conserves hors IRQ: UI/persistence/overview peuvent encore lire `sampler_ram_slot_t` pour metadata, path, cout et waveform; `sampler_ram_pool_get_data()` reste legacy et diagnostique un acces IRQ.
+
+## Addendum 2026-07-18 - record audio vers systeme par projection writer
+
+- `mixer_process()` reste le producteur audio unique des flux record Looper RAW et Audio Rec WAV. Il pousse seulement des frames PCM24 stereo dans les rings statiques SPSC de `multi_record_writer` et capture le preroll RAM Looper local; il ne lit plus l'etat mutable writer pour valider la capture Looper.
+- Les transitions Looper sample-accurate START/STOP restent consommees au marker boundary Z4 dans `brick6_looper_runtime`, mais l'appel writer depuis l'IRQ publie maintenant des markers START/STOP dans une file locale bornee au lieu de muter directement l'etat fichier/finalisation.
+- L'audio lit uniquement la projection writer minimale `{generation, client, backend, session_active, accepts_blocks, frame_limit, frames_received}`. Cette projection est publiee par le domaine systeme apres prepare/start/stop et peut etre ajustee par le producteur audio pour couper l'acceptation apres STOP/overrun sans toucher au fichier.
+- Les frames sont immuables apres publication du `write_index`; les hooks locaux `publish producer`, `acquire consumer` et `release consumer` sont presents et restent des barrieres no-op/cache locales H743 hors IPC.
+- Saturation IRQ: aucun blocage, aucun overwrite silencieux. Audio Rec publie STOP apres overrun pour finaliser une prise degradee; Looper RAW publie ABORT et coupe la session audio pour eviter un RAW de boucle incoherent. Les echecs de markers critiques sont comptes.
+- Diagnostics exposes via le statut writer: high-water/depth, blocs produits/consommes, markers produits/consommes, overruns/drops, markers critiques en echec, generations stale, sessions abandonnees, max blocs draines par service et appels writer legacy vus depuis l'IRQ.
+
+## Addendum 2026-07-19 - telemetry audio et commandes runtime critiques
+
+- `audio_telemetry` expose une projection audio->systeme locale, statique et ecrasable pour le playhead RAM utile a l'UI: `{track_id, global_slot, sample_id, frame_count, position_frame, playing, reverse, generation}`.
+- Le rendu `Sampler/RAM` publie ce playhead depuis le domaine audio; l'UI ne lit plus la voix mutable via `brick6_sampler_runtime_get_ram_playhead`.
+- Les resets/all-notes-off/stop critiques restants passent par `audio_control_command`: panic, stop transport clips, VCA all-notes-off, Wave/Drum all-notes-off, reset Wave instance, reset Sampler track, stop/set Multi instrument et reset runtime audio global.
+- L'executant `audio_control_command_process_from_audio()` valide maintenant les generations contre la revision active du snapshot audio, pas contre `track_runtime` lu directement depuis l'audio.
+- Acces directs conserves en Z1: appels DSP internes au mixer/engines/sampler depuis `audio_control_command`, definitions runtime audio-owned, et `drum_synth_all_notes_off_all()` dans `brick6_audio_runtime` lors d'un toggle runtime audio-owned.
+
+## Addendum 2026-07-20 - init domaine audio retardable
+
+- L'init audio applicative est regroupee dans `brick6_audio_domain_init()`: codec Board, mixer/policy FX, buffers float, moteurs Drum/Sampler/Looper/Wave, runtime audio, transports locaux controle->audio/audio->systeme, `audio_init()` et callback DSP.
+- Le demarrage effectif du flux est isole dans `brick6_audio_domain_start()`. `audio_start()` n'est plus enfoui dans l'orchestrateur global et reste retardable apres publication d'un etat initial coherent par `brick6_system_domain_init()`.
+- Le chemin hard-RT Z1 reste inchange: aucune modification DSP, pas de service cooperatif audio ajoute en superloop, pas de HSEM/IPC/RTOS. Les services Sampler/Looper/writer/cache restent systeme-owned hors IRQ et communiquent par les contrats locaux existants.
+- Ownership futur confirme: SAI/I2S, DMA audio, codec, buffers DMA, callback DSP, mixer, engines, playback/capture audio et application sample-accurate restent M7-cibles. USB/MIDI/SD/UI/storage restent systeme/M4-cibles et n'entrent pas dans le demarrage DMA.

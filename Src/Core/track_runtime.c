@@ -4,6 +4,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
+#include "Audio/audio_control_command.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/track_state.h"
 #include "Param/param_registry_backends.h"
@@ -885,14 +886,18 @@ static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
     if ((previous_is_wave != 0U)
             && ((current_is_wave == 0U) || (current_ctx->instance_id != previous_instance)))
     {
-        brick6_braids_runtime_reset_instance(previous_instance);
+        audio_control_command_submit_wave_param(previous_instance,
+                                                AUDIO_CONTROL_WAVE_RESET_INSTANCE,
+                                                0.0f);
         g_track_runtime_braids_reset_count[previous_instance]++;
     }
 
     if ((current_is_wave != 0U)
             && ((previous_is_wave == 0U) || (previous_instance != current_ctx->instance_id)))
     {
-        brick6_braids_runtime_reset_instance(current_ctx->instance_id);
+        audio_control_command_submit_wave_param(current_ctx->instance_id,
+                                                AUDIO_CONTROL_WAVE_RESET_INSTANCE,
+                                                0.0f);
         g_track_runtime_braids_reset_count[current_ctx->instance_id]++;
         (void)param_backend_reapply_tone_wave_runtime(current_ctx->track_id);
     }
@@ -1052,7 +1057,9 @@ void track_runtime_refresh_all(void)
     {
         if (previous_wave_owner[instance] != current_wave_owner[instance])
         {
-            brick6_braids_runtime_reset_instance(instance);
+            audio_control_command_submit_wave_param(instance,
+                                                    AUDIO_CONTROL_WAVE_RESET_INSTANCE,
+                                                    0.0f);
             g_track_runtime_braids_reset_count[instance]++;
             if (current_wave_owner[instance] < SEQ_TRACK_COUNT)
             {

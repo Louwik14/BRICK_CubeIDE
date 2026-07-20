@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_leds_lowcost.c:47:6:board_led_transport_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_leds_lowcost.c:54:6:board_led_transport_busy	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_leds_lowcost.c:59:6:board_led_transport_send	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_leds_lowcost.c:79:9:board_led_transport_handle_pwm_callback	8	static

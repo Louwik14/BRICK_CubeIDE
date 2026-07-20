@@ -7,6 +7,7 @@
 
 #define SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE 0xF0U
 #define SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK   0xF1U
+#define SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP     128U
 
 typedef struct
 {
@@ -66,13 +67,30 @@ typedef struct
     uint8_t velocity;
     uint16_t sample_offset_in_block;
     uint32_t event_token;
+    uint64_t sample_time;
 } seq_runtime_audio_event_t;
+
+typedef struct
+{
+    uint32_t generation;
+    uint64_t block_start_sample;
+    uint16_t block_frames;
+    uint16_t event_count;
+    uint16_t rejected_events;
+    uint16_t critical_failures;
+    seq_runtime_audio_event_t events[SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP];
+} seq_runtime_audio_event_block_t;
 
 typedef struct
 {
     uint32_t internal_irq_tick_count;
     uint32_t internal_non_audio_step_pulse_count;
     uint32_t internal_step_burst_block_count;
+    uint32_t prepared_block_count;
+    uint32_t prepared_event_count;
+    uint32_t prepared_event_max;
+    uint32_t prepared_block_saturated_count;
+    uint32_t prepared_critical_failure_count;
     uint16_t max_internal_step_pulses_per_block;
 } seq_runtime_diag_t;
 
@@ -87,10 +105,13 @@ void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
+void seq_runtime_prepare_control_actions(void);
 /* Hybrid seam: query of due events with explicit audio-timeline advance. */
 uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
                                                 uint16_t max_events,
                                                 uint16_t block_frames);
+uint8_t seq_runtime_audio_prepare_event_block(seq_runtime_audio_event_block_t *out_block,
+                                              uint16_t block_frames);
 /* Audio apply seam: forwards collected runtime events to the scheduler apply surface. */
 void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event);
 uint32_t seq_runtime_get_samples_per_step_q16(void);

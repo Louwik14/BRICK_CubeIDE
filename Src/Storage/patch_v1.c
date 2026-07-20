@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Audio/audio_control_command.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -551,7 +552,10 @@ static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV
     for (uint8_t i = 0U; i < width; ++i)
     {
         keyboard_engine_all_notes_off_for_track(targets[i]);
-        brick6_sampler_runtime_reset_track(targets[i]);
+        audio_control_command_submit_sampler_param(targets[i],
+                                                   AUDIO_CONTROL_SAMPLER_RESET_TRACK,
+                                                   0.0f,
+                                                   0U);
     }
 
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)

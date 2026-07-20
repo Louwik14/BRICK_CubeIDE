@@ -724,3 +724,32 @@ Points factuels observes:
 - `START=TRIG` est porte par `seq_live_rec_session`: armer REC ou demander PLAY en REC arme depuis STOP place l'attente trigger; le premier note-on interne ou MIDI externe consomme l'attente, demarre le transport via `seq_runtime_start`, puis continue dans le chemin live-rec normal.
 - STOP, desarmement REC et changement de START hors `TRIG` clear l'attente. Changer START vers `TRIG` pendant REC arme et STOP recree l'attente de facon deterministe.
 - Les chemins clavier et MIDI ne decident pas du start: ils notifient seulement `seq_runtime_live_rec_note_on`, le domaine REC consomme eventuellement le trigger.
+
+## Addendum 2026-07-18 - notes controle hors sample-accurate
+
+- Les evenements sequenceur sample-accurate restent appliques directement dans le chemin audio Z4->Z1, sans passage par la nouvelle file controle.
+- Les notes clavier/control hors chemin sample-accurate commencent a publier les commandes moteur via `audio_control_command`, consommees au debut du bloc audio. Les note-off/panic restent classes imperatifs ordonnes.
+- Dette restante: le scheduler PLAY et ses p-locks restent explicitement hors migration; la sortie MIDI depuis audio et le panic `seq_output_guard` demandent encore une passe de split M7->M4 dediee.
+
+## Addendum 2026-07-18 - bloc prepare et MIDI out local
+
+- Z4 expose maintenant `seq_runtime_audio_prepare_event_block()`, contrat local de bloc immutable borne pour Z1. Le bloc porte une generation, `block_start_sample`, `block_frames`, `event_count`, les compteurs `rejected_events/critical_failures`, et les events `{type, track, note, velocity, offset, token, sample_time}`.
+- La progression sample-domain reste audio-owned: `seq_runtime_exec_collect_block_events()` avance encore la timeline audio, consomme les pulses internes/externes, emet boundaries/metronome et draine la queue scheduler uniquement depuis le domaine bloc audio.
+- La preparation logique conserve les seams existants: `seq_boundary_engine` decide les boundaries, `seq_play_scheduler_schedule_step*()` materialise note/program/p-lock selon les steps et microtiming, puis la collecte de bloc fige les evenements avant application.
+- Les appels directs Z4 vers `midi_*` sont retires du chemin apply/clock/panic: `seq_play_scheduler`, `seq_runtime_exec`, `seq_runtime` et `seq_output_guard` publient vers `audio_midi_out`. L'ordre utile et le `sample_time` sont conserves pour le drain hors IRQ.
+- Saturation: les events PLAY restent bornes par la queue scheduler existante; le bloc prepare signale saturation quand il atteint `SEQ_RUNTIME_AUDIO_EVENT_BLOCK_CAP`. La sortie MIDI out privilegie note-off, stop, panic et all-notes-off, avec compteurs d'echec critique.
+
+## Addendum 2026-07-18 - actions PLAY preparees hors IRQ
+
+- `seq_play_scheduler_prepare_all_steps_from_control()` publie un lot complet d'actions PLAY preparees depuis le domaine controle, appele au boot, en superloop apres `pattern_live_service()`, et sur notification post-commit de pattern.
+- La publication est double-buffer en `CONTROL_STATE_SDRAM`: l'audio lit seulement le buffer actif et sa generation publiee; le staging conserve l'ancien lot jusqu'au commit court. Les actions ne portent aucun pointeur mutable.
+- Le type d'action preparee couvre `NOTE`, `PROGRAM_CHANGE`, `PLOCK_APPLY`, `PLOCK_RELEASE` et `CONTROL`; cette passe peuple les actions `NOTE` et `PROGRAM_CHANGE` PLAY, avec `{source_track, note, velocity, len_steps, microtiming_ticks, value}` explicites.
+- `seq_play_scheduler_schedule_step*()` ne relit plus les steps, notes programmees, p-locks PLAY ni Program dans `seq_model` pour construire les notes: il consomme le lot prepare, rejette les generations absentes/stale, puis garde seulement le placement sample-domain, quant, remap voice-group, tokens note-off et queue scheduler.
+- Reste audio-owned: timeline, pulses, conversion finale vers `due_sample_time`, decoupe negative lookahead, tri/offset intra-bloc, application engine/mixer, metronome, boundary Looper et clock externe. Les p-locks non-PLAY restent dans `seq_boundary_engine` car capture base/apply/release dependent des valeurs runtime exactes au boundary.
+- Saturation/diagnostics: `SEQ_PLAY_PREPARED_ACTIONS_PER_STEP` borne le lot par step; les rejets normaux et echecs critiques alimentent `prepared_action_reject_count` et `prepared_critical_failure_count`; les lots publies/consommes/manquants/stale et couts max prepare/place sont exposes dans `seq_play_scheduler_diag_t`.
+
+## Addendum 2026-07-19 - panic Z4 sans appels directs engines/MIDI
+
+- `seq_output_guard` ne touche plus directement la pile `midi_*` dans le chemin panic/all-notes-off: il publie note-off, CC 120/123 et Stop via `audio_midi_out`, draine hors IRQ.
+- Les extinctions audio panic passent par `audio_control_command`: stop clips transport, VCA all-notes-off, Drum/Wave all-notes-off. L'ordre reste imperatif et diagnostique en cas de rejet.
+- Les appels sample-domain internes Z4->Z1 pour placement de notes preparees et boundary Looper restent audio-owned; aucune file generique supplementaire n'est introduite.

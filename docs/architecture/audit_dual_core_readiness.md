@@ -2,6 +2,8 @@
 
 ## 1. Verdict global
 
+Mise a jour apres passe H743 mono-coeur `audio_control_snapshot`: la premiere frontiere locale controle/audio est en place pour `track_runtime`, `track_sound_state` et `track_tone_sound_state`. L'audio consomme maintenant une projection double-buffer appliquee au debut de `brick6_audio_runtime_dsp()`. Les constats d'audit ci-dessous restent valides pour les autres domaines non migres: scheduler mutable, queues MIDI/control, sampler/page-cache, Looper/Recorder et preview SD.
+
 Le firmware est partiellement pret a une migration STM32H7 dual-core. La separation conceptuelle annoncee par la documentation est verifiee dans le code pour les trois grands niveaux:
 
 - etat canonique et controle: `track_state`, `track_sound_state`, `track_tone_sound_state`, `seq_model`, `param_store`, persistence;
@@ -341,3 +343,84 @@ Premiere passe utile: sur H743 mono-core, introduire une "frontiere audio locale
 4. ajouter diagnostics: revision appliquee, snapshots rates, queue high-water, dirty observe en IRQ.
 
 Cette passe garde le MCU actuel, evite le cumul refactor + dual-core, et force les bons contrats avant toute creation CM7/CM4.
+
+## Addendum 2026-07-18 - phase commandes controle -> audio H743
+
+- Une file locale bornee `audio_control_command` est ajoutee sur H743 mono-coeur pour transformer les writes controle vers les principaux runtimes audio en commandes consommees a la frontiere de bloc audio.
+- Migré dans cette phase: setters mixer track/global les plus utilises, FILTER/VCA via Z3, params moteurs Wave/Drum/Sampler/Looper, XFade Looper, notes clavier hors sample-accurate, rebind/snap/neutralisation mixer de transition structurelle.
+- Non migre volontairement: events PLAY sample-accurate, LFO audio-owned, etats DSP internes, page-cache, scheduler complet, reset/storage sampler/pool et certaines commandes UI settings directes encore ambigues.
+- Politique plein: coalescable = derniere valeur gagne puis rejet diagnostique si tous les slots sont pleins; imperatif = ordre conserve, jamais drop silencieux, echec compte dans `critical_failures`.
+## Addendum 2026-07-18 - phase bloc events Z4 et MIDI out
+
+- Z4 ajoute un contrat local de bloc prepare `seq_runtime_audio_event_block_t`: buffer statique borne, generation, debut/longueur de bloc, offsets intra-bloc et donnees d'application. Sur H743 mono-coeur, la collecte reste locale et sans IPC reel.
+- La separation obtenue est partielle mais explicite: la preparation logique step/p-lock/boundary reste dans `seq_boundary_engine`/`seq_play_scheduler`; l'avance timeline et l'application sample-accurate restent audio-owned dans `seq_runtime_exec` + `audio.c`.
+- Les appels MIDI/USB non hard-RT sortent du chemin audio Z4: note-on/off, Program, MIDI clock, transport realtime et panic publient vers `audio_midi_out`, file M7->controle locale bornee, drainee dans la superloop.
+- Saturation MIDI out: note-off, stop, panic et all-notes-off sont critiques; un critique peut remplacer un evenement normal, sinon l'echec critique est diagnostique. Aucune attente ni croissance non bornee dans l'IRQ.
+- Diagnostics ajoutes: events prepares par bloc, maximum observe, blocs satures/echecs critiques, cout max collecte/application, profondeur/high-water/rejets/echecs critiques de la sortie MIDI out.
+## Addendum 2026-07-18 - phase actions PLAY preparees
+
+- La frontiere locale Z4 progresse: les notes PLAY et Program Change sont preparees hors IRQ depuis `seq_model`/p-locks PLAY dans un lot double-buffer statique, puis consommees par l'audio via generation active.
+- Le scheduler audio ne parcourt plus les steps ni les p-locks PLAY pour construire les actions musicales; il garde l'autorite sample-domain: placement exact, microtiming positif/negatif, quant, note-off, tokens anti double-off, queue due-sample et apply engine.
+- Le format prepare est volontairement plus large que le peuplement actuel: types `NOTE`, `PROGRAM_CHANGE`, `PLOCK_APPLY`, `PLOCK_RELEASE`, `CONTROL`, sans pointeurs mutables et avec track/type/valeurs explicites. Les p-locks non-PLAY restent dans `seq_boundary_engine` tant que leur capture base/release exige l'etat runtime exact au boundary.
+- Le lot est place en `CONTROL_STATE_SDRAM`; l'ancien buffer reste actif jusqu'au publish court, ce qui evite une lecture partielle par l'IRQ. En cible dual-core, cette section devra recevoir le protocole cache/MPU de shared memory.
+- Saturation/diagnostics: capacite fixe par step, rejets normaux/critique, lots publies/consommes/manquants/stale, maximum d'actions preparees, cout max de preparation et de placement.
+
+## Addendum 2026-07-18 - phase page-cache Sampler publie
+
+- Le premier contrat local sampler/page-cache est en place sur H743 mono-coeur: `sample_voice_reader` consomme une projection `sample_audio_page_t` versionnee au lieu d'utiliser directement `sample_page_desc_t` pour le chemin segment cursor Stream/Multi/Classic migre.
+- Ownership obtenu: le systeme possede allocation, chargement, etats `QUEUED/LOADING/ERROR`, pins/window locks/LRU et publication READY; l'audio acquiert seulement des pages READY immutables par cle/page/generation et release un lease local borne.
+- Les metadata systeme `use_count` et `last_touch` ne sont plus modifiees par le fast path migre. Les anciens refcounts restent pour les chemins non migres et pour la compat `sample_cache`.
+- Publication: page invisible pendant `LOADING`; publication READY avec hook local de coherence cache; ancienne generation acquise non reutilisee avant release; generation stale rejetee.
+- Saturation/miss: acquire refuse si lease plein ou page non READY; le rendu conserve silence/underrun/fallback sans blocage ni attente SD. L'eviction garde une page avec lease audio plutot que de la reutiliser.
+- Acces directs restant a migrer: `sample_cache` legacy Classic et ses spans/blocs, Looper RAW playback, RAM resident `sampler_ram_pool` (deja immutable par slot/generation mais hors handle page-cache), overview waveform hors IRQ et APIs de diagnostic `sample_page_cache_get_page_desc`.
+- Readiness sampler/cache passe de 2 a 3 pour le chemin reader migre, mais reste non transplantable tel quel: les hooks clean/invalidate/barrier sont encore no-op locaux et aucune coherence CM7/CM4 reelle n'est traitee.
+
+## Addendum 2026-07-18 - phase Classic legacy audio sur projection
+
+- Les chemins Classic audio restants dans `sample_cache` ne lisent plus les descripteurs mutables du page-cache: voix cursor, blocs, spans, read-frame et peek-frame consomment maintenant `sample_audio_page_t` et releasent par handle versionne.
+- La couche d'autorite est clarifiee: `sample_page_cache` reste l'autorite physique READY/slot/generation/eviction; `sample_stream_manager` reste l'unique service SD STREAM; `brick6_sampler_runtime` et `sample_cache` ne gardent que l'etat voix/lecture et les wrappers Classic.
+- Les spans multi-pages restent bornes a deux leases dans les chemins couverts: page courante puis voisin necessaire, ordre deterministe, rollback si le voisin manque, pas de lecture partielle declaree complete.
+- Diagnostics ajoutes pour la suite dual-core: spans Classic OK/refuses/rollback, max pages par operation, misses, appels legacy observes en IRQ, acquire/release/stale via le diagnostic page-cache.
+- Restent hors migration: Looper RAW playback, `sampler_ram_pool` resident, overview waveform, loaders/diagnostics hors IRQ et `sample_cache_get_legacy_data()` utilise par la compat pool hors audio.
+## Addendum 2026-07-18 - phase Looper RAW playback sur projection
+
+- Le playback RAW Looper est migre vers la meme frontiere locale que Classic/Stream/Multi: l'audio acquiert uniquement des pages READY immutables par cle `LOOPER`, slot et generation, puis release explicitement le lease versionne.
+- Le domaine systeme garde les reservoirs RAW, le writer, la finalisation, les metadonnees et les demandes de prefetch/refill. Le rendu audio ne demande plus de pages et ne touche plus aux compteurs mutables `use_count`/`last_touch` du page-cache.
+- La generation de contenu Looper est incrementee a chaque nouvelle prise, clear/replace ou re-record; la publication normale est refusee tant que le RAW finalise et les metadonnees minimales ne sont pas coherents. Le preroll RAM reste une projection locale transitoire pour conserver le demarrage Auto existant pendant finalisation.
+- Diagnostics Looper ajoutes: generations publiees/appliquees, acquire/release, stale generation, page misses, publication incomplete rejetee, max pages acquises par rendu et placeholders explicites pour transitions refusees, pages gardees par lease actif et acces legacy IRQ.
+- Readiness Looper/Recorder passe de 2 a 3 pour le playback RAW. Restent non transplantables directement: ring writer cache-safe CM7/CM4 reel, preroll RAM shared-memory, maintenance cache/barrieres bicore et service SD M4 effectif.
+
+## Addendum 2026-07-18 - phase Sampler/RAM resident sur projection
+
+- `sampler_ram_pool` expose une projection audio locale `sampler_ram_audio_sample_t`, construite uniquement quand le slot RAM est READY et complet. Le rendu `Sampler/RAM` normal et sliced ne lit plus `sampler_ram_slot_t` mutable.
+- Le domaine systeme garde import, allocation `SAMPLE_PAGE_SLOT_POOL`, conversion, registration `sample_global_pool`, overview, clear/reload et erreurs. Le domaine audio acquiert une generation immutable au trigger et release a l'arret, au steal, au reset track ou a la fin de lecture.
+- Le caractere resident/pinne permet un lease borne par voix plutot qu'un acquire par bloc: les anciennes generations sont retirees et gardees hors free-list tant que leur compteur audio n'est pas revenu a zero. Aucun lock, malloc, attente ou release physique n'est requis en IRQ.
+- Diagnostics ajoutes: generations publiees, acquire/release OK/refus/stale, clear deferres, allocations conservees pour voix actives, publications incompletes refusees, maximum d'utilisateurs audio et acces legacy IRQ via `sampler_ram_pool_get_data()`.
+- Readiness Sampler/cache progresse pour RAM resident: Classic/Stream/Multi, Looper RAW et RAM resident ont maintenant des projections audio locales. Restent non transplantables directement: coherence D-cache CM7/CM4 reelle, table de retiree partagee cache-safe et ownership des overviews hors audio.
+
+## Addendum 2026-07-18 - phase recorder/Looper ring audio -> systeme
+
+- `multi_record_writer` separe maintenant la production audio de l'ownership fichier: l'audio publie frames et markers START/STOP/ABORT versionnes, le systeme consomme, ecrit, draine et finalise.
+- Le chemin IRQ ne lit plus l'etat mutable writer pour autoriser la capture Looper; il s'appuie sur l'etat boundary Looper local et sur une projection writer minimale `{generation, client, backend, active, accepts, frame_limit}`.
+- START/STOP Looper au boundary ne mutent plus directement le writer quand l'appel vient de l'IRQ: ils deviennent des markers critiques SPSC. Le service consomme les markers avant le drain afin de garder les premiers blocs de la session.
+- Saturation: l'IRQ ne bloque pas. `SAMPLE_WAV` coupe l'acceptation et demande STOP pour finaliser degrade; `LOOPER_RAW` coupe la session et demande ABORT pour eviter une boucle RAW partielle non signalee. Les echecs de markers critiques et les sessions abandonnees sont diagnostiques.
+- Les seams mono-coeur pour future coherence memoire sont explicites (`publish producer`, `acquire consumer`, `release consumer`, barrieres locales), sans IPC materiel ni projet CM7/CM4.
+- Readiness Looper/Recorder passe a 3 pour le flux record: le fichier/finalisation sont system-owned et l'audio ne modifie plus que les rings, la projection producteur et les compteurs producteurs. Restent non transplantables directement: cache/MPU CM7/CM4 reels et placement shared-memory definitif.## Addendum 2026-07-19 - audit acces directs systeme/audio restants
+
+- Supprimes dans cette passe: panic/all-notes-off Z4 vers engines et `midi_*`, reset Wave instance depuis Z2, reset Sampler Kit/Patch/Project, set/stop/gain Multi depuis UI/storage, reset global Project blank, queries UI/Z3 vers Multi runtime et query UI vers playhead RAM mutable.
+- Telemetry ajoutee: `audio_telemetry` publie depuis l'audio le playhead RAM utile UI avec generation et compteurs published/overwritten; publication ecrasable autorisee pour cette donnee non critique.
+- Commandes critiques ajoutees ou reutilisees: `AUDIO_CONTROL_WAVE_RESET_INSTANCE`, `AUDIO_CONTROL_COMMAND_AUDIO_RUNTIME_RESET_ALL`, stop clips transport, VCA/Wave/Drum all-notes-off, reset track Sampler, set/stop/gain Multi.
+- API legacy traitees: `brick6_sampler_runtime_get_ram_playhead`, `brick6_sampler_runtime_get_multi_instrument`, `brick6_sampler_runtime_get_multi_gain`, `brick6_sampler_runtime_set_multi_instrument`, `brick6_sampler_runtime_stop_multi_instrument`, `brick6_sampler_runtime_reset_track`, `brick6_braids_runtime_reset_instance` n'ont plus de call-site systeme actif important; leurs definitions restent pour le domaine audio et compat.
+- Restants legitimes audio-owned: executant `audio_control_command` vers mixer/engines/sampler/looper, DSP internes, voix, phases, filtres, enveloppes, LFO audio, mixer interne, timeline sample, compteurs audio, et `brick6_audio_runtime` lors du toggle runtime audio.
+- Restants init/control-owned: `audio_control_snapshot_build()` lit `track_runtime_get_revision()` et les etats controle pour publier le snapshot; les submitters de commande capturent la revision runtime controle pour stale generation.
+- Restants legacy hors chemin actif ou diagnostic: declarations publiques des anciennes APIs runtime, `sample_cache_get_legacy_data`, overviews/waveforms, loaders, diagnostics page-cache/RAM et protections d'appel IRQ.
+- A reporter au vrai CM7/CM4: coherence D-cache/MPU/barrieres reelles, placement shared-memory des rings/snapshots/telemetry, boot peripheriques unifie, et politiques IPC pour saturation inter-coeurs.
+## Addendum 2026-07-20 - split Z0 en domaines mono-coeur
+
+- Z0 passe de l'orchestrateur indistinct `brick6_app_init()`/`main()` a des entry points explicites: shared platform, domaine audio init/start, domaine systeme init/start/process. Les wrappers historiques restent pour compatibilite mono-coeur.
+- Ordre audite et implemente: `main()` garde MPU/cache, HAL, clocks, peripheriques CubeMX, TIM5/TIM12 et FatFs; `brick6_app_init()` enchaine SDRAM shared, init audio sans DMA, init systeme/storage/controle, publication + force-apply du snapshot initial, demarrage DMA audio, puis LED/MIDI systeme.
+- Le demarrage DMA audio est maintenant un point unique retardable (`brick6_audio_domain_start()`), appele uniquement apres `audio_control_snapshot_publish_from_control()` et `audio_control_snapshot_force_apply_latest()`.
+- La superloop est systeme-owned: services engine/seq/storage/UI/Hall/MIDI/audio-metadata, USB host Board et poll MIDI host borne vivent dans `brick6_system_domain_process()`. Z1 ne gagne aucun service cooperatif nouveau.
+- Ownership futur documente: shared unique = power/clocks/MPU/cache/FMC-SDRAM; M7 = SAI/I2S, DMA audio, codec, mixer/engines/audio runtime; M4 = USB/MIDI, SD/FatFs, UI/OLED/LED/Hall/controls, loaders/cache/writer/persistence. TIM5/TIM12 restent a classer finement avec le split clock final.
+- Dependances restantes non corrigees volontairement: les `main.c` generes initialisent encore tous les peripheriques dans un seul firmware; FatFs reste initialise cote generated avant l'init storage; les handles/IRQ CubeMX restent centralises; pas de memoire partagee, cache protocol inter-coeur, HSEM ou projet CM7/CM4 introduit.
+- Readiness Z0 passe de 2 a 3: la frontiere de boot et de service est visible et utilisable pour le futur deplacement, mais la transplantation directe attend encore le vrai decoupage CubeMX/peripheriques et la policy shared-memory.

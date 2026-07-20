@@ -9,14 +9,18 @@
 #include "Seq/seq_play_scheduler.h"
 
 #include <stdint.h>
+#include <string.h>
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Audio/audio_control_snapshot.h"
+#include "Audio/audio_midi_out.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Storage/memory_layout.h"
 #include "param_registry.h"
 #include "midi.h"
 
@@ -28,6 +32,8 @@
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 256U
+#define SEQ_PLAY_PREPARED_ACTIONS_PER_STEP 9U
+#define SEQ_PLAY_PREPARED_BUFFER_COUNT 2U
 
 
 
@@ -37,6 +43,38 @@ typedef enum
     SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
     SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE
 } seq_play_scheduler_evt_type_t;
+
+typedef enum
+{
+    SEQ_PLAY_PREPARED_ACTION_NOTE = 0,
+    SEQ_PLAY_PREPARED_ACTION_PROGRAM_CHANGE,
+    SEQ_PLAY_PREPARED_ACTION_PLOCK_APPLY,
+    SEQ_PLAY_PREPARED_ACTION_PLOCK_RELEASE,
+    SEQ_PLAY_PREPARED_ACTION_CONTROL
+} seq_play_prepared_action_type_t;
+
+typedef struct
+{
+    uint8_t type;
+    uint8_t source_track;
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t set_id;
+    seq_param_slot_t param_slot;
+    seq_value16_t value16;
+    float len_steps;
+    float microtiming_ticks;
+} seq_play_prepared_action_t;
+
+typedef struct
+{
+    uint32_t generation;
+    uint8_t action_count;
+    uint8_t rejected_normal;
+    uint8_t critical_failures;
+    uint8_t reserved;
+    seq_play_prepared_action_t actions[SEQ_PLAY_PREPARED_ACTIONS_PER_STEP];
+} seq_play_prepared_step_t;
 
 typedef struct
 {
@@ -56,6 +94,11 @@ static uint8_t g_seq_play_generation;
 static uint8_t g_seq_play_midi_program_valid[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_midi_program_last[SEQ_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
+CONTROL_STATE_SDRAM static seq_play_prepared_step_t
+    g_seq_play_prepared_steps[SEQ_PLAY_PREPARED_BUFFER_COUNT][SEQ_TRACK_COUNT][SEQ_MAX_STEPS];
+static volatile uint8_t g_seq_play_prepared_active_index;
+static volatile uint32_t g_seq_play_prepared_generation;
+static volatile uint32_t g_seq_play_consumed_prepared_generation;
 static uint8_t g_seq_play_group_rr_cursor[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_group_track_active_count[SEQ_TRACK_COUNT];
 static uint32_t g_seq_play_next_event_token;
@@ -156,7 +199,19 @@ static uint8_t seq_play_scheduler_event_priority(uint8_t type)
 static void seq_play_scheduler_emit_midi_program(seq_track_id_t track, uint8_t program_0_127)
 {
     const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
-    midi_program_change(MIDI_DEST_BOTH, channel, program_0_127);
+    (void)audio_midi_out_program_change(channel, program_0_127, 0U);
+
+    if (track < SEQ_TRACK_COUNT)
+    {
+        g_seq_play_midi_program_valid[track] = 1U;
+        g_seq_play_midi_program_last[track] = program_0_127;
+    }
+}
+
+static void seq_play_scheduler_emit_midi_program_audio(seq_track_id_t track, uint8_t program_0_127)
+{
+    const uint8_t channel = audio_control_snapshot_get_midi_channel_zero_based(track);
+    (void)audio_midi_out_program_change(channel, program_0_127, 0U);
 
     if (track < SEQ_TRACK_COUNT)
     {
@@ -303,7 +358,7 @@ static uint8_t seq_play_scheduler_resolve_note_target_track(seq_track_id_t sourc
 {
     (void)note;
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(source_track, &role_u8);
+    (void)audio_control_snapshot_get_voice_group_role(source_track, &role_u8);
     if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
     {
         return source_track;
@@ -311,7 +366,7 @@ static uint8_t seq_play_scheduler_resolve_note_target_track(seq_track_id_t sourc
 
     uint8_t members[SEQ_TRACK_COUNT];
     uint8_t member_count = 0U;
-    if ((track_runtime_collect_voice_group_members(source_track,
+    if ((audio_control_snapshot_collect_voice_group_members(source_track,
                                                    members,
                                                    (uint8_t)SEQ_TRACK_COUNT,
                                                    &member_count) == 0U)
@@ -341,7 +396,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t is_note_on)
 {
     track_runtime_resolved_track_t resolved;
-    if (track_runtime_resolve_track(track, &resolved) == 0U)
+    if (audio_control_snapshot_resolve_track(track, &resolved) == 0U)
     {
         return;
     }
@@ -434,15 +489,15 @@ static void seq_play_scheduler_emit_midi_note_raw(const seq_play_scheduler_audio
         return;
     }
 
-    const uint8_t channel = track_runtime_get_midi_channel_zero_based(event->track);
+    const uint8_t channel = audio_control_snapshot_get_midi_channel_zero_based(event->track);
     if (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
     {
-        midi_note_on(MIDI_DEST_BOTH, channel, event->note, event->velocity);
+        (void)audio_midi_out_note_on(channel, event->note, event->velocity, event->sample_time);
         seq_output_guard_note_on_seen(event->track, event->note);
         return;
     }
 
-    midi_note_off(MIDI_DEST_BOTH, channel, event->note, 0U);
+    (void)audio_midi_out_note_off(channel, event->note, 0U, event->sample_time);
     seq_output_guard_note_off_seen(event->track, event->note);
 }
 
@@ -488,12 +543,160 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
     return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
 }
 
+static void seq_play_scheduler_prepared_push(seq_play_prepared_step_t *step,
+                                             const seq_play_prepared_action_t *action,
+                                             uint8_t critical)
+{
+    if ((step == NULL) || (action == NULL))
+    {
+        return;
+    }
+
+    if (step->action_count >= SEQ_PLAY_PREPARED_ACTIONS_PER_STEP)
+    {
+        if (critical != 0U)
+        {
+            step->critical_failures++;
+            g_seq_play_diag.prepared_critical_failure_count++;
+        }
+        else
+        {
+            step->rejected_normal++;
+            g_seq_play_diag.prepared_action_reject_count++;
+        }
+        return;
+    }
+
+    step->actions[step->action_count++] = *action;
+}
+
+static void seq_play_scheduler_prepare_step_from_control(uint8_t buffer_index,
+                                                         seq_track_id_t track,
+                                                         seq_step_id_t step,
+                                                         uint32_t generation)
+{
+    seq_play_prepared_step_t prepared = {0};
+    prepared.generation = generation;
+
+    if ((seq_model_step_is_active(track, step) != 0U)
+        && (seq_model_step_has_play_plock(track, step) != 0U))
+    {
+        uint8_t has_first_note = 0U;
+        for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
+        {
+            const param_id_t note_id = seq_play_scheduler_param_note(voice);
+            const param_id_t vel_id = seq_play_scheduler_param_vel(voice);
+            const param_id_t len_id = seq_play_scheduler_param_len(voice);
+            const param_id_t mictim_id = seq_play_scheduler_param_mictim(voice);
+
+            const float vel_f = seq_param_iface_decode_param_value(vel_id,
+                                                                   seq_play_scheduler_get_locked_or_default(track, step, vel_id));
+            const uint8_t vel = (uint8_t)(vel_f + 0.5f);
+            if (vel == 0U)
+            {
+                continue;
+            }
+
+            const float note_f = seq_param_iface_decode_param_value(note_id,
+                                                                    seq_play_scheduler_get_locked_or_default(track, step, note_id));
+            const uint8_t note = (uint8_t)(note_f + 0.5f);
+            if (note >= 128U)
+            {
+                continue;
+            }
+
+            float len_steps_f = seq_param_iface_decode_param_value(len_id,
+                                                                   seq_play_scheduler_get_locked_or_default(track, step, len_id));
+            if (len_steps_f < 1.0f)
+            {
+                len_steps_f = 1.0f;
+            }
+            if (len_steps_f > 64.0f)
+            {
+                len_steps_f = 64.0f;
+            }
+
+            const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
+                                                                      seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
+            const seq_play_prepared_action_t action = {
+                .type = (uint8_t)SEQ_PLAY_PREPARED_ACTION_NOTE,
+                .source_track = track,
+                .note = note,
+                .velocity = vel,
+                .len_steps = len_steps_f,
+                .microtiming_ticks = mictim_f
+            };
+            seq_play_scheduler_prepared_push(&prepared, &action, 1U);
+            has_first_note = 1U;
+        }
+
+        if (has_first_note != 0U)
+        {
+            const float program_f = seq_param_iface_decode_param_value(PARAM_MIDI_PROGRAM,
+                                                                       seq_play_scheduler_get_locked_or_default(track, step, PARAM_MIDI_PROGRAM));
+            uint8_t program_0_127 = 0U;
+            if (seq_play_scheduler_program_value_decode(program_f, &program_0_127) != 0U)
+            {
+                const seq_play_prepared_action_t action = {
+                    .type = (uint8_t)SEQ_PLAY_PREPARED_ACTION_PROGRAM_CHANGE,
+                    .source_track = track,
+                    .note = program_0_127
+                };
+                seq_play_scheduler_prepared_push(&prepared, &action, 0U);
+            }
+        }
+    }
+
+    if (prepared.action_count > g_seq_play_diag.max_prepared_actions_per_step)
+    {
+        g_seq_play_diag.max_prepared_actions_per_step = prepared.action_count;
+    }
+
+    g_seq_play_prepared_steps[buffer_index][track][step] = prepared;
+}
+
+void seq_play_scheduler_prepare_all_steps_from_control(void)
+{
+    const uint32_t t0 = DWT->CYCCNT;
+    uint32_t next_generation = g_seq_play_prepared_generation + 1U;
+    if (next_generation == 0U)
+    {
+        next_generation = 1U;
+    }
+    const uint8_t staging_index = (uint8_t)((g_seq_play_prepared_active_index + 1U)
+                                           % SEQ_PLAY_PREPARED_BUFFER_COUNT);
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (seq_step_id_t step = 0U; step < SEQ_MAX_STEPS; ++step)
+        {
+            seq_play_scheduler_prepare_step_from_control(staging_index, track, step, next_generation);
+        }
+    }
+
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    g_seq_play_prepared_active_index = staging_index;
+    g_seq_play_prepared_generation = next_generation;
+    g_seq_play_diag.prepared_lots_published++;
+    seq_play_scheduler_exit_critical(primask);
+
+    const uint32_t cycles = DWT->CYCCNT - t0;
+    if (cycles > g_seq_play_diag.max_prepare_cycles)
+    {
+        g_seq_play_diag.max_prepare_cycles = cycles;
+    }
+}
+
 void seq_play_scheduler_init(void)
 {
     g_seq_play_event_count = 0U;
     g_seq_play_generation = 1U;
     g_seq_play_next_event_token = 0U;
     g_seq_play_diag = (seq_play_scheduler_diag_t){0};
+    memset(g_seq_play_prepared_steps, 0, sizeof(g_seq_play_prepared_steps));
+    g_seq_play_prepared_active_index = 0U;
+    g_seq_play_prepared_generation = 0U;
+    g_seq_play_consumed_prepared_generation = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         g_seq_play_midi_program_valid[track] = 0U;
@@ -521,31 +724,48 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      uint32_t samples_per_step_q16,
                                                      uint8_t negative_lookahead)
 {
-    seq_play_scheduler_refresh_track(track);
-
-    if (seq_model_step_is_active(track, step) == 0U)
+    const uint32_t place_t0 = DWT->CYCCNT;
+    if ((track >= SEQ_TRACK_COUNT) || (step >= SEQ_MAX_STEPS))
     {
         return;
     }
 
-    if (seq_model_step_has_play_plock(track, step) == 0U)
+    const uint8_t active_index = g_seq_play_prepared_active_index;
+    const uint32_t expected_generation = g_seq_play_prepared_generation;
+    const seq_play_prepared_step_t prepared = g_seq_play_prepared_steps[active_index][track][step];
+    if (expected_generation == 0U)
+    {
+        g_seq_play_diag.prepared_lots_missing++;
+        return;
+    }
+    if (prepared.action_count == 0U)
     {
         return;
+    }
+    if (prepared.generation != expected_generation)
+    {
+        g_seq_play_diag.prepared_generation_reject_count++;
+        return;
+    }
+    if (g_seq_play_consumed_prepared_generation != expected_generation)
+    {
+        g_seq_play_consumed_prepared_generation = expected_generation;
+        g_seq_play_diag.prepared_lots_consumed++;
     }
 
     track_runtime_resolved_track_t resolved;
-    if (track_runtime_resolve_track(track, &resolved) == 0U)
+    if (audio_control_snapshot_resolve_track(track, &resolved) == 0U)
     {
         return;
     }
     if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
+            || (audio_control_snapshot_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
     {
         return;
     }
 
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    (void)audio_control_snapshot_get_voice_group_role(track, &role_u8);
     if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
     {
         return;
@@ -563,51 +783,22 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         }
     }
 
-    uint8_t has_first_note = 0U;
+    uint8_t emitted_note = 0U;
     uint64_t first_note_sample_time = 0U;
 
-    for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
+    for (uint8_t i = 0U; i < prepared.action_count; ++i)
     {
-        const param_id_t note_id = seq_play_scheduler_param_note(voice);
-        const param_id_t vel_id = seq_play_scheduler_param_vel(voice);
-        const param_id_t len_id = seq_play_scheduler_param_len(voice);
-        const param_id_t mictim_id = seq_play_scheduler_param_mictim(voice);
-        /* Projection read: per-param status is a runtime guard, not a local recomputation. */
-        if (track_runtime_get_effective_param_status(track, note_id) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+        const seq_play_prepared_action_t *const action = &prepared.actions[i];
+        if (action->type != (uint8_t)SEQ_PLAY_PREPARED_ACTION_NOTE)
+        {
+            continue;
+        }
+        if (audio_control_snapshot_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
         {
             continue;
         }
 
-        const float vel_f = seq_param_iface_decode_param_value(vel_id,
-                                                               seq_play_scheduler_get_locked_or_default(track, step, vel_id));
-        const uint8_t vel = (uint8_t)(vel_f + 0.5f);
-        if (vel == 0U)
-        {
-            continue;
-        }
-
-        const float note_f = seq_param_iface_decode_param_value(note_id,
-                                                                seq_play_scheduler_get_locked_or_default(track, step, note_id));
-        const uint8_t note = (uint8_t)(note_f + 0.5f);
-        if (note >= 128U)
-        {
-            continue;
-        }
-
-        const float len_f = seq_param_iface_decode_param_value(len_id,
-                                                               seq_play_scheduler_get_locked_or_default(track, step, len_id));
-        float len_steps_f = len_f;
-        if (len_steps_f < 1.0f)
-        {
-            len_steps_f = 1.0f;
-        }
-        if (len_steps_f > 64.0f)
-        {
-            len_steps_f = 64.0f;
-        }
-        const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
-                                                                  seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
-        int32_t microtiming_samples = (int32_t)((mictim_f * samples_per_step_f) / 96.0f);
+        int32_t microtiming_samples = (int32_t)((action->microtiming_ticks * samples_per_step_f) / 96.0f);
         if (((negative_lookahead != 0U) && (microtiming_samples >= 0))
             || ((negative_lookahead == 0U) && (microtiming_samples < 0)))
         {
@@ -631,13 +822,13 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         {
             note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
         }
-        if ((has_first_note == 0U) || (note_on_sample_time < first_note_sample_time))
+        if ((emitted_note == 0U) || (note_on_sample_time < first_note_sample_time))
         {
-            has_first_note = 1U;
+            emitted_note = 1U;
             first_note_sample_time = note_on_sample_time;
         }
 
-        uint64_t len_samples = (uint64_t)((len_steps_f * samples_per_step_f) + 0.5f);
+        uint64_t len_samples = (uint64_t)((action->len_steps * samples_per_step_f) + 0.5f);
         if (len_samples == 0U)
         {
             len_samples = 1U;
@@ -648,37 +839,44 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
             note_off_sample_time = note_on_sample_time + 1ULL;
         }
 
-        const seq_track_id_t target_track = (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, note);
+        const seq_track_id_t target_track = (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, action->note);
         const uint32_t event_token = seq_play_scheduler_alloc_event_token();
 
         seq_play_scheduler_push(note_on_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
                                 target_track,
-                                note,
-                                vel,
+                                action->note,
+                                action->velocity,
                                 event_token);
         seq_play_scheduler_push(note_off_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
                                 target_track,
-                                note,
+                                action->note,
                                 0U,
                                 event_token);
     }
 
-    if (has_first_note != 0U)
+    if (emitted_note != 0U)
     {
-        const float program_f = seq_param_iface_decode_param_value(PARAM_MIDI_PROGRAM,
-                                                                   seq_play_scheduler_get_locked_or_default(track, step, PARAM_MIDI_PROGRAM));
-        uint8_t program_0_127 = 0U;
-        if (seq_play_scheduler_program_value_decode(program_f, &program_0_127) != 0U)
+        for (uint8_t i = 0U; i < prepared.action_count; ++i)
         {
-            if ((track < SEQ_TRACK_COUNT)
-                    && ((g_seq_play_midi_program_valid[track] == 0U)
-                        || (g_seq_play_midi_program_last[track] != program_0_127)))
+            const seq_play_prepared_action_t *const action = &prepared.actions[i];
+            if (action->type != (uint8_t)SEQ_PLAY_PREPARED_ACTION_PROGRAM_CHANGE)
             {
-                seq_play_scheduler_push_program_change(first_note_sample_time, track, program_0_127);
+                continue;
+            }
+            if ((g_seq_play_midi_program_valid[track] == 0U)
+                || (g_seq_play_midi_program_last[track] != action->note))
+            {
+                seq_play_scheduler_push_program_change(first_note_sample_time, track, action->note);
             }
         }
+    }
+
+    const uint32_t place_cycles = DWT->CYCCNT - place_t0;
+    if (place_cycles > g_seq_play_diag.max_place_cycles)
+    {
+        g_seq_play_diag.max_place_cycles = place_cycles;
     }
 }
 
@@ -793,6 +991,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
             out_evt.sample_offset_in_block = (uint16_t)(block_frames - 1U);
             clamp_count++;
         }
+        out_evt.sample_time = block_start_sample + (uint64_t)out_evt.sample_offset_in_block;
         out_events[count++] = out_evt;
 
         g_seq_play_events[selected_index].audio_dispatched = 1U;
@@ -857,7 +1056,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 
     if (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE)
     {
-        seq_play_scheduler_emit_midi_program((seq_track_id_t)event->track, event->note);
+        seq_play_scheduler_emit_midi_program_audio((seq_track_id_t)event->track, event->note);
         return;
     }
 
@@ -957,7 +1156,8 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 {
-    /* Post-commit seam: pattern change re-seeds scheduler-side program state only. */
+    /* Post-commit seam: pattern change publishes a fresh prepared action lot. */
+    seq_play_scheduler_prepare_all_steps_from_control();
     seq_play_scheduler_refresh_track(track);
 
     track_runtime_descriptor_t descriptor;

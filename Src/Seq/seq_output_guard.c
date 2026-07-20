@@ -10,9 +10,11 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
+#include "Audio/audio_control_command.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
+#include "Audio/audio_midi_out.h"
 #include "Audio/mixer.h"
 #include "midi.h"
 
@@ -109,7 +111,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
             for (uint8_t i = 0U; i < count; ++i)
             {
-                midi_note_off(MIDI_DEST_BOTH, channel, note, 0U);
+                (void)audio_midi_out_note_off(channel, note, 0U, 0U);
             }
 
             g_seq_output_guard.note_counts[track][note] = 0U;
@@ -118,18 +120,26 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
     for (uint8_t ch = 0U; ch < 16U; ++ch)
     {
-        midi_all_sound_off(MIDI_DEST_BOTH, ch);
-        midi_all_notes_off(MIDI_DEST_BOTH, ch);
+        (void)audio_midi_out_submit_raw((uint8_t)(0xB0U | (ch & 0x0FU)),
+                                        120U,
+                                        0U,
+                                        3U,
+                                        0U,
+                                        AUDIO_MIDI_OUT_PRIORITY_CRITICAL);
+        (void)audio_midi_out_all_notes_off(ch, 0U);
     }
 
     if (send_transport_stop != 0U)
     {
-        midi_stop(MIDI_DEST_BOTH);
+        (void)audio_midi_out_stop(0U);
     }
 
     uint8_t drum_killed[SEQ_TRACK_COUNT] = { 0U };
     track_runtime_refresh_all();
-    brick6_sampler_runtime_stop_transport_clips();
+    audio_control_command_submit_sampler_param(0U,
+                                               AUDIO_CONTROL_SAMPLER_STOP_TRANSPORT_CLIPS,
+                                               0.0f,
+                                               0U);
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         /* Non-UI projection consumer: panic only needs resolved routing/engine state. */
@@ -146,7 +156,9 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
         if (resolved.mix_track_id < MIXER_MAX_TRACKS)
         {
-            mixer_track_vca_all_notes_off(resolved.mix_track_id);
+            audio_control_command_submit_mixer_vca(resolved.mix_track_id,
+                                                   AUDIO_CONTROL_VCA_ALL_NOTES_OFF,
+                                                   0.0f);
         }
 
         if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
@@ -155,12 +167,18 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                     && (drum_killed[resolved.descriptor.instance_id] == 0U))
             {
                 drum_killed[resolved.descriptor.instance_id] = 1U;
-                drum_synth_all_notes_off_for_instance(resolved.descriptor.instance_id);
+                audio_control_command_submit_drum_note(resolved.descriptor.instance_id,
+                                                       AUDIO_CONTROL_NOTE_ALL_OFF,
+                                                       0U,
+                                                       0U);
             }
         }
         else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
         {
-            brick6_braids_runtime_all_notes_off(resolved.descriptor.instance_id);
+            audio_control_command_submit_wave_note(resolved.descriptor.instance_id,
+                                                   AUDIO_CONTROL_NOTE_ALL_OFF,
+                                                   0U,
+                                                   0U);
         }
     }
 }

@@ -33,12 +33,12 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
 
     if (state->audio_cursor.neighbor_acquired != 0U)
     {
-        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
+        sample_page_cache_audio_release_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
     }
 
     if (state->audio_cursor.current_acquired != 0U)
     {
-        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.current_page_ref);
+        sample_page_cache_audio_release_ref_key(state->key, &state->audio_cursor.current_page_ref);
     }
 
     memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
@@ -52,21 +52,21 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
         return 0U;
     }
 
-    sample_page_span_t span;
-    if (sample_page_cache_try_acquire_page_key(state->key,
-                                               frame_pos / SAMPLE_PAGE_FRAMES,
-                                               &span) == 0U)
+    sample_audio_page_t page;
+    if (sample_page_cache_audio_acquire_key(state->key,
+                                            frame_pos / SAMPLE_PAGE_FRAMES,
+                                            &page) == 0U)
     {
         return 0U;
     }
 
-    state->audio_cursor.current_page_ref.page_index = span.page_index;
-    state->audio_cursor.current_page_ref.page_generation = span.page_generation;
-    state->audio_cursor.current_page_ref.slot_index = span.slot_index;
-    state->audio_cursor.current_base = span.frames_interleaved;
-    state->audio_cursor.current_start_frame = span.start_frame;
-    state->audio_cursor.current_frame_count = span.frame_count;
-    state->audio_cursor.current_offset_frames = frame_pos - span.start_frame;
+    state->audio_cursor.current_page_ref.page_index = page.page_index;
+    state->audio_cursor.current_page_ref.page_generation = page.generation;
+    state->audio_cursor.current_page_ref.slot_index = page.slot_index;
+    state->audio_cursor.current_base = page.frames_interleaved;
+    state->audio_cursor.current_start_frame = page.start_frame;
+    state->audio_cursor.current_frame_count = page.frame_count;
+    state->audio_cursor.current_offset_frames = frame_pos - page.start_frame;
     state->audio_cursor.current_acquired = 1U;
     state->audio_cursor.active = 1U;
     return 1U;
@@ -88,25 +88,25 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
 
     if (state->audio_cursor.neighbor_acquired != 0U)
     {
-        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
+        sample_page_cache_audio_release_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
         state->audio_cursor.neighbor_acquired = 0U;
         state->audio_cursor.neighbor_base = 0;
         state->audio_cursor.neighbor_start_frame = 0U;
         state->audio_cursor.neighbor_frame_count = 0U;
     }
 
-    sample_page_span_t span;
-    if (sample_page_cache_try_acquire_page_key(state->key, page_index, &span) == 0U)
+    sample_audio_page_t page;
+    if (sample_page_cache_audio_acquire_key(state->key, page_index, &page) == 0U)
     {
         return 0U;
     }
 
-    state->audio_cursor.neighbor_page_ref.page_index = span.page_index;
-    state->audio_cursor.neighbor_page_ref.page_generation = span.page_generation;
-    state->audio_cursor.neighbor_page_ref.slot_index = span.slot_index;
-    state->audio_cursor.neighbor_base = span.frames_interleaved;
-    state->audio_cursor.neighbor_start_frame = span.start_frame;
-    state->audio_cursor.neighbor_frame_count = span.frame_count;
+    state->audio_cursor.neighbor_page_ref.page_index = page.page_index;
+    state->audio_cursor.neighbor_page_ref.page_generation = page.generation;
+    state->audio_cursor.neighbor_page_ref.slot_index = page.slot_index;
+    state->audio_cursor.neighbor_base = page.frames_interleaved;
+    state->audio_cursor.neighbor_start_frame = page.start_frame;
+    state->audio_cursor.neighbor_frame_count = page.frame_count;
     state->audio_cursor.neighbor_acquired = 1U;
     return 1U;
 }
@@ -1425,7 +1425,16 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         memset(&neighbor_span, 0, sizeof(neighbor_span));
         if (needs_neighbor_span != 0U)
         {
-            (void)sample_cache_try_acquire_span(reader->sample_id, neighbor_frame_index, 1U, &neighbor_span);
+            if (sample_cache_try_acquire_span(reader->sample_id, neighbor_frame_index, 1U, &neighbor_span) == 0U)
+            {
+                sample_cache_release_span(reader->sample_id, &span);
+                sample_page_cache_audio_note_span_rollback(1U);
+                if (out_underrun != 0)
+                {
+                    *out_underrun = 1U;
+                }
+                break;
+            }
         }
 
         float position = reader->position;

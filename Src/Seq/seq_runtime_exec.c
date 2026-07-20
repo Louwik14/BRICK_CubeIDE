@@ -11,6 +11,8 @@
 
 #include "Seq/seq_runtime_exec.h"
 
+#include <stddef.h>
+
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
@@ -19,7 +21,7 @@
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_transport_fsm.h"
-#include "midi.h"
+#include "Audio/audio_midi_out.h"
 
 #define SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP 32U
 #define SEQ_RUNTIME_EXEC_METRO_STEPS_PER_BEAT 4U
@@ -98,6 +100,7 @@ static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_
     out_event->velocity = scheduler_event->velocity;
     out_event->sample_offset_in_block = scheduler_event->sample_offset_in_block;
     out_event->event_token = scheduler_event->event_token;
+    out_event->sample_time = 0U;
 }
 
 static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time)
@@ -174,6 +177,7 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
         out->velocity = marker->click_type;
         out->sample_offset_in_block = (uint16_t)(marker->due_sample_time - block_start_sample);
         out->event_token = 0U;
+        out->sample_time = marker->due_sample_time;
     }
 
     return count;
@@ -334,7 +338,7 @@ void seq_runtime_exec_emit_midi_clock_for_block(uint64_t block_start_sample,
     {
         if (g_seq_runtime_exec_midi_clock_next_sample_q16 >= block_start_q16)
         {
-            midi_clock(MIDI_DEST_BOTH);
+            (void)audio_midi_out_clock(g_seq_runtime_exec_midi_clock_next_sample_q16 >> 16);
         }
 
         g_seq_runtime_exec_midi_clock_next_sample_q16 += (uint64_t)g_seq_runtime_exec_midi_clock_period_q16;
@@ -702,6 +706,8 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
         for (uint16_t i = 0U; i < count; ++i)
         {
             seq_runtime_exec_copy_scheduler_audio_event(&out_events[total + i], &scheduler_events[i]);
+            out_events[total + i].sample_time = block_start_sample
+                                                + (uint64_t)scheduler_events[i].sample_offset_in_block;
         }
         total = (uint16_t)(total + count);
         if (count < request)

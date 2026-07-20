@@ -3,8 +3,7 @@
 #include <math.h>
 #include <string.h>
 
-#include "Core/track_runtime.h"
-#include "Core/track_tone_sound_state.h"
+#include "Audio/audio_control_snapshot.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "audio_float.h"
@@ -608,7 +607,7 @@ static uint8_t fxmm_find_master_fx_track(uint8_t *out_track)
 {
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *ctx = audio_control_snapshot_get_track_ctx(track);
         if ((ctx != NULL)
                 && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
@@ -1107,8 +1106,8 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
         frames = AUDIO_BLOCK_SIZE;
     }
 
-    const track_tone_sound_state_t *state = track_tone_sound_state_get_const(track);
-    if (state == NULL)
+    audio_control_master_fx_snapshot_t master_fx;
+    if (audio_control_snapshot_get_master_fx(track, &master_fx) == 0U)
     {
         return;
     }
@@ -1118,7 +1117,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     uint8_t freeze_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
-        const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
+        const uint8_t type = fxmm_u7(master_fx.type[slot]);
         if ((type == FX_MASTER_MACRO_STUTTER) && (stutter_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
         {
             stutter_owner_slot = slot;
@@ -1136,13 +1135,13 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
 
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
-        const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
+        const uint8_t type = fxmm_u7(master_fx.type[slot]);
         fxmm_process_slot(&g_slots[slot],
                           slot,
                           type,
-                          state->master_fx.level[slot],
-                          state->master_fx.macro_a[slot],
-                          state->master_fx.macro_b[slot],
+                          master_fx.level[slot],
+                          master_fx.macro_a[slot],
+                          master_fx.macro_b[slot],
                           left,
                           right,
                           frames,
