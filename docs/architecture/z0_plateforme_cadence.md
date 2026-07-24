@@ -342,3 +342,45 @@ Z0 appelle principalement:
 - La frontiere Board porte maintenant le mapping physique explicite des shift-registers par variante via `board_controls_button_logical_for_physical()`: premium conserve son mapping 24 positions existant, low-cost expose 32 positions SR.
 - Le backend Hall commun separe le nombre de lanes UI Hall (`HALL_UI_LANE_COUNT=16`) du nombre de touches Hall clavier (`HALL_KEY_COUNT=24`) afin de garder le pipeline Z5 commun tout en autorisant le clavier low-cost 24 touches.
 
+## Addendum 2026-07-23 - SDMMC1 low-cost
+
+- La variante low-cost bloque de nouveau dans `Error_Handler()` si `HAL_SD_Init(&hsd1)` echoue pendant `MX_SDMMC1_SD_Init()`; aucun echec SD n'est masque au boot.
+- Le pinout SDMMC1 low-cost attendu est `PC8=D0`, `PC9=D1`, `PC10=D2`, `PC11=D3`, `PC12=CK`, `PD2=CMD`, sans Card Detect utilisable; `BSP_SD_IsDetected()` considere donc la carte presente.
+- CMD et D0..D3 sont configures en AF12 avec pull-up interne; CK reste AF12 sans pull-up. La vitesse GPIO reste `GPIO_SPEED_FREQ_VERY_HIGH`.
+- L'identification HAL demarre en bus 1 bit et a 400 kHz derive de l'horloge SDMMC; apres identification, la configuration low-cost demande le bus 4 bits et `ClockDiv=5` sur SDMMCCLK 240 MHz, soit 24 MHz cible en transfert.
+- Les diagnostics GDB low-cost sont portes par `g_sd_init_diag`: stage, derniere commande, dernier retour SDMMC/HAL, `STA`, `RESP1`, `CLKCR`, `POWER`, compteur CMD55 et compteur ACMD41. Premium conserve son chemin SDMMC genere.
+
+## Addendum 2026-07-23 - cadence low-cost et initialisation OLED
+
+- Le SAI1 low-cost active explicitement ses deux slots stereo TX/RX (`SlotActive=0x00000003`). Avec zero slot actif, le DMA RX ne produisait pas les callbacks qui alimentent `engine_tasklet_notify_frames()`.
+- L'initialisation lazy de l'OLED reste commune et autoritative dans le premier `ui_tasklet_poll()`. Sur low-cost, ce premier poll redevient atteignable lorsque les callbacks audio font avancer `engine_tick_count`; aucun second chemin d'initialisation display n'est ajoute.
+- La chaine confirmee reste: callbacks DMA RX SAI1 -> `engine_tasklet_notify_frames()` -> `engine_tasklet_poll()` -> `engine_tick_count` -> `ui_tasklet_poll()` -> `drv_display_init()`, puis renderer et service de flush SPI5/DMA.
+
+## Addendum 2026-07-23 - bypass boot calibration Hall low-cost temporaire
+
+- `BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION`, localise dans `brick6_app_init.c`, fait demarrer uniquement la variante low-cost sur `CFG` quand aucune calibration Hall valide n'est chargee.
+- Le chargement reste tente, aucune calibration fictive n'est installee et aucune ecriture de calibration n'est effectuee par le bypass.
+- Premium conserve l'ouverture automatique de `CALIBRATION` en cas de calibration absente/invalide. Sans calibration effective, `hall_engine` continue d'invalider les etats de touches et d'ignorer leurs entrees.
+
+## Addendum 2026-07-23 - bootstrap audio low-cost
+
+- Le codec low-cost est le `TLV320AIC3204` sur `I2C1`, adresse 7 bits `0x18`; son reset exploitable par le firmware est le reset logiciel du codec.
+- `SAI1_A` fournit le TX maitre a 48 kHz avec MCLK 12,288 MHz, trames stereo de 64 bits et deux slots actifs de 32 bits transportant chacun 24 bits utiles.
+- Le DMA TX low-cost reste circulaire en mots 32 bits. Les deux slots doivent rester explicitement actifs dans CubeMX et dans le code genere.
+- Tant que le potentiometre low-cost n'est pas monte, le controle master ignore le multiplexeur ADC et initialise une fois le gain master a 75 %. Le chemin premium reste inchange.
+
+## Addendum 2026-07-23 - entree bootloader systeme low-cost
+
+- Sur la variante low-cost uniquement, `Board/LowCost/Generated/Src/main.c` surveille `SHIFT + STEP16` en superloop apres `brick6_app_process()`.
+- Si le combo reste maintenu au moins 2 s, `PB8` (`BOOTLOADER_TRIGGER`) est reconfigure en sortie push-pull, force a 1 pendant environ 10 ms, puis `NVIC_SystemReset()` est appele pour entrer dans le bootloader systeme STM32 via BOOT0.
+- Le flag local `LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE` permet de desactiver cette fonction sans toucher aux mappings UI premium.
+
+## Addendum 2026-07-23 - presets CMake par variante
+
+- `CMakePresets.json` fixe explicitement `BRICK6_VARIANT` dans chaque preset public.
+- Le preset configure/build `Debug` est reserve a la variante `lowcost`, utilise `CMAKE_BUILD_TYPE=Debug`, genere dans `build/Debug` et conserve les symboles GDB avec `-Og -g3`.
+- Le preset configure/build `Release` est reserve a la variante `lowcost`, utilise `CMAKE_BUILD_TYPE=Release` et genere dans `build/Release`.
+- Le preset configure/build `Premium` est reserve a la variante `premium` et genere dans `build/Premium`.
+- Aucun preset public generique ne doit selectionner implicitement une variante; seul le preset cache commun reste factorise et non invocable directement.
+
+

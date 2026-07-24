@@ -25,11 +25,35 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     switch (family)
     {
         case UI_TRACK_FAMILY_INPUT1:
-        case UI_TRACK_FAMILY_INPUT2:
-        case UI_TRACK_FAMILY_INPUT3:
-        case UI_TRACK_FAMILY_INPUT4:
             *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
             return k_input_types;
+
+        case UI_TRACK_FAMILY_INPUT2:
+#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 1U
+            *out_count = 0U;
+            return 0;
+#else
+            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
+            return k_input_types;
+#endif
+
+        case UI_TRACK_FAMILY_INPUT3:
+#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 2U
+            *out_count = 0U;
+            return 0;
+#else
+            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
+            return k_input_types;
+#endif
+
+        case UI_TRACK_FAMILY_INPUT4:
+#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 3U
+            *out_count = 0U;
+            return 0;
+#else
+            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
+            return k_input_types;
+#endif
 
         case UI_TRACK_FAMILY_SYNTH:
             *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
@@ -437,13 +461,25 @@ const char *ui_track_catalog_family_display_name(ui_track_family_t family)
             return "Input1";
 
         case UI_TRACK_FAMILY_INPUT2:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "Track";
+#else
             return "Input2";
+#endif
 
         case UI_TRACK_FAMILY_INPUT3:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "Track";
+#else
             return "Input3";
+#endif
 
         case UI_TRACK_FAMILY_INPUT4:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "Track";
+#else
             return "Input4";
+#endif
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
@@ -472,13 +508,25 @@ const char *ui_track_catalog_family_short_name(ui_track_family_t family)
             return "In1";
 
         case UI_TRACK_FAMILY_INPUT2:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "---";
+#else
             return "In2";
+#endif
 
         case UI_TRACK_FAMILY_INPUT3:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "---";
+#else
             return "In3";
+#endif
 
         case UI_TRACK_FAMILY_INPUT4:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return "---";
+#else
             return "In4";
+#endif
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";

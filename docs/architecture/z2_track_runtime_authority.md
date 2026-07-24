@@ -326,3 +326,9 @@ Sorties de Z2:
 - Le catalogue produit est variant-aware a la compilation: premium conserve `Input1..Input4` comme families produit, tandis que low-cost expose uniquement `Input1`.
 - En low-cost, `track_runtime_input_family_mix_track()` ne mappe que `Input1 -> mix lane 0`; `Input2..4` restent des valeurs enum historiques mais ne sont plus des families input disponibles ni des ressources routables.
 - La reservation de lanes fixes d'entree suit `UI_AUDIO_INPUT_PROTO_WIRED_COUNT`: low-cost reserve uniquement la lane 0, premium garde les lanes proto 0..2.
+
+## Addendum 2026-07-23 - fermeture des sources input low-cost
+
+- Le catalogue low-cost n'expose que `Input1`; les valeurs historiques `Input2`, `Input3` et `Input4` restent reservees pour la compatibilite des donnees partagees mais ne sont ni selectionnables ni routables.
+- Le shim `runtime_target` et la recherche de ressource libre du clipboard appliquent la cardinalite physique de la variante; ils ne peuvent donc pas reintroduire une source input absente.
+- La variante premium conserve ses quatre familles input et tous ses mappings existants.

@@ -58,7 +58,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, OLED_RES_Pin|HOST_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, SR_DATA_Pin|SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
+  HAL_GPIO_WritePin(GPIOA, SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
                           |MUX_HALL_S0_Pin|SCK_SR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
@@ -77,20 +77,20 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ENC4_B_Pin ENC4_A_Pin ENC2_B_Pin */
-  GPIO_InitStruct.Pin = ENC4_B_Pin|ENC4_A_Pin|ENC2_B_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : SR_DATA_Pin SYNC_OUT_Pin MUX_HALL_S2_Pin MUX_HALL_S1_Pin
+  /*Configure GPIO pins : SYNC_OUT_Pin MUX_HALL_S2_Pin MUX_HALL_S1_Pin
                            MUX_HALL_S0_Pin SCK_SR_Pin */
-  GPIO_InitStruct.Pin = SR_DATA_Pin|SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
+  GPIO_InitStruct.Pin = SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
                           |MUX_HALL_S0_Pin|SCK_SR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SR_DATA_Pin */
+  GPIO_InitStruct.Pin = SR_DATA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(SR_DATA_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : FUSB302_INT_N_Pin */
   GPIO_InitStruct.Pin = FUSB302_INT_N_Pin;
@@ -111,10 +111,16 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ENC3_B_Pin ENC3_A_Pin ENC2_A_Pin ENC1_B_Pin
+  /*Configure GPIO pins : ENC4_B_Pin ENC4_A_Pin */
+  GPIO_InitStruct.Pin = ENC4_B_Pin|ENC4_A_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : ENC3_B_Pin ENC3_A_Pin ENC2_B_Pin ENC2_A_Pin ENC1_B_Pin
                            ENC1_A_Pin */
-  GPIO_InitStruct.Pin = ENC3_B_Pin|ENC3_A_Pin|ENC2_A_Pin|ENC1_B_Pin
-                          |ENC1_A_Pin;
+  GPIO_InitStruct.Pin = ENC3_B_Pin|ENC3_A_Pin|ENC2_B_Pin|ENC2_A_Pin
+                          |ENC1_B_Pin|ENC1_A_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);

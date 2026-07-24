@@ -343,7 +343,7 @@ static void keyboard_input_all_notes_off_sink(void)
     if (ui_hall_mode_resolve_effective_view(ui_get_active_track(),
                                             ui_get_hall_mode()) != UI_HALL_MODE_VIEW_ROUT)
     {
-        keyboard_arp_all_notes_off();
+        keyboard_arp_all_notes_off_track(ui_get_active_track());
     }
 }
 

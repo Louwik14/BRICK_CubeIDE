@@ -25,6 +25,7 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_engine.h"
+#include "Board/board_product.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -336,7 +337,7 @@ static button_id_t led_macro_param_to_button(param_id_t param)
 
 static button_id_t led_param_button_for_led(led_id_t led)
 {
-    for (button_id_t button = BTN_PARAM_1; button <= BTN_PARAM_8; ++button)
+    for (button_id_t button = BTN_PARAM_1; button <= BTN_TRACK; ++button)
     {
         if (led_remap_param_led_for_button(button) == led)
         {
@@ -641,6 +642,24 @@ static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
     return (mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP);
 }
 
+static bool led_hall_mode_uses_seq_scene(ui_hall_mode_t mode)
+{
+    if (mode == UI_HALL_MODE_SEQ)
+    {
+        return true;
+    }
+
+    if (led_hall_mode_uses_keyboard_scene(mode) == false)
+    {
+        return false;
+    }
+
+    const board_product_capabilities_t *const caps = board_product_capabilities();
+    return ((caps != NULL)
+            && (caps->has_step_binary_lanes != 0U)
+            && (caps->has_separate_hall_keyboard != 0U));
+}
+
 static void led_apply_normal_rec_scene(led_id_t led)
 {
     uint8_t blink = 0U;
@@ -717,7 +736,7 @@ static void led_apply_fixed_scene(void)
             led_apply_track_select_hall_scene(hall);
         }
     }
-    else if (hall_mode == UI_HALL_MODE_SEQ)
+    else if (led_hall_mode_uses_seq_scene(hall_mode))
     {
         seq_led_render_active_track_page();
     }

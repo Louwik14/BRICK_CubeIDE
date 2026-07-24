@@ -33,6 +33,7 @@
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
+#include "pages/ui_page_lowcost_button_test.h"
 #include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
 #include "ui_bootstrap.h"
@@ -54,7 +55,7 @@
 #include "Core/track_state.h"
 #include "App/Hall/hall_surface.h"
 
-#define UI_TRACK_MOD_BUTTON BTN_PARAM_8
+#define UI_TRACK_MOD_BUTTON BTN_TRACK
 
 typedef struct
 {
@@ -659,6 +660,10 @@ void ui_core_service_track_selection_inputs(void)
     {
         const uint8_t pressed = hall_surface_is_pressed(hall);
         const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
+        if ((hall_surface_is_binary() != 0U) && (pressed == 0U) && (was_pressed != 0U))
+        {
+            g_ui_track_state.hall_note_suppressed[hall] = 0U;
+        }
         ui_hall_input_service_handle_hall(hall,
                                           pressed,
                                           was_pressed,
@@ -763,6 +768,13 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
+        /* Temporary low-cost bring-up page owns button events, including events
+         * normally consumed by transport, shortcuts, or navigation. */
+        if (ui_page_lowcost_button_test_capture_event(&ev) != 0U)
+        {
+            goto next_event;
+        }
+
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
 

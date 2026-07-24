@@ -20,6 +20,16 @@
 
 void brick6_master_control_process(void)
 {
+#if defined(BRICK6_VARIANT_LOWCOST)
+    static uint8_t initialized = 0U;
+
+    if (initialized == 0U)
+    {
+        mixer_set_master(0.75f);
+        initialized = 1U;
+    }
+    return;
+#else
     enum
     {
         POT_MACRO_BASE_INDEX = 0U,
@@ -106,4 +116,5 @@ void brick6_master_control_process(void)
 
     last_step = step;
     initialized = 1U;
+#endif
 }

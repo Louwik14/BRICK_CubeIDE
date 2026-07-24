@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:341:13:keyboard_input_all_notes_off_sink	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:320:13:keyboard_input_note_off_sink	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:299:13:keyboard_input_note_on_sink	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:101:13:keyboard_input_lowcost_nav_button	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:350:6:keyboard_input_init	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:363:6:keyboard_input_process_hall	40	static

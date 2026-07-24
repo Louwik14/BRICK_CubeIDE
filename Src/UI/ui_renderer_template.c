@@ -493,6 +493,24 @@ static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const
     drv_display_draw_text_inverted((uint8_t)(x + 1U), (uint8_t)(y + 1U), txt);
 }
 
+static void ui_renderer_template_fill_lock_label_frame(uint8_t text_x, uint8_t y, uint8_t text_w, uint8_t h)
+{
+    uint8_t box_x = text_x;
+    uint8_t box_w = text_w;
+
+    if (box_x > 0U)
+    {
+        box_x--;
+        box_w++;
+    }
+    if ((uint16_t)box_x + (uint16_t)box_w < (uint16_t)OLED_WIDTH)
+    {
+        box_w++;
+    }
+
+    drv_display_fill_rect(box_x, y, box_w, h);
+}
+
 static void ui_renderer_template_draw_track_badge(uint8_t x, uint8_t y, const char *txt)
 {
     drv_display_set_font(&FONT_5X7);
@@ -659,7 +677,7 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
     }
     else
     {
-        (void)snprintf(bottom_txt, bottom_len, "%s", name_txt);
+        (void)snprintf(bottom_txt, bottom_len, "%s", (*out_draw_name_inverted != 0U) ? value_txt : name_txt);
     }
 
     return 1U;
@@ -2785,10 +2803,11 @@ static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_pa
     if ((draw_name_inverted != 0U) && (drv_display_text_width(bottom_txt) != 0U))
     {
         const uint8_t text_w = drv_display_text_width(bottom_txt);
-        drv_display_draw_line(text_x,
-                              UI_TEMPLATE_SAMPLER_LABEL_Y + 6,
-                              text_x + text_w - 1U,
-                              UI_TEMPLATE_SAMPLER_LABEL_Y + 6);
+        ui_renderer_template_fill_lock_label_frame(text_x,
+                                                   UI_TEMPLATE_SAMPLER_LABEL_Y - 1,
+                                                   text_w,
+                                                   8);
+        drv_display_draw_text_inverted(text_x, UI_TEMPLATE_SAMPLER_LABEL_Y, bottom_txt);
     }
 }
 
@@ -3139,10 +3158,13 @@ draw_bottom_label:
             }
             return;
         }
-        drv_display_draw_line(text_x,
-                              y + UI_TEMPLATE_CARD_LABEL_Y + UI_TEMPLATE_CARD_LABEL_H,
-                              text_x + text_w - 1,
-                              y + UI_TEMPLATE_CARD_LABEL_Y + UI_TEMPLATE_CARD_LABEL_H);
+        ui_renderer_template_fill_lock_label_frame(text_x,
+                                                   (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y - 1),
+                                                   text_w,
+                                                   UI_TEMPLATE_CARD_LABEL_H + 1);
+        drv_display_draw_text_inverted(text_x,
+                                       (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
+                                       bottom_txt);
     }
 
     if (slot_locked != 0U)

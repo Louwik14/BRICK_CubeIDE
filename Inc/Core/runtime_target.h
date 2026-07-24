@@ -54,15 +54,19 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             out_target->filter_target_track = 0U;
             break;
 
+#if UI_AUDIO_INPUT_RESOURCE_COUNT > 1U
         case UI_TRACK_FAMILY_INPUT2:
             out_target->has_filter_target = 1U;
             out_target->filter_target_track = 1U;
             break;
+#endif
 
+#if UI_AUDIO_INPUT_RESOURCE_COUNT > 2U
         case UI_TRACK_FAMILY_INPUT3:
             out_target->has_filter_target = 1U;
             out_target->filter_target_track = 2U;
             break;
+#endif
 
         case UI_TRACK_FAMILY_SYNTH:
         case UI_TRACK_FAMILY_SAMPLER:
@@ -78,6 +82,7 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             }
             break;
 
+#if UI_AUDIO_INPUT_RESOURCE_COUNT > 3U
         case UI_TRACK_FAMILY_INPUT4:
             /*
              * Product model keeps Input4 as a real physical stereo input
@@ -86,6 +91,7 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
              * (Authoritative path: track_runtime.)
              */
             break;
+#endif
 
         default:
             break;
@@ -119,4 +125,3 @@ static inline uint8_t runtime_target_resolve_filter_for_ui_track(uint8_t ui_trac
 #ifdef __cplusplus
 }
 #endif
-

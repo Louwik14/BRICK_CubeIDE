@@ -18,8 +18,10 @@
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
+#include "pages/ui_page_lowcost_button_test.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
+#include "lowcost_button_test_config.h"
 
 void ui_bootstrap_init(void)
 {
@@ -63,6 +65,9 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_kit_assign);
     ui_page_manager_register(&g_ui_page_name_edit);
     ui_page_manager_register(&g_ui_page_settings);
+#if LOWCOST_BUTTON_TEST_PAGE
+    ui_page_manager_register(&g_ui_page_lowcost_button_test);
+#endif
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

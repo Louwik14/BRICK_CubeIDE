@@ -11,6 +11,7 @@
 #define LED_RESET_SLOTS 100U
 #define WS2812_0 84U
 #define WS2812_1 175U
+#define LOWCOST_WS2812_BRIGHTNESS_PERCENT 10U
 #define LED_BUFFER_SIZE ((BOARD_LED_TRANSPORT_COUNT * LED_BITS_PER_LED) + LED_RESET_SLOTS)
 
 static DMA_BUFFER uint32_t pwm_buffer[LED_BUFFER_SIZE];
@@ -23,9 +24,9 @@ static void led_transport_encode(const uint8_t *rgb, uint32_t count)
     for (uint32_t i = 0U; i < count; i++)
     {
         const uint8_t colors[3] = {
-            rgb[(i * 3U) + 1U],
-            rgb[(i * 3U) + 0U],
-            rgb[(i * 3U) + 2U]
+            (uint8_t)(((uint16_t)rgb[(i * 3U) + 1U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U),
+            (uint8_t)(((uint16_t)rgb[(i * 3U) + 0U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U),
+            (uint8_t)(((uint16_t)rgb[(i * 3U) + 2U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U)
         };
 
         for (uint32_t c = 0U; c < 3U; c++)

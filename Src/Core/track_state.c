@@ -60,6 +60,12 @@ static void track_state_normalize_config(ui_track_config_t *config)
 
 }
 
+static uint8_t track_state_family_is_unavailable_input(ui_track_family_t family)
+{
+    return (uint8_t)(((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT4))
+                     && (ui_track_catalog_family_is_input(family) == false));
+}
+
 static void track_state_bump_revision(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)
@@ -397,9 +403,10 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
             return false;
         }
 
-        if (fam == UI_TRACK_FAMILY_OFF)
+        if ((fam == UI_TRACK_FAMILY_OFF) || (track_state_family_is_unavailable_input(fam) != 0U))
         {
-            typ = UI_TRACK_TYPE_AUDIO;
+            next_configs[track].family = UI_TRACK_FAMILY_OFF;
+            next_configs[track].type = UI_TRACK_TYPE_AUDIO;
         }
         else
         {
@@ -419,12 +426,6 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
 
             next_configs[track].family = normalized.family;
             next_configs[track].type = normalized.type;
-        }
-
-        if (fam == UI_TRACK_FAMILY_OFF)
-        {
-            next_configs[track].family = fam;
-            next_configs[track].type = typ;
         }
         next_channels[track] = (midi_channel[track] < 1U)
             ? 1U

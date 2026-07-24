@@ -21,7 +21,7 @@
  * enum arithmetic.
  *
  * Physical order observed on hardware:
- *   BTN_PARAM_7, BTN_PARAM_8, BTN_PARAM_4, BTN_PARAM_3,
+ *   BTN_PARAM_7, BTN_TRACK, BTN_PARAM_4, BTN_PARAM_3,
  *   BTN_PARAM_2, BTN_PARAM_1, BTN_PARAM_5, BTN_PARAM_6
  *
  * LED_PARAM_1..LED_PARAM_8 follow that physical LED order.
@@ -34,7 +34,7 @@ static const led_id_t g_led_remap_param_led_for_button[LED_REMAP_PARAM_COUNT] = 
     [4] = LED_PARAM_1, /* BTN_PARAM_5 */
     [5] = LED_PARAM_4, /* BTN_PARAM_6 */
     [6] = LED_PARAM_5, /* BTN_PARAM_7 */
-    [7] = LED_PARAM_8, /* BTN_PARAM_8 */
+    [7] = LED_PARAM_8, /* BTN_TRACK */
 };
 
 /*
@@ -93,7 +93,7 @@ static inline bool led_remap_is_seq_led(led_id_t led)
 
 static inline led_id_t led_remap_param_led_for_button(button_id_t button)
 {
-    if (((uint32_t)button < (uint32_t)BTN_PARAM_1) || ((uint32_t)button > (uint32_t)BTN_PARAM_8))
+    if (((uint32_t)button < (uint32_t)BTN_PARAM_1) || ((uint32_t)button > (uint32_t)BTN_TRACK))
     {
         return LED_COUNT_TOTAL;
     }

@@ -295,7 +295,7 @@ Toujours penser :
 - `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` uniquement pour families moteur `Synth`, `Sampler` ou `Drum`
 - `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth`, `Sampler`, `Drum` ou `Hybrid`
-- `BTN_PARAM_8` -> bouton spécial `TRACK`
+- `BTN_TRACK` -> bouton spécial `TRACK`
 
 ### Règle générale
 Pour tout mapping logique/physique :

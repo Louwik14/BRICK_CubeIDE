@@ -974,3 +974,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Aucun changement de structure `PatternSaveV1` / `ProjectSaveV1` n'est introduit dans ce lot: les versions restent celles du format courant.
 - En low-cost, les valeurs persistantes qui referencent `Input2..4` ou une route CUE/BOTH sont refusees/normalisees par les validations catalogue et les clamps runtime existants lors de l'application, sans migration inter-variante.
 - Premium conserve le format et les ressources exposees inchanges.
+
+## Addendum 2026-07-23 - normalisation restore inputs low-cost
+
+- Le restore bulk track-config normalise en `Off/Audio` toute family input indisponible pour la variante compilee, notamment `Input2..4` en low-cost.
+- Cette normalisation evite qu'un projet ou pattern partage puisse reexposer une entree absente tout en conservant le format de fichier courant.
+
+## Addendum 2026-07-23 - default SEQ Length projet blank
+
+- La creation/reset de projet via le boot snapshot et `project_v1_load_blank()` reprend les defaults `seq_model_init_defaults()`: `SEQ Length=16` sur chaque track.
+- Les snapshots projets/patterns existants continuent de restaurer leur champ `length_steps` stocke quand il est valide; le format persistant n'est pas modifie.

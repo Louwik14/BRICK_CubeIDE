@@ -16,6 +16,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
+#include "Keyboard/keyboard_arp.h"
 #include "Mod/mod_lfo_v1.h"
 #include "param_registry.h"
 #include "midi.h"
@@ -28,6 +29,7 @@
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 256U
+#define SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP 16U
 
 
 
@@ -565,6 +567,10 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
 
     uint8_t has_first_note = 0U;
     uint64_t first_note_sample_time = 0U;
+    const uint8_t arp_hold_step = (negative_lookahead == 0U) ? 1U : 0U;
+    uint8_t arp_step_notes[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
+    uint8_t arp_step_vel[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
+    uint8_t arp_step_count = 0U;
 
     for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
     {
@@ -592,6 +598,13 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         if (note >= 128U)
         {
             continue;
+        }
+
+        if ((arp_hold_step != 0U) && (arp_step_count < SEQ_PLAY_SCHEDULER_VOICE_COUNT))
+        {
+            arp_step_notes[arp_step_count] = note;
+            arp_step_vel[arp_step_count] = vel;
+            arp_step_count++;
         }
 
         const float len_f = seq_param_iface_decode_param_value(len_id,
@@ -678,6 +691,44 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
             {
                 seq_play_scheduler_push_program_change(first_note_sample_time, track, program_0_127);
             }
+        }
+    }
+
+    if (arp_step_count > 0U)
+    {
+        keyboard_arp_scheduled_note_t arp_notes[SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP];
+        const uint8_t arp_note_count =
+            keyboard_arp_seq_step_render_for_track(track,
+                                                   arp_step_notes,
+                                                   arp_step_vel,
+                                                   arp_step_count,
+                                                   samples_per_step_q16,
+                                                   arp_notes,
+                                                   SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP);
+        for (uint8_t i = 0U; i < arp_note_count; ++i)
+        {
+            const seq_track_id_t target_track =
+                (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, arp_notes[i].note);
+            const uint32_t event_token = seq_play_scheduler_alloc_event_token();
+            const uint64_t note_on_sample_time = step_sample_time + (uint64_t)arp_notes[i].on_offset_samples;
+            uint64_t note_off_sample_time = step_sample_time + (uint64_t)arp_notes[i].off_offset_samples;
+            if (note_off_sample_time <= note_on_sample_time)
+            {
+                note_off_sample_time = note_on_sample_time + 1ULL;
+            }
+
+            seq_play_scheduler_push(note_on_sample_time,
+                                    (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
+                                    target_track,
+                                    arp_notes[i].note,
+                                    arp_notes[i].velocity,
+                                    event_token);
+            seq_play_scheduler_push(note_off_sample_time,
+                                    (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                                    target_track,
+                                    arp_notes[i].note,
+                                    0U,
+                                    event_token);
         }
     }
 }

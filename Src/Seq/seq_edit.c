@@ -18,7 +18,19 @@
 #include "param_registry.h"
 #include "Storage/undo_v2.h"
 
+#define SEQ_EDIT_ENGINE_TICKS_PER_SECOND 1500U
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define STEP_PLOCK_HOLD_MS 300U
+#else
 #define SEQ_STEP_HOLD_THRESHOLD_TICKS 160U
+#define STEP_PLOCK_HOLD_MS (((SEQ_STEP_HOLD_THRESHOLD_TICKS * 1000U) + (SEQ_EDIT_ENGINE_TICKS_PER_SECOND - 1U)) \
+                            / SEQ_EDIT_ENGINE_TICKS_PER_SECOND)
+#endif
+
+#if !defined(SEQ_STEP_HOLD_THRESHOLD_TICKS)
+#define SEQ_STEP_HOLD_THRESHOLD_TICKS (((STEP_PLOCK_HOLD_MS * SEQ_EDIT_ENGINE_TICKS_PER_SECOND) + 999U) / 1000U)
+#endif
 
 typedef struct
 {
@@ -375,12 +387,59 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
         uint8_t selected = g_seq_hold_state.held[hall];
         if ((selected == 0U) && (promote_pending != 0U) && (g_seq_hold_state.pending[hall] != 0U))
         {
+#if defined(BRICK6_VARIANT_LOWCOST)
+            const uint32_t now_tick = engine_tick_count;
+            if ((now_tick - g_seq_hold_state.press_tick[hall]) < SEQ_STEP_HOLD_THRESHOLD_TICKS)
+            {
+                continue;
+            }
+#endif
             g_seq_hold_state.pending[hall] = 0U;
             g_seq_hold_state.held[hall] = 1U;
             selected = 1U;
         }
 
         if (selected == 0U)
+        {
+            continue;
+        }
+
+        if (track_set == 0U)
+        {
+            *out_track = g_seq_hold_state.track_id[hall];
+            track_set = 1U;
+        }
+
+        if (g_seq_hold_state.track_id[hall] != *out_track)
+        {
+            continue;
+        }
+
+        if (count < max_steps)
+        {
+            out_steps[count] = g_seq_hold_state.step_id[hall];
+            count++;
+        }
+    }
+
+    return count;
+}
+
+uint8_t seq_edit_collect_pressed_steps(seq_track_id_t *out_track,
+                                       seq_step_id_t *out_steps,
+                                       uint8_t max_steps)
+{
+    if ((out_track == 0) || (out_steps == 0) || (max_steps == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    uint8_t track_set = 0U;
+
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if ((g_seq_hold_state.pending[hall] == 0U) && (g_seq_hold_state.held[hall] == 0U))
         {
             continue;
         }
@@ -578,4 +637,3 @@ void seq_edit_clear_steps(seq_track_id_t track,
     }
     seq_edit_finish_snapshot_undo(undo_started);
 }
-

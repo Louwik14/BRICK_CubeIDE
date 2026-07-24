@@ -21,6 +21,7 @@
 #include "ui_core.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
+#include "lowcost_button_test_config.h"
 
 #include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
@@ -55,6 +56,13 @@
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+/* Temporary low-cost bring-up bypass: remove when Hall calibration is available. */
+#define BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION 1U
+#else
+#define BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION 0U
+#endif
 
 static void brick6_process_hall_ui_keyboard_chain(void)
 {
@@ -143,7 +151,8 @@ void brick6_app_init(void)
     control_event_init();
 
     hall_loop_init();
-    if (hall_calibration_load() != 0U)
+    if ((hall_calibration_load() != 0U)
+        || (BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION != 0U))
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
     }
@@ -151,6 +160,9 @@ void brick6_app_init(void)
     {
         ui_page_set(UI_PAGE_CALIBRATION);
     }
+#if LOWCOST_BUTTON_TEST_PAGE
+    ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
+#endif
 
     audio_start();
 

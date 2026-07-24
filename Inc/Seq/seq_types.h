@@ -7,6 +7,7 @@
 #define SEQ_STEPS_PER_PAGE    16U
 #define SEQ_PAGE_COUNT         4U
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)
+#define SEQ_DEFAULT_LENGTH_STEPS SEQ_STEPS_PER_PAGE
 
 /* Local per-step product rule: one step can carry up to 32 p-locks. */
 #define SEQ_STEP_MAX_LOCKS    32U

@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:56:31:tlv_hal_to_status	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:167:16:tlv_word_length_bits	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:61:24:TLV320AIC3204_SelectPage	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:79:24:TLV320AIC3204_WriteReg	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:100:24:TLV320AIC3204_ReadReg	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:145:31:tlv_write_checked	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:126:24:TLV320AIC3204_SoftwareReset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:179:24:TLV320AIC3204_Init	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Drivers/tlv320aic3204.c:306:24:TLV320AIC3204_InitDefault	32	static

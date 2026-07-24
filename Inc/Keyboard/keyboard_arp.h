@@ -8,6 +8,14 @@
 extern "C" {
 #endif
 
+typedef struct
+{
+    uint8_t note;
+    uint8_t velocity;
+    uint32_t on_offset_samples;
+    uint32_t off_offset_samples;
+} keyboard_arp_scheduled_note_t;
+
 void keyboard_arp_init(void);
 void keyboard_arp_sync_track(uint8_t track);
 void keyboard_arp_tick(void);
@@ -15,6 +23,14 @@ void keyboard_arp_note_on(uint8_t note, uint8_t velocity);
 void keyboard_arp_note_off(uint8_t note);
 void keyboard_arp_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity);
 void keyboard_arp_note_off_for_track(uint8_t track, uint8_t note);
+uint8_t keyboard_arp_seq_step_render_for_track(uint8_t track,
+                                               const uint8_t *notes,
+                                               const uint8_t *velocities,
+                                               uint8_t count,
+                                               uint32_t samples_per_step_q16,
+                                               keyboard_arp_scheduled_note_t *out_notes,
+                                               uint8_t max_out_notes);
+void keyboard_arp_clear_seq_step_source(void);
 void keyboard_arp_all_notes_off_track(uint8_t track);
 void keyboard_arp_all_notes_off(void);
 uint8_t keyboard_arp_has_hold_activity(void);

@@ -12,7 +12,7 @@ typedef enum
     BTN_PARAM_5,
     BTN_PARAM_6,
     BTN_PARAM_7,
-    BTN_PARAM_8,
+    BTN_TRACK,
 
     BTN_PLAY,
     BTN_REC,

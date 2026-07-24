@@ -2,6 +2,11 @@
 
 ## 1. Perimetre
 
+Bring-up temporaire low-cost : lorsque `LOWCOST_BUTTON_TEST_PAGE` vaut `1`,
+`UI_PAGE_LOWCOST_BUTTON_TEST` est selectionnee au boot et affiche les
+evenements bouton issus de la chaine normale `buttons_update()` / UI. Cette
+page et son enregistrement sont exclus du comportement premium.
+
 Perimetre operationnel de zone (appartient a Z5):
 - `Src/UI/ui_core.c`
 - `Src/UI/ui_core_runtime_bridge.c`
@@ -46,6 +51,8 @@ Dependances de Z5 sans appartenir a Z5:
 - Z6 `wav_loader` / `sample_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
 - Z6 `multi_sample_index` / `multi_sample_import` / `multi_sample_pool` pour le browser Settings/Sampler/Multi: Z5 affiche les dossiers instrument, prepare/load les indexes et expose `CLEAR` page 3 pour supprimer uniquement les `.brickmulti` directs du dossier courant apres confirmation.
 - Board low-cost: les 16 STEP binaires sont exposes comme lanes `0..15` par `board_surface_snapshot()` avec pression 0/max. Le pipeline commun Hall/UI reste responsable des transitions press/release, modes, track select, mute/pattern et pression logique.
+- La chaîne low-cost remappe les groupes physiques dans l'ordre SR4, SR3, SR2, SR1; l'ordre D0..D7 de chaque registre reste inchangé.
+- Board low-cost: `SR_DATA` (PA2) est une entree avec pull-up; les 32 contacts des quatre registres parallele-vers-serie sont actifs bas. Le scan commun reconstruit les bits dans l'ordre physique documente par `board_controls_button_logical_for_physical()`, puis `buttons_update()` porte l'unique debounce.
 
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
@@ -663,6 +670,12 @@ Points factuels:
 - Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
 - Les buffers median de calibration Hall (`g_min_buffer`, `g_max_buffer`) restent utilises uniquement par la page calibration / `hall_calibration_process()` et sont places en `CTRL_STATE` D3; ils ne sont ni audio hard-RT ni DMA-owned.
 
+### Bypass boot calibration Hall low-cost temporaire (2026-07-23)
+
+- Premium garde le contrat normal: calibration absente/invalide -> page `CALIBRATION`.
+- Low-cost passe temporairement sur `CFG` via le flag Z0 local `BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION`; les pages de calibration restent enregistrees et accessibles manuellement.
+- Ce bypass ne marque jamais le moteur Hall comme calibre: tant que `hall_engine_set_calibration()` n'a pas recu de valeurs valides, les entrees Hall sont ignorees.
+
 
 ## 9. Contrat query stricte - filter target
 - `ui_resolve_filter_target_track` porte l'explicitation du refresh avant la query.
@@ -802,9 +815,9 @@ Points factuels:
 - Le renderer ne deduit pas les causes de changement de valeur: il interroge seulement `ui_param` pour savoir si une valeur temporaire doit remplacer le nom.
 - Les valeurs temporaires reutilisent le formatage commun du renderer et les callbacks `param_text`, afin de conserver les labels dynamiques Master/FX, Multi/Sample/Stream et les overrides locaux.
 - Les widgets custom template sont optionnels via `custom_widget_picker`; ils se dessinent dans le rect utile du widget, ou dans un rect groupe explicite quand les quatre slots d'une sous-page declarent le meme custom widget, et doivent reutiliser la meme valeur visible que les widgets simples (base display, preview MACRO/scene, feedback p-lock), sans consommer le flash valeur comme source de courbe.
-- Custom actif: `COLORS/ADSR` et `VCA/ADSR` remplacent les quatre widgets simples A/D/S/R par une seule courbe ADSR groupee sur la zone haute commune; les quatre slots restent editables et gardent leurs labels/flash/underline locaux, avec fallback widget classique si le groupe attendu est incomplet ou non supporte runtime.
+- Custom actif: `COLORS/ADSR`, `COLORS/VCA` et `VCA/ADSR` remplacent les quatre widgets simples A/D/S/R par une seule courbe ADSR groupee sur la zone haute commune; les quatre slots restent editables et gardent leurs labels/flash/P-Lock locaux, avec fallback widget classique si le groupe attendu est incomplet ou non supporte runtime.
 - Le dessin ADSR groupe est decoupe en quatre zones horizontales stables A/D/S/R alignees sur les quatre slots; A/D/R n'entrent pas en competition de largeur globale et deplacent les points de transition de la courbe principale dans leur zone, tandis que S pilote la hauteur du plateau.
-- `COLORS/MAIN` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
+- `COLORS/FILTER` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
 - Le flash est declenche uniquement par action utilisateur explicite sur le slot: edition directe encodeur, edition p-lock, live-rec p-lock issu de l'encodeur, ou edition de valeur scene/macro en assign. Playback p-lock, LFO, morph scene continu, macro pot physique, restore/recall et refresh UI ne declenchent pas le flash.
 - Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.
 
@@ -917,7 +930,7 @@ Points factuels:
 
 ## 36. Mapping physique low-cost SR / clavier Hall
 
-- La variante low-cost expose le mapping SR physique dans `Board/LowCost/Src/board_controls_lowcost.c`: SR1 porte Plus/Minus/Paste/Copy/Rec/PlayStop/Shift/Track, SR2/SR3 portent les 16 STEP, SR4 porte Page1..4 et les quatre boutons push encodeur. Le driver SR ne code aucune fonction `SHIFT`: il retourne seulement des `button_id_t`.
+- La variante low-cost conserve l'ordre SR physique de `Board/LowCost/Src/board_controls_lowcost.c`: les 32 bits bruts restent ceux des quatre registres et ne sont pas reordonnes. Apres cette lecture, une table explicite remappe uniquement les IDs observes par la page de test vers les `button_id_t` produit; les IDs non revalides, dont Encoder2/3/4, gardent leur interpretation existante. Le driver SR ne code aucune fonction `SHIFT`: il retourne seulement des `button_id_t`.
 - Les STEP low-cost sont aussi reprojetes vers les 16 lanes Hall UI par `board_surface_snapshot()`, via les IDs `BTN_STEP_1..BTN_STEP_16`; debounce/pressed/released restent dans le driver commun boutons et les press/release Hall restent dans le pipeline Z5.
 - Le clavier Hall low-cost separe utilise une table autoritative `mux index + channel -> logical key ID` dans `hall_keymap`: MUX1/MUX2/MUX3 couvrent les 24 touches `B1..B14` et `N1..N10`. Les metadonnees de touche portent explicitement type blanche/noire, index blanc/noir, position chromatique et validite.
 - Z5 conserve 16 lanes UI (`HALL_UI_LANE_COUNT`) distinctes des 24 touches clavier (`HALL_KEY_COUNT`); le pipeline UI commun ne deduit jamais blanche/noire depuis le mux, le canal ADC ou l'ordre d'acquisition.
@@ -937,3 +950,35 @@ Points factuels:
 - La projection des 16 lanes Hall/STEP reste unique via `led_remap_led_for_hall()`: premium garde le remap physique Hall existant, low-cost projette directement les lanes `0..15` vers `LED_STEP_1..16`.
 - La LED REC reutilise uniquement l'etat REC existant de Z4 (`seq_runtime_rec_*`); aucune autorite REC LED separee n'est ajoutee.
 - Les quatre LEDs SEQ sont rendues par la logique commune `seq_led`: elles indiquent le nombre de pages actives, la page editee et, pendant le transport, l'ecart entre page editee et page de lecture. La Board ne porte que le transport physique.
+- Le transport WS2812 low-cost applique un plafond global de 10 % a chaque composante RGB. Les 16 steps gardent le chainage explicite `BTN_STEP_n -> lane Hall n-1 -> LED_STEP_n -> WS2812 n`; aucune permutation physique n'est implicite.
+- Le pinout encodeurs low-cost autoritatif est: ENC1 `A=PG14/B=PG13`, ENC2 `A=PG12/B=PG11`, ENC3 `A=PG10/B=PG9`, ENC4 `A=PD7/B=PD6`. Les quatre lignes sont des GPIO input avec pull-up interne; aucun AF n'est assigne sur ces broches.
+- Les encodeurs low-cost inversent leur signe dans le driver commun. `LOWCOST_ENCODER_TYPE` selectionne `BOARD_ENCODER_TYPE_CONTINUOUS` (defaut, une transition quadrature par increment) ou `BOARD_ENCODER_TYPE_MECHANICAL_24_DETENTS` (quatre transitions quadrature par cran, reste signe conserve lors d'un changement de direction); premium reste a une transition et signe historique.
+
+## Addendum 2026-07-23 - visibilite des inputs low-cost
+
+- Les libelles et selecteurs low-cost ne publient que `Input1`; les identifiants historiques `Input2..4` sont rendus indisponibles et ne constituent pas des sources de track.
+- Le paste d'une track input low-cost ne recherche qu'une ressource reellement declaree input par le catalogue de variante.
+- Aucun comportement UI premium n'est modifie.
+
+## Addendum 2026-07-23 - raccourcis STEP low-cost temporaires
+
+- En low-cost, les `SHIFT + STEP` temporaires completent les mappings Hall existants sans modifier les assignations Hall premium.
+- `SHIFT + STEP10..16` ouvrent respectivement `TONE`, `COLORS/ENV`, `PLAY`, `MOD`, `MIX`, `REC CFG` et `SETTINGS`.
+- `SHIFT + STEP16` conserve son action courte `SETTINGS`; sur low-cost seulement, un maintien de 2 s est aussi surveille par Z0 pour charger BOOT0 via `PB8` puis reset en bootloader systeme.
+- `SHIFT + STEP9` est consomme sans action pour ne pas heriter d'une assignation Hall pendant l'absence des capteurs Hall low-cost.
+
+## Addendum 2026-07-23 - maintien STEP low-cost pour P-Lock
+
+- En low-cost, l'entree P-Lock par maintien STEP utilise `STEP_PLOCK_HOLD_MS = 300` dans `seq_edit`; la conversion reste explicite vers la base engine 1500 Hz, soit 450 ticks.
+- Un STEP relache avant ce seuil effectue uniquement le toggle court au release; un STEP promu en maintien P-Lock ne retoggle pas au release.
+- Les edits encodeur en contexte SEQ ne peuvent plus promouvoir un maintien pending low-cost avant le seuil de 500 ms; premium conserve la promotion immediate historique.
+## Addendum 2026-07-23 - suppression STEP low-cost
+
+- En low-cost, les suppressions posees par les raccourcis `SHIFT + STEP` sont nettoyees sur le release de la lane binaire dans `ui_core_service_track_selection_inputs`.
+- Une suppression STEP ne doit jamais survivre a son release physique, sinon le stage `ui_core_is_suppressed_hall_press_event_consumed` bloquerait les futurs `UI_EVENT_HALL_PRESS` normaux en mode SEQ.
+
+## Addendum 2026-07-23 - STEP low-cost en KBD/ARP
+
+- En low-cost avec clavier Hall separe, les 16 STEP binaires restent des lanes sequenceur meme lorsque le hall mode courant est `KEYBOARD` ou `ARP`.
+- `ui_core_seq_transport_handle_seq_mode_event()` accepte donc les press/release STEP dans ces deux modes low-cost pour conserver toggle court, maintien et P-Lock; les notes clavier viennent uniquement du clavier Hall separe.
+- Premium conserve le contrat historique: les Halls analogiques peuvent injecter des notes en `KEYBOARD`/`ARP` et ne sont pas reinterpretes comme steps sequenceur dans ces modes.

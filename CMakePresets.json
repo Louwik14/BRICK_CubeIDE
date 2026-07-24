@@ -2,26 +2,34 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "default",
+            "name": "common-ninja-arm",
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-		    "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
-            "cacheVariables": {
-            }
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake"
         },
         {
             "name": "Debug",
-            "inherits": "default",
+            "inherits": "common-ninja-arm",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BRICK6_VARIANT": "lowcost"
             }
         },
         {
             "name": "Release",
-            "inherits": "default",
+            "inherits": "common-ninja-arm",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "BRICK6_VARIANT": "lowcost"
+            }
+        },
+        {
+            "name": "Premium",
+            "inherits": "common-ninja-arm",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BRICK6_VARIANT": "premium"
             }
         }
     ],
@@ -33,6 +41,10 @@
         {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "Premium",
+            "configurePreset": "Premium"
         }
     ]
 }

@@ -237,7 +237,7 @@ void seq_model_init_defaults(void)
 
     for (uint8_t tr = 0U; tr < SEQ_TRACK_COUNT; ++tr)
     {
-        g_seq_project.tracks[tr].length_steps = SEQ_MAX_STEPS;
+        g_seq_project.tracks[tr].length_steps = SEQ_DEFAULT_LENGTH_STEPS;
         g_seq_project.tracks[tr].ui_page = 0U;
 
         for (uint8_t st = 0U; st < SEQ_MAX_STEPS; ++st)
@@ -278,7 +278,7 @@ uint8_t seq_model_load_project(const seq_project_data_t *project)
         uint8_t length_steps = project->tracks[tr].length_steps;
         if ((length_steps == 0U) || (length_steps > SEQ_MAX_STEPS))
         {
-            length_steps = SEQ_MAX_STEPS;
+            length_steps = SEQ_DEFAULT_LENGTH_STEPS;
         }
         g_seq_project.tracks[tr].length_steps = length_steps;
 

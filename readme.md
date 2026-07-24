@@ -15,6 +15,11 @@ Core use:
 
 This repository targets a playable, deterministic instrument firmware. It is not a generic DSP sandbox and it does not rely on ambiguous central nodes.
 
+Variant audio resources:
+- Premium exposes the four stereo input sources `Input1..4`.
+- Low-cost exposes one stereo line input, `Input1`; `Input2..4` are absent from its catalogs and UI.
+- On the low-cost revision without the volume potentiometer fitted, master volume temporarily starts at 75% and does not depend on the potentiometer ADC.
+
 ## 2. Product priorities
 
 Priority order:
@@ -133,6 +138,7 @@ This separation is intentional. Do not add a second authority for the same state
 ### Sequencer
 - integrated sequencer
 - transport / clock / scheduler
+- `SEQ Length` defaults to 16 steps on new or blank projects; saved projects keep their stored per-track length
 - parameter locks
 - modulation baseline with two LFOs per track
 - MOD LFO pages are `LFO1`, `LFO1#`, `LFO2`, `LFO2#`; `RATE` is Hz-left / OFF-center / tempo-sync-right
@@ -147,7 +153,7 @@ This separation is intentional. Do not add a second authority for the same state
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - no product VU/peak meter in the mixer header
-- boot default (normal path): track 1 focused on `CFG` (hall calibration path stays prioritary)
+- boot default (normal path): track 1 focused on `CFG`; premium keeps the missing/invalid Hall calibration page priority, while low-cost temporarily bypasses only its automatic opening and keeps uncalibrated Hall inputs disabled
 
 ### Parameter system
 - UI-side parameter control

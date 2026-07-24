@@ -251,6 +251,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
+#include "SD/sd_init_diag.h"
 
 /** @addtogroup STM32H7xx_HAL_Driver
   * @{
@@ -401,13 +402,17 @@ HAL_StatusTypeDef HAL_SD_Init(SD_HandleTypeDef *hsd)
   hsd->State = HAL_SD_STATE_PROGRAMMING;
 
   /* Initialize the Card parameters */
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_HAL_SD_INIT_CARD, hsd);
   if (HAL_SD_InitCard(hsd) != HAL_OK)
   {
+    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_HAL_SD_INIT_CARD, HAL_ERROR, hsd);
     return HAL_ERROR;
   }
 
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_CARD_STATUS, hsd);
   if (HAL_SD_GetCardStatus(hsd, &CardStatus) != HAL_OK)
   {
+    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_CARD_STATUS, HAL_ERROR, hsd);
     return HAL_ERROR;
   }
   /* Get Initial Card Speed from Card Status*/
@@ -430,12 +435,15 @@ HAL_StatusTypeDef HAL_SD_Init(SD_HandleTypeDef *hsd)
 
   }
   /* Configure the bus wide */
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_CONFIG_WIDE, hsd);
   if (HAL_SD_ConfigWideBusOperation(hsd, hsd->Init.BusWide) != HAL_OK)
   {
+    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_CONFIG_WIDE, HAL_ERROR, hsd);
     return HAL_ERROR;
   }
 
   /* Verify that SD card is ready to use after Initialization */
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, hsd);
   tickstart = HAL_GetTick();
   while ((HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER))
   {
@@ -443,6 +451,7 @@ HAL_StatusTypeDef HAL_SD_Init(SD_HandleTypeDef *hsd)
     {
       hsd->ErrorCode = HAL_SD_ERROR_TIMEOUT;
       hsd->State = HAL_SD_STATE_READY;
+      sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, HAL_TIMEOUT, hsd);
       return HAL_TIMEOUT;
     }
   }
@@ -455,6 +464,7 @@ HAL_StatusTypeDef HAL_SD_Init(SD_HandleTypeDef *hsd)
 
   /* Initialize the SD state */
   hsd->State = HAL_SD_STATE_READY;
+  sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, HAL_OK, hsd);
 
   return HAL_OK;
 }
@@ -520,6 +530,7 @@ HAL_StatusTypeDef HAL_SD_InitCard(SD_HandleTypeDef *hsd)
   }
 
   /* Identify card operating voltage */
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_SD_POWER_ON, hsd);
   errorstate = SD_PowerON(hsd);
   if (errorstate != HAL_SD_ERROR_NONE)
   {
@@ -529,6 +540,7 @@ HAL_StatusTypeDef HAL_SD_InitCard(SD_HandleTypeDef *hsd)
   }
 
   /* Card initialization */
+  sd_init_diag_stage(SD_INIT_DIAG_STAGE_SD_IDENT, hsd);
   errorstate = SD_InitCard(hsd);
   if (errorstate != HAL_SD_ERROR_NONE)
   {

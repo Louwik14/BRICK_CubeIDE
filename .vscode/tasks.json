@@ -2,13 +2,26 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build Release",
+      "label": "Configure Debug Lowcost",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--preset",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Debug Lowcost",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
         "--preset",
-        "Release"
+        "Debug"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -22,51 +35,12 @@
       ]
     },
     {
-      "label": "Flash Release",
-      "type": "shell",
-      "command": "STM32_Programmer_CLI.exe",
-      "args": [
-        "-c",
-        "port=USB1",
-        "-d",
-        "${workspaceFolder}\\build\\Release\\BRICK6_CUBE.elf",
-        "-v",
-        "-g",
-        "0x08000000"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Clean Release",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "if (Test-Path '${workspaceFolder}\\build\\Release') { Remove-Item '${workspaceFolder}\\build\\Release' -Recurse -Force }; cmake --preset Release"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Configure Debug",
+      "label": "Configure Release Lowcost",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--preset",
-        "Debug"
+        "Release"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -74,29 +48,13 @@
       "problemMatcher": []
     },
     {
-      "label": "Clean Debug",
+      "label": "Build Release Lowcost",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
         "--preset",
-        "Debug",
-        "--target",
-        "clean"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build Debug",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "--preset",
-        "Debug"
+        "Release"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -107,12 +65,34 @@
       ]
     },
     {
-      "label": "Debug",
-      "dependsOn": [
-        "Build Debug"
+      "label": "Configure Premium",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--preset",
+        "Premium"
       ],
-      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "problemMatcher": []
+    },
+    {
+      "label": "Build Premium",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "Premium"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
     }
   ]
 }

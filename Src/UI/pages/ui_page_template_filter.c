@@ -8,10 +8,10 @@
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "ENV",
-    .nav_labels = { "MAIN", "ADSR", "-", "-" },
+    .nav_labels = { "FILTER", "ADSR", "VCA", "-" },
     .subpages = {
         {
-            .title = "MAIN",
+            .title = "FILTER",
             .param_bank = { .params = { PARAM_FILTER_TYPE, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT } },
         },
         {
@@ -19,8 +19,8 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
             .param_bank = { .params = { PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY, PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "VCA",
+            .param_bank = { .params = { PARAM_VCA_ATTACK, PARAM_VCA_DECAY, PARAM_VCA_SUSTAIN, PARAM_VCA_RELEASE } },
         },
         {
             .title = "-",
@@ -116,6 +116,19 @@ static ui_template_custom_widget_kind_t ui_page_template_filter_pick_custom_widg
                                                       PARAM_FILTER_RELEASE) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_FILTER;
+    }
+
+    if (((id == PARAM_VCA_ATTACK)
+            || (id == PARAM_VCA_DECAY)
+            || (id == PARAM_VCA_SUSTAIN)
+            || (id == PARAM_VCA_RELEASE))
+            && (ui_page_template_subpage_matches_adsr(subpage,
+                                                      PARAM_VCA_ATTACK,
+                                                      PARAM_VCA_DECAY,
+                                                      PARAM_VCA_SUSTAIN,
+                                                      PARAM_VCA_RELEASE) != 0U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA;
     }
 
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
@@ -306,13 +319,16 @@ static void ui_page_template_colors_sync_family(void)
     const uint8_t has_adsr_page = ((filter_type == MIXER_TRACK_FILTER_LP_BI)
                                 || (filter_type == MIXER_TRACK_FILTER_HP_BI)
                                 || (filter_type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
+    const uint8_t has_vca_page =
+        (uint8_t)((track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_VCA) != 0U)
+                && (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_VCA) != 0));
 
-    family->nav_labels[0] = "MAIN";
+    family->nav_labels[0] = "FILTER";
     family->nav_labels[1] = (has_adsr_page != 0U) ? "ADSR" : "-";
-    family->nav_labels[2] = "-";
+    family->nav_labels[2] = (has_vca_page != 0U) ? "VCA" : "-";
     family->nav_labels[3] = "-";
 
-    family->subpages[0].title = "MAIN";
+    family->subpages[0].title = "FILTER";
     family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
     family->subpages[0].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_LOW : PARAM_FILTER_CUTOFF;
     family->subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
@@ -324,11 +340,11 @@ static void ui_page_template_colors_sync_family(void)
     family->subpages[1].param_bank.params[2] = (has_adsr_page != 0U) ? PARAM_FILTER_SUSTAIN : PARAM_COUNT;
     family->subpages[1].param_bank.params[3] = (has_adsr_page != 0U) ? PARAM_FILTER_RELEASE : PARAM_COUNT;
 
-    family->subpages[2].title = "-";
-    family->subpages[2].param_bank.params[0] = PARAM_COUNT;
-    family->subpages[2].param_bank.params[1] = PARAM_COUNT;
-    family->subpages[2].param_bank.params[2] = PARAM_COUNT;
-    family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+    family->subpages[2].title = (has_vca_page != 0U) ? "VCA" : "-";
+    family->subpages[2].param_bank.params[0] = (has_vca_page != 0U) ? PARAM_VCA_ATTACK : PARAM_COUNT;
+    family->subpages[2].param_bank.params[1] = (has_vca_page != 0U) ? PARAM_VCA_DECAY : PARAM_COUNT;
+    family->subpages[2].param_bank.params[2] = (has_vca_page != 0U) ? PARAM_VCA_SUSTAIN : PARAM_COUNT;
+    family->subpages[2].param_bank.params[3] = (has_vca_page != 0U) ? PARAM_VCA_RELEASE : PARAM_COUNT;
 
     family->subpages[3].title = "-";
     family->subpages[3].param_bank.params[0] = PARAM_COUNT;

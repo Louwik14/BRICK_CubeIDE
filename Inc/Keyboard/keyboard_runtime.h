@@ -54,6 +54,7 @@ void keyboard_runtime_process_midi(const uint8_t *msg, size_t len, seq_clock_src
 void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity);
 void keyboard_runtime_all_notes_off(void);
 void keyboard_runtime_clear_arp_track(uint8_t track);
+void keyboard_runtime_clear_arp_seq_step_source(void);
 void keyboard_runtime_sync_track_focus_context(void);
 void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode);
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void);

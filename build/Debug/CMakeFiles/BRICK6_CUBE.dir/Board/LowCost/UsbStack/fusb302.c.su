@@ -1,0 +1,17 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:101:25:fusb302_from_hal	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:156:23:fusb302_role_from_status1a	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:128:25:fusb302_write_reg	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:112:25:fusb302_read_reg	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:266:25:fusb302_probe_device	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:252:25:fusb302_clear_interrupts	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:144:25:fusb302_update_reg	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:299:25:fusb302_start_drp	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:218:25:fusb302_read_state	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:377:18:fusb302_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:408:18:fusb302_read_role	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:423:18:fusb302_handle_interrupt	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:438:6:fusb302_is_present	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:443:6:fusb302_irq_pending	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:448:16:fusb302_cached_role	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:453:17:fusb302_cached_state	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/fusb302.c:458:6:HAL_GPIO_EXTI_Callback	0	static

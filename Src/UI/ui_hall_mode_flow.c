@@ -17,6 +17,7 @@
 #include "ui_core_navigation_bridge.h"
 #include "ui_hall_mode_contract.h"
 #include "ui_hall_mode_projection.h"
+#include "ui_navigation.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_HALL_PATCH_SAVE_ARM_MS 80U
@@ -79,7 +80,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                                                            uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                                            uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT])
 {
-    if ((ui_hall_mode_flow_has_lowcost_step_modes() == 0U) || (hall >= 8U))
+    if (ui_hall_mode_flow_has_lowcost_step_modes() == 0U)
     {
         return 0U;
     }
@@ -133,6 +134,37 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             target_mode = UI_HALL_MODE_MACRO;
             target_page = UI_PAGE_TEMPLATE_MACRO;
             break;
+
+        case 8U:
+            return 1U;
+
+        case 9U:
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_TONE);
+            return 1U;
+
+        case 10U:
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_COLORS);
+            return 1U;
+
+        case 11U:
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_PLAY);
+            return 1U;
+
+        case 12U:
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_MOD);
+            return 1U;
+
+        case 13U:
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_MIX);
+            return 1U;
+
+        case 14U:
+            ui_core_navigation_bridge_open_rec_cfg_page();
+            return 1U;
+
+        case 15U:
+            ui_page_settings_open(ui_page_get_id());
+            return 1U;
 
         default:
             return 0U;

@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:20:13:mixer_meter_apply_reset_if_pending	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:42:6:mixer_meter_submit_track_peak	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:54:6:mixer_meter_submit_master_block	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:61:6:mixer_meter_advance_window	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:85:7:mixer_meter_get_track_peak	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:95:7:mixer_meter_get_master_peak	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:100:10:mixer_meter_get_master_clip_count	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer_meter.c:105:6:mixer_meter_reset_window	0	static

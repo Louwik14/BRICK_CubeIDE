@@ -501,7 +501,8 @@ static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
 {
     for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT4; ++family)
     {
-        if (ui_count_tracks_with_family(family) == 0U)
+        if (ui_track_family_is_input(family)
+                && (ui_count_tracks_with_family(family) == 0U))
         {
             return family;
         }

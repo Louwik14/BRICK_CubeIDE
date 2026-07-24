@@ -272,6 +272,7 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_kit_assign.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_lowcost_button_test.c"
 )
 
 # Mutable Instruments
@@ -472,6 +473,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     --specs=nano.specs
 
     $<$<CONFIG:Debug>:-Og>
+    $<$<CONFIG:Debug>:-g3>
     $<$<CONFIG:Release>:-O1>
 
     $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fno-math-errno>

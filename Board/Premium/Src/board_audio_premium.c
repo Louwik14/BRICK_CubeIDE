@@ -144,6 +144,7 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
     }
 }
 
+
 void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
                              const float *AUDIO_RESTRICT main_l,
                              const float *AUDIO_RESTRICT main_r,
@@ -185,4 +186,3 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
         cue_gain += gain_step;
     }
 }
-

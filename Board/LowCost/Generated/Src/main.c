@@ -49,6 +49,7 @@
 #include "display_flush_service.h"
 #include "ui_renderer_oled.h"
 #include "Board/board_power.h"
+#include "buttons.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -89,6 +90,9 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
+#define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
+#define LOWCOST_BOOTLOADER_HOLD_MS                 2000UL
+#define LOWCOST_BOOTLOADER_BOOT0_CHARGE_MS         10UL
 
 static void MPU_Config(void)
 {
@@ -110,6 +114,51 @@ static void MPU_Config(void)
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+
+static void lowcost_bootloader_shift_step16_service(void)
+{
+#if LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE
+  static uint8_t combo_was_down = 0U;
+  static uint8_t fired = 0U;
+  static uint32_t hold_start_ms = 0U;
+
+  const uint8_t combo_down =
+      ((button_down(BTN_SHIFT) != 0U) && (button_down(BTN_STEP_16) != 0U)) ? 1U : 0U;
+  const uint32_t now_ms = HAL_GetTick();
+
+  if (combo_down == 0U)
+  {
+    combo_was_down = 0U;
+    fired = 0U;
+    hold_start_ms = 0U;
+    return;
+  }
+
+  if (combo_was_down == 0U)
+  {
+    combo_was_down = 1U;
+    hold_start_ms = now_ms;
+    return;
+  }
+
+  if ((fired == 0U) && ((uint32_t)(now_ms - hold_start_ms) >= LOWCOST_BOOTLOADER_HOLD_MS))
+  {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    fired = 1U;
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    GPIO_InitStruct.Pin = BOOTLOADER_TRIGGER_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(BOOTLOADER_TRIGGER_GPIO_Port, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(BOOTLOADER_TRIGGER_GPIO_Port, BOOTLOADER_TRIGGER_Pin, GPIO_PIN_SET);
+    HAL_Delay(LOWCOST_BOOTLOADER_BOOT0_CHARGE_MS);
+    NVIC_SystemReset();
+  }
+#endif
 }
 
 /* USER CODE END 0 */
@@ -201,6 +250,7 @@ int main(void)
 
 
 	     brick6_app_process();
+	     lowcost_bootloader_shift_step16_service();
 
 	     if (usb_role_manager_is_host_active() != 0U)
 	     {

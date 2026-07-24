@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:24:6:encoders_hw_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:33:6:encoders_fast_poll_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:43:6:encoders_hw_read	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:38:6:encoders_fast_poll_irq	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:81:9:encoders_hw_get_delta	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:53:6:encoders_hw_init	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:63:6:encoders_fast_poll_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:73:6:encoders_hw_read	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:68:6:encoders_fast_poll_irq	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:99:9:encoders_hw_get_delta	0	static,ignoring_inline_asm

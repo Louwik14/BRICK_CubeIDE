@@ -22,4 +22,3 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
                              uint32_t frames,
                              float cue_gain_start,
                              float cue_gain_end);
-

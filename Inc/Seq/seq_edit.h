@@ -20,6 +20,9 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
                                     seq_step_id_t *out_steps,
                                     uint8_t max_steps,
                                     uint8_t promote_pending);
+uint8_t seq_edit_collect_pressed_steps(seq_track_id_t *out_track,
+                                       seq_step_id_t *out_steps,
+                                       uint8_t max_steps);
 
 uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_step_id_t step,

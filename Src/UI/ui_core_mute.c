@@ -9,7 +9,7 @@
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 
-#define UI_TRACK_MOD_BUTTON BTN_PARAM_8
+#define UI_TRACK_MOD_BUTTON BTN_TRACK
 
 typedef struct
 {

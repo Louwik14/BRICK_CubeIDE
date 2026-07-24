@@ -291,6 +291,11 @@ void keyboard_runtime_clear_arp_track(uint8_t track)
     keyboard_arp_all_notes_off_track(track);
 }
 
+void keyboard_runtime_clear_arp_seq_step_source(void)
+{
+    keyboard_arp_clear_seq_step_source();
+}
+
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
 {
     const uint8_t active_track = ui_get_active_track();

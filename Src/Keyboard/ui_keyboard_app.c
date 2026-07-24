@@ -146,10 +146,6 @@ static void kbd_flush_sounding_notes(void)
 static void kbd_sink_all_notes_off_internal(void)
 {
     kbd_flush_sounding_notes();
-    if (g_keyboard_state.sink.all_notes_off != NULL)
-    {
-        g_keyboard_state.sink.all_notes_off();
-    }
 }
 
 static inline uint8_t kbd_root_pc(void)

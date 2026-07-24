@@ -900,3 +900,10 @@ Clarification START/END/LOOP live:
 - Les tracks d'entree inexistantes low-cost `Input2..4` ne sont plus activees par le bridge runtime audio et ne sont plus reservees par Z2; leurs buffers bloc sont zeroes par le backend board au lieu d'etre parcourus comme entrees physiques.
 - Low-cost compile `MIXER_HAS_CUE_BUS=0`: les buffers bloc CUE et Looper-CUE ne sont pas instancies, les accumulations CUE/XFade CUE sont compilees hors chemin IRQ, et `board_audio_pack_output()` ignore toute donnee CUE. Premium garde MAIN/CUE physique et bus CUE inchanges.
 - Gain mesure apres build Release: low-cost DTCMRAM 83584 B contre premium 84608 B, soit 1024 B de buffers CUE bloc retires dans Z1. Les buffers DMA low-cost restent reduits par `BOARD_AUDIO_TDM_SLOTS=2` contre TDM8 premium.
+
+## Addendum 2026-07-23 - sortie casque TLV320AIC3204 low-cost
+
+- Le flux low-cost transporte du PCM signe 24 bits dans deux slots SAI de 32 bits; le codec recoit BCLK/WCLK depuis `SAI1_A`.
+- L'initialisation codec active les DAC gauche/droit avec leurs donnees serie respectives, route LDAC vers HPL et RDAC vers HPR, puis alimente et de-mute uniquement les sorties casque.
+- Les gains HPL/HPR sont maintenus mutes pendant le routage et la mise sous tension, puis ouverts a 0 dB apres le delai de stabilisation.
+- Aucun registre reserve de la page 1 ne fait partie de la sequence d'initialisation.

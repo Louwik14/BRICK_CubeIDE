@@ -122,7 +122,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_setti
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:2834:13:ui_page_settings_apply_action	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:3133:13:ui_page_settings_handle_event_internal	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4360:6:ui_page_settings_open	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4366:9:ui_page_settings_is_open	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4371:6:ui_page_settings_handle_encoder	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4545:9:ui_page_settings_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4366:6:ui_page_settings_open_sample_browser	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4374:9:ui_page_settings_is_open	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4379:6:ui_page_settings_handle_encoder	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4553:9:ui_page_settings_handle_event	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:3295:13:ui_page_settings_handle_event_page	8	static

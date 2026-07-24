@@ -37,18 +37,13 @@ enum
   TLV_P1_CM_CTRL = 10,
   TLV_P1_HPL_ROUTE = 12,
   TLV_P1_HPR_ROUTE = 13,
-  TLV_P1_LOL_ROUTE = 14,
-  TLV_P1_LOR_ROUTE = 15,
   TLV_P1_HPL_GAIN = 16,
   TLV_P1_HPR_GAIN = 17,
-  TLV_P1_LOL_GAIN = 18,
-  TLV_P1_LOR_GAIN = 19,
   TLV_P1_HEADPHONE_STARTUP = 20,
-  TLV_P1_OUTPUT_COMMON_MODE = 40,
   TLV_P1_MICBIAS = 51,
   TLV_P1_LEFT_P_ROUTE = 52,
-  TLV_P1_RIGHT_P_ROUTE = 54,
-  TLV_P1_LEFT_M_ROUTE = 55,
+  TLV_P1_LEFT_M_ROUTE = 54,
+  TLV_P1_RIGHT_P_ROUTE = 55,
   TLV_P1_RIGHT_M_ROUTE = 57,
   TLV_P1_FLOATING_INPUT = 58,
   TLV_P1_LEFT_PGA_GAIN = 59,
@@ -276,27 +271,18 @@ tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_RIGHT_AGC, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
+  /* Keep the analog drivers muted until clocks, DACs and routes are live. */
+  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x40U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x40U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_ROUTE, 0x08U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_ROUTE, 0x08U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_LOL_ROUTE, 0x08U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_LOR_ROUTE, 0x08U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_OUTPUT_COMMON_MODE, 0x06U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HEADPHONE_STARTUP, 0x25U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_LOL_GAIN, 0x00U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_LOR_GAIN, 0x00U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_OUTPUT_POWER, 0x3CU);
+  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_OUTPUT_POWER, 0x30U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_DAC_DATAPATH, 0xD4U);
@@ -308,7 +294,12 @@ tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_RIGHT_DAC_VOL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
-  HAL_Delay(10U);
+  HAL_Delay(40U);
+  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+
   return TLV320AIC3204_STATUS_OK;
 }
 

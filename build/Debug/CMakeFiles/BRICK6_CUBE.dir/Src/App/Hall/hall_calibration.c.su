@@ -21,8 +21,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibrat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:553:9:hall_calibration_is_key_done	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:563:10:hall_calibration_get_min	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:573:10:hall_calibration_get_max	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:583:9:hall_calibration_load	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:616:6:hall_calibration_save	136	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:583:9:hall_calibration_load	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:616:6:hall_calibration_save	168	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:666:6:hall_user_calibration_start	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:677:6:hall_user_calibration_process	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_calibration.c:755:9:hall_user_calibration_is_done	0	static

@@ -125,6 +125,7 @@ Lectures runtime explicites, sans autorite locale de mutation:
 - `seq_live_rec_capture`: lit `track_runtime_get_midi_source`, `track_runtime_get_midi_channel_zero_based` et `track_runtime_get_effective_param_status` comme gardes de capture.
 - `seq_led`: lit `seq_runtime_is_running` et `seq_runtime_get_playhead_step` comme projections de cursor.
 - `seq_output_guard`: lit `track_runtime_get_midi_channel_zero_based` et la projection runtime resolue pour le panic/cleanup.
+- `keyboard_arp`: rend pour `seq_play_scheduler` les notes/velocites ARP derivees d'un step actif; le scheduler reste proprietaire de l'horodatage sample-domain et de la queue audio.
 
 Contrat:
 - ces consumers ne font pas de refresh implicite;
@@ -724,3 +725,17 @@ Points factuels observes:
 - `START=TRIG` est porte par `seq_live_rec_session`: armer REC ou demander PLAY en REC arme depuis STOP place l'attente trigger; le premier note-on interne ou MIDI externe consomme l'attente, demarre le transport via `seq_runtime_start`, puis continue dans le chemin live-rec normal.
 - STOP, desarmement REC et changement de START hors `TRIG` clear l'attente. Changer START vers `TRIG` pendant REC arme et STOP recree l'attente de facon deterministe.
 - Les chemins clavier et MIDI ne decident pas du start: ils notifient seulement `seq_runtime_live_rec_note_on`, le domaine REC consomme eventuellement le trigger.
+
+## Addendum 2026-07-23 - default SEQ Length
+
+- `SEQ_DEFAULT_LENGTH_STEPS` vaut 16 et devient la longueur initiale de chaque track dans `seq_model_init_defaults()`.
+- Les projets/patterns deja sauvegardes gardent leur `length_steps` persiste tant que la valeur est valide; aucune migration ou bump de format n'est introduit.
+
+## Addendum 2026-07-23 - ARP Hold declenche par steps
+
+- Quand `ARP Hold` est actif sur une track, un step sequenceur actif de cette meme track emet un trigger vers le runtime ARP de la track.
+- Ce trigger reste track-local et ne modifie pas les autres etats ARP; `ARP Hold=Off` conserve le pilotage clavier uniquement.
+- Le scheduler PLAY collecte les notes du step actif, demande a `keyboard_arp` de rendre le prochain pas ARP en offsets samples derives de `samples_per_step_q16`, puis queue les note-on/note-off ARP dans la meme queue sample-domain que PLAY.
+- Le chemin `SEQ_STEP` ne depend plus du tick UI/systeme ni de `HAL_GetTick` pour son horodatage: note-on, strum et note-off ARP sont collectes/appliques par `seq_runtime_audio_collect_block_events` avec offsets intra-buffer.
+- Les divisions ARP sont converties depuis la cadence sequencer audio (`samples_per_step_q16`, base 16th = 6 PPQN24), sans accumulation en millisecondes et sans recalage au wrap pattern.
+- Au STOP transport, `seq_runtime` demande uniquement le clear de la source ARP `SEQ_STEP`: les notes/pending/arpeges issus des steps sont relaches, tandis que la source `KBD` latchee reste disponible pour le jeu manuel hors sequenceur.

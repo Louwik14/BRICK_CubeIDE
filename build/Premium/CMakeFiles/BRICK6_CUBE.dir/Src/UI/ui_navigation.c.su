@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:30:16:ui_navigation_is_ensemble_page	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:24:13:ui_navigation_refresh_active_track_runtime	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:43:16:ui_navigation_is_page_available	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:157:6:ui_navigation_request_ensemble_page	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:193:6:ui_navigation_request_page_with_availability	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:219:6:ui_navigation_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:253:9:ui_navigation_is_ensemble_button_available	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:270:13:ui_navigation_get_button_for_page	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:291:6:ui_navigation_sync_active_track_ensemble	8	static

@@ -1,3 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/spi.c:31:6:MX_SPI5_Init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/spi.c:73:6:HAL_SPI_MspInit	240	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/spi.c:137:6:HAL_SPI_MspDeInit	8	static
