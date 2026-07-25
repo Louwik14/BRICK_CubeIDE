@@ -5,7 +5,7 @@
 #include <string.h>
 
 CTRL_STATE static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
-CTRL_STATE static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
 
 void param_registry_runtime_state_init(void)
 {

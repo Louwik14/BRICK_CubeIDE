@@ -993,3 +993,28 @@ Points factuels:
 - Le parametre `SLOT` utilise un widget custom monochrome 24x24: base tous slots actifs, remplacement bitmap par croix pour chaque slot inactif, puis focus du slot edite par-dessus. Un slot est actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
 - Correction 2026-07-24: le widget `SLOT` est rendu depuis les bitmaps 24x24 de reference et compose dynamiquement les huit slots de la track courante; le parametre `SOURCE` de `MOD/MATRIX` utilise un rendu texte direct (`OFF`, `LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`) et aucun widget circulaire, tandis que les labels de parametres restent `ENV FLT`, `ENV VCA`, `ENV3`.
 - L'ensemble visuel `ENV` utilise la page 4 libre pour `ENV 3` (`ATTACK/DECAY/SUSTAIN/RELEASE`) avec le widget ADSR commun.
+
+## Addendum 2026-07-25 - catalogue Synth/Stack
+
+- Le catalogue CFG `Synth` propose maintenant `Wave` et `Stack`.
+- `Wave` conserve ses labels, pages et comportement UI historiques; il n'est pas renomme en Braids et ne devient pas un alias de Stack.
+- `Stack` est un type Synth distinct expose par les labels `Stack` / `STCK`. Cette passe n'ajoute pas encore de page TONE Stack ni de parametres Stack.
+
+## Addendum 2026-07-25 - pages TONE Stack
+
+- Le type `Synth/Stack` possede une surface TONE dediee en quatre pages: `COMM` (`OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`), puis `OSC1`, `OSC2`, `OSC3` avec `MODEL`, `TUNE`, `TIMBRE`, `COLOR`.
+- Les labels affiches pour `TIMBRE` et `COLOR` sont resolus dynamiquement selon le modele du slot Stack courant; les labels Wave continuent d'utiliser le resolveur Braids historique.
+- `MODEL` Stack utilise un widget enum texte et reste distinct du parametre `MODEL` Wave historique.
+
+## Addendum 2026-07-25 - preview waveform Stack
+
+- Le catalogue TONE Stack expose maintenant `SOFT`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM`.
+- `SOFT` affiche `TIMBRE=MORPH` et `COLOR=FOLD`; `SHAPE` affiche `TIMBRE=SHAPE` et `COLOR=MORPH`.
+- Le widget des params de morph `SOFT.TIMBRE` et `SHAPE.COLOR` remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des deux params du slot et sans capture audio.
+- Wave conserve ses widgets et labels historiques.
+
+## Addendum 2026-07-25 - sensibilite encodeur parametres discrets
+
+- Le chemin central d'edition physique `ui_param_handle_encoder_with_context()` applique un accumulateur x4 uniquement apres les chemins p-lock/live-rec p-lock.
+- Les params enum/bool/int, les displays enum/bool/int et les params a moins de 20 valeurs possibles consomment environ 4 crans encodeur par pas; les parametres continus a grande plage conservent leur delta existant.
+- Le reliquat est remis a zero au changement de bank/page ou de track via `ui_param_set_bank()` / `ui_param_invalidate_bank()`.

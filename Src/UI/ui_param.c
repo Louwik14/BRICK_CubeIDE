@@ -42,6 +42,7 @@
 #include "stm32h7xx_hal.h"
 
 #define UI_PARAM_VALUE_FLASH_DURATION_MS 800U
+#define UI_PARAM_STEPPED_ENCODER_DIVIDER 4
 
 typedef struct
 {
@@ -67,6 +68,8 @@ static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
 static uint8_t g_ui_param_bank_track = 0xFFU;
 static uint8_t g_ui_param_encoder_edit_group_active = 0U;
 static uint32_t g_ui_param_encoder_edit_group_key = 0U;
+static int16_t g_ui_param_stepped_encoder_accum[4];
+static uint32_t g_ui_param_stepped_encoder_key[4];
 
 typedef struct
 {
@@ -227,6 +230,15 @@ static uint8_t ui_param_value_is_same(float a, float b)
 {
     const float diff = a - b;
     return ((diff > -0.000001f) && (diff < 0.000001f)) ? 1U : 0U;
+}
+
+static void ui_param_reset_stepped_encoder_accum(void)
+{
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        g_ui_param_stepped_encoder_accum[i] = 0;
+        g_ui_param_stepped_encoder_key[i] = 0UL;
+    }
 }
 
 static uint8_t ui_param_seq_div_ui_to_runtime(float value)
@@ -813,6 +825,7 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
         g_ui_param.valid = 0U;
         g_ui_param_bank_track = 0xFFU;
         ui_param_clear_value_flash();
+        ui_param_reset_stepped_encoder_accum();
         return;
     }
 
@@ -835,6 +848,7 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
     if ((same_bank == 0U) || (same_track == 0U))
     {
         ui_param_clear_value_flash();
+        ui_param_reset_stepped_encoder_accum();
     }
 }
 
@@ -843,6 +857,7 @@ void ui_param_invalidate_bank(void)
     g_ui_param.valid = 0U;
     g_ui_param_bank_track = 0xFFU;
     ui_param_clear_value_flash();
+    ui_param_reset_stepped_encoder_accum();
 }
 
 void ui_param_sync_active_bank_values(void)
@@ -1534,6 +1549,78 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
     return desc->step;
 }
 
+static uint8_t ui_param_desc_has_less_than_20_values(const param_desc_t *desc)
+{
+    if ((desc == 0) || (desc->step <= 0.0f) || (desc->max < desc->min))
+    {
+        return 0U;
+    }
+
+    const float span = desc->max - desc->min;
+    const uint32_t intervals = (uint32_t)((span / desc->step) + 0.5f);
+    return ((intervals + 1UL) < 20UL) ? 1U : 0U;
+}
+
+static uint8_t ui_param_encoder_uses_stepped_accum(const param_desc_t *desc)
+{
+    if (desc == 0)
+    {
+        return 0U;
+    }
+
+    if ((desc->type == PARAM_TYPE_ENUM)
+            || (desc->type == PARAM_TYPE_BOOL)
+            || (desc->type == PARAM_TYPE_INT)
+            || (desc->display_type == PARAM_DISPLAY_ENUM)
+            || (desc->display_type == PARAM_DISPLAY_BOOL)
+            || (desc->display_type == PARAM_DISPLAY_INT))
+    {
+        return 1U;
+    }
+
+    return ui_param_desc_has_less_than_20_values(desc);
+}
+
+static uint32_t ui_param_make_stepped_encoder_key(const ui_param_encoder_context_t *ctx,
+                                                  uint8_t encoder,
+                                                  param_id_t param)
+{
+    uint32_t key = ((uint32_t)(ctx->active_track & 0x0FU) << 24)
+                 | ((uint32_t)(encoder & 0x03U) << 22)
+                 | ((uint32_t)param & 0x03FFUL);
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        key ^= ((uint32_t)ctx->bank.params[i] & 0x03FFUL) << (2U + (i * 5U));
+    }
+    return key;
+}
+
+static int16_t ui_param_filter_stepped_encoder_delta(const ui_param_encoder_context_t *ctx,
+                                                     uint8_t encoder,
+                                                     param_id_t param,
+                                                     const param_desc_t *desc,
+                                                     int16_t delta)
+{
+    if ((ctx == 0) || (encoder >= 4U) || (delta == 0) || (ui_param_encoder_uses_stepped_accum(desc) == 0U))
+    {
+        return delta;
+    }
+
+    const uint32_t key = ui_param_make_stepped_encoder_key(ctx, encoder, param);
+    if (g_ui_param_stepped_encoder_key[encoder] != key)
+    {
+        g_ui_param_stepped_encoder_key[encoder] = key;
+        g_ui_param_stepped_encoder_accum[encoder] = 0;
+    }
+
+    g_ui_param_stepped_encoder_accum[encoder] = (int16_t)(g_ui_param_stepped_encoder_accum[encoder] + delta);
+    const int16_t stepped_delta = (int16_t)(g_ui_param_stepped_encoder_accum[encoder] / UI_PARAM_STEPPED_ENCODER_DIVIDER);
+    g_ui_param_stepped_encoder_accum[encoder] =
+        (int16_t)(g_ui_param_stepped_encoder_accum[encoder] - (stepped_delta * UI_PARAM_STEPPED_ENCODER_DIVIDER));
+    return stepped_delta;
+}
+
 static uint8_t ui_param_is_lfo_rate(param_id_t param)
 {
     return ((param == PARAM_LFO1_RATE) || (param == PARAM_LFO2_RATE)) ? 1U : 0U;
@@ -2005,6 +2092,12 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     if (ui_param_try_apply_live_rec_plock(encoder, param, desc, delta, edit_step, min_value, max_value, ctx->active_track) != 0U)
     {
         return 1U;
+    }
+
+    delta = ui_param_filter_stepped_encoder_delta(ctx, encoder, param, desc, delta);
+    if (delta == 0)
+    {
+        return 0U;
     }
 
     float value = ui_param_get_active_track_value(param, ctx->active_track);

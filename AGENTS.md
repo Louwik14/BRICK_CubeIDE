@@ -149,7 +149,8 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Hybrid`
 
 #### Pour `Synth`
-- `Sampler`
+- `Wave`
+- `Stack`
 
 #### Pour `Drum`
 - `TRX BD`
@@ -168,6 +169,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - une vraie family `MIDI` viendra plus tard
 - `runtime_target` est un shim legacy de compat, hors chemin opérationnel in-tree
 - `Master` est une family spéciale non standard
+- `Wave` reste le moteur Braids historique; `Stack` est un type Synth séparé et ne doit jamais devenir un renommage ou alias de `Wave`.
 
 ---
 
@@ -308,7 +310,7 @@ toujours utiliser des tables explicites.
 - `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum
 
 ### Ressources exclusives
-- `Synth/Sampler` : paste direct (non exclusif)
+- `Sampler/*` : paste direct (non exclusif)
 - `Input1..4` : priorité à un input libre, sinon move-on-paste
 - après move réussi, le clipboard reste chaînable
 

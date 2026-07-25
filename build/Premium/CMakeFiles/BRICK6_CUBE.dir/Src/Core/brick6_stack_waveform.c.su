@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:31:9:brick6_stack_waveform_saw	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:36:9:brick6_stack_waveform_triangle	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:43:9:brick6_stack_waveform_sine	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:50:9:brick6_stack_waveform_pwm	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:60:9:brick6_stack_waveform_fold	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:83:9:brick6_stack_waveform_soft	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stack_waveform.c:103:9:brick6_stack_waveform_shape	16	static

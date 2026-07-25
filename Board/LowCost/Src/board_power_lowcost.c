@@ -3,7 +3,7 @@
 #include "main.h"
 #include "stm32h7xx_hal.h"
 
-#define POWER_LONG_PRESS_MS 3000UL
+#define POWER_BOOT_PRESS_MS 1000UL
 void board_power_delay_ms(uint32_t ms)
 {
     HAL_Delay(ms);
@@ -37,7 +37,7 @@ void board_power_hold_enable_after_boot_press(void)
             continue;
         }
 
-        if ((now_ms - high_start_ms) >= POWER_LONG_PRESS_MS)
+        if ((now_ms - high_start_ms) >= POWER_BOOT_PRESS_MS)
         {
             HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_SET);
             return;

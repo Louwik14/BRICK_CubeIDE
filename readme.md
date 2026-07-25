@@ -80,7 +80,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Wave`
+- `Synth`: `Wave`, `Stack`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
@@ -134,6 +134,15 @@ This separation is intentional. Do not add a second authority for the same state
 - `TONE/TONE`: `Timbre`, `Modulation`, `Color`, `Phase Reset`
 - `Phase Reset=Off` preserves the current Wave behavior
 - `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Wave models that consume sync; random state is not reset
+
+### Stack
+- `Synth/Stack` is a separate mono engine from `Synth/Wave`; Wave remains the historical Braids runtime.
+- Stack exposes three independent oscillator slots plus noise through `TONE`.
+- `TONE/COMM`: `OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`.
+- `TONE/OSC1..OSC3`: `MODEL`, `TUNE`, `TIMBRE`, `COLOR` per slot, with model-aware Timbre/Color labels.
+- Stack models: `SOFT`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`.
+- `SOFT` maps `TIMBRE=MORPH` and `COLOR=FOLD`; `SHAPE` maps `TIMBRE=SHAPE` and `COLOR=MORPH`.
+- The three slots and noise are summed mono into the normal track path: filter, inserts, VCA and mixer.
 
 ### Sequencer
 - integrated sequencer

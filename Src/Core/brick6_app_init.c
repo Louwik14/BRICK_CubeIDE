@@ -38,6 +38,7 @@
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
@@ -130,6 +131,7 @@ void brick6_app_init(void)
     brick6_sampler_runtime_init();
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
+    brick6_stack_runtime_init();
     mixer_set_master(0.0f);
 
     brick6_audio_runtime_init();

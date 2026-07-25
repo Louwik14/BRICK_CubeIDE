@@ -999,3 +999,19 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PatternSaveV1` ne contient plus de bloc LFO separe: LFO source, Matrix et ENV3 sont persistants uniquement via les blocs track-aware du layout courant.
 - Les anciens params directs `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant au lieu d'etre convertis ou conserves en fallback.
 - Kit/Patch conservent leurs versions deja bumpÃ©es par la rupture `track_sound_state_t`: la surface param n'ajoute pas de nouveau champ dedie dans leurs headers.
+
+## Addendum 2026-07-25 - persistence Stack
+
+- `Synth/Stack` est persiste comme type de track distinct de `Synth/Wave`; aucun champ Wave n'est renomme, migre ou reutilise comme alias Stack.
+- Les parametres `PARAM_STACK_*` sont ajoutes au layout `PARAM_COUNT`: Pattern et Project les capturent via leurs matrices track-aware `track_values` / `track_valid`.
+- `PATTERN_VERSION=32` et `PROJECT_V1_FILE_VERSION=44` marquent la rupture de payload Pattern/Project; en phase prototype, les anciens fichiers sont refuses par validation stricte `version/payload_size`, sans migration.
+- Les etats sonores Stack canoniques sont ajoutes a `track_tone_sound_state_t`; Patch et Kit les capturent donc dans leur snapshot tone comme les autres moteurs TONE.
+- `PATCH_SD_FILE_VERSION=6` et `KIT_SD_FILE_VERSION=5` marquent la rupture de payload Patch/Kit; les anciens slots sont refuses par validation stricte, sans compatibilite artificielle.
+- Le resume d'un Kit encode `Stack` avec le label court `SK`; les labels `WV` Wave existants gardent leur signification historique.
+- `project_v1_load_blank()` neutralise maintenant aussi le runtime transitoire Stack via `brick6_stack_runtime_init()` pendant le reset blank, separement du reset Wave/Braids historique.
+
+## Addendum 2026-07-25 - versions simplification analogique Stack
+
+- Les valeurs enum `PARAM_STACK_OSC*_MODEL` changent de semantique prototype: les anciens modeles analogiques simples sont remplaces par `SOFT` et `SHAPE`, sans migration.
+- `PATTERN_VERSION=33`, `PROJECT_V1_FILE_VERSION=45`, `PATCH_SD_FILE_VERSION=7` et `KIT_SD_FILE_VERSION=6` marquent cette rupture de catalogue Stack.
+- Les formats restent refuses par validation stricte de version/taille; aucun remap des anciennes valeurs `SINE/TRIANGLE/SAW/PWM/...` n'est conserve.

@@ -3,7 +3,7 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_WAVE };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_WAVE, UI_TRACK_TYPE_STACK };
     static const ui_track_type_t k_sampler_types[] = {
         UI_TRACK_TYPE_ONE_SHOT,
         UI_TRACK_TYPE_CLIP,
@@ -569,6 +569,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Multi";
         case UI_TRACK_TYPE_WAVE:
             return "Wave";
+        case UI_TRACK_TYPE_STACK:
+            return "Stack";
 
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
@@ -610,6 +612,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Mult";
         case UI_TRACK_TYPE_WAVE:
             return "Wave";
+        case UI_TRACK_TYPE_STACK:
+            return "STCK";
 
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";

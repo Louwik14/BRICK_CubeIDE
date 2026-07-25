@@ -6,6 +6,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Param/param_filter.h"
@@ -305,6 +306,173 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
     brick6_braids_runtime_set_modulation(instance_id, state->wave.modulation);
     brick6_braids_runtime_set_color(instance_id, state->wave.color);
     brick6_braids_runtime_set_phase_reset(instance_id, (state->wave.phase_reset >= 0.5f) ? 1U : 0U);
+    return 1U;
+}
+
+static uint8_t param_backend_stack_slot_for_id(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
+{
+    if ((out_slot == NULL) || (out_param == NULL))
+    {
+        return 0U;
+    }
+
+    if ((id >= PARAM_STACK_OSC1_LEVEL) && (id <= PARAM_STACK_OSC3_LEVEL))
+    {
+        *out_slot = (uint8_t)(id - PARAM_STACK_OSC1_LEVEL);
+        *out_param = 0U;
+        return 1U;
+    }
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    {
+        const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
+        return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
+uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->instance_id >= BRICK6_STACK_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    if (id == PARAM_STACK_NOISE_LEVEL)
+    {
+        const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->stack.noise_level = clamped;
+        }
+        if (update_base_state == 0U)
+        {
+            brick6_stack_runtime_set_noise_level(ctx->instance_id, clamped);
+            return 1U;
+        }
+        return brick6_stack_runtime_submit_noise_level(ctx->instance_id, clamped);
+    }
+
+    uint8_t slot = 0U;
+    uint8_t slot_param = 0U;
+    if (param_backend_stack_slot_for_id(id, &slot, &slot_param) == 0U)
+    {
+        return 0U;
+    }
+
+    switch (slot_param)
+    {
+        case 0U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.level[slot] = clamped;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_level(ctx->instance_id, slot, clamped);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_level(ctx->instance_id, slot, clamped);
+        }
+        case 1U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, (float)(BRICK6_STACK_MODEL_COUNT - 1U));
+            const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(clamped + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.model[slot] = (float)(uint8_t)model;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_model(ctx->instance_id, slot, model);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_model(ctx->instance_id, slot, model);
+        }
+        case 2U:
+        {
+            const float clamped = param_backend_clamp_value(value, -24.0f, 24.0f);
+            const int8_t semitones = (int8_t)(clamped + ((clamped >= 0.0f) ? 0.5f : -0.5f));
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.tune[slot] = (float)semitones;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_tune(ctx->instance_id, slot, semitones);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_tune(ctx->instance_id, slot, semitones);
+        }
+        case 3U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.timbre[slot] = clamped;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_timbre(ctx->instance_id, slot, clamped);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, clamped);
+        }
+        default:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.color[slot] = clamped;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_color(ctx->instance_id, slot, clamped);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, clamped);
+        }
+    }
+}
+
+uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((state == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->instance_id >= BRICK6_STACK_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+    {
+        (void)brick6_stack_runtime_submit_slot_level(ctx->instance_id, slot, state->stack.level[slot]);
+        (void)brick6_stack_runtime_submit_slot_model(ctx->instance_id,
+                                                     slot,
+                                                     (brick6_stack_model_t)(uint8_t)(param_backend_clamp_value(state->stack.model[slot],
+                                                                                                               0.0f,
+                                                                                                               (float)(BRICK6_STACK_MODEL_COUNT - 1U)) + 0.5f));
+        (void)brick6_stack_runtime_submit_slot_tune(ctx->instance_id,
+                                                    slot,
+                                                    (int8_t)(param_backend_clamp_value(state->stack.tune[slot], -24.0f, 24.0f)
+                                                             + ((state->stack.tune[slot] >= 0.0f) ? 0.5f : -0.5f)));
+        (void)brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, state->stack.timbre[slot]);
+        (void)brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, state->stack.color[slot]);
+    }
+    (void)brick6_stack_runtime_submit_noise_level(ctx->instance_id, state->stack.noise_level);
     return 1U;
 }
 

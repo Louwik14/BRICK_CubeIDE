@@ -907,3 +907,35 @@ Clarification START/END/LOOP live:
 - L'initialisation codec active les DAC gauche/droit avec leurs donnees serie respectives, route LDAC vers HPL et RDAC vers HPR, puis alimente et de-mute uniquement les sorties casque.
 - Les gains HPL/HPR sont maintenus mutes pendant le routage et la mise sous tension, puis ouverts a 0 dB apres le delai de stabilisation.
 - Aucun registre reserve de la page 1 ne fait partie de la sequence d'initialisation.
+
+## Addendum 2026-07-25 - fondation runtime Stack
+
+- `Src/Core/brick6_stack_runtime.c` porte le runtime Stack v0: trois slots, niveaux Q15, noise, note on/off/all-notes-off/reset, pending mono 24 samples par instance et trim nominal Q15 applique apres somme.
+- Le chemin Z1 rend les tracks bindees `TRACK_RUNTIME_ENGINE_STACK` via `brick6_stack_runtime_render_instance()` puis les injecte en mono-native avec `mixer_submit_external_mono_native()`, comme source externe separee de Wave.
+- Le kernel audible actuel est volontairement provisoire et local a Stack; aucune instance `MacroOscillator` Braids n'est creee par slot et le runtime Wave historique reste rendu par `brick6_braids_runtime`.
+- La file de commandes Stack est dimensionnee pour absorber un refresh/reapply complet de toutes les instances Stack (`reset + 16 params` par track) sans overflow silencieux avant drainage audio.
+
+## Addendum 2026-07-25 - catalogue et dispatch Stack
+
+- Stack expose maintenant un catalogue constant `BRICK6_STACK_MODEL_*` couvrant le socle cible, avec mapping modele -> famille -> kernel -> renderer et taille d'etat kernel indicative.
+- Chaque slot stocke le modele, la famille, le kernel et le renderer resolus; le rendu appelle un renderer par slot et par chunk 24, sans switch modele dans la boucle sample.
+- Les renderers lourds non encore implementes restent explicitement silencieux dans cette etape; le placeholder phase local conserve seulement le chemin audible minimal Stack.
+
+## Addendum 2026-07-25 - kernels analogiques Stack
+
+- Les modeles analogiques simples Stack sont regroupes en `SOFT` et `SHAPE`.
+- `SOFT` utilise `TIMBRE` comme morph `SINE -> TRIANGLE` et `COLOR` comme fold; les extremites sine/triangle et le fold nul bypassent explicitement mix/fold pour eviter les ecarts d'arrondi.
+- `SHAPE` reprend l'ancien comportement `SAW/SQUARE`: `TIMBRE` garde la forme/largeur d'impulsion et `COLOR` morphe `SAW -> SQUARE`; les extremites saw/square retournent directement la forme cible.
+- La math pure des formes analogiques Stack est factorisee dans `brick6_stack_waveform`, consommee par le runtime Stack et par la preview UI, sans instance `MacroOscillator` et sans toucher Wave/Braids.
+
+## Addendum 2026-07-25 - wavetable Stack
+
+- Le modele Stack `WAVETABLE` utilise les donnees Braids `wt_waves` via un adaptateur C++ local `brick6_stack_braids_resources`, sans copier la banque et sans instancier `MacroOscillator`.
+- `TIMBRE` scanne les 16 waves d'une banque et `COLOR` selectionne une des 16 banques derivees de `wt_waves`; `wt_map` et `wt_code` ne sont pas consommes par ce kernel Stack v1.
+- Wave/Braids garde son runtime et ses ressources historiques inchanges; l'adaptateur expose seulement l'echantillonnage table necessaire au kernel Stack.
+
+## Addendum 2026-07-25 - modeles complexes Stack
+
+- Les modeles Stack `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` ont maintenant des renderers locaux jouables, avec phases auxiliaires, feedback et lissage minimal portes par `stack_osc_slot_t`.
+- Ces modeles utilisent le dispatch Stack resolu par slot et restent sans instance complete `MacroOscillator` ou `DigitalOscillator`; Wave/Braids conserve son runtime historique separe.
+- `SUB` mixe un principal saw/square avec un sub divise, `FM` et `FEEDBACK FM` utilisent `TIMBRE` pour l'index et `COLOR` pour le ratio, `RING` emploie deux modulateurs detunes, `TRIPLE SAW/SQUARE` utilisent `TIMBRE` et `COLOR` comme detunes osc 2/3, et `SWARM` ajoute un ensemble saw filtre local.

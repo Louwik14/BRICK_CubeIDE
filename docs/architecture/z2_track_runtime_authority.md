@@ -332,3 +332,28 @@ Sorties de Z2:
 - Le catalogue low-cost n'expose que `Input1`; les valeurs historiques `Input2`, `Input3` et `Input4` restent reservees pour la compatibilite des donnees partagees mais ne sont ni selectionnables ni routables.
 - Le shim `runtime_target` et la recherche de ressource libre du clipboard appliquent la cardinalite physique de la variante; ils ne peuvent donc pas reintroduire une source input absente.
 - La variante premium conserve ses quatre familles input et tous ses mappings existants.
+
+## Addendum 2026-07-25 - identite Synth/Stack
+
+- La family `Synth` expose maintenant deux types distincts: `Wave` et `Stack`.
+- `Wave` reste l'identite historique `TRACK_RUNTIME_TYPE_WAVE`, bindee a `TRACK_RUNTIME_ENGINE_WAVE` et au runtime Braids historique `brick6_braids_runtime`; aucune semantique Wave n'est renommee, migree ou reutilisee comme alias Stack.
+- `Stack` est une nouvelle identite runtime separee: `TRACK_RUNTIME_TYPE_STACK` bindee par Z2 a `TRACK_RUNTIME_ENGINE_STACK`, avec ownership stable par track logique (`instance_id == track_id`).
+- Cette passe ajoute seulement l'identite et le binding structurel Stack. Aucun kernel, runtime audible, parametre TONE Stack, persistence Stack ou chemin de rendu Z1 Stack n'est encore branche.
+
+## Addendum 2026-07-25 - ownership runtime Stack v0
+
+- `TRACK_RUNTIME_ENGINE_STACK` possede maintenant un runtime dedie initialise et resetable, avec instances stables par track logique (`instance_id == track_id`).
+- Les chemins note du clavier, du scheduler PLAY et du panic output guard dispatchent Stack vers `brick6_stack_runtime_*`; Wave conserve son dispatch historique vers `brick6_braids_runtime_*`.
+- Les resets d'ownership Stack sont separes des resets Wave et ne reappliquent aucun parametre Wave.
+- Les commandes Stack hors IRQ passent par la file `brick6_stack_runtime_submit_*`; Z1 les draine via `brick6_stack_runtime_process_commands_from_audio()` avant le rendu Stack.
+
+## Addendum 2026-07-25 - catalogue Stack v0
+
+- Le catalogue modele Stack appartient au runtime Stack, pas a Wave; il ne renomme ni ne reutilise l'identite `TRACK_RUNTIME_TYPE_WAVE`.
+- Le changement de modele Stack passe par `brick6_stack_runtime_set_slot_model()` ou par la commande `brick6_stack_runtime_submit_slot_model()`, qui resolvent et stockent le renderer hors boucle sample.
+
+## Addendum 2026-07-25 - slots TONE Stack
+
+- `TRACK_RUNTIME_TYPE_STACK` declare sa propre table de slots TONE dans `track_runtime_tone_slots_stack[]`: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR pour chaque slot.
+- Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_wave[]`.
+- Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Wave.

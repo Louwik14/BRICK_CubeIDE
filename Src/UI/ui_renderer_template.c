@@ -12,6 +12,8 @@
 #include "ui_macro_interaction.h"
 #include "ui_param.h"
 #include "ui_widgets.h"
+#include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_stack_waveform.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -59,6 +61,7 @@
 #define UI_TEMPLATE_SAMPLER_TEXT_MAX_PX UI_TEMPLATE_CARD_LABEL_MAX_PX
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_W (UI_TEMPLATE_SAMPLER_WAVE_W - 2)
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_H (UI_TEMPLATE_SAMPLER_WAVE_H - 2)
+#define UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W (OLED_WIDTH - 2)
 
 typedef struct
 {
@@ -946,6 +949,195 @@ static uint8_t ui_renderer_template_draw_lfo_wave_shape(int x, int y, int w, int
 static uint8_t ui_renderer_template_draw_lfo_shape_widget(int x, int y, int w, int h, float value)
 {
     return ui_renderer_template_draw_lfo_wave_shape(x, y, w, h, ui_renderer_template_lfo_shape_from_value(value));
+}
+
+static uint16_t ui_renderer_template_float_to_q15(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0U;
+    }
+    if (value >= 1.0f)
+    {
+        return 32767U;
+    }
+    return (uint16_t)(value * 32767.0f + 0.5f);
+}
+
+static uint8_t ui_renderer_template_stack_slot_param(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
+{
+    if ((out_slot == 0) || (out_param == 0))
+    {
+        return 0U;
+    }
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    {
+        const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
+        return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
+    }
+    return 0U;
+}
+
+static int ui_renderer_template_stack_wave_y(int y, int h, int16_t sample)
+{
+    const int mid = y + (h / 2);
+    const int amp = (h > 4) ? ((h - 4) / 2) : 1;
+    int yy = mid - (((int)sample * amp) / 32767);
+    const int min_y = y + 1;
+    const int max_y = y + h - 2;
+    if (yy < min_y)
+    {
+        yy = min_y;
+    }
+    if (yy > max_y)
+    {
+        yy = max_y;
+    }
+    return yy;
+}
+
+typedef struct
+{
+    uint8_t valid;
+    brick6_stack_model_t model;
+    uint16_t timbre_q15;
+    uint16_t color_q15;
+    int plot_w;
+    int16_t samples[UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W];
+} ui_renderer_template_stack_wave_cache_t;
+
+static ui_renderer_template_stack_wave_cache_t g_ui_template_stack_wave_cache[BRICK6_STACK_SLOT_COUNT];
+
+static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_stack_wave_cache_t *cache,
+                                                          brick6_stack_model_t model,
+                                                          uint16_t timbre_q15,
+                                                          uint16_t color_q15,
+                                                          int plot_w)
+{
+    if ((cache == NULL) || (plot_w <= 0))
+    {
+        return;
+    }
+
+    cache->valid = 1U;
+    cache->model = model;
+    cache->timbre_q15 = timbre_q15;
+    cache->color_q15 = color_q15;
+    cache->plot_w = plot_w;
+
+    const uint32_t denom = (plot_w > 1) ? (uint32_t)(plot_w - 1) : 1UL;
+    for (int px = 0; px < plot_w; ++px)
+    {
+        const uint32_t phase = (uint32_t)(((uint64_t)px * 0xFFFFFFFFULL) / denom);
+        cache->samples[px] = (model == BRICK6_STACK_MODEL_SOFT)
+            ? brick6_stack_waveform_soft(phase, timbre_q15, color_q15)
+            : brick6_stack_waveform_shape(phase, timbre_q15, color_q15);
+    }
+}
+
+static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                               int x,
+                                                               int y,
+                                                               int w,
+                                                               int h,
+                                                               param_id_t id,
+                                                               float value)
+{
+    if ((w <= 2) || (h <= 2))
+    {
+        return 0U;
+    }
+
+    uint8_t slot = 0U;
+    uint8_t slot_param = 0U;
+    if (ui_renderer_template_stack_slot_param(id, &slot, &slot_param) == 0U)
+    {
+        return 0U;
+    }
+
+    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (slot * 4U));
+    const param_id_t timbre_param = (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 4U));
+    const param_id_t color_param = (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 4U));
+    float model_value = 0.0f;
+    float timbre_value = 0.0f;
+    float color_value = 0.0f;
+    if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, model_param, &model_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, timbre_param, &timbre_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, color_param, &color_value, 0) == 0U))
+    {
+        return 0U;
+    }
+
+    if (id == timbre_param)
+    {
+        timbre_value = value;
+    }
+    else if (id == color_param)
+    {
+        color_value = value;
+    }
+
+    const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
+    if (!(((model == BRICK6_STACK_MODEL_SOFT) && (id == timbre_param))
+            || ((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))))
+    {
+        return 0U;
+    }
+
+    const uint16_t timbre_q15 = ui_renderer_template_float_to_q15(timbre_value);
+    const uint16_t color_q15 = ui_renderer_template_float_to_q15(color_value);
+    const int plot_w = (w > 2) ? (w - 2) : w;
+    if (plot_w > UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W)
+    {
+        return 0U;
+    }
+
+    ui_renderer_template_stack_wave_cache_t *const cache = &g_ui_template_stack_wave_cache[slot];
+    if ((cache->valid == 0U)
+            || (cache->model != model)
+            || (cache->timbre_q15 != timbre_q15)
+            || (cache->color_q15 != color_q15)
+            || (cache->plot_w != plot_w))
+    {
+        ui_renderer_template_rebuild_stack_wave_cache(cache, model, timbre_q15, color_q15, plot_w);
+    }
+
+    ui_renderer_template_draw_lfo_baseline(x, y, w, h);
+
+    int prev_x = x + 1;
+    int prev_y = 0;
+    uint8_t have_prev = 0U;
+    for (int px = 0; px < plot_w; ++px)
+    {
+        const int xx = x + 1 + (int)px;
+        const int yy = ui_renderer_template_stack_wave_y(y, h, cache->samples[px]);
+        if (have_prev != 0U)
+        {
+            if (model == BRICK6_STACK_MODEL_SHAPE)
+            {
+                const int dy = yy - prev_y;
+                if ((dy > (h / 2)) || (dy < -(h / 2)))
+                {
+                    drv_display_draw_line(prev_x, prev_y, xx, prev_y);
+                    drv_display_draw_line(xx, prev_y, xx, yy);
+                }
+                else
+                {
+                    drv_display_draw_line(prev_x, prev_y, xx, yy);
+                }
+            }
+            else
+            {
+                drv_display_draw_line(prev_x, prev_y, xx, yy);
+            }
+        }
+        prev_x = xx;
+        prev_y = yy;
+        have_prev = 1U;
+    }
+    return 1U;
 }
 
 static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int h, param_id_t id, float value)
@@ -3500,6 +3692,14 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                                 UI_TEMPLATE_CARD_WIDGET_W,
                                                                 UI_TEMPLATE_CARD_WIDGET_H,
                                                                 value) != 0U)
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM)
+                ? (ui_renderer_template_draw_stack_waveform_widget(plock_frame_ctx,
+                                                                   widget_x,
+                                                                   widget_y,
+                                                                   UI_TEMPLATE_CARD_WIDGET_W,
+                                                                   UI_TEMPLATE_CARD_WIDGET_H,
+                                                                   id,
+                                                                   value) != 0U)
                 : (((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
@@ -3529,7 +3729,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                          widget_x,
                                                          widget_y,
                                                          UI_TEMPLATE_CARD_WIDGET_W,
-                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U))))))))
+                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U)))))))))
         {
             if (slot_locked != 0U)
             {

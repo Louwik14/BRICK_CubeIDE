@@ -15,6 +15,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_tone_sound_state.h"
 #include "mixer.h"
@@ -545,6 +546,7 @@ static void project_v1_reset_blank_transient_runtime(void)
     brick6_sampler_runtime_service();
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
+    brick6_stack_runtime_init();
     drum_synth_all_notes_off_all();
     mixer_reset_runtime_state();
     fx_master_macro_init(48000.0f);

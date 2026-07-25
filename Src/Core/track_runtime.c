@@ -5,6 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Core/track_state.h"
 #include "Param/param_registry_backends.h"
 #include "UI/ui_track_catalog.h"
@@ -30,6 +31,7 @@ volatile uint32_t g_track_runtime_refresh_all_count;
 volatile uint32_t g_track_runtime_refresh_in_irq_count;
 volatile uint32_t g_track_runtime_refresh_track_count[SEQ_TRACK_COUNT];
 volatile uint32_t g_track_runtime_braids_reset_count[BRICK6_BRAIDS_MAX_INSTANCES];
+volatile uint32_t g_track_runtime_stack_reset_count[BRICK6_STACK_MAX_INSTANCES];
 
 typedef struct
 {
@@ -121,6 +123,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_LOOPER;
         case UI_TRACK_TYPE_MULTI:
             return TRACK_RUNTIME_TYPE_MULTI;
+        case UI_TRACK_TYPE_STACK:
+            return TRACK_RUNTIME_TYPE_STACK;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -326,6 +330,25 @@ static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_PHASE_RESET
 };
 
+static const param_id_t g_track_runtime_tone_slots_stack[] = {
+    PARAM_STACK_OSC1_LEVEL,
+    PARAM_STACK_OSC2_LEVEL,
+    PARAM_STACK_OSC3_LEVEL,
+    PARAM_STACK_NOISE_LEVEL,
+    PARAM_STACK_OSC1_MODEL,
+    PARAM_STACK_OSC1_TUNE,
+    PARAM_STACK_OSC1_TIMBRE,
+    PARAM_STACK_OSC1_COLOR,
+    PARAM_STACK_OSC2_MODEL,
+    PARAM_STACK_OSC2_TUNE,
+    PARAM_STACK_OSC2_TIMBRE,
+    PARAM_STACK_OSC2_COLOR,
+    PARAM_STACK_OSC3_MODEL,
+    PARAM_STACK_OSC3_TUNE,
+    PARAM_STACK_OSC3_TIMBRE,
+    PARAM_STACK_OSC3_COLOR
+};
+
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_GAIN,
@@ -419,6 +442,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_WAVE:
             *out_table = g_track_runtime_tone_slots_wave;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_STACK:
+            *out_table = g_track_runtime_tone_slots_stack;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtime_tone_slots_stack[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_SAMPLER:
@@ -573,6 +601,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_LOOPER:
         case TRACK_RUNTIME_ENGINE_WAVE:
+        case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -606,6 +635,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_LOOPER:
         case TRACK_RUNTIME_ENGINE_WAVE:
+        case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -626,7 +656,8 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 
     if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK))
     {
         return 1U;
     }
@@ -789,6 +820,11 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
+    if (type == TRACK_RUNTIME_TYPE_STACK)
+    {
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_STACK, ctx->track_id);
+        return;
+    }
 
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
@@ -897,6 +933,32 @@ static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
         (void)param_backend_reapply_tone_wave_runtime(current_ctx->track_id);
     }
 }
+static void track_runtime_reset_stack_if_owner_changed(uint8_t previous_engine,
+                                                       uint8_t previous_instance,
+                                                       const track_runtime_ctx_t *current_ctx)
+{
+    const uint8_t current_is_stack = ((current_ctx != NULL)
+            && (current_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && (current_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            && (current_ctx->instance_id < BRICK6_STACK_MAX_INSTANCES)) ? 1U : 0U;
+    const uint8_t previous_is_stack = ((previous_engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            && (previous_instance < BRICK6_STACK_MAX_INSTANCES)) ? 1U : 0U;
+
+    if ((previous_is_stack != 0U)
+            && ((current_is_stack == 0U) || (current_ctx->instance_id != previous_instance)))
+    {
+        (void)brick6_stack_runtime_submit_reset_instance(previous_instance);
+        g_track_runtime_stack_reset_count[previous_instance]++;
+    }
+
+    if ((current_is_stack != 0U)
+            && ((previous_is_stack == 0U) || (previous_instance != current_ctx->instance_id)))
+    {
+        (void)brick6_stack_runtime_submit_reset_instance(current_ctx->instance_id);
+        g_track_runtime_stack_reset_count[current_ctx->instance_id]++;
+        (void)param_backend_reapply_tone_stack_runtime(current_ctx->track_id);
+    }
+}
 
 void track_runtime_init(void)
 {
@@ -963,6 +1025,8 @@ void track_runtime_refresh_all(void)
     uint8_t drum_count = 0U;
     uint8_t previous_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
     uint8_t current_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
+    uint8_t previous_stack_owner[BRICK6_STACK_MAX_INSTANCES];
+    uint8_t current_stack_owner[BRICK6_STACK_MAX_INSTANCES];
 
     g_track_runtime_refresh_all_count++;
     memset(mix_track_used, 0, sizeof(mix_track_used));
@@ -972,6 +1036,11 @@ void track_runtime_refresh_all(void)
         previous_wave_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
         current_wave_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
     }
+    for (uint8_t instance = 0U; instance < BRICK6_STACK_MAX_INSTANCES; ++instance)
+    {
+        previous_stack_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+        current_stack_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+    }
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         previous_mix_track[track] = g_track_runtime_ctx[track].mix_track_id;
@@ -980,6 +1049,12 @@ void track_runtime_refresh_all(void)
                 && (g_track_runtime_ctx[track].instance_id < BRICK6_BRAIDS_MAX_INSTANCES))
         {
             previous_wave_owner[g_track_runtime_ctx[track].instance_id] = track;
+        }
+        else if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                && (g_track_runtime_ctx[track].instance_id < BRICK6_STACK_MAX_INSTANCES))
+        {
+            previous_stack_owner[g_track_runtime_ctx[track].instance_id] = track;
         }
     }
 
@@ -1045,6 +1120,13 @@ void track_runtime_refresh_all(void)
                     current_wave_owner[ctx->instance_id] = track;
                 }
             }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            {
+                if (ctx->instance_id < BRICK6_STACK_MAX_INSTANCES)
+                {
+                    current_stack_owner[ctx->instance_id] = track;
+                }
+            }
         }
     }
 
@@ -1057,6 +1139,19 @@ void track_runtime_refresh_all(void)
             if (current_wave_owner[instance] < SEQ_TRACK_COUNT)
             {
                 (void)param_backend_reapply_tone_wave_runtime(current_wave_owner[instance]);
+            }
+        }
+    }
+
+    for (uint8_t instance = 0U; instance < BRICK6_STACK_MAX_INSTANCES; ++instance)
+    {
+        if (previous_stack_owner[instance] != current_stack_owner[instance])
+        {
+            (void)brick6_stack_runtime_submit_reset_instance(instance);
+            g_track_runtime_stack_reset_count[instance]++;
+            if (current_stack_owner[instance] < SEQ_TRACK_COUNT)
+            {
+                (void)param_backend_reapply_tone_stack_runtime(current_stack_owner[instance]);
             }
         }
     }
@@ -1145,6 +1240,7 @@ void track_runtime_refresh_track(uint8_t track)
         track_runtime_bind_ctx(&next_ctx, &allocator);
         g_track_runtime_ctx[track] = next_ctx;
         track_runtime_reset_wave_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
+        track_runtime_reset_stack_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_recompute_synth_usage();
         track_runtime_rebuild_mix_track_reverse_map();
         g_track_runtime_track_dirty[track] = 0U;
@@ -1424,6 +1520,22 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_WAVE_MODULATION:
         case PARAM_WAVE_COLOR:
         case PARAM_WAVE_PHASE_RESET:
+        case PARAM_STACK_OSC1_LEVEL:
+        case PARAM_STACK_OSC2_LEVEL:
+        case PARAM_STACK_OSC3_LEVEL:
+        case PARAM_STACK_NOISE_LEVEL:
+        case PARAM_STACK_OSC1_MODEL:
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC1_TIMBRE:
+        case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_MODEL:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC2_TIMBRE:
+        case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_MODEL:
+        case PARAM_STACK_OSC3_TUNE:
+        case PARAM_STACK_OSC3_TIMBRE:
+        case PARAM_STACK_OSC3_COLOR:
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX1_LEVEL:
         case PARAM_MASTER_FX1_A:

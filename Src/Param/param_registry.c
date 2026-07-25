@@ -27,6 +27,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
@@ -544,6 +545,34 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_PHASE_RESET:
             *out_value = state->wave.phase_reset;
             return 1U;
+        case PARAM_STACK_OSC1_LEVEL:
+        case PARAM_STACK_OSC2_LEVEL:
+        case PARAM_STACK_OSC3_LEVEL:
+            *out_value = state->stack.level[(uint8_t)(id - PARAM_STACK_OSC1_LEVEL)];
+            return 1U;
+        case PARAM_STACK_NOISE_LEVEL:
+            *out_value = state->stack.noise_level;
+            return 1U;
+        case PARAM_STACK_OSC1_MODEL:
+        case PARAM_STACK_OSC2_MODEL:
+        case PARAM_STACK_OSC3_MODEL:
+            *out_value = state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)];
+            return 1U;
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC3_TUNE:
+            *out_value = state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)];
+            return 1U;
+        case PARAM_STACK_OSC1_TIMBRE:
+        case PARAM_STACK_OSC2_TIMBRE:
+        case PARAM_STACK_OSC3_TIMBRE:
+            *out_value = state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)];
+            return 1U;
+        case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_COLOR:
+            *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)];
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -745,6 +774,35 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_WAVE_PHASE_RESET:
             state->wave.phase_reset = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_OSC1_LEVEL:
+        case PARAM_STACK_OSC2_LEVEL:
+        case PARAM_STACK_OSC3_LEVEL:
+            state->stack.level[(uint8_t)(id - PARAM_STACK_OSC1_LEVEL)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_NOISE_LEVEL:
+            state->stack.noise_level = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_OSC1_MODEL:
+        case PARAM_STACK_OSC2_MODEL:
+        case PARAM_STACK_OSC3_MODEL:
+            state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)] =
+                clamp_value(value, 0.0f, (float)(BRICK6_STACK_MODEL_COUNT - 1U));
+            return 1U;
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC3_TUNE:
+            state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)] = clamp_value(value, -24.0f, 24.0f);
+            return 1U;
+        case PARAM_STACK_OSC1_TIMBRE:
+        case PARAM_STACK_OSC2_TIMBRE:
+        case PARAM_STACK_OSC3_TIMBRE:
+            state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_COLOR:
+            state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

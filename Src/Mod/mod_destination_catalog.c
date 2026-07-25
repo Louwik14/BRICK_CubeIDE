@@ -4,6 +4,7 @@
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
@@ -133,6 +134,29 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
         case PARAM_WAVE_TIMBRE:
         case PARAM_WAVE_MODULATION:
         case PARAM_WAVE_COLOR:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t mod_destination_is_direct_stack(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_STACK_OSC1_LEVEL:
+        case PARAM_STACK_OSC2_LEVEL:
+        case PARAM_STACK_OSC3_LEVEL:
+        case PARAM_STACK_NOISE_LEVEL:
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC1_TIMBRE:
+        case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC2_TIMBRE:
+        case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_TUNE:
+        case PARAM_STACK_OSC3_TIMBRE:
+        case PARAM_STACK_OSC3_COLOR:
             return 1U;
         default:
             return 0U;
@@ -445,6 +469,82 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
     }
 }
 
+static uint8_t mod_destination_stack_slot_for_id(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
+{
+    if ((out_slot == NULL) || (out_param == NULL))
+    {
+        return 0U;
+    }
+
+    if ((id >= PARAM_STACK_OSC1_LEVEL) && (id <= PARAM_STACK_OSC3_LEVEL))
+    {
+        *out_slot = (uint8_t)(id - PARAM_STACK_OSC1_LEVEL);
+        *out_param = 0U;
+        return 1U;
+    }
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    {
+        const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
+        return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
+static uint8_t mod_destination_apply_stack_rt(uint8_t track,
+                                              param_id_t dest,
+                                              const track_runtime_ctx_t *ctx,
+                                              float value)
+{
+    (void)track;
+
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->instance_id >= BRICK6_STACK_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    if (dest == PARAM_STACK_NOISE_LEVEL)
+    {
+        brick6_stack_runtime_set_noise_level(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+        return 1U;
+    }
+
+    uint8_t slot = 0U;
+    uint8_t slot_param = 0U;
+    if (mod_destination_stack_slot_for_id(dest, &slot, &slot_param) == 0U)
+    {
+        return 0U;
+    }
+
+    switch (slot_param)
+    {
+        case 0U:
+            brick6_stack_runtime_set_slot_level(ctx->instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case 2U:
+        {
+            const float clamped = mod_destination_clampf(value, -24.0f, 24.0f);
+            brick6_stack_runtime_set_slot_tune(ctx->instance_id,
+                                               slot,
+                                               (int8_t)(clamped + ((clamped >= 0.0f) ? 0.5f : -0.5f)));
+            return 1U;
+        }
+        case 3U:
+            brick6_stack_runtime_set_slot_timbre(ctx->instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case 4U:
+            brick6_stack_runtime_set_slot_color(ctx->instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t mod_destination_apply_drum_rt(uint8_t track,
                                              param_id_t dest,
                                              const track_runtime_ctx_t *ctx,
@@ -548,6 +648,10 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     {
         return mod_destination_apply_wave_rt(track, dest, ctx, value);
     }
+    if (mod_destination_is_direct_stack(dest) != 0U)
+    {
+        return mod_destination_apply_stack_rt(track, dest, ctx, value);
+    }
     if (mod_destination_is_direct_drum(dest) != 0U)
     {
         return mod_destination_apply_drum_rt(track, dest, ctx, value);
@@ -608,7 +712,11 @@ static uint8_t mod_destination_param_matches_track_context(ui_track_family_t fam
         {
             return 0U;
         }
-        if ((dest == PARAM_WAVE_PHASE_RESET) || (dest == PARAM_MIDI_PROGRAM))
+        if ((dest == PARAM_WAVE_PHASE_RESET)
+                || (dest == PARAM_MIDI_PROGRAM)
+                || (dest == PARAM_STACK_OSC1_MODEL)
+                || (dest == PARAM_STACK_OSC2_MODEL)
+                || (dest == PARAM_STACK_OSC3_MODEL))
         {
             return 0U;
         }
@@ -926,6 +1034,19 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_SAMPLER_CLIP_PLAY_MODE: return "Mode";
         case PARAM_SAMPLER_CLIP_STRETCH_MODE: return "Strc";
         case PARAM_SAMPLER_CLIP_GRAIN: return "Gra.";
+        case PARAM_STACK_OSC1_LEVEL: return "O1Lv";
+        case PARAM_STACK_OSC2_LEVEL: return "O2Lv";
+        case PARAM_STACK_OSC3_LEVEL: return "O3Lv";
+        case PARAM_STACK_NOISE_LEVEL: return "Noiz";
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC3_TUNE: return "Tune";
+        case PARAM_STACK_OSC1_TIMBRE:
+        case PARAM_STACK_OSC2_TIMBRE:
+        case PARAM_STACK_OSC3_TIMBRE: return "Timb";
+        case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_COLOR: return "Col";
         default: return NULL;
     }
 }

@@ -62,7 +62,8 @@ typedef enum
     UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP,
     UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT,
     UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE,
-    UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE
+    UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE,
+    UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM
 } ui_template_custom_widget_kind_t;
 
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);

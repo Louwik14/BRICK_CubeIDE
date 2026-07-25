@@ -763,3 +763,18 @@ Dette explicite post-passe 4:
 - Les anciens ids `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant; aucun tombstone n'est conserve pour Matrix/ENV3.
 - Les params `PARAM_ENV3_ATTACK/DECAY/SUSTAIN/RELEASE` ecrivent la config canonique `track_sound_state.mod_env3`; en p-lock playback, `mod_env3` applique une copie runtime temporaire puis revient a la base courante sans modifier la valeur sauvegardee/affichee.
 - Les params Matrix a adressage par slot selectionne restent exclus des p-locks MOD tant qu'il n'existe pas d'IDs slot-addressed stables; cela evite de rendre une automation dependante du slot actuellement affiche.
+
+## Addendum 2026-07-25 - parametres TONE Stack
+
+- Stack possede ses propres IDs TONE: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR par slot. Ils sont stockes dans `track_tone_sound_state.stack` et ne reutilisent aucun champ Wave.
+- Les writes hors IRQ passent par `param_backend_apply_tone_stack()` puis par la file `brick6_stack_runtime_submit_*`; le controle hors IRQ n'ecrit pas directement dans l'instance runtime Stack. Les projections runtime temporaires de p-lock utilisent les setters audio directs sans mutation de la base canonique.
+- Les p-locks TONE utilisent la table `track_runtime_tone_slots_stack[]`; `MODEL` est donc p-lockable comme parametre stepped Stack.
+- Le catalogue commun de modulation expose uniquement les destinations Stack continues: niveaux, bruit, TUNE, TIMBRE et COLOR. Les params `PARAM_STACK_OSC*_MODEL` sont exclus des destinations LFO/Matrix continues.
+- Wave conserve son catalogue de params, son apply backend et ses destinations historiques sans rerouting vers Stack.
+- Le cache runtime param conserve les valeurs en `CTRL_STATE`; son masque de validite vit en `SEQ_STATE_D2` pour garder `RAM_D3` bornee quand le catalogue de params evolue.
+
+## Addendum 2026-07-25 - simplification analogique Stack
+
+- Le catalogue utilisateur Stack remplace les huit modeles analogiques simples par `SOFT` et `SHAPE`; les autres modeles Stack gardent leurs IDs relatifs courants dans le nouveau catalogue prototype.
+- `PARAM_STACK_OSC*_MODEL` est maintenant borne a `0..9`, defaut `SHAPE`; aucune compatibilite de conversion des anciennes valeurs prototype n'est conservee.
+- Les params continus `TIMBRE` et `COLOR` restent les seules surfaces modulees/p-lockables pour les morphs analogiques: `SOFT TIMBRE=MORPH`, `SOFT COLOR=FOLD`, `SHAPE TIMBRE=SHAPE`, `SHAPE COLOR=MORPH`.

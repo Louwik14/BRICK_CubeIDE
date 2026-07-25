@@ -45,6 +45,7 @@ typedef enum
     UI_TRACK_TYPE_DRUM_BD_ANALOG,
     UI_TRACK_TYPE_LOOPER,
     UI_TRACK_TYPE_MULTI,
+    UI_TRACK_TYPE_STACK,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 

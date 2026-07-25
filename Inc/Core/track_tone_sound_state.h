@@ -61,6 +61,15 @@ typedef struct
         float color;
         float phase_reset;
     } wave;
+    struct
+    {
+        float level[3];
+        float model[3];
+        float tune[3];
+        float timbre[3];
+        float color[3];
+        float noise_level;
+    } stack;
     float midi_program;
     float midi_cc[12];
     struct

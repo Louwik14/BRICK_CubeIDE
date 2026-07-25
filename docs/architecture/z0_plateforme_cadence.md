@@ -383,4 +383,13 @@ Z0 appelle principalement:
 - Le preset configure/build `Premium` est reserve a la variante `premium` et genere dans `build/Premium`.
 - Aucun preset public generique ne doit selectionner implicitement une variante; seul le preset cache commun reste factorise et non invocable directement.
 
+## Addendum 2026-07-25 - init runtime Stack
 
+- `brick6_app_init()` initialise maintenant `brick6_stack_runtime_init()` apres le runtime Wave/Braids et avant `brick6_audio_runtime_init()`.
+- Stack reste un runtime Synth separe; cet init ne modifie pas l'ordre ni la semantique de `brick6_braids_runtime_init()` pour Wave.
+
+## Addendum 2026-07-25 - temporisation boot Power low-cost
+
+- La vraie temporisation d'allumage low-cost est `POWER_BOOT_PRESS_MS` dans `Board/LowCost/Src/board_power_lowcost.c`.
+- `board_power_hold_enable_after_boot_press()` maintient `POWER_HOLD` bas tant que `POWER_BUTTON_SENSE` n'a pas ete vu haut en continu pendant 1000 ms, puis met `POWER_HOLD` haut et ne gere plus aucun chemin d'extinction runtime.
+- Aucun watchdog, auto-off firmware ou demande de shutdown n'est active dans cette zone.

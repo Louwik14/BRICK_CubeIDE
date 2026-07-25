@@ -4,6 +4,7 @@
 
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include "Param/param_registry.h"
 #include "Param/param_wave_labels.h"
 #include "Sampler/multi_sample_pool.h"
@@ -84,6 +85,18 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_stack = {
+    .family_title = "TONE",
+    .nav_labels = { "COMM", "OSC1", "OSC2", "OSC3" },
+    .subpages = {
+        { .title = "COMM", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR } } },
+        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TUNE, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR } } },
+    },
+    .default_subpage = 0U,
+};
+
 typedef param_wave_label_value_kind_t ui_wave_value_kind_t;
 typedef param_wave_param_label_t ui_wave_param_label_t;
 
@@ -149,12 +162,16 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
                                                            param_id_t id,
                                                            const char *value_label,
                                                            uiw_widget_type_t suggested_widget);
+static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget(uint8_t slot,
+                                                                                 const ui_template_subpage_t *subpage,
+                                                                                 param_id_t id);
 static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro);
 
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
     .family_resolver = ui_page_template_tone_resolve_family,
     .widget_picker = ui_page_template_tone_pick_widget,
+    .custom_widget_picker = ui_page_template_tone_pick_custom_widget,
     .param_text = ui_page_template_tone_param_text,
     .active_subpage = 0U,
     .has_visited = 0U,
@@ -727,6 +744,131 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
     return 1U;
 }
 
+static uint8_t ui_page_template_tone_stack_slot_param(param_id_t id,
+                                                      uint8_t *out_slot,
+                                                      uint8_t *out_param)
+{
+    if ((out_slot == NULL) || (out_param == NULL))
+    {
+        return 0U;
+    }
+
+    if ((id >= PARAM_STACK_OSC1_LEVEL) && (id <= PARAM_STACK_OSC3_LEVEL))
+    {
+        *out_slot = (uint8_t)(id - PARAM_STACK_OSC1_LEVEL);
+        *out_param = 0U;
+        return 1U;
+    }
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    {
+        const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
+        return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
+static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
+{
+    switch ((brick6_stack_model_t)model)
+    {
+        case BRICK6_STACK_MODEL_SOFT: return "MORPH";
+        case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
+        case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
+        case BRICK6_STACK_MODEL_SUB: return "SHAPE";
+        case BRICK6_STACK_MODEL_FM: return "INDEX";
+        case BRICK6_STACK_MODEL_FEEDBACK_FM: return "FB IDX";
+        case BRICK6_STACK_MODEL_RING: return "MOD1";
+        case BRICK6_STACK_MODEL_TRIPLE_SAW:
+        case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC2";
+        case BRICK6_STACK_MODEL_SWARM: return "SPREAD";
+        default: return "TIMBRE";
+    }
+}
+
+static const char *ui_page_template_tone_stack_color_label(uint8_t model)
+{
+    switch ((brick6_stack_model_t)model)
+    {
+        case BRICK6_STACK_MODEL_SOFT: return "FOLD";
+        case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
+        case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
+        case BRICK6_STACK_MODEL_SUB: return "SUB";
+        case BRICK6_STACK_MODEL_FM:
+        case BRICK6_STACK_MODEL_FEEDBACK_FM: return "RATIO";
+        case BRICK6_STACK_MODEL_RING: return "MOD2";
+        case BRICK6_STACK_MODEL_TRIPLE_SAW:
+        case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC3";
+        case BRICK6_STACK_MODEL_SWARM: return "COLOR";
+        default: return "COLOR";
+    }
+}
+
+static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
+                                                      char *out_name,
+                                                      uint32_t out_name_len)
+{
+    const uint8_t active_track = ui_get_active_track();
+    uint8_t stack_slot = 0U;
+    uint8_t stack_param = 0U;
+
+    if (id == PARAM_STACK_NOISE_LEVEL)
+    {
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "NOISE");
+        }
+        return 1U;
+    }
+    if (ui_page_template_tone_stack_slot_param(id, &stack_slot, &stack_param) == 0U)
+    {
+        return 0U;
+    }
+
+    const char *name = NULL;
+    switch (stack_param)
+    {
+        case 0U:
+            switch (stack_slot)
+            {
+                case 0U: name = "OSC1 LVL"; break;
+                case 1U: name = "OSC2 LVL"; break;
+                default: name = "OSC3 LVL"; break;
+            }
+            break;
+        case 1U:
+            name = "MODEL";
+            break;
+        case 2U:
+            name = "TUNE";
+            break;
+        case 3U:
+        {
+            float model_value = 0.0f;
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+            (void)param_registry_get_track_value(model_param, active_track, &model_value);
+            name = ui_page_template_tone_stack_timbre_label((uint8_t)(model_value + 0.5f));
+            break;
+        }
+        default:
+        {
+            float model_value = 0.0f;
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+            (void)param_registry_get_track_value(model_param, active_track, &model_value);
+            name = ui_page_template_tone_stack_color_label((uint8_t)(model_value + 0.5f));
+            break;
+        }
+    }
+
+    if ((out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "%s", (name != NULL) ? name : "-");
+    }
+    return 1U;
+}
+
 static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
                                                            param_id_t id,
                                                            const char *value_label,
@@ -737,6 +879,13 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     (void)slot;
     (void)value_label;
+
+    if ((id == PARAM_STACK_OSC1_MODEL)
+            || (id == PARAM_STACK_OSC2_MODEL)
+            || (id == PARAM_STACK_OSC3_MODEL))
+    {
+        return UIW_WIDGET_ENUM_TEXT;
+    }
 
     uint8_t fx_type = 0U;
     uint8_t macro = 0U;
@@ -771,6 +920,39 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         default:
             return UIW_WIDGET_KNOB;
     }
+}
+
+static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget(uint8_t slot,
+                                                                                 const ui_template_subpage_t *subpage,
+                                                                                 param_id_t id)
+{
+    (void)slot;
+    (void)subpage;
+
+    uint8_t stack_slot = 0U;
+    uint8_t stack_param = 0U;
+    if (ui_page_template_tone_stack_slot_param(id, &stack_slot, &stack_param) == 0U)
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+    float model_value = 0.0f;
+    if (param_registry_get_track_value(model_param, ui_get_active_track(), &model_value) == 0U)
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
+    if ((model == BRICK6_STACK_MODEL_SOFT) && (stack_param == 3U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
+    }
+    if ((model == BRICK6_STACK_MODEL_SHAPE) && (stack_param == 4U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
+    }
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
 static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro)
@@ -1164,6 +1346,17 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
+            && (ui_page_template_tone_stack_param_text(id, out_name, out_name_len) != 0U))
+    {
+        (void)slot;
+        (void)value;
+        (void)out_value;
+        (void)out_value_len;
+        return 1U;
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
     {
@@ -1338,6 +1531,10 @@ void ui_page_template_tone_register_families(void)
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_WAVE))
             {
                 family_template = &g_ui_template_tone_family_wave;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_STACK))
+            {
+                family_template = &g_ui_template_tone_family_stack;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_SAMPLER))
             {

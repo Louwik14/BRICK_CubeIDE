@@ -45,6 +45,7 @@ typedef enum
 {
     KIT_V1_LABEL_OFF = 0,
     KIT_V1_LABEL_WV,
+    KIT_V1_LABEL_SK,
     KIT_V1_LABEL_RM,
     KIT_V1_LABEL_ST,
     KIT_V1_LABEL_ML,
