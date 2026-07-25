@@ -192,7 +192,8 @@ static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_s
     {
         const param_id_t id = subpage->param_bank.params[i];
         if ((id >= PARAM_COUNT) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
-                || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC))
+                || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
+                || (id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_LINK))
         {
             continue;
         }

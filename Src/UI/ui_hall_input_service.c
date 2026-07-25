@@ -7,6 +7,10 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
+#if defined(BRICK6_VARIANT_LOWCOST)
+#include "Seq/seq_edit.h"
+#include "ui_core.h"
+#endif
 
 static uint8_t ui_hall_input_service_find_held_master_candidate(uint8_t hall,
                                                                 const uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT],
@@ -73,7 +77,19 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                        && (shift_down != 0U)
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
 
-    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE) && (macro_overlay_hall_context == 0U))
+    uint8_t lowcost_range_length_candidate = 0U;
+#if defined(BRICK6_VARIANT_LOWCOST)
+    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
+        && (macro_overlay_hall_context == 0U)
+        && (seq_edit_lowcost_range_length_candidate(ui_get_active_track(), hall) != 0U))
+    {
+        lowcost_range_length_candidate = 1U;
+    }
+#endif
+
+    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
+        && (macro_overlay_hall_context == 0U)
+        && (lowcost_range_length_candidate == 0U))
     {
         const ui_mute_submode_t mute_submode = ui_core_mute_get_submode();
         const uint8_t allow_shift_mode_redirect =

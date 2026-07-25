@@ -147,6 +147,15 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
+#if defined(BRICK6_VARIANT_LOWCOST)
+        if ((ev->type == UI_EVENT_HALL_PRESS)
+            && (ev->id < SEQ_STEPS_PER_PAGE)
+            && (seq_edit_lowcost_range_length_candidate(track, ev->id) != 0U))
+        {
+            seq_edit_step_press(track, ev->id);
+            return 1U;
+        }
+#endif
         return 0U;
     }
 

@@ -513,7 +513,6 @@ static uint8_t mod_destination_apply_stack_rt(uint8_t track,
         brick6_stack_runtime_set_noise_level(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
         return 1U;
     }
-
     uint8_t slot = 0U;
     uint8_t slot_param = 0U;
     if (mod_destination_stack_slot_for_id(dest, &slot, &slot_param) == 0U)
@@ -714,6 +713,8 @@ static uint8_t mod_destination_param_matches_track_context(ui_track_family_t fam
         }
         if ((dest == PARAM_WAVE_PHASE_RESET)
                 || (dest == PARAM_MIDI_PROGRAM)
+                || (dest == PARAM_STACK_OSC_DETUNE)
+                || (dest == PARAM_STACK_PHASE_RESET)
                 || (dest == PARAM_STACK_OSC1_MODEL)
                 || (dest == PARAM_STACK_OSC2_MODEL)
                 || (dest == PARAM_STACK_OSC3_MODEL))

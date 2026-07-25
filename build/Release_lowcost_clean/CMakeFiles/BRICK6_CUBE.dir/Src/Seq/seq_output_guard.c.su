@@ -1,7 +1,7 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:26:6:seq_output_guard_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:31:6:seq_output_guard_reset	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:36:6:seq_output_guard_note_on_seen	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:49:6:seq_output_guard_note_off_seen	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:62:9:seq_output_guard_is_note_active_on_track	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:72:9:seq_output_guard_is_note_active_on_channel	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:96:6:seq_output_guard_panic	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:28:6:seq_output_guard_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:33:6:seq_output_guard_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:38:6:seq_output_guard_note_on_seen	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:51:6:seq_output_guard_note_off_seen	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:64:9:seq_output_guard_is_note_active_on_track	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:74:9:seq_output_guard_is_note_active_on_channel	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c:98:6:seq_output_guard_panic	96	static

@@ -16,6 +16,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:317:9:patch_sd_bank_store_slot	720	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:403:9:patch_sd_bank_delete_slot	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:471:9:patch_sd_bank_load_slot	720	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:447:9:patch_sd_bank_rename_slot	2728	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:447:9:patch_sd_bank_rename_slot	3032	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:548:23:patch_sd_bank_get_last_error	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:553:13:patch_sd_bank_error_to_string	0	static

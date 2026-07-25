@@ -36,6 +36,7 @@
                   (_apply))
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
+static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_route_labels[] = {"None", "Master", NULL};
 #define PARAM_MIX_ROUTE_MAX 1.0f
@@ -70,6 +71,7 @@ static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 #endif
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
+static const char *const g_cfg_group_link_labels[] = {"OFF", "ON", NULL};
 static const char *const g_cfg_start_labels[] = {"DEFAULT", "TRIG", "ROLL 1/4", "ROLL 1/2", "ROLL 1", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
 static const char *const g_cfg_rec_len_labels[] = {"Overdub", "Pattern", NULL};
@@ -195,6 +197,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
+    PARAM_DESC_EX(PARAM_CFG_GROUP_SPREAD, "SPREAD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_CFG_GROUP_LINK, "LINK", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_cfg_group_link_labels, NULL),
     PARAM_DESC_EX(PARAM_CFG_START, "START", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_start_labels, apply_cfg_start),
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
@@ -368,6 +372,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_STACK_OSC3_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_COLOR, "Color", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_STACK_OSC_DETUNE, "OSC DETUNE", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_STACK_PHASE_RESET, "RESET", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_stack_reset_labels, NULL),
 
     PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),

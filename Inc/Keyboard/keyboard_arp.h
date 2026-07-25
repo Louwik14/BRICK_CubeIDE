@@ -28,12 +28,15 @@ uint8_t keyboard_arp_seq_step_render_for_track(uint8_t track,
                                                const uint8_t *velocities,
                                                uint8_t count,
                                                uint32_t samples_per_step_q16,
+                                               uint32_t duration_samples,
                                                keyboard_arp_scheduled_note_t *out_notes,
-                                               uint8_t max_out_notes);
+                                               uint8_t max_out_notes,
+                                               uint64_t *out_next_offset_q16);
 void keyboard_arp_clear_seq_step_source(void);
 void keyboard_arp_all_notes_off_track(uint8_t track);
 void keyboard_arp_all_notes_off(void);
 uint8_t keyboard_arp_has_hold_activity(void);
+uint8_t keyboard_arp_get_revision_for_track(uint8_t track);
 
 void keyboard_arp_set_hold(bool enabled);
 void keyboard_arp_set_rate(uint8_t value);

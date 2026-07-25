@@ -760,6 +760,7 @@ Dette explicite post-passe 4:
 
 - La surface MOD expose `MATRIX`, `LFO 1`, `LFO 2`, `LFO TIME`; les champs `DEST/DEPTH` ne sont plus edites dans les pages LFO et passent uniquement par `mod_matrix`.
 - Les params `PARAM_MOD_MATRIX_SLOT/SOURCE/DEST/DEPTH` sont des params track-aware MOD qui adressent le slot selectionne par track. `SLOT` est un selecteur d'edition, pas un slot de modulation actif.
+- Pour LINK de voice group, `PARAM_MOD_MATRIX_DEPTH` est la seule valeur Matrix compatible; la propagation conserve explicitement l'index de slot source. `SLOT`, `SOURCE` et `DEST` restent des selecteurs/structure et ne sont pas propages.
 - Les anciens ids `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant; aucun tombstone n'est conserve pour Matrix/ENV3.
 - Les params `PARAM_ENV3_ATTACK/DECAY/SUSTAIN/RELEASE` ecrivent la config canonique `track_sound_state.mod_env3`; en p-lock playback, `mod_env3` applique une copie runtime temporaire puis revient a la base courante sans modifier la valeur sauvegardee/affichee.
 - Les params Matrix a adressage par slot selectionne restent exclus des p-locks MOD tant qu'il n'existe pas d'IDs slot-addressed stables; cela evite de rendre une automation dependante du slot actuellement affiche.
@@ -778,3 +779,17 @@ Dette explicite post-passe 4:
 - Le catalogue utilisateur Stack remplace les huit modeles analogiques simples par `SOFT` et `SHAPE`; les autres modeles Stack gardent leurs IDs relatifs courants dans le nouveau catalogue prototype.
 - `PARAM_STACK_OSC*_MODEL` est maintenant borne a `0..9`, defaut `SHAPE`; aucune compatibilite de conversion des anciennes valeurs prototype n'est conservee.
 - Les params continus `TIMBRE` et `COLOR` restent les seules surfaces modulees/p-lockables pour les morphs analogiques: `SOFT TIMBRE=MORPH`, `SOFT COLOR=FOLD`, `SHAPE TIMBRE=SHAPE`, `SHAPE COLOR=MORPH`.
+
+## Addendum 2026-07-25 - params page VOICE Stack
+
+- Stack conserve deux params TONE globaux pour la page `VOICE`: `PARAM_STACK_OSC_DETUNE` et `PARAM_STACK_PHASE_RESET`.
+- `PARAM_STACK_OSC_DETUNE` est stocke dans `track_tone_sound_state.stack.osc_detune`, p-lockable via le set TONE, mais exclu des destinations continues Matrix/LFO car ses offsets sont regeneres uniquement au note-on et restent fixes pendant la note.
+- `PARAM_STACK_PHASE_RESET` stocke `FREE`/`RESET`, reste exclu des destinations continues et conserve `FREE` par defaut.
+
+## Addendum 2026-07-25 - TRACK CFG group SPREAD/LINK
+
+- `PARAM_CFG_GROUP_SPREAD` et `PARAM_CFG_GROUP_LINK` sont des commandes CFG speciales resolues par `param_registry` vers la master effective du voice group; elles ne passent pas par les domaines TONE/COLORS/MIX/PLAY.
+- SPREAD reutilise `PARAM_MIX_PAN` comme point d'application: pour `n=2..8`, la position du membre `i` est `spread * (((i / (n - 1)) * 2) - 1)`, donc centree autour de zero, avec `i=0` master puis slaves dans l'ordre logique.
+- LINK est intercepte en un seul point UI, apres l'edition manuelle de base et avant toute propagation secondaire: le delta propage est `valeur_apres_source - valeur_avant_source`, donc le delta reellement accepte apres clamp.
+- LINK inclut les edits manuels de base sur `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, et sur domaines compatibles `TONE`, `COLORS`, `MIX` et `MOD` pour params continus/int non enum/bool. Il exclut strictement `PLAY`, p-locks, live-rec p-locks, scheduler, modulation, automation, commandes, navigation, SPREAD et LINK.
+- La recursion est bloquee par un garde local de propagation; une ecriture propagee ne redevient jamais source LINK.

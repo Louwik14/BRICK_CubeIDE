@@ -23,6 +23,10 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
 uint8_t seq_edit_collect_pressed_steps(seq_track_id_t *out_track,
                                        seq_step_id_t *out_steps,
                                        uint8_t max_steps);
+uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
+                                                   seq_step_id_t step);
+uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
+                                                uint8_t hall_index);
 
 uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_step_id_t step,
@@ -70,4 +74,3 @@ void seq_edit_clear_steps(seq_track_id_t track,
                           uint8_t step_count);
 
 #endif /* SEQ_EDIT_H */
-

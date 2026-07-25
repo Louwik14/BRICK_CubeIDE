@@ -55,6 +55,30 @@ static const ui_template_family_t g_ui_template_cfg_slave_proxy_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_cfg_group_master_family = {
+    .family_title = "CFG",
+    .nav_labels = { "MAIN", "GROUP", "-", "-" },
+    .subpages = {
+        {
+            .title = "TRACK",
+            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
+        },
+        {
+            .title = "GROUP",
+            .param_bank = { .params = { PARAM_CFG_GROUP_SPREAD, PARAM_CFG_GROUP_LINK, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_rec_cfg_family = {
     .family_title = "REC CFG",
     .nav_labels = { "MAIN", "LEN", "-", "-" },
@@ -164,14 +188,26 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
+    const uint8_t active_track = ui_get_active_track();
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(ui_get_active_track(), &role_u8);
+    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
     if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
     {
         return &g_ui_template_cfg_slave_proxy_family;
     }
 
-    if (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF)
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        uint8_t member_count = 0U;
+        if ((track_runtime_collect_voice_group_members(active_track, NULL, 0U, &member_count) != 0U)
+                && (member_count > 1U)
+                && (member_count <= 8U))
+        {
+            return &g_ui_template_cfg_group_master_family;
+        }
+    }
+
+    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;
     }

@@ -79,7 +79,9 @@ typedef struct
 {
     uint8_t family;
     uint8_t type;
-    uint8_t reserved[2];
+    uint8_t voice_group_role;
+    uint8_t voice_group_link;
+    float voice_group_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     kit_v1_asset_ref_t asset;

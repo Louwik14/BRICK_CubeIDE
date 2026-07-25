@@ -359,6 +359,34 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         }
         return brick6_stack_runtime_submit_noise_level(ctx->instance_id, clamped);
     }
+    if (id == PARAM_STACK_OSC_DETUNE)
+    {
+        const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->stack.osc_detune = clamped;
+        }
+        if (update_base_state == 0U)
+        {
+            brick6_stack_runtime_set_osc_detune(ctx->instance_id, clamped);
+            return 1U;
+        }
+        return brick6_stack_runtime_submit_osc_detune(ctx->instance_id, clamped);
+    }
+    if (id == PARAM_STACK_PHASE_RESET)
+    {
+        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->stack.phase_reset = (float)enabled;
+        }
+        if (update_base_state == 0U)
+        {
+            brick6_stack_runtime_set_phase_reset(ctx->instance_id, enabled);
+            return 1U;
+        }
+        return brick6_stack_runtime_submit_phase_reset(ctx->instance_id, enabled);
+    }
 
     uint8_t slot = 0U;
     uint8_t slot_param = 0U;
@@ -473,6 +501,8 @@ uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
         (void)brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, state->stack.color[slot]);
     }
     (void)brick6_stack_runtime_submit_noise_level(ctx->instance_id, state->stack.noise_level);
+    (void)brick6_stack_runtime_submit_osc_detune(ctx->instance_id, state->stack.osc_detune);
+    (void)brick6_stack_runtime_submit_phase_reset(ctx->instance_id, (state->stack.phase_reset >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 

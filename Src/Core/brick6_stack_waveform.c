@@ -13,6 +13,35 @@ static int16_t brick6_stack_waveform_sat16(int32_t value)
     return (int16_t)value;
 }
 
+static const int16_t k_stack_sine_quarter_q15[65] = {
+       0,    804,   1608,   2410,
+    3212,   4011,   4808,   5602,
+    6393,   7179,   7962,   8739,
+    9512,  10278,  11039,  11793,
+   12539,  13279,  14010,  14732,
+   15446,  16151,  16846,  17530,
+   18204,  18868,  19519,  20159,
+   20787,  21403,  22005,  22594,
+   23170,  23731,  24279,  24811,
+   25329,  25832,  26319,  26790,
+   27245,  27683,  28105,  28510,
+   28898,  29268,  29621,  29956,
+   30273,  30571,  30852,  31113,
+   31356,  31580,  31785,  31971,
+   32137,  32285,  32412,  32521,
+   32609,  32678,  32728,  32757,
+   32767
+};
+
+static int16_t brick6_stack_waveform_sine_quarter(uint32_t phase)
+{
+    const uint32_t index = phase >> 24;
+    const int32_t a = k_stack_sine_quarter_q15[index];
+    const int32_t b = k_stack_sine_quarter_q15[index + 1U];
+    const int32_t fraction = (int32_t)(phase & 0x00FFFFFFUL);
+    return (int16_t)(a + (((b - a) * fraction + 0x00800000L) >> 24));
+}
+
 static int16_t brick6_stack_waveform_mix_q15(int16_t a, int16_t b, uint16_t balance_q15)
 {
     if (balance_q15 == 0U)
@@ -42,9 +71,22 @@ int16_t brick6_stack_waveform_triangle(uint32_t phase)
 
 int16_t brick6_stack_waveform_sine(uint32_t phase)
 {
-    const int32_t tri = brick6_stack_waveform_triangle(phase);
-    const int32_t x = (tri < 0) ? -tri : tri;
-    return brick6_stack_waveform_sat16((tri * (49152 - x)) >> 14);
+    const uint32_t shifted = phase - 0x40000000UL;
+    const uint32_t quadrant = shifted >> 30;
+    const uint32_t quarter_phase = shifted & 0x3FFFFFFFUL;
+    const uint32_t mirrored = 0x3FFFFFFFUL - quarter_phase;
+
+    switch (quadrant)
+    {
+    case 0U:
+        return brick6_stack_waveform_sine_quarter(quarter_phase);
+    case 1U:
+        return brick6_stack_waveform_sine_quarter(mirrored);
+    case 2U:
+        return (int16_t)-brick6_stack_waveform_sine_quarter(quarter_phase);
+    default:
+        return (int16_t)-brick6_stack_waveform_sine_quarter(mirrored);
+    }
 }
 
 int16_t brick6_stack_waveform_pwm(uint32_t phase, uint16_t width_q15)

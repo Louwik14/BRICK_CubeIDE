@@ -939,3 +939,16 @@ Clarification START/END/LOOP live:
 - Les modeles Stack `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` ont maintenant des renderers locaux jouables, avec phases auxiliaires, feedback et lissage minimal portes par `stack_osc_slot_t`.
 - Ces modeles utilisent le dispatch Stack resolu par slot et restent sans instance complete `MacroOscillator` ou `DigitalOscillator`; Wave/Braids conserve son runtime historique separe.
 - `SUB` mixe un principal saw/square avec un sub divise, `FM` et `FEEDBACK FM` utilisent `TIMBRE` pour l'index et `COLOR` pour le ratio, `RING` emploie deux modulateurs detunes, `TRIPLE SAW/SQUARE` utilisent `TIMBRE` et `COLOR` comme detunes osc 2/3, et `SWARM` ajoute un ensemble saw filtre local.
+
+## Addendum 2026-07-25 - VOICE Stack osc detune/reset
+
+- Le systeme d'unison interne Stack ajoute par erreur est retire: pas de compteur `VOICE`, pas de duplication de renderer par voix, pas de `SPREAD`/`DRIFT` Stack, pas de normalisation `1/N` et retour a l'injection mono-native.
+- `OSC DETUNE` agit uniquement sur les trois slots Stack existants. En `RESET=RESET`, trois offsets pseudo-aleatoires deterministes sont generes au note-on hors boucle sample, recentres autour de zero, puis appliques au `phase_inc` des slots tant que la note dure; en `RESET=FREE`, les offsets courants sont conserves.
+- `RESET` ne gere plus que la phase des trois slots: `FREE` garde les phases libres; `RESET` fixe au note-on des phases deterministes par slot (`phase=slot*0x55555555`, `phase2=0x55555555+slot*0x11111111`, `phase3=0xAAAAAAAA-slot*0x11111111`).
+
+## Addendum 2026-07-25 - declick retrigger Stack FREE
+
+- Stack ne pre-rend plus de surplus au-dela des frames demandees par le segment audio courant: le cache 24 samples reste local au chunk en cours et ne laisse plus l'etat phase/feedback/swarm avance en avance sur les samples deja sortis.
+- En `RESET=FREE`, le note-on Stack conserve les phases principales, phases auxiliaires, feedback, filtre swarm et offsets `OSC DETUNE`; aucun de ces etats n'est regenere ou nettoye au retrigger.
+- En `RESET=RESET`, le note-on conserve le comportement volontaire de redemarrage: phases par slot remises aux valeurs deterministes, feedback/swarm clear et offsets `OSC DETUNE` regeneres.
+- Le changement de `MODEL` Stack est idempotent sur meme modele, afin qu'un reapply/p-lock identique ne reset pas phase/etats de kernel inutilement.

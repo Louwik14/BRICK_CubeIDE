@@ -4,6 +4,8 @@
 #include "ui_edit_context_sync.h"
 #include "ui_param.h"
 #include "param_store.h"
+#include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 
@@ -11,6 +13,8 @@
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
 #define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
+#define UI_CFG_GROUP_SPREAD_PARAM ((param_id_t)PARAM_CFG_GROUP_SPREAD)
+#define UI_CFG_GROUP_LINK_PARAM ((param_id_t)PARAM_CFG_GROUP_LINK)
 #define UI_CFG_START_PARAM ((param_id_t)PARAM_CFG_START)
 #define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
 #define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
@@ -41,6 +45,15 @@ void ui_active_track_sync_mirror(void)
                            (float)ui_get_track_type_index_for_family(active_config.family, active_config.type));
     param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)ui_get_track_midi_channel(active_track));
     param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)ui_get_track_midi_source(active_track));
+    {
+        uint8_t master_track = active_track;
+        if (track_runtime_get_voice_group_effective_master(active_track, &master_track) == 0U)
+        {
+            master_track = active_track;
+        }
+        param_store_set_active(UI_CFG_GROUP_SPREAD_PARAM, track_state_get_voice_group_spread(master_track));
+        param_store_set_active(UI_CFG_GROUP_LINK_PARAM, (float)track_state_get_voice_group_link(master_track));
+    }
     param_store_set_active(UI_CFG_START_PARAM, (float)seq_runtime_get_rec_start_mode());
     param_store_set_active(UI_CFG_TEMPO_PARAM, (float)seq_runtime_get_tempo_bpm_milli() / 1000.0f);
     param_store_set_active(UI_CFG_SYNC_PARAM, ui_active_track_sync_clock_source_to_ui_value());

@@ -346,7 +346,9 @@ static const param_id_t g_track_runtime_tone_slots_stack[] = {
     PARAM_STACK_OSC3_MODEL,
     PARAM_STACK_OSC3_TUNE,
     PARAM_STACK_OSC3_TIMBRE,
-    PARAM_STACK_OSC3_COLOR
+    PARAM_STACK_OSC3_COLOR,
+    PARAM_STACK_OSC_DETUNE,
+    PARAM_STACK_PHASE_RESET
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -554,7 +556,8 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
         return mask;
     }
 
-    if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
+    if (((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
+            && (track_state_get_voice_group_role(ctx->track_id) != TRACK_VOICE_GROUP_ROLE_SLAVE))
     {
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_PLAY);
     }
@@ -1536,6 +1539,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_STACK_OSC3_TIMBRE:
         case PARAM_STACK_OSC3_COLOR:
+        case PARAM_STACK_OSC_DETUNE:
+        case PARAM_STACK_PHASE_RESET:
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX1_LEVEL:
         case PARAM_MASTER_FX1_A:

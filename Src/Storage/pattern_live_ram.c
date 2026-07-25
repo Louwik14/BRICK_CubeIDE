@@ -159,7 +159,13 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         }
     }
 
-    return (track_state_apply_voice_group_roles_bulk(role_sanitized) != false) ? 1U : 0U;
+    if (track_state_apply_voice_group_roles_bulk(role_sanitized) == false)
+    {
+        return 0U;
+    }
+
+    return (track_state_apply_voice_group_config_bulk(track_cfg->voice_group_spread,
+                                                      track_cfg->voice_group_link) != false) ? 1U : 0U;
 }
 
 static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
@@ -210,7 +216,8 @@ static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
 static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 {
     if ((id == PARAM_MASTER_GAIN) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
-        || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC))
+        || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
+        || (id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_LINK))
     {
         return 0U;
     }
@@ -463,6 +470,8 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
         out_pattern->track_cfg.voice_group_role[track] = (uint8_t)track_state_get_voice_group_role(track);
+        out_pattern->track_cfg.voice_group_spread[track] = track_state_get_voice_group_spread(track);
+        out_pattern->track_cfg.voice_group_link[track] = track_state_get_voice_group_link(track);
         for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
         {
             out_pattern->track_cfg.looper_route_enabled[track][source_track] =
@@ -682,6 +691,16 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     }
 
     param_registry_batch_end();
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER)
+        {
+            (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
+                                                   track,
+                                                   track_state_get_voice_group_spread(track));
+        }
+    }
 
     return 1U;
 }

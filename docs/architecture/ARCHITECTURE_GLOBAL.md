@@ -223,3 +223,9 @@ Documents conserves pour tracabilite uniquement:
 - Z6 etend le seam Pattern/Kit: un Pattern porte une reference de slot Kit, tandis que la banque Kit `B6KT` reste l'autorite durable du contenu sonore complet.
 - Z5 expose ce lien dans le header principal (`Kit: nom`, dirty `*`, Pattern dessous) et le browser Kit lie le slot applique au pattern actif.
 - Set reste retire; Kit reste full-machine sonore, Patch reste separe.
+
+## Addendum 2026-07-25 - TRACK CFG voice group
+
+- Z2 porte les attributs de groupe master/slaves `SPREAD` et `LINK` dans `track_state`; Z5 les expose uniquement en `CFG 2/2` sur une master avec slaves.
+- Z3 applique SPREAD via le pan MIX existant et intercepte LINK au point unique d'edition manuelle UI; `PLAY`, p-locks et scheduler restent exclus.
+- Z6 persiste ces attributs dans Pattern/Project et les payloads Patch Poly/Kit selon leurs autorites respectives.

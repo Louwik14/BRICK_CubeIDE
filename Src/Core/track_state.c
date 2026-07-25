@@ -8,6 +8,8 @@ static ui_track_config_t g_track_configs[UI_TRACK_COUNT];
 static uint8_t g_track_midi_channel[UI_TRACK_COUNT];
 static ui_track_midi_source_t g_track_midi_source[UI_TRACK_COUNT];
 static track_voice_group_role_t g_track_voice_group_role[UI_TRACK_COUNT];
+static float g_track_voice_group_spread[UI_TRACK_COUNT];
+static uint8_t g_track_voice_group_link[UI_TRACK_COUNT];
 static uint32_t g_track_revision[UI_TRACK_COUNT];
 static uint32_t g_track_state_global_revision = 0U;
 
@@ -142,6 +144,8 @@ void track_state_init(void)
         g_track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
         g_track_midi_source[track] = UI_TRACK_MIDI_SRC_ALL;
         g_track_voice_group_role[track] = TRACK_VOICE_GROUP_ROLE_SOLO;
+        g_track_voice_group_spread[track] = 0.0f;
+        g_track_voice_group_link[track] = 0U;
         g_track_revision[track] = 0U;
     }
 
@@ -216,6 +220,34 @@ track_voice_group_role_t track_state_get_voice_group_role(uint8_t track)
     return role;
 }
 
+float track_state_get_voice_group_spread(uint8_t master_track)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return 0.0f;
+    }
+
+    const float spread = g_track_voice_group_spread[master_track];
+    if (spread < 0.0f)
+    {
+        return 0.0f;
+    }
+    if (spread > 1.0f)
+    {
+        return 1.0f;
+    }
+    return spread;
+}
+
+uint8_t track_state_get_voice_group_link(uint8_t master_track)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+    return (g_track_voice_group_link[master_track] != 0U) ? 1U : 0U;
+}
+
 bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t role)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT))
@@ -239,6 +271,45 @@ bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t ro
 
     g_track_voice_group_role[track] = role;
     track_state_bump_revision(track);
+    return true;
+}
+
+bool track_state_set_voice_group_spread(uint8_t master_track, float spread)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+    if (spread < 0.0f)
+    {
+        spread = 0.0f;
+    }
+    if (spread > 1.0f)
+    {
+        spread = 1.0f;
+    }
+    if (g_track_voice_group_spread[master_track] == spread)
+    {
+        return true;
+    }
+    g_track_voice_group_spread[master_track] = spread;
+    track_state_bump_revision(master_track);
+    return true;
+}
+
+bool track_state_set_voice_group_link(uint8_t master_track, uint8_t link)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+    link = (link != 0U) ? 1U : 0U;
+    if (g_track_voice_group_link[master_track] == link)
+    {
+        return true;
+    }
+    g_track_voice_group_link[master_track] = link;
+    track_state_bump_revision(master_track);
     return true;
 }
 
@@ -512,6 +583,39 @@ bool track_state_apply_voice_group_roles_bulk(const uint8_t role[UI_TRACK_COUNT]
         if (g_track_voice_group_role[track] != next_roles[track])
         {
             g_track_voice_group_role[track] = next_roles[track];
+            track_state_bump_revision(track);
+        }
+    }
+
+    return true;
+}
+
+bool track_state_apply_voice_group_config_bulk(const float spread[UI_TRACK_COUNT],
+                                               const uint8_t link[UI_TRACK_COUNT])
+{
+    if ((spread == NULL) || (link == NULL))
+    {
+        return false;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        float next_spread = spread[track];
+        if (next_spread < 0.0f)
+        {
+            next_spread = 0.0f;
+        }
+        if (next_spread > 1.0f)
+        {
+            next_spread = 1.0f;
+        }
+        const uint8_t next_link = (link[track] != 0U) ? 1U : 0U;
+
+        if ((g_track_voice_group_spread[track] != next_spread)
+                || (g_track_voice_group_link[track] != next_link))
+        {
+            g_track_voice_group_spread[track] = next_spread;
+            g_track_voice_group_link[track] = next_link;
             track_state_bump_revision(track);
         }
     }

@@ -111,6 +111,89 @@ static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float c
     return 0U;
 }
 
+static uint8_t param_registry_collect_active_group(uint8_t track,
+                                                   uint8_t members[8U],
+                                                   uint8_t *out_count,
+                                                   uint8_t *out_master)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (members == NULL) || (out_count == NULL) || (out_master == NULL))
+    {
+        return 0U;
+    }
+
+    uint8_t master = track;
+    if (track_runtime_get_voice_group_effective_master(track, &master) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    if (track_runtime_collect_voice_group_members(master, members, 8U, &count) == 0U)
+    {
+        return 0U;
+    }
+    if ((count < 2U) || (count > 8U))
+    {
+        return 0U;
+    }
+
+    *out_count = count;
+    *out_master = master;
+    return 1U;
+}
+
+static uint8_t param_registry_apply_voice_group_spread(uint8_t master_track, float spread)
+{
+    uint8_t members[8U] = { 0U };
+    uint8_t member_count = 0U;
+    uint8_t master = master_track;
+    if (param_registry_collect_active_group(master_track, members, &member_count, &master) == 0U)
+    {
+        return 1U;
+    }
+
+    if (member_count <= 1U)
+    {
+        return 1U;
+    }
+
+    const float denom = (float)(member_count - 1U);
+    for (uint8_t i = 0U; i < member_count; ++i)
+    {
+        const float normalized = ((denom > 0.0f) ? (((float)i / denom) * 2.0f) : 0.0f) - 1.0f;
+        (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], normalized * spread);
+    }
+
+    return 1U;
+}
+
+static uint8_t param_apply_cfg_group_value(param_id_t id, uint8_t track, float clamped)
+{
+    uint8_t members[8U] = { 0U };
+    uint8_t member_count = 0U;
+    uint8_t master = track;
+    if (param_registry_collect_active_group(track, members, &member_count, &master) == 0U)
+    {
+        return 0U;
+    }
+
+    if (id == PARAM_CFG_GROUP_SPREAD)
+    {
+        if (track_state_set_voice_group_spread(master, clamped) == false)
+        {
+            return 0U;
+        }
+        return param_registry_apply_voice_group_spread(master, track_state_get_voice_group_spread(master));
+    }
+
+    if (id == PARAM_CFG_GROUP_LINK)
+    {
+        return (track_state_set_voice_group_link(master, (clamped >= 0.5f) ? 1U : 0U) != false) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
 static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -573,6 +656,12 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC3_COLOR:
             *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)];
             return 1U;
+        case PARAM_STACK_OSC_DETUNE:
+            *out_value = state->stack.osc_detune;
+            return 1U;
+        case PARAM_STACK_PHASE_RESET:
+            *out_value = state->stack.phase_reset;
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -803,6 +892,12 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR:
             state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_OSC_DETUNE:
+            state->stack.osc_detune = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_PHASE_RESET:
+            state->stack.phase_reset = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;
@@ -1119,6 +1214,20 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 *out_value = (float)track_state_get_midi_source(track);
                 return 1U;
 
+            case PARAM_CFG_GROUP_SPREAD:
+            case PARAM_CFG_GROUP_LINK:
+            {
+                uint8_t master = track;
+                if (track_runtime_get_voice_group_effective_master(track, &master) == 0U)
+                {
+                    return 0U;
+                }
+                *out_value = (id == PARAM_CFG_GROUP_SPREAD)
+                    ? track_state_get_voice_group_spread(master)
+                    : (float)track_state_get_voice_group_link(master);
+                return 1U;
+            }
+
             default:
                 break;
         }
@@ -1302,6 +1411,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             kit_v1_mark_dirty();
         }
         return ok;
+    }
+
+    if ((id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_LINK))
+    {
+        return param_apply_cfg_group_value(id, track, clamped);
     }
 
     {

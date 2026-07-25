@@ -69,6 +69,8 @@ typedef struct
         float timbre[3];
         float color[3];
         float noise_level;
+        float osc_detune;
+        float phase_reset;
     } stack;
     float midi_program;
     float midi_cc[12];

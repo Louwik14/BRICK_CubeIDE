@@ -163,6 +163,7 @@ This separation is intentional. Do not add a second authority for the same state
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG`; premium keeps the missing/invalid Hall calibration page priority, while low-cost temporarily bypasses only its automatic opening and keeps uncalibrated Hall inputs disabled
+- voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` and `LINK`; slaves and standalone tracks keep the historical CFG page only, and `PLAY` remains independent per member
 
 ### Parameter system
 - UI-side parameter control

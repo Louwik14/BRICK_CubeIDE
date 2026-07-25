@@ -982,18 +982,18 @@ static uint8_t ui_renderer_template_stack_slot_param(param_id_t id, uint8_t *out
 
 static int ui_renderer_template_stack_wave_y(int y, int h, int16_t sample)
 {
-    const int mid = y + (h / 2);
-    const int amp = (h > 4) ? ((h - 4) / 2) : 1;
-    int yy = mid - (((int)sample * amp) / 32767);
-    const int min_y = y + 1;
-    const int max_y = y + h - 2;
-    if (yy < min_y)
+    const int top = y + 1;
+    const int bottom = y + h - 2;
+    const int span = bottom - top;
+    const uint32_t normalized = (uint32_t)((int32_t)sample + 32768);
+    int yy = bottom - (int)(((uint64_t)normalized * (uint64_t)span + 32767ULL) / 65535ULL);
+    if (yy < top)
     {
-        yy = min_y;
+        yy = top;
     }
-    if (yy > max_y)
+    if (yy > bottom)
     {
-        yy = max_y;
+        yy = bottom;
     }
     return yy;
 }
@@ -1027,10 +1027,10 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
     cache->color_q15 = color_q15;
     cache->plot_w = plot_w;
 
-    const uint32_t denom = (plot_w > 1) ? (uint32_t)(plot_w - 1) : 1UL;
+    const uint64_t denom = (uint64_t)plot_w * 2ULL;
     for (int px = 0; px < plot_w; ++px)
     {
-        const uint32_t phase = (uint32_t)(((uint64_t)px * 0xFFFFFFFFULL) / denom);
+        const uint32_t phase = (uint32_t)(((uint64_t)((px * 2) + 1) * 0xFFFFFFFFULL) / denom);
         cache->samples[px] = (model == BRICK6_STACK_MODEL_SOFT)
             ? brick6_stack_waveform_soft(phase, timbre_q15, color_q15)
             : brick6_stack_waveform_shape(phase, timbre_q15, color_q15);

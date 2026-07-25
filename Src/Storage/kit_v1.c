@@ -5,6 +5,7 @@
 
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Param/param_registry.h"
 #include "Sampler/multi_sample_pool.h"
@@ -341,6 +342,16 @@ static kit_v1_result_t kit_v1_restore_loaded_kit_state(const KitSaveV1 *kit)
         }
     }
 
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER)
+        {
+            (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
+                                                   track,
+                                                   track_state_get_voice_group_spread(track));
+        }
+    }
+
     return KIT_V1_RESULT_OK;
 }
 
@@ -400,6 +411,9 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
     uint8_t type[UI_TRACK_COUNT];
     uint8_t midi_channel[UI_TRACK_COUNT];
     uint8_t midi_source[UI_TRACK_COUNT];
+    uint8_t role[UI_TRACK_COUNT];
+    float group_spread[UI_TRACK_COUNT];
+    uint8_t group_link[UI_TRACK_COUNT];
 
     if (kit == 0)
     {
@@ -412,9 +426,20 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
         type[track] = kit->tracks[track].type;
         midi_channel[track] = ui_get_track_midi_channel(track);
         midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+        role[track] = kit->tracks[track].voice_group_role;
+        group_spread[track] = kit->tracks[track].voice_group_spread;
+        group_link[track] = kit->tracks[track].voice_group_link;
     }
 
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
+    {
+        return 0U;
+    }
+    if (track_state_apply_voice_group_roles_bulk(role) == false)
+    {
+        return 0U;
+    }
+    if (track_state_apply_voice_group_config_bulk(group_spread, group_link) == false)
     {
         return 0U;
     }
@@ -478,6 +503,9 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
 
         dst->family = (uint8_t)family;
         dst->type = (uint8_t)type;
+        dst->voice_group_role = (uint8_t)track_state_get_voice_group_role(track);
+        dst->voice_group_spread = track_state_get_voice_group_spread(track);
+        dst->voice_group_link = track_state_get_voice_group_link(track);
         memcpy(&dst->sound, sound, sizeof(dst->sound));
         memcpy(&dst->tone, tone, sizeof(dst->tone));
         if (kit_v1_track_uses_sampler_asset(family, type) != 0U)

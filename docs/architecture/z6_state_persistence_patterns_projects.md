@@ -1015,3 +1015,17 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Les valeurs enum `PARAM_STACK_OSC*_MODEL` changent de semantique prototype: les anciens modeles analogiques simples sont remplaces par `SOFT` et `SHAPE`, sans migration.
 - `PATTERN_VERSION=33`, `PROJECT_V1_FILE_VERSION=45`, `PATCH_SD_FILE_VERSION=7` et `KIT_SD_FILE_VERSION=6` marquent cette rupture de catalogue Stack.
 - Les formats restent refuses par validation stricte de version/taille; aucun remap des anciennes valeurs `SINE/TRIANGLE/SAW/PWM/...` n'est conserve.
+
+## Addendum 2026-07-25 - persistence page VOICE Stack
+
+- Le retrait de l'unison interne Stack supprime les params prototype `VOICE count`, `DETUNE`, `SPREAD` et `DRIFT` ajoutes par erreur.
+- Le layout courant garde seulement `PARAM_STACK_OSC_DETUNE` et `PARAM_STACK_PHASE_RESET`; `track_tone_sound_state_t` porte `osc_detune` et `phase_reset`.
+- `PATTERN_VERSION=34`, `PROJECT_V1_FILE_VERSION=46`, `PATCH_SD_FILE_VERSION=8` et `KIT_SD_FILE_VERSION=7` marquent cette rupture prototype liee au layout `PARAM_COUNT` et au payload tone.
+- Defaults: `OSC DETUNE=0`, `RESET=FREE`, ce qui conserve son et cout Stack historiques.
+
+## Addendum 2026-07-25 - persistence TRACK CFG group SPREAD/LINK
+
+- Le bloc track config Pattern/Project capture maintenant `voice_group_spread[]` et `voice_group_link[]` en plus des roles voice group.
+- `PATTERN_VERSION=35` et `PROJECT_V1_FILE_VERSION=47` marquent cette rupture prototype; aucune migration des anciens formats n'est conservee.
+- Patch Poly capture SPREAD/LINK sur le membre master et les reapplique sur la target master lors d'un apply poly; `PATCH_SD_FILE_VERSION=9`.
+- Kit capture roles, SPREAD et LINK par track avec les autres donnees structurelles full-machine; `KIT_SD_FILE_VERSION=8`.

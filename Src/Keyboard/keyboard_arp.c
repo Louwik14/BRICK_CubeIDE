@@ -151,6 +151,7 @@ CTRL_STATE static keyboard_arp_runtime_state_t g_keyboard_arp_state[SEQ_TRACK_CO
 static keyboard_arp_runtime_state_t *g_keyboard_arp_current = &g_keyboard_arp_state[0];
 #define g_keyboard_arp (*g_keyboard_arp_current)
 static keyboard_arp_config_t g_keyboard_arp_config[SEQ_TRACK_COUNT];
+static uint8_t g_keyboard_arp_config_revision[SEQ_TRACK_COUNT];
 static uint8_t g_keyboard_arp_config_initialized = 0U;
 static uint8_t g_keyboard_arp_active_track = 0U;
 static uint8_t g_keyboard_arp_current_track = 0U;
@@ -272,6 +273,20 @@ static void keyboard_arp_update_active_config(uint8_t track)
         keyboard_arp_select_track(track);
         keyboard_arp_load_config(&g_keyboard_arp_config[track]);
         keyboard_arp_select_track(previous);
+    }
+}
+
+static void keyboard_arp_bump_config_revision(uint8_t track)
+{
+    if (keyboard_arp_track_is_valid(track) == 0U)
+    {
+        return;
+    }
+
+    g_keyboard_arp_config_revision[track]++;
+    if (g_keyboard_arp_config_revision[track] == 0U)
+    {
+        g_keyboard_arp_config_revision[track] = 1U;
     }
 }
 
@@ -628,6 +643,18 @@ static void keyboard_arp_release_seq_step_notes(void)
         {
             keyboard_arp_activate_from_latched();
         }
+    }
+
+    if ((g_keyboard_arp.arp_phys_count == 0U)
+        && (g_keyboard_arp.arp_latched_count == 0U)
+        && (g_keyboard_arp.arp_pattern_count == 0U)
+        && (g_keyboard_arp.arp_active_count == 0U)
+        && (g_keyboard_arp.arp_pending_on_count == 0U))
+    {
+        g_keyboard_arp.arp_step_index = 0U;
+        g_keyboard_arp.arp_pingpong_dir = 1;
+        g_keyboard_arp.arp_strum_flip = false;
+        g_keyboard_arp.arp_last_played_count = 0U;
     }
 }
 
@@ -1129,6 +1156,94 @@ static uint8_t keyboard_arp_render_current_step_samples(uint32_t samples_per_ste
     return rendered;
 }
 
+static uint8_t keyboard_arp_render_window_samples(uint32_t samples_per_step_q16,
+                                                  uint32_t duration_samples,
+                                                  keyboard_arp_scheduled_note_t *out_notes,
+                                                  uint8_t max_out_notes,
+                                                  uint64_t *out_next_offset_q16)
+{
+    if (out_next_offset_q16 != NULL)
+    {
+        *out_next_offset_q16 = 0ULL;
+    }
+
+    if ((duration_samples == 0U) || (out_notes == NULL) || (max_out_notes == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t base_period_q16 = keyboard_arp_step_interval_samples_q16(samples_per_step_q16);
+    uint64_t step_offset_q16 = 0ULL;
+    uint8_t rendered = 0U;
+
+    while (rendered < max_out_notes)
+    {
+        const uint32_t step_offset = (uint32_t)(step_offset_q16 >> 16);
+        if (step_offset >= duration_samples)
+        {
+            break;
+        }
+
+        keyboard_arp_scheduled_note_t step_notes[KBD_ARP_MAX_CHORD_NOTES];
+        const uint8_t step_count =
+            keyboard_arp_render_current_step_samples(samples_per_step_q16,
+                                                     step_notes,
+                                                     KBD_ARP_MAX_CHORD_NOTES);
+        if (step_count == 0U)
+        {
+            break;
+        }
+
+        for (uint8_t i = 0U; (i < step_count) && (rendered < max_out_notes); ++i)
+        {
+            const uint64_t on_abs = (uint64_t)step_offset + (uint64_t)step_notes[i].on_offset_samples;
+            if (on_abs >= (uint64_t)duration_samples)
+            {
+                continue;
+            }
+
+            uint64_t off_abs = (uint64_t)step_offset + (uint64_t)step_notes[i].off_offset_samples;
+            if (off_abs > (uint64_t)duration_samples)
+            {
+                off_abs = (uint64_t)duration_samples;
+            }
+            if (off_abs <= on_abs)
+            {
+                off_abs = on_abs + 1ULL;
+            }
+
+            out_notes[rendered].note = step_notes[i].note;
+            out_notes[rendered].velocity = step_notes[i].velocity;
+            out_notes[rendered].on_offset_samples = (uint32_t)on_abs;
+            out_notes[rendered].off_offset_samples = (uint32_t)off_abs;
+            rendered++;
+        }
+
+        uint64_t period_q16 = base_period_q16;
+        if (((g_keyboard_arp.arp_step_index & 0x1U) != 0U) && (g_keyboard_arp.arp_swing > 0U))
+        {
+            period_q16 += (base_period_q16 * (uint64_t)g_keyboard_arp.arp_swing) / 100ULL;
+        }
+        step_offset_q16 += period_q16;
+    }
+
+    if (out_next_offset_q16 != NULL)
+    {
+        *out_next_offset_q16 = step_offset_q16;
+    }
+
+    const uint8_t last_count =
+        (rendered > KBD_ARP_MAX_CHORD_NOTES) ? KBD_ARP_MAX_CHORD_NOTES : rendered;
+    const uint8_t first_last = (uint8_t)(rendered - last_count);
+    g_keyboard_arp.arp_last_played_count = last_count;
+    for (uint8_t i = 0U; i < last_count; ++i)
+    {
+        g_keyboard_arp.arp_last_played[i] = out_notes[(uint8_t)(first_last + i)].note;
+    }
+
+    return rendered;
+}
+
 void keyboard_arp_init(void)
 {
     keyboard_arp_ensure_config_initialized();
@@ -1293,11 +1408,14 @@ uint8_t keyboard_arp_seq_step_render_for_track(uint8_t track,
                                                const uint8_t *velocities,
                                                uint8_t count,
                                                uint32_t samples_per_step_q16,
+                                               uint32_t duration_samples,
                                                keyboard_arp_scheduled_note_t *out_notes,
-                                               uint8_t max_out_notes)
+                                               uint8_t max_out_notes,
+                                               uint64_t *out_next_offset_q16)
 {
-    if ((g_keyboard_arp_config_initialized == 0U)
-        || (keyboard_arp_track_is_valid(track) == 0U)
+    keyboard_arp_ensure_config_initialized();
+
+    if ((keyboard_arp_track_is_valid(track) == 0U)
         || (notes == NULL)
         || (velocities == NULL)
         || (count == 0U)
@@ -1338,14 +1456,18 @@ uint8_t keyboard_arp_seq_step_render_for_track(uint8_t track,
     uint8_t rendered = 0U;
     if (g_keyboard_arp.arp_pattern_count > 0U)
     {
-        rendered = keyboard_arp_render_current_step_samples(samples_per_step_q16,
-                                                            out_notes,
-                                                            max_out_notes);
+        rendered = keyboard_arp_render_window_samples(samples_per_step_q16,
+                                                      duration_samples,
+                                                      out_notes,
+                                                      max_out_notes,
+                                                      out_next_offset_q16);
     }
 
-    if (g_keyboard_arp.arp_pattern_count == 0U)
+    g_keyboard_arp.arp_pattern_count = 0U;
+    g_keyboard_arp.arp_pattern_source = (uint8_t)KBD_ARP_NOTE_SOURCE_KBD;
+    if (g_keyboard_arp.arp_hold && (g_keyboard_arp.arp_latched_count > 0U))
     {
-        g_keyboard_arp.arp_pattern_source = (uint8_t)KBD_ARP_NOTE_SOURCE_KBD;
+        keyboard_arp_activate_from_latched();
     }
 
     keyboard_arp_select_track(previous_track);
@@ -1432,6 +1554,7 @@ void keyboard_arp_set_hold(bool enabled)
 {
     keyboard_arp_ensure_config_initialized();
     g_keyboard_arp_config[g_keyboard_arp_active_track].hold = enabled;
+    keyboard_arp_bump_config_revision(g_keyboard_arp_active_track);
     keyboard_arp_select_track(g_keyboard_arp_active_track);
     const bool previous = g_keyboard_arp.arp_hold;
     g_keyboard_arp.arp_hold = enabled;
@@ -1492,6 +1615,7 @@ void keyboard_arp_set_rate_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].rate = (value > 7U) ? 7U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1501,6 +1625,7 @@ void keyboard_arp_set_oct_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].oct = (value > 4U) ? 4U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1510,6 +1635,7 @@ void keyboard_arp_set_pattern_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].pattern = (kbd_arp_pattern_t)((value >= (uint8_t)KBD_ARP_PATTERN_COUNT) ? 0U : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1519,6 +1645,7 @@ void keyboard_arp_set_gate_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].gate = (value > 100U) ? 100U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1528,6 +1655,7 @@ void keyboard_arp_set_swing_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].swing = (value > 100U) ? 100U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1537,6 +1665,7 @@ void keyboard_arp_set_accent_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].accent = (kbd_arp_accent_t)((value >= (uint8_t)KBD_ARP_ACCENT_COUNT) ? 0U : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1546,6 +1675,7 @@ void keyboard_arp_set_vel_acc_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].vel_acc = (value > 96U) ? 96U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1555,6 +1685,7 @@ void keyboard_arp_set_strum_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].strum = (kbd_arp_strum_t)((value >= (uint8_t)KBD_ARP_STRUM_COUNT) ? 0U : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1564,6 +1695,7 @@ void keyboard_arp_set_offset_for_track(uint8_t track, int8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].offset = (value < 0) ? 0 : (value > 60 ? 60 : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1573,6 +1705,7 @@ void keyboard_arp_set_transpose_for_track(uint8_t track, int8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].trans = (value < -24) ? -24 : (value > 24 ? 24 : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1582,6 +1715,7 @@ void keyboard_arp_set_spread_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].spread = (value > 12U) ? 12U : value;
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1591,6 +1725,7 @@ void keyboard_arp_set_dir_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].dir = (kbd_arp_dir_t)((value >= (uint8_t)KBD_ARP_DIR_COUNT) ? 0U : value);
+    keyboard_arp_bump_config_revision(track);
     keyboard_arp_update_active_config(track);
 }
 
@@ -1618,6 +1753,7 @@ void keyboard_arp_set_sync_for_track(uint8_t track, uint8_t value)
     if (keyboard_arp_track_is_valid(track) == 0U)
         return;
     g_keyboard_arp_config[track].sync = (kbd_arp_sync_t)((value >= (uint8_t)KBD_ARP_SYNC_COUNT) ? 0U : value);
+    keyboard_arp_bump_config_revision(track);
     if (track == g_keyboard_arp_active_track)
     {
         keyboard_arp_select_track(track);
@@ -1628,6 +1764,7 @@ void keyboard_arp_set_sync_for_track(uint8_t track, uint8_t value)
 }
 
 bool keyboard_arp_get_hold_for_track(uint8_t track) { keyboard_arp_ensure_config_initialized(); return (keyboard_arp_track_is_valid(track) != 0U) ? g_keyboard_arp_config[track].hold : false; }
+uint8_t keyboard_arp_get_revision_for_track(uint8_t track) { keyboard_arp_ensure_config_initialized(); return (keyboard_arp_track_is_valid(track) != 0U) ? g_keyboard_arp_config_revision[track] : 0U; }
 uint8_t keyboard_arp_get_rate_for_track(uint8_t track) { keyboard_arp_ensure_config_initialized(); return (keyboard_arp_track_is_valid(track) != 0U) ? g_keyboard_arp_config[track].rate : 2U; }
 uint8_t keyboard_arp_get_oct_for_track(uint8_t track) { keyboard_arp_ensure_config_initialized(); return (keyboard_arp_track_is_valid(track) != 0U) ? g_keyboard_arp_config[track].oct : 0U; }
 uint8_t keyboard_arp_get_pattern_for_track(uint8_t track) { keyboard_arp_ensure_config_initialized(); return (keyboard_arp_track_is_valid(track) != 0U) ? (uint8_t)g_keyboard_arp_config[track].pattern : 0U; }

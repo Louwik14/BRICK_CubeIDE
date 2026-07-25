@@ -985,6 +985,17 @@ Points factuels:
 - `ui_core_seq_transport_handle_seq_mode_event()` accepte donc les press/release STEP dans ces deux modes low-cost pour conserver toggle court, maintien et P-Lock; les notes clavier viennent uniquement du clavier Hall separe.
 - Premium conserve le contrat historique: les Halls analogiques peuvent injecter des notes en `KEYBOARD`/`ARP` et ne sont pas reinterpretes comme steps sequenceur dans ces modes.
 
+## Addendum 2026-07-25 - workflow LENGTH rapide low-cost
+
+- En low-cost seulement, `seq_edit_step_press()` intercepte un `STEP` vide avant le toggle court si un autre `STEP` occupe de la meme track reste maintenu et se situe avant lui dans l'ordre temporel absolu.
+- Si un modificateur `SHIFT` est deja vu pendant ce candidat exact, `ui_hall_input_service` ne pose pas la suppression `SHIFT + STEP` et `ui_core_seq_transport_handle_seq_mode_event()` laisse passer ce `HALL_PRESS` vers `seq_edit_step_press()`.
+- Le candidat LENGTH exige un source hall deja promu en maintien avant B, distinct de B et encore physiquement presse dans `hall_surface`; un simple pending ou le premier `HALL_PRESS` d'un step occupe ne peut pas se qualifier.
+- La borne B est acceptee si son trig est inactif et qu'elle ne porte pas de p-lock non-PLAY; les restes PLAY d'un ancien trig supprime ne bloquent donc pas le geste.
+- Pour une master de voice group, cette vacuite de B est verifiee sur chaque membre PLAY du groupe, plafonne a 8; le geste ecrit seulement `LEN` sur le step A de chaque membre et ne materialise jamais B.
+- Le second `STEP` sert uniquement de borne de fin: il n'est pas enregistre comme maintien, ne cree aucun trig, ne copie rien et reste vide au release.
+- Apres succes, `seq_led` affiche sur la page courante uniquement les steps visibles compris dans l'intervalle absolu `A..B`; l'overlay clignote deux fois en jaune via la cadence `engine_tick_count`, puis retombe sur le rendu normal.
+- Premium garde le chemin press/release historique: le helper de flash retourne toujours inactif hors `BRICK6_VARIANT_LOWCOST`.
+
 ## Addendum 2026-07-24 - UI MOD Matrix et ENV3
 
 - L'ensemble `MOD` expose maintenant quatre pages: `MATRIX` (`SLOT/SOURCE/DEST/DEPTH`), `LFO 1` (`RATE/PHASE ou SLEW/SHAPE/TRIG`), `LFO 2` (`RATE/PHASE ou SLEW/SHAPE/TRIG`) et `LFO TIME` (`DELAY1/FADE1/DELAY2/FADE2`).
@@ -1016,5 +1027,37 @@ Points factuels:
 ## Addendum 2026-07-25 - sensibilite encodeur parametres discrets
 
 - Le chemin central d'edition physique `ui_param_handle_encoder_with_context()` applique un accumulateur x4 uniquement apres les chemins p-lock/live-rec p-lock.
-- Les params enum/bool/int, les displays enum/bool/int et les params a moins de 20 valeurs possibles consomment environ 4 crans encodeur par pas; les parametres continus a grande plage conservent leur delta existant.
+- Les params discrets enum/bool/int consomment environ 4 crans encodeur par pas uniquement si leur catalogue expose moins de 20 valeurs; les longs enums/ints conservent leur delta existant.
 - Le reliquat est remis a zero au changement de bank/page ou de track via `ui_param_set_bank()` / `ui_param_invalidate_bank()`.
+
+## Addendum 2026-07-25 - PLAY voice group master/slaves
+
+- Quand la track active est `MASTER` d'un voice group, l'ensemble `PLAY` projette une page par membre du groupe, dans l'ordre stable master puis slaves contigus, avec plafond UI explicite a 8 membres.
+- Jusqu'a 4 membres, le titre reste `PLAY`; au-dela, le bouton `PLAY` alterne les sous-ensembles `PLAY 1/2` et `PLAY 2/2`.
+- Chaque page groupe expose le layout historique de la voix 1 (`NOTE`, `VEL`, `LEN`, `MicTim`) pour la track membre correspondante; `ui_param` resout un contexte explicite `owner_track/member_index/target_track/base_param` via la page courante au lieu de supposer la track active master.
+- Les edits directs et p-locks PLAY utilisent ce meme contexte: la valeur est stockee sur la track membre cible avec l'ID PLAY historique, jamais dans un slot commun de la master.
+- Une track `SLAVE` ne publie pas son propre ensemble `PLAY`; l'edition PLAY du groupe passe par la track `MASTER`.
+- Les pages excedentaires sont neutralisees par `PARAM_COUNT` et le resolver `subpage_enabled`, afin d'eviter les pages fantomes lors de l'ajout ou retrait de slaves.
+
+## Addendum 2026-07-25 - page VOICE Stack
+
+- `Synth/Stack` alterne `TONE 1/2` et la page `VOICE` par pression repetee du bouton TONE.
+- `TONE 1/2` conserve les pages `COMM`, `OSC1`, `OSC2`, `OSC3`.
+- La page `VOICE` expose uniquement `OSC DETUNE` et `RESET`, avec deux emplacements vides conserves par le style template existant. Aucune page `OSC1+`, `OSC2+`, `OSC3+`, aucun `SPREAD` Stack et aucun parametre de nombre de voix ne sont exposes.
+- Wave conserve ses pages `EDIT` et `TONE` historiques.
+
+## Addendum 2026-07-25 - TRACK CFG 2/2 voice group
+
+- `CFG` reste mono-page pour une track seule, une slave et une master sans slave.
+- Quand la track active est `MASTER` d'un voice group avec au moins une slave, `CFG` expose une deuxieme page `GROUP` avec seulement `SPREAD` et `LINK`; les deux autres slots restent vides.
+- Le cycle par reapppui sur le raccourci CFG utilise la selection de subpage template existante; les pages non disponibles restent neutralisees par `PARAM_COUNT`.
+- LINK propage aussi les edits manuels `CFG/TRACK` et `CFG/TYPE` aux membres compatibles du voice group, via le meme delta apres clamp que les autres valeurs de base.
+- `PLAY` conserve son contrat totalement independant par membre: LINK ne s'execute jamais dans le domaine PLAY, ne propage pas NOTE/VEL/LEN/MicTim, ne touche aucun p-lock PLAY et ne change pas la lecture scheduler par membre.
+- Pour `MOD`, LINK propage seulement les valeurs numeriques compatibles: LFO `RATE/DELAY/FADE/PHASE_SLEW`, ENV3 `ATTACK/DECAY/SUSTAIN/RELEASE` et Matrix `DEPTH`.
+- Matrix `SLOT`, `SOURCE` et `DEST` restent exclus comme selecteurs/structure. La propagation de `DEPTH` cible le meme slot Matrix que la source, puis restaure le slot selectionne de la track cible.
+
+## Addendum 2026-07-25 - clipboard step master PLAY
+
+- Le copy/paste de step depuis une master de voice group conserve la selection UI historique, mais le backend `seq_clipboard` capture aussi les donnees PLAY des membres du groupe dans l'ordre des pages PLAY groupe.
+- Chaque page/membre reste independant: le paste cible le meme index de membre dans le groupe destination et ne duplique pas les IDs PLAY sans contexte de membre.
+- Les slaves ne deviennent pas navigables en PLAY; seules leurs donnees PLAY internes sont restaurees par le paste de la master.

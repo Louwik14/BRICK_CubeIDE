@@ -12,6 +12,8 @@
 #include "ui_renderer_template.h"
 #include "ui_template_page.h"
 
+static uint8_t g_ui_template_tone_stack_subset = 0U;
+
 static const ui_template_family_t g_ui_template_tone_family_master_fx = {
     .family_title = "TONE",
     .nav_labels = { "FX1", "FX2", "FX3", "FX4" },
@@ -86,13 +88,25 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_stack = {
-    .family_title = "TONE",
+    .family_title = "TONE 1/2",
     .nav_labels = { "COMM", "OSC1", "OSC2", "OSC3" },
     .subpages = {
         { .title = "COMM", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
         { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR } } },
         { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TUNE, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_stack_global = {
+    .family_title = "VOICE",
+    .nav_labels = { "VOICE", "-", "-", "-" },
+    .subpages = {
+        { .title = "VOICE", .param_bank = { .params = { PARAM_STACK_OSC_DETUNE, PARAM_STACK_PHASE_RESET, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -148,6 +162,13 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
 
 static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
 {
+    const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
+            && (g_ui_template_tone_stack_subset != 0U))
+    {
+        return &g_ui_template_tone_family_stack_global;
+    }
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
@@ -1569,6 +1590,28 @@ void ui_page_template_tone_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_TONE, track_family, track_type, family_template);
         }
     }
+}
+
+void ui_page_template_tone_open_primary(void)
+{
+    g_ui_template_tone_stack_subset = 0U;
+    g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
+}
+
+void ui_page_template_tone_toggle_subset(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_STACK))
+    {
+        ui_page_template_tone_open_primary();
+        return;
+    }
+
+    g_ui_template_tone_stack_subset = (g_ui_template_tone_stack_subset == 0U) ? 1U : 0U;
+    g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
 }
 
 static void ui_page_template_tone_enter(void)

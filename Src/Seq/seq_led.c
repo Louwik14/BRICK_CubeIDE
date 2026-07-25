@@ -20,6 +20,8 @@
 #define SEQ_LED_PAGE_DIM_B 32U
 #define SEQ_LED_PAGE_SCROLL_R 128U
 #define SEQ_LED_PAGE_SCROLL_G 48U
+#define SEQ_LED_YELLOW_R 96U
+#define SEQ_LED_YELLOW_G 96U
 
 static uint8_t seq_led_page_count_for_track(uint8_t track)
 {
@@ -100,6 +102,12 @@ void seq_led_render_active_track_page(void)
     {
         const led_id_t led = led_remap_led_for_hall(hall);
         const uint8_t step = (uint8_t)(base_step + hall);
+        if (seq_edit_lowcost_length_flash_step_visible(track, step) != 0U)
+        {
+            led_layer_set(LED_LAYER_SEQ_STATE, led, SEQ_LED_YELLOW_R, SEQ_LED_YELLOW_G, 0U);
+            continue;
+        }
+
         const seq_step_visual_t visual = seq_model_get_step_visual(track, step);
 
         if (visual == SEQ_STEP_VISUAL_BLUE)

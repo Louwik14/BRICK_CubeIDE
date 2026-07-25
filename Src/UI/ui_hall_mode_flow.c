@@ -75,6 +75,16 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
     ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
 }
 
+static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
+{
+    const ui_event_t event = {
+        .type = UI_EVENT_BUTTON_PRESS,
+        .id = (uint8_t)button,
+        .value = 0,
+    };
+    ui_navigation_handle_event(&event);
+}
+
 static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                                                            uint32_t now_ms,
                                                            uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
@@ -139,23 +149,23 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             return 1U;
 
         case 9U:
-            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_TONE);
+            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_2);
             return 1U;
 
         case 10U:
-            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_COLORS);
+            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_1);
             return 1U;
 
         case 11U:
-            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_PLAY);
+            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_5);
             return 1U;
 
         case 12U:
-            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_MOD);
+            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_3);
             return 1U;
 
         case 13U:
-            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_MIX);
+            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_4);
             return 1U;
 
         case 14U:
@@ -198,7 +208,9 @@ static uint8_t ui_hall_mode_flow_capture_track_sound_copy(uint8_t source_track,
         if ((id == PARAM_CFG_TRACK)
                 || (id == PARAM_CFG_TRACK_TYPE)
                 || (id == PARAM_CFG_MIDI_CH)
-                || (id == PARAM_CFG_MIDI_SRC))
+                || (id == PARAM_CFG_MIDI_SRC)
+                || (id == PARAM_CFG_GROUP_SPREAD)
+                || (id == PARAM_CFG_GROUP_LINK))
         {
             continue;
         }

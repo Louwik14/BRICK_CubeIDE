@@ -733,9 +733,36 @@ Points factuels observes:
 
 ## Addendum 2026-07-23 - ARP Hold declenche par steps
 
-- Quand `ARP Hold` est actif sur une track, un step sequenceur actif de cette meme track emet un trigger vers le runtime ARP de la track.
-- Ce trigger reste track-local et ne modifie pas les autres etats ARP; `ARP Hold=Off` conserve le pilotage clavier uniquement.
-- Le scheduler PLAY collecte les notes du step actif, demande a `keyboard_arp` de rendre le prochain pas ARP en offsets samples derives de `samples_per_step_q16`, puis queue les note-on/note-off ARP dans la meme queue sample-domain que PLAY.
+- Quand `ARP Hold` est actif sur une track, un step sequenceur actif de cette meme track fournit une fenetre source au runtime ARP de la track.
+- Cette fenetre reste track-locale et ne modifie pas les autres etats ARP; `ARP Hold=Off` conserve le pilotage clavier uniquement.
+- Le scheduler PLAY collecte les notes du step actif, conserve la fenetre `SEQ_STEP`, demande a `keyboard_arp` de rendre seulement la tranche temporelle due au boundary courant, puis queue les note-on/note-off ARP dans la meme queue sample-domain que PLAY.
 - Le chemin `SEQ_STEP` ne depend plus du tick UI/systeme ni de `HAL_GetTick` pour son horodatage: note-on, strum et note-off ARP sont collectes/appliques par `seq_runtime_audio_collect_block_events` avec offsets intra-buffer.
 - Les divisions ARP sont converties depuis la cadence sequencer audio (`samples_per_step_q16`, base 16th = 6 PPQN24), sans accumulation en millisecondes et sans recalage au wrap pattern.
-- Au STOP transport, `seq_runtime` demande uniquement le clear de la source ARP `SEQ_STEP`: les notes/pending/arpeges issus des steps sont relaches, tandis que la source `KBD` latchee reste disponible pour le jeu manuel hors sequenceur.
+- La fenetre ARP `SEQ_STEP` est bornee par la duree PLAY effective du step: une note `LEN=16` rend progressivement tous les pas ARP dus dans ces 16 steps, sans note source brute concurrente.
+- Les parametres ARP sont relus par tranche de scheduler; une revision de config ARP force la prochaine tranche a repartir du boundary courant avec les nouveaux reglages, sans reappui sur le step source.
+- Le rendu `SEQ_STEP` de `keyboard_arp` est transitoire: seule la phase ARP avance, puis la source/pattern `KBD` eventuelle est restauree; `keyboard_arp_tick` ne devient pas proprietaire de cette cadence.
+- Au STOP transport, `seq_runtime` demande uniquement le clear de la source ARP `SEQ_STEP`: la phase `SEQ_STEP` repartira du debut au prochain PLAY si aucune source `KBD` n'est active, tandis que la source `KBD` latchee reste disponible pour le jeu manuel hors sequenceur.
+
+## Addendum 2026-07-25 - LENGTH rapide low-cost et DIV
+
+- Le geste low-cost `STEP A occupe maintenu + STEP B vide apres A` ecrit un p-lock PLAY `LEN` sur le step A, sans toucher au transport ni au moteur audio.
+- La duree utilise la meme base que les boundaries runtime: un pas temporel de track vaut `samples_per_step_q16 * DIV`. La valeur `LEN` stockee restant exprimee en steps de base scheduler, la conversion est `LEN = (B - A + 1) * DIV`.
+- La valeur encodee passe par `seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_Vx_LEN, value)`, donc la quantification et les bornes du catalogue PLAY existant (`1..64 stp`) restent l'autorite.
+- Hors groupe, si plusieurs voix PLAY sont deja materialisees sur A, leurs `LEN` correspondants sont mis a jour; sinon le fallback borne est `V1_LEN`.
+- Sur une master de voice group, la meme duree temporelle est ecrite comme `V1_LEN` distinct sur chaque membre collecte par Z2 dans l'ordre master puis slaves, plafonne a 8. Les pages PLAY groupe restent independantes et `LINK` n'intervient pas.
+## Addendum 2026-07-25 - PLAY voice group master/slaves
+
+- Le scheduler ignore les tracks `SLAVE` comme sources autonomes.
+- Quand une source `MASTER` possede un groupe, le step de la master pilote les membres collectes par Z2 dans l'ordre master puis slaves, plafonnes a 8.
+- Chaque membre lit ses propres bases et p-locks PLAY voix 1 (`NOTE`, `VEL`, `LEN`, `MicTim`) sur sa track membre, puis emet vers sa propre track runtime; hors groupe, le chemin historique 4 voix de la track reste inchange.
+- Le gate de scheduling d'une master groupe teste les p-locks PLAY des tracks membres du groupe, pas seulement ceux de la master, afin que les p-locks poses depuis les pages PLAY groupe restent audibles et independants.
+- La persistence reste le format pattern existant: comme les p-locks groupe sont stockes sur la track membre cible avec les IDs PLAY historiques, save/load conserve l'independance sans ajouter d'ID artificiel par page.
+
+## Addendum 2026-07-25 - clipboard step PLAY voice group
+
+- Le clipboard de steps conserve le format historique mono-track pour une track seule: trig + tous les p-locks du step source sur la track source, puis paste avec clear complet du step cible.
+- Quand la source est une master de voice group, le clipboard ajoute un payload PLAY borne a 8 membres, ordonne master puis slaves, indexe par position logique de membre et non par liste speciale de tracks.
+- Pour chaque membre, le payload PLAY copie tous les p-locks `SEQ_PLOCK_SET_PLAY` du step membre et materialise au minimum `V1 NOTE`, `V1 VEL`, `V1 LEN`, `V1 MicTim` depuis le lock existant ou la base PLAY du membre.
+- Au paste vers une master de groupe, le membre source N est applique au membre destination N. Si les largeurs source/destination divergent, les membres communs sont appliques et le resultat est marque partiel; les membres destination excedentaires ne sont pas touches.
+- Les slaves restent sans ensemble PLAY direct: le paste ecrit seulement leurs p-locks PLAY internes. Les locks PLAY d'un membre slave sont clears/reposes sur sa track, sans toucher les locks non-PLAY ni les pages PLAY des autres membres.
+- `LINK` n'intervient pas dans ce chemin: aucune propagation PLAY n'est declenchee par copy/paste.

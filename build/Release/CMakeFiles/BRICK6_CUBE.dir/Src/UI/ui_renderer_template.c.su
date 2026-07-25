@@ -1,4 +1,5 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:954:17:ui_renderer_template_float_to_q15	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:983:12:ui_renderer_template_stack_wave_y	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1399:13:ui_renderer_template_matrix_set_bit	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1418:13:ui_renderer_template_matrix_draw_digit	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1453:13:ui_renderer_template_matrix_draw_digit_at	40	static
@@ -28,7 +29,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_templat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:748:16:ui_renderer_template_filter_type_visible	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:3181:13:ui_renderer_template_draw_sampler_ram_marker	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:767:16:ui_renderer_template_filter_param_supported	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1013:13:ui_renderer_template_rebuild_stack_wave_cache	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1013:13:ui_renderer_template_rebuild_stack_wave_cache	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:852:15:ui_renderer_template_lfo_wave_q7	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:914:16:ui_renderer_template_draw_lfo_wave_shape	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1143:16:ui_renderer_template_draw_lfo_phase_slew	48	static

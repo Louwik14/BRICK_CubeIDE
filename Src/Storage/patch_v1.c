@@ -211,6 +211,12 @@ static patch_v1_result_t patch_v1_capture_member(uint8_t track,
     out_member->relative_index = relative_index;
     out_member->family = (uint8_t)ui_get_track_family(track);
     out_member->type = (uint8_t)ui_get_track_type(track);
+    out_member->group_spread = (role == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+        ? track_state_get_voice_group_spread(track)
+        : 0.0f;
+    out_member->group_link = (role == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+        ? track_state_get_voice_group_link(track)
+        : 0U;
     memcpy(&out_member->sound, sound, sizeof(out_member->sound));
     memcpy(&out_member->tone, tone, sizeof(out_member->tone));
     patch_v1_capture_sampler_asset(tone, &out_member->asset);
@@ -514,10 +520,22 @@ static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV
         memcpy(dst_tone, &member->tone, sizeof(*dst_tone));
     }
 
+    if (width > 1U)
+    {
+        (void)track_state_set_voice_group_spread(targets[0], patch->members[0].group_spread);
+        (void)track_state_set_voice_group_link(targets[0], patch->members[0].group_link);
+    }
+
     for (uint8_t i = 0U; i < width; ++i)
     {
         patch_v1_reapply_track_params(targets[i]);
         track_runtime_refresh_track(targets[i]);
+    }
+    if (width > 1U)
+    {
+        (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
+                                               targets[0],
+                                               track_state_get_voice_group_spread(targets[0]));
     }
     ui_active_track_sync_full_after_reconfigure();
 

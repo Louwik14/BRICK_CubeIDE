@@ -92,6 +92,8 @@ void brick6_stack_runtime_set_slot_tune(uint8_t instance_id, uint8_t slot, int8_
 void brick6_stack_runtime_set_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
 void brick6_stack_runtime_set_slot_color(uint8_t instance_id, uint8_t slot, float color);
 void brick6_stack_runtime_set_noise_level(uint8_t instance_id, float level);
+void brick6_stack_runtime_set_osc_detune(uint8_t instance_id, float detune);
+void brick6_stack_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled);
 
 uint8_t brick6_stack_runtime_model_count(void);
 const char *brick6_stack_runtime_model_name(brick6_stack_model_t model);
@@ -111,6 +113,8 @@ uint8_t brick6_stack_runtime_submit_slot_tune(uint8_t instance_id, uint8_t slot,
 uint8_t brick6_stack_runtime_submit_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
 uint8_t brick6_stack_runtime_submit_slot_color(uint8_t instance_id, uint8_t slot, float color);
 uint8_t brick6_stack_runtime_submit_noise_level(uint8_t instance_id, float level);
+uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune);
+uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled);
 void brick6_stack_runtime_process_commands_from_audio(void);
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id);
 void brick6_stack_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);

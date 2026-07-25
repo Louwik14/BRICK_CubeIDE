@@ -89,6 +89,8 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->stack.color[1] = param_registry[PARAM_STACK_OSC2_COLOR].default_value;
     state->stack.color[2] = param_registry[PARAM_STACK_OSC3_COLOR].default_value;
     state->stack.noise_level = param_registry[PARAM_STACK_NOISE_LEVEL].default_value;
+    state->stack.osc_detune = param_registry[PARAM_STACK_OSC_DETUNE].default_value;
+    state->stack.phase_reset = param_registry[PARAM_STACK_PHASE_RESET].default_value;
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;

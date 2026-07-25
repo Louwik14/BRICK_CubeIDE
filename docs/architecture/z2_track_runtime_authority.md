@@ -320,6 +320,7 @@ Sorties de Z2:
 - Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master` et `track_runtime_collect_voice_group_members`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
 - Patch Poly v2 consomme ce modele comme source structurelle: capture depuis master/slaves officiels et apply polyX uniquement vers un groupe cible deja declare de meme largeur.
 - Z2 ne stocke aucune reference a un Patch et ne devient pas une autorite de persistence Patch.
+- Projection UI: une track `SLAVE` ne publie pas l'ensemble `PLAY`; le `MASTER` reste le seul point d'edition PLAY du groupe.
 
 ## Addendum 2026-07-17 - lot 4B catalogue input low-cost
 
@@ -357,3 +358,9 @@ Sorties de Z2:
 - `TRACK_RUNTIME_TYPE_STACK` declare sa propre table de slots TONE dans `track_runtime_tone_slots_stack[]`: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR pour chaque slot.
 - Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_wave[]`.
 - Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Wave.
+
+## Addendum 2026-07-25 - config voice group SPREAD/LINK
+
+- `track_state` porte maintenant deux champs de configuration par master de voice group: `voice_group_spread` (`0..1`, defaut `0`) et `voice_group_link` (`OFF/ON`, defaut `OFF`).
+- Ces champs appartiennent au modele master/slaves existant: les membres sont resolus par `track_runtime_collect_voice_group_members()` dans l'ordre stable master puis slaves contigus, plafonne a 8 par les consommateurs UI/param.
+- Z2 ne cree aucune nouvelle autorite de groupe: les roles `SOLO/MASTER/SLAVE` restent la structure, et SPREAD/LINK sont seulement des attributs de la master effective.
