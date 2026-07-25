@@ -8,7 +8,7 @@
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "ENV",
-    .nav_labels = { "FILTER", "ADSR", "VCA", "-" },
+    .nav_labels = { "FILTER", "ADSR", "VCA", "ENV 3" },
     .subpages = {
         {
             .title = "FILTER",
@@ -23,8 +23,8 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
             .param_bank = { .params = { PARAM_VCA_ATTACK, PARAM_VCA_DECAY, PARAM_VCA_SUSTAIN, PARAM_VCA_RELEASE } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "ENV 3",
+            .param_bank = { .params = { PARAM_ENV3_ATTACK, PARAM_ENV3_DECAY, PARAM_ENV3_SUSTAIN, PARAM_ENV3_RELEASE } },
         },
     },
     .default_subpage = 0U,
@@ -129,6 +129,19 @@ static ui_template_custom_widget_kind_t ui_page_template_filter_pick_custom_widg
                                                       PARAM_VCA_RELEASE) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA;
+    }
+
+    if (((id == PARAM_ENV3_ATTACK)
+            || (id == PARAM_ENV3_DECAY)
+            || (id == PARAM_ENV3_SUSTAIN)
+            || (id == PARAM_ENV3_RELEASE))
+            && (ui_page_template_subpage_matches_adsr(subpage,
+                                                      PARAM_ENV3_ATTACK,
+                                                      PARAM_ENV3_DECAY,
+                                                      PARAM_ENV3_SUSTAIN,
+                                                      PARAM_ENV3_RELEASE) != 0U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_ENV3;
     }
 
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
@@ -326,7 +339,7 @@ static void ui_page_template_colors_sync_family(void)
     family->nav_labels[0] = "FILTER";
     family->nav_labels[1] = (has_adsr_page != 0U) ? "ADSR" : "-";
     family->nav_labels[2] = (has_vca_page != 0U) ? "VCA" : "-";
-    family->nav_labels[3] = "-";
+    family->nav_labels[3] = "ENV 3";
 
     family->subpages[0].title = "FILTER";
     family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
@@ -346,11 +359,11 @@ static void ui_page_template_colors_sync_family(void)
     family->subpages[2].param_bank.params[2] = (has_vca_page != 0U) ? PARAM_VCA_SUSTAIN : PARAM_COUNT;
     family->subpages[2].param_bank.params[3] = (has_vca_page != 0U) ? PARAM_VCA_RELEASE : PARAM_COUNT;
 
-    family->subpages[3].title = "-";
-    family->subpages[3].param_bank.params[0] = PARAM_COUNT;
-    family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-    family->subpages[3].param_bank.params[2] = PARAM_COUNT;
-    family->subpages[3].param_bank.params[3] = PARAM_COUNT;
+    family->subpages[3].title = "ENV 3";
+    family->subpages[3].param_bank.params[0] = PARAM_ENV3_ATTACK;
+    family->subpages[3].param_bank.params[1] = PARAM_ENV3_DECAY;
+    family->subpages[3].param_bank.params[2] = PARAM_ENV3_SUSTAIN;
+    family->subpages[3].param_bank.params[3] = PARAM_ENV3_RELEASE;
 }
 
 static void ui_page_template_colors_enter(void)

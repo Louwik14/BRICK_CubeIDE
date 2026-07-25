@@ -39,22 +39,23 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
     state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;
     state->vca_release = param_registry[PARAM_VCA_RELEASE].default_value;
-    state->mod_lfo[0].dest = param_registry[PARAM_LFO1_DEST].default_value;
     state->mod_lfo[0].rate = param_registry[PARAM_LFO1_RATE].default_value;
-    state->mod_lfo[0].depth = param_registry[PARAM_LFO1_DEPTH].default_value;
     state->mod_lfo[0].shape = param_registry[PARAM_LFO1_SHAPE].default_value;
     state->mod_lfo[0].delay = param_registry[PARAM_LFO1_DELAY].default_value;
     state->mod_lfo[0].trig = param_registry[PARAM_LFO1_TRIG].default_value;
     state->mod_lfo[0].fade = param_registry[PARAM_LFO1_FADE].default_value;
     state->mod_lfo[0].phase_slew = param_registry[PARAM_LFO1_PHASE_SLEW].default_value;
-    state->mod_lfo[1].dest = param_registry[PARAM_LFO2_DEST].default_value;
     state->mod_lfo[1].rate = param_registry[PARAM_LFO2_RATE].default_value;
-    state->mod_lfo[1].depth = param_registry[PARAM_LFO2_DEPTH].default_value;
     state->mod_lfo[1].shape = param_registry[PARAM_LFO2_SHAPE].default_value;
     state->mod_lfo[1].delay = param_registry[PARAM_LFO2_DELAY].default_value;
     state->mod_lfo[1].trig = param_registry[PARAM_LFO2_TRIG].default_value;
     state->mod_lfo[1].fade = param_registry[PARAM_LFO2_FADE].default_value;
     state->mod_lfo[1].phase_slew = param_registry[PARAM_LFO2_PHASE_SLEW].default_value;
+    state->mod_env3.attack = 0.0f;
+    state->mod_env3.decay = 32.0f;
+    state->mod_env3.sustain = 127.0f;
+    state->mod_env3.release = 32.0f;
+    mod_matrix_set_defaults(state->mod_matrix, &state->mod_matrix_selected_slot);
 }
 
 void track_sound_state_init(void)

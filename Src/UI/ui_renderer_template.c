@@ -19,7 +19,10 @@
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Core/track_sound_state.h"
+#include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_matrix.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 
@@ -42,6 +45,8 @@
 #define UI_TEMPLATE_GROUP_WIDGET_H   UI_TEMPLATE_CARD_WIDGET_H
 #define UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST 1U
 #define UI_TEMPLATE_FILTER_GROUP_SLOT_COUNT 2U
+#define UI_TEMPLATE_LFO_GROUP_SLOT_FIRST 1U
+#define UI_TEMPLATE_LFO_GROUP_SLOT_COUNT 2U
 #define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
 #define UI_TEMPLATE_HEADER_TITLE_X   43
 #define UI_TEMPLATE_HEADER_TITLE_W   42
@@ -168,6 +173,21 @@ static void ui_renderer_template_format_fixed(float value, uint8_t decimals, con
     }
 }
 
+static const char *ui_renderer_template_matrix_source_label(float value)
+{
+    const uint8_t index = (uint8_t)(value + 0.5f);
+    static const char *const labels[] = {
+        "OFF",
+        "LFO1",
+        "LFO2",
+        "ENV1",
+        "ENV2",
+        "ENV3"
+    };
+
+    return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "OFF";
+}
+
 void ui_format_param_127_00(float value, float min_value, float max_value, char *out, uint32_t out_len)
 {
     float normalized = 0.0f;
@@ -218,7 +238,19 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    if ((id == PARAM_LFO1_DEST) || (id == PARAM_LFO2_DEST))
+    if (id == PARAM_MOD_MATRIX_SLOT)
+    {
+        (void)snprintf(out, out_len, "%u", (unsigned int)((uint8_t)(value + 0.5f) + 1U));
+        return;
+    }
+
+    if (id == PARAM_MOD_MATRIX_SOURCE)
+    {
+        (void)snprintf(out, out_len, "%s", ui_renderer_template_matrix_source_label(value));
+        return;
+    }
+
+    if (id == PARAM_MOD_MATRIX_DEST)
     {
         if (mod_lfo_v1_dest_label(ui_get_active_track(), (uint16_t)(value + 0.5f), out, out_len) != 0U)
         {
@@ -943,6 +975,90 @@ static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int
     return 1U;
 }
 
+static const char *ui_renderer_template_lfo_shape_short_label(uint8_t shape)
+{
+    static const char *const labels[] = {
+        "SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW"
+    };
+    return (shape < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[shape] : "-";
+}
+
+static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shape_id,
+                                                                 param_id_t phase_id,
+                                                                 float shape_value,
+                                                                 float phase_value,
+                                                                 int x,
+                                                                 int y,
+                                                                 int w,
+                                                                 int h)
+{
+    if ((w < 24) || (h < 10))
+    {
+        return 0U;
+    }
+
+    (void)shape_id;
+    (void)phase_id;
+    const uint8_t shape = ui_renderer_template_lfo_shape_from_value(shape_value);
+    char shape_label[8];
+    (void)snprintf(shape_label, sizeof(shape_label), "%s", ui_renderer_template_lfo_shape_short_label(shape));
+    drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(shape_label, 22U);
+
+    const int label_w = 24;
+    const int label_x = x + 1;
+    const int label_y = y + ((h - (int)drv_display_font_height()) / 2);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(label_x, label_w, shape_label),
+                          (uint8_t)label_y,
+                          shape_label);
+
+    const int wave_x = x + label_w + 1;
+    const int wave_w = w - label_w - 2;
+    const int wave_h = (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH) ? (h - 9) : h;
+    if (ui_renderer_template_draw_lfo_wave_shape(wave_x, y, wave_w, wave_h, shape) == 0U)
+    {
+        return 0U;
+    }
+
+    if (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        const int bar_y = y + h - 7;
+        const int bar_x = wave_x + 2;
+        const int bar_w = (wave_w > 4) ? (wave_w - 4) : wave_w;
+        float norm = phase_value / 360.0f;
+        if (norm < 0.0f)
+        {
+            norm = 0.0f;
+        }
+        else if (norm > 1.0f)
+        {
+            norm = 1.0f;
+        }
+        drv_display_draw_rect(bar_x, bar_y, bar_w, 5);
+        const int fill_w = (int)((norm * (float)(bar_w - 2)) + 0.5f);
+        if (fill_w > 0)
+        {
+            drv_display_fill_rect(bar_x + 1, bar_y + 1, fill_w, 3);
+        }
+    }
+    else
+    {
+        float phase = phase_value;
+        if (phase < 0.0f)
+        {
+            phase = 0.0f;
+        }
+        else if (phase > 360.0f)
+        {
+            phase = 360.0f;
+        }
+        const uint8_t plot_w = (uint8_t)((wave_w > 2) ? (wave_w - 2) : wave_w);
+        const int cursor_x = wave_x + 1 + (int)((phase * (float)(plot_w - 1U)) / 360.0f);
+        drv_display_draw_line(cursor_x, y + 1, cursor_x, y + wave_h - 2);
+    }
+    return 1U;
+}
+
 static void ui_renderer_template_draw_lfo_center_indicator(int x, int y, int w, int h, float value, float max_abs)
 {
     const int cy = y + (h / 2);
@@ -1035,9 +1151,317 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
             return 1U;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW:
             return ui_renderer_template_draw_lfo_phase_slew(x, y, w, h, id, value);
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP:
+            return 0U;
         default:
             return 0U;
     }
+}
+
+static uint8_t ui_renderer_template_matrix_slot_is_filled(uint8_t track, uint8_t slot)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    if ((state == NULL) || (slot >= MOD_MATRIX_SLOT_COUNT))
+    {
+        return 0U;
+    }
+
+    const track_mod_matrix_slot_t *const matrix_slot = &state->mod_matrix[slot];
+    return ((matrix_slot->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
+            && (matrix_slot->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
+            && (matrix_slot->destination != (uint16_t)MOD_DESTINATION_NONE)
+            && (matrix_slot->destination < (uint16_t)PARAM_COUNT)
+            && (matrix_slot->depth != 0.0f)) ? 1U : 0U;
+}
+
+static void ui_renderer_template_draw_matrix_rows(int x, int y, const uint32_t rows[24])
+{
+    for (uint8_t row = 0U; row < 24U; ++row)
+    {
+        const uint32_t bits = rows[row];
+        for (uint8_t col = 0U; col < 24U; ++col)
+        {
+            if ((bits & (1UL << (23U - col))) != 0UL)
+            {
+                drv_display_draw_pixel(x + (int)col, y + (int)row, true);
+            }
+        }
+    }
+}
+
+static uint32_t ui_renderer_template_matrix_slot_mask(uint8_t slot, uint8_t row)
+{
+    static const uint8_t slot_x[MOD_MATRIX_SLOT_COUNT] = { 0U, 7U, 15U, 15U, 15U, 7U, 0U, 0U };
+    static const uint8_t slot_y[MOD_MATRIX_SLOT_COUNT] = { 0U, 0U, 0U, 7U, 16U, 15U, 16U, 7U };
+    static const uint8_t slot_w[MOD_MATRIX_SLOT_COUNT] = { 7U, 9U, 9U, 9U, 9U, 9U, 7U, 9U };
+    static const uint8_t slot_h[MOD_MATRIX_SLOT_COUNT] = { 7U, 9U, 7U, 9U, 7U, 9U, 7U, 9U };
+
+    if ((slot >= MOD_MATRIX_SLOT_COUNT) || (row < slot_y[slot]) || (row >= (uint8_t)(slot_y[slot] + slot_h[slot])))
+    {
+        return 0U;
+    }
+
+    return ((1UL << slot_w[slot]) - 1UL) << (24U - slot_x[slot] - slot_w[slot]);
+}
+
+static void ui_renderer_template_matrix_set_bit(uint32_t rows[24], uint8_t col, uint8_t row, uint8_t on)
+{
+    if ((col >= 24U) || (row >= 24U))
+    {
+        return;
+    }
+
+    const uint32_t bit = 1UL << (23U - col);
+    rows[row] = (on != 0U) ? (rows[row] | bit) : (rows[row] & ~bit);
+}
+
+static void ui_renderer_template_matrix_clear_slot(uint32_t rows[24], uint8_t slot)
+{
+    for (uint8_t row = 0U; row < 24U; ++row)
+    {
+        rows[row] &= ~ui_renderer_template_matrix_slot_mask(slot, row);
+    }
+}
+
+static void ui_renderer_template_matrix_draw_digit(uint32_t rows[24], uint8_t slot, uint8_t on)
+{
+    static const uint8_t digit_x[MOD_MATRIX_SLOT_COUNT] = { 3U, 10U, 18U, 18U, 18U, 10U, 3U, 3U };
+    static const uint8_t digit_y[MOD_MATRIX_SLOT_COUNT] = { 1U, 1U, 1U, 9U, 17U, 17U, 17U, 9U };
+    static const uint8_t glyphs[8][5] = {
+        { 0x2U, 0x6U, 0x2U, 0x2U, 0x7U },
+        { 0x6U, 0x1U, 0x2U, 0x4U, 0x7U },
+        { 0x6U, 0x1U, 0x2U, 0x1U, 0x6U },
+        { 0x5U, 0x5U, 0x7U, 0x1U, 0x1U },
+        { 0x7U, 0x4U, 0x6U, 0x1U, 0x6U },
+        { 0x3U, 0x4U, 0x7U, 0x5U, 0x7U },
+        { 0x7U, 0x1U, 0x2U, 0x4U, 0x4U },
+        { 0x7U, 0x5U, 0x7U, 0x5U, 0x7U }
+    };
+
+    if (slot >= MOD_MATRIX_SLOT_COUNT)
+    {
+        return;
+    }
+
+    for (uint8_t row = 0U; row < 5U; ++row)
+    {
+        for (uint8_t col = 0U; col < 3U; ++col)
+        {
+            if ((glyphs[slot][row] & (uint8_t)(1U << (2U - col))) != 0U)
+            {
+                ui_renderer_template_matrix_set_bit(rows,
+                                                    (uint8_t)(digit_x[slot] + col),
+                                                    (uint8_t)(digit_y[slot] + row),
+                                                    on);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_matrix_draw_digit_at(uint32_t rows[24],
+                                                      uint8_t slot,
+                                                      uint8_t x,
+                                                      uint8_t y,
+                                                      uint8_t on)
+{
+    static const uint8_t glyphs[8][5] = {
+        { 0x2U, 0x6U, 0x2U, 0x2U, 0x7U },
+        { 0x6U, 0x1U, 0x2U, 0x4U, 0x7U },
+        { 0x6U, 0x1U, 0x2U, 0x1U, 0x6U },
+        { 0x5U, 0x5U, 0x7U, 0x1U, 0x1U },
+        { 0x7U, 0x4U, 0x6U, 0x1U, 0x6U },
+        { 0x3U, 0x4U, 0x7U, 0x5U, 0x7U },
+        { 0x7U, 0x1U, 0x2U, 0x4U, 0x4U },
+        { 0x7U, 0x5U, 0x7U, 0x5U, 0x7U }
+    };
+
+    if (slot >= MOD_MATRIX_SLOT_COUNT)
+    {
+        return;
+    }
+
+    for (uint8_t row = 0U; row < 5U; ++row)
+    {
+        for (uint8_t col = 0U; col < 3U; ++col)
+        {
+            if ((glyphs[slot][row] & (uint8_t)(1U << (2U - col))) != 0U)
+            {
+                ui_renderer_template_matrix_set_bit(rows, (uint8_t)(x + col), (uint8_t)(y + row), on);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_matrix_apply_inactive_slot(uint32_t rows[24], uint8_t slot)
+{
+    static const uint8_t cross_x[MOD_MATRIX_SLOT_COUNT] = { 1U, 9U, 17U, 17U, 17U, 9U, 1U, 1U };
+    static const uint8_t cross_y[MOD_MATRIX_SLOT_COUNT] = { 1U, 1U, 1U, 9U, 17U, 17U, 17U, 9U };
+
+    if (slot >= MOD_MATRIX_SLOT_COUNT)
+    {
+        return;
+    }
+
+    ui_renderer_template_matrix_draw_digit(rows, slot, 0U);
+    for (uint8_t row = 0U; row < 5U; ++row)
+    {
+        for (uint8_t col = 0U; col < 5U; ++col)
+        {
+            ui_renderer_template_matrix_set_bit(rows,
+                                                (uint8_t)(cross_x[slot] + col),
+                                                (uint8_t)(cross_y[slot] + row),
+                                                0U);
+        }
+    }
+    for (uint8_t i = 0U; i < 5U; ++i)
+    {
+        ui_renderer_template_matrix_set_bit(rows, (uint8_t)(cross_x[slot] + i), (uint8_t)(cross_y[slot] + i), 1U);
+        ui_renderer_template_matrix_set_bit(rows, (uint8_t)(cross_x[slot] + 4U - i), (uint8_t)(cross_y[slot] + i), 1U);
+    }
+}
+
+static void ui_renderer_template_matrix_apply_focus_slot(uint32_t rows[24], uint8_t slot)
+{
+    static const uint8_t odd_x[MOD_MATRIX_SLOT_COUNT] = { 0U, 0U, 15U, 0U, 15U, 0U, 0U, 0U };
+    static const uint8_t odd_y[MOD_MATRIX_SLOT_COUNT] = { 0U, 0U, 0U, 0U, 16U, 0U, 16U, 0U };
+    static const uint8_t even_x[MOD_MATRIX_SLOT_COUNT] = { 0U, 7U, 0U, 15U, 0U, 7U, 0U, 0U };
+    static const uint8_t even_y[MOD_MATRIX_SLOT_COUNT] = { 0U, 0U, 0U, 7U, 0U, 15U, 0U, 7U };
+    static const uint16_t arrow_down[9] = {
+        0x1FFU, 0x1FFU, 0x1FFU, 0x1FFU, 0x1FFU, 0x1FFU, 0x0FEU, 0x07CU, 0x038U
+    };
+
+    if (slot >= MOD_MATRIX_SLOT_COUNT)
+    {
+        return;
+    }
+
+    ui_renderer_template_matrix_clear_slot(rows, slot);
+    if ((slot & 1U) == 0U)
+    {
+        const uint8_t x = odd_x[slot];
+        const uint8_t y = odd_y[slot];
+        for (uint8_t row = 0U; row < 7U; ++row)
+        {
+            for (uint8_t col = 0U; col < 7U; ++col)
+            {
+                ui_renderer_template_matrix_set_bit(rows, (uint8_t)(x + col), (uint8_t)(y + row), 1U);
+            }
+        }
+    }
+    else
+    {
+        uint8_t x = even_x[slot];
+        uint8_t y = even_y[slot];
+        if (slot == 3U)
+        {
+            x--;
+        }
+        else if (slot == 5U)
+        {
+            y--;
+        }
+        for (uint8_t row = 0U; row < 9U; ++row)
+        {
+            for (uint8_t col = 0U; col < 9U; ++col)
+            {
+                uint8_t on = 0U;
+                if (slot == 1U)
+                {
+                    on = ((arrow_down[row] & (uint16_t)(1U << (8U - col))) != 0U) ? 1U : 0U;
+                }
+                else if (slot == 5U)
+                {
+                    on = ((arrow_down[8U - row] & (uint16_t)(1U << (8U - col))) != 0U) ? 1U : 0U;
+                }
+                else if (slot == 3U)
+                {
+                    on = ((arrow_down[8U - col] & (uint16_t)(1U << (8U - row))) != 0U) ? 1U : 0U;
+                }
+                else
+                {
+                    on = ((arrow_down[col] & (uint16_t)(1U << row)) != 0U) ? 1U : 0U;
+                }
+                if (on != 0U)
+                {
+                    if ((slot == 7U) && (col == 8U) && ((row == 3U) || (row == 5U)))
+                    {
+                        continue;
+                    }
+                    ui_renderer_template_matrix_set_bit(rows, (uint8_t)(x + col), (uint8_t)(y + row), 1U);
+                }
+            }
+        }
+        if (slot == 1U)
+        {
+            ui_renderer_template_matrix_set_bit(rows, (uint8_t)(x + 1U), (uint8_t)(y + 8U), 1U);
+            ui_renderer_template_matrix_set_bit(rows, (uint8_t)(x + 7U), (uint8_t)(y + 8U), 1U);
+        }
+    }
+    if (slot == 3U)
+    {
+        ui_renderer_template_matrix_draw_digit_at(rows, slot, 17U, 9U, 0U);
+    }
+    else if (slot == 5U)
+    {
+        ui_renderer_template_matrix_draw_digit_at(rows, slot, 10U, 16U, 0U);
+    }
+    else
+    {
+        ui_renderer_template_matrix_draw_digit(rows, slot, 0U);
+    }
+}
+
+static uint8_t ui_renderer_template_draw_matrix_slot_widget(int x, int y, int w, int h, float value)
+{
+    static const uint32_t all_active_rows[24] = {
+        0x000000U, 0x103030U, 0x300808U, 0x101010U, 0x102008U, 0x383830U,
+        0x000000U, 0x010100U, 0x008200U, 0x384428U, 0x283828U, 0x382838U,
+        0x283808U, 0x384408U, 0x008200U, 0x010100U, 0x000000U, 0x383838U,
+        0x082020U, 0x103838U, 0x202808U, 0x203838U, 0x000000U, 0x000000U
+    };
+    uint32_t rows[24];
+
+    const int ox = x + ((w > 24) ? ((w - 24) / 2) : 0);
+    const int oy = y + ((h > 24) ? ((h - 24) / 2) : 0);
+    uint8_t selected = (uint8_t)(value + 0.5f);
+    if (selected >= MOD_MATRIX_SLOT_COUNT)
+    {
+        selected = MOD_MATRIX_SLOT_COUNT - 1U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+    for (uint8_t row = 0U; row < 24U; ++row)
+    {
+        rows[row] = all_active_rows[row];
+    }
+
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        if (ui_renderer_template_matrix_slot_is_filled(track, slot) == 0U)
+        {
+            ui_renderer_template_matrix_apply_inactive_slot(rows, slot);
+        }
+    }
+
+    ui_renderer_template_matrix_apply_focus_slot(rows, selected);
+
+    ui_renderer_template_draw_matrix_rows(ox, oy, rows);
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_matrix_source_text(int x, int y, int w, int h, float value)
+{
+    char label[12];
+
+    if ((w <= 0) || (h <= 0))
+    {
+        return 0U;
+    }
+
+    (void)snprintf(label, sizeof(label), "%s", ui_renderer_template_matrix_source_label(value));
+    drv_display_set_font(&FONT_OFF_COMPACT);
+    ui_renderer_template_fit_text(label, (uint8_t)((w > 2) ? (w - 2) : w));
+    return ui_renderer_template_draw_filter_text(x, y, w, h, label, &FONT_OFF_COMPACT, 4);
 }
 
 static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, int y, int w, int h, float value)
@@ -1989,6 +2413,13 @@ static uint8_t ui_renderer_template_custom_adsr_params(ui_template_custom_widget
             *out_release = PARAM_VCA_RELEASE;
             return 1U;
 
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_ENV3:
+            *out_attack = PARAM_ENV3_ATTACK;
+            *out_decay = PARAM_ENV3_DECAY;
+            *out_sustain = PARAM_ENV3_SUSTAIN;
+            *out_release = PARAM_ENV3_RELEASE;
+            return 1U;
+
         default:
             return 0U;
     }
@@ -2323,6 +2754,65 @@ static uint8_t ui_renderer_template_draw_filter_curve_group(const ui_param_seq_p
                                                    h,
                                                    0.0f,
                                                    1U);
+}
+
+static uint8_t ui_renderer_template_lfo_shape_phase_group_is_active(const ui_template_page_state_t *state,
+                                                                    const ui_template_subpage_t *subpage,
+                                                                    param_id_t *out_shape_id,
+                                                                    param_id_t *out_phase_id)
+{
+    if ((subpage == 0)
+            || (out_shape_id == 0)
+            || (out_phase_id == 0)
+            || (ui_renderer_template_resolve_custom_widget(state,
+                                                           subpage,
+                                                           UI_TEMPLATE_LFO_GROUP_SLOT_FIRST,
+                                                           subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST]) != UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP)
+            || (ui_renderer_template_resolve_custom_widget(state,
+                                                           subpage,
+                                                           UI_TEMPLATE_LFO_GROUP_SLOT_FIRST + 1U,
+                                                           subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST + 1U]) != UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP))
+    {
+        return 0U;
+    }
+
+    const param_id_t phase_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST];
+    const param_id_t shape_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST + 1U];
+    if (!(((phase_param == PARAM_LFO1_PHASE_SLEW) && (shape_param == PARAM_LFO1_SHAPE))
+            || ((phase_param == PARAM_LFO2_PHASE_SLEW) && (shape_param == PARAM_LFO2_SHAPE))))
+    {
+        return 0U;
+    }
+
+    *out_shape_id = shape_param;
+    *out_phase_id = phase_param;
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_lfo_shape_phase_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                               param_id_t shape_id,
+                                                               param_id_t phase_id)
+{
+    float shape_value = 0.0f;
+    float phase_value = 0.0f;
+    if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, shape_id, &shape_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, phase_id, &phase_value, 0) == 0U))
+    {
+        return 0U;
+    }
+
+    const int x = g_ui_template_frame_x[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST] + UI_TEMPLATE_CARD_WIDGET_X_PAD;
+    const int y = UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y;
+    const int w = (UI_TEMPLATE_FRAME_W * UI_TEMPLATE_LFO_GROUP_SLOT_COUNT) - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD);
+    const int h = UI_TEMPLATE_CARD_WIDGET_H;
+    return ui_renderer_template_render_lfo_shape_phase_group(shape_id,
+                                                             phase_id,
+                                                             shape_value,
+                                                             phase_value,
+                                                             x,
+                                                             y,
+                                                             w,
+                                                             h);
 }
 
 static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
@@ -2998,6 +3488,18 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                             UI_TEMPLATE_CARD_WIDGET_H,
                                                             id,
                                                             value) != 0U)
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT)
+                ? (ui_renderer_template_draw_matrix_slot_widget(widget_x,
+                                                                widget_y,
+                                                                UI_TEMPLATE_CARD_WIDGET_W,
+                                                                UI_TEMPLATE_CARD_WIDGET_H,
+                                                                value) != 0U)
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE)
+                ? (ui_renderer_template_draw_matrix_source_text(widget_x,
+                                                                widget_y,
+                                                                UI_TEMPLATE_CARD_WIDGET_W,
+                                                                UI_TEMPLATE_CARD_WIDGET_H,
+                                                                value) != 0U)
                 : (((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
@@ -3027,7 +3529,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                          widget_x,
                                                          widget_y,
                                                          UI_TEMPLATE_CARD_WIDGET_W,
-                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U))))))
+                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U))))))))
         {
             if (slot_locked != 0U)
             {
@@ -3400,6 +3902,16 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
                 grouped_widget_drawn = 1U;
             }
+            param_id_t grouped_lfo_shape_id = PARAM_COUNT;
+            param_id_t grouped_lfo_phase_id = PARAM_COUNT;
+            if (ui_renderer_template_lfo_shape_phase_group_is_active(state,
+                                                                     subpage,
+                                                                     &grouped_lfo_shape_id,
+                                                                     &grouped_lfo_phase_id) != 0U)
+            {
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
+                grouped_widget_drawn = 1U;
+            }
 
             for (uint8_t i = 0U; i < 4U; i++)
             {
@@ -3417,6 +3929,12 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
                 {
                     (void)ui_renderer_template_draw_filter_curve_group(&plock_frame_ctx);
+                }
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP)
+                {
+                    (void)ui_renderer_template_draw_lfo_shape_phase_group(&plock_frame_ctx,
+                                                                          grouped_lfo_shape_id,
+                                                                          grouped_lfo_phase_id);
                 }
                 else
                 {

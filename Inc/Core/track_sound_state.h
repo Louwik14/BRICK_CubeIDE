@@ -3,21 +3,29 @@
 
 #include <stdint.h>
 
+#include "Mod/mod_matrix.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct
 {
-    float dest;
     float rate;
-    float depth;
     float shape;
     float delay;
     float trig;
     float fade;
     float phase_slew;
 } track_mod_lfo_state_t;
+
+typedef struct
+{
+    float attack;
+    float decay;
+    float sustain;
+    float release;
+} track_mod_env3_state_t;
 
 typedef struct
 {
@@ -49,6 +57,9 @@ typedef struct
     float vca_sustain;
     float vca_release;
     track_mod_lfo_state_t mod_lfo[2];
+    track_mod_env3_state_t mod_env3;
+    track_mod_matrix_slot_t mod_matrix[MOD_MATRIX_SLOT_COUNT];
+    uint8_t mod_matrix_selected_slot;
 } track_sound_state_t;
 
 void track_sound_state_init(void);

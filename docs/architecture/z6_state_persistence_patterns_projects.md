@@ -1,4 +1,4 @@
-# Z6 - State / Persistence / Patterns / Projects
+﻿# Z6 - State / Persistence / Patterns / Projects
 
 ## 1. Perimetre
 
@@ -59,7 +59,7 @@ Autorite snapshot live (pattern):
 - Capture: `pattern_live_capture_current()`.
 - Apply: `pattern_live_apply_snapshot()`.
 - Selection pattern active/queued: `pattern_live_queue_slot()`, `pattern_live_service()`, `pattern_live_set_active_state()`.
-- Restore LFO en apply live: une seule voie d'autorite (`mod_lfo_v1_set_track_param` depuis `pattern_live_apply_snapshot`).
+- Restore LFO/Matrix/ENV3 en apply live: via les blocs track-aware du layout courant; aucun bloc legacy LFO `DEST/DEPTH`.
 
 Autorite persistence pattern bank SD:
 - `pattern_sd_bank_store_slot[_nosync]()`, `pattern_sd_bank_load_slot()`, `pattern_sd_bank_delete_slot()`, `pattern_sd_bank_get_slot_checksum()`.
@@ -247,7 +247,7 @@ Z6 appelle les zones suivantes:
   - `track_runtime_get_param_rule()`, `track_runtime_refresh_all()`.
 - Z3 Param/Mod:
   - `param_get()`, `param_set()`, `param_registry_get_track_value()`, `param_registry_apply_track_value()`, `param_registry_batch_begin/end()`, `param_registry_sync_ui_for_active_track()`.
-  - `mod_lfo_v1_get_track_param()`, `mod_lfo_v1_set_track_param()`.
+  - `param_registry_get_track_value()`, `param_registry_apply_track_value()`.
 - Z4 Seq:
   - `seq_model_*` (capture/apply trig/plocks/pages/length).
   - `seq_runtime_*` (tempo/clock/rec/div/quant/swing/playhead/start/stop).
@@ -492,7 +492,7 @@ Carte courte du flux reel observe dans `Src/Storage/pattern_live_ram.c`:
   - reprise uniquement en fin d'apply si `resume_transport != 0` et si transport etait running avant stop.
 - Restore params / modulation:
   - `param_registry_batch_begin/end` encadre l'apply des blocs `sound` + `mix` par track puis des globals via `param_set`.
-  - modulation LFO restauree ensuite, uniquement via `mod_lfo_v1_set_track_param` (autorite unique).
+  - modulation LFO/Matrix/ENV3 restauree via les params track-aware du layout courant.
 - Restore seq/model/playhead:
   - validation budget plocks, puis `pattern_live_apply_seq_block()` (reset model + trigs/plocks/pages/length).
   - reset playhead de toutes les tracks a 0 en fin d'apply.
@@ -519,10 +519,10 @@ Plus petite prochaine passe utile:
   - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=RAM`,
   - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `RAM`,
   - aucun bump de format snapshot n'est requis pour cette seule sortie de family.
-- La grille Slice n'est jamais persistÃ©e:
+- La grille Slice n'est jamais persistÃƒÂ©e:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock; `Slicer` n'est plus un type Track CFG visible et les configs legacy `Sampler/Slicer` sont normalisees en `Sampler/RAM` sans changer `PARAM_COUNT`.
-- `PROJECT_V1_FILE_VERSION` a ete incremente pour reflï¿½ter le payload Sampler v1 et le bloc MACRO projet.
+- `PROJECT_V1_FILE_VERSION` a ete incremente pour reflÃ¯Â¿Â½ter le payload Sampler v1 et le bloc MACRO projet.
 - `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquaient une ancienne rupture prototype Synth historique; les anciens payloads incompatibles restent refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
@@ -578,7 +578,7 @@ TODO policy SD/projet:
 - L'ajout du type Master/FX `COLOR` etend seulement l'enum de valeur stockee dans les params `PARAM_MASTER_FXn_TYPE`; `PARAM_COUNT`, `PatternSaveV1` et `ProjectSaveV1` ne changent pas.
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
 - Le retrait produit de Master/FX `TALK` et `PITCH` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..11`; `PARAM_COUNT` ne change pas, mais les formats pattern/projet/patch/kit sont bumpes pour refuser les anciens fichiers prototype.
-- Le retrait produit de Master/FX `ECHO` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..10`; `PARAM_COUNT` ne change pas. `PATTERN_VERSION=30`, `PROJECT_V1_FILE_VERSION=42`, `PATCH_SD_FILE_VERSION=4` et `KIT_SD_FILE_VERSION=3` refusent les anciens fichiers prototype sans migration legacy.
+- Le retrait produit de Master/FX `ECHO` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..10`; `PARAM_COUNT` ne change pas. `PATTERN_VERSION=31`, `PROJECT_V1_FILE_VERSION=43`, `PATCH_SD_FILE_VERSION=5` et `KIT_SD_FILE_VERSION=4` refusent les anciens fichiers prototype sans migration legacy.
 - `STUTTER` et `FREEZE` sont des ressources uniques dans les 4 slots Master/FX sans changement de layout: les restaurations multiples sont normalisees par l'apply param Z3, qui conserve le premier slot du type unique concerne et remappe les suivants vers `OFF`. Aucun bump supplementaire de format n'est requis par cette contrainte.
 - L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
 
@@ -788,9 +788,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## 34. Versioning LFO final
 
 - `PATTERN_VERSION=25` et `PROJECT_V1_FILE_VERSION=36` marquent la rupture prototype du contrat LFO final.
-- `PatternSaveV1.mod` persiste maintenant, par LFO, `dest`, `rate`, `depth`, `shape`, `delay`, `trig`, `fade`, `phase_slew`.
+- `PatternSaveV1` ne porte plus de bloc `mod`: les params LFO courants, Matrix et ENV3 sont stockes via les blocs track-aware.
 - Les anciennes sauvegardes prototype sont refusees par version/payload stricts; aucune migration produit complexe n'est requise.
-- La restauration LFO reste mono-autorite: `pattern_live_apply_snapshot` appelle uniquement `mod_lfo_v1_set_track_param`.
+- La restauration Matrix/ENV3 refuse les anciens formats par version et n'applique aucun fallback LFO `DEST/DEPTH`.
 - `PATTERN_VERSION=17` et `PROJECT_V1_FILE_VERSION=22` marquent l'ajout de `PARAM_WAVE_PHASE_RESET` et le changement de layout `PARAM_COUNT`; les anciens fichiers prototype sont refuses par version/payload stricts.
 - La selection ROUT `Sampler/Looper` est capturee/restauree par matrice `looper track -> source track` dans le snapshot pattern; les projets la portent via leur snapshot live embarque.
 - Les etats internes writer (`TAKE_READY`, `FINALIZING`, etc.) restent caches; aucun etat `Temp/Saved/Finalizing` n'est expose comme param utilisateur Looper.
@@ -921,10 +921,10 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - `patch_v1` ajoute une persistence Z6 separee de Project/Pattern: un Patch est la photo canonique d'une seule track.
 - Les slots Patch sont des fichiers indexes sous `0:/BRICK/PATCH/P0000.B6P`, format magic `B6PT`, version `1`, header metadata et checksum du payload.
-- Payload V1: family/type/source/name, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO capturees via `mod_lfo_v1_get_track_param`, et une reference asset Sampler optionnelle issue de `sample_global_pool`.
+- Payload V1: family/type/source/name, `track_sound_state_t`, `track_tone_sound_state_t` et une reference asset Sampler optionnelle issue de `sample_global_pool`.
 - Aucun audio brut, sequence, pattern, p-lock, playhead, voice, reader SD, page-cache, buffer audio, pointeur runtime ou etat IRQ n'est capture.
 - `patch_sd_bank` utilise `SD_ACCESS_CLIENT_PATCH`; les acces FatFs restent hors IRQ et exclusifs vis-a-vis des clients SD critiques.
-- L'apply minimal `patch_v1_apply_slot_to_track` charge un slot, valide header/checksum/payload, neutralise les notes/voix de la target, applique family/type via les autorites UI/track_state existantes, rafraichit `track_runtime`, restaure les etats canoniques sound/tone, restaure les LFO via `mod_lfo_v1_set_track_param`, puis reapplique les params autorises via `param_registry_apply_track_value`.
+- L'apply minimal `patch_v1_apply_slot_to_track` charge un slot, valide header/checksum/payload, neutralise les notes/voix de la target, applique family/type via les autorites UI/track_state existantes, rafraichit `track_runtime`, restaure les etats canoniques sound/tone, puis reapplique les params autorises via `param_registry_apply_track_value`.
 - La banque Patch V1 expose un slot state minimal `EMPTY/VALID/INVALID`, `patch_sd_bank_rename_slot` et `patch_sd_bank_delete_slot`. Rename recharge le payload, modifie `meta.name` et reecrit le meme fichier avec checksum recalcule; delete supprime le fichier de slot et met le slot en `EMPTY`.
 - Le slot courant reste l'index choisi par le browser/save/apply. Save direct ecrit le slot courant s'il est utilisable, sinon le premier slot vide; apply positionne le slot courant sur le slot applique; delete choisit le prochain slot valide ou conserve le slot devenu vide.
 - Les filtres/tri Patch Assign utilisent uniquement le cache metadata/header de `patch_sd_bank`; aucun payload lourd n'est charge pour construire la liste. Les filtres precis Family/Type listent uniquement les slots `VALID` compatibles; `BAD PATCH` et `EMPTY` restent visibles seulement dans la vue `ALL/ALL`, apres les patches valides.
@@ -937,27 +937,27 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - Le format Patch `B6PT` passe en version `2`; les anciens payloads version `1` sont refuses proprement par validation stricte d'en-tete/version/payload.
 - Un Patch porte maintenant `width=1..PATCH_POLY_TRACK_MAX`, avec `PATCH_POLY_TRACK_MAX=4`. `P1` correspond au snapshot mono-track historique; `P2/P3/P4` representent un seul preset sonore compose de tracks liees.
-- Le payload Patch v2 contient `members[4]`. Chaque membre stocke role `SOLO/MASTER/SLAVE`, index relatif, family/type, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO et une reference asset Sampler optionnelle issue de `sample_global_pool`.
+- Le payload Patch v2 contient `members[4]`. Chaque membre stocke role `SOLO/MASTER/SLAVE`, index relatif, family/type, `track_sound_state_t`, `track_tone_sound_state_t` et une reference asset Sampler optionnelle issue de `sample_global_pool`.
 - Le header/cache metadata ajoute la largeur et le summary primaire Family/Type/Width pour le browser Patch Assign. Rename recharge le payload v2, modifie `meta.name`, puis reecrit header/payload avec checksum recalcule; delete reste un unlink de slot.
 - La capture Patch Poly s'appuie uniquement sur `voice_group_role`: focus `SOLO` -> `P1`; focus `MASTER` -> master + slaves contigus; focus `SLAVE` -> remontee au master effectif puis capture du groupe. Les groupes incoherents ou plus larges que 4 sont refuses.
 - L'apply `P1` conserve l'application mono-track vers une ou plusieurs targets. L'apply `P2/P3/P4` exige une seule target role `MASTER` dont le groupe contigu declare a exactement la largeur du Patch.
 - Avant mutation, l'apply valide header/checksum/version, largeur, roles membres, family/type et refs asset Sampler deja `READY`; un asset manquant refuse `ASSET MISS` sans reload SD/page-cache/reader.
 - L'apply ne capture ni ne restaure sequence, pattern, p-lock, playhead, transport, voices, readers SD, page-cache, buffers audio, etat IRQ ni etat UI temporaire. Aucun apply partiel, Set, preview, rollback ou creation automatique de slaves n'est introduit.
 
-## Addendum 2026-05-29 - Kit V1 étape 2
+## Addendum 2026-05-29 - Kit V1 Ã©tape 2
 
-- `kit_v1` ajoute une persistence Z6 séparée de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sélectionnables.
-- Les slots Kit sont des fichiers indexés sous `0:/BRICK/KIT/K0000.B6K`, format magic `B6KT`, version `1`, header metadata (`name[32]`, `track_count`, summary compact 16 tracks max), `payload_size` et checksum du payload.
-- Payload V1: pour les tracks `0..UI_TRACK_COUNT-1`, capture family/type, `track_sound_state_t`, `track_tone_sound_state_t`, deux lanes LFO via `mod_lfo_v1_get_track_param`, référence asset Sampler optionnelle issue de `sample_global_pool`, et summary family/type/label/off pour miniature future.
-- Aucun pattern, séquence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, état IRQ ni état UI temporaire n'est capturé.
-- `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accès FatFs restent hors IRQ et exclusifs vis-à-vis des clients SD critiques.
-- Étape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Rename recharge le payload, met à jour `meta.name`, puis réécrit header/payload avec checksum recalculé; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
+- `kit_v1` ajoute une persistence Z6 sÃ©parÃ©e de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sÃ©lectionnables.
+- Les slots Kit sont des fichiers indexÃ©s sous `0:/BRICK/KIT/K0000.B6K`, format magic `B6KT`, version `1`, header metadata (`name[32]`, `track_count`, summary compact 16 tracks max), `payload_size` et checksum du payload.
+- Payload V1: pour les tracks `0..UI_TRACK_COUNT-1`, capture family/type, `track_sound_state_t`, `track_tone_sound_state_t`, reference asset Sampler optionnelle issue de `sample_global_pool`, et summary family/type/label/off pour miniature future.
+- Aucun pattern, sÃ©quence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, Ã©tat IRQ ni Ã©tat UI temporaire n'est capturÃ©.
+- `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accÃ¨s FatFs restent hors IRQ et exclusifs vis-Ã -vis des clients SD critiques.
+- Ã‰tape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Rename recharge le payload, met Ã  jour `meta.name`, puis rÃ©Ã©crit header/payload avec checksum recalculÃ©; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
 
 ## Addendum 2026-05-29 - Kit V1 etape 3
 
 - `kit_v1_apply_slot` charge et valide le slot Kit (`B6KT`, version, payload size, checksum via `kit_sd_bank_load_slot`, puis `meta.track_count == UI_TRACK_COUNT` et family/type valides).
 - Avant toute mutation, les refs asset Sampler `RAM/STREAM/MULTI` sont resolues uniquement contre un slot `sample_global_pool` deja `READY`, de meme kind/path; aucun reload SD, reader, page-cache ou streamer n'est cree. Refus: `ASSET MISS`.
-- Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, restaure les deux LFO par `mod_lfo_v1_set_track_param`, puis reprojette les domaines `COLORS`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
+- Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, puis reprojette les domaines `COLORS`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
 - Le transport, playhead, sequence, pattern et p-locks ne sont ni captures ni restaures. Si une erreur arrive apres mutation structurelle/reapply partiel, le refus final est `ERROR`; aucun rollback complet n'est garanti en V1.
 - Apply partiel, target mask, preview, rollback, reload asset Sampler complet, tags/filtres avances et Patch polyX restent hors perimetre.
 ## Addendum 2026-05-29 - Pattern linked Kit
@@ -984,3 +984,18 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - La creation/reset de projet via le boot snapshot et `project_v1_load_blank()` reprend les defaults `seq_model_init_defaults()`: `SEQ Length=16` sur chaque track.
 - Les snapshots projets/patterns existants continuent de restaurer leur champ `length_steps` stocke quand il est valide; le format persistant n'est pas modifie.
+
+## Addendum 2026-07-24 - payload Kit/Patch Matrix et ENV3
+
+- `track_sound_state_t` porte maintenant la config canonique `mod_env3` et les slots `mod_matrix`; les payloads Kit/Patch capturent donc ces champs via leur snapshot sound.
+- `KIT_SD_FILE_VERSION=4` et `PATCH_SD_FILE_VERSION=5` marquent la rupture de payload; les anciens slots Kit/Patch sont refuses par validation stricte version/taille, sans migration implicite.
+- Les payloads dedies aux anciennes lanes LFO `DEST/DEPTH` ont ete retires du format courant; la Matrix/ENV3 n'a pas de conversion depuis ces anciens champs.
+- La passe runtime seule ne changeait pas `PatternSaveV1`; la surface param/UI ci-dessous introduit ensuite le bump Pattern/Project associe au layout `PARAM_COUNT`.
+
+## Addendum 2026-07-24 - layout param Matrix/ENV3
+
+- `PARAM_MOD_MATRIX_SLOT/SOURCE/DEST/DEPTH` et `PARAM_ENV3_ATTACK/DECAY/SUSTAIN/RELEASE` sont ajoutes au layout `PARAM_COUNT`.
+- `PATTERN_VERSION=31` et `PROJECT_V1_FILE_VERSION=43` marquent la rupture de payload Pattern/Project; les anciens fichiers prototype sont refuses par validation stricte version/taille, sans migration implicite.
+- `PatternSaveV1` ne contient plus de bloc LFO separe: LFO source, Matrix et ENV3 sont persistants uniquement via les blocs track-aware du layout courant.
+- Les anciens params directs `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant au lieu d'etre convertis ou conserves en fallback.
+- Kit/Patch conservent leurs versions deja bumpÃ©es par la rupture `track_sound_state_t`: la surface param n'ajoute pas de nouveau champ dedie dans leurs headers.

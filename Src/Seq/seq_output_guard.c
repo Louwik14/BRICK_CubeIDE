@@ -12,6 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "midi.h"
@@ -148,6 +149,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         {
             mixer_track_vca_all_notes_off(resolved.mix_track_id);
         }
+        mod_lfo_v1_all_notes_off(track);
 
         if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {

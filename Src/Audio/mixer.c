@@ -89,6 +89,8 @@ typedef struct {
     uint8_t vca_note_count;
     uint8_t vca_current_note;
     uint8_t vca_gate;
+    float vca_env_value;
+    float filter_env_value;
     uint8_t type;
 } mixer_track_filter_t;
 
@@ -617,6 +619,8 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->vca_gate = 0U;
+    filter->vca_env_value = 0.0f;
+    filter->filter_env_value = 0.0f;
 
     fx_biquad_filter_mono_init(&filter->biquad_mono, filter->sample_rate);
     env_adsr_init(&filter->filter_env, filter->sample_rate);
@@ -836,6 +840,7 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
     while(i < frames)
     {
         const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
+        filter->filter_env_value = env;
         fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
 
         uint32_t chunk = frames - i;
@@ -846,7 +851,7 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
 
         for(uint32_t j = 1U; j < chunk; ++j)
         {
-            (void)env_adsr_process_step(&filter->filter_env);
+            filter->filter_env_value = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
         }
 
         fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
@@ -862,6 +867,7 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
     while(i < frames)
     {
         const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
+        filter->filter_env_value = env;
         fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
 
         uint32_t chunk = frames - i;
@@ -872,7 +878,7 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
 
         for(uint32_t j = 1U; j < chunk; ++j)
         {
-            (void)env_adsr_process_step(&filter->filter_env);
+            filter->filter_env_value = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
         }
 
         fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
@@ -1928,6 +1934,7 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
         g_track_filters[track_id].vca_note_count = 0U;
         g_track_filters[track_id].vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
         g_track_filters[track_id].vca_gate = 0U;
+        g_track_filters[track_id].vca_env_value = 0.0f;
         adsr_daisy_c_reset(&g_track_filters[track_id].vca_env);
     }
 }
@@ -1986,6 +1993,7 @@ void mixer_track_vca_all_notes_off(uint32_t track_id)
     filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->vca_gate = 0U;
+    filter->vca_env_value = 0.0f;
     adsr_daisy_c_reset(&filter->vca_env);
 }
 
@@ -1999,6 +2007,22 @@ uint8_t mixer_track_vca_is_running(uint32_t track_id)
         return 0U;
 
     return adsr_daisy_c_is_running(&filter->vca_env);
+}
+
+float mixer_get_track_vca_env_value(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return 0.0f;
+
+    return clampf_local(g_track_filters[track_id].vca_env_value, 0.0f, 1.0f);
+}
+
+float mixer_get_track_filter_env_value(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return 0.0f;
+
+    return clampf_local(g_track_filters[track_id].filter_env_value, 0.0f, 1.0f);
 }
 
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note)
@@ -2022,6 +2046,7 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->note_active = 0U;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
+    filter->filter_env_value = 0.0f;
     env_adsr_reset(&filter->filter_env);
 }
 
@@ -2400,6 +2425,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float vca_gain = (g_track_filters[t].vca_enabled != 0U)
                         ? adsr_daisy_c_process(&g_track_filters[t].vca_env, g_track_filters[t].vca_gate)
                         : 1.0f;
+                if (g_track_filters[t].vca_enabled != 0U)
+                {
+                    g_track_filters[t].vca_env_value = vca_gain;
+                }
                 if (is_mono_native_lane != 0U)
                 {
                     mono[i] *= (gain_cur * vca_gain);

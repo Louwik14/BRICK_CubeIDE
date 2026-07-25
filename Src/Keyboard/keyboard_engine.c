@@ -211,6 +211,7 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     {
         drum_synth_all_notes_off_for_instance(ctx->instance_id);
     }
+    mod_lfo_v1_all_notes_off(track);
 }
 
 static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
@@ -250,6 +251,10 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
     if (is_note_on != 0U)
     {
         mod_lfo_v1_note_trigger(track);
+    }
+    else
+    {
+        mod_lfo_v1_note_release(track);
     }
 
     uint8_t filter_track = 0U;

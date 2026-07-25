@@ -357,6 +357,10 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     {
         mod_lfo_v1_note_trigger(track);
     }
+    else
+    {
+        mod_lfo_v1_note_release(track);
+    }
 
     if (resolved.has_filter_target != 0U)
     {

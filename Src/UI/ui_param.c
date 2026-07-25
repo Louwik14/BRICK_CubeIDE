@@ -1178,7 +1178,7 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
         *out_max = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
     }
-    else if ((param == PARAM_LFO1_DEST) || (param == PARAM_LFO2_DEST))
+    else if (param == PARAM_MOD_MATRIX_DEST)
     {
         const uint16_t count = mod_lfo_v1_dest_count(track);
         *out_max = (count > 0U) ? (float)(count - 1U) : 0.0f;

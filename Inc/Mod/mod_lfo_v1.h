@@ -34,9 +34,7 @@ typedef enum
 
 typedef enum
 {
-    MOD_LFO_PARAM_DEST = 0,
-    MOD_LFO_PARAM_RATE,
-    MOD_LFO_PARAM_DEPTH,
+    MOD_LFO_PARAM_RATE = 0,
     MOD_LFO_PARAM_SHAPE,
     MOD_LFO_PARAM_DELAY,
     MOD_LFO_PARAM_TRIG,
@@ -64,6 +62,8 @@ void mod_lfo_v1_invalidate_dest_cache_all(void);
 void mod_lfo_v1_process_sample_all(void);
 void mod_lfo_v1_process_block(uint32_t frames);
 void mod_lfo_v1_note_trigger(uint8_t track);
+void mod_lfo_v1_note_release(uint8_t track);
+void mod_lfo_v1_all_notes_off(uint8_t track);
 uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index);
 uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7);
 

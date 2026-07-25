@@ -33,6 +33,8 @@
 #include "Core/track_state.h"
 #include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_env3.h"
+#include "Mod/mod_matrix.h"
 #include "Sampler/multi_sample_pool.h"
 #include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
@@ -203,17 +205,9 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
 
     switch (id)
     {
-        case PARAM_LFO1_DEST:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_DEST;
-            return 1U;
         case PARAM_LFO1_RATE:
             *out_lfo_index = 0U;
             *out_lfo_param = MOD_LFO_PARAM_RATE;
-            return 1U;
-        case PARAM_LFO1_DEPTH:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_DEPTH;
             return 1U;
         case PARAM_LFO1_SHAPE:
             *out_lfo_index = 0U;
@@ -235,17 +229,9 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
             *out_lfo_index = 0U;
             *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
             return 1U;
-        case PARAM_LFO2_DEST:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_DEST;
-            return 1U;
         case PARAM_LFO2_RATE:
             *out_lfo_index = 1U;
             *out_lfo_param = MOD_LFO_PARAM_RATE;
-            return 1U;
-        case PARAM_LFO2_DEPTH:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_DEPTH;
             return 1U;
         case PARAM_LFO2_SHAPE:
             *out_lfo_index = 1U;
@@ -267,6 +253,57 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
             *out_lfo_index = 1U;
             *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
             return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_env3_map(param_id_t id, mod_env3_param_t *out_env_param)
+{
+    if (out_env_param == NULL)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_ENV3_ATTACK: *out_env_param = MOD_ENV3_PARAM_ATTACK; return 1U;
+        case PARAM_ENV3_DECAY: *out_env_param = MOD_ENV3_PARAM_DECAY; return 1U;
+        case PARAM_ENV3_SUSTAIN: *out_env_param = MOD_ENV3_PARAM_SUSTAIN; return 1U;
+        case PARAM_ENV3_RELEASE: *out_env_param = MOD_ENV3_PARAM_RELEASE; return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_matrix_get_track_value(param_id_t id, uint8_t track, float *out_value)
+{
+    switch (id)
+    {
+        case PARAM_MOD_MATRIX_SLOT:
+            return mod_matrix_get_selected_slot(track, out_value);
+        case PARAM_MOD_MATRIX_SOURCE:
+            return mod_matrix_get_selected_slot_source(track, out_value);
+        case PARAM_MOD_MATRIX_DEST:
+            return mod_matrix_get_selected_slot_destination_index(track, out_value);
+        case PARAM_MOD_MATRIX_DEPTH:
+            return mod_matrix_get_selected_slot_depth(track, out_value);
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_matrix_set_track_value(param_id_t id, uint8_t track, float value)
+{
+    switch (id)
+    {
+        case PARAM_MOD_MATRIX_SLOT:
+            return mod_matrix_set_selected_slot(track, value);
+        case PARAM_MOD_MATRIX_SOURCE:
+            return mod_matrix_set_selected_slot_source(track, value);
+        case PARAM_MOD_MATRIX_DEST:
+            return mod_matrix_set_selected_slot_destination_index(track, value);
+        case PARAM_MOD_MATRIX_DEPTH:
+            return mod_matrix_set_selected_slot_depth(track, value);
         default:
             return 0U;
     }
@@ -1031,10 +1068,23 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
 
     {
         uint8_t lfo_index = 0U;
-        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
         if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
         {
             return mod_lfo_v1_get_track_param(track, lfo_index, lfo_param, out_value);
+        }
+    }
+
+    if (param_matrix_get_track_value(id, track, out_value) != 0U)
+    {
+        return 1U;
+    }
+
+    {
+        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+        if (param_env3_map(id, &env_param) != 0U)
+        {
+            return mod_env3_get_track_param(track, env_param, out_value);
         }
     }
 
@@ -1129,10 +1179,18 @@ uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t tra
 
     {
         uint8_t lfo_index = 0U;
-        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
         if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
         {
             return mod_lfo_v1_apply_track_param_temp(track, lfo_index, lfo_param, clamped);
+        }
+    }
+
+    {
+        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+        if (param_env3_map(id, &env_param) != 0U)
+        {
+            return mod_env3_apply_track_param_temp(track, env_param, clamped);
         }
     }
 
@@ -1147,10 +1205,19 @@ uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t tra
 void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track)
 {
     uint8_t lfo_index = 0U;
-    mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+    mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
     if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
     {
         mod_lfo_v1_clear_track_param_temp(track, lfo_index, lfo_param);
+        return;
+    }
+
+    {
+        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+        if (param_env3_map(id, &env_param) != 0U)
+        {
+            mod_env3_clear_track_param_temp(track, env_param);
+        }
     }
 }
 
@@ -1181,10 +1248,36 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     {
         uint8_t lfo_index = 0U;
-        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
         if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
         {
             const uint8_t ok = mod_lfo_v1_set_track_param(track, lfo_index, lfo_param, clamped);
+            if (ok != 0U)
+            {
+                kit_v1_mark_dirty();
+            }
+            return ok;
+        }
+    }
+
+    if ((id == PARAM_MOD_MATRIX_SLOT)
+            || (id == PARAM_MOD_MATRIX_SOURCE)
+            || (id == PARAM_MOD_MATRIX_DEST)
+            || (id == PARAM_MOD_MATRIX_DEPTH))
+    {
+        const uint8_t ok = param_matrix_set_track_value(id, track, clamped);
+        if (ok != 0U)
+        {
+            kit_v1_mark_dirty();
+        }
+        return ok;
+    }
+
+    {
+        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+        if (param_env3_map(id, &env_param) != 0U)
+        {
+            const uint8_t ok = mod_env3_set_track_param(track, env_param, clamped);
             if (ok != 0U)
             {
                 kit_v1_mark_dirty();

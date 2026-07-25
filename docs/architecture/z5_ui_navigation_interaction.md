@@ -828,19 +828,21 @@ Points factuels:
 - La table UI couvre les 39 moteurs actifs de `brick6_braids_runtime.cpp::kBraidsShapeMap`, incluant `Harm` et sans entree `Warm`.
 - Les formats locaux Wave sont bornes a `PARAM_WAVE_TIMBRE` et `PARAM_WAVE_COLOR`: continu unipolaire normalise `0.00..127.00`, pourcent bipolaire conserve, intervalle en demi-tons/centiemes quand le mapping Braids est prouve, enum discret, stepped, morph et rate normalise.
 - Les controles globaux visibles de `Synth/Wave` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
-- La surface `MOD/LFO DEST` reutilise la meme source de noms Wave que `TONE`: les destinations `MODEL/FINE/PITCH/FM AMT`, `A MOD` et les labels dynamiques `TIMBRE/COLOR` dependent du moteur Wave canonique courant de la track, sans resolution temps reel des changements temporaires p-lock/LFO.
+- La surface `MOD/MATRIX DEST` reutilise la meme source de noms Wave que `TONE`: les destinations `MODEL/FINE/PITCH/FM AMT`, `A MOD` et les labels dynamiques `TIMBRE/COLOR` dependent du moteur Wave canonique courant de la track, sans resolution temps reel des changements temporaires p-lock/LFO.
 - `SawSq` garde `PARAM_WAVE_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
 - Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Wave car ils ne sont pas dans le mapping runtime actif.
 
 ## 28. Surface MOD LFO finale
 
-- L'ensemble `MOD` expose quatre sous-pages dans cet ordre: `LFO1`, `LFO1#`, `LFO2`, `LFO2#`.
-- `LFO1`/`LFO2`: `DEST`, `RATE`, `DEPTH`, `SHAPE`.
-- `LFO1#`/`LFO2#`: `DELAY`, `TRIG`, `FADE`, `PHASE` ou `SLEW`.
+- L'ensemble `MOD` expose quatre sous-pages dans cet ordre: `MATRIX`, `LFO 1`, `LFO 2`, `LFO TIME`.
+- `MATRIX`: `SLOT`, `SOURCE`, `DEST`, `DEPTH`.
+- Dans `MATRIX`, les choix vides sont libelles `Off` pour la source et la destination; les sources exposent `LFO 1`, `LFO 2`, `ENV 3`, `ENV VCA`, `ENV FLT`; un slot est visuellement actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
+- `ENV VCA` et `ENV FLT` peuvent etre selectionnees sur la surface commune, mais restent des sources runtime track-aware: si le VCA ou l'enveloppe filtre n'existe pas pour la track effective, la route est invalide et ne cree pas de modulation fantome.
+- `LFO 1`/`LFO 2`: `RATE`, `PHASE` ou `SLEW`, `SHAPE`, `TRIG`; `TIME`: `DELAY1`, `FADE1`, `DELAY2`, `FADE2`.
 - `RATE` affiche `OFF` au centre, `x.xxHz` a gauche et les divisions musicales a droite. L'encodeur sans SHIFT avance le cote Hz par pas lisibles de 1Hz; avec SHIFT il edite le cote Hz au pas fin de `0.01Hz`. Le cote sync reste discret par index.
 - `DELAY` affiche toujours une valeur en secondes `x.xxs`; sans SHIFT l'edition avance par pas de 1s en conservant la fraction, avec SHIFT par pas de `0.01s`.
 - Le slot `PHASE_SLEW` renomme dynamiquement le label en `PHASE` ou `SLEW` selon la shape du LFO concerne, meme si `SHAPE` est sur la page precedente.
-- Le widget `PHASE/SLEW` dessine une miniature legere de la forme courante; en mode phase, un curseur indique le decalage horizontal, en mode `RND` le widget n'affiche pas de phase.
+- Sur `LFO 1`/`LFO 2`, les slots physiques 2 et 3 restent deux encodeurs independants (`PHASE/SLEW` puis `SHAPE`) mais sont fusionnes visuellement dans un widget large de deux parametres: label de forme, miniature de forme et curseur de phase pour les formes non aleatoires, ou barre `SLEW` quand la forme est `RND`.
 
 ## 29. Retour UI apres load blank
 
@@ -982,3 +984,12 @@ Points factuels:
 - En low-cost avec clavier Hall separe, les 16 STEP binaires restent des lanes sequenceur meme lorsque le hall mode courant est `KEYBOARD` ou `ARP`.
 - `ui_core_seq_transport_handle_seq_mode_event()` accepte donc les press/release STEP dans ces deux modes low-cost pour conserver toggle court, maintien et P-Lock; les notes clavier viennent uniquement du clavier Hall separe.
 - Premium conserve le contrat historique: les Halls analogiques peuvent injecter des notes en `KEYBOARD`/`ARP` et ne sont pas reinterpretes comme steps sequenceur dans ces modes.
+
+## Addendum 2026-07-24 - UI MOD Matrix et ENV3
+
+- L'ensemble `MOD` expose maintenant quatre pages: `MATRIX` (`SLOT/SOURCE/DEST/DEPTH`), `LFO 1` (`RATE/PHASE ou SLEW/SHAPE/TRIG`), `LFO 2` (`RATE/PHASE ou SLEW/SHAPE/TRIG`) et `LFO TIME` (`DELAY1/FADE1/DELAY2/FADE2`).
+- Les destinations dynamiques WAVE restent rendues par le widget LFO destination existant, mais l'edition de destination/profondeur appartient a la page `MATRIX`.
+- La liste `SOURCE` Matrix ajoute `ENV VCA` et `ENV FLT` aux sources existantes; les labels UI exacts sont conserves dans le catalogue parametre.
+- Le parametre `SLOT` utilise un widget custom monochrome 24x24: base tous slots actifs, remplacement bitmap par croix pour chaque slot inactif, puis focus du slot edite par-dessus. Un slot est actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
+- Correction 2026-07-24: le widget `SLOT` est rendu depuis les bitmaps 24x24 de reference et compose dynamiquement les huit slots de la track courante; le parametre `SOURCE` de `MOD/MATRIX` utilise un rendu texte direct (`OFF`, `LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`) et aucun widget circulaire, tandis que les labels de parametres restent `ENV FLT`, `ENV VCA`, `ENV3`.
+- L'ensemble visuel `ENV` utilise la page 4 libre pour `ENV 3` (`ATTACK/DECAY/SUSTAIN/RELEASE`) avec le widget ADSR commun.

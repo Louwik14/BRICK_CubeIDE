@@ -7,7 +7,6 @@
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
-#include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
 #include "Storage/patch_sd_bank.h"
 #include "UI/ui_active_track_sync.h"
@@ -26,48 +25,6 @@ static void patch_v1_copy_text(char *dst, uint32_t dst_size, const char *src)
         return;
     }
     (void)snprintf(dst, dst_size, "%s", src);
-}
-
-static void patch_v1_capture_lfo(uint8_t track, uint8_t lfo, patch_v1_lfo_lane_t *out)
-{
-    float value = 0.0f;
-    if (out == 0)
-    {
-        return;
-    }
-    memset(out, 0, sizeof(*out));
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DEST, &value) != 0U)
-    {
-        out->dest = (uint16_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_RATE, &value) != 0U)
-    {
-        out->rate = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DEPTH, &value) != 0U)
-    {
-        out->depth = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, &value) != 0U)
-    {
-        out->shape = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DELAY, &value) != 0U)
-    {
-        out->delay = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_TRIG, &value) != 0U)
-    {
-        out->trig = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_FADE, &value) != 0U)
-    {
-        out->fade = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_PHASE_SLEW, &value) != 0U)
-    {
-        out->phase_slew = value;
-    }
 }
 
 static void patch_v1_capture_sampler_asset(const track_tone_sound_state_t *tone,
@@ -212,23 +169,6 @@ static uint8_t patch_v1_family_type_is_valid(uint8_t family, uint8_t type)
                                               (ui_track_type_t)type) != false) ? 1U : 0U;
 }
 
-static void patch_v1_apply_lfo(uint8_t track, uint8_t lfo, const patch_v1_lfo_lane_t *lane)
-{
-    if ((track >= UI_TRACK_COUNT) || (lfo >= 2U) || (lane == 0))
-    {
-        return;
-    }
-
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEST, (float)lane->dest);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_RATE, lane->rate);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEPTH, (float)lane->depth);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, (float)lane->shape);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DELAY, lane->delay);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_TRIG, (float)lane->trig);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_FADE, lane->fade);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_PHASE_SLEW, lane->phase_slew);
-}
-
 static void patch_v1_reapply_track_params(uint8_t track)
 {
     param_registry_batch_begin();
@@ -273,8 +213,6 @@ static patch_v1_result_t patch_v1_capture_member(uint8_t track,
     out_member->type = (uint8_t)ui_get_track_type(track);
     memcpy(&out_member->sound, sound, sizeof(out_member->sound));
     memcpy(&out_member->tone, tone, sizeof(out_member->tone));
-    patch_v1_capture_lfo(track, 0U, &out_member->lfo[0]);
-    patch_v1_capture_lfo(track, 1U, &out_member->lfo[1]);
     patch_v1_capture_sampler_asset(tone, &out_member->asset);
     return PATCH_V1_RESULT_OK;
 }
@@ -574,8 +512,6 @@ static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV
 
         memcpy(dst_sound, &member->sound, sizeof(*dst_sound));
         memcpy(dst_tone, &member->tone, sizeof(*dst_tone));
-        patch_v1_apply_lfo(target, 0U, &member->lfo[0]);
-        patch_v1_apply_lfo(target, 1U, &member->lfo[1]);
     }
 
     for (uint8_t i = 0U; i < width; ++i)

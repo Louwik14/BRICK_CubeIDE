@@ -6,7 +6,6 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Keyboard/keyboard_engine.h"
-#include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Storage/kit_sd_bank.h"
@@ -101,48 +100,6 @@ static uint8_t kit_v1_sampler_asset_kind_matches_type(uint8_t kind, ui_track_typ
         return (kind == (uint8_t)SAMPLE_GLOBAL_KIND_MULTI) ? 1U : 0U;
     }
     return 0U;
-}
-
-static void kit_v1_capture_lfo(uint8_t track, uint8_t lfo, kit_v1_lfo_lane_t *out)
-{
-    float value = 0.0f;
-    if (out == 0)
-    {
-        return;
-    }
-    memset(out, 0, sizeof(*out));
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DEST, &value) != 0U)
-    {
-        out->dest = (uint16_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_RATE, &value) != 0U)
-    {
-        out->rate = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DEPTH, &value) != 0U)
-    {
-        out->depth = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, &value) != 0U)
-    {
-        out->shape = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_DELAY, &value) != 0U)
-    {
-        out->delay = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_TRIG, &value) != 0U)
-    {
-        out->trig = (uint8_t)value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_FADE, &value) != 0U)
-    {
-        out->fade = value;
-    }
-    if (mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_PHASE_SLEW, &value) != 0U)
-    {
-        out->phase_slew = value;
-    }
 }
 
 static void kit_v1_capture_sampler_asset(const track_tone_sound_state_t *tone,
@@ -241,23 +198,6 @@ static uint8_t kit_v1_resolve_loaded_asset(const kit_v1_asset_ref_t *asset,
     }
 
     return 0U;
-}
-
-static void kit_v1_apply_lfo(uint8_t track, uint8_t lfo, const kit_v1_lfo_lane_t *lane)
-{
-    if ((track >= UI_TRACK_COUNT) || (lfo >= 2U) || (lane == 0))
-    {
-        return;
-    }
-
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEST, (float)lane->dest);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_RATE, lane->rate);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DEPTH, (float)lane->depth);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, (float)lane->shape);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_DELAY, lane->delay);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_TRIG, (float)lane->trig);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_FADE, lane->fade);
-    (void)mod_lfo_v1_set_track_param(track, lfo, MOD_LFO_PARAM_PHASE_SLEW, lane->phase_slew);
 }
 
 static uint8_t kit_v1_is_reapply_domain(param_id_t id)
@@ -386,8 +326,6 @@ static kit_v1_result_t kit_v1_restore_loaded_kit_state(const KitSaveV1 *kit)
 
         memcpy(dst_sound, &src->sound, sizeof(*dst_sound));
         memcpy(dst_tone, &src->tone, sizeof(*dst_tone));
-        kit_v1_apply_lfo(track, 0U, &src->lfo[0]);
-        kit_v1_apply_lfo(track, 1U, &src->lfo[1]);
     }
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
@@ -537,8 +475,6 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
         dst->type = (uint8_t)type;
         memcpy(&dst->sound, sound, sizeof(dst->sound));
         memcpy(&dst->tone, tone, sizeof(dst->tone));
-        kit_v1_capture_lfo(track, 0U, &dst->lfo[0]);
-        kit_v1_capture_lfo(track, 1U, &dst->lfo[1]);
         if (kit_v1_track_uses_sampler_asset(family, type) != 0U)
         {
             kit_v1_capture_sampler_asset(tone, &dst->asset);

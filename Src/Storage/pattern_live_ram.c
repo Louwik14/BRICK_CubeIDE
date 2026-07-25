@@ -17,7 +17,6 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
-#include "Mod/mod_lfo_v1.h"
 #include "Storage/pattern_sd_bank.h"
 
 #define PATTERN_BANK_COUNT 16U
@@ -496,72 +495,6 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
             }
         }
 
-        float lfo_value = 0.0f;
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_DEST, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.dest = (uint16_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_RATE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.rate = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_DEPTH, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.depth = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_SHAPE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.shape = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_DELAY, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.delay = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_TRIG, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.trig = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_FADE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.fade = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 0U, MOD_LFO_PARAM_PHASE_SLEW, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo1.phase_slew = lfo_value;
-        }
-
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_DEST, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.dest = (uint16_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_RATE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.rate = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_DEPTH, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.depth = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_SHAPE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.shape = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_DELAY, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.delay = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_TRIG, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.trig = (uint8_t)lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_FADE, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.fade = lfo_value;
-        }
-        if (mod_lfo_v1_get_track_param(track, 1U, MOD_LFO_PARAM_PHASE_SLEW, &lfo_value) != 0U)
-        {
-            out_pattern->mod.tracks[track].lfo2.phase_slew = lfo_value;
-        }
     }
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
@@ -749,27 +682,6 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     }
 
     param_registry_batch_end();
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        /* LFO restore authority: config is restored only via mod_lfo_v1_set_track_param. */
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEST, (float)ctx->pattern->mod.tracks[track].lfo1.dest);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_RATE, (float)ctx->pattern->mod.tracks[track].lfo1.rate);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEPTH, (float)ctx->pattern->mod.tracks[track].lfo1.depth);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_SHAPE, (float)ctx->pattern->mod.tracks[track].lfo1.shape);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DELAY, ctx->pattern->mod.tracks[track].lfo1.delay);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_TRIG, (float)ctx->pattern->mod.tracks[track].lfo1.trig);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_FADE, ctx->pattern->mod.tracks[track].lfo1.fade);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_PHASE_SLEW, ctx->pattern->mod.tracks[track].lfo1.phase_slew);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEST, (float)ctx->pattern->mod.tracks[track].lfo2.dest);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_RATE, (float)ctx->pattern->mod.tracks[track].lfo2.rate);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEPTH, (float)ctx->pattern->mod.tracks[track].lfo2.depth);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_SHAPE, (float)ctx->pattern->mod.tracks[track].lfo2.shape);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DELAY, ctx->pattern->mod.tracks[track].lfo2.delay);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_TRIG, (float)ctx->pattern->mod.tracks[track].lfo2.trig);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_FADE, ctx->pattern->mod.tracks[track].lfo2.fade);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_PHASE_SLEW, ctx->pattern->mod.tracks[track].lfo2.phase_slew);
-    }
 
     return 1U;
 }

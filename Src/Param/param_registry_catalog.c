@@ -84,6 +84,7 @@ static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", 
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
+static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "ENV FLT", "ENV VCA", "ENV3", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -254,22 +255,26 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_HARMONICS, "Harm", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_DRIVE, "Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
-    PARAM_DESC_EX(PARAM_LFO1_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_dest),
     PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo1_rate),
-    PARAM_DESC_EX(PARAM_LFO1_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_depth),
     PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
     PARAM_DESC_EX(PARAM_LFO1_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_delay),
     PARAM_DESC_EX(PARAM_LFO1_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo1_trig),
     PARAM_DESC_EX(PARAM_LFO1_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_fade),
     PARAM_DESC_EX(PARAM_LFO1_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo1_phase_slew),
-    PARAM_DESC_EX(PARAM_LFO2_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_dest),
     PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo2_rate),
-    PARAM_DESC_EX(PARAM_LFO2_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_depth),
     PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
     PARAM_DESC_EX(PARAM_LFO2_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_delay),
     PARAM_DESC_EX(PARAM_LFO2_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo2_trig),
     PARAM_DESC_EX(PARAM_LFO2_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_fade),
     PARAM_DESC_EX(PARAM_LFO2_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo2_phase_slew),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_SLOT, "Slot", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_slot),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_SOURCE, "Source", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_matrix_source),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_dest),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_DEPTH, "Depth", PARAM_TYPE_BIPOLAR, -127.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_depth),
+    PARAM_DESC_EX(PARAM_ENV3_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_attack),
+    PARAM_DESC_EX(PARAM_ENV3_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_decay),
+    PARAM_DESC_EX(PARAM_ENV3_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_sustain),
+    PARAM_DESC_EX(PARAM_ENV3_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_release),
 
     PARAM_DESC_EX(PARAM_MIX_REVERB_WET, "Wet", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_wet),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),

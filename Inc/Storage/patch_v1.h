@@ -41,18 +41,6 @@ typedef enum
 
 typedef struct
 {
-    uint16_t dest;
-    float rate;
-    uint8_t depth;
-    uint8_t shape;
-    float delay;
-    uint8_t trig;
-    float fade;
-    float phase_slew;
-} patch_v1_lfo_lane_t;
-
-typedef struct
-{
     uint8_t has_asset;
     uint8_t kind;
     uint16_t global_slot;
@@ -81,7 +69,6 @@ typedef struct
     uint8_t type;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
-    patch_v1_lfo_lane_t lfo[2];
     patch_v1_asset_ref_t asset;
 } patch_v1_member_t;
 

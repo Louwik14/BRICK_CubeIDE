@@ -280,7 +280,11 @@ static void seq_param_iface_rebuild_slot_maps(void)
                 || (param == PARAM_LOOPER_PLAY)
                 || (param == PARAM_LOOPER_STRETCH)
                 || (param == PARAM_LOOPER_PITCH)
-                || (param == PARAM_LOOPER_GRAIN))
+                || (param == PARAM_LOOPER_GRAIN)
+                || (param == PARAM_MOD_MATRIX_SLOT)
+                || (param == PARAM_MOD_MATRIX_SOURCE)
+                || (param == PARAM_MOD_MATRIX_DEST)
+                || (param == PARAM_MOD_MATRIX_DEPTH))
         {
             continue;
         }
@@ -314,7 +318,11 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
     if ((param == PARAM_SAMPLER_SLICE_COUNT)
             || (param == PARAM_LOOPER_STRETCH)
             || (param == PARAM_LOOPER_PITCH)
-            || (param == PARAM_LOOPER_GRAIN))
+            || (param == PARAM_LOOPER_GRAIN)
+                || (param == PARAM_MOD_MATRIX_SLOT)
+                || (param == PARAM_MOD_MATRIX_SOURCE)
+                || (param == PARAM_MOD_MATRIX_DEST)
+                || (param == PARAM_MOD_MATRIX_DEPTH))
     {
         return 0U;
     }
@@ -707,16 +715,22 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     {
         return 0U;
     }
-    if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
-    {
-        state->base_value = state->runtime_value;
-        seq_param_set_base_valid(track, set_id, param_slot, 1U);
-    }
-
     param_id_t param = PARAM_COUNT;
     if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
+    }
+
+    if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
+    {
+        float base = 0.0f;
+        if (param_registry_get_track_value(param, track, &base) == 0U)
+        {
+            return 0U;
+        }
+        state->base_value = seq_param_iface_encode_param_value(param, base);
+        state->runtime_value = state->base_value;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
     }
 
     if (seq_param_iface_is_play_param(param) != 0U)

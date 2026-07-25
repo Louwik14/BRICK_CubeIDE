@@ -1520,22 +1520,26 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;
 
-        case PARAM_LFO1_DEST:
         case PARAM_LFO1_RATE:
-        case PARAM_LFO1_DEPTH:
         case PARAM_LFO1_SHAPE:
         case PARAM_LFO1_DELAY:
         case PARAM_LFO1_TRIG:
         case PARAM_LFO1_FADE:
         case PARAM_LFO1_PHASE_SLEW:
-        case PARAM_LFO2_DEST:
         case PARAM_LFO2_RATE:
-        case PARAM_LFO2_DEPTH:
         case PARAM_LFO2_SHAPE:
         case PARAM_LFO2_DELAY:
         case PARAM_LFO2_TRIG:
         case PARAM_LFO2_FADE:
         case PARAM_LFO2_PHASE_SLEW:
+        case PARAM_MOD_MATRIX_SLOT:
+        case PARAM_MOD_MATRIX_SOURCE:
+        case PARAM_MOD_MATRIX_DEST:
+        case PARAM_MOD_MATRIX_DEPTH:
+        case PARAM_ENV3_ATTACK:
+        case PARAM_ENV3_DECAY:
+        case PARAM_ENV3_SUSTAIN:
+        case PARAM_ENV3_RELEASE:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MOD;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

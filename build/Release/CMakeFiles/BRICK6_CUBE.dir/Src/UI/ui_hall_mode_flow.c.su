@@ -2,4 +2,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:342:25:ui_hall_mode_flow_resolve_direct_action	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:363:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:453:6:ui_hall_mode_flow_service_pending	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:530:6:ui_hall_mode_flow_handle_track_hall_action	1608	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:530:6:ui_hall_mode_flow_handle_track_hall_action	1640	static

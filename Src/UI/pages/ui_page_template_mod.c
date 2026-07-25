@@ -8,23 +8,23 @@
 
 static const ui_template_family_t g_ui_template_mod_family = {
     .family_title = "MOD",
-    .nav_labels = { "LFO1", "LFO1#", "LFO2", "LFO2#" },
+    .nav_labels = { "MATRIX", "LFO 1", "LFO 2", "TIME" },
     .subpages = {
         {
-            .title = "LFO1",
-            .param_bank = { .params = { PARAM_LFO1_DEST, PARAM_LFO1_RATE, PARAM_LFO1_DEPTH, PARAM_LFO1_SHAPE } },
+            .title = "MATRIX",
+            .param_bank = { .params = { PARAM_MOD_MATRIX_SLOT, PARAM_MOD_MATRIX_SOURCE, PARAM_MOD_MATRIX_DEST, PARAM_MOD_MATRIX_DEPTH } },
         },
         {
-            .title = "LFO1#",
-            .param_bank = { .params = { PARAM_LFO1_DELAY, PARAM_LFO1_TRIG, PARAM_LFO1_FADE, PARAM_LFO1_PHASE_SLEW } },
+            .title = "LFO 1",
+            .param_bank = { .params = { PARAM_LFO1_RATE, PARAM_LFO1_PHASE_SLEW, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG } },
         },
         {
-            .title = "LFO2",
-            .param_bank = { .params = { PARAM_LFO2_DEST, PARAM_LFO2_RATE, PARAM_LFO2_DEPTH, PARAM_LFO2_SHAPE } },
+            .title = "LFO 2",
+            .param_bank = { .params = { PARAM_LFO2_RATE, PARAM_LFO2_PHASE_SLEW, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG } },
         },
         {
-            .title = "LFO2#",
-            .param_bank = { .params = { PARAM_LFO2_DELAY, PARAM_LFO2_TRIG, PARAM_LFO2_FADE, PARAM_LFO2_PHASE_SLEW } },
+            .title = "LFO TIME",
+            .param_bank = { .params = { PARAM_LFO1_DELAY, PARAM_LFO1_FADE, PARAM_LFO2_DELAY, PARAM_LFO2_FADE } },
         },
     },
     .default_subpage = 0U,
@@ -41,35 +41,42 @@ static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(
 {
     (void)subpage;
 
-    if ((slot == 0U) && ((id == PARAM_LFO1_DEST) || (id == PARAM_LFO2_DEST)))
+    if ((slot == 0U) && (id == PARAM_MOD_MATRIX_SLOT))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT;
+    }
+    if ((slot == 1U) && (id == PARAM_MOD_MATRIX_SOURCE))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
+    }
+    if ((slot == 2U) && (id == PARAM_MOD_MATRIX_DEST))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST;
     }
-    if ((slot == 1U) && ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)))
+    if ((slot == 0U) && ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE;
     }
-    if ((slot == 2U) && ((id == PARAM_LFO1_DEPTH) || (id == PARAM_LFO2_DEPTH)))
+    if ((slot == 3U) && (id == PARAM_MOD_MATRIX_DEPTH))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
     }
-    if ((slot == 3U) && ((id == PARAM_LFO1_SHAPE) || (id == PARAM_LFO2_SHAPE)))
+    if ((slot == 1U) && ((id == PARAM_LFO1_PHASE_SLEW) || (id == PARAM_LFO2_PHASE_SLEW)))
     {
-        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE;
+        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
     }
-    if ((slot == 0U) && ((id == PARAM_LFO1_DELAY) || (id == PARAM_LFO2_DELAY)))
+    if ((slot == 2U) && ((id == PARAM_LFO1_SHAPE) || (id == PARAM_LFO2_SHAPE)))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
+    }
+    if (((slot == 0U) || (slot == 2U)) && ((id == PARAM_LFO1_DELAY) || (id == PARAM_LFO2_DELAY)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DELAY;
     }
-    if ((slot == 2U) && ((id == PARAM_LFO1_FADE) || (id == PARAM_LFO2_FADE)))
+    if (((slot == 1U) || (slot == 3U)) && ((id == PARAM_LFO1_FADE) || (id == PARAM_LFO2_FADE)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_FADE;
     }
-    if ((slot == 3U) && ((id == PARAM_LFO1_PHASE_SLEW) || (id == PARAM_LFO2_PHASE_SLEW)))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW;
-    }
-
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
