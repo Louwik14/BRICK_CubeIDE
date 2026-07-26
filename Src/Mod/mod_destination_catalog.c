@@ -5,10 +5,12 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/track_tone_sound_state.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_wave_labels.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_types.h"
 #include "mixer.h"
 
@@ -183,6 +185,11 @@ static uint8_t mod_destination_is_direct_drum(param_id_t dest)
 static uint8_t mod_destination_is_direct_midi_cc(param_id_t dest)
 {
     return param_backend_is_midi_cc_id(dest);
+}
+
+static uint8_t mod_destination_is_lfo_rate(param_id_t dest)
+{
+    return ((dest == PARAM_LFO1_RATE) || (dest == PARAM_LFO2_RATE)) ? 1U : 0U;
 }
 
 static uint8_t mod_destination_midi_cc_cache_index(param_id_t dest, uint8_t *out_index)
@@ -496,6 +503,87 @@ static uint8_t mod_destination_stack_slot_for_id(param_id_t id, uint8_t *out_slo
     return 0U;
 }
 
+static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot_param)
+{
+    switch (slot_param)
+    {
+        case 3U:
+            switch ((brick6_stack_model_t)model)
+            {
+                case BRICK6_STACK_MODEL_SINFD:
+                case BRICK6_STACK_MODEL_TRIFD: return "FOLD";
+                case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
+                case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
+                case BRICK6_STACK_MODEL_SUB: return "SHAPE";
+                case BRICK6_STACK_MODEL_FM: return "INDEX";
+                case BRICK6_STACK_MODEL_FEEDBACK_FM: return "FB IDX";
+                case BRICK6_STACK_MODEL_RING: return "MOD1";
+                case BRICK6_STACK_MODEL_TRIPLE_SAW:
+                case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC2";
+                case BRICK6_STACK_MODEL_SWARM: return "SPREAD";
+                default: return "TIMBRE";
+            }
+        case 4U:
+            switch ((brick6_stack_model_t)model)
+            {
+                case BRICK6_STACK_MODEL_SINFD:
+                case BRICK6_STACK_MODEL_TRIFD: return "SYM";
+                case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
+                case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
+                case BRICK6_STACK_MODEL_SUB: return "SUB";
+                case BRICK6_STACK_MODEL_FM:
+                case BRICK6_STACK_MODEL_FEEDBACK_FM: return "RATIO";
+                case BRICK6_STACK_MODEL_RING: return "MOD2";
+                case BRICK6_STACK_MODEL_TRIPLE_SAW:
+                case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC3";
+                case BRICK6_STACK_MODEL_SWARM: return "COLOR";
+                default: return "COLOR";
+            }
+        case 5U:
+            switch ((brick6_stack_model_t)model)
+            {
+                case BRICK6_STACK_MODEL_SINFD:
+                case BRICK6_STACK_MODEL_TRIFD: return "SHAPE";
+                default: return "PARAM3";
+            }
+        default:
+            return NULL;
+    }
+}
+
+static uint8_t mod_destination_stack_label_for_track_param(uint8_t track, param_id_t dest, const char **out_label)
+{
+    if (out_label == NULL)
+    {
+        return 0U;
+    }
+
+    uint8_t slot = 0U;
+    uint8_t slot_param = 0U;
+    if ((mod_destination_stack_slot_for_id(dest, &slot, &slot_param) == 0U)
+            || (slot >= BRICK6_STACK_SLOT_COUNT)
+            || (slot_param < 3U)
+            || (slot_param > 5U))
+    {
+        return 0U;
+    }
+
+    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
+    if (tone == NULL)
+    {
+        return 0U;
+    }
+
+    uint8_t model = (uint8_t)(tone->stack.model[slot] + 0.5f);
+    if (model >= (uint8_t)BRICK6_STACK_MODEL_COUNT)
+    {
+        model = (uint8_t)BRICK6_STACK_MODEL_SHAPE;
+    }
+
+    *out_label = mod_destination_stack_model_label(model, slot_param);
+    return (*out_label != NULL) ? 1U : 0U;
+}
+
 static uint8_t mod_destination_apply_stack_rt(uint8_t track,
                                               param_id_t dest,
                                               const track_runtime_ctx_t *ctx,
@@ -633,6 +721,14 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
                                          const track_runtime_ctx_t *ctx,
                                          float value)
 {
+    if (mod_destination_is_lfo_rate(dest) != 0U)
+    {
+        (void)ctx;
+        return mod_lfo_v1_apply_track_param_temp(track,
+                                                 (dest == PARAM_LFO1_RATE) ? 0U : 1U,
+                                                 MOD_LFO_PARAM_RATE,
+                                                 value);
+    }
     if (mod_destination_is_simple_mix(dest) != 0U)
     {
         return mod_destination_apply_simple_mix_rt(track, dest, ctx, value);
@@ -673,13 +769,11 @@ static uint8_t mod_destination_is_internal_lfo_param(param_id_t id)
 {
     switch (id)
     {
-        case PARAM_LFO1_RATE:
         case PARAM_LFO1_SHAPE:
         case PARAM_LFO1_DELAY:
         case PARAM_LFO1_TRIG:
         case PARAM_LFO1_FADE:
         case PARAM_LFO1_PHASE_SLEW:
-        case PARAM_LFO2_RATE:
         case PARAM_LFO2_SHAPE:
         case PARAM_LFO2_DELAY:
         case PARAM_LFO2_TRIG:
@@ -834,6 +928,13 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
     if ((track >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT) || (mod_destination_is_internal_lfo_param(dest) != 0U))
     {
         return 0U;
+    }
+
+    if (mod_destination_is_lfo_rate(dest) != 0U)
+    {
+        (void)family;
+        (void)type;
+        return (ctx != NULL) ? 1U : 0U;
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(dest);
@@ -1001,9 +1102,20 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     }
 
     const char *name = NULL;
-    if (param_wave_label_for_track_param(track, dest, &name) == 0U)
+    if (dest == PARAM_LFO1_RATE)
     {
-        name = param_registry[dest].name;
+        name = "lfo1rate";
+    }
+    else if (dest == PARAM_LFO2_RATE)
+    {
+        name = "lfo2rate";
+    }
+    else if (param_wave_label_for_track_param(track, dest, &name) == 0U)
+    {
+        if (mod_destination_stack_label_for_track_param(track, dest, &name) == 0U)
+        {
+            name = param_registry[dest].name;
+        }
     }
     if (name == NULL)
     {
@@ -1028,6 +1140,8 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
 {
     switch (dest)
     {
+        case PARAM_LFO1_RATE: return "L1Rt";
+        case PARAM_LFO2_RATE: return "L2Rt";
         case PARAM_MIX_LEVEL: return "Lvl";
         case PARAM_MIX_SEND1: return "Snd1";
         case PARAM_MIX_SEND2: return "Snd2";
@@ -1104,7 +1218,10 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     const char *label = NULL;
     if (param_wave_label_for_track_param(track, dest, &label) == 0U)
     {
-        label = mod_destination_short_label_for_param(dest);
+        if (mod_destination_stack_label_for_track_param(track, dest, &label) == 0U)
+        {
+            label = mod_destination_short_label_for_param(dest);
+        }
     }
     if (label == NULL)
     {

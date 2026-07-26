@@ -39,6 +39,9 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
     state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;
     state->vca_release = param_registry[PARAM_VCA_RELEASE].default_value;
+    state->env_retrig_filter = param_registry[PARAM_ENV_RETRIG_FILTER].default_value;
+    state->env_retrig_vca = param_registry[PARAM_ENV_RETRIG_VCA].default_value;
+    state->env_retrig_mod = param_registry[PARAM_ENV_RETRIG_MOD].default_value;
     state->mod_lfo[0].rate = param_registry[PARAM_LFO1_RATE].default_value;
     state->mod_lfo[0].shape = param_registry[PARAM_LFO1_SHAPE].default_value;
     state->mod_lfo[0].delay = param_registry[PARAM_LFO1_DELAY].default_value;
@@ -51,6 +54,14 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->mod_lfo[1].trig = param_registry[PARAM_LFO2_TRIG].default_value;
     state->mod_lfo[1].fade = param_registry[PARAM_LFO2_FADE].default_value;
     state->mod_lfo[1].phase_slew = param_registry[PARAM_LFO2_PHASE_SLEW].default_value;
+    state->mod_multi[0].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_1_A].default_value;
+    state->mod_multi[0].source_b = (uint8_t)param_registry[PARAM_MOD_MULTI_1_B].default_value;
+    state->mod_multi[1].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_2_A].default_value;
+    state->mod_multi[1].source_b = (uint8_t)param_registry[PARAM_MOD_MULTI_2_B].default_value;
+    state->mod_slew[0].source = (uint8_t)param_registry[PARAM_MOD_SLEW_1_SOURCE].default_value;
+    state->mod_slew[0].amount = param_registry[PARAM_MOD_SLEW_1_AMOUNT].default_value;
+    state->mod_slew[1].source = (uint8_t)param_registry[PARAM_MOD_SLEW_2_SOURCE].default_value;
+    state->mod_slew[1].amount = param_registry[PARAM_MOD_SLEW_2_AMOUNT].default_value;
     state->mod_env3.attack = 0.0f;
     state->mod_env3.decay = 32.0f;
     state->mod_env3.sustain = 127.0f;

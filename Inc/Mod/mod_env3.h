@@ -19,6 +19,8 @@ void mod_env3_init(void);
 void mod_env3_reset_runtime(void);
 uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float value);
 uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *out_value);
+uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value);
+uint8_t mod_env3_get_track_retrigger_hard(uint8_t track, float *out_value);
 uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, float value);
 void mod_env3_clear_track_param_temp(uint8_t track, mod_env3_param_t param);
 void mod_env3_note_on(uint8_t track);

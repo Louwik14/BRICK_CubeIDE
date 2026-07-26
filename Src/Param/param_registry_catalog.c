@@ -87,7 +87,7 @@ static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", 
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
-static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "ENV FLT", "ENV VCA", "ENV3", NULL};
+static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "env flt", "env vca", "env mod", "MULT1", "MULT2", "SLEW1", "SLEW2", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -273,13 +273,24 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_LFO2_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_fade),
     PARAM_DESC_EX(PARAM_LFO2_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo2_phase_slew),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_SLOT, "Slot", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_slot),
-    PARAM_DESC_EX(PARAM_MOD_MATRIX_SOURCE, "Source", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_matrix_source),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_SOURCE, "Source", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_matrix_source),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_dest),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_DEPTH, "Depth", PARAM_TYPE_BIPOLAR, -127.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_depth),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_1_A, "M1A", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_a),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_1_B, "M1B", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_b),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_2_A, "M2A", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_a),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_2_B, "M2B", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 5.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_b),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_1_SOURCE, "S1SRC", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_1_source),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_1_AMOUNT, "S1AMT", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mod_slew_1_amount),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_2_SOURCE, "S2SRC", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_2_source),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_2_AMOUNT, "S2AMT", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mod_slew_2_amount),
     PARAM_DESC_EX(PARAM_ENV3_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_attack),
     PARAM_DESC_EX(PARAM_ENV3_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_decay),
     PARAM_DESC_EX(PARAM_ENV3_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_sustain),
     PARAM_DESC_EX(PARAM_ENV3_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_release),
+    PARAM_DESC_EX(PARAM_ENV_RETRIG_FILTER, "ENV FLT", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_ENV_RETRIG_VCA, "ENV VCA", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_ENV_RETRIG_MOD, "ENV MOD", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
 
     PARAM_DESC_EX(PARAM_MIX_REVERB_WET, "Wet", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_wet),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),

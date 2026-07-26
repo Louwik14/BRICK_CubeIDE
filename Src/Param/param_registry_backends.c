@@ -9,6 +9,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
+#include "Mod/mod_env3.h"
 #include "Param/param_filter.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
@@ -1115,6 +1116,39 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                 mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
             }
             return 1U;
+
+        case PARAM_ENV_RETRIG_FILTER:
+        {
+            track_sound_state_t *state = track_sound_state_get(track);
+            const uint8_t hard = (value >= 0.5f) ? 1U : 0U;
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->env_retrig_filter = (float)hard;
+            }
+
+            track_runtime_resolved_track_t resolved;
+            if ((track_runtime_resolve_track(track, &resolved) != 0U)
+                    && (resolved.has_filter_target != 0U))
+            {
+                mixer_set_track_filter_retrigger_hard(resolved.filter_track_id, hard);
+            }
+            return 1U;
+        }
+
+        case PARAM_ENV_RETRIG_VCA:
+        {
+            track_sound_state_t *state = track_sound_state_get(track);
+            const uint8_t hard = (value >= 0.5f) ? 1U : 0U;
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->env_retrig_vca = (float)hard;
+            }
+            mixer_set_track_vca_retrigger_hard(ctx->mix_track_id, hard);
+            return 1U;
+        }
+
+        case PARAM_ENV_RETRIG_MOD:
+            return mod_env3_set_track_retrigger_hard(track, value);
 
         case PARAM_VCA_ATTACK:
         {

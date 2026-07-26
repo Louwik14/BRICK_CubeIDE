@@ -1,5 +1,11 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-26 - Retrigger hard/soft ENV
+
+- Le mixer porte maintenant deux flags runtime par lane, `filter_retrigger_hard` et `vca_retrigger_hard`, projetes depuis les params track-aware `PARAM_ENV_RETRIG_FILTER` et `PARAM_ENV_RETRIG_VCA`.
+- `ON` conserve le comportement hard historique: l'enveloppe repart de zero au note-on. `OFF` utilise le retrigger soft de l'enveloppe existante: attaque depuis la valeur courante, sans rampe/declick/zero-cross additionnel.
+- Le chemin VCA amplitude reste `adsr_daisy_c_t`; le chemin filtre reste `env_adsr_peaks_t` via `env_adsr`. Les moteurs Wave/Stack/Braids ne sont pas modifies.
+
 ## 1. Perimetre
 
 Perimetre operationnel de zone (appartient a Z1):

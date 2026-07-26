@@ -256,6 +256,40 @@ void apply_mod_matrix_depth(float v)
     }
 }
 
+static void apply_mod_multi_active_track(uint8_t op, uint8_t input, float v)
+{
+    if (mod_matrix_set_multi_source(ui_get_active_track(), op, input, v) != 0U)
+    {
+        kit_v1_mark_dirty();
+    }
+}
+
+void apply_mod_multi_1_a(float v) { apply_mod_multi_active_track(0U, 0U, v); }
+void apply_mod_multi_1_b(float v) { apply_mod_multi_active_track(0U, 1U, v); }
+void apply_mod_multi_2_a(float v) { apply_mod_multi_active_track(1U, 0U, v); }
+void apply_mod_multi_2_b(float v) { apply_mod_multi_active_track(1U, 1U, v); }
+
+static void apply_mod_slew_source_active_track(uint8_t op, float v)
+{
+    if (mod_matrix_set_slew_source(ui_get_active_track(), op, v) != 0U)
+    {
+        kit_v1_mark_dirty();
+    }
+}
+
+static void apply_mod_slew_amount_active_track(uint8_t op, float v)
+{
+    if (mod_matrix_set_slew_amount(ui_get_active_track(), op, v) != 0U)
+    {
+        kit_v1_mark_dirty();
+    }
+}
+
+void apply_mod_slew_1_source(float v) { apply_mod_slew_source_active_track(0U, v); }
+void apply_mod_slew_1_amount(float v) { apply_mod_slew_amount_active_track(0U, v); }
+void apply_mod_slew_2_source(float v) { apply_mod_slew_source_active_track(1U, v); }
+void apply_mod_slew_2_amount(float v) { apply_mod_slew_amount_active_track(1U, v); }
+
 static void apply_env3_active_track(mod_env3_param_t param, float v)
 {
     if (mod_env3_set_track_param(ui_get_active_track(), param, v) != 0U)

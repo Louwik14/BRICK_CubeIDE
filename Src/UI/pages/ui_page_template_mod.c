@@ -6,8 +6,10 @@
 #include "ui_core.h"
 #include "ui_template_page.h"
 
-static const ui_template_family_t g_ui_template_mod_family = {
-    .family_title = "MOD",
+static uint8_t g_ui_template_mod_subset = 0U;
+
+static const ui_template_family_t g_ui_template_mod_family_main = {
+    .family_title = "MOD 1/2",
     .nav_labels = { "MATRIX", "LFO 1", "LFO 2", "TIME" },
     .subpages = {
         {
@@ -30,8 +32,37 @@ static const ui_template_family_t g_ui_template_mod_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_mod_family_ops = {
+    .family_title = "MOD 2/2",
+    .nav_labels = { "MULTI", "SLEW", "-", "-" },
+    .subpages = {
+        {
+            .title = "MULTI",
+            .param_bank = { .params = { PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B, PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B } },
+        },
+        {
+            .title = "SLEW",
+            .param_bank = { .params = { PARAM_MOD_SLEW_1_SOURCE, PARAM_MOD_SLEW_1_AMOUNT, PARAM_MOD_SLEW_2_SOURCE, PARAM_MOD_SLEW_2_AMOUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_mod_resolve_family(void)
 {
+    if (g_ui_template_mod_subset != 0U)
+    {
+        return &g_ui_template_mod_family_ops;
+    }
+
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MOD);
 }
 
@@ -49,6 +80,15 @@ static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
     }
+    if (((id == PARAM_MOD_MULTI_1_A)
+            || (id == PARAM_MOD_MULTI_1_B)
+            || (id == PARAM_MOD_MULTI_2_A)
+            || (id == PARAM_MOD_MULTI_2_B)
+            || (id == PARAM_MOD_SLEW_1_SOURCE)
+            || (id == PARAM_MOD_SLEW_2_SOURCE)))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
+    }
     if ((slot == 2U) && (id == PARAM_MOD_MATRIX_DEST))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST;
@@ -58,6 +98,10 @@ static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE;
     }
     if ((slot == 3U) && (id == PARAM_MOD_MATRIX_DEPTH))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
+    }
+    if ((id == PARAM_MOD_SLEW_1_AMOUNT) || (id == PARAM_MOD_SLEW_2_AMOUNT))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
     }
@@ -119,6 +163,20 @@ static ui_template_page_state_t g_ui_template_mod_state = {
     .has_visited = 0U,
 };
 
+void ui_page_template_mod_open_primary(void)
+{
+    g_ui_template_mod_subset = 0U;
+    g_ui_template_mod_state.resolved_family = ui_page_template_mod_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_mod_state, 0U);
+}
+
+void ui_page_template_mod_toggle_subset(void)
+{
+    g_ui_template_mod_subset = (g_ui_template_mod_subset == 0U) ? 1U : 0U;
+    g_ui_template_mod_state.resolved_family = ui_page_template_mod_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_mod_state, 0U);
+}
+
 void ui_page_template_mod_register_families(void)
 {
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
@@ -135,7 +193,7 @@ void ui_page_template_mod_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_MOD,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_mod_family);
+                                        &g_ui_template_mod_family_main);
         }
     }
 }

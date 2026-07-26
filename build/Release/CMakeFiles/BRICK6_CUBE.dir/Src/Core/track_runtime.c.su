@@ -28,9 +28,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1429:9:track_runtime_resolve_track	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1469:9:track_runtime_is_ui_ensemble_available	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1485:28:track_runtime_get_param_rule	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1682:9:track_runtime_tone_slot_to_param	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1724:9:track_runtime_tone_param_to_slot	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1768:30:track_runtime_get_effective_param_status	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1887:9:track_runtime_get_voice_group_role	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1898:9:track_runtime_get_voice_group_effective_master	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1937:9:track_runtime_collect_voice_group_members	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1693:9:track_runtime_tone_slot_to_param	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1735:9:track_runtime_tone_param_to_slot	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1779:30:track_runtime_get_effective_param_status	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1898:9:track_runtime_get_voice_group_role	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1909:9:track_runtime_get_voice_group_effective_master	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_runtime.c:1948:9:track_runtime_collect_voice_group_members	48	static

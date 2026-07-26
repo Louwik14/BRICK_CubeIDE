@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 #define MOD_MATRIX_SLOT_COUNT 8U
-#define MOD_MATRIX_SOURCE_COUNT 6U
+#define MOD_MATRIX_SOURCE_COUNT 10U
 
 typedef enum
 {
@@ -21,7 +21,11 @@ typedef enum
     MOD_MATRIX_SOURCE_LFO2,
     MOD_MATRIX_SOURCE_ENV_FLT,
     MOD_MATRIX_SOURCE_ENV_VCA,
-    MOD_MATRIX_SOURCE_ENV3
+    MOD_MATRIX_SOURCE_ENV3,
+    MOD_MATRIX_SOURCE_MULTI1,
+    MOD_MATRIX_SOURCE_MULTI2,
+    MOD_MATRIX_SOURCE_SLEW1,
+    MOD_MATRIX_SOURCE_SLEW2
 } mod_matrix_source_t;
 
 typedef struct
@@ -52,6 +56,12 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_get_slot_destination_index(uint8_t track, uint8_t slot, float *out_value);
 uint8_t mod_matrix_get_slot_depth(uint8_t track, uint8_t slot, float *out_value);
 uint8_t mod_matrix_get_slot_source(uint8_t track, uint8_t slot, float *out_value);
+uint8_t mod_matrix_set_multi_source(uint8_t track, uint8_t op, uint8_t input, float value);
+uint8_t mod_matrix_get_multi_source(uint8_t track, uint8_t op, uint8_t input, float *out_value);
+uint8_t mod_matrix_set_slew_source(uint8_t track, uint8_t op, float value);
+uint8_t mod_matrix_get_slew_source(uint8_t track, uint8_t op, float *out_value);
+uint8_t mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float value);
+uint8_t mod_matrix_get_slew_amount(uint8_t track, uint8_t op, float *out_value);
 uint8_t mod_matrix_has_any_configured_route(void);
 uint8_t mod_matrix_track_has_configured_route(uint8_t track);
 uint8_t mod_matrix_track_has_configured_source(uint8_t track, mod_matrix_source_t source);
@@ -64,6 +74,10 @@ void mod_matrix_process_track(uint8_t track,
                               const track_runtime_ctx_t *ctx,
                               const float source_values[MOD_MATRIX_SOURCE_COUNT],
                               const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT]);
+void mod_matrix_process_operators(uint8_t track,
+                                  float source_values[MOD_MATRIX_SOURCE_COUNT],
+                                  uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                  uint32_t elapsed_frames);
 void mod_matrix_release_track(uint8_t track,
                               ui_track_family_t family,
                               ui_track_type_t type,

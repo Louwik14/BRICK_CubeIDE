@@ -198,7 +198,11 @@ static const char *ui_renderer_template_matrix_source_label(float value)
         "LFO2",
         "ENV1",
         "ENV2",
-        "ENV3"
+        "ENV3",
+        "MLT1",
+        "MLT2",
+        "SLW1",
+        "SLW2"
     };
 
     return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "OFF";
@@ -260,7 +264,13 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    if (id == PARAM_MOD_MATRIX_SOURCE)
+    if ((id == PARAM_MOD_MATRIX_SOURCE)
+            || (id == PARAM_MOD_MULTI_1_A)
+            || (id == PARAM_MOD_MULTI_1_B)
+            || (id == PARAM_MOD_MULTI_2_A)
+            || (id == PARAM_MOD_MULTI_2_B)
+            || (id == PARAM_MOD_SLEW_1_SOURCE)
+            || (id == PARAM_MOD_SLEW_2_SOURCE))
     {
         (void)snprintf(out, out_len, "%s", ui_renderer_template_matrix_source_label(value));
         return;
@@ -1354,7 +1364,7 @@ static void ui_renderer_template_draw_lfo_center_indicator(int x, int y, int w, 
     const int left_span = (center - x) - 2;
     const int right_span = (x + w - center) - 2;
     ui_renderer_template_draw_lfo_baseline(x, y, w, h);
-    drv_display_draw_line(center, y + 2, center, y + h - 3);
+    drv_display_draw_line(center, y + 4, center, y + h - 5);
 
     if ((value < -0.0001f) && (left_span > 0))
     {
@@ -1427,7 +1437,18 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
             return 1U;
         }
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH:
-            ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 127.0f);
+            if (id == PARAM_MOD_MATRIX_DEPTH)
+            {
+                ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, 127.0f);
+            }
+            else if ((id == PARAM_MOD_SLEW_1_AMOUNT) || (id == PARAM_MOD_SLEW_2_AMOUNT))
+            {
+                ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 1.0f);
+            }
+            else
+            {
+                ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 127.0f);
+            }
             return 1U;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE:
             return ui_renderer_template_draw_lfo_shape_widget(x, y, w, h, value);
@@ -2980,6 +3001,10 @@ static ui_template_custom_widget_kind_t ui_renderer_template_resolve_grouped_cus
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE)
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
 
     for (uint8_t slot = 1U; slot < 4U; ++slot)
     {
@@ -4169,6 +4194,63 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
     }
 }
 
+static void ui_renderer_template_draw_elbow_arrow(uint8_t from_slot, uint8_t to_slot)
+{
+    if ((from_slot >= 4U) || (to_slot >= 4U) || (to_slot <= from_slot))
+    {
+        return;
+    }
+
+    const int x0 = (int)g_ui_template_frame_x[from_slot] + (UI_TEMPLATE_FRAME_W / 2);
+    const int x1 = (int)g_ui_template_frame_x[to_slot] + (UI_TEMPLATE_FRAME_W / 2);
+    const int y_low = UI_TEMPLATE_FRAME_Y + 6;
+    const int y_high = UI_TEMPLATE_FRAME_Y + 2;
+
+    drv_display_draw_line(x0, y_low, x0, y_high);
+    drv_display_draw_line(x0, y_high, x1, y_high);
+    drv_display_draw_line(x1, y_high, x1, y_low);
+    drv_display_draw_pixel(x1 - 1, y_low - 1, true);
+    drv_display_draw_pixel(x1 + 1, y_low - 1, true);
+    drv_display_draw_pixel(x1 - 2, y_low - 2, true);
+    drv_display_draw_pixel(x1 + 2, y_low - 2, true);
+}
+
+static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_t *subpage)
+{
+    if (subpage == NULL)
+    {
+        return;
+    }
+
+    if ((subpage->param_bank.params[0] == PARAM_MOD_MATRIX_SLOT)
+            && (subpage->param_bank.params[1] == PARAM_MOD_MATRIX_SOURCE)
+            && (subpage->param_bank.params[2] == PARAM_MOD_MATRIX_DEST)
+            && (subpage->param_bank.params[3] == PARAM_MOD_MATRIX_DEPTH))
+    {
+        ui_renderer_template_draw_elbow_arrow(1U, 2U);
+        return;
+    }
+
+    if ((subpage->param_bank.params[0] == PARAM_MOD_MULTI_1_A)
+            && (subpage->param_bank.params[1] == PARAM_MOD_MULTI_1_B)
+            && (subpage->param_bank.params[2] == PARAM_MOD_MULTI_2_A)
+            && (subpage->param_bank.params[3] == PARAM_MOD_MULTI_2_B))
+    {
+        ui_renderer_template_draw_elbow_arrow(0U, 1U);
+        ui_renderer_template_draw_elbow_arrow(2U, 3U);
+        return;
+    }
+
+    if ((subpage->param_bank.params[0] == PARAM_MOD_SLEW_1_SOURCE)
+            && (subpage->param_bank.params[1] == PARAM_MOD_SLEW_1_AMOUNT)
+            && (subpage->param_bank.params[2] == PARAM_MOD_SLEW_2_SOURCE)
+            && (subpage->param_bank.params[3] == PARAM_MOD_SLEW_2_AMOUNT))
+    {
+        ui_renderer_template_draw_elbow_arrow(0U, 1U);
+        ui_renderer_template_draw_elbow_arrow(2U, 3U);
+    }
+}
+
 void ui_renderer_template_draw(const ui_template_page_state_t *state)
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
@@ -4230,6 +4312,7 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                                                      i,
                                                      subpage->param_bank.params[i]);
             }
+            ui_renderer_template_draw_mod_link_arrows(subpage);
 
             if (grouped_widget_drawn != 0U)
             {

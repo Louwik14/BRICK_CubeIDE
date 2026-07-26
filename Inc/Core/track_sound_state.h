@@ -29,6 +29,18 @@ typedef struct
 
 typedef struct
 {
+    uint8_t source_a;
+    uint8_t source_b;
+} track_mod_multi_state_t;
+
+typedef struct
+{
+    uint8_t source;
+    float amount;
+} track_mod_slew_state_t;
+
+typedef struct
+{
     float mix_level;
     float mix_pan;
     float mix_send1;
@@ -56,7 +68,12 @@ typedef struct
     float vca_decay;
     float vca_sustain;
     float vca_release;
+    float env_retrig_filter;
+    float env_retrig_vca;
+    float env_retrig_mod;
     track_mod_lfo_state_t mod_lfo[2];
+    track_mod_multi_state_t mod_multi[2];
+    track_mod_slew_state_t mod_slew[2];
     track_mod_env3_state_t mod_env3;
     track_mod_matrix_slot_t mod_matrix[MOD_MATRIX_SLOT_COUNT];
     uint8_t mod_matrix_selected_slot;

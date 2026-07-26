@@ -2,6 +2,10 @@
 
 ## 1. Perimetre
 
+Addendum 2026-07-26 - ENV retrigger modes:
+- `PARAM_ENV_RETRIG_FILTER`, `PARAM_ENV_RETRIG_VCA` et `PARAM_ENV_RETRIG_MOD` augmentent le layout `PARAM_COUNT` et sont persistants via les snapshots track-aware existants.
+- `PATTERN_VERSION` passe a `38`, `PROJECT_V1_FILE_VERSION` a `50`, `PATCH_SD_FILE_VERSION` a `12` et `KIT_SD_FILE_VERSION` a `11`; les anciens payloads sont refuses par validation d'en-tete/taille sans migration.
+
 Addendum 2026-05-28 - formats REC START:
 - `PatternSaveV1.globals.rec_start_mode` stocke le contrat REC `START` (`DEFAULT/TRIG/ROLL 1/4/ROLL 1/2/ROLL 1`) a la place de l'ancien champ REC launch/count-in.
 - `PATTERN_VERSION` passe a `26` et `PROJECT_V1_FILE_VERSION` passe a `37`; les anciens fichiers sont refuses par validation d'en-tete, sans alias de compatibilite.

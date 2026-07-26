@@ -1507,6 +1507,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
+        case PARAM_ENV_RETRIG_FILTER:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_COLORS;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
@@ -1619,6 +1620,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
         case PARAM_VCA_RELEASE:
+        case PARAM_ENV_RETRIG_VCA:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
             return rule;
@@ -1659,10 +1661,19 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MOD_MATRIX_SOURCE:
         case PARAM_MOD_MATRIX_DEST:
         case PARAM_MOD_MATRIX_DEPTH:
+        case PARAM_MOD_MULTI_1_A:
+        case PARAM_MOD_MULTI_1_B:
+        case PARAM_MOD_MULTI_2_A:
+        case PARAM_MOD_MULTI_2_B:
+        case PARAM_MOD_SLEW_1_SOURCE:
+        case PARAM_MOD_SLEW_1_AMOUNT:
+        case PARAM_MOD_SLEW_2_SOURCE:
+        case PARAM_MOD_SLEW_2_AMOUNT:
         case PARAM_ENV3_ATTACK:
         case PARAM_ENV3_DECAY:
         case PARAM_ENV3_SUSTAIN:
         case PARAM_ENV3_RELEASE:
+        case PARAM_ENV_RETRIG_MOD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MOD;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

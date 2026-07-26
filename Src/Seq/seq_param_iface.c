@@ -284,7 +284,15 @@ static void seq_param_iface_rebuild_slot_maps(void)
                 || (param == PARAM_MOD_MATRIX_SLOT)
                 || (param == PARAM_MOD_MATRIX_SOURCE)
                 || (param == PARAM_MOD_MATRIX_DEST)
-                || (param == PARAM_MOD_MATRIX_DEPTH))
+                || (param == PARAM_MOD_MATRIX_DEPTH)
+                || (param == PARAM_MOD_MULTI_1_A)
+                || (param == PARAM_MOD_MULTI_1_B)
+                || (param == PARAM_MOD_MULTI_2_A)
+                || (param == PARAM_MOD_MULTI_2_B)
+                || (param == PARAM_MOD_SLEW_1_SOURCE)
+                || (param == PARAM_MOD_SLEW_1_AMOUNT)
+                || (param == PARAM_MOD_SLEW_2_SOURCE)
+                || (param == PARAM_MOD_SLEW_2_AMOUNT))
         {
             continue;
         }
@@ -322,7 +330,15 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
                 || (param == PARAM_MOD_MATRIX_SLOT)
                 || (param == PARAM_MOD_MATRIX_SOURCE)
                 || (param == PARAM_MOD_MATRIX_DEST)
-                || (param == PARAM_MOD_MATRIX_DEPTH))
+                || (param == PARAM_MOD_MATRIX_DEPTH)
+                || (param == PARAM_MOD_MULTI_1_A)
+                || (param == PARAM_MOD_MULTI_1_B)
+                || (param == PARAM_MOD_MULTI_2_A)
+                || (param == PARAM_MOD_MULTI_2_B)
+                || (param == PARAM_MOD_SLEW_1_SOURCE)
+                || (param == PARAM_MOD_SLEW_1_AMOUNT)
+                || (param == PARAM_MOD_SLEW_2_SOURCE)
+                || (param == PARAM_MOD_SLEW_2_AMOUNT))
     {
         return 0U;
     }

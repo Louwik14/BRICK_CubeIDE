@@ -393,6 +393,56 @@ static uint8_t param_matrix_set_track_value(param_id_t id, uint8_t track, float 
     }
 }
 
+static uint8_t param_mod_operator_get_track_value(param_id_t id, uint8_t track, float *out_value)
+{
+    switch (id)
+    {
+        case PARAM_MOD_MULTI_1_A:
+            return mod_matrix_get_multi_source(track, 0U, 0U, out_value);
+        case PARAM_MOD_MULTI_1_B:
+            return mod_matrix_get_multi_source(track, 0U, 1U, out_value);
+        case PARAM_MOD_MULTI_2_A:
+            return mod_matrix_get_multi_source(track, 1U, 0U, out_value);
+        case PARAM_MOD_MULTI_2_B:
+            return mod_matrix_get_multi_source(track, 1U, 1U, out_value);
+        case PARAM_MOD_SLEW_1_SOURCE:
+            return mod_matrix_get_slew_source(track, 0U, out_value);
+        case PARAM_MOD_SLEW_1_AMOUNT:
+            return mod_matrix_get_slew_amount(track, 0U, out_value);
+        case PARAM_MOD_SLEW_2_SOURCE:
+            return mod_matrix_get_slew_source(track, 1U, out_value);
+        case PARAM_MOD_SLEW_2_AMOUNT:
+            return mod_matrix_get_slew_amount(track, 1U, out_value);
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_mod_operator_set_track_value(param_id_t id, uint8_t track, float value)
+{
+    switch (id)
+    {
+        case PARAM_MOD_MULTI_1_A:
+            return mod_matrix_set_multi_source(track, 0U, 0U, value);
+        case PARAM_MOD_MULTI_1_B:
+            return mod_matrix_set_multi_source(track, 0U, 1U, value);
+        case PARAM_MOD_MULTI_2_A:
+            return mod_matrix_set_multi_source(track, 1U, 0U, value);
+        case PARAM_MOD_MULTI_2_B:
+            return mod_matrix_set_multi_source(track, 1U, 1U, value);
+        case PARAM_MOD_SLEW_1_SOURCE:
+            return mod_matrix_set_slew_source(track, 0U, value);
+        case PARAM_MOD_SLEW_1_AMOUNT:
+            return mod_matrix_set_slew_amount(track, 0U, value);
+        case PARAM_MOD_SLEW_2_SOURCE:
+            return mod_matrix_set_slew_source(track, 1U, value);
+        case PARAM_MOD_SLEW_2_AMOUNT:
+            return mod_matrix_set_slew_amount(track, 1U, value);
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped)
 {
     seq_param_slot_t param_slot = 0U;
@@ -475,6 +525,15 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
             return 1U;
         case PARAM_VCA_RELEASE:
             *out_value = state->vca_release;
+            return 1U;
+        case PARAM_ENV_RETRIG_FILTER:
+            *out_value = state->env_retrig_filter;
+            return 1U;
+        case PARAM_ENV_RETRIG_VCA:
+            *out_value = state->env_retrig_vca;
+            return 1U;
+        case PARAM_ENV_RETRIG_MOD:
+            *out_value = state->env_retrig_mod;
             return 1U;
         default:
             return 0U;
@@ -1257,12 +1316,22 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 1U;
     }
 
+    if (param_mod_operator_get_track_value(id, track, out_value) != 0U)
+    {
+        return 1U;
+    }
+
     {
         mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
         if (param_env3_map(id, &env_param) != 0U)
         {
             return mod_env3_get_track_param(track, env_param, out_value);
         }
+    }
+
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        return mod_env3_get_track_retrigger_hard(track, out_value);
     }
 
     {
@@ -1455,6 +1524,23 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return ok;
     }
 
+    if ((id == PARAM_MOD_MULTI_1_A)
+            || (id == PARAM_MOD_MULTI_1_B)
+            || (id == PARAM_MOD_MULTI_2_A)
+            || (id == PARAM_MOD_MULTI_2_B)
+            || (id == PARAM_MOD_SLEW_1_SOURCE)
+            || (id == PARAM_MOD_SLEW_1_AMOUNT)
+            || (id == PARAM_MOD_SLEW_2_SOURCE)
+            || (id == PARAM_MOD_SLEW_2_AMOUNT))
+    {
+        const uint8_t ok = param_mod_operator_set_track_value(id, track, clamped);
+        if (ok != 0U)
+        {
+            kit_v1_mark_dirty();
+        }
+        return ok;
+    }
+
     {
         mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
         if (param_env3_map(id, &env_param) != 0U)
@@ -1466,6 +1552,16 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             }
             return ok;
         }
+    }
+
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        const uint8_t ok = mod_env3_set_track_retrigger_hard(track, clamped);
+        if (ok != 0U)
+        {
+            kit_v1_mark_dirty();
+        }
+        return ok;
     }
 
     if (param_filter_is_param(id) != 0U)

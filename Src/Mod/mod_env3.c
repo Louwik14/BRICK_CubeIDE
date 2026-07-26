@@ -179,6 +179,40 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
     }
 }
 
+uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    track_sound_state_t *const sound = track_sound_state_get(track);
+    if (sound == NULL)
+    {
+        return 0U;
+    }
+
+    sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
+    return 1U;
+}
+
+uint8_t mod_env3_get_track_retrigger_hard(uint8_t track, float *out_value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    const track_sound_state_t *const sound = track_sound_state_get_const(track);
+    if (sound == NULL)
+    {
+        return 0U;
+    }
+
+    *out_value = sound->env_retrig_mod;
+    return 1U;
+}
+
 uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, float value)
 {
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT))
@@ -231,7 +265,9 @@ void mod_env3_note_on(uint8_t track)
     {
         g_mod_env3_runtime[track].held_notes++;
     }
-    env_adsr_retrigger(&g_mod_env3_runtime[track].env, false);
+    float retrigger_hard = 1.0f;
+    (void)mod_env3_get_track_retrigger_hard(track, &retrigger_hard);
+    env_adsr_retrigger(&g_mod_env3_runtime[track].env, retrigger_hard >= 0.5f);
 }
 
 void mod_env3_note_off(uint8_t track)

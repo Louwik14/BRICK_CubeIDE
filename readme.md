@@ -162,6 +162,7 @@ This separation is intentional. Do not add a second authority for the same state
 - keyboard / arp / pattern / mute workflows
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
+- `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches; default is `ON`/hard.
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG`; premium keeps the missing/invalid Hall calibration page priority, while low-cost temporarily bypasses only its automatic opening and keeps uncalibrated Hall inputs disabled
 - voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` and `LINK`; slaves and standalone tracks keep the historical CFG page only, and `PLAY` remains independent per member

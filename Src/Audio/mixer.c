@@ -89,6 +89,8 @@ typedef struct {
     uint8_t vca_note_count;
     uint8_t vca_current_note;
     uint8_t vca_gate;
+    uint8_t filter_retrigger_hard;
+    uint8_t vca_retrigger_hard;
     float vca_env_value;
     float filter_env_value;
     uint8_t type;
@@ -619,6 +621,8 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->vca_gate = 0U;
+    filter->filter_retrigger_hard = 1U;
+    filter->vca_retrigger_hard = 1U;
     filter->vca_env_value = 0.0f;
     filter->filter_env_value = 0.0f;
 
@@ -1850,6 +1854,14 @@ void mixer_set_track_filter_env_delay(uint32_t track_id, float delay_s)
     (void)delay_s;
 }
 
+void mixer_set_track_filter_retrigger_hard(uint32_t track_id, uint8_t hard)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].filter_retrigger_hard = (hard != 0U) ? 1U : 0U;
+}
+
 void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -1887,7 +1899,7 @@ void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t ve
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->current_note = midi_note;
     filter->note_active = 1U;
-    env_adsr_retrigger(&filter->filter_env, true);
+    env_adsr_retrigger(&filter->filter_env, filter->filter_retrigger_hard != 0U);
 }
 
 void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
@@ -1939,6 +1951,14 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
     }
 }
 
+void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].vca_retrigger_hard = (hard != 0U) ? 1U : 0U;
+}
+
 void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
 {
     (void)velocity;
@@ -1957,7 +1977,7 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
     {
         filter->vca_note_active = 1U;
         filter->vca_gate = 1U;
-        adsr_daisy_c_retrigger(&filter->vca_env, 1U);
+        adsr_daisy_c_retrigger(&filter->vca_env, filter->vca_retrigger_hard);
     }
 }
 

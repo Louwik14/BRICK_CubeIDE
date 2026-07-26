@@ -1,5 +1,22 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-26 - MOD 2/2 MULTI/SLEW
+
+- Correction 2026-07-26: `MULTI` (`M1A/M1B/M2A/M2B`) et les champs `S1SRC/S2SRC` de `SLEW` utilisent le widget texte de source Matrix (`LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`, `MULT1`, `MULT2`, `SLEW1`, `SLEW2`), jamais un potard continu; les labels longs de ces sources restent `env flt`, `env vca`, `env mod`.
+- Correction 2026-07-26: `S1AMT/S2AMT` utilisent une barre unipolaire de quantite, et `MATRIX/DEPTH` utilise une barre bipolaire centree.
+- Correction 2026-07-26: les liaisons visuelles MOD sont des fleches coudees 1 px entre les widgets sources et cibles, pas des fleches droites.
+
+- L'ensemble `MOD` alterne maintenant `MOD 1/2` et `MOD 2/2` par réappui sur le bouton MOD.
+- `MOD 1/2` conserve `MATRIX`, `LFO 1`, `LFO 2`, `TIME`.
+- `MOD 2/2` expose `MULTI` (`M1A/M1B/M2A/M2B`) et `SLEW` (`S1SRC/S1AMT/S2SRC/S2AMT`).
+- Les sélecteurs de sources réutilisent le widget source Matrix et ajoutent `MULT1`, `MULT2`, `SLEW1`, `SLEW2`.
+- Les destinations Matrix affichent les labels Stack dynamiques par modèle pour `TIMBRE/COLOR/PARAM3`, dont `SINFD/TRIFD = FOLD/SYM/SHAPE`, et les destinations LFO rate `L1Rt/L2Rt`.
+
+## Addendum 2026-07-26 - ENV 2/2 RETRIG
+
+- L'ensemble `COLORS/ENV` a maintenant deux sous-ensembles cyclables par le bouton `COLORS`: `ENV 1/2` garde `FILTER`, `ADSR`, `VCA`, `ENV 3`; `ENV 2/2` expose uniquement la page `RETRIG` avec `ENV FLT`, `ENV VCA`, `ENV MOD`, puis un quatrieme slot vide.
+- Les trois params `RETRIG` sont des ON/OFF persistants: `ON` = hard retrigger, `OFF` = soft retrigger.
+
 ## 1. Perimetre
 
 Bring-up temporaire low-cost : lorsque `LOWCOST_BUTTON_TEST_PAGE` vaut `1`,

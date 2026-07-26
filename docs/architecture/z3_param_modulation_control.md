@@ -1,5 +1,25 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-26 - MOD operators MULTI/SLEW et LFO rate destinations
+
+- Correction UI-label 2026-07-26: les labels longs de sources Matrix `ENV FLT/ENV VCA/ENV3` sont exposes cote catalogue MOD comme `env flt/env vca/env mod`; les IDs runtime et valeurs enum ne changent pas.
+
+- Correction 2026-07-26: une route Matrix qui consomme `MULT1/MULT2/SLEW1/SLEW2` active aussi les sources amont requises par ces operateurs; `SOURCE=MULT1` avec `M1A=LFO1` et `M1B=ENV VCA` calcule donc les deux sources avant l'accumulation Matrix.
+- Correction 2026-07-26: `SLEW1/SLEW2` utilisent maintenant le nombre de frames du tick Matrix pour convertir `AMT` en coefficient de lissage borne et reset leur etat interne quand la source change; le lissage ne depend plus d'un coefficient fixe implicite.
+
+- `mod_matrix` ajoute quatre sources runtime control-rate: `MULT1`, `MULT2`, `SLEW1`, `SLEW2`.
+- Les params track-aware MOD persistants `PARAM_MOD_MULTI_*` configurent `MULT1=M1A*M1B` et `MULT2=M2A*M2B`; les sorties sont clampées `-1..1`.
+- Les params track-aware MOD persistants `PARAM_MOD_SLEW_*` configurent `SLEW1/SLEW2`; `AMT` est borné `0..1` et converti en coefficient linéaire borné au tick Matrix/LFO, jamais par sample audio.
+- Les opérateurs sont évalués dans `mod_lfo_v1_process_block()` juste avant `mod_matrix_process_track()`. Les sources opérateur lues par d'autres opérateurs utilisent l'état opérateur précédent du tick courant/précédent; les cycles directs `SLEW1->SLEW1`, `SLEW2->SLEW2`, `SLEW1<->SLEW2` et les boucles directes `MULT*` sont ignorés.
+- `PARAM_LFO1_RATE` et `PARAM_LFO2_RATE` deviennent destinations continues Matrix avec labels `L1Rt/lfo1rate` et `L2Rt/lfo2rate`; l'application RT passe par le temp overlay LFO et la valeur modulée est clampée sans rate négatif côté destination.
+
+## Addendum 2026-07-26 - ENV retrigger hard/soft
+
+- Trois params track-aware append-only sont ajoutes au layout courant: `PARAM_ENV_RETRIG_FILTER`, `PARAM_ENV_RETRIG_VCA`, `PARAM_ENV_RETRIG_MOD`.
+- Defaults: `ON` pour conserver le retrigger hard historique. `ON` = hard reset a zero au note-on; `OFF` = retrigger soft depuis la valeur courante.
+- Les bases canoniques vivent dans `track_sound_state` (`env_retrig_filter`, `env_retrig_vca`, `env_retrig_mod`) et sont capturees/restaurees par les flux `PARAM_COUNT` existants.
+- Application runtime: `ENV FLT` projette vers la lane filtre mixer resolue, `ENV VCA` vers la lane VCA mixer resolue, `ENV MOD` est lu par `mod_env3_note_on()`. `env_adsr_peaks_t` supporte deja le hard/soft via `env_adsr_retrigger(..., hard_reset)`.
+
 ## 1. Perimetre
 
 Zone Z3 (coeur + modules param_registry):

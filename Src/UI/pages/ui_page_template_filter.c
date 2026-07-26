@@ -6,8 +6,10 @@
 #include "ui_template_page.h"
 #include "Core/track_runtime.h"
 
+static uint8_t g_ui_template_filter_subset = 0U;
+
 static ui_template_family_t g_ui_template_filter_family_audio = {
-    .family_title = "ENV",
+    .family_title = "ENV 1/2",
     .nav_labels = { "FILTER", "ADSR", "VCA", "ENV 3" },
     .subpages = {
         {
@@ -30,8 +32,37 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_filter_family_retrig = {
+    .family_title = "ENV 2/2",
+    .nav_labels = { "RETRIG", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "RETRIG",
+            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_colors_resolve_family(void)
 {
+    if (g_ui_template_filter_subset != 0U)
+    {
+        return &g_ui_template_filter_family_retrig;
+    }
+
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_COLORS);
 }
 
@@ -177,6 +208,20 @@ static ui_template_page_state_t g_ui_template_filter_state = {
     .has_visited = 0U,
 };
 
+void ui_page_template_colors_open_primary(void)
+{
+    g_ui_template_filter_subset = 0U;
+    g_ui_template_filter_state.resolved_family = ui_page_template_colors_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_filter_state, 0U);
+}
+
+void ui_page_template_colors_toggle_subset(void)
+{
+    g_ui_template_filter_subset = (g_ui_template_filter_subset == 0U) ? 1U : 0U;
+    g_ui_template_filter_state.resolved_family = ui_page_template_colors_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_filter_state, 0U);
+}
+
 typedef struct
 {
     uint8_t valid;
@@ -246,7 +291,7 @@ void ui_page_template_vca_register_families(void)
 
 static ui_template_family_t *ui_page_template_colors_get_audio_family(void)
 {
-    return (ui_template_family_t *)ui_page_template_colors_resolve_family();
+    return (ui_template_family_t *)ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_COLORS);
 }
 
 static uint8_t ui_page_template_colors_sync_should_recompute(uint8_t active_track,
@@ -279,6 +324,11 @@ static uint8_t ui_page_template_colors_sync_should_recompute(uint8_t active_trac
 
 static void ui_page_template_colors_sync_family(void)
 {
+    if (g_ui_template_filter_subset != 0U)
+    {
+        return;
+    }
+
     ui_template_family_t *family = ui_page_template_colors_get_audio_family();
     uint8_t filter_target_track = 0U;
     const uint8_t active_track = ui_get_active_track();

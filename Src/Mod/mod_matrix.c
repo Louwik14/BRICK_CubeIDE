@@ -25,11 +25,20 @@ typedef struct
 typedef struct
 {
     uint8_t any_route;
-    uint8_t source_mask;
+    uint16_t source_mask;
 } mod_matrix_route_cache_t;
+
+typedef struct
+{
+    float multi[2];
+    float slew[2];
+    uint8_t multi_valid[2];
+    uint8_t slew_valid[2];
+} mod_matrix_operator_runtime_t;
 
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_route_cache_t g_mod_matrix_route_cache[SEQ_TRACK_COUNT];
+static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
 static uint8_t g_mod_matrix_any_route = 0U;
 
 static float mod_matrix_clampf(float v, float lo, float hi)
@@ -132,6 +141,8 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
             return UI_TRACK_TYPE_SLICER;
         case TRACK_RUNTIME_TYPE_WAVE:
             return UI_TRACK_TYPE_WAVE;
+        case TRACK_RUNTIME_TYPE_STACK:
+            return UI_TRACK_TYPE_STACK;
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
             return UI_TRACK_TYPE_DRUM_TRX_BD;
         case TRACK_RUNTIME_TYPE_MIDI:
@@ -185,6 +196,10 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
         case MOD_MATRIX_SOURCE_LFO1:
         case MOD_MATRIX_SOURCE_LFO2:
         case MOD_MATRIX_SOURCE_ENV3:
+        case MOD_MATRIX_SOURCE_MULTI1:
+        case MOD_MATRIX_SOURCE_MULTI2:
+        case MOD_MATRIX_SOURCE_SLEW1:
+        case MOD_MATRIX_SOURCE_SLEW2:
             break;
 
         case MOD_MATRIX_SOURCE_ENV_VCA:
@@ -300,7 +315,7 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->valid = 1U;
         dst->destination = (uint16_t)destination;
         dst->base_value = base;
-        dst->min_value = desc->min;
+        dst->min_value = ((destination == PARAM_LFO1_RATE) || (destination == PARAM_LFO2_RATE)) ? 0.0f : desc->min;
         dst->max_value = desc->max;
     }
 
@@ -338,6 +353,7 @@ void mod_matrix_init(void)
 void mod_matrix_reset_runtime(void)
 {
     memset(g_mod_matrix_runtime, 0, sizeof(g_mod_matrix_runtime));
+    memset(g_mod_matrix_operator_runtime, 0, sizeof(g_mod_matrix_operator_runtime));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
@@ -356,13 +372,13 @@ void mod_matrix_rebuild_route_cache_track(uint8_t track)
         return;
     }
 
-    uint8_t source_mask = 0U;
+    uint16_t source_mask = 0U;
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
     {
         const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
         if (mod_matrix_slot_is_configured(s) != 0U)
         {
-            source_mask |= (uint8_t)(1U << s->source);
+            source_mask |= (uint16_t)(1U << s->source);
         }
     }
 
@@ -376,13 +392,13 @@ void mod_matrix_rebuild_route_cache_all(void)
     g_mod_matrix_any_route = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        uint8_t source_mask = 0U;
+        uint16_t source_mask = 0U;
         for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
         {
             const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
             if (mod_matrix_slot_is_configured(s) != 0U)
             {
-                source_mask |= (uint8_t)(1U << s->source);
+                source_mask |= (uint16_t)(1U << s->source);
             }
         }
         g_mod_matrix_route_cache[track].source_mask = source_mask;
@@ -554,6 +570,106 @@ uint8_t mod_matrix_get_slot_source(uint8_t track, uint8_t slot, float *out_value
     return 1U;
 }
 
+uint8_t mod_matrix_set_multi_source(uint8_t track, uint8_t op, uint8_t input, float value)
+{
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if ((state == NULL) || (op >= 2U) || (input >= 2U))
+    {
+        return 0U;
+    }
+
+    const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
+    if (input == 0U)
+    {
+        state->mod_multi[op].source_a = source;
+    }
+    else
+    {
+        state->mod_multi[op].source_b = source;
+    }
+    return 1U;
+}
+
+uint8_t mod_matrix_get_multi_source(uint8_t track, uint8_t op, uint8_t input, float *out_value)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    if ((state == NULL) || (op >= 2U) || (input >= 2U) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    *out_value = (float)((input == 0U) ? state->mod_multi[op].source_a : state->mod_multi[op].source_b);
+    return 1U;
+}
+
+static void mod_matrix_reset_slew_runtime(uint8_t track, uint8_t op)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (op >= 2U))
+    {
+        return;
+    }
+
+    g_mod_matrix_operator_runtime[track].slew[op] = 0.0f;
+    g_mod_matrix_operator_runtime[track].slew_valid[op] = 0U;
+}
+
+uint8_t mod_matrix_set_slew_source(uint8_t track, uint8_t op, float value)
+{
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if ((state == NULL) || (op >= 2U))
+    {
+        return 0U;
+    }
+
+    const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
+    if (state->mod_slew[op].source != source)
+    {
+        state->mod_slew[op].source = source;
+        mod_matrix_reset_slew_runtime(track, op);
+    }
+    return 1U;
+}
+
+uint8_t mod_matrix_get_slew_source(uint8_t track, uint8_t op, float *out_value)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    if ((state == NULL) || (op >= 2U) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    *out_value = (float)state->mod_slew[op].source;
+    return 1U;
+}
+
+uint8_t mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float value)
+{
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if ((state == NULL) || (op >= 2U))
+    {
+        return 0U;
+    }
+
+    const float amount = mod_matrix_clampf(value, 0.0f, 1.0f);
+    if (state->mod_slew[op].amount != amount)
+    {
+        state->mod_slew[op].amount = amount;
+    }
+    return 1U;
+}
+
+uint8_t mod_matrix_get_slew_amount(uint8_t track, uint8_t op, float *out_value)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    if ((state == NULL) || (op >= 2U) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    *out_value = state->mod_slew[op].amount;
+    return 1U;
+}
+
 uint8_t mod_matrix_has_any_configured_route(void)
 {
     return g_mod_matrix_any_route;
@@ -578,7 +694,226 @@ uint8_t mod_matrix_track_has_configured_source(uint8_t track, mod_matrix_source_
         return 0U;
     }
 
-    return ((g_mod_matrix_route_cache[track].source_mask & (uint8_t)(1U << (uint8_t)source)) != 0U) ? 1U : 0U;
+    return ((g_mod_matrix_route_cache[track].source_mask & (uint16_t)(1U << (uint8_t)source)) != 0U) ? 1U : 0U;
+}
+
+static uint8_t mod_matrix_slew_direct_cycle(const track_sound_state_t *state, uint8_t op);
+
+static uint8_t mod_matrix_source_depends_on(const track_sound_state_t *state,
+                                            uint8_t root_source,
+                                            uint8_t target_source,
+                                            uint8_t depth)
+{
+    if ((state == NULL)
+            || (root_source >= (uint8_t)MOD_MATRIX_SOURCE_COUNT)
+            || (target_source >= (uint8_t)MOD_MATRIX_SOURCE_COUNT)
+            || (depth >= 4U))
+    {
+        return 0U;
+    }
+
+    if (root_source == target_source)
+    {
+        return 1U;
+    }
+
+    switch ((mod_matrix_source_t)root_source)
+    {
+        case MOD_MATRIX_SOURCE_MULTI1:
+        case MOD_MATRIX_SOURCE_MULTI2:
+        {
+            const uint8_t op = (root_source == (uint8_t)MOD_MATRIX_SOURCE_MULTI1) ? 0U : 1U;
+            const uint8_t src_a = state->mod_multi[op].source_a;
+            const uint8_t src_b = state->mod_multi[op].source_b;
+            if ((src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+                    || (src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI2)
+                    || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+                    || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI2))
+            {
+                return 0U;
+            }
+            return ((mod_matrix_source_depends_on(state, src_a, target_source, (uint8_t)(depth + 1U)) != 0U)
+                    || (mod_matrix_source_depends_on(state, src_b, target_source, (uint8_t)(depth + 1U)) != 0U))
+                ? 1U
+                : 0U;
+        }
+        case MOD_MATRIX_SOURCE_SLEW1:
+        case MOD_MATRIX_SOURCE_SLEW2:
+        {
+            const uint8_t op = (root_source == (uint8_t)MOD_MATRIX_SOURCE_SLEW1) ? 0U : 1U;
+            if (mod_matrix_slew_direct_cycle(state, op) != 0U)
+            {
+                return 0U;
+            }
+            return mod_matrix_source_depends_on(state,
+                                                state->mod_slew[op].source,
+                                                target_source,
+                                                (uint8_t)(depth + 1U));
+        }
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t mod_matrix_track_has_operator_route(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    const uint16_t mask = g_mod_matrix_route_cache[track].source_mask;
+    return ((mask & ((uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+                    | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_MULTI2)
+                    | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_SLEW1)
+                    | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_SLEW2))) != 0U) ? 1U : 0U;
+}
+
+static uint8_t mod_matrix_get_operator_source_value(const mod_matrix_operator_runtime_t *rt,
+                                                    const float source_values[MOD_MATRIX_SOURCE_COUNT],
+                                                    const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                                    uint8_t source,
+                                                    float *out)
+{
+    if ((out == NULL) || (source >= (uint8_t)MOD_MATRIX_SOURCE_COUNT))
+    {
+        return 0U;
+    }
+
+    switch ((mod_matrix_source_t)source)
+    {
+        case MOD_MATRIX_SOURCE_MULTI1:
+        case MOD_MATRIX_SOURCE_MULTI2:
+        {
+            const uint8_t op = (source == (uint8_t)MOD_MATRIX_SOURCE_MULTI1) ? 0U : 1U;
+            if ((rt == NULL) || (rt->multi_valid[op] == 0U))
+            {
+                return 0U;
+            }
+            *out = rt->multi[op];
+            return 1U;
+        }
+        case MOD_MATRIX_SOURCE_SLEW1:
+        case MOD_MATRIX_SOURCE_SLEW2:
+        {
+            const uint8_t op = (source == (uint8_t)MOD_MATRIX_SOURCE_SLEW1) ? 0U : 1U;
+            if ((rt == NULL) || (rt->slew_valid[op] == 0U))
+            {
+                return 0U;
+            }
+            *out = rt->slew[op];
+            return 1U;
+        }
+        default:
+            if ((source_valid == NULL) || (source_values == NULL) || (source_valid[source] == 0U))
+            {
+                return 0U;
+            }
+            *out = source_values[source];
+            return 1U;
+    }
+}
+
+static uint8_t mod_matrix_slew_direct_cycle(const track_sound_state_t *state, uint8_t op)
+{
+    if ((state == NULL) || (op >= 2U))
+    {
+        return 1U;
+    }
+
+    const uint8_t src = state->mod_slew[op].source;
+    const uint8_t self = (op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2;
+    const uint8_t other = (op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW2 : (uint8_t)MOD_MATRIX_SOURCE_SLEW1;
+    if (src == self)
+    {
+        return 1U;
+    }
+    if (src == other)
+    {
+        const uint8_t other_src = state->mod_slew[1U - op].source;
+        if (other_src == self)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+void mod_matrix_process_operators(uint8_t track,
+                                  float source_values[MOD_MATRIX_SOURCE_COUNT],
+                                  uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                  uint32_t elapsed_frames)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (source_values == NULL) || (source_valid == NULL))
+    {
+        return;
+    }
+    if (mod_matrix_track_has_operator_route(track) == 0U)
+    {
+        return;
+    }
+
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    mod_matrix_operator_runtime_t *const rt = &g_mod_matrix_operator_runtime[track];
+    if (state == NULL)
+    {
+        return;
+    }
+
+    for (uint8_t op = 0U; op < 2U; ++op)
+    {
+        const uint8_t src_a = state->mod_multi[op].source_a;
+        const uint8_t src_b = state->mod_multi[op].source_b;
+        float a = 0.0f;
+        float b = 0.0f;
+        const uint8_t invalid_src = (uint8_t)((src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+                                             || (src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI2)
+                                             || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+                                             || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI2));
+        if ((invalid_src == 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src_a, &a) != 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src_b, &b) != 0U))
+        {
+            rt->multi[op] = mod_matrix_clampf(a * b, -1.0f, 1.0f);
+            rt->multi_valid[op] = 1U;
+            source_values[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1 : (uint8_t)MOD_MATRIX_SOURCE_MULTI2] = rt->multi[op];
+            source_valid[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1 : (uint8_t)MOD_MATRIX_SOURCE_MULTI2] = 1U;
+        }
+        else
+        {
+            rt->multi_valid[op] = 0U;
+        }
+    }
+
+    for (uint8_t op = 0U; op < 2U; ++op)
+    {
+        const uint8_t src = state->mod_slew[op].source;
+        float input = 0.0f;
+        if ((mod_matrix_slew_direct_cycle(state, op) == 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src, &input) != 0U))
+        {
+            const float amount = mod_matrix_clampf(state->mod_slew[op].amount, 0.0f, 1.0f);
+            const float tau_frames = 16.0f + (amount * amount * 48000.0f);
+            const float elapsed = (elapsed_frames == 0U) ? 1.0f : (float)elapsed_frames;
+            const float coeff = (amount <= 0.0f) ? 1.0f : (elapsed / (tau_frames + elapsed));
+            if (rt->slew_valid[op] == 0U)
+            {
+                rt->slew[op] = input;
+            }
+            else
+            {
+                rt->slew[op] += (input - rt->slew[op]) * coeff;
+            }
+            rt->slew[op] = mod_matrix_clampf(rt->slew[op], -1.0f, 1.0f);
+            rt->slew_valid[op] = 1U;
+            source_values[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2] = rt->slew[op];
+            source_valid[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2] = 1U;
+        }
+        else
+        {
+            rt->slew_valid[op] = 0U;
+        }
+    }
 }
 
 uint8_t mod_matrix_source_has_active_route(uint8_t track,
@@ -596,17 +931,33 @@ uint8_t mod_matrix_source_has_active_route(uint8_t track,
 
     if (mod_matrix_track_has_configured_source(track, source) == 0U)
     {
-        return 0U;
+        const uint16_t operator_mask = (uint16_t)((uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
+            | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_MULTI2)
+            | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_SLEW1)
+            | (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_SLEW2));
+        if ((g_mod_matrix_route_cache[track].source_mask & operator_mask) == 0U)
+        {
+            return 0U;
+        }
     }
 
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
     {
         const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
         if ((s != NULL)
-                && (s->source == (uint8_t)source)
                 && (mod_matrix_slot_is_effective(track, s, family, type, ctx) != 0U))
         {
-            return 1U;
+            if (s->source == (uint8_t)source)
+            {
+                return 1U;
+            }
+            if (mod_matrix_source_depends_on(track_sound_state_get_const(track),
+                                             s->source,
+                                             (uint8_t)source,
+                                             0U) != 0U)
+            {
+                return 1U;
+            }
         }
     }
     return 0U;

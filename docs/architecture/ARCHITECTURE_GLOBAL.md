@@ -192,6 +192,11 @@ Documents conserves pour tracabilite uniquement:
 
 ## 7. Addendum 2026-05-13
 
+## Addendum 2026-07-26 - MOD operators Matrix
+
+- Z3 étend l'autorité Matrix avec des opérateurs control-rate `MULTI/SLEW` et des destinations `LFO rate`; Z5 expose cette surface en `MOD 2/2`.
+- Les opérateurs restent dans le flux modulation existant, sans nouveau backend audio ni calcul par sample.
+
 - Le buffer master dedie est retire des zones Z1/Z2/Z3/Z5/Z6.
 - `audio_xfade` reste rattache au Looper, sans backend buffer master.
 - Le recorder legacy dormant `live_recorder` / `recorder_transport` est retire de Z0/Z1; le record produit conserve uniquement Looper RAW + `multi_record_writer`.

@@ -10,6 +10,8 @@ extern "C" {
 extern const ui_page_t g_ui_page_template_mod;
 
 void ui_page_template_mod_register_families(void);
+void ui_page_template_mod_open_primary(void);
+void ui_page_template_mod_toggle_subset(void);
 
 #ifdef __cplusplus
 }

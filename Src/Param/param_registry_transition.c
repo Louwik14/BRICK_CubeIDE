@@ -158,6 +158,7 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
         PARAM_FILTER_EQ_LOW,
         PARAM_FILTER_EQ_MID,
         PARAM_FILTER_EQ_HIGH,
+        PARAM_ENV_RETRIG_FILTER,
         PARAM_MIX_LEVEL,
         PARAM_MIX_PAN,
         PARAM_MIX_SEND1,
@@ -167,7 +168,8 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
         PARAM_VCA_ATTACK,
         PARAM_VCA_DECAY,
         PARAM_VCA_SUSTAIN,
-        PARAM_VCA_RELEASE
+        PARAM_VCA_RELEASE,
+        PARAM_ENV_RETRIG_VCA
     };
 
     if (track >= SEQ_TRACK_COUNT)
