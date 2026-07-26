@@ -2026,7 +2026,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
     seq_param_slot_t param_slot = 0U;
     if (ui_param_resolve_seq_slot(param_track, param, &set_id, &param_slot) == 0U)
     {
-        return 0U;
+        return 1U;
     }
 
     const float delta_value = (float)delta * edit_step;
@@ -2042,7 +2042,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                   gesture_key,
                                   UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
     {
-        return 0U;
+        return 1U;
     }
 
     for (uint8_t i = 0U; i < held_count; ++i)

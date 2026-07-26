@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "Board/board_product.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "stm32h7xx_hal.h"
@@ -121,7 +122,20 @@ uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode)
 
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
 {
-    return (uint8_t)(raw_mode == UI_HALL_MODE_SEQ);
+    if (raw_mode == UI_HALL_MODE_SEQ)
+    {
+        return 1U;
+    }
+
+    const board_product_capabilities_t *const caps = board_product_capabilities();
+    if ((caps == 0)
+            || (caps->has_step_binary_lanes == 0U)
+            || (caps->has_separate_hall_keyboard == 0U))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((raw_mode == UI_HALL_MODE_KEYBOARD) || (raw_mode == UI_HALL_MODE_ARP));
 }
 
 const char *ui_get_hall_mode_short_label(void)

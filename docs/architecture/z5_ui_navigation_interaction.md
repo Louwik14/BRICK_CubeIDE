@@ -974,6 +974,7 @@ Points factuels:
 - En low-cost, l'entree P-Lock par maintien STEP utilise `STEP_PLOCK_HOLD_MS = 300` dans `seq_edit`; la conversion reste explicite vers la base engine 1500 Hz, soit 450 ticks.
 - Un STEP relache avant ce seuil effectue uniquement le toggle court au release; un STEP promu en maintien P-Lock ne retoggle pas au release.
 - Les edits encodeur en contexte SEQ ne peuvent plus promouvoir un maintien pending low-cost avant le seuil de 500 ms; premium conserve la promotion immediate historique.
+- En low-cost, les modes `KEYBOARD` et `ARP` restent aussi des contextes de STEP sequenceur pour les lanes binaires separees: maintien STEP + edit encodeur doit entrer dans le chemin p-lock, et un parametre non p-lockable est consomme sans write global.
 ## Addendum 2026-07-23 - suppression STEP low-cost
 
 - En low-cost, les suppressions posees par les raccourcis `SHIFT + STEP` sont nettoyees sur le release de la lane binaire dans `ui_core_service_track_selection_inputs`.

@@ -44,7 +44,7 @@
       "searchDir": [
         "${workspaceFolder}"
       ],
-      "preLaunchTask": "Build Release Lowcost",
+      "preLaunchTask": "Build Release",
       "runToEntryPoint": "main",
       "showDevDebugOutput": "raw",
       "postLaunchCommands": [

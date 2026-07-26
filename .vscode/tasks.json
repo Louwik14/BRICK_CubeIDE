@@ -48,7 +48,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Build Release Lowcost",
+      "label": "Build Release",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -63,6 +63,19 @@
       "problemMatcher": [
         "$gcc"
       ]
+    },
+    {
+      "label": "Flash Release",
+      "type": "shell",
+      "command": "${workspaceFolder}\\flash_release.bat",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [
+        "Build Release"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     },
     {
       "label": "Configure Premium",
