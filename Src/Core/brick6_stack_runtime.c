@@ -869,6 +869,16 @@ static void brick6_stack_runtime_render_slot_chunk(stack_osc_slot_t *slot,
     k_stack_renderers[slot->renderer_id](slot, acc, frames, effective_level);
 }
 
+static uint8_t brick6_stack_runtime_slot_is_clean_soft_sine(const stack_osc_slot_t *slot)
+{
+    return ((slot != NULL)
+            && (slot->renderer_id == (uint8_t)STACK_RENDERER_SOFT)
+            && (slot->timbre_q15 == 0U)
+            && (slot->color_q15 == 0U))
+        ? 1U
+        : 0U;
+}
+
 static uint16_t brick6_stack_runtime_energy_gain_q15(uint32_t energy_q30)
 {
     if (energy_q30 <= STACK_LEVEL_ENERGY_ONE_Q30)
@@ -919,6 +929,8 @@ static void brick6_stack_runtime_generate_pending(brick6_stack_runtime_instance_
 
     memset(acc, 0, sizeof(acc));
     uint32_t level_energy_q30 = 0U;
+    uint8_t active_signal_count = 0U;
+    uint8_t clean_soft_sine_signal = 0U;
     if (instance->voice.gate != 0U)
     {
         for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
@@ -932,6 +944,8 @@ static void brick6_stack_runtime_generate_pending(brick6_stack_runtime_instance_
             const uint16_t effective_level = (uint16_t)(((uint32_t)osc->level_q15
                     * (uint32_t)instance->voice.velocity_q15) >> 15);
             level_energy_q30 += (uint32_t)effective_level * (uint32_t)effective_level;
+            active_signal_count++;
+            clean_soft_sine_signal = brick6_stack_runtime_slot_is_clean_soft_sine(osc);
             brick6_stack_runtime_render_slot_chunk(osc,
                                                    acc,
                                                    frames,
@@ -947,6 +961,8 @@ static void brick6_stack_runtime_generate_pending(brick6_stack_runtime_instance_
         {
             level_energy_q30 = (uint32_t)effective_noise * (uint32_t)effective_noise;
         }
+        active_signal_count++;
+        clean_soft_sine_signal = 0U;
         for (uint8_t i = 0U; i < frames; ++i)
         {
             const int16_t sample_q15 = brick6_stack_runtime_render_noise_sample(instance);
@@ -955,10 +971,13 @@ static void brick6_stack_runtime_generate_pending(brick6_stack_runtime_instance_
     }
 
     const uint16_t output_gain_q15 = brick6_stack_runtime_energy_gain_q15(level_energy_q30);
+    const uint8_t bypass_soft_clip = ((active_signal_count == 1U) && (clean_soft_sine_signal != 0U)) ? 1U : 0U;
     for (uint8_t i = 0U; i < frames; ++i)
     {
         const int32_t post_gain = (acc[i] * (int32_t)output_gain_q15) >> 15;
-        instance->pending_mono[i] = brick6_stack_soft_clip_q15(post_gain);
+        instance->pending_mono[i] = (bypass_soft_clip != 0U)
+            ? brick6_stack_sat16(post_gain)
+            : brick6_stack_soft_clip_q15(post_gain);
     }
     instance->pending_offset = 0U;
     instance->pending_count = frames;

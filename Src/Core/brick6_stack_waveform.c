@@ -39,7 +39,7 @@ static int16_t brick6_stack_waveform_sine_quarter(uint32_t phase)
     const int32_t a = k_stack_sine_quarter_q15[index];
     const int32_t b = k_stack_sine_quarter_q15[index + 1U];
     const int32_t fraction = (int32_t)(phase & 0x00FFFFFFUL);
-    return (int16_t)(a + (((b - a) * fraction + 0x00800000L) >> 24));
+    return (int16_t)(a + (int32_t)((((int64_t)(b - a) * (int64_t)fraction) + 0x00800000LL) >> 24));
 }
 
 static int16_t brick6_stack_waveform_mix_q15(int16_t a, int16_t b, uint16_t balance_q15)
