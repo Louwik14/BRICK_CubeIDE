@@ -120,8 +120,21 @@ static const char *const g_ui_template_lfo_sync_labels[15] = {
 
 static void ui_renderer_template_format_semitones(float value, char *out, uint32_t out_len)
 {
-    const int32_t semitones = (int32_t)((value >= 0.0f) ? (value + 0.5f) : (value - 0.5f));
-    if (semitones == 0)
+    int32_t cents = (int32_t)((value >= 0.0f) ? ((value * 100.0f) + 0.5f) : ((value * 100.0f) - 0.5f));
+    if ((cents % 100L) != 0L)
+    {
+        const char *sign = "";
+        if (cents < 0)
+        {
+            sign = "-";
+            cents = -cents;
+        }
+        (void)snprintf(out, out_len, "%s%ld.%02ld st", sign, (long)(cents / 100L), (long)(cents % 100L));
+        return;
+    }
+
+    const int32_t semitones = cents / 100L;
+    if (semitones == 0L)
     {
         (void)snprintf(out, out_len, "0 st");
         return;
@@ -970,11 +983,11 @@ static uint8_t ui_renderer_template_stack_slot_param(param_id_t id, uint8_t *out
     {
         return 0U;
     }
-    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_PARAM3))
     {
         const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
-        *out_slot = (uint8_t)(rel / 4U);
-        *out_param = (uint8_t)((rel % 4U) + 1U);
+        *out_slot = (uint8_t)(rel / 5U);
+        *out_param = (uint8_t)((rel % 5U) + 1U);
         return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
     }
     return 0U;
@@ -1004,6 +1017,7 @@ typedef struct
     brick6_stack_model_t model;
     uint16_t timbre_q15;
     uint16_t color_q15;
+    uint16_t param3_q15;
     int plot_w;
     int16_t samples[UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W];
 } ui_renderer_template_stack_wave_cache_t;
@@ -1014,6 +1028,7 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
                                                           brick6_stack_model_t model,
                                                           uint16_t timbre_q15,
                                                           uint16_t color_q15,
+                                                          uint16_t param3_q15,
                                                           int plot_w)
 {
     if ((cache == NULL) || (plot_w <= 0))
@@ -1025,15 +1040,28 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
     cache->model = model;
     cache->timbre_q15 = timbre_q15;
     cache->color_q15 = color_q15;
+    cache->param3_q15 = param3_q15;
     cache->plot_w = plot_w;
 
     const uint64_t denom = (uint64_t)plot_w * 2ULL;
     for (int px = 0; px < plot_w; ++px)
     {
         const uint32_t phase = (uint32_t)(((uint64_t)((px * 2) + 1) * 0xFFFFFFFFULL) / denom);
-        cache->samples[px] = (model == BRICK6_STACK_MODEL_SOFT)
-            ? brick6_stack_waveform_soft(phase, timbre_q15, color_q15)
-            : brick6_stack_waveform_shape(phase, timbre_q15, color_q15);
+        switch (model)
+        {
+            case BRICK6_STACK_MODEL_SOFT:
+                cache->samples[px] = brick6_stack_waveform_soft(phase, timbre_q15, color_q15);
+                break;
+            case BRICK6_STACK_MODEL_SINE_FOLD:
+                cache->samples[px] = brick6_stack_waveform_sine_fold(phase, timbre_q15, color_q15, param3_q15);
+                break;
+            case BRICK6_STACK_MODEL_TRI_FOLD:
+                cache->samples[px] = brick6_stack_waveform_tri_fold(phase, timbre_q15, color_q15, param3_q15);
+                break;
+            default:
+                cache->samples[px] = brick6_stack_waveform_shape(phase, timbre_q15, color_q15);
+                break;
+        }
     }
 }
 
@@ -1057,15 +1085,18 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
         return 0U;
     }
 
-    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (slot * 4U));
-    const param_id_t timbre_param = (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 4U));
-    const param_id_t color_param = (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 4U));
+    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (slot * 5U));
+    const param_id_t timbre_param = (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 5U));
+    const param_id_t color_param = (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 5U));
+    const param_id_t param3_param = (param_id_t)(PARAM_STACK_OSC1_PARAM3 + (slot * 5U));
     float model_value = 0.0f;
     float timbre_value = 0.0f;
     float color_value = 0.0f;
+    float param3_value = 0.0f;
     if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, model_param, &model_value, 0) == 0U)
             || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, timbre_param, &timbre_value, 0) == 0U)
-            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, color_param, &color_value, 0) == 0U))
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, color_param, &color_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, param3_param, &param3_value, 0) == 0U))
     {
         return 0U;
     }
@@ -1078,16 +1109,23 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
     {
         color_value = value;
     }
+    else if (id == param3_param)
+    {
+        param3_value = value;
+    }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    if (!(((model == BRICK6_STACK_MODEL_SOFT) && (id == timbre_param))
-            || ((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))))
+    if (!(((model == BRICK6_STACK_MODEL_SOFT) && ((id == timbre_param) || (id == color_param)))
+            || ((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))
+            || (((model == BRICK6_STACK_MODEL_SINE_FOLD) || (model == BRICK6_STACK_MODEL_TRI_FOLD))
+                && ((id == timbre_param) || (id == color_param) || (id == param3_param)))))
     {
         return 0U;
     }
 
     const uint16_t timbre_q15 = ui_renderer_template_float_to_q15(timbre_value);
     const uint16_t color_q15 = ui_renderer_template_float_to_q15(color_value);
+    const uint16_t param3_q15 = ui_renderer_template_float_to_q15(param3_value);
     const int plot_w = (w > 2) ? (w - 2) : w;
     if (plot_w > UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W)
     {
@@ -1099,9 +1137,10 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
             || (cache->model != model)
             || (cache->timbre_q15 != timbre_q15)
             || (cache->color_q15 != color_q15)
+            || (cache->param3_q15 != param3_q15)
             || (cache->plot_w != plot_w))
     {
-        ui_renderer_template_rebuild_stack_wave_cache(cache, model, timbre_q15, color_q15, plot_w);
+        ui_renderer_template_rebuild_stack_wave_cache(cache, model, timbre_q15, color_q15, param3_q15, plot_w);
     }
 
     ui_renderer_template_draw_lfo_baseline(x, y, w, h);

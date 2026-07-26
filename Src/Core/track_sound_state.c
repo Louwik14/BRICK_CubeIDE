@@ -64,6 +64,7 @@ void track_sound_state_init(void)
     {
         track_sound_state_set_defaults(&g_track_sound_state[track]);
     }
+    mod_matrix_rebuild_route_cache_all();
 }
 
 track_sound_state_t *track_sound_state_get(uint8_t track)

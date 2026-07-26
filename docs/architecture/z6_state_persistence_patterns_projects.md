@@ -1029,3 +1029,10 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PATTERN_VERSION=35` et `PROJECT_V1_FILE_VERSION=47` marquent cette rupture prototype; aucune migration des anciens formats n'est conservee.
 - Patch Poly capture SPREAD/LINK sur le membre master et les reapplique sur la target master lors d'un apply poly; `PATCH_SD_FILE_VERSION=9`.
 - Kit capture roles, SPREAD et LINK par track avec les autres donnees structurelles full-machine; `KIT_SD_FILE_VERSION=8`.
+
+## Addendum 2026-07-26 - persistence Stack PARAM3 / Fold
+
+- `PARAM_STACK_OSC1_PARAM3`, `PARAM_STACK_OSC2_PARAM3` et `PARAM_STACK_OSC3_PARAM3` sont ajoutes au layout `PARAM_COUNT`; Pattern/Project les capturent via les matrices track-aware existantes.
+- `track_tone_sound_state_t.stack` ajoute `param3[3]`, donc Patch et Kit capturent aussi cette surface TONE Stack.
+- `PATTERN_VERSION=36`, `PROJECT_V1_FILE_VERSION=48`, `PATCH_SD_FILE_VERSION=10` et `KIT_SD_FILE_VERSION=9` marquent cette rupture prototype; les anciens fichiers restent refuses par validation stricte version/taille, sans migration.
+- Les nouveaux modeles Stack `SINE FOLD` et `TRI FOLD` sont ajoutes en fin d'enum modele afin de conserver les valeurs des modeles existants `SOFT..SWARM`.

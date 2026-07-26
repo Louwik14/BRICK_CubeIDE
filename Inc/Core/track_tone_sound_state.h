@@ -68,6 +68,7 @@ typedef struct
         float tune[3];
         float timbre[3];
         float color[3];
+        float param3[3];
         float noise_level;
         float osc_detune;
         float phase_reset;

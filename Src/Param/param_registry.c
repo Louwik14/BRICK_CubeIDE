@@ -639,22 +639,27 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC1_MODEL:
         case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC3_MODEL:
-            *out_value = state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)];
+            *out_value = state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 5U)];
             return 1U;
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
-            *out_value = state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)];
+            *out_value = state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 5U)];
             return 1U;
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC3_TIMBRE:
-            *out_value = state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)];
+            *out_value = state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 5U)];
             return 1U;
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR:
-            *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)];
+            *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 5U)];
+            return 1U;
+        case PARAM_STACK_OSC1_PARAM3:
+        case PARAM_STACK_OSC2_PARAM3:
+        case PARAM_STACK_OSC3_PARAM3:
+            *out_value = state->stack.param3[(uint8_t)((id - PARAM_STACK_OSC1_PARAM3) / 5U)];
             return 1U;
         case PARAM_STACK_OSC_DETUNE:
             *out_value = state->stack.osc_detune;
@@ -875,23 +880,28 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC1_MODEL:
         case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC3_MODEL:
-            state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)] =
+            state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 5U)] =
                 clamp_value(value, 0.0f, (float)(BRICK6_STACK_MODEL_COUNT - 1U));
             return 1U;
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
-            state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)] = clamp_value(value, -24.0f, 24.0f);
+            state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 5U)] = clamp_value(value, -24.0f, 24.0f);
             return 1U;
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC3_TIMBRE:
-            state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 5U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR:
-            state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 5U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_STACK_OSC1_PARAM3:
+        case PARAM_STACK_OSC2_PARAM3:
+        case PARAM_STACK_OSC3_PARAM3:
+            state->stack.param3[(uint8_t)((id - PARAM_STACK_OSC1_PARAM3) / 5U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_STACK_OSC_DETUNE:
             state->stack.osc_detune = clamp_value(value, 0.0f, 1.0f);

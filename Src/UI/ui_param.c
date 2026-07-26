@@ -114,6 +114,13 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         uint8_t track,
                                         uint8_t update_active_mirror);
 
+static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
+{
+    return ((param == PARAM_STACK_OSC1_TUNE)
+            || (param == PARAM_STACK_OSC2_TUNE)
+            || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
+}
+
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
 {
     if ((bank == 0) || (g_ui_param.valid == 0U))
@@ -1779,17 +1786,32 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
         return 0.0f;
     }
 
+    if (ctx->shift_down != 0U)
+    {
+        if ((desc->type == PARAM_TYPE_FLOAT)
+                || ((desc->type == PARAM_TYPE_BIPOLAR)
+                    && ((desc->display_type != PARAM_DISPLAY_INT) || (ui_param_is_stack_osc_tune(desc->id) != 0U))))
+        {
+            return 0.01f;
+        }
+    }
+
+    if ((desc->id == PARAM_MIX_DELAY_MOD_RATE) || (ui_param_is_stack_osc_tune(desc->id) != 0U))
+    {
+        return 1.0f;
+    }
+
     if ((desc->display_type == PARAM_DISPLAY_PERCENT)
             && (desc->type == PARAM_TYPE_FLOAT)
             && (desc->max > desc->min))
     {
         const float range = desc->max - desc->min;
-        return (ctx->shift_down != 0U) ? (range / 12700.0f) : (range / 127.0f);
+        return range / 127.0f;
     }
 
     if (desc->id == PARAM_CFG_TEMPO)
     {
-        return (ctx->shift_down != 0U) ? 0.01f : 1.0f;
+        return 1.0f;
     }
 
     return desc->step;

@@ -745,7 +745,8 @@ Points factuels observes:
 
 ## Addendum 2026-07-25 - LENGTH rapide low-cost et DIV
 
-- Le geste low-cost `STEP A occupe maintenu + STEP B vide apres A` ecrit un p-lock PLAY `LEN` sur le step A, sans toucher au transport ni au moteur audio.
+- Le geste low-cost `STEP A maintenu, vide ou occupe + STEP B vide apres A` ecrit un p-lock PLAY `LEN` sur le step A, sans toucher au transport ni au moteur audio.
+- Si A est vide ou seulement porteur de p-locks, le geste materialise A en trig actif avant le feedback; B reste une borne vide non materialisee.
 - La duree utilise la meme base que les boundaries runtime: un pas temporel de track vaut `samples_per_step_q16 * DIV`. La valeur `LEN` stockee restant exprimee en steps de base scheduler, la conversion est `LEN = (B - A + 1) * DIV`.
 - La valeur encodee passe par `seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_Vx_LEN, value)`, donc la quantification et les bornes du catalogue PLAY existant (`1..64 stp`) restent l'autorite.
 - Hors groupe, si plusieurs voix PLAY sont deja materialisees sur A, leurs `LEN` correspondants sont mis a jour; sinon le fallback borne est `V1_LEN`.

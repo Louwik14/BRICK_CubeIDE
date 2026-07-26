@@ -988,9 +988,10 @@ Points factuels:
 
 ## Addendum 2026-07-25 - workflow LENGTH rapide low-cost
 
-- En low-cost seulement, `seq_edit_step_press()` intercepte un `STEP` vide avant le toggle court si un autre `STEP` occupe de la meme track reste maintenu et se situe avant lui dans l'ordre temporel absolu.
+- En low-cost seulement, `seq_edit_step_press()` intercepte un `STEP` vide avant le toggle court si un autre `STEP` vide ou occupe de la meme track reste maintenu et se situe avant lui dans l'ordre temporel absolu.
 - Si un modificateur `SHIFT` est deja vu pendant ce candidat exact, `ui_hall_input_service` ne pose pas la suppression `SHIFT + STEP` et `ui_core_seq_transport_handle_seq_mode_event()` laisse passer ce `HALL_PRESS` vers `seq_edit_step_press()`.
-- Le candidat LENGTH exige un source hall deja promu en maintien avant B, distinct de B et encore physiquement presse dans `hall_surface`; un simple pending ou le premier `HALL_PRESS` d'un step occupe ne peut pas se qualifier.
+- Le candidat LENGTH exige un source hall deja promu en maintien, ou un pending dont le seuil de maintien est deja atteint, avant B; il doit etre distinct de B et encore physiquement presse dans `hall_surface`. Un simple pending sous seuil ou le premier `HALL_PRESS` d'un step ne peut pas se qualifier.
+- Quand A est vide ou seulement porteur de p-locks, le succes LENGTH cree A; B ne sert jamais de trig de creation.
 - La borne B est acceptee si son trig est inactif et qu'elle ne porte pas de p-lock non-PLAY; les restes PLAY d'un ancien trig supprime ne bloquent donc pas le geste.
 - Pour une master de voice group, cette vacuite de B est verifiee sur chaque membre PLAY du groupe, plafonne a 8; le geste ecrit seulement `LEN` sur le step A de chaque membre et ne materialise jamais B.
 - Le second `STEP` sert uniquement de borne de fin: il n'est pas enregistre comme maintien, ne cree aucun trig, ne copie rien et reste vide au release.
@@ -1022,7 +1023,7 @@ Points factuels:
 
 - Le catalogue TONE Stack expose maintenant `SOFT`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM`.
 - `SOFT` affiche `TIMBRE=MORPH` et `COLOR=FOLD`; `SHAPE` affiche `TIMBRE=SHAPE` et `COLOR=MORPH`.
-- Le widget des params de morph `SOFT.TIMBRE` et `SHAPE.COLOR` remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des deux params du slot et sans capture audio.
+- Le widget des params de morph/couleur `SOFT.TIMBRE`, `SOFT.COLOR` et `SHAPE.COLOR` remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des deux params du slot et sans capture audio.
 - Wave conserve ses widgets et labels historiques.
 
 ## Addendum 2026-07-25 - sensibilite encodeur parametres discrets
@@ -1062,3 +1063,17 @@ Points factuels:
 - Le copy/paste de step depuis une master de voice group conserve la selection UI historique, mais le backend `seq_clipboard` capture aussi les donnees PLAY des membres du groupe dans l'ordre des pages PLAY groupe.
 - Chaque page/membre reste independant: le paste cible le meme index de membre dans le groupe destination et ne duplique pas les IDs PLAY sans contexte de membre.
 - Les slaves ne deviennent pas navigables en PLAY; seules leurs donnees PLAY internes sont restaurees par le paste de la master.
+
+## Addendum 2026-07-26 - edition fine SHIFT
+
+- Le chemin central encodeur `ui_param_handle_encoder_with_context()` lit `SHIFT` dans le snapshot d'edition et applique un pas fin `0.01` aux params continus compatibles, sans changer les enums, bools ni listes.
+- `PARAM_MIX_DELAY_MOD_RATE` garde un pas UI coarse `1.0Hz` sans `SHIFT` tout en conservant sa resolution catalogue `0.01` pour l'edition fine et les p-locks.
+- Les params `PARAM_STACK_OSC1_TUNE..OSC3_TUNE` utilisent un seul controle `TUNE`: `1 st` sans `SHIFT`, `0.01 st` avec `SHIFT`; Wave/Braids conserve ses controles historiques separes.
+
+## Addendum 2026-07-26 - TONE Stack 2 pages Fold
+
+- `Synth/Stack` alterne maintenant `TONE 1/2` et `TONE 2/2`.
+- `TONE 1/2`: `COMM` reste `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`; `OSC1..OSC3` exposent `MODEL/PARAM1/PARAM2/PARAM3` via les IDs `MODEL/TIMBRE/COLOR/PARAM3`.
+- `TONE 2/2`: page `TUNE` expose `OSC DETUNE`, `OSC1 TUNE`, `OSC2 TUNE`, `OSC3 TUNE`; page `PHASE` expose `RESET`.
+- Les labels dynamiques Stack affichent `SINE FOLD` et `TRI FOLD` avec `FOLD/SYM/SHAPE`; `SOFT` garde ses labels et widgets historiques.
+- La preview waveform Stack reutilise `brick6_stack_waveform` pour `SOFT`, `SHAPE`, `SINE FOLD` et `TRI FOLD`; le cache UI inclut maintenant `PARAM3`.

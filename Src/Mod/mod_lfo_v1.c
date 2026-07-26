@@ -74,6 +74,8 @@ typedef struct
 
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static uint32_t g_mod_lfo_control_counter = 0U;
+static uint8_t g_mod_lfo_had_matrix_routes = 0U;
+static uint8_t g_mod_lfo_track_had_matrix_routes[SEQ_TRACK_COUNT];
 
 static float mod_lfo_clampf(float v, float lo, float hi)
 {
@@ -442,6 +444,25 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
         return;
     }
 
+    if (mod_matrix_has_any_configured_route() == 0U)
+    {
+        if (g_mod_lfo_had_matrix_routes != 0U)
+        {
+            for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+            {
+                for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+                {
+                    g_mod_lfo_runtime[track][lfo].active = 0U;
+                    g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
+                }
+                g_mod_lfo_track_had_matrix_routes[track] = 0U;
+            }
+            g_mod_lfo_had_matrix_routes = 0U;
+        }
+        return;
+    }
+
+    g_mod_lfo_had_matrix_routes = 1U;
     const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -449,6 +470,21 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
         {
             continue;
         }
+
+        if (mod_matrix_track_has_configured_route(track) == 0U)
+        {
+            if (g_mod_lfo_track_had_matrix_routes[track] != 0U)
+            {
+                for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+                {
+                    g_mod_lfo_runtime[track][lfo].active = 0U;
+                    g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
+                }
+                g_mod_lfo_track_had_matrix_routes[track] = 0U;
+            }
+            continue;
+        }
+        g_mod_lfo_track_had_matrix_routes[track] = 1U;
 
         track_runtime_refresh_track(track);
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -625,6 +661,8 @@ void mod_lfo_v1_init(void)
     mod_env3_init();
     mod_matrix_init();
     g_mod_lfo_control_counter = 0U;
+    g_mod_lfo_had_matrix_routes = 0U;
+    memset(g_mod_lfo_track_had_matrix_routes, 0, sizeof(g_mod_lfo_track_had_matrix_routes));
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -658,6 +696,8 @@ void mod_lfo_v1_init(void)
 void mod_lfo_v1_reset_runtime(void)
 {
     g_mod_lfo_control_counter = 0U;
+    g_mod_lfo_had_matrix_routes = 0U;
+    memset(g_mod_lfo_track_had_matrix_routes, 0, sizeof(g_mod_lfo_track_had_matrix_routes));
     mod_destination_catalog_reset_runtime();
     mod_env3_reset_runtime();
     mod_matrix_reset_runtime();

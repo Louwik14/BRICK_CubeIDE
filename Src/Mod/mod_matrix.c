@@ -22,7 +22,15 @@ typedef struct
     mod_matrix_runtime_destination_t destinations[MOD_MATRIX_SLOT_COUNT];
 } mod_matrix_runtime_track_t;
 
+typedef struct
+{
+    uint8_t any_route;
+    uint8_t source_mask;
+} mod_matrix_route_cache_t;
+
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
+static mod_matrix_route_cache_t g_mod_matrix_route_cache[SEQ_TRACK_COUNT];
+static uint8_t g_mod_matrix_any_route = 0U;
 
 static float mod_matrix_clampf(float v, float lo, float hi)
 {
@@ -55,6 +63,29 @@ static const track_mod_matrix_slot_t *mod_matrix_track_slot_const(uint8_t track,
         return NULL;
     }
     return &state->mod_matrix[slot];
+}
+
+static uint8_t mod_matrix_slot_is_configured(const track_mod_matrix_slot_t *slot)
+{
+    return ((slot != NULL)
+            && (slot->enabled != 0U)
+            && (slot->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
+            && (slot->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
+            && (slot->destination < (uint16_t)PARAM_COUNT)
+            && (slot->depth != 0.0f)) ? 1U : 0U;
+}
+
+static void mod_matrix_recompute_global_route_flag(void)
+{
+    g_mod_matrix_any_route = 0U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (g_mod_matrix_route_cache[track].any_route != 0U)
+        {
+            g_mod_matrix_any_route = 1U;
+            return;
+        }
+    }
 }
 
 static ui_track_family_t mod_matrix_ui_family_from_ctx(const track_runtime_ctx_t *ctx)
@@ -315,6 +346,52 @@ void mod_matrix_reset_runtime(void)
             g_mod_matrix_runtime[track].destinations[i].max_value = 127.0f;
         }
     }
+    mod_matrix_rebuild_route_cache_all();
+}
+
+void mod_matrix_rebuild_route_cache_track(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    uint8_t source_mask = 0U;
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
+        if (mod_matrix_slot_is_configured(s) != 0U)
+        {
+            source_mask |= (uint8_t)(1U << s->source);
+        }
+    }
+
+    g_mod_matrix_route_cache[track].source_mask = source_mask;
+    g_mod_matrix_route_cache[track].any_route = (source_mask != 0U) ? 1U : 0U;
+    mod_matrix_recompute_global_route_flag();
+}
+
+void mod_matrix_rebuild_route_cache_all(void)
+{
+    g_mod_matrix_any_route = 0U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        uint8_t source_mask = 0U;
+        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+        {
+            const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
+            if (mod_matrix_slot_is_configured(s) != 0U)
+            {
+                source_mask |= (uint8_t)(1U << s->source);
+            }
+        }
+        g_mod_matrix_route_cache[track].source_mask = source_mask;
+        g_mod_matrix_route_cache[track].any_route = (source_mask != 0U) ? 1U : 0U;
+        if (source_mask != 0U)
+        {
+            g_mod_matrix_any_route = 1U;
+        }
+    }
 }
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value)
@@ -403,6 +480,7 @@ uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float
     s->destination = (uint16_t)mod_destination_catalog_param_from_index(track, index);
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
+    mod_matrix_rebuild_route_cache_track(track);
     mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
     return 1U;
 }
@@ -416,6 +494,11 @@ uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value)
     }
 
     s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
+    mod_matrix_rebuild_route_cache_track(track);
+    if (s->depth == 0.0f)
+    {
+        mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
+    }
     return 1U;
 }
 
@@ -430,6 +513,7 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
     s->source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
+    mod_matrix_rebuild_route_cache_track(track);
     mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
     return 1U;
 }
@@ -470,6 +554,33 @@ uint8_t mod_matrix_get_slot_source(uint8_t track, uint8_t slot, float *out_value
     return 1U;
 }
 
+uint8_t mod_matrix_has_any_configured_route(void)
+{
+    return g_mod_matrix_any_route;
+}
+
+uint8_t mod_matrix_track_has_configured_route(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    return g_mod_matrix_route_cache[track].any_route;
+}
+
+uint8_t mod_matrix_track_has_configured_source(uint8_t track, mod_matrix_source_t source)
+{
+    if ((track >= SEQ_TRACK_COUNT)
+            || (source == MOD_MATRIX_SOURCE_NONE)
+            || ((uint8_t)source >= MOD_MATRIX_SOURCE_COUNT))
+    {
+        return 0U;
+    }
+
+    return ((g_mod_matrix_route_cache[track].source_mask & (uint8_t)(1U << (uint8_t)source)) != 0U) ? 1U : 0U;
+}
+
 uint8_t mod_matrix_source_has_active_route(uint8_t track,
                                            mod_matrix_source_t source,
                                            ui_track_family_t family,
@@ -479,6 +590,11 @@ uint8_t mod_matrix_source_has_active_route(uint8_t track,
     if ((track >= SEQ_TRACK_COUNT)
             || (source == MOD_MATRIX_SOURCE_NONE)
             || ((uint8_t)source >= MOD_MATRIX_SOURCE_COUNT))
+    {
+        return 0U;
+    }
+
+    if (mod_matrix_track_has_configured_source(track, source) == 0U)
     {
         return 0U;
     }
@@ -502,6 +618,10 @@ void mod_matrix_process_track(uint8_t track,
                               const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT])
 {
     if ((track >= SEQ_TRACK_COUNT) || (source_values == NULL) || (source_valid == NULL))
+    {
+        return;
+    }
+    if (mod_matrix_track_has_configured_route(track) == 0U)
     {
         return;
     }

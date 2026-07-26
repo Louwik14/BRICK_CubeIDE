@@ -92,19 +92,19 @@ static const ui_template_family_t g_ui_template_tone_family_stack = {
     .nav_labels = { "COMM", "OSC1", "OSC2", "OSC3" },
     .subpages = {
         { .title = "COMM", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
-        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR } } },
-        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TUNE, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_PARAM3 } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_PARAM3 } } },
+        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_PARAM3 } } },
     },
     .default_subpage = 0U,
 };
 
 static const ui_template_family_t g_ui_template_tone_family_stack_global = {
-    .family_title = "VOICE",
-    .nav_labels = { "VOICE", "-", "-", "-" },
+    .family_title = "TONE 2/2",
+    .nav_labels = { "TUNE", "PHASE", "-", "-" },
     .subpages = {
-        { .title = "VOICE", .param_bank = { .params = { PARAM_STACK_OSC_DETUNE, PARAM_STACK_PHASE_RESET, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "TUNE", .param_bank = { .params = { PARAM_STACK_OSC_DETUNE, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC3_TUNE } } },
+        { .title = "PHASE", .param_bank = { .params = { PARAM_STACK_PHASE_RESET, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -780,11 +780,11 @@ static uint8_t ui_page_template_tone_stack_slot_param(param_id_t id,
         *out_param = 0U;
         return 1U;
     }
-    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_PARAM3))
     {
         const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
-        *out_slot = (uint8_t)(rel / 4U);
-        *out_param = (uint8_t)((rel % 4U) + 1U);
+        *out_slot = (uint8_t)(rel / 5U);
+        *out_param = (uint8_t)((rel % 5U) + 1U);
         return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
     }
 
@@ -797,6 +797,8 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SOFT: return "MORPH";
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
+        case BRICK6_STACK_MODEL_SINE_FOLD:
+        case BRICK6_STACK_MODEL_TRI_FOLD: return "FOLD";
         case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
         case BRICK6_STACK_MODEL_SUB: return "SHAPE";
         case BRICK6_STACK_MODEL_FM: return "INDEX";
@@ -815,6 +817,8 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SOFT: return "FOLD";
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
+        case BRICK6_STACK_MODEL_SINE_FOLD:
+        case BRICK6_STACK_MODEL_TRI_FOLD: return "SYM";
         case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
         case BRICK6_STACK_MODEL_SUB: return "SUB";
         case BRICK6_STACK_MODEL_FM:
@@ -824,6 +828,16 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
         case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC3";
         case BRICK6_STACK_MODEL_SWARM: return "COLOR";
         default: return "COLOR";
+    }
+}
+
+static const char *ui_page_template_tone_stack_param3_label(uint8_t model)
+{
+    switch ((brick6_stack_model_t)model)
+    {
+        case BRICK6_STACK_MODEL_SINE_FOLD:
+        case BRICK6_STACK_MODEL_TRI_FOLD: return "SHAPE";
+        default: return "PARAM3";
     }
 }
 
@@ -868,17 +882,25 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
         case 3U:
         {
             float model_value = 0.0f;
-            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
             name = ui_page_template_tone_stack_timbre_label((uint8_t)(model_value + 0.5f));
+            break;
+        }
+        case 4U:
+        {
+            float model_value = 0.0f;
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
+            (void)param_registry_get_track_value(model_param, active_track, &model_value);
+            name = ui_page_template_tone_stack_color_label((uint8_t)(model_value + 0.5f));
             break;
         }
         default:
         {
             float model_value = 0.0f;
-            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            name = ui_page_template_tone_stack_color_label((uint8_t)(model_value + 0.5f));
+            name = ui_page_template_tone_stack_param3_label((uint8_t)(model_value + 0.5f));
             break;
         }
     }
@@ -957,7 +979,7 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
         return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
 
-    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
+    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
     float model_value = 0.0f;
     if (param_registry_get_track_value(model_param, ui_get_active_track(), &model_value) == 0U)
     {
@@ -965,11 +987,16 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    if ((model == BRICK6_STACK_MODEL_SOFT) && (stack_param == 3U))
+    if ((model == BRICK6_STACK_MODEL_SOFT) && ((stack_param == 3U) || (stack_param == 4U)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }
     if ((model == BRICK6_STACK_MODEL_SHAPE) && (stack_param == 4U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
+    }
+    if (((model == BRICK6_STACK_MODEL_SINE_FOLD) || (model == BRICK6_STACK_MODEL_TRI_FOLD))
+            && ((stack_param == 3U) || (stack_param == 4U) || (stack_param == 5U)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }

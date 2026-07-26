@@ -816,6 +816,7 @@ Clarification START/END/LOOP live:
 
 - `mod_lfo_v1_process_block(frames)` est appele apres le clear des entrees externes mixer et avant le rendu des engines, afin que les destinations moteur voient la valeur LFO de la fenetre courante et que les destinations mixer restent appliquees avant `mixer_process()`.
 - En mode experimental, le LFO traite une valeur par fenetre audio recue par `mod_lfo_v1_process_block(frames)`, typiquement la fenetre `BRICK6_AUDIO_EVENT_GRID_FRAMES`; une valeur de grille 32 ou 64 permet de tester le cout pire cas de 28 LFO actifs sans changer les destinations.
+- Si le cache Matrix signale qu'aucune route n'est configuree, `mod_lfo_v1_process_block(frames)` sort avant le parcours des 14 tracks, des sources ENV/LFO et de `mod_matrix_process_track`. Une track sans route configuree est egalement sautee avant refresh runtime et scan Matrix complet.
 - La phase LFO avance par nombre de frames ecoulees, pas par nombre fixe de ticks 3000 Hz; un LFO rapide ne declenche donc pas plus d'updates qu'un LFO lent.
 - La valeur LFO est tenue sur la fenetre de controle; aucun ramp supplementaire ni instrumentation IRQ n'est ajoute dans cette passe.
 - Correction 2026-05-26: le mode experimental n'attend plus un accumulateur `MOD_LFO_WINDOW_RATE_FRAMES`; il applique immediatement un tick LFO avec le `frames` du bloc courant pour eviter un retard d'une fenetre au demarrage/reset et respecter les sous-fenetres eventuelles.
@@ -924,7 +925,7 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-07-25 - kernels analogiques Stack
 
 - Les modeles analogiques simples Stack sont regroupes en `SOFT` et `SHAPE`.
-- `SOFT` utilise `TIMBRE` comme morph `SINE -> TRIANGLE` et `COLOR` comme fold; les extremites sine/triangle et le fold nul bypassent explicitement mix/fold pour eviter les ecarts d'arrondi.
+- `SOFT` utilise `TIMBRE` comme morph `SINE -> TRIANGLE` et `COLOR` comme fold sine-shaped via la LUT sine Stack; `COLOR=0` conserve strictement la forme non coloree et aucun oversampling local n'est utilise.
 - `SHAPE` reprend l'ancien comportement `SAW/SQUARE`: `TIMBRE` garde la forme/largeur d'impulsion et `COLOR` morphe `SAW -> SQUARE`; les extremites saw/square retournent directement la forme cible.
 - La math pure des formes analogiques Stack est factorisee dans `brick6_stack_waveform`, consommee par le runtime Stack et par la preview UI, sans instance `MacroOscillator` et sans toucher Wave/Braids.
 
@@ -952,3 +953,16 @@ Clarification START/END/LOOP live:
 - En `RESET=FREE`, le note-on Stack conserve les phases principales, phases auxiliaires, feedback, filtre swarm et offsets `OSC DETUNE`; aucun de ces etats n'est regenere ou nettoye au retrigger.
 - En `RESET=RESET`, le note-on conserve le comportement volontaire de redemarrage: phases par slot remises aux valeurs deterministes, feedback/swarm clear et offsets `OSC DETUNE` regeneres.
 - Le changement de `MODEL` Stack est idempotent sur meme modele, afin qu'un reapply/p-lock identique ne reset pas phase/etats de kernel inutilement.
+
+## Addendum 2026-07-26 - Stack FREE free-running
+
+- En `RESET=FREE`, Stack avance les phases principales et auxiliaires des trois slots pendant `gate=off`, sans rendu modele complet, sans bruit, sans feedback FM, sans filtre swarm et sans audio mixer utile.
+- Chaque slot utilise le meme increment que son renderer actif: `phase_inc` du slot pour les phases principales, et les increments derives locaux pour wavetable, sub, FM, ring, triple et swarm. Les offsets `OSC DETUNE` deja projetes dans `phase_inc` continuent donc a faire deriver les slots pendant le silence.
+- En `RESET=RESET`, ce chemin free-running est coupe; le note-on continue de reset phases, feedback/swarm et offsets `OSC DETUNE` comme avant.
+
+## Addendum 2026-07-26 - Stack SINE/TRI FOLD
+
+- Les modeles Stack `SINE FOLD` et `TRI FOLD` ajoutent deux renderers locaux dedies, bases respectivement sur la sine Stack propre et la triangle Stack existante.
+- Leur wavefolder est factorise dans `brick6_stack_waveform`: `FOLD=0` retourne strictement la base clean; `SYM` ajoute un offset de fold dependant de `FOLD`; `SHAPE` arrondit le repli via la LUT sine Stack apres un miroir borne.
+- Aucun `sinf`, `tanhf`, `powf`, oversampling, filtre correctif, allocation ou acces Wave/Braids n'est ajoute dans le chemin sample Stack.
+- `SOFT` conserve son chemin existant `sine -> triangle` avec ancien fold `COLOR`; les autres modeles Stack gardent leurs renderers et mappings sonores.

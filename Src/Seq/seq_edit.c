@@ -322,6 +322,33 @@ static uint8_t seq_edit_lowcost_step_is_range_end_empty(seq_track_id_t track,
                     && (seq_model_step_has_non_play_plock(track, step) == 0U));
 }
 
+static uint8_t seq_edit_lowcost_source_is_held_or_mature_pending(uint8_t hall)
+{
+    if (hall >= SEQ_STEPS_PER_PAGE)
+    {
+        return 0U;
+    }
+
+    if (g_seq_hold_state.held[hall] != 0U)
+    {
+        return 1U;
+    }
+
+    if (g_seq_hold_state.pending[hall] == 0U)
+    {
+        return 0U;
+    }
+
+    if ((engine_tick_count - g_seq_hold_state.press_tick[hall]) < SEQ_STEP_HOLD_THRESHOLD_TICKS)
+    {
+        return 0U;
+    }
+
+    g_seq_hold_state.pending[hall] = 0U;
+    g_seq_hold_state.held[hall] = 1U;
+    return 1U;
+}
+
 static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
                                                          seq_step_id_t end_step,
                                                          uint8_t end_hall,
@@ -356,10 +383,9 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
     {
         if ((hall == end_hall)
-                || (g_seq_hold_state.held[hall] == 0U)
+                || (seq_edit_lowcost_source_is_held_or_mature_pending(hall) == 0U)
                 || (hall_surface_is_pressed(hall) == 0U)
                 || (g_seq_hold_state.track_id[hall] != track)
-                || (g_seq_hold_state.pressed_active[hall] == 0U)
                 || (g_seq_hold_state.step_id[hall] >= end_step))
         {
             continue;
@@ -482,16 +508,20 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
         }
     }
 
-    seq_edit_finish_snapshot_undo((uint8_t)((undo_started != 0U) && (applied != 0U)));
-    if ((undo_started != 0U) && (applied == 0U))
-    {
-        undo_v2_cancel_transaction();
-    }
     if (applied == 0U)
     {
+        if (undo_started != 0U)
+        {
+            undo_v2_cancel_transaction();
+        }
         return 0U;
     }
 
+    if (seq_model_step_is_active(track, start_step) == 0U)
+    {
+        seq_model_set_trig(track, start_step, 1U);
+    }
+    seq_edit_finish_snapshot_undo(undo_started);
     seq_edit_mark_step_edited(track, start_step);
     seq_edit_lowcost_length_flash_start(track, start_step, end_step);
     return 1U;

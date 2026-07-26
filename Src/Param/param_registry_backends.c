@@ -322,11 +322,11 @@ static uint8_t param_backend_stack_slot_for_id(param_id_t id, uint8_t *out_slot,
         *out_param = 0U;
         return 1U;
     }
-    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_PARAM3))
     {
         const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
-        *out_slot = (uint8_t)(rel / 4U);
-        *out_param = (uint8_t)((rel % 4U) + 1U);
+        *out_slot = (uint8_t)(rel / 5U);
+        *out_param = (uint8_t)((rel % 5U) + 1U);
         return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
     }
 
@@ -429,17 +429,16 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         case 2U:
         {
             const float clamped = param_backend_clamp_value(value, -24.0f, 24.0f);
-            const int8_t semitones = (int8_t)(clamped + ((clamped >= 0.0f) ? 0.5f : -0.5f));
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->stack.tune[slot] = (float)semitones;
+                state->stack.tune[slot] = clamped;
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_tune(ctx->instance_id, slot, semitones);
+                brick6_stack_runtime_set_slot_tune(ctx->instance_id, slot, clamped);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_tune(ctx->instance_id, slot, semitones);
+            return brick6_stack_runtime_submit_slot_tune(ctx->instance_id, slot, clamped);
         }
         case 3U:
         {
@@ -455,7 +454,7 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             return brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, clamped);
         }
-        default:
+        case 4U:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
@@ -468,6 +467,20 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
                 return 1U;
             }
             return brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, clamped);
+        }
+        default:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->stack.param3[slot] = clamped;
+            }
+            if (update_base_state == 0U)
+            {
+                brick6_stack_runtime_set_slot_param3(ctx->instance_id, slot, clamped);
+                return 1U;
+            }
+            return brick6_stack_runtime_submit_slot_param3(ctx->instance_id, slot, clamped);
         }
     }
 }
@@ -495,10 +508,10 @@ uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
                                                                                                                (float)(BRICK6_STACK_MODEL_COUNT - 1U)) + 0.5f));
         (void)brick6_stack_runtime_submit_slot_tune(ctx->instance_id,
                                                     slot,
-                                                    (int8_t)(param_backend_clamp_value(state->stack.tune[slot], -24.0f, 24.0f)
-                                                             + ((state->stack.tune[slot] >= 0.0f) ? 0.5f : -0.5f)));
+                                                    param_backend_clamp_value(state->stack.tune[slot], -24.0f, 24.0f));
         (void)brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, state->stack.timbre[slot]);
         (void)brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, state->stack.color[slot]);
+        (void)brick6_stack_runtime_submit_slot_param3(ctx->instance_id, slot, state->stack.param3[slot]);
     }
     (void)brick6_stack_runtime_submit_noise_level(ctx->instance_id, state->stack.noise_level);
     (void)brick6_stack_runtime_submit_osc_detune(ctx->instance_id, state->stack.osc_detune);

@@ -742,6 +742,7 @@ Dette explicite post-passe 4:
 ## 44. Contrat runtime Matrix et accumulation
 
 - `mod_matrix` porte l'autorite runtime d'accumulation des modulations continues par track: 8 slots statiques, source explicite, destination catalogue commune, depth bipolaire et etat `enabled` distinct.
+- `mod_matrix` maintient un cache runtime borne des routes configurees: flag global `any route`, flag par track et masque des sources par track. Ces caches sont reconstruits a l'init/reset et maintenus par les edits Matrix source/destination/depth afin que l'IRQ audio puisse court-circuiter le chemin quand aucune route n'existe.
 - Les slots actifs sont regroupes par destination a chaque fenetre control-rate; la valeur appliquee est `base + somme(depth * source)`, puis clamp unique aux bornes du parametre.
 - `mod_lfo_v1` ne route plus directement vers une destination: il produit les sources `LFO1` et `LFO2` et orchestre la lecture des sources runtime `ENV3`, `ENV VCA` et `ENV FLT`; les anciens champs `DEST/DEPTH` ne sont plus une surface de compatibilite Matrix/ENV3.
 - `ENV VCA` et `ENV FLT` exposent uniquement la derniere sortie normalisee `0..1` des enveloppes mixer existantes: VCA et filtre conservent leur role audio d'origine, aucune ADSR parallele n'est creee, et la Matrix utilise seulement la profondeur bipolaire pour inverser.
@@ -778,13 +779,14 @@ Dette explicite post-passe 4:
 
 - Le catalogue utilisateur Stack remplace les huit modeles analogiques simples par `SOFT` et `SHAPE`; les autres modeles Stack gardent leurs IDs relatifs courants dans le nouveau catalogue prototype.
 - `PARAM_STACK_OSC*_MODEL` est maintenant borne a `0..9`, defaut `SHAPE`; aucune compatibilite de conversion des anciennes valeurs prototype n'est conservee.
-- Les params continus `TIMBRE` et `COLOR` restent les seules surfaces modulees/p-lockables pour les morphs analogiques: `SOFT TIMBRE=MORPH`, `SOFT COLOR=FOLD`, `SHAPE TIMBRE=SHAPE`, `SHAPE COLOR=MORPH`.
+- Les params continus `TIMBRE` et `COLOR` restent les seules surfaces modulees/p-lockables pour les morphs analogiques: `SOFT TIMBRE=MORPH`, `SOFT COLOR=BEND`, `SHAPE TIMBRE=SHAPE`, `SHAPE COLOR=MORPH`.
 
 ## Addendum 2026-07-25 - params page VOICE Stack
 
 - Stack conserve deux params TONE globaux pour la page `VOICE`: `PARAM_STACK_OSC_DETUNE` et `PARAM_STACK_PHASE_RESET`.
 - `PARAM_STACK_OSC_DETUNE` est stocke dans `track_tone_sound_state.stack.osc_detune`, p-lockable via le set TONE, mais exclu des destinations continues Matrix/LFO car ses offsets sont regeneres uniquement au note-on et restent fixes pendant la note.
 - `PARAM_STACK_PHASE_RESET` stocke `FREE`/`RESET`, reste exclu des destinations continues et conserve `FREE` par defaut.
+- En `FREE`, les phases Stack restent free-running pendant le silence avec les increments propres de chaque slot; en `RESET`, le note-on garde le reset deterministe local au runtime Stack.
 
 ## Addendum 2026-07-25 - TRACK CFG group SPREAD/LINK
 
@@ -793,3 +795,16 @@ Dette explicite post-passe 4:
 - LINK est intercepte en un seul point UI, apres l'edition manuelle de base et avant toute propagation secondaire: le delta propage est `valeur_apres_source - valeur_avant_source`, donc le delta reellement accepte apres clamp.
 - LINK inclut les edits manuels de base sur `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, et sur domaines compatibles `TONE`, `COLORS`, `MIX` et `MOD` pour params continus/int non enum/bool. Il exclut strictement `PLAY`, p-locks, live-rec p-locks, scheduler, modulation, automation, commandes, navigation, SPREAD et LINK.
 - La recursion est bloquee par un garde local de propagation; une ecriture propagee ne redevient jamais source LINK.
+
+## Addendum 2026-07-26 - resolution fine TONE Stack
+
+- Les `PARAM_STACK_OSC*_TUNE` stockent maintenant la valeur en centiemes de demi-ton via un `step=0.01`; le pas coarse `1.0` est une policy UI Z5, pas la resolution catalogue.
+- Le runtime Stack consomme ce pitch comme cents par slot oscillator et ne quantize plus la base Stack au demi-ton; les p-locks TONE encodent donc les valeurs fines exactes selon le step catalogue.
+- Wave/Braids garde `PARAM_WAVE_FINE` et `PARAM_WAVE_COARSE` inchanges.
+
+## Addendum 2026-07-26 - PARAM3 Stack et modeles Fold
+
+- Les slots Stack gardent `MODEL` et `TUNE`, mais les pages OSC exposent maintenant les trois params modele `TIMBRE`, `COLOR` et `PARAM3`; `TUNE` est deplace en page dediee Z5.
+- `track_tone_sound_state.stack` porte `param3[3]`; `PARAM_STACK_OSC*_PARAM3` est ajoute au layout `PARAM_COUNT`, reapply via `brick6_stack_runtime_submit_slot_param3()` et destination continue Matrix/LFO comme `TIMBRE/COLOR`.
+- `PARAM_STACK_OSC*_MODEL` est borne a `0..11`: les valeurs existantes `SOFT..SWARM` gardent leurs indices, `SINE FOLD` et `TRI FOLD` sont ajoutes en fin d'enum.
+- Pour `SINE FOLD` et `TRI FOLD`, les labels modele sont `FOLD` / `SYM` / `SHAPE`; les autres modeles ne consomment pas `PARAM3` dans le runtime audio.
