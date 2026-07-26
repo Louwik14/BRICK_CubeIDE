@@ -208,6 +208,25 @@ static const char *ui_renderer_template_matrix_source_label(float value)
     return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "OFF";
 }
 
+static const char *ui_renderer_template_matrix_source_value_label(float value)
+{
+    const uint8_t index = (uint8_t)(value + 0.5f);
+    static const char *const labels[] = {
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "env flt",
+        "env vca",
+        "env mod",
+        "MULT1",
+        "MULT2",
+        "SLEW1",
+        "SLEW2"
+    };
+
+    return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "Off";
+}
+
 void ui_format_param_127_00(float value, float min_value, float max_value, char *out, uint32_t out_len)
 {
     float normalized = 0.0f;
@@ -272,7 +291,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             || (id == PARAM_MOD_SLEW_1_SOURCE)
             || (id == PARAM_MOD_SLEW_2_SOURCE))
     {
-        (void)snprintf(out, out_len, "%s", ui_renderer_template_matrix_source_label(value));
+        (void)snprintf(out, out_len, "%s", ui_renderer_template_matrix_source_value_label(value));
         return;
     }
 
@@ -4203,8 +4222,8 @@ static void ui_renderer_template_draw_elbow_arrow(uint8_t from_slot, uint8_t to_
 
     const int x0 = (int)g_ui_template_frame_x[from_slot] + (UI_TEMPLATE_FRAME_W / 2);
     const int x1 = (int)g_ui_template_frame_x[to_slot] + (UI_TEMPLATE_FRAME_W / 2);
-    const int y_low = UI_TEMPLATE_FRAME_Y + 6;
-    const int y_high = UI_TEMPLATE_FRAME_Y + 2;
+    const int y_low = UI_TEMPLATE_FRAME_Y + 10;
+    const int y_high = UI_TEMPLATE_FRAME_Y + 6;
 
     drv_display_draw_line(x0, y_low, x0, y_high);
     drv_display_draw_line(x0, y_high, x1, y_high);
