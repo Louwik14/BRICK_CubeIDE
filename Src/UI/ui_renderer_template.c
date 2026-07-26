@@ -1049,13 +1049,10 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
         const uint32_t phase = (uint32_t)(((uint64_t)((px * 2) + 1) * 0xFFFFFFFFULL) / denom);
         switch (model)
         {
-            case BRICK6_STACK_MODEL_SOFT:
-                cache->samples[px] = brick6_stack_waveform_soft(phase, timbre_q15, color_q15);
-                break;
-            case BRICK6_STACK_MODEL_SINE_FOLD:
+            case BRICK6_STACK_MODEL_SINFD:
                 cache->samples[px] = brick6_stack_waveform_sine_fold(phase, timbre_q15, color_q15, param3_q15);
                 break;
-            case BRICK6_STACK_MODEL_TRI_FOLD:
+            case BRICK6_STACK_MODEL_TRIFD:
                 cache->samples[px] = brick6_stack_waveform_tri_fold(phase, timbre_q15, color_q15, param3_q15);
                 break;
             default:
@@ -1115,9 +1112,8 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
     }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    if (!(((model == BRICK6_STACK_MODEL_SOFT) && ((id == timbre_param) || (id == color_param)))
-            || ((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))
-            || (((model == BRICK6_STACK_MODEL_SINE_FOLD) || (model == BRICK6_STACK_MODEL_TRI_FOLD))
+    if (!(((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))
+            || (((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD))
                 && ((id == timbre_param) || (id == color_param) || (id == param3_param)))))
     {
         return 0U;
@@ -1177,6 +1173,67 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
         have_prev = 1U;
     }
     return 1U;
+}
+
+static uint8_t ui_renderer_template_stack_fold_group_is_active(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                               const ui_template_page_state_t *state,
+                                                               const ui_template_subpage_t *subpage)
+{
+    if ((state == NULL) || (subpage == NULL)
+            || (ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_STACK)
+            || (subpage->param_bank.params[0] < PARAM_STACK_OSC1_MODEL)
+            || (subpage->param_bank.params[0] > PARAM_STACK_OSC3_MODEL))
+    {
+        return 0U;
+    }
+
+    uint8_t slot = 0U;
+    uint8_t slot_param = 0U;
+    if ((ui_renderer_template_stack_slot_param(subpage->param_bank.params[0], &slot, &slot_param) == 0U)
+            || (slot_param != 1U)
+            || (subpage->param_bank.params[1] != (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 5U)))
+            || (subpage->param_bank.params[2] != (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 5U)))
+            || (subpage->param_bank.params[3] != (param_id_t)(PARAM_STACK_OSC1_PARAM3 + (slot * 5U))))
+    {
+        return 0U;
+    }
+
+    float model_value = 0.0f;
+    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[0], &model_value, 0) == 0U)
+    {
+        return 0U;
+    }
+
+    const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
+    return ((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD)) ? 1U : 0U;
+}
+
+static uint8_t ui_renderer_template_draw_stack_fold_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                          const ui_template_subpage_t *subpage)
+{
+    if (subpage == NULL)
+    {
+        return 0U;
+    }
+
+    float param3_value = 0.0f;
+    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx,
+                                                     subpage->param_bank.params[3],
+                                                     &param3_value,
+                                                     0) == 0U)
+    {
+        return 0U;
+    }
+
+    return ui_renderer_template_draw_stack_waveform_widget(plock_frame_ctx,
+                                                           g_ui_template_frame_x[1] + UI_TEMPLATE_CARD_WIDGET_X_PAD,
+                                                           UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y,
+                                                           (g_ui_template_frame_x[3] - g_ui_template_frame_x[1])
+                                                               + UI_TEMPLATE_CARD_WIDGET_W,
+                                                           UI_TEMPLATE_CARD_WIDGET_H,
+                                                           subpage->param_bank.params[3],
+                                                           param3_value);
 }
 
 static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int h, param_id_t id, float value)
@@ -4151,6 +4208,11 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
                 grouped_widget_drawn = 1U;
             }
+            if (ui_renderer_template_stack_fold_group_is_active(&plock_frame_ctx, state, subpage) != 0U)
+            {
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
+                grouped_widget_drawn = 1U;
+            }
 
             for (uint8_t i = 0U; i < 4U; i++)
             {
@@ -4174,6 +4236,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                     (void)ui_renderer_template_draw_lfo_shape_phase_group(&plock_frame_ctx,
                                                                           grouped_lfo_shape_id,
                                                                           grouped_lfo_phase_id);
+                }
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM)
+                {
+                    (void)ui_renderer_template_draw_stack_fold_group(&plock_frame_ctx, subpage);
                 }
                 else
                 {

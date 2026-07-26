@@ -1012,7 +1012,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-07-25 - versions simplification analogique Stack
 
-- Les valeurs enum `PARAM_STACK_OSC*_MODEL` changent de semantique prototype: les anciens modeles analogiques simples sont remplaces par `SOFT` et `SHAPE`, sans migration.
+- Les valeurs enum `PARAM_STACK_OSC*_MODEL` changent de semantique prototype: les anciens modeles analogiques simples sont remplaces par la surface Stack courante, sans migration.
 - `PATTERN_VERSION=33`, `PROJECT_V1_FILE_VERSION=45`, `PATCH_SD_FILE_VERSION=7` et `KIT_SD_FILE_VERSION=6` marquent cette rupture de catalogue Stack.
 - Les formats restent refuses par validation stricte de version/taille; aucun remap des anciennes valeurs `SINE/TRIANGLE/SAW/PWM/...` n'est conserve.
 
@@ -1034,5 +1034,5 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - `PARAM_STACK_OSC1_PARAM3`, `PARAM_STACK_OSC2_PARAM3` et `PARAM_STACK_OSC3_PARAM3` sont ajoutes au layout `PARAM_COUNT`; Pattern/Project les capturent via les matrices track-aware existantes.
 - `track_tone_sound_state_t.stack` ajoute `param3[3]`, donc Patch et Kit capturent aussi cette surface TONE Stack.
-- `PATTERN_VERSION=36`, `PROJECT_V1_FILE_VERSION=48`, `PATCH_SD_FILE_VERSION=10` et `KIT_SD_FILE_VERSION=9` marquent cette rupture prototype; les anciens fichiers restent refuses par validation stricte version/taille, sans migration.
-- Les nouveaux modeles Stack `SINE FOLD` et `TRI FOLD` sont ajoutes en fin d'enum modele afin de conserver les valeurs des modeles existants `SOFT..SWARM`.
+- `PATTERN_VERSION=37`, `PROJECT_V1_FILE_VERSION=49`, `PATCH_SD_FILE_VERSION=11` et `KIT_SD_FILE_VERSION=10` marquent cette rupture prototype; les anciens fichiers restent refuses par validation stricte version/taille, sans migration.
+- `SOFT` n'est plus un modele Stack actif: l'ancien index 0 devient `SINFD`; `TRIFD` est ajoute a la liste modele fold dediee. Aucune migration prototype des anciennes valeurs `SOFT` n'est conservee.

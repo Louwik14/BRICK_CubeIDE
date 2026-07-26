@@ -777,9 +777,9 @@ Dette explicite post-passe 4:
 
 ## Addendum 2026-07-25 - simplification analogique Stack
 
-- Le catalogue utilisateur Stack remplace les huit modeles analogiques simples par `SOFT` et `SHAPE`; les autres modeles Stack gardent leurs IDs relatifs courants dans le nouveau catalogue prototype.
-- `PARAM_STACK_OSC*_MODEL` est maintenant borne a `0..9`, defaut `SHAPE`; aucune compatibilite de conversion des anciennes valeurs prototype n'est conservee.
-- Les params continus `TIMBRE` et `COLOR` restent les seules surfaces modulees/p-lockables pour les morphs analogiques: `SOFT TIMBRE=MORPH`, `SOFT COLOR=BEND`, `SHAPE TIMBRE=SHAPE`, `SHAPE COLOR=MORPH`.
+- Le catalogue utilisateur Stack remplace les huit modeles analogiques simples par `SINFD`, `TRIFD` et `SHAPE`; l'ancien modele prototype `SOFT` n'est plus expose.
+- `PARAM_STACK_OSC*_MODEL` est maintenant borne a `0..10`; aucune compatibilite de conversion des anciennes valeurs prototype n'est conservee.
+- Les params continus `TIMBRE`, `COLOR` et `PARAM3` restent les surfaces modulees/p-lockables des modeles fold: `SINFD/TRIFD FOLD/SYM/SHAPE`; `SHAPE` garde `SHAPE/MORPH`.
 
 ## Addendum 2026-07-25 - params page VOICE Stack
 
@@ -806,5 +806,5 @@ Dette explicite post-passe 4:
 
 - Les slots Stack gardent `MODEL` et `TUNE`, mais les pages OSC exposent maintenant les trois params modele `TIMBRE`, `COLOR` et `PARAM3`; `TUNE` est deplace en page dediee Z5.
 - `track_tone_sound_state.stack` porte `param3[3]`; `PARAM_STACK_OSC*_PARAM3` est ajoute au layout `PARAM_COUNT`, reapply via `brick6_stack_runtime_submit_slot_param3()` et destination continue Matrix/LFO comme `TIMBRE/COLOR`.
-- `PARAM_STACK_OSC*_MODEL` est borne a `0..11`: les valeurs existantes `SOFT..SWARM` gardent leurs indices, `SINE FOLD` et `TRI FOLD` sont ajoutes en fin d'enum.
-- Pour `SINE FOLD` et `TRI FOLD`, les labels modele sont `FOLD` / `SYM` / `SHAPE`; les autres modeles ne consomment pas `PARAM3` dans le runtime audio.
+- `PARAM_STACK_OSC*_MODEL` est borne a `0..10`: `SOFT` n'est plus actif, l'ancien index 0 devient `SINFD`, et `TRIFD` est ajoute comme second moteur fold dedie.
+- Pour `SINFD` et `TRIFD`, les labels modele sont `FOLD` / `SYM` / `SHAPE`; les autres modeles ne consomment pas `PARAM3` dans le runtime audio.

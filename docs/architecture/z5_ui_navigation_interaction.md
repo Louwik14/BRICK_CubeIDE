@@ -1021,9 +1021,9 @@ Points factuels:
 
 ## Addendum 2026-07-25 - preview waveform Stack
 
-- Le catalogue TONE Stack expose maintenant `SOFT`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM`.
-- `SOFT` affiche `TIMBRE=MORPH` et `COLOR=FOLD`; `SHAPE` affiche `TIMBRE=SHAPE` et `COLOR=MORPH`.
-- Le widget des params de morph/couleur `SOFT.TIMBRE`, `SOFT.COLOR` et `SHAPE.COLOR` remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des deux params du slot et sans capture audio.
+- Le catalogue TONE Stack expose maintenant `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM` et `TRIFD`.
+- `SINFD/TRIFD` affichent `FOLD/SYM/SHAPE`; `SHAPE` affiche `SHAPE/MORPH`.
+- Le widget waveform Stack remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des params du slot et sans capture audio.
 - Wave conserve ses widgets et labels historiques.
 
 ## Addendum 2026-07-25 - sensibilite encodeur parametres discrets
@@ -1074,6 +1074,7 @@ Points factuels:
 
 - `Synth/Stack` alterne maintenant `TONE 1/2` et `TONE 2/2`.
 - `TONE 1/2`: `COMM` reste `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`; `OSC1..OSC3` exposent `MODEL/PARAM1/PARAM2/PARAM3` via les IDs `MODEL/TIMBRE/COLOR/PARAM3`.
-- `TONE 2/2`: page `TUNE` expose `OSC DETUNE`, `OSC1 TUNE`, `OSC2 TUNE`, `OSC3 TUNE`; page `PHASE` expose `RESET`.
-- Les labels dynamiques Stack affichent `SINE FOLD` et `TRI FOLD` avec `FOLD/SYM/SHAPE`; `SOFT` garde ses labels et widgets historiques.
-- La preview waveform Stack reutilise `brick6_stack_waveform` pour `SOFT`, `SHAPE`, `SINE FOLD` et `TRI FOLD`; le cache UI inclut maintenant `PARAM3`.
+- `TONE 2/2`: page `TUNE` expose `OSC DETUNE`, `TUNE 1`, `TUNE 2`, `TUNE 3`; page `PHASE` expose `RESET`.
+- Les labels dynamiques Stack affichent `SINFD` et `TRIFD` avec `FOLD/SYM/SHAPE`; `SOFT` n'est plus un modele Stack actif.
+- La preview waveform Stack reutilise `brick6_stack_waveform` pour `SHAPE`, `SINFD` et `TRIFD`; le cache UI inclut maintenant `PARAM3`.
+- Sur les pages `OSC1..OSC3`, `SINFD/TRIFD` dessinent une waveform unique large sur la zone widget des trois params `FOLD/SYM/SHAPE`; les trois labels restent separes en bas de slots.

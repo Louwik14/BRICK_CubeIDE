@@ -355,7 +355,7 @@ Sorties de Z2:
 
 ## Addendum 2026-07-25 - slots TONE Stack
 
-- `TRACK_RUNTIME_TYPE_STACK` declare sa propre table de slots TONE dans `track_runtime_tone_slots_stack[]`: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR pour chaque slot.
+- `TRACK_RUNTIME_TYPE_STACK` declare sa propre table de slots TONE dans `track_runtime_tone_slots_stack[]`: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR/PARAM3 pour chaque slot.
 - Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_wave[]`.
 - Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Wave.
 

@@ -795,10 +795,9 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SOFT: return "MORPH";
+        case BRICK6_STACK_MODEL_SINFD:
+        case BRICK6_STACK_MODEL_TRIFD: return "FOLD";
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
-        case BRICK6_STACK_MODEL_SINE_FOLD:
-        case BRICK6_STACK_MODEL_TRI_FOLD: return "FOLD";
         case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
         case BRICK6_STACK_MODEL_SUB: return "SHAPE";
         case BRICK6_STACK_MODEL_FM: return "INDEX";
@@ -815,10 +814,9 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SOFT: return "FOLD";
+        case BRICK6_STACK_MODEL_SINFD:
+        case BRICK6_STACK_MODEL_TRIFD: return "SYM";
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
-        case BRICK6_STACK_MODEL_SINE_FOLD:
-        case BRICK6_STACK_MODEL_TRI_FOLD: return "SYM";
         case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
         case BRICK6_STACK_MODEL_SUB: return "SUB";
         case BRICK6_STACK_MODEL_FM:
@@ -835,8 +833,8 @@ static const char *ui_page_template_tone_stack_param3_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINE_FOLD:
-        case BRICK6_STACK_MODEL_TRI_FOLD: return "SHAPE";
+        case BRICK6_STACK_MODEL_SINFD:
+        case BRICK6_STACK_MODEL_TRIFD: return "SHAPE";
         default: return "PARAM3";
     }
 }
@@ -877,7 +875,12 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
             name = "MODEL";
             break;
         case 2U:
-            name = "TUNE";
+            switch (stack_slot)
+            {
+                case 0U: name = "TUNE 1"; break;
+                case 1U: name = "TUNE 2"; break;
+                default: name = "TUNE 3"; break;
+            }
             break;
         case 3U:
         {
@@ -987,15 +990,11 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    if ((model == BRICK6_STACK_MODEL_SOFT) && ((stack_param == 3U) || (stack_param == 4U)))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
-    }
     if ((model == BRICK6_STACK_MODEL_SHAPE) && (stack_param == 4U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }
-    if (((model == BRICK6_STACK_MODEL_SINE_FOLD) || (model == BRICK6_STACK_MODEL_TRI_FOLD))
+    if (((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD))
             && ((stack_param == 3U) || (stack_param == 4U) || (stack_param == 5U)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;

@@ -64,7 +64,7 @@ static const char *const g_looper_play_labels[] = {"Off", "Auto", NULL};
 
 
 static const char *const g_wave_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Toy", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "Bell", "Drum", "Kick", "Cymbal", "Snare", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
-static const char *const g_stack_model_labels[] = {"SOFT", "SHAPE", "WAVETABLE", "SUB", "FM", "FB FM", "RING", "TRIPLE SAW", "TRIPLE SQR", "SWARM", "SINE FOLD", "TRI FOLD", NULL};
+static const char *const g_stack_model_labels[] = {"SINFD", "SHAPE", "WAVETABLE", "SUB", "FM", "FB FM", "RING", "TRIPLE SAW", "TRIPLE SQR", "SWARM", "TRIFD", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "-", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 #else
@@ -360,17 +360,17 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_STACK_OSC2_LEVEL, "OSC2 LVL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_LEVEL, "OSC3 LVL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_NOISE_LEVEL, "Noise", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_STACK_OSC1_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 11.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
+    PARAM_DESC_EX(PARAM_STACK_OSC1_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC1_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 0.01f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC1_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC1_COLOR, "Color", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC1_PARAM3, "Param3", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_STACK_OSC2_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 11.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
+    PARAM_DESC_EX(PARAM_STACK_OSC2_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC2_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 0.01f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC2_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC2_COLOR, "Color", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC2_PARAM3, "Param3", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_STACK_OSC3_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 11.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
+    PARAM_DESC_EX(PARAM_STACK_OSC3_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_stack_model_labels, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 0.01f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_STACK_OSC3_COLOR, "Color", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),

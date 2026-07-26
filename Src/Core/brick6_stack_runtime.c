@@ -31,10 +31,9 @@
 
 enum
 {
-    STACK_RENDERER_SOFT = 0,
+    STACK_RENDERER_SINFD = 0,
     STACK_RENDERER_SHAPE,
-    STACK_RENDERER_SINE_FOLD,
-    STACK_RENDERER_TRI_FOLD,
+    STACK_RENDERER_TRIFD,
     STACK_RENDERER_WAVETABLE,
     STACK_RENDERER_SUB,
     STACK_RENDERER_FM,
@@ -107,8 +106,8 @@ AUDIO_HOT static volatile uint8_t g_stack_command_tail;
 AUDIO_HOT static brick6_stack_runtime_command_t g_stack_command_queue[STACK_COMMAND_QUEUE_CAP];
 
 static const brick6_stack_model_desc_t k_stack_model_catalog[BRICK6_STACK_MODEL_COUNT] = {
-    [BRICK6_STACK_MODEL_SOFT] = {
-        "SOFT", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_FOLD, STACK_RENDERER_SOFT, 12U
+    [BRICK6_STACK_MODEL_SINFD] = {
+        "SINFD", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_FOLD, STACK_RENDERER_SINFD, 16U
     },
     [BRICK6_STACK_MODEL_SHAPE] = {
         "SHAPE", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_BASIC, STACK_RENDERER_SHAPE, 8U
@@ -137,11 +136,8 @@ static const brick6_stack_model_desc_t k_stack_model_catalog[BRICK6_STACK_MODEL_
     [BRICK6_STACK_MODEL_SWARM] = {
         "SWARM", BRICK6_STACK_FAMILY_ENSEMBLE, BRICK6_STACK_KERNEL_SWARM, STACK_RENDERER_SWARM, 40U
     },
-    [BRICK6_STACK_MODEL_SINE_FOLD] = {
-        "SINE FOLD", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_FOLD, STACK_RENDERER_SINE_FOLD, 16U
-    },
-    [BRICK6_STACK_MODEL_TRI_FOLD] = {
-        "TRI FOLD", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_FOLD, STACK_RENDERER_TRI_FOLD, 16U
+    [BRICK6_STACK_MODEL_TRIFD] = {
+        "TRIFD", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_FOLD, STACK_RENDERER_TRIFD, 16U
     },
 };
 
@@ -615,9 +611,9 @@ static void brick6_stack_render_waveform(stack_osc_slot_t *slot,
     }
 }
 
-static int16_t brick6_stack_wave_soft(stack_osc_slot_t *slot)
+static int16_t brick6_stack_wave_sinfd(stack_osc_slot_t *slot)
 {
-    return brick6_stack_waveform_soft(slot->phase, slot->timbre_q15, slot->color_q15);
+    return brick6_stack_waveform_sine_fold(slot->phase, slot->timbre_q15, slot->color_q15, slot->param3_q15);
 }
 
 static int16_t brick6_stack_wave_shape(stack_osc_slot_t *slot)
@@ -625,22 +621,17 @@ static int16_t brick6_stack_wave_shape(stack_osc_slot_t *slot)
     return brick6_stack_waveform_shape(slot->phase, slot->timbre_q15, slot->color_q15);
 }
 
-static int16_t brick6_stack_wave_sine_fold(stack_osc_slot_t *slot)
-{
-    return brick6_stack_waveform_sine_fold(slot->phase, slot->timbre_q15, slot->color_q15, slot->param3_q15);
-}
-
-static int16_t brick6_stack_wave_tri_fold(stack_osc_slot_t *slot)
+static int16_t brick6_stack_wave_trifd(stack_osc_slot_t *slot)
 {
     return brick6_stack_waveform_tri_fold(slot->phase, slot->timbre_q15, slot->color_q15, slot->param3_q15);
 }
 
-static void brick6_stack_runtime_render_soft(stack_osc_slot_t *slot,
+static void brick6_stack_runtime_render_sinfd(stack_osc_slot_t *slot,
                                              int32_t *acc,
                                              uint8_t frames,
                                              uint16_t effective_level)
 {
-    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_soft);
+    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_sinfd);
 }
 
 static void brick6_stack_runtime_render_shape(stack_osc_slot_t *slot,
@@ -651,20 +642,12 @@ static void brick6_stack_runtime_render_shape(stack_osc_slot_t *slot,
     brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_shape);
 }
 
-static void brick6_stack_runtime_render_sine_fold(stack_osc_slot_t *slot,
-                                                  int32_t *acc,
-                                                  uint8_t frames,
-                                                  uint16_t effective_level)
-{
-    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_sine_fold);
-}
-
-static void brick6_stack_runtime_render_tri_fold(stack_osc_slot_t *slot,
+static void brick6_stack_runtime_render_trifd(stack_osc_slot_t *slot,
                                                  int32_t *acc,
                                                  uint8_t frames,
                                                  uint16_t effective_level)
 {
-    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_tri_fold);
+    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_trifd);
 }
 
 static void brick6_stack_runtime_render_wavetable(stack_osc_slot_t *slot,
@@ -899,10 +882,9 @@ static void brick6_stack_runtime_advance_slot_free_running(stack_osc_slot_t *slo
 
     switch (slot->renderer_id)
     {
-        case STACK_RENDERER_SOFT:
+        case STACK_RENDERER_SINFD:
         case STACK_RENDERER_SHAPE:
-        case STACK_RENDERER_SINE_FOLD:
-        case STACK_RENDERER_TRI_FOLD:
+        case STACK_RENDERER_TRIFD:
             slot->phase += slot->phase_inc * (uint32_t)frames;
             break;
 
@@ -997,10 +979,9 @@ typedef void (*brick6_stack_slot_renderer_t)(stack_osc_slot_t *slot,
                                              uint16_t effective_level);
 
 static const brick6_stack_slot_renderer_t k_stack_renderers[STACK_RENDERER_COUNT] = {
-    brick6_stack_runtime_render_soft,
+    brick6_stack_runtime_render_sinfd,
     brick6_stack_runtime_render_shape,
-    brick6_stack_runtime_render_sine_fold,
-    brick6_stack_runtime_render_tri_fold,
+    brick6_stack_runtime_render_trifd,
     brick6_stack_runtime_render_wavetable,
     brick6_stack_runtime_render_sub,
     brick6_stack_runtime_render_fm,
@@ -1028,7 +1009,7 @@ static void brick6_stack_runtime_render_slot_chunk(stack_osc_slot_t *slot,
 static uint8_t brick6_stack_runtime_slot_is_clean_soft_sine(const stack_osc_slot_t *slot)
 {
     return ((slot != NULL)
-            && (slot->renderer_id == (uint8_t)STACK_RENDERER_SOFT)
+            && (slot->renderer_id == (uint8_t)STACK_RENDERER_SINFD)
             && (slot->timbre_q15 == 0U)
             && (slot->color_q15 == 0U))
         ? 1U

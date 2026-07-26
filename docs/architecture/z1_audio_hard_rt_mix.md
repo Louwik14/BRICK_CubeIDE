@@ -924,8 +924,8 @@ Clarification START/END/LOOP live:
 
 ## Addendum 2026-07-25 - kernels analogiques Stack
 
-- Les modeles analogiques simples Stack sont regroupes en `SOFT` et `SHAPE`.
-- `SOFT` utilise `TIMBRE` comme morph `SINE -> TRIANGLE` et `COLOR` comme fold sine-shaped via la LUT sine Stack; `COLOR=0` conserve strictement la forme non coloree et aucun oversampling local n'est utilise.
+- Les modeles analogiques simples Stack actifs sont regroupes en `SINFD`, `TRIFD` et `SHAPE`; l'ancien modele `SOFT` prototype n'est plus expose.
+- `SINFD` utilise une base sine propre et `TRIFD` une base triangle, chacun avec `FOLD/SYM/SHAPE`; `FOLD=0` conserve strictement la forme non coloree et aucun oversampling local n'est utilise.
 - `SHAPE` reprend l'ancien comportement `SAW/SQUARE`: `TIMBRE` garde la forme/largeur d'impulsion et `COLOR` morphe `SAW -> SQUARE`; les extremites saw/square retournent directement la forme cible.
 - La math pure des formes analogiques Stack est factorisee dans `brick6_stack_waveform`, consommee par le runtime Stack et par la preview UI, sans instance `MacroOscillator` et sans toucher Wave/Braids.
 
@@ -960,9 +960,9 @@ Clarification START/END/LOOP live:
 - Chaque slot utilise le meme increment que son renderer actif: `phase_inc` du slot pour les phases principales, et les increments derives locaux pour wavetable, sub, FM, ring, triple et swarm. Les offsets `OSC DETUNE` deja projetes dans `phase_inc` continuent donc a faire deriver les slots pendant le silence.
 - En `RESET=RESET`, ce chemin free-running est coupe; le note-on continue de reset phases, feedback/swarm et offsets `OSC DETUNE` comme avant.
 
-## Addendum 2026-07-26 - Stack SINE/TRI FOLD
+## Addendum 2026-07-26 - Stack SINFD/TRIFD
 
-- Les modeles Stack `SINE FOLD` et `TRI FOLD` ajoutent deux renderers locaux dedies, bases respectivement sur la sine Stack propre et la triangle Stack existante.
+- Les modeles Stack `SINFD` et `TRIFD` ajoutent deux renderers locaux dedies, bases respectivement sur la sine Stack propre et la triangle Stack existante.
 - Leur wavefolder est factorise dans `brick6_stack_waveform`: `FOLD=0` retourne strictement la base clean; `SYM` ajoute un offset de fold dependant de `FOLD`; `SHAPE` arrondit le repli via la LUT sine Stack apres un miroir borne.
 - Aucun `sinf`, `tanhf`, `powf`, oversampling, filtre correctif, allocation ou acces Wave/Braids n'est ajoute dans le chemin sample Stack.
-- `SOFT` conserve son chemin existant `sine -> triangle` avec ancien fold `COLOR`; les autres modeles Stack gardent leurs renderers et mappings sonores.
+- `SOFT` n'est plus un modele Stack actif: l'ancien slot enum 0 est remplace par `SINFD`. Les autres modeles Stack gardent leurs renderers et mappings sonores.
