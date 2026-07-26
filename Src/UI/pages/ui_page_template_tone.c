@@ -89,12 +89,12 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
 
 static const ui_template_family_t g_ui_template_tone_family_stack = {
     .family_title = "TONE 1/2",
-    .nav_labels = { "COMM", "OSC1", "OSC2", "OSC3" },
+    .nav_labels = { "OSC1", "OSC2", "OSC3", "LVL" },
     .subpages = {
-        { .title = "COMM", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
         { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_PARAM3, PARAM_STACK_OSC1_MODEL } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_PARAM3, PARAM_STACK_OSC2_MODEL } } },
         { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_PARAM3, PARAM_STACK_OSC3_MODEL } } },
+        { .title = "LVL", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
     },
     .default_subpage = 0U,
 };

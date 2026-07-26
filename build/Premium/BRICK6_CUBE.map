@@ -27303,7 +27303,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x00000000                        __itcm_text_end__ = .
                 0x0808aaf8                        __itcm_text_load__ = LOADADDR (.itcm_text)
 
-.rodata         0x0808aaf8    0x1b300
+.rodata         0x0808aaf8    0x1b2f8
                 0x0808aaf8                        . = ALIGN (0x4)
  *(.rodata)
  .rodata        0x0808aaf8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
@@ -27345,1414 +27345,1414 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  .rodata.numerator.1
                 0x0808b768        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c.obj
  .rodata.USBD_FS_ProductStrDescriptor.str1.4
-                0x0808b770     0x38ef CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
+                0x0808b770     0x38e7 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
                                   0xf (size before relaxing)
  .rodata.USBD_FS_ManufacturerStrDescriptor.str1.4
-                0x0808f05f        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
+                0x0808f057        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
                                  0x13 (size before relaxing)
  .rodata.USBD_FS_ConfigStrDescriptor.str1.4
-                0x0808f05f        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
+                0x0808f057        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
                                   0xc (size before relaxing)
  .rodata.USBD_FS_InterfaceStrDescriptor.str1.4
-                0x0808f05f        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
+                0x0808f057        0x0 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/UsbStack/usbd_desc.c.obj
                                   0xf (size before relaxing)
  .rodata.check_fs.str1.4
-                0x0808f05f        0x0 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
+                0x0808f057        0x0 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
                                   0xc (size before relaxing)
  .rodata.follow_path.str1.4
-                0x0808f05f        0x0 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
+                0x0808f057        0x0 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
                                  0x13 (size before relaxing)
- *fill*         0x0808f05f        0x1 
+ *fill*         0x0808f057        0x1 
  .rodata.LfnOfs
-                0x0808f060        0xd CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
- *fill*         0x0808f06d        0x3 
- .rodata.ExCvt  0x0808f070       0x80 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
+                0x0808f058        0xd CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
+ *fill*         0x0808f065        0x3 
+ .rodata.ExCvt  0x0808f068       0x80 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/ff.c.obj
  .rodata.cvt2.0
-                0x0808f0f0       0xbc CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
+                0x0808f0e8       0xbc CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
  .rodata.cvt1.1
-                0x0808f1ac      0x1f2 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
- *fill*         0x0808f39e        0x2 
- .rodata.Tbl    0x0808f3a0      0x100 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
+                0x0808f1a4      0x1f2 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
+ *fill*         0x0808f396        0x2 
+ .rodata.Tbl    0x0808f398      0x100 CMakeFiles/BRICK6_CUBE.dir/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
  .rodata.k_on_cmd.0
-                0x0808f4a0        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
- *fill*         0x0808f4a1        0x3 
+                0x0808f498        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+ *fill*         0x0808f499        0x3 
  .rodata.k_init_cmds.1
-                0x0808f4a4       0x17 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
- *fill*         0x0808f4bb        0x1 
+                0x0808f49c       0x17 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+ *fill*         0x0808f4b3        0x1 
  .rodata.k_page_mode_cmds.2
-                0x0808f4bc        0x2 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
- *fill*         0x0808f4be        0x2 
+                0x0808f4b4        0x2 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+ *fill*         0x0808f4b6        0x2 
  .rodata.FONT_OFF_COMPACT
-                0x0808f4c0        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4c0                FONT_OFF_COMPACT
- *fill*         0x0808f4c1        0x3 
+                0x0808f4b8        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4b8                FONT_OFF_COMPACT
+ *fill*         0x0808f4b9        0x3 
  .rodata.FONT_HELVB14
-                0x0808f4c4        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4c4                FONT_HELVB14
- *fill*         0x0808f4c5        0x3 
+                0x0808f4bc        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4bc                FONT_HELVB14
+ *fill*         0x0808f4bd        0x3 
  .rodata.FONT_PEAR
-                0x0808f4c8        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4c8                FONT_PEAR
- *fill*         0x0808f4c9        0x3 
+                0x0808f4c0        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4c0                FONT_PEAR
+ *fill*         0x0808f4c1        0x3 
  .rodata.FONT_3X3BASIC
-                0x0808f4cc        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4cc                FONT_3X3BASIC
- *fill*         0x0808f4cd        0x3 
+                0x0808f4c4        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4c4                FONT_3X3BASIC
+ *fill*         0x0808f4c5        0x3 
  .rodata.FONT_MINIMAL3X3
-                0x0808f4d0        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4d0                FONT_MINIMAL3X3
- *fill*         0x0808f4d1        0x3 
+                0x0808f4c8        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4c8                FONT_MINIMAL3X3
+ *fill*         0x0808f4c9        0x3 
  .rodata.FONT_4X6
-                0x0808f4d4        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4d4                FONT_4X6
- *fill*         0x0808f4d5        0x3 
+                0x0808f4cc        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4cc                FONT_4X6
+ *fill*         0x0808f4cd        0x3 
  .rodata.FONT_5X7
-                0x0808f4d8        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
-                0x0808f4d8                FONT_5X7
- *fill*         0x0808f4d9        0x3 
+                0x0808f4d0        0x1 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
+                0x0808f4d0                FONT_5X7
+ *fill*         0x0808f4d1        0x3 
  .rodata.quad_table
-                0x0808f4dc       0x10 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/encoders_hw.c.obj
+                0x0808f4d4       0x10 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/encoders_hw.c.obj
  .rodata.g_led_macro_scene_colors
-                0x0808f4ec       0x30 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
+                0x0808f4e4       0x30 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
  .rodata.g_led_keyboard_omni_chord_colors
-                0x0808f51c        0xc CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
+                0x0808f514        0xc CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
  .rodata.g_led_remap_led_for_hall
-                0x0808f528       0x18 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
+                0x0808f520       0x18 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
  .rodata.g_led_remap_param_led_for_button
-                0x0808f540        0x8 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
+                0x0808f538        0x8 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/led_rgb.c.obj
  .rodata.cs42448_default_config.0
-                0x0808f548        0x5 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Drivers/cs42448.c.obj
- *fill*         0x0808f54d        0x3 
+                0x0808f540        0x5 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Drivers/cs42448.c.obj
+ *fill*         0x0808f545        0x3 
  .rodata.g_button_physical_to_logical
-                0x0808f550       0x18 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_controls_premium.c.obj
+                0x0808f548       0x18 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_controls_premium.c.obj
  .rodata.g_encoder_pins
-                0x0808f568       0x40 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_controls_premium.c.obj
+                0x0808f560       0x40 CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_controls_premium.c.obj
  .rodata.g_premium_capabilities
-                0x0808f5a8        0xa CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_product_premium.c.obj
- *fill*         0x0808f5b2        0x2 
+                0x0808f5a0        0xa CMakeFiles/BRICK6_CUBE.dir/Board/Premium/Src/board_product_premium.c.obj
+ *fill*         0x0808f5aa        0x2 
  .rodata.u8g2_font_5x7_tr
-                0x0808f5b4      0x324 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x0808f5b4                u8g2_font_5x7_tr
+                0x0808f5ac      0x324 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x0808f5ac                u8g2_font_5x7_tr
  .rodata.u8g2_font_6x13B_tf
-                0x0808f8d8      0x8c7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x0808f8d8                u8g2_font_6x13B_tf
- *fill*         0x0809019f        0x1 
+                0x0808f8d0      0x8c7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x0808f8d0                u8g2_font_6x13B_tf
+ *fill*         0x08090197        0x1 
  .rodata.u8g2_font_tom_thumb_4x6_tr
-                0x080901a0      0x2c7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x080901a0                u8g2_font_tom_thumb_4x6_tr
- *fill*         0x08090467        0x1 
+                0x08090198      0x2c7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x08090198                u8g2_font_tom_thumb_4x6_tr
+ *fill*         0x0809045f        0x1 
  .rodata.u8g2_font_minimal3x3_tu
-                0x08090468      0x1a0 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x08090468                u8g2_font_minimal3x3_tu
+                0x08090460      0x1a0 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x08090460                u8g2_font_minimal3x3_tu
  .rodata.u8g2_font_3x3basic_tr
-                0x08090608      0x21a CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x08090608                u8g2_font_3x3basic_tr
- *fill*         0x08090822        0x2 
+                0x08090600      0x21a CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x08090600                u8g2_font_3x3basic_tr
+ *fill*         0x0809081a        0x2 
  .rodata.u8g2_font_pearfont_tr
-                0x08090824      0x271 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x08090824                u8g2_font_pearfont_tr
- *fill*         0x08090a95        0x3 
+                0x0809081c      0x271 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x0809081c                u8g2_font_pearfont_tr
+ *fill*         0x08090a8d        0x3 
  .rodata.u8g2_font_helvB14_tf
-                0x08090a98      0xe61 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
-                0x08090a98                u8g2_font_helvB14_tf
- *fill*         0x080918f9        0x3 
+                0x08090a90      0xe61 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_fonts.c.obj
+                0x08090a90                u8g2_font_helvB14_tf
+ *fill*         0x080918f1        0x3 
  .rodata.u8g2_cb_r0
-                0x080918fc        0xc CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_setup.c.obj
-                0x080918fc                u8g2_cb_r0
+                0x080918f4        0xc CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8g2_setup.c.obj
+                0x080918f4                u8g2_cb_r0
  .rodata.u8x8_d_ssd1309_powersave0_seq
+                0x08091900        0x5 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
+ *fill*         0x08091905        0x3 
+ .rodata.u8x8_d_ssd1309_powersave1_seq
                 0x08091908        0x5 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
  *fill*         0x0809190d        0x3 
- .rodata.u8x8_d_ssd1309_powersave1_seq
-                0x08091910        0x5 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
- *fill*         0x08091915        0x3 
  .rodata.u8x8_d_ssd1309_flip0_seq
+                0x08091910        0x7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
+ *fill*         0x08091917        0x1 
+ .rodata.u8x8_d_ssd1309_flip1_seq
                 0x08091918        0x7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
  *fill*         0x0809191f        0x1 
- .rodata.u8x8_d_ssd1309_flip1_seq
-                0x08091920        0x7 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
- *fill*         0x08091927        0x1 
  .rodata.u8x8_d_ssd1309_128x64_noname_init_seq
-                0x08091928       0x29 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
- *fill*         0x08091951        0x3 
+                0x08091920       0x29 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
+ *fill*         0x08091949        0x3 
  .rodata.u8x8_ssd1309_128x64_noname0_display_info
-                0x08091954       0x18 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
+                0x0809194c       0x18 CMakeFiles/BRICK6_CUBE.dir/Drivers/U8g2/u8x8_d_ssd1309.c.obj
  .rodata.g_lowcost_key_from_mux
-                0x0809196c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
+                0x08091964       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
  .rodata.g_premium_key_from_mux
-                0x08091984       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
+                0x0809197c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
  .rodata.g_lowcost_key_metadata
-                0x08091994       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
+                0x0809198c       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/App/Hall/hall_keymap.c.obj
  .rodata.release_s.0
-                0x08091a24       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/audio_float.c.obj
+                0x08091a1c       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/audio_float.c.obj
  .rodata.attack_s.1
-                0x08091a38       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/audio_float.c.obj
+                0x08091a30       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/audio_float.c.obj
  .rodata.divs.0
-                0x08091a50       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091a48       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.beats.1
-                0x08091a78       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091a70       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.rates.2
-                0x08091a98       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091a90       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.beats.3
-                0x08091ab8       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091ab0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.k_freeze_return_gain.4
-                0x08091ad8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091ad0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.k_freeze_feedback.5
-                0x08091ae8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
+                0x08091ae0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .rodata.fx_peaks_lut_svf_damp
-                0x08091af8      0x202 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_peaks_svf_lut.c.obj
-                0x08091af8                fx_peaks_lut_svf_damp
- *fill*         0x08091cfa        0x2 
+                0x08091af0      0x202 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_peaks_svf_lut.c.obj
+                0x08091af0                fx_peaks_lut_svf_damp
+ *fill*         0x08091cf2        0x2 
  .rodata.fx_peaks_lut_svf_cutoff
-                0x08091cfc      0x202 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_peaks_svf_lut.c.obj
-                0x08091cfc                fx_peaks_lut_svf_cutoff
- *fill*         0x08091efe        0x2 
+                0x08091cf4      0x202 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_peaks_svf_lut.c.obj
+                0x08091cf4                fx_peaks_lut_svf_cutoff
+ *fill*         0x08091ef6        0x2 
  .rodata._ZN12_GLOBAL__N_1L15kBraidsShapeMapE
-                0x08091f00       0x27 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
- *fill*         0x08091f27        0x1 
+                0x08091ef8       0x27 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+ *fill*         0x08091f1f        0x1 
  .rodata.macro_pot_index_map.4
-                0x08091f28        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
+                0x08091f20        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
  .rodata.k_ratios_q15.0
-                0x08091f2c       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
+                0x08091f24       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
  .rodata.k_stack_renderers
-                0x08091f4c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
+                0x08091f44       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
  .rodata.k_stack_semitone_ratio_q15
-                0x08091f7c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
+                0x08091f74       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
  .rodata.str1.4
-                0x08091f94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
+                0x08091f8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
                                  0x62 (size before relaxing)
  .rodata.k_stack_model_catalog
-                0x08091f94       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
+                0x08091f8c       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_runtime.c.obj
  .rodata.k_stack_sine_quarter_q15
-                0x08091fec       0x82 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_waveform.c.obj
- *fill*         0x0809206e        0x2 
+                0x08091fe4       0x82 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_stack_waveform.c.obj
+ *fill*         0x08092066        0x2 
  .rodata.g_track_runtime_tone_slots_drum_bd_analog
-                0x08092070        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x08092068        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.g_track_runtime_tone_slots_master_fx
-                0x08092078       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x08092070       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.g_track_runtime_tone_slots_hybrid
-                0x08092098       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x08092090       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.g_track_runtime_tone_slots_midi
-                0x080920b4       0x1a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x080920ce        0x2 
+                0x080920ac       0x1a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x080920c6        0x2 
  .rodata.g_track_runtime_tone_slots_multi
-                0x080920d0        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x080920d6        0x2 
+                0x080920c8        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x080920ce        0x2 
  .rodata.g_track_runtime_tone_slots_looper
-                0x080920d8        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x080920e6        0x2 
+                0x080920d0        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x080920de        0x2 
  .rodata.g_track_runtime_tone_slots_clip
-                0x080920e8       0x16 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x080920fe        0x2 
+                0x080920e0       0x16 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x080920f6        0x2 
  .rodata.g_track_runtime_tone_slots_slicer
-                0x08092100        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x080920f8        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.g_track_runtime_tone_slots_sampler
-                0x0809210c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x08092104       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.g_track_runtime_tone_slots_stack
-                0x0809211c       0x2a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x08092146        0x2 
+                0x08092114       0x2a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x0809213e        0x2 
  .rodata.g_track_runtime_tone_slots_wave
-                0x08092148       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x08092140       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .rodata.kbd_chords_dict_suffix.str1.4
-                0x08092158        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092150        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
                                  0x46 (size before relaxing)
  .rodata.g_kbd_scale_offsets
-                0x08092158       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092150       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.g_kbd_chord_exts
-                0x08092190       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092188       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.EXT_9TH
+                0x080921b8        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x080921b9        0x3 
+ .rodata.EXT_6TH
+                0x080921bc        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x080921bd        0x3 
+ .rodata.EXT_MAJ7
                 0x080921c0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  *fill*         0x080921c1        0x3 
- .rodata.EXT_6TH
+ .rodata.EXT_7TH
                 0x080921c4        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  *fill*         0x080921c5        0x3 
- .rodata.EXT_MAJ7
-                0x080921c8        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x080921c9        0x3 
- .rodata.EXT_7TH
-                0x080921cc        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x080921cd        0x3 
  .rodata.g_kbd_chord_bases
-                0x080921d0       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x080921c8       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.SECRET_7_SHARP9
-                0x08092200        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x08092205        0x3 
+                0x080921f8        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x080921fd        0x3 
  .rodata.SECRET_MIN_6
-                0x08092208        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092200        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.SECRET_MIN_FLAT6
-                0x0809220c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092204        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.SECRET_MIN_ADD4
-                0x08092210        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x08092208        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .rodata.SECRET_AUG
+                0x0809220c        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x0809220f        0x1 
+ .rodata.SECRET_5
+                0x08092210        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x08092212        0x2 
+ .rodata.TRIAD_DIM
                 0x08092214        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  *fill*         0x08092217        0x1 
- .rodata.SECRET_5
-                0x08092218        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x0809221a        0x2 
- .rodata.TRIAD_DIM
+ .rodata.TRIAD_SUS4
+                0x08092218        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+ *fill*         0x0809221b        0x1 
+ .rodata.TRIAD_MINOR
                 0x0809221c        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  *fill*         0x0809221f        0x1 
- .rodata.TRIAD_SUS4
+ .rodata.TRIAD_MAJOR
                 0x08092220        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  *fill*         0x08092223        0x1 
- .rodata.TRIAD_MINOR
-                0x08092224        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x08092227        0x1 
- .rodata.TRIAD_MAJOR
-                0x08092228        0x3 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
- *fill*         0x0809222b        0x1 
  .rodata.g_kbd_omni_ext_button_to_chord_index
-                0x0809222c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x08092224        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
  .rodata.g_kbd_omni_type_button_to_chord_index
-                0x08092230        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x08092228        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
  .rodata.ppqn24_per_step.0
-                0x08092234       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0809222c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .rodata.ppqn24_per_step.1
-                0x08092244       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0809223c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .rodata.chord_for_left_group.0
-                0x08092254        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0809224c        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
  .rodata.ui_keyboard_app_format_active_chord_label.str1.4
-                0x0809225b        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x08092253        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
                                  0x19 (size before relaxing)
  .rodata.str1.4
-                0x0809225b        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x08092253        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
                                  0x2e (size before relaxing)
- *fill*         0x0809225b        0x1 
+ *fill*         0x08092253        0x1 
  .rodata.k_root_names.0
-                0x0809225c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x08092254       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .rodata.cin_len.0
-                0x0809228c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
+                0x08092284       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
  .rodata.str1.4
-                0x0809229c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x08092294        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
                                   0x5 (size before relaxing)
  .rodata.mod_destination_catalog_short_label.str1.4
-                0x0809229c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
+                0x08092294        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
                                  0x94 (size before relaxing)
  .rodata.grain_frames.0
-                0x0809229c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
+                0x08092294        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
  .rodata.counts.1
-                0x080922a8        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
- *fill*         0x080922af        0x1 
+                0x080922a0        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_destination_catalog.c.obj
+ *fill*         0x080922a7        0x1 
  .rodata.g_mod_lfo_sine_lut
-                0x080922b0      0x404 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj
+                0x080922a8      0x404 CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj
  .rodata.g_mod_lfo_sync_bars_per_cycle
-                0x080926b4       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj
+                0x080926ac       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj
  .rodata.beats.0
-                0x080926f0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_apply_wrappers.c.obj
+                0x080926e8       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_apply_wrappers.c.obj
  .rodata.values.0
-                0x08092724        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
+                0x0809271c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
  .rodata.values.1
-                0x08092730        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
+                0x08092728        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
  .rodata.counts.2
-                0x0809273c        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
+                0x08092734        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_backends.c.obj
  .rodata.str1.4
-                0x08092743        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809273b        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
                                 0xc53 (size before relaxing)
- *fill*         0x08092743        0x1 
+ *fill*         0x0809273b        0x1 
  .rodata.param_registry
-                0x08092744     0x3020 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
-                0x08092744                param_registry
+                0x0809273c     0x3020 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809273c                param_registry
  .rodata.g_mod_matrix_source_labels
-                0x08095764       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809575c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_lfo_trig_labels
-                0x08095780       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095778       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_lfo_shape_labels
-                0x08095794       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809578c       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_sync_labels
-                0x080957bc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080957b4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_dir_labels
-                0x080957cc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080957c4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_strum_labels
-                0x080957dc       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080957d4       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_accent_labels
-                0x080957f4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080957ec       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_pattern_labels
-                0x08095808       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095800       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_arp_rate_labels
-                0x08095820       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095818       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_kbd_note_order_labels
-                0x08095844        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809583c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_kbd_scale_labels
-                0x08095850       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095848       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_kbd_root_labels
-                0x08095870       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095868       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_seq_div_labels
-                0x080958a4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809589c       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_cfg_rec_len_labels
-                0x080958b8        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080958b0        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_cfg_sync_labels
-                0x080958c4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080958bc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_cfg_start_labels
-                0x080958d4       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080958cc       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_cfg_group_link_labels
-                0x080958ec        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080958e4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_track_midi_source_labels
-                0x080958f8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080958f0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_track_family_labels
-                0x08095908       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095900       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_stack_model_labels
-                0x08095934       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809592c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_wave_edit_labels
-                0x08095964       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x0809595c       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_looper_play_labels
-                0x08095a04        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x080959fc        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_looper_len_labels
-                0x08095a10       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a08       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_looper_arm_labels
-                0x08095a2c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a24       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_search_labels
-                0x08095a3c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a34       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_hop_labels
-                0x08095a54       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a4c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_grain_labels
-                0x08095a70       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a68       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_stretch_mode_labels
-                0x08095a8c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a84       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_play_mode_labels
-                0x08095a9c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095a94        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_clip_sync_length_labels
-                0x08095aa8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095aa0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_slice_count_labels
-                0x08095ac0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095ab8       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_sampler_mode_labels
-                0x08095ae0       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095ad8       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_delay_mode_labels
-                0x08095af4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095aec       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_delay_type_labels
-                0x08095b08        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b00        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_delay_time_labels
-                0x08095b14       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b0c       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_reverb_type_labels
-                0x08095b4c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b44        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_filter_type_labels
-                0x08095b54       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b4c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_master_fx_type_labels
-                0x08095b6c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b64       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_route_labels
-                0x08095b9c       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095b94       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_stack_reset_labels
-                0x08095bb0        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095ba8        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.g_bool_labels
-                0x08095bbc        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
+                0x08095bb4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_catalog.c.obj
  .rodata.k_lane_bound_params.0
-                0x08095bc8       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_transition.c.obj
+                0x08095bc0       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_registry_transition.c.obj
  .rodata.param_wave_label_for_track_param.str1.4
-                0x08095bf8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
+                0x08095bf0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
                                  0x26 (size before relaxing)
  .rodata.str1.4
-                0x08095bf8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
+                0x08095bf0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
                                 0x1ba (size before relaxing)
  .rodata.g_wave_param_labels
-                0x08095bf8      0x1d4 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
+                0x08095bf0      0x1d4 CMakeFiles/BRICK6_CUBE.dir/Src/Param/param_wave_labels.c.obj
  .rodata.BSP_SD_ReadBlocks_DMA.str1.4
-                0x08095dcc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
+                0x08095dc4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
                                  0x10 (size before relaxing)
  .rodata.BSP_SD_WriteBlocks_DMA.str1.4
-                0x08095dcc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
+                0x08095dc4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
                                  0x11 (size before relaxing)
  .rodata.BSP_SD_Init.str1.4
-                0x08095dcc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
+                0x08095dc4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/bsp_driver_sd.c.obj
                                   0xc (size before relaxing)
  .rodata.SD_write.str1.4
-                0x08095dcc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
+                0x08095dc4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
                                  0xd7 (size before relaxing)
  .rodata.SD_read.str1.4
-                0x08095dcc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
+                0x08095dc4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
                                  0xd2 (size before relaxing)
  .rodata.SD_Driver
-                0x08095dcc       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
-                0x08095dcc                SD_Driver
+                0x08095dc4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
+                0x08095dc4                SD_Driver
  .rodata.multi_import_set_duplicate_pair_diag.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_import.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_import.c.obj
                                  0x1a (size before relaxing)
  .rodata.multi_sample_import_folder_with_progress.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_import.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_import.c.obj
                                  0x37 (size before relaxing)
  .rodata.multi_index_header_basic_valid.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_index.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_index.c.obj
                                   0x9 (size before relaxing)
  .rodata.multi_sample_index_apply_to_pool.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_index.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/multi_sample_index.c.obj
                                   0x6 (size before relaxing)
  .rodata.sample_pool_load.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sample_pool.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sample_pool.c.obj
                                  0x2b (size before relaxing)
  .rodata.sampler_ram_pool_result_label.str1.4
-                0x08095de0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sampler_ram_pool.c.obj
+                0x08095dd8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sampler_ram_pool.c.obj
                                  0x9a (size before relaxing)
  .rodata.mandatory_play_params.0
-                0x08095de0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_clipboard.c.obj
+                0x08095dd8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_clipboard.c.obj
  .rodata.g_led_remap_led_for_hall
-                0x08095de8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_led.c.obj
+                0x08095de0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_led.c.obj
  .rodata.k_len.3
-                0x08095e00        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_capture.c.obj
+                0x08095df8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_capture.c.obj
  .rodata.k_mictim.0
-                0x08095e08        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
+                0x08095e00        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
  .rodata.k_len.1
-                0x08095e10        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
+                0x08095e08        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
  .rodata.k_vel.2
-                0x08095e18        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
+                0x08095e10        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
  .rodata.k_note.3
-                0x08095e20        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
+                0x08095e18        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_live_rec_session.c.obj
  .rodata.g_seq_param_mix_slot_to_id
-                0x08095e28        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_param_iface.c.obj
+                0x08095e20        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_param_iface.c.obj
  .rodata.g_seq_play_voice_mictim_ids
-                0x08095e30        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
+                0x08095e28        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
  .rodata.g_seq_play_voice_len_ids
-                0x08095e38        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
+                0x08095e30        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
  .rodata.g_seq_play_voice_vel_ids
-                0x08095e40        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
+                0x08095e38        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
  .rodata.g_seq_play_voice_note_ids
-                0x08095e48        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
+                0x08095e40        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Seq/seq_play_scheduler.c.obj
  .rodata.g_looper_storage_raw_paths
-                0x08095e50       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
+                0x08095e48       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
  .rodata.prefix.0
-                0x08095e60       0x15 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
- *fill*         0x08095e75        0x3 
+                0x08095e58       0x15 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
+ *fill*         0x08095e6d        0x3 
  .rodata.pcm_guid_le.0
-                0x08095e78       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_parser.c.obj
+                0x08095e70       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_parser.c.obj
  .rodata.g_waveform_cache_level_frames
-                0x08095e88       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/waveform_cache.c.obj
- .rodata.hex.0  0x08095e9c       0x11 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/waveform_cache.c.obj
+                0x08095e80       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/waveform_cache.c.obj
+ .rodata.hex.0  0x08095e94       0x11 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/waveform_cache.c.obj
  .rodata.ui_page_audio_rec_error_label.str1.4
-                0x08095ead        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ea5        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
                                  0x6e (size before relaxing)
  .rodata.ui_page_audio_rec_draw_marker_bar.str1.4
-                0x08095ead        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ea5        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
                                   0x6 (size before relaxing)
  .rodata.ui_page_audio_rec_render.str1.4
-                0x08095ead        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ea5        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
                                  0x79 (size before relaxing)
  .rodata.ui_page_rec_edit_render.str1.4
-                0x08095ead        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ea5        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
                                  0x75 (size before relaxing)
- *fill*         0x08095ead        0x3 
+ *fill*         0x08095ea5        0x3 
  .rodata.k_scale_q8.0
-                0x08095eb0       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
- *fill*         0x08095ec2        0x2 
+                0x08095ea8       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+ *fill*         0x08095eba        0x2 
  .rodata.g_ui_page_rec_edit
-                0x08095ec4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
-                0x08095ec4                g_ui_page_rec_edit
+                0x08095ebc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ebc                g_ui_page_rec_edit
  .rodata.g_ui_page_audio_rec
-                0x08095ee0       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
-                0x08095ee0                g_ui_page_audio_rec
+                0x08095ed8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_audio_rec.c.obj
+                0x08095ed8                g_ui_page_audio_rec
  .rodata.ui_page_calibration_render.str1.4
-                0x08095efc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
+                0x08095ef4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
                                  0x22 (size before relaxing)
  .rodata.ui_page_user_calibration_render.str1.4
-                0x08095efc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
+                0x08095ef4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
                                  0xc9 (size before relaxing)
  .rodata.g_ui_page_user_calibration
-                0x08095efc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
-                0x08095efc                g_ui_page_user_calibration
+                0x08095ef4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
+                0x08095ef4                g_ui_page_user_calibration
  .rodata.g_ui_page_calibration
-                0x08095f18       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
-                0x08095f18                g_ui_page_calibration
+                0x08095f10       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_calibration.c.obj
+                0x08095f10                g_ui_page_calibration
  .rodata.ui_page_debug_hall_render.str1.4
-                0x08095f34        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_debug_hall.c.obj
+                0x08095f2c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_debug_hall.c.obj
                                  0x2a (size before relaxing)
  .rodata.g_ui_page_debug_hall
-                0x08095f34       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_debug_hall.c.obj
-                0x08095f34                g_ui_page_debug_hall
+                0x08095f2c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_debug_hall.c.obj
+                0x08095f2c                g_ui_page_debug_hall
  .rodata.ui_page_kit_assign_set_status.str1.4
-                0x08095f50        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
+                0x08095f48        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_page_kit_assign_render.str1.4
-                0x08095f50        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
+                0x08095f48        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
                                  0x48 (size before relaxing)
  .rodata.ui_page_kit_assign_name_done.str1.4
-                0x08095f50        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
+                0x08095f48        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
                                   0xc (size before relaxing)
  .rodata.ui_page_kit_assign_handle_event.str1.4
-                0x08095f50        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
+                0x08095f48        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
                                  0x30 (size before relaxing)
  .rodata.g_ui_page_kit_assign
-                0x08095f50       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
-                0x08095f50                g_ui_page_kit_assign
+                0x08095f48       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_kit_assign.c.obj
+                0x08095f48                g_ui_page_kit_assign
  .rodata.ui_page_name_edit_finish.str1.4
-                0x08095f6c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
                                   0x6 (size before relaxing)
  .rodata.ui_page_name_edit_glyph_w.str1.4
-                0x08095f6c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
                                   0x6 (size before relaxing)
  .rodata.ui_page_name_edit_fit_label.str1.4
-                0x08095f6c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_page_name_edit_render.str1.4
-                0x08095f6c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
                                  0x24 (size before relaxing)
  .rodata.ui_page_name_edit_open.str1.4
-                0x08095f6c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
                                   0x9 (size before relaxing)
  .rodata.g_ui_page_name_edit
-                0x08095f6c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
-                0x08095f6c                g_ui_page_name_edit
+                0x08095f64       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f64                g_ui_page_name_edit
  .rodata.g_name_edit_chars
-                0x08095f88       0x42 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
+                0x08095f80       0x42 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_name_edit.c.obj
  .rodata.ui_page_param_test_render.str1.4
-                0x08095fca        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
+                0x08095fc2        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
                                  0x42 (size before relaxing)
- *fill*         0x08095fca        0x2 
+ *fill*         0x08095fc2        0x2 
  .rodata.g_ui_page_param_test
-                0x08095fcc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
-                0x08095fcc                g_ui_page_param_test
+                0x08095fc4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
+                0x08095fc4                g_ui_page_param_test
  .rodata.str1.4
-                0x08095fe8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
+                0x08095fe0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
                                  0x1e (size before relaxing)
  .rodata.g_tone_page_names
-                0x08095fe8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
+                0x08095fe0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
  .rodata.g_tone_param_banks
-                0x08095ff8       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
+                0x08095ff0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_param_test.c.obj
  .rodata.ui_page_patch_assign_set_status.str1.4
-                0x08096018        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_page_patch_assign_name_done.str1.4
-                0x08096018        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
                                   0xe (size before relaxing)
  .rodata.ui_page_patch_assign_render.str1.4
-                0x08096018        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
                                  0xd8 (size before relaxing)
  .rodata.ui_page_patch_assign_handle_event.str1.4
-                0x08096018        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
                                  0x6a (size before relaxing)
  .rodata.str1.4
-                0x08096018        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
                                  0x14 (size before relaxing)
  .rodata.k_items.0
-                0x08096018       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x08096010       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
  .rodata.g_ui_page_patch_assign
-                0x08096054       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
-                0x08096054                g_ui_page_patch_assign
+                0x0809604c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_patch_assign.c.obj
+                0x0809604c                g_ui_page_patch_assign
  .rodata.ui_page_settings_preview_error_label.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x81 (size before relaxing)
  .rodata.ui_page_settings_multi_load_error_label.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x5e (size before relaxing)
  .rodata.ui_page_settings_draw_page_footer_ex.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0xb (size before relaxing)
  .rodata.ui_page_settings_draw_page_footer.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x2 (size before relaxing)
  .rodata.ui_page_settings_status.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_page_settings_sample_request_replace.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x21 (size before relaxing)
  .rodata.ui_page_settings_fit_label.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x2 (size before relaxing)
  .rodata.ui_page_settings_draw_sample_footer.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x10 (size before relaxing)
  .rodata.ui_page_settings_sd_busy_status.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x6 (size before relaxing)
  .rodata.ui_page_settings_sample_browser_refresh.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x2d (size before relaxing)
  .rodata.ui_page_settings_sample_browser_enter_root.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0xb (size before relaxing)
  .rodata.ui_page_settings_multi_confirm_replace.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x1d (size before relaxing)
  .rodata.ui_page_settings_sample_catalog_refresh_action.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x7 (size before relaxing)
  .rodata.ui_page_settings_draw_global_sample_header.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x18 (size before relaxing)
  .rodata.ui_page_settings_multi_browser_refresh.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x1b (size before relaxing)
  .rodata.ui_page_settings_multi_prepare_poll.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0x8 (size before relaxing)
  .rodata.ui_page_settings_render_multi_browser.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0xda (size before relaxing)
  .rodata.ui_page_settings_render.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                 0x1d1 (size before relaxing)
  .rodata.ui_page_settings_multi_load_entry_to_slot.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x1f (size before relaxing)
  .rodata.ui_page_settings_multi_prepare_entry.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x4c (size before relaxing)
  .rodata.ui_page_settings_ram_request_replace.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0xb (size before relaxing)
  .rodata.ui_page_settings_sample_load_to_slot.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x51 (size before relaxing)
  .rodata.ui_page_settings_tick.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x79 (size before relaxing)
  .rodata.ui_page_settings_sample_confirm_accept.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x73 (size before relaxing)
  .rodata.ui_page_settings_apply_action.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0xc9 (size before relaxing)
  .rodata.ui_page_settings_handle_encoder.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                   0xa (size before relaxing)
  .rodata.ui_page_settings_handle_event.str1.4
-                0x08096070        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
                                  0x1b (size before relaxing)
  .rodata.k_suffix.0
-                0x08096070        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096068        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
  .rodata.k_loaded.1
-                0x0809607c        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
- *fill*         0x08096083        0x1 
+                0x08096074        0x7 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+ *fill*         0x0809607b        0x1 
  .rodata.k_prep.2
+                0x0809607c        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+ *fill*         0x08096081        0x3 
+ .rodata.k_missing.3
                 0x08096084        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
  *fill*         0x08096089        0x3 
- .rodata.k_missing.3
-                0x0809608c        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
- *fill*         0x08096091        0x3 
  .rodata.k_error.4
-                0x08096094        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
- *fill*         0x0809609a        0x2 
+                0x0809608c        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+ *fill*         0x08096092        0x2 
  .rodata.g_ui_page_settings
-                0x0809609c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
-                0x0809609c                g_ui_page_settings
+                0x08096094       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_settings.c.obj
+                0x08096094                g_ui_page_settings
  .rodata.ui_page_template_arp_virtual_slot_text.str1.4
-                0x080960b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x080960b0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
                                   0xc (size before relaxing)
  .rodata.g_ui_page_template_arp
-                0x080960b8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
-                0x080960b8                g_ui_page_template_arp
+                0x080960b0       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x080960b0                g_ui_page_template_arp
  .rodata.str1.4
-                0x080960d4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x080960cc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
                                  0x25 (size before relaxing)
  .rodata.g_ui_template_arp_family_slave_proxy
-                0x080960d4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x080960cc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
  .rodata.g_ui_template_arp_family_buffer
-                0x0809611c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x08096114       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
  .rodata.g_ui_template_arp_family
-                0x08096164       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x0809615c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
  .rodata.ui_page_template_cfg_virtual_slot_text.str1.4
-                0x080961ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961a4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
                                  0x1c (size before relaxing)
  .rodata.ui_page_template_cfg_pick_widget.str1.4
-                0x080961ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961a4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
                                  0x14 (size before relaxing)
  .rodata.g_ui_page_template_rec_cfg
-                0x080961ac       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
-                0x080961ac                g_ui_page_template_rec_cfg
+                0x080961a4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961a4                g_ui_page_template_rec_cfg
  .rodata.g_ui_page_template_cfg
-                0x080961c8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
-                0x080961c8                g_ui_page_template_cfg
+                0x080961c0       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961c0                g_ui_page_template_cfg
  .rodata.str1.4
-                0x080961e4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961dc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
                                  0x2a (size before relaxing)
  .rodata.g_ui_template_rec_cfg_family
-                0x080961e4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080961dc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .rodata.g_ui_template_cfg_group_master_family
-                0x0809622c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x08096224       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .rodata.g_ui_template_cfg_slave_proxy_family
-                0x08096274       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x0809626c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .rodata.g_ui_template_cfg_family
-                0x080962bc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x080962b4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .rodata.ui_page_template_colors_sync_family.str1.4
-                0x08096304        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x080962fc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
                                  0x22 (size before relaxing)
  .rodata.g_ui_page_template_vca
-                0x08096304       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
-                0x08096304                g_ui_page_template_vca
+                0x080962fc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x080962fc                g_ui_page_template_vca
  .rodata.g_ui_page_template_colors
-                0x08096320       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
-                0x08096320                g_ui_page_template_colors
+                0x08096318       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x08096318                g_ui_page_template_colors
  .rodata.str1.4
-                0x0809633c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x08096334        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
                                   0x4 (size before relaxing)
  .rodata.g_ui_page_template_keyboard
-                0x0809633c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
-                0x0809633c                g_ui_page_template_keyboard
+                0x08096334       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
+                0x08096334                g_ui_page_template_keyboard
  .rodata.str1.4
-                0x08096358        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
+                0x08096350        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
                                  0x1e (size before relaxing)
  .rodata.g_ui_template_keyboard_family
-                0x08096358       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
+                0x08096350       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
  .rodata.ui_page_template_macro_virtual_slot_text.str1.4
-                0x080963a0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
+                0x08096398        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
                                  0x1b (size before relaxing)
  .rodata.g_ui_page_template_macro
-                0x080963a0       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
-                0x080963a0                g_ui_page_template_macro
+                0x08096398       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
+                0x08096398                g_ui_page_template_macro
  .rodata.str1.4
-                0x080963bc        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
+                0x080963b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
                                  0x1d (size before relaxing)
  .rodata.g_ui_template_macro_family
-                0x080963bc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
+                0x080963b4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
  .rodata.g_ui_page_template_mix
-                0x08096404       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
-                0x08096404                g_ui_page_template_mix
+                0x080963fc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x080963fc                g_ui_page_template_mix
  .rodata.str1.4
-                0x08096420        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x08096418        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
                                  0x51 (size before relaxing)
  .rodata.g_ui_template_mix_unavailable_family
-                0x08096420       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x08096418       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
  .rodata.g_ui_template_mix_family_delay_dual
-                0x08096468       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x08096460       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
  .rodata.g_ui_template_mix_family_delay_classic
-                0x080964b0       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x080964a8       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
  .rodata.g_ui_template_mix_family_main
-                0x080964f8       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x080964f0       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
  .rodata.ui_page_template_mod_param_text.str1.4
-                0x08096540        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
+                0x08096538        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
                                  0x1a (size before relaxing)
  .rodata.g_ui_page_template_mod
-                0x08096540       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
-                0x08096540                g_ui_page_template_mod
+                0x08096538       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
+                0x08096538                g_ui_page_template_mod
  .rodata.str1.4
-                0x0809655c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
+                0x08096554        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
                                  0x2d (size before relaxing)
  .rodata.g_ui_template_mod_family
-                0x0809655c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
+                0x08096554       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
  .rodata.ui_page_template_play_virtual_slot_text.str1.4
-                0x080965a4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x0809659c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
                                  0x1c (size before relaxing)
  .rodata.ui_page_template_play_resolve_family.str1.4
-                0x080965a4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x0809659c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
                                  0x30 (size before relaxing)
  .rodata.g_ui_page_template_play
-                0x080965a4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
-                0x080965a4                g_ui_page_template_play
+                0x0809659c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x0809659c                g_ui_page_template_play
  .rodata.str1.4
-                0x080965c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x080965b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
                                  0x30 (size before relaxing)
  .rodata.g_ui_template_play_slave_proxy_family
-                0x080965c0       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x080965b8       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
  .rodata.g_ui_template_play_family
-                0x08096608       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x08096600       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
  .rodata.g_ui_page_template_seq
-                0x08096650       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
-                0x08096650                g_ui_page_template_seq
+                0x08096648       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
+                0x08096648                g_ui_page_template_seq
  .rodata.str1.4
-                0x0809666c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
+                0x08096664        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
                                   0x6 (size before relaxing)
  .rodata.g_ui_template_seq_family
-                0x0809666c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
+                0x08096664       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
  .rodata.ui_page_template_tone_wave_format_bipolar_float.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
                                   0xf (size before relaxing)
  .rodata.ui_page_template_tone_wave_format_q7_interval.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
                                  0x13 (size before relaxing)
  .rodata.ui_page_template_tone_master_fx_format_choice.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_page_template_tone_sync_drum_family.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
                                   0xe (size before relaxing)
  .rodata.ui_page_template_tone_param_text.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
                                 0x221 (size before relaxing)
  .rodata.str1.4
-                0x080966b4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
-                                0x1ac (size before relaxing)
+                0x080966ac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                                0x1a4 (size before relaxing)
  .rodata.k_labels.0
-                0x080966b4       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ac       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_labels.1
-                0x080966d4       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966cc       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_labels.2
-                0x080966f4       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080966ec       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_rate.3
-                0x0809671c       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096714       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_hold.4
-                0x0809673c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096734       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_shape.5
-                0x0809674c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096744        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_color.6
-                0x08096758       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096750       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_labels.7
-                0x08096768       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096760       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.k_labels.8
-                0x080967c0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080967b8       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_page_template_tone
-                0x080967d0       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
-                0x080967d0                g_ui_page_template_tone
+                0x080967c8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080967c8                g_ui_page_template_tone
  .rodata.g_wave_fm_frequency_quantizer
-                0x080967ec      0x102 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
- *fill*         0x080968ee        0x2 
+                0x080967e4      0x102 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+ *fill*         0x080968e6        0x2 
  .rodata.g_wave_triple_intervals_q7
-                0x080968f0       0x82 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
- *fill*         0x08096972        0x2 
+                0x080968e8       0x82 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+ *fill*         0x0809696a        0x2 
  .rodata.g_ui_template_tone_family_hybrid
-                0x08096974       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x0809696c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_midi
-                0x080969bc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080969b4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_stack_global
-                0x08096a04       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x080969fc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_stack
-                0x08096a4c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096a44       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_wave
-                0x08096a94       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096a8c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_multi
-                0x08096adc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096ad4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_looper
-                0x08096b24       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096b1c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_clip
-                0x08096b6c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096b64       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_sampler
-                0x08096bb4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096bac       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.g_ui_template_tone_family_master_fx
-                0x08096bfc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x08096bf4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .rodata.ui_get_track_runtime_header_label.str1.4
-                0x08096c44        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core.c.obj
+                0x08096c3c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core.c.obj
                                   0xe (size before relaxing)
  .rodata.k_event_stages.0
-                0x08096c44       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core.c.obj
+                0x08096c3c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core.c.obj
  .rodata.ui_core_clipboard_handle_macro_slot_event.str1.4
-                0x08096c94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
                                  0x3d (size before relaxing)
  .rodata.ui_core_clipboard_handle_track_event.str1.4
-                0x08096c94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
                                  0x3d (size before relaxing)
  .rodata.ui_core_clipboard_handle_ensemble_event.str1.4
-                0x08096c94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
                                  0x43 (size before relaxing)
  .rodata.ui_core_clipboard_handle_page_event.str1.4
-                0x08096c94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
                                  0x44 (size before relaxing)
  .rodata.ui_core_clipboard_handle_seq_track_event.str1.4
-                0x08096c94        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
                                  0x97 (size before relaxing)
  .rodata.k_param_buttons.0
-                0x08096c94        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+                0x08096c8c        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
  .rodata.ui_core_feedback_set.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_feedback.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_feedback.c.obj
                                   0x3 (size before relaxing)
  .rodata.ui_core_pattern_handle_mode_event.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_pattern.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_pattern.c.obj
                                  0x21 (size before relaxing)
  .rodata.ui_core_runtime_bridge_looper_start_track.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
                                  0x7d (size before relaxing)
  .rodata.ui_core_runtime_bridge_service_looper_record_control.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
                                  0x2f (size before relaxing)
  .rodata.ui_core_runtime_bridge_service_looper_export_feedback.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
                                  0x46 (size before relaxing)
  .rodata.ui_core_runtime_bridge_request_undo.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
                                  0x11 (size before relaxing)
  .rodata.ui_core_runtime_bridge_handle_global_shortcuts.str1.4
-                0x08096c9a        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c92        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
                                  0x2c (size before relaxing)
- *fill*         0x08096c9a        0x2 
+ *fill*         0x08096c92        0x2 
  .rodata.g_ui_core_runtime_bridge_system_sync_adapter
-                0x08096c9c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x08096c94       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
  .rodata.ui_core_seq_transport_handle_seq_mode_event.str1.4
-                0x08096cac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_seq_transport.c.obj
+                0x08096ca4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_seq_transport.c.obj
                                  0x1a (size before relaxing)
  .rodata.ui_hall_mode_get_base_label.str1.4
-                0x08096cac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
+                0x08096ca4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
                                   0x4 (size before relaxing)
  .rodata.str1.4
-                0x08096cac        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
+                0x08096ca4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
                                  0x29 (size before relaxing)
  .rodata.g_ui_hall_mode_contracts
-                0x08096cac       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
+                0x08096ca4       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_contract.c.obj
  .rodata.ui_hall_mode_flow_handle_shift_hall_action.str1.4
-                0x08096cec        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_flow.c.obj
+                0x08096ce4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_flow.c.obj
                                  0x15 (size before relaxing)
  .rodata.ui_hall_mode_flow_handle_track_hall_action.str1.4
-                0x08096cec        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_flow.c.obj
+                0x08096ce4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_flow.c.obj
                                   0xa (size before relaxing)
  .rodata.ui_get_hall_mode_short_label.str1.4
-                0x08096cec        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_projection.c.obj
+                0x08096ce4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_projection.c.obj
                                  0x2d (size before relaxing)
  .rodata.ui_get_hall_mode_suffix_label.str1.4
-                0x08096cec        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_projection.c.obj
+                0x08096ce4        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_hall_mode_projection.c.obj
                                  0x1c (size before relaxing)
  .rodata.g_ui_nav_rules
-                0x08096cec       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_navigation.c.obj
+                0x08096ce4       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_navigation.c.obj
  .rodata.ui_renderer_template_format_fixed.str1.4
-                0x08096cfe        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
                                  0x26 (size before relaxing)
  .rodata.ui_renderer_template_draw_custom_filter.str1.4
-                0x08096cfe        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
                                  0x13 (size before relaxing)
  .rodata.ui_renderer_template_format_value.str1.4
-                0x08096cfe        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
                                  0x77 (size before relaxing)
  .rodata.ui_renderer_template_draw.str1.4
-                0x08096cfe        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
                                  0x81 (size before relaxing)
  .rodata.str1.4
-                0x08096cfe        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
                                 0xde2 (size before relaxing)
- *fill*         0x08096cfe        0x2 
+ *fill*         0x08096cf6        0x2 
  .rodata.labels.0
-                0x08096d00       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096cf8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.stream.1
-                0x08096d24       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- .rodata.ram.2  0x08096d98       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096d1c       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ .rodata.ram.2  0x08096d90       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.hybrid.3
-                0x08096e0c       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096e04       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.input.4
-                0x08096e80       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096e78       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.midi.5
-                0x08096ef4       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096eec       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.black_x.6
-                0x08096f68        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x08096f6d        0x3 
+                0x08096f60        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x08096f65        0x3 
  .rodata.div_x.7
-                0x08096f70        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x08096f76        0x2 
+                0x08096f68        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x08096f6e        0x2 
  .rodata.wave.8
-                0x08096f78       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096f70       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.vinyl.9
-                0x08096fec       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08096fe4       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.label.10
-                0x08097060        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x08097065        0x3 
+                0x08097058        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x0809705d        0x3 
  .rodata.synth.11
-                0x08097068       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097060       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.labels.12
-                0x080970dc        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080970d4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.glyphs.13
-                0x080970e8       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080970e0       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.slot_x.14
-                0x08097110        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097108        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.slot_w.15
-                0x08097118        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097110        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.slot_h.16
-                0x08097120        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097118        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.slot_y.17
-                0x08097128        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097120        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.arrow_down.18
-                0x08097130       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x08097142        0x2 
+                0x08097128       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x0809713a        0x2 
  .rodata.even_y.19
-                0x08097144        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x0809713c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.even_x.20
-                0x0809714c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097144        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.odd_y.21
-                0x08097154        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x0809714c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.odd_x.22
-                0x0809715c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097154        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.digit_y.23
-                0x08097164        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x0809715c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.digit_x.24
-                0x0809716c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097164        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.glyphs.25
-                0x08097174       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x0809716c       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.cross_y.26
-                0x0809719c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097194        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.cross_x.27
-                0x080971a4        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x0809719c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.all_active_rows.28
-                0x080971ac       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080971a4       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.sine_q7.29
-                0x0809720c       0x11 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x0809721d        0x3 
+                0x08097204       0x11 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x08097215        0x3 
  .rodata.rnd_q7.30
-                0x08097220        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097218        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.labels.31
-                0x08097228       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097220       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.k_slice_counts.32
-                0x08097240        0xe CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
- *fill*         0x0809724e        0x2 
+                0x08097238        0xe CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+ *fill*         0x08097246        0x2 
  .rodata.g_ui_template_lfo_sync_labels
-                0x08097250       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097248       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.g_ui_template_midi_note_names
-                0x0809728c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x08097284       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.g_ui_template_footer_w
-                0x080972bc        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080972b4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.g_ui_template_footer_x
-                0x080972c0        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080972b8        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.g_ui_template_frame_x
-                0x080972c4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
+                0x080972bc        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_renderer_template.c.obj
  .rodata.ui_boot_loading_render.str1.4
-                0x080972c8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x080972c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
                                  0x1a (size before relaxing)
  .rodata.k_cols.0
-                0x080972c8        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
- *fill*         0x080972cd        0x3 
+                0x080972c0        0x5 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+ *fill*         0x080972c5        0x3 
  .rodata.k_shapes.1
-                0x080972d0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x080972c8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
  .rodata.k_ui_boot_stack
-                0x080972e8       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x080972e0       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
  .rodata.k_ui_boot_logo_brick
-                0x0809733c      0x10a CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x08097334      0x10a CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
  .rodata.str1.4
-                0x08097446        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x0809743e        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
                                 0x6ec (size before relaxing)
- *fill*         0x08097446        0x2 
+ *fill*         0x0809743e        0x2 
  .rodata.k_ui_boot_loading_phrases
-                0x08097448      0x178 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
+                0x08097440      0x178 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_tasklet.c.obj
  .rodata.ui_template_page_is_subpage_selectable.str1.4
-                0x080975c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_template_page.c.obj
+                0x080975b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_template_page.c.obj
                                   0x8 (size before relaxing)
  .rodata.ui_track_catalog_family_display_name.str1.4
-                0x080975c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+                0x080975b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
                                  0x52 (size before relaxing)
  .rodata.ui_track_catalog_family_short_name.str1.4
-                0x080975c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+                0x080975b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
                                  0x28 (size before relaxing)
  .rodata.ui_track_catalog_type_display_name.str1.4
-                0x080975c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+                0x080975b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
                                  0x58 (size before relaxing)
  .rodata.ui_track_catalog_type_short_name.str1.4
-                0x080975c0        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+                0x080975b8        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
                                  0x30 (size before relaxing)
  .rodata.k_midi_types.0
-                0x080975c0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
- *fill*         0x080975c1        0x3 
+                0x080975b8        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+ *fill*         0x080975b9        0x3 
  .rodata.k_master_types.1
-                0x080975c4        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
- *fill*         0x080975c5        0x3 
+                0x080975bc        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+ *fill*         0x080975bd        0x3 
  .rodata.k_drum_types.2
+                0x080975c0        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+ *fill*         0x080975c2        0x2 
+ .rodata.k_sampler_types.3
+                0x080975c4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+ .rodata.k_synth_types.4
                 0x080975c8        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
  *fill*         0x080975ca        0x2 
- .rodata.k_sampler_types.3
-                0x080975cc        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
- .rodata.k_synth_types.4
-                0x080975d0        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
- *fill*         0x080975d2        0x2 
  .rodata.k_input_types.5
-                0x080975d4        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
+                0x080975cc        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_track_catalog.c.obj
  .rodata.uiw_draw_wave_icon.str1.4
-                0x080975d6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+                0x080975ce        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
                                  0x11 (size before relaxing)
  .rodata.uiw_draw_filter_icon.str1.4
-                0x080975d6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+                0x080975ce        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
                                  0x15 (size before relaxing)
  .rodata.uiw_draw_enum_text.str1.4
-                0x080975d6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+                0x080975ce        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
                                   0x2 (size before relaxing)
  .rodata.uiw_pick_widget_type.str1.4
-                0x080975d6        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+                0x080975ce        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
                                  0x18 (size before relaxing)
- *fill*         0x080975d6        0x2 
+ *fill*         0x080975ce        0x2 
  .rodata.indicator_y.0
-                0x080975d8       0x21 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
- *fill*         0x080975f9        0x3 
+                0x080975d0       0x21 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+ *fill*         0x080975f1        0x3 
  .rodata.indicator_x.1
-                0x080975fc       0x21 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
- *fill*         0x0809761d        0x3 
+                0x080975f4       0x21 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_widgets.c.obj
+ *fill*         0x08097615        0x3 
  .rodata._ZN6braidsL15kConstellationIE
-                0x08097620       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097618       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL15kConstellationQE
-                0x08097630       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097628       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL6chordsE
-                0x08097640       0x66 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080976a6        0x2 
+                0x08097638       0x66 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x0809769e        0x2 
  .rodata._ZN6braidsL14mini_wave_lineE
-                0x080976a8       0x21 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080976c9        0x3 
+                0x080976a0       0x21 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080976c1        0x3 
  .rodata._ZN6braidsL9wave_lineE
-                0x080976cc       0x40 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x080976c4       0x40 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL21wavetable_definitionsE
-                0x0809770c      0x168 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097704      0x168 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL22kDrumPartialDecayShortE
-                0x08097874        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x0809786c        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL21kDrumPartialDecayLongE
-                0x08097880        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097878        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL21kDrumPartialAmplitudeE
-                0x0809788c        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097884        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL13kDrumPartialsE
-                0x08097898        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097890        0xc CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL22kBellPartialDecayShortE
-                0x080978a4       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080978ba        0x2 
+                0x0809789c       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080978b2        0x2 
  .rodata._ZN6braidsL21kBellPartialDecayLongE
-                0x080978bc       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080978d2        0x2 
+                0x080978b4       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080978ca        0x2 
  .rodata._ZN6braidsL22kBellPartialAmplitudesE
-                0x080978d4       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080978ea        0x2 
+                0x080978cc       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080978e2        0x2 
  .rodata._ZN6braidsL13kBellPartialsE
-                0x080978ec       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x08097902        0x2 
+                0x080978e4       0x16 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080978fa        0x2 
  .rodata._ZN6braidsL14formant_a_dataE
-                0x08097904       0xfa CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x080979fe        0x2 
+                0x080978fc       0xfa CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x080979f6        0x2 
  .rodata._ZN6braidsL14formant_f_dataE
-                0x08097a00       0xfa CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x08097afa        0x2 
+                0x080979f8       0xfa CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x08097af2        0x2 
  .rodata._ZN6braidsL14consonant_dataE
-                0x08097afc       0x30 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097af4       0x30 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL11vowels_dataE
-                0x08097b2c       0x36 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
- *fill*         0x08097b62        0x2 
+                0x08097b24       0x36 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+ *fill*         0x08097b5a        0x2 
  .rodata._ZN6braidsL11kPhaseResetE
-                0x08097b64       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097b5c       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata._ZN6braidsL17kFIR4CoefficientsE
-                0x08097b74       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x08097b6c       0x10 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
  .rodata.CSWTCH.56
-                0x08097b84        0x3 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
- *fill*         0x08097b87        0x1 
+                0x08097b7c        0x3 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
+ *fill*         0x08097b7f        0x1 
  .rodata._ZN6braidsL9intervalsE
-                0x08097b88       0x82 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
- *fill*         0x08097c0a        0x2 
+                0x08097b80       0x82 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
+ *fill*         0x08097c02        0x2 
  .rodata._ZN6braids7wt_codeE
-                0x08097c0c      0x428 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x08097c0c                braids::wt_code
+                0x08097c04      0x428 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x08097c04                braids::wt_code
  .rodata._ZN6braids6wt_mapE
-                0x08098034      0x100 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x08098034                braids::wt_map
+                0x0809802c      0x100 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x0809802c                braids::wt_map
  .rodata._ZN6braids8wt_wavesE
-                0x08098134     0x8100 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x08098134                braids::wt_waves
+                0x0809812c     0x8100 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x0809812c                braids::wt_waves
  .rodata._ZN6braids11ws_tri_foldE
-                0x080a0234      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0234                braids::ws_tri_fold
- *fill*         0x080a0436        0x2 
+                0x080a022c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a022c                braids::ws_tri_fold
+ *fill*         0x080a042e        0x2 
  .rodata._ZN6braids12ws_sine_foldE
-                0x080a0438      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0438                braids::ws_sine_fold
- *fill*         0x080a063a        0x2 
+                0x080a0430      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0430                braids::ws_sine_fold
+ *fill*         0x080a0632        0x2 
  .rodata._ZN6braids20ws_violent_overdriveE
-                0x080a063c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a063c                braids::ws_violent_overdrive
- *fill*         0x080a083e        0x2 
+                0x080a0634      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0634                braids::ws_violent_overdrive
+ *fill*         0x080a0836        0x2 
  .rodata._ZN6braids21ws_moderate_overdriveE
-                0x080a0840      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0840                braids::ws_moderate_overdrive
- *fill*         0x080a0a42        0x2 
+                0x080a0838      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0838                braids::ws_moderate_overdrive
+ *fill*         0x080a0a3a        0x2 
  .rodata._ZN6braids23wav_bandlimited_comb_14E
-                0x080a0a44      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0a44                braids::wav_bandlimited_comb_14
- *fill*         0x080a0c46        0x2 
+                0x080a0a3c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0a3c                braids::wav_bandlimited_comb_14
+ *fill*         0x080a0c3e        0x2 
  .rodata._ZN6braids23wav_bandlimited_comb_13E
-                0x080a0c48      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0c48                braids::wav_bandlimited_comb_13
- *fill*         0x080a0e4a        0x2 
+                0x080a0c40      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0c40                braids::wav_bandlimited_comb_13
+ *fill*         0x080a0e42        0x2 
  .rodata._ZN6braids23wav_bandlimited_comb_12E
-                0x080a0e4c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a0e4c                braids::wav_bandlimited_comb_12
- *fill*         0x080a104e        0x2 
+                0x080a0e44      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a0e44                braids::wav_bandlimited_comb_12
+ *fill*         0x080a1046        0x2 
  .rodata._ZN6braids23wav_bandlimited_comb_11E
-                0x080a1050      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1050                braids::wav_bandlimited_comb_11
- *fill*         0x080a1252        0x2 
+                0x080a1048      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1048                braids::wav_bandlimited_comb_11
+ *fill*         0x080a124a        0x2 
  .rodata._ZN6braids23wav_bandlimited_comb_10E
-                0x080a1254      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1254                braids::wav_bandlimited_comb_10
- *fill*         0x080a1456        0x2 
+                0x080a124c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a124c                braids::wav_bandlimited_comb_10
+ *fill*         0x080a144e        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_9E
-                0x080a1458      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1458                braids::wav_bandlimited_comb_9
- *fill*         0x080a165a        0x2 
+                0x080a1450      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1450                braids::wav_bandlimited_comb_9
+ *fill*         0x080a1652        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_8E
-                0x080a165c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a165c                braids::wav_bandlimited_comb_8
- *fill*         0x080a185e        0x2 
+                0x080a1654      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1654                braids::wav_bandlimited_comb_8
+ *fill*         0x080a1856        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_7E
-                0x080a1860      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1860                braids::wav_bandlimited_comb_7
- *fill*         0x080a1a62        0x2 
+                0x080a1858      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1858                braids::wav_bandlimited_comb_7
+ *fill*         0x080a1a5a        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_6E
-                0x080a1a64      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1a64                braids::wav_bandlimited_comb_6
- *fill*         0x080a1c66        0x2 
+                0x080a1a5c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1a5c                braids::wav_bandlimited_comb_6
+ *fill*         0x080a1c5e        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_5E
-                0x080a1c68      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1c68                braids::wav_bandlimited_comb_5
- *fill*         0x080a1e6a        0x2 
+                0x080a1c60      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1c60                braids::wav_bandlimited_comb_5
+ *fill*         0x080a1e62        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_4E
-                0x080a1e6c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a1e6c                braids::wav_bandlimited_comb_4
- *fill*         0x080a206e        0x2 
+                0x080a1e64      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a1e64                braids::wav_bandlimited_comb_4
+ *fill*         0x080a2066        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_3E
-                0x080a2070      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2070                braids::wav_bandlimited_comb_3
- *fill*         0x080a2272        0x2 
+                0x080a2068      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2068                braids::wav_bandlimited_comb_3
+ *fill*         0x080a226a        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_2E
-                0x080a2274      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2274                braids::wav_bandlimited_comb_2
- *fill*         0x080a2476        0x2 
+                0x080a226c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a226c                braids::wav_bandlimited_comb_2
+ *fill*         0x080a246e        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_1E
-                0x080a2478      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2478                braids::wav_bandlimited_comb_1
- *fill*         0x080a267a        0x2 
+                0x080a2470      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2470                braids::wav_bandlimited_comb_1
+ *fill*         0x080a2672        0x2 
  .rodata._ZN6braids22wav_bandlimited_comb_0E
-                0x080a267c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a267c                braids::wav_bandlimited_comb_0
- *fill*         0x080a287e        0x2 
+                0x080a2674      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2674                braids::wav_bandlimited_comb_0
+ *fill*         0x080a2876        0x2 
  .rodata._ZN6braids8wav_sineE
-                0x080a2880      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2880                braids::wav_sine
- *fill*         0x080a2a82        0x2 
+                0x080a2878      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2878                braids::wav_sine
+ *fill*         0x080a2a7a        0x2 
  .rodata._ZN6braids18wav_formant_squareE
-                0x080a2a84      0x200 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2a84                braids::wav_formant_square
+                0x080a2a7c      0x200 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2a7c                braids::wav_formant_square
  .rodata._ZN6braids16wav_formant_sineE
-                0x080a2c84      0x200 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2c84                braids::wav_formant_sine
+                0x080a2c7c      0x200 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2c7c                braids::wav_formant_sine
  .rodata._ZN6braids21lut_oscillator_delaysE
-                0x080a2e84      0x184 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a2e84                braids::lut_oscillator_delays
+                0x080a2e7c      0x184 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a2e7c                braids::lut_oscillator_delays
  .rodata._ZN6braids25lut_oscillator_incrementsE
-                0x080a3008      0x184 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a3008                braids::lut_oscillator_increments
+                0x080a3000      0x184 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a3000                braids::lut_oscillator_increments
  .rodata._ZN6braids8lut_bellE
-                0x080a318c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a318c                braids::lut_bell
- *fill*         0x080a338e        0x2 
+                0x080a3184      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a3184                braids::lut_bell
+ *fill*         0x080a3386        0x2 
  .rodata._ZN6braids26lut_fm_frequency_quantizerE
-                0x080a3390      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a3390                braids::lut_fm_frequency_quantizer
- *fill*         0x080a3492        0x2 
+                0x080a3388      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a3388                braids::lut_fm_frequency_quantizer
+ *fill*         0x080a348a        0x2 
  .rodata._ZN6braids20lut_blowing_envelopeE
-                0x080a3494      0x310 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a3494                braids::lut_blowing_envelope
+                0x080a348c      0x310 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a348c                braids::lut_blowing_envelope
  .rodata._ZN6braids19lut_bowing_frictionE
-                0x080a37a4      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a37a4                braids::lut_bowing_friction
- *fill*         0x080a39a6        0x2 
+                0x080a379c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a379c                braids::lut_bowing_friction
+ *fill*         0x080a399e        0x2 
  .rodata._ZN6braids19lut_bowing_envelopeE
-                0x080a39a8      0x5e0 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a39a8                braids::lut_bowing_envelope
+                0x080a39a0      0x5e0 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a39a0                braids::lut_bowing_envelope
  .rodata._ZN6braids26lut_granular_envelope_rateE
-                0x080a3f88      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a3f88                braids::lut_granular_envelope_rate
- *fill*         0x080a418a        0x2 
+                0x080a3f80      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a3f80                braids::lut_granular_envelope_rate
+ *fill*         0x080a4182        0x2 
  .rodata._ZN6braids21lut_granular_envelopeE
-                0x080a418c      0x402 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a418c                braids::lut_granular_envelope
- *fill*         0x080a458e        0x2 
+                0x080a4184      0x402 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a4184                braids::lut_granular_envelope
+ *fill*         0x080a4586        0x2 
  .rodata._ZN6braids13lut_svf_scaleE
-                0x080a4590      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a4590                braids::lut_svf_scale
- *fill*         0x080a4792        0x2 
+                0x080a4588      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a4588                braids::lut_svf_scale
+ *fill*         0x080a478a        0x2 
  .rodata._ZN6braids12lut_svf_dampE
-                0x080a4794      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a4794                braids::lut_svf_damp
- *fill*         0x080a4996        0x2 
+                0x080a478c      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a478c                braids::lut_svf_damp
+ *fill*         0x080a498e        0x2 
  .rodata._ZN6braids14lut_svf_cutoffE
-                0x080a4998      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a4998                braids::lut_svf_cutoff
- *fill*         0x080a4b9a        0x2 
+                0x080a4990      0x202 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a4990                braids::lut_svf_cutoff
+ *fill*         0x080a4b92        0x2 
  .rodata._ZN6braids19lut_resonator_scaleE
-                0x080a4b9c      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a4b9c                braids::lut_resonator_scale
- *fill*         0x080a4c9e        0x2 
+                0x080a4b94      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a4b94                braids::lut_resonator_scale
+ *fill*         0x080a4c96        0x2 
  .rodata._ZN6braids25lut_resonator_coefficientE
-                0x080a4ca0      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x080a4ca0                braids::lut_resonator_coefficient
- *fill*         0x080a4da2        0x2 
+                0x080a4c98      0x102 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x080a4c98                braids::lut_resonator_coefficient
+ *fill*         0x080a4d9a        0x2 
  .rodata._ZN6stmlib19lut_pitch_ratio_lowE
-                0x080a4da4      0x404 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/dsp/units.cc.obj
-                0x080a4da4                stmlib::lut_pitch_ratio_low
+                0x080a4d9c      0x404 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/dsp/units.cc.obj
+                0x080a4d9c                stmlib::lut_pitch_ratio_low
  .rodata._ZN6stmlib20lut_pitch_ratio_highE
-                0x080a51a8      0x404 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/dsp/units.cc.obj
-                0x080a51a8                stmlib::lut_pitch_ratio_high
- .rodata.tiny   0x080a55ac        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
- .rodata.two    0x080a55b0        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
- .rodata.one    0x080a55b4        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
+                0x080a51a0      0x404 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/dsp/units.cc.obj
+                0x080a51a0                stmlib::lut_pitch_ratio_high
+ .rodata.tiny   0x080a55a4        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
+ .rodata.two    0x080a55a8        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
+ .rodata.one    0x080a55ac        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_tanh.o)
  .rodata.__exp2f_data
-                0x080a55b8      0x148 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_exp2_data.o)
-                0x080a55b8                __exp2f_data
+                0x080a55b0      0x148 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_exp2_data.o)
+                0x080a55b0                __exp2f_data
  .rodata.__logf_data
-                0x080a5700      0x120 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_log_data.o)
-                0x080a5700                __logf_data
+                0x080a56f8      0x120 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_log_data.o)
+                0x080a56f8                __logf_data
  .rodata.__inv_pio4
-                0x080a5820       0x60 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sincosf_data.o)
-                0x080a5820                __inv_pio4
+                0x080a5818       0x60 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sincosf_data.o)
+                0x080a5818                __inv_pio4
  .rodata.__sincosf_table
-                0x080a5880       0xe0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sincosf_data.o)
-                0x080a5880                __sincosf_table
+                0x080a5878       0xe0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sincosf_data.o)
+                0x080a5878                __sincosf_table
  .rodata.__powf_log2_data
-                0x080a5960      0x128 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_pow_log2_data.o)
-                0x080a5960                __powf_log2_data
+                0x080a5958      0x128 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libm.a(libm_a-sf_pow_log2_data.o)
+                0x080a5958                __powf_log2_data
  .rodata._ctype_
-                0x080a5a88      0x101 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-ctype_.o)
-                0x080a5a88                _ctype_
+                0x080a5a80      0x101 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-ctype_.o)
+                0x080a5a80                _ctype_
  .rodata._printf_float.str1.1
-                0x080a5b89      0x171 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf_float.o)
+                0x080a5b81      0x171 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf_float.o)
                                  0x12 (size before relaxing)
  .rodata._printf_i.str1.1
-                0x080a5cfa        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf_i.o)
+                0x080a5cf2        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf_i.o)
                                  0x22 (size before relaxing)
  .rodata._dtoa_r.str1.1
-                0x080a5cfa        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-dtoa.o)
+                0x080a5cf2        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-dtoa.o)
                                  0x8f (size before relaxing)
  .rodata._Balloc.str1.1
-                0x080a5cfa        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
+                0x080a5cf2        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
                                  0x70 (size before relaxing)
  .rodata.__multadd.str1.1
-                0x080a5cfa        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
+                0x080a5cf2        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
                                  0x11 (size before relaxing)
- *fill*         0x080a5cfa        0x2 
- .rodata.p05.0  0x080a5cfc        0xc C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
+ *fill*         0x080a5cf2        0x2 
+ .rodata.p05.0  0x080a5cf4        0xc C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
  .rodata.__mprec_bigtens
-                0x080a5d08       0x28 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
-                0x080a5d08                __mprec_bigtens
+                0x080a5d00       0x28 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
+                0x080a5d00                __mprec_bigtens
  .rodata.__mprec_tens
-                0x080a5d30       0xc8 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
-                0x080a5d30                __mprec_tens
+                0x080a5d28       0xc8 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mprec.o)
+                0x080a5d28                __mprec_tens
  .rodata._svfprintf_r.str1.1
-                0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-svfprintf.o)
+                0x080a5df0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-svfprintf.o)
                                  0x11 (size before relaxing)
  .rodata._vfprintf_r.str1.1
-                0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf.o)
+                0x080a5df0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-nano-vfprintf.o)
                                  0x11 (size before relaxing)
  .rodata._setlocale_r.str1.1
-                0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
+                0x080a5df0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
                                   0x9 (size before relaxing)
  .rodata.str1.1
-                0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
+                0x080a5df0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
                                   0x2 (size before relaxing)
  .rodata.__assert_func.str1.1
-                0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-assert.o)
+                0x080a5df0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-assert.o)
                                  0x3d (size before relaxing)
-                0x080a5df8                        . = ALIGN (0x4)
+                0x080a5df0                        . = ALIGN (0x4)
 
 .ARM.extab
  *(.ARM.extab* .gnu.linkonce.armextab.*)
 
-.ARM            0x080a5df8        0x8
-                0x080a5df8                        __exidx_start = .
+.ARM            0x080a5df0        0x8
+                0x080a5df0                        __exidx_start = .
  *(.ARM.exidx*)
- .ARM.exidx     0x080a5df8        0x8 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-strcmp.o)
- .ARM.exidx     0x080a5e00        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-memchr.o)
+ .ARM.exidx     0x080a5df0        0x8 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-strcmp.o)
+ .ARM.exidx     0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-memchr.o)
                                   0x8 (size before relaxing)
- .ARM.exidx     0x080a5e00        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-strlen.o)
+ .ARM.exidx     0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-strlen.o)
                                   0x8 (size before relaxing)
- .ARM.exidx     0x080a5e00        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard\libgcc.a(_udivmoddi4.o)
+ .ARM.exidx     0x080a5df8        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard\libgcc.a(_udivmoddi4.o)
                                   0x8 (size before relaxing)
-                0x080a5e00                        __exidx_end = .
+                0x080a5df8                        __exidx_end = .
 
-.preinit_array  0x080a5e00        0x0
-                0x080a5e00                        PROVIDE (__preinit_array_start = .)
+.preinit_array  0x080a5df8        0x0
+                0x080a5df8                        PROVIDE (__preinit_array_start = .)
  *(.preinit_array*)
-                0x080a5e00                        PROVIDE (__preinit_array_end = .)
+                0x080a5df8                        PROVIDE (__preinit_array_end = .)
 
-.init_array     0x080a5e00        0x8
-                0x080a5e00                        PROVIDE (__init_array_start = .)
+.init_array     0x080a5df8        0x8
+                0x080a5df8                        PROVIDE (__init_array_start = .)
  *(SORT_BY_NAME(.init_array.*))
  *(.init_array*)
- .init_array    0x080a5e00        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
- .init_array    0x080a5e04        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_reverb_revb.cpp.obj
-                0x080a5e08                        PROVIDE (__init_array_end = .)
+ .init_array    0x080a5df8        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
+ .init_array    0x080a5dfc        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_reverb_revb.cpp.obj
+                0x080a5e00                        PROVIDE (__init_array_end = .)
 
-.fini_array     0x080a5e08        0x4
+.fini_array     0x080a5e00        0x4
                 [!provide]                        PROVIDE (__fini_array_start = .)
  *(SORT_BY_NAME(.fini_array.*))
  *(.fini_array*)
- .fini_array    0x080a5e08        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
+ .fini_array    0x080a5e00        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
                 [!provide]                        PROVIDE (__fini_array_end = .)
 
-.rel.dyn        0x080a5e0c        0x0
- .rel.iplt      0x080a5e0c        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
+.rel.dyn        0x080a5e04        0x0
+ .rel.iplt      0x080a5e04        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
 
 .boot_context_flash
                 0x081c0000        0x0
                 0x081c0000                        . = ALIGN (0x20)
                 0x081c0000                        . = ALIGN (0x20)
-                0x080a5e0c                        _sidata = LOADADDR (.data)
+                0x080a5e04                        _sidata = LOADADDR (.data)
 
-.data           0x24000000      0x9fc load address 0x080a5e0c
+.data           0x24000000      0x9fc load address 0x080a5e04
                 0x24000000                        . = ALIGN (0x4)
                 0x24000000                        _sdata = .
  *(.data)
@@ -28936,11 +28936,11 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x240009fc                        . = ALIGN (0x4)
                 0x240009fc                        _edata = .
 
-.igot.plt       0x240009fc        0x0 load address 0x080a6808
+.igot.plt       0x240009fc        0x0 load address 0x080a6800
  .igot.plt      0x240009fc        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
                 0x240009fc                        . = ALIGN (0x4)
 
-.bss            0x24000a00    0x45de4 load address 0x080a6808
+.bss            0x24000a00    0x45de4 load address 0x080a6800
                 0x24000a00                        _sbss = .
                 0x24000a00                        __bss_start__ = _sbss
  *(.bss)
@@ -30002,7 +30002,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x240467e4                        _ebss = .
                 0x240467e4                        __bss_end__ = _ebss
 
-.ram_d1         0x24046800    0x273c0 load address 0x080a6808
+.ram_d1         0x24046800    0x273c0 load address 0x080a6800
                 0x24046800                        . = ALIGN (0x20)
  *(.ram_d1)
  *(.ram_d1*)

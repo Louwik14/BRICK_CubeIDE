@@ -138,8 +138,8 @@ This separation is intentional. Do not add a second authority for the same state
 ### Stack
 - `Synth/Stack` is a separate mono engine from `Synth/Wave`; Wave remains the historical Braids runtime.
 - Stack exposes three independent oscillator slots plus noise through `TONE`.
-- `TONE/COMM`: `OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`.
 - `TONE/OSC1..OSC3`: `MODEL`, `PARAM1`, `PARAM2`, `PARAM3` per slot, with model-aware labels.
+- `TONE/LVL`: `OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`.
 - `TONE 2/2`: `TUNE` exposes `OSC DETUNE`, `TUNE 1`, `TUNE 2`, `TUNE 3`; `PHASE` exposes `RESET`.
 - Stack models: `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`, `TRIFD`.
 - `SINFD` / `TRIFD`: `FOLD`, `SYM`, `SHAPE`; `SOFT` is no longer an active Stack model.

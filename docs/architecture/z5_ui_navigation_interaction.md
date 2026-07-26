@@ -1015,7 +1015,7 @@ Points factuels:
 
 ## Addendum 2026-07-25 - pages TONE Stack
 
-- Le type `Synth/Stack` possede une surface TONE dediee en quatre pages: `COMM` (`OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`), puis `OSC1`, `OSC2`, `OSC3` avec `MODEL`, `TUNE`, `TIMBRE`, `COLOR`.
+- Le type `Synth/Stack` possede une surface TONE dediee en quatre pages: `OSC1`, `OSC2`, `OSC3` avec `MODEL`, `TUNE`, `TIMBRE`, `COLOR`, puis `LVL` (`OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`).
 - Les labels affiches pour `TIMBRE` et `COLOR` sont resolus dynamiquement selon le modele du slot Stack courant; les labels Wave continuent d'utiliser le resolveur Braids historique.
 - `MODEL` Stack utilise un widget enum texte et reste distinct du parametre `MODEL` Wave historique.
 
@@ -1044,7 +1044,7 @@ Points factuels:
 ## Addendum 2026-07-25 - page VOICE Stack
 
 - `Synth/Stack` alterne `TONE 1/2` et la page `VOICE` par pression repetee du bouton TONE.
-- `TONE 1/2` conserve les pages `COMM`, `OSC1`, `OSC2`, `OSC3`.
+- `TONE 1/2` conserve les pages `OSC1`, `OSC2`, `OSC3`, `LVL`.
 - La page `VOICE` expose uniquement `OSC DETUNE` et `RESET`, avec deux emplacements vides conserves par le style template existant. Aucune page `OSC1+`, `OSC2+`, `OSC3+`, aucun `SPREAD` Stack et aucun parametre de nombre de voix ne sont exposes.
 - Wave conserve ses pages `EDIT` et `TONE` historiques.
 
@@ -1073,7 +1073,7 @@ Points factuels:
 ## Addendum 2026-07-26 - TONE Stack 2 pages Fold
 
 - `Synth/Stack` alterne maintenant `TONE 1/2` et `TONE 2/2`.
-- `TONE 1/2`: `COMM` reste `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`; `OSC1..OSC3` exposent `PARAM1/PARAM2/PARAM3/MODEL` via les IDs `TIMBRE/COLOR/PARAM3/MODEL`.
+- `TONE 1/2`: `OSC1..OSC3` exposent `PARAM1/PARAM2/PARAM3/MODEL` via les IDs `TIMBRE/COLOR/PARAM3/MODEL`; `LVL` expose `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`.
 - `TONE 2/2`: page `TUNE` expose `TUNE 1`, `TUNE 2`, `TUNE 3`, `OSC DT`; page `PHASE` expose `RESET`.
 - Les labels dynamiques Stack affichent `SINFD` et `TRIFD` avec `FOLD/SYM/SHAPE`; `SOFT` n'est plus un modele Stack actif.
 - La preview waveform Stack reutilise `brick6_stack_waveform` pour `SHAPE`, `SINFD` et `TRIFD`; le cache UI inclut maintenant `PARAM3`.
