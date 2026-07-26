@@ -937,9 +937,9 @@ Clarification START/END/LOOP live:
 
 ## Addendum 2026-07-25 - modeles complexes Stack
 
-- Les modeles Stack `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` ont maintenant des renderers locaux jouables, avec phases auxiliaires, feedback et lissage minimal portes par `stack_osc_slot_t`.
+- Les modeles Stack `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` ont maintenant des renderers locaux jouables, avec phases auxiliaires et feedback portes par `stack_osc_slot_t`.
 - Ces modeles utilisent le dispatch Stack resolu par slot et restent sans instance complete `MacroOscillator` ou `DigitalOscillator`; Wave/Braids conserve son runtime historique separe.
-- `SUB` mixe un principal saw/square avec un sub divise, `FM` et `FEEDBACK FM` utilisent `TIMBRE` pour l'index et `COLOR` pour le ratio, `RING` emploie deux modulateurs detunes, `TRIPLE SAW/SQUARE` utilisent `TIMBRE` et `COLOR` comme detunes osc 2/3, et `SWARM` ajoute un ensemble saw filtre local.
+- `SUB` mixe un principal saw/square avec un sub divise, `FM` et `FEEDBACK FM` utilisent `TIMBRE` pour l'index et `COLOR` pour le ratio, `RING` emploie deux modulateurs detunes, `TRIPLE SAW/SQUARE` utilisent `TIMBRE` et `COLOR` comme detunes osc 2/3, et `SWARM` reste un ensemble saw detune simple.
 
 ## Addendum 2026-07-25 - VOICE Stack osc detune/reset
 
@@ -949,16 +949,16 @@ Clarification START/END/LOOP live:
 
 ## Addendum 2026-07-25 - declick retrigger Stack FREE
 
-- Stack ne pre-rend plus de surplus au-dela des frames demandees par le segment audio courant: le cache 24 samples reste local au chunk en cours et ne laisse plus l'etat phase/feedback/swarm avance en avance sur les samples deja sortis.
-- En `RESET=FREE`, le note-on Stack conserve les phases principales, phases auxiliaires, feedback, filtre swarm et offsets `OSC DETUNE`; aucun de ces etats n'est regenere ou nettoye au retrigger.
-- En `RESET=RESET`, le note-on conserve le comportement volontaire de redemarrage: phases par slot remises aux valeurs deterministes, feedback/swarm clear et offsets `OSC DETUNE` regeneres.
+- Stack ne pre-rend plus de surplus au-dela des frames demandees par le segment audio courant: le cache 24 samples reste local au chunk en cours et ne laisse plus l'etat phase/feedback avancer en avance sur les samples deja sortis.
+- En `RESET=FREE`, le note-on Stack conserve les phases principales, phases auxiliaires, feedback et offsets `OSC DETUNE`; aucun de ces etats n'est regenere ou nettoye au retrigger.
+- En `RESET=RESET`, le note-on conserve le comportement volontaire de redemarrage: phases par slot remises aux valeurs deterministes, feedback clear et offsets `OSC DETUNE` regeneres.
 - Le changement de `MODEL` Stack est idempotent sur meme modele, afin qu'un reapply/p-lock identique ne reset pas phase/etats de kernel inutilement.
 
 ## Addendum 2026-07-26 - Stack FREE free-running
 
-- En `RESET=FREE`, Stack avance les phases principales et auxiliaires des trois slots pendant `gate=off`, sans rendu modele complet, sans bruit, sans feedback FM, sans filtre swarm et sans audio mixer utile.
+- En `RESET=FREE`, Stack avance les phases principales et auxiliaires des trois slots pendant `gate=off`, sans rendu modele complet, sans bruit, sans feedback FM et sans audio mixer utile.
 - Chaque slot utilise le meme increment que son renderer actif: `phase_inc` du slot pour les phases principales, et les increments derives locaux pour wavetable, sub, FM, ring, triple et swarm. Les offsets `OSC DETUNE` deja projetes dans `phase_inc` continuent donc a faire deriver les slots pendant le silence.
-- En `RESET=RESET`, ce chemin free-running est coupe; le note-on continue de reset phases, feedback/swarm et offsets `OSC DETUNE` comme avant.
+- En `RESET=RESET`, ce chemin free-running est coupe; le note-on continue de reset phases, feedback et offsets `OSC DETUNE` comme avant.
 
 ## Addendum 2026-07-26 - Stack SINFD/TRIFD
 
@@ -966,3 +966,10 @@ Clarification START/END/LOOP live:
 - Leur wavefolder est factorise dans `brick6_stack_waveform`: `FOLD=0` retourne strictement la base clean; `SYM` ajoute un offset de fold dependant de `FOLD`; `SHAPE` arrondit le repli via la LUT sine Stack apres un miroir borne.
 - Aucun `sinf`, `tanhf`, `powf`, oversampling, filtre correctif, allocation ou acces Wave/Braids n'est ajoute dans le chemin sample Stack.
 - `SOFT` n'est plus un modele Stack actif: l'ancien slot enum 0 est remplace par `SINFD`. Les autres modeles Stack gardent leurs renderers et mappings sonores.
+
+## Addendum 2026-07-26 - Stack renderers simples faible CPU
+
+- Les calibrations loudness/Braids-like propres a Stack sont retirees des renderers locaux non-Wave: `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` utilisent des moyennes simples de trois oscillateurs; `SWARM` n'a plus de filtre local ni de cinq lectures saw.
+- `WAVETABLE` Stack lit une seule table selectionnee par `TIMBRE` dans la banque choisie par `COLOR`: plus de double demi-increment, moyenne ou crossfade de waves dans le chemin sample.
+- `SUB`, `FM`, `FEEDBACK FM`, `RING` et `SHAPE` gardent des formules Stack directes: balance sub lineaire, profondeur FM sans boost de phase, feedback FM borne par multiplication simple du sample precedent, ring en multiplication Q15, square/PWM sans gain Braids.
+- Le mix energie/levels, le soft clip de sortie Stack, la sine interpolee en `int64_t`, `SINFD/TRIFD`, `PARAM3` et la surface UI TONE Stack restent les autorites courantes; Wave/Braids historique reste separe.

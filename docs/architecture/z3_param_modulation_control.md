@@ -800,7 +800,8 @@ Dette explicite post-passe 4:
 
 - Les `PARAM_STACK_OSC*_TUNE` stockent maintenant la valeur en centiemes de demi-ton via un `step=0.01`; le pas coarse `1.0` est une policy UI Z5, pas la resolution catalogue.
 - Le runtime Stack consomme ce pitch comme cents par slot oscillator et ne quantize plus la base Stack au demi-ton; les p-locks TONE encodent donc les valeurs fines exactes selon le step catalogue.
-- Wave/Braids garde `PARAM_WAVE_FINE` et `PARAM_WAVE_COARSE` inchanges.
+- Wave/Braids garde le stockage interne `PARAM_WAVE_FINE` et `PARAM_WAVE_COARSE`; Z5 expose cependant un controle Wave `TUNE` unifie sur `PARAM_WAVE_COARSE`.
+- Pour ce controle UI, la valeur visible combine `COARSE + FINE`, l'edition directe remet `FINE` au neutre `0.5`, et l'encodage p-lock de `PARAM_WAVE_COARSE` conserve la resolution fine du controle unifie.
 
 ## Addendum 2026-07-26 - PARAM3 Stack et modeles Fold
 
@@ -808,3 +809,8 @@ Dette explicite post-passe 4:
 - `track_tone_sound_state.stack` porte `param3[3]`; `PARAM_STACK_OSC*_PARAM3` est ajoute au layout `PARAM_COUNT`, reapply via `brick6_stack_runtime_submit_slot_param3()` et destination continue Matrix/LFO comme `TIMBRE/COLOR`.
 - `PARAM_STACK_OSC*_MODEL` est borne a `0..10`: `SOFT` n'est plus actif, l'ancien index 0 devient `SINFD`, et `TRIFD` est ajoute comme second moteur fold dedie.
 - Pour `SINFD` et `TRIFD`, les labels modele sont `FOLD` / `SYM` / `SHAPE`; les autres modeles ne consomment pas `PARAM3` dans le runtime audio.
+
+## Addendum 2026-07-26 - LINK choix structurels et filtre
+
+- LINK voice group propage maintenant les choix discrets `PARAM_FILTER_TYPE`, `PARAM_CFG_TRACK` et `PARAM_CFG_TRACK_TYPE` par valeur absolue source apres clamp, pas par delta relatif.
+- Les autres params LINK existants restent sur leur propagation relative bornee; les exclusions `PLAY`, p-locks, scheduler, automation, SPREAD/LINK et selecteurs Matrix restent inchangees.

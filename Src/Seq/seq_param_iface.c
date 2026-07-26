@@ -854,6 +854,20 @@ seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
 
     const param_desc_t *const desc = &param_registry[param];
     float clamped = value;
+
+    if (param == PARAM_WAVE_COARSE)
+    {
+        if (clamped < 0.0f)
+        {
+            clamped = 0.0f;
+        }
+        if (clamped > 1.0f)
+        {
+            clamped = 1.0f;
+        }
+        return (seq_value16_t)(clamped * 4800.0f + 0.5f);
+    }
+
     if (clamped < desc->min)
     {
         clamped = desc->min;
@@ -891,6 +905,21 @@ float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16
     }
 
     const param_desc_t *const desc = &param_registry[param];
+
+    if (param == PARAM_WAVE_COARSE)
+    {
+        float value = (float)value16 / 4800.0f;
+        if (value < 0.0f)
+        {
+            value = 0.0f;
+        }
+        if (value > 1.0f)
+        {
+            value = 1.0f;
+        }
+        return value;
+    }
+
     float step = desc->step;
     if (step <= 0.0f)
     {

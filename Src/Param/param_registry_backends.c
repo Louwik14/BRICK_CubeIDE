@@ -227,6 +227,10 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.coarse = clamped;
             }
+            else
+            {
+                brick6_braids_runtime_set_fine(instance_id, 0.5f);
+            }
             brick6_braids_runtime_set_coarse(instance_id, clamped);
             return 1U;
         }

@@ -8,6 +8,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_templat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:452:12:ui_renderer_template_center_x	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:918:13:ui_renderer_template_draw_lfo_baseline	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:514:13:ui_renderer_template_draw_brick_frame	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:2010:13:ui_renderer_template_draw_cfg_synth_icon	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:2110:13:ui_renderer_template_draw_cfg_drum_icon	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1960:13:ui_renderer_template_draw_cfg_midi_icon	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:1836:13:ui_renderer_template_draw_cfg_input_icon	24	static
@@ -35,4 +36,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_templat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:207:6:ui_format_param_127_00	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:231:13:ui_renderer_template_format_value	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:639:13:ui_renderer_template_build_param_text	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:4166:6:ui_renderer_template_draw	416	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:4172:6:ui_renderer_template_draw	416	static

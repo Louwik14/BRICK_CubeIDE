@@ -77,10 +77,10 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
 
 static const ui_template_family_t g_ui_template_tone_family_wave = {
     .family_title = "TONE",
-    .nav_labels = { "EDIT", "TONE", "-", "-" },
+    .nav_labels = { "VOICE", "EDIT", "-", "-" },
     .subpages = {
-        { .title = "EDIT", .param_bank = { .params = { PARAM_WAVE_EDIT, PARAM_WAVE_FINE, PARAM_WAVE_COARSE, PARAM_WAVE_FM } } },
-        { .title = "TONE", .param_bank = { .params = { PARAM_WAVE_TIMBRE, PARAM_WAVE_MODULATION, PARAM_WAVE_COLOR, PARAM_WAVE_PHASE_RESET } } },
+        { .title = "VOICE", .param_bank = { .params = { PARAM_WAVE_TIMBRE, PARAM_WAVE_COLOR, PARAM_WAVE_MODULATION, PARAM_WAVE_EDIT } } },
+        { .title = "EDIT", .param_bank = { .params = { PARAM_WAVE_COARSE, PARAM_WAVE_FM, PARAM_WAVE_PHASE_RESET, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -92,9 +92,9 @@ static const ui_template_family_t g_ui_template_tone_family_stack = {
     .nav_labels = { "COMM", "OSC1", "OSC2", "OSC3" },
     .subpages = {
         { .title = "COMM", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
-        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_PARAM3 } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_PARAM3 } } },
-        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_PARAM3 } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_PARAM3, PARAM_STACK_OSC1_MODEL } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_PARAM3, PARAM_STACK_OSC2_MODEL } } },
+        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_PARAM3, PARAM_STACK_OSC3_MODEL } } },
     },
     .default_subpage = 0U,
 };
@@ -103,7 +103,7 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .family_title = "TONE 2/2",
     .nav_labels = { "TUNE", "PHASE", "-", "-" },
     .subpages = {
-        { .title = "TUNE", .param_bank = { .params = { PARAM_STACK_OSC_DETUNE, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC3_TUNE } } },
+        { .title = "TUNE", .param_bank = { .params = { PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC3_TUNE, PARAM_STACK_OSC_DETUNE } } },
         { .title = "PHASE", .param_bank = { .params = { PARAM_STACK_PHASE_RESET, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -716,7 +716,7 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
         case PARAM_WAVE_COARSE:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
-                (void)snprintf(out_name, out_name_len, "PITCH");
+                (void)snprintf(out_name, out_name_len, "TUNE");
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
@@ -852,6 +852,14 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
         if ((out_name != NULL) && (out_name_len > 0U))
         {
             (void)snprintf(out_name, out_name_len, "NOISE");
+        }
+        return 1U;
+    }
+    if (id == PARAM_STACK_OSC_DETUNE)
+    {
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "OSC DT");
         }
         return 1U;
     }

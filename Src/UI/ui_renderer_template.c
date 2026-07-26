@@ -45,7 +45,7 @@
 #define UI_TEMPLATE_GROUP_WIDGET_Y   (UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y)
 #define UI_TEMPLATE_GROUP_WIDGET_W   126
 #define UI_TEMPLATE_GROUP_WIDGET_H   UI_TEMPLATE_CARD_WIDGET_H
-#define UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST 1U
+#define UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST 0U
 #define UI_TEMPLATE_FILTER_GROUP_SLOT_COUNT 2U
 #define UI_TEMPLATE_LFO_GROUP_SLOT_FIRST 1U
 #define UI_TEMPLATE_LFO_GROUP_SLOT_COUNT 2U
@@ -1182,25 +1182,25 @@ static uint8_t ui_renderer_template_stack_fold_group_is_active(const ui_param_se
     if ((state == NULL) || (subpage == NULL)
             || (ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
             || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_STACK)
-            || (subpage->param_bank.params[0] < PARAM_STACK_OSC1_MODEL)
-            || (subpage->param_bank.params[0] > PARAM_STACK_OSC3_MODEL))
+            || (subpage->param_bank.params[3] < PARAM_STACK_OSC1_MODEL)
+            || (subpage->param_bank.params[3] > PARAM_STACK_OSC3_MODEL))
     {
         return 0U;
     }
 
     uint8_t slot = 0U;
     uint8_t slot_param = 0U;
-    if ((ui_renderer_template_stack_slot_param(subpage->param_bank.params[0], &slot, &slot_param) == 0U)
+    if ((ui_renderer_template_stack_slot_param(subpage->param_bank.params[3], &slot, &slot_param) == 0U)
             || (slot_param != 1U)
-            || (subpage->param_bank.params[1] != (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 5U)))
-            || (subpage->param_bank.params[2] != (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 5U)))
-            || (subpage->param_bank.params[3] != (param_id_t)(PARAM_STACK_OSC1_PARAM3 + (slot * 5U))))
+            || (subpage->param_bank.params[0] != (param_id_t)(PARAM_STACK_OSC1_TIMBRE + (slot * 5U)))
+            || (subpage->param_bank.params[1] != (param_id_t)(PARAM_STACK_OSC1_COLOR + (slot * 5U)))
+            || (subpage->param_bank.params[2] != (param_id_t)(PARAM_STACK_OSC1_PARAM3 + (slot * 5U))))
     {
         return 0U;
     }
 
     float model_value = 0.0f;
-    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[0], &model_value, 0) == 0U)
+    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[3], &model_value, 0) == 0U)
     {
         return 0U;
     }
@@ -1219,7 +1219,7 @@ static uint8_t ui_renderer_template_draw_stack_fold_group(const ui_param_seq_plo
 
     float param3_value = 0.0f;
     if (ui_renderer_template_get_visible_param_value(plock_frame_ctx,
-                                                     subpage->param_bank.params[3],
+                                                     subpage->param_bank.params[2],
                                                      &param3_value,
                                                      0) == 0U)
     {
@@ -1227,12 +1227,12 @@ static uint8_t ui_renderer_template_draw_stack_fold_group(const ui_param_seq_plo
     }
 
     return ui_renderer_template_draw_stack_waveform_widget(plock_frame_ctx,
-                                                           g_ui_template_frame_x[1] + UI_TEMPLATE_CARD_WIDGET_X_PAD,
+                                                           g_ui_template_frame_x[0] + UI_TEMPLATE_CARD_WIDGET_X_PAD,
                                                            UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y,
-                                                           (g_ui_template_frame_x[3] - g_ui_template_frame_x[1])
+                                                           (g_ui_template_frame_x[2] - g_ui_template_frame_x[0])
                                                                + UI_TEMPLATE_CARD_WIDGET_W,
                                                            UI_TEMPLATE_CARD_WIDGET_H,
-                                                           subpage->param_bank.params[3],
+                                                           subpage->param_bank.params[2],
                                                            param3_value);
 }
 
@@ -3985,7 +3985,13 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
     (void)track_runtime_get_voice_group_role(active_track, &role_u8);
     const uint8_t track_display_id = (uint8_t)(active_track + 1U);
-    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    uint8_t member_count = 0U;
+    const uint8_t has_group = (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+            ? track_runtime_collect_voice_group_members(active_track, NULL, 0U, &member_count)
+            : 0U;
+    if ((role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+            && (has_group != 0U)
+            && (member_count > 1U))
     {
         (void)snprintf(track_label, sizeof(track_label), "M%u", (unsigned int)track_display_id);
     }

@@ -74,7 +74,6 @@ typedef struct
     uint32_t phase2;
     uint32_t phase3;
     int16_t feedback_q15;
-    int16_t swarm_lp_q15;
 } stack_osc_slot_t;
 
 typedef struct

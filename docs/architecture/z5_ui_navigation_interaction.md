@@ -1068,13 +1068,25 @@ Points factuels:
 
 - Le chemin central encodeur `ui_param_handle_encoder_with_context()` lit `SHIFT` dans le snapshot d'edition et applique un pas fin `0.01` aux params continus compatibles, sans changer les enums, bools ni listes.
 - `PARAM_MIX_DELAY_MOD_RATE` garde un pas UI coarse `1.0Hz` sans `SHIFT` tout en conservant sa resolution catalogue `0.01` pour l'edition fine et les p-locks.
-- Les params `PARAM_STACK_OSC1_TUNE..OSC3_TUNE` utilisent un seul controle `TUNE`: `1 st` sans `SHIFT`, `0.01 st` avec `SHIFT`; Wave/Braids conserve ses controles historiques separes.
+- Les params `PARAM_STACK_OSC1_TUNE..OSC3_TUNE` utilisent un seul controle `TUNE`: `1 st` sans `SHIFT`, `0.01 st` avec `SHIFT`.
 
 ## Addendum 2026-07-26 - TONE Stack 2 pages Fold
 
 - `Synth/Stack` alterne maintenant `TONE 1/2` et `TONE 2/2`.
-- `TONE 1/2`: `COMM` reste `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`; `OSC1..OSC3` exposent `MODEL/PARAM1/PARAM2/PARAM3` via les IDs `MODEL/TIMBRE/COLOR/PARAM3`.
-- `TONE 2/2`: page `TUNE` expose `OSC DETUNE`, `TUNE 1`, `TUNE 2`, `TUNE 3`; page `PHASE` expose `RESET`.
+- `TONE 1/2`: `COMM` reste `OSC1 LVL/OSC2 LVL/OSC3 LVL/NOISE`; `OSC1..OSC3` exposent `PARAM1/PARAM2/PARAM3/MODEL` via les IDs `TIMBRE/COLOR/PARAM3/MODEL`.
+- `TONE 2/2`: page `TUNE` expose `TUNE 1`, `TUNE 2`, `TUNE 3`, `OSC DT`; page `PHASE` expose `RESET`.
 - Les labels dynamiques Stack affichent `SINFD` et `TRIFD` avec `FOLD/SYM/SHAPE`; `SOFT` n'est plus un modele Stack actif.
 - La preview waveform Stack reutilise `brick6_stack_waveform` pour `SHAPE`, `SINFD` et `TRIFD`; le cache UI inclut maintenant `PARAM3`.
 - Sur les pages `OSC1..OSC3`, `SINFD/TRIFD` dessinent une waveform unique large sur la zone widget des trois params `FOLD/SYM/SHAPE`; les trois labels restent separes en bas de slots.
+
+## Addendum 2026-07-26 - reorganisations TONE/ENV
+
+- `COLORS/ENV` page `FILTER` expose `CUTOFF/RES/EG AMT/F TYPE`; en mode DJ/EQ3, elle expose `LOW/MID/HIGH/F TYPE`.
+- `Synth/Wave` page `TONE` expose maintenant `VOICE` (`PARAM1/PARAM2/A MOD/MODEL`) puis `EDIT` (`TUNE/FM AMT/PHASE`).
+- Le controle Wave `TUNE` utilise l'ID UI `PARAM_WAVE_COARSE` comme controle unifie: sans `SHIFT` le pas est `1 st`, avec `SHIFT` le pas est `0.01 st`; l'edition directe neutralise `PARAM_WAVE_FINE` a `0.5` et encode la valeur finale dans `PARAM_WAVE_COARSE`.
+- Le badge de track affiche `M#` uniquement pour une master ayant au moins une slave effective; une master orpheline revient au label simple `#`.
+
+## Addendum 2026-07-26 - LINK choix discrets
+
+- Le point d'insertion UI de LINK garde le delta pour les params continus existants, mais applique les choix `CFG/TRACK`, `CFG/TYPE` et `COLORS/F Type` par valeur absolue de la master.
+- La selection d'une slave relit ensuite les valeurs via les sources autoritaires par-track (`track_state` et `track_sound_state`), donc l'affichage slave suit sans miroir UI parallele.

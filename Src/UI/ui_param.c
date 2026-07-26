@@ -121,6 +121,38 @@ static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
             || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
 }
 
+static uint8_t ui_param_is_wave_tune(param_id_t param, uint8_t track)
+{
+    return (uint8_t)((param == PARAM_WAVE_COARSE)
+            && (track < UI_TRACK_COUNT)
+            && (ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_WAVE));
+}
+
+static float ui_param_wave_tune_normalized_from_parts(float coarse, float fine)
+{
+    float semitones = ((coarse - 0.5f) * 48.0f) + ((fine - 0.5f) * 2.0f);
+    if (semitones < -24.0f)
+    {
+        semitones = -24.0f;
+    }
+    else if (semitones > 24.0f)
+    {
+        semitones = 24.0f;
+    }
+
+    float normalized = (semitones / 48.0f) + 0.5f;
+    if (normalized < 0.0f)
+    {
+        normalized = 0.0f;
+    }
+    else if (normalized > 1.0f)
+    {
+        normalized = 1.0f;
+    }
+    return normalized;
+}
+
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
 {
     if ((bank == 0) || (g_ui_param.valid == 0U))
@@ -1305,6 +1337,19 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
         return 1U;
     }
 
+    if (ui_param_is_wave_tune(param, track) != 0U)
+    {
+        float coarse = 0.5f;
+        float fine = 0.5f;
+        if ((param_registry_get_track_value(PARAM_WAVE_COARSE, track, &coarse) == 0U)
+                || (param_registry_get_track_value(PARAM_WAVE_FINE, track, &fine) == 0U))
+        {
+            return 0U;
+        }
+        *out_value = ui_param_wave_tune_normalized_from_parts(coarse, fine);
+        return 1U;
+    }
+
     return param_registry_get_track_value(param, track, out_value);
 }
 
@@ -1353,6 +1398,11 @@ static uint8_t ui_param_group_link_param_is_allowed(param_id_t param, const para
         return 1U;
     }
 
+    if (param == PARAM_FILTER_TYPE)
+    {
+        return 1U;
+    }
+
     if ((param == PARAM_MOD_MATRIX_SLOT)
             || (param == PARAM_MOD_MATRIX_SOURCE)
             || (param == PARAM_MOD_MATRIX_DEST))
@@ -1385,6 +1435,13 @@ static uint8_t ui_param_group_link_param_is_allowed(param_id_t param, const para
     }
 
     return 0U;
+}
+
+static uint8_t ui_param_group_link_param_uses_absolute_value(param_id_t param)
+{
+    return (uint8_t)(((param == PARAM_CFG_TRACK)
+                      || (param == PARAM_CFG_TRACK_TYPE)
+                      || (param == PARAM_FILTER_TYPE)) ? 1U : 0U);
 }
 
 static uint8_t ui_param_apply_group_link_matrix_depth(uint8_t encoder,
@@ -1461,6 +1518,7 @@ static uint8_t ui_param_apply_group_link_delta(uint8_t encoder,
                                                param_id_t param,
                                                const param_desc_t *desc,
                                                uint8_t source_track,
+                                               float source_value,
                                                float applied_delta)
 {
     if ((g_ui_param_group_link_propagating != 0U)
@@ -1522,7 +1580,9 @@ static uint8_t ui_param_apply_group_link_delta(uint8_t encoder,
             continue;
         }
 
-        const float next_value = ui_param_clamp(current_value + applied_delta, min_value, max_value);
+        const float next_value = (ui_param_group_link_param_uses_absolute_value(param) != 0U)
+            ? ui_param_clamp(source_value, min_value, max_value)
+            : ui_param_clamp(current_value + applied_delta, min_value, max_value);
         if (ui_param_value_is_same(next_value, current_value) != 0U)
         {
             continue;
@@ -1719,6 +1779,71 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
+    if (ui_param_is_wave_tune(param, track) != 0U)
+    {
+        const float clamped = ui_param_clamp(value, 0.0f, 1.0f);
+        float current_value = 0.0f;
+        if (ui_param_get_track_edit_value(param, track, &current_value) == 0U)
+        {
+            return 0U;
+        }
+
+        if (ui_param_value_is_same(current_value, clamped) != 0U)
+        {
+            if (update_active_mirror != 0U)
+            {
+                param_store_set_active(param, clamped);
+                param_store_set_active(PARAM_WAVE_FINE, 0.5f);
+            }
+            return 1U;
+        }
+
+        ui_param_ensure_undo_transaction(encoder, param, track);
+
+        const param_registry_track_edit_cmd_t fine_cmd = {
+            .id = PARAM_WAVE_FINE,
+            .track = track,
+            .value = 0.5f
+        };
+        const param_registry_track_edit_cmd_t coarse_cmd = {
+            .id = PARAM_WAVE_COARSE,
+            .track = track,
+            .value = clamped
+        };
+        if ((param_registry_apply_track_edit(&fine_cmd) == 0U)
+                || (param_registry_apply_track_edit(&coarse_cmd) == 0U))
+        {
+            return 0U;
+        }
+
+        uint8_t set_id = 0U;
+        seq_param_slot_t param_slot = 0U;
+        if (ui_param_resolve_seq_slot(track, param, &set_id, &param_slot) != 0U)
+        {
+            const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
+            const seq_param_iface_base_commit_cmd_t cmd = {
+                .source = SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT,
+                .authoritative_apply_done = 1U,
+                .target_track = track,
+                .set_id = set_id,
+                .param_slot = param_slot,
+                .value16 = encoded
+            };
+            (void)seq_param_iface_commit_base_after_authoritative_apply(&cmd);
+        }
+
+        if (update_active_mirror != 0U)
+        {
+            param_store_set_active(param, clamped);
+            param_store_set_active(PARAM_WAVE_FINE, 0.5f);
+        }
+        if (undo_v2_is_transaction_open() != 0U)
+        {
+            (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
+        }
+        return 1U;
+    }
+
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
     float current_value = 0.0f;
@@ -1788,12 +1913,21 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
 
     if (ctx->shift_down != 0U)
     {
+        if (ui_param_is_wave_tune(desc->id, ctx->active_track) != 0U)
+        {
+            return 0.01f / 48.0f;
+        }
         if ((desc->type == PARAM_TYPE_FLOAT)
                 || ((desc->type == PARAM_TYPE_BIPOLAR)
                     && ((desc->display_type != PARAM_DISPLAY_INT) || (ui_param_is_stack_osc_tune(desc->id) != 0U))))
         {
             return 0.01f;
         }
+    }
+
+    if (ui_param_is_wave_tune(desc->id, ctx->active_track) != 0U)
+    {
+        return 1.0f / 48.0f;
     }
 
     if ((desc->id == PARAM_MIX_DELAY_MOD_RATE) || (ui_param_is_stack_osc_tune(desc->id) != 0U))
@@ -2392,7 +2526,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value - source_current_value);
+            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
         }
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
@@ -2416,7 +2550,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value - source_current_value);
+            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
         }
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
@@ -2461,7 +2595,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        edit_track,
                                        value,
                                        UI_PARAM_VALUE_FLASH_DIRECT);
-        (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value - source_current_value);
+        (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
     }
     (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
     if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))

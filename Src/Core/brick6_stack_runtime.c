@@ -18,8 +18,6 @@
 #define STACK_BASE_C4_INC 23428135UL
 #define STACK_COMMAND_QUEUE_CAP 256U
 #define STACK_OSC_DETUNE_MAX_SHIFT 8U
-#define STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15 10752
-#define STACK_BRAIDS_SWARM_OSC_GAIN_Q15 4096
 #define STACK_LEVEL_ENERGY_ONE_Q30 1073676289UL
 #define STACK_LEVEL_ENERGY_TWO_Q30 2147352578UL
 #define STACK_LEVEL_ENERGY_THREE_Q30 3221028867UL
@@ -531,30 +529,19 @@ static int16_t brick6_stack_mix_q15(int16_t a, int16_t b, uint16_t balance_q15)
     return brick6_stack_sat16(mixed);
 }
 
-static int16_t brick6_stack_mix_q16(int16_t a, int16_t b, uint16_t balance_q16)
+static int16_t brick6_stack_mul_q15(int16_t a, int16_t b)
 {
-    const int32_t mixed = (int32_t)a + ((((int32_t)b - (int32_t)a) * (int32_t)balance_q16) >> 16);
-    return brick6_stack_sat16(mixed);
+    return brick6_stack_sat16(((int32_t)a * (int32_t)b) >> 15);
 }
 
-static int16_t brick6_stack_mul_q16(int16_t a, int16_t b)
+static uint32_t brick6_stack_pm_offset(uint16_t modulator, uint16_t amount_q15)
 {
-    return (int16_t)(((int32_t)a * (int32_t)b) >> 16);
+    return (uint32_t)((int32_t)(int16_t)modulator * (int32_t)amount_q15);
 }
 
-static int32_t brick6_stack_apply_gain_q15(int16_t sample, int32_t gain_q15)
+static int32_t brick6_stack_average3_q15(int16_t a, int16_t b, int16_t c)
 {
-    return ((int32_t)sample * gain_q15) >> 15;
-}
-
-static uint32_t brick6_stack_pm_offset_fm(uint16_t modulator, uint16_t amount_q15)
-{
-    return (uint32_t)((uint32_t)((int32_t)(int16_t)modulator * (int32_t)amount_q15) << 2);
-}
-
-static uint32_t brick6_stack_pm_offset_feedback_fm(uint16_t modulator, uint16_t amount_q15)
-{
-    return (uint32_t)((uint32_t)((int32_t)(int16_t)modulator * (int32_t)amount_q15) << 1);
+    return (((int32_t)a + (int32_t)b + (int32_t)c) * 10923L) >> 15;
 }
 
 static uint32_t brick6_stack_scale_inc(uint32_t inc, uint32_t ratio_q15)
@@ -666,24 +653,13 @@ static void brick6_stack_runtime_render_wavetable(stack_osc_slot_t *slot,
             ? bank
             : (BRICK6_STACK_BRAIDS_WAVETABLE_BANK_COUNT - 1U))
             * BRICK6_STACK_BRAIDS_WAVETABLE_BANK_SIZE);
-    const uint32_t position = (uint32_t)slot->timbre_q15 * (BRICK6_STACK_BRAIDS_WAVETABLE_BANK_SIZE - 1U) * 2U;
-    const uint8_t offset = (uint8_t)(position >> 16);
-    const uint16_t xfade_q16 = (uint16_t)(position & 0xFFFFU);
-    const uint8_t wave_a = (uint8_t)(bank_base + offset);
-    const uint8_t wave_b = (uint8_t)(bank_base
-            + ((offset + 1U) < BRICK6_STACK_BRAIDS_WAVETABLE_BANK_SIZE ? (offset + 1U) : offset));
-    const uint32_t half_inc = slot->phase_inc >> 1;
+    const uint32_t position = (uint32_t)slot->timbre_q15 * (BRICK6_STACK_BRAIDS_WAVETABLE_BANK_SIZE - 1U);
+    const uint8_t wave = (uint8_t)(bank_base + (uint8_t)((position + 16384U) >> 15));
 
     for (uint8_t i = 0U; i < frames; ++i)
     {
-        slot->phase += (half_inc != 0U) ? half_inc : 1U;
-        const int16_t a = brick6_stack_braids_wavetable_sample(wave_a, slot->phase);
-        const int16_t b = brick6_stack_braids_wavetable_sample(wave_b, slot->phase);
-        int32_t sample_q15 = (int32_t)brick6_stack_mix_q16(a, b, xfade_q16) >> 1;
-        slot->phase += (half_inc != 0U) ? half_inc : 1U;
-        const int16_t c = brick6_stack_braids_wavetable_sample(wave_a, slot->phase);
-        const int16_t d = brick6_stack_braids_wavetable_sample(wave_b, slot->phase);
-        sample_q15 += (int32_t)brick6_stack_mix_q16(c, d, xfade_q16) >> 1;
+        slot->phase += slot->phase_inc;
+        const int16_t sample_q15 = brick6_stack_braids_wavetable_sample(wave, slot->phase);
         acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
     }
 }
@@ -698,9 +674,7 @@ static void brick6_stack_runtime_render_sub(stack_osc_slot_t *slot,
         return;
     }
 
-    const uint32_t sub_inc = (slot->color_q15 < 16384U) ? (slot->phase_inc >> 1) : (slot->phase_inc >> 2);
-    const uint16_t sub_mix = (uint16_t)(slot->color_q15 < 16384U ? ((16383U - slot->color_q15) << 1)
-                                                                : ((slot->color_q15 - 16384U) << 1));
+    const uint32_t sub_inc = slot->phase_inc >> 1;
     for (uint8_t i = 0U; i < frames; ++i)
     {
         slot->phase += slot->phase_inc;
@@ -709,7 +683,7 @@ static void brick6_stack_runtime_render_sub(stack_osc_slot_t *slot,
                                                        brick6_stack_phase_pwm(slot->phase, slot->timbre_q15),
                                                        slot->timbre_q15);
         const int16_t sub = brick6_stack_phase_pwm(slot->phase2, 16384U);
-        const int16_t sample_q15 = brick6_stack_mix_q15(principal, sub, sub_mix);
+        const int16_t sample_q15 = brick6_stack_mix_q15(principal, sub, slot->color_q15);
         acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
     }
 }
@@ -730,7 +704,7 @@ static void brick6_stack_runtime_render_fm(stack_osc_slot_t *slot,
         slot->phase += slot->phase_inc;
         slot->phase2 += mod_inc;
         const int16_t mod = brick6_stack_phase_sine(slot->phase2);
-        const uint32_t offset = brick6_stack_pm_offset_fm((uint16_t)mod, slot->timbre_q15);
+        const uint32_t offset = brick6_stack_pm_offset((uint16_t)mod, slot->timbre_q15);
         const int16_t sample_q15 = brick6_stack_phase_sine(slot->phase + (uint32_t)offset);
         acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
     }
@@ -751,9 +725,9 @@ static void brick6_stack_runtime_render_feedback_fm(stack_osc_slot_t *slot,
     {
         slot->phase += slot->phase_inc;
         slot->phase2 += mod_inc;
-        const uint32_t feedback_pm = (uint32_t)((uint32_t)(int32_t)slot->feedback_q15 << 14);
-        const int16_t mod = brick6_stack_phase_sine(slot->phase2 + feedback_pm);
-        const uint32_t offset = brick6_stack_pm_offset_feedback_fm((uint16_t)mod, slot->timbre_q15);
+        const int16_t mod = brick6_stack_phase_sine(slot->phase2);
+        const uint32_t offset = brick6_stack_pm_offset((uint16_t)mod, slot->timbre_q15)
+                + (uint32_t)((int32_t)slot->feedback_q15 * (int32_t)slot->timbre_q15);
         const int16_t sample_q15 = brick6_stack_phase_sine(slot->phase + (uint32_t)offset);
         slot->feedback_q15 = sample_q15;
         acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
@@ -780,7 +754,7 @@ static void brick6_stack_runtime_render_ring(stack_osc_slot_t *slot,
         const int16_t a = brick6_stack_phase_sine(slot->phase);
         const int16_t b = brick6_stack_phase_sine(slot->phase2);
         const int16_t c = brick6_stack_phase_sine(slot->phase3);
-        const int16_t sample_q15 = brick6_stack_mul_q16(brick6_stack_mul_q16(a, b), c);
+        const int16_t sample_q15 = brick6_stack_mul_q15(brick6_stack_mul_q15(a, b), c);
         acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
     }
 }
@@ -802,12 +776,9 @@ static void brick6_stack_runtime_render_triple_saw(stack_osc_slot_t *slot,
         slot->phase += slot->phase_inc;
         slot->phase2 += inc2;
         slot->phase3 += inc3;
-        const int32_t mixed = brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase),
-                                                          STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase2),
-                                              STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase3),
-                                              STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15);
+        const int32_t mixed = brick6_stack_average3_q15(brick6_stack_phase_saw(slot->phase),
+                                                        brick6_stack_phase_saw(slot->phase2),
+                                                        brick6_stack_phase_saw(slot->phase3));
         acc[i] += (mixed * (int32_t)effective_level) >> 15;
     }
 }
@@ -829,12 +800,9 @@ static void brick6_stack_runtime_render_triple_square(stack_osc_slot_t *slot,
         slot->phase += slot->phase_inc;
         slot->phase2 += inc2;
         slot->phase3 += inc3;
-        const int32_t mixed = brick6_stack_apply_gain_q15(brick6_stack_phase_pwm(slot->phase, 16384U),
-                                                          STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_pwm(slot->phase2, 16384U),
-                                              STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_pwm(slot->phase3, 16384U),
-                                              STACK_BRAIDS_TRIPLE_OSC_GAIN_Q15);
+        const int32_t mixed = brick6_stack_average3_q15(brick6_stack_phase_pwm(slot->phase, 16384U),
+                                                        brick6_stack_phase_pwm(slot->phase2, 16384U),
+                                                        brick6_stack_phase_pwm(slot->phase3, 16384U));
         acc[i] += (mixed * (int32_t)effective_level) >> 15;
     }
 }
@@ -851,25 +819,15 @@ static void brick6_stack_runtime_render_swarm(stack_osc_slot_t *slot,
 
     const uint32_t inc2 = brick6_stack_detune_inc(slot->phase_inc, slot->timbre_q15, -1);
     const uint32_t inc3 = brick6_stack_detune_inc(slot->phase_inc, slot->timbre_q15, 1);
-    const uint16_t damp_q15 = (uint16_t)(2048U + (((uint32_t)slot->color_q15 * 14336U) >> 15));
     for (uint8_t i = 0U; i < frames; ++i)
     {
         slot->phase += slot->phase_inc;
         slot->phase2 += inc2;
         slot->phase3 += inc3;
-        const int32_t mixed = brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase),
-                                                          STACK_BRAIDS_SWARM_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase2),
-                                              STACK_BRAIDS_SWARM_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase3),
-                                              STACK_BRAIDS_SWARM_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase + 0x33333333UL),
-                                              STACK_BRAIDS_SWARM_OSC_GAIN_Q15)
-                + brick6_stack_apply_gain_q15(brick6_stack_phase_saw(slot->phase3 + 0x99999999UL),
-                                              STACK_BRAIDS_SWARM_OSC_GAIN_Q15);
-        slot->swarm_lp_q15 = brick6_stack_sat16((int32_t)slot->swarm_lp_q15
-                + (((mixed - (int32_t)slot->swarm_lp_q15) * (int32_t)damp_q15) >> 15));
-        acc[i] += ((int32_t)slot->swarm_lp_q15 * (int32_t)effective_level) >> 15;
+        const int32_t mixed = brick6_stack_average3_q15(brick6_stack_phase_saw(slot->phase),
+                                                        brick6_stack_phase_saw(slot->phase2),
+                                                        brick6_stack_phase_saw(slot->phase3));
+        acc[i] += (mixed * (int32_t)effective_level) >> 15;
     }
 }
 
@@ -889,12 +847,8 @@ static void brick6_stack_runtime_advance_slot_free_running(stack_osc_slot_t *slo
             break;
 
         case STACK_RENDERER_WAVETABLE:
-        {
-            const uint32_t half_inc = slot->phase_inc >> 1;
-            const uint32_t step = ((half_inc != 0U) ? half_inc : 1U) * 2U;
-            slot->phase += step * (uint32_t)frames;
+            slot->phase += slot->phase_inc * (uint32_t)frames;
             break;
-        }
 
         case STACK_RENDERER_SUB:
         {
@@ -1174,7 +1128,6 @@ void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, bric
     osc->phase2 = 0x55555555UL;
     osc->phase3 = 0xAAAAAAAAUL;
     osc->feedback_q15 = 0;
-    osc->swarm_lp_q15 = 0;
     brick6_stack_runtime_update_slot_pitch(instance, slot);
     brick6_stack_runtime_flush_pending(instance);
 }
@@ -1300,7 +1253,6 @@ void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t vel
             instance->slots[slot].phase2 = 0x55555555UL + ((uint32_t)slot * 0x11111111UL);
             instance->slots[slot].phase3 = 0xAAAAAAAAUL - ((uint32_t)slot * 0x11111111UL);
             instance->slots[slot].feedback_q15 = 0;
-            instance->slots[slot].swarm_lp_q15 = 0;
         }
     }
     brick6_stack_runtime_update_all_pitches(instance);
