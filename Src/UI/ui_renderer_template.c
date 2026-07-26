@@ -1378,65 +1378,12 @@ static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shap
 
 static void ui_renderer_template_draw_lfo_center_indicator(int x, int y, int w, int h, float value, float max_abs)
 {
-    const int cy = y + (h / 2);
-    const int center = x + (w / 2);
-    const int left_span = (center - x) - 2;
-    const int right_span = (x + w - center) - 2;
-    ui_renderer_template_draw_lfo_baseline(x, y, w, h);
-    drv_display_draw_line(center, y + 4, center, y + h - 5);
-
-    if ((value < -0.0001f) && (left_span > 0))
-    {
-        int len = (int)(((-value) * (float)left_span / max_abs) + 0.5f);
-        if (len > left_span)
-        {
-            len = left_span;
-        }
-        if (len > 0)
-        {
-            drv_display_fill_rect(center - len, cy - 1, len, 3);
-        }
-    }
-    else if ((value > 0.0001f) && (right_span > 0))
-    {
-        int len = (int)(((value * (float)right_span) / max_abs) + 0.5f);
-        if (len > right_span)
-        {
-            len = right_span;
-        }
-        if (len > 0)
-        {
-            drv_display_fill_rect(center + 1, cy - 1, len, 3);
-        }
-    }
+    uiw_draw_bipolar_bar(x, y, w, h, value, -max_abs, max_abs);
 }
 
 static void ui_renderer_template_draw_lfo_unipolar_bar(int x, int y, int w, int h, float value, float min_value, float max_value)
 {
-    const int bx = x + 3;
-    const int by = y + (h / 2) - 3;
-    const int bw = (w > 8) ? (w - 6) : w;
-    const int bh = 7;
-    float norm = 0.0f;
-    if (max_value > min_value)
-    {
-        norm = (value - min_value) / (max_value - min_value);
-    }
-    if (norm < 0.0f)
-    {
-        norm = 0.0f;
-    }
-    if (norm > 1.0f)
-    {
-        norm = 1.0f;
-    }
-
-    drv_display_draw_rect(bx, by, bw, bh);
-    const int fill_w = (int)((norm * (float)(bw - 2)) + 0.5f);
-    if (fill_w > 0)
-    {
-        drv_display_fill_rect(bx + 1, by + 1, fill_w, bh - 2);
-    }
+    uiw_draw_value_bar(x, y, w, h, value, min_value, max_value);
 }
 
 static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_widget_kind_t kind,
@@ -3660,6 +3607,39 @@ static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_temp
     }
 }
 
+static uint8_t ui_renderer_template_widget_type_is_bar(uiw_widget_type_t widget_type)
+{
+    return (uint8_t)((widget_type == UIW_WIDGET_BAR) || (widget_type == UIW_WIDGET_BIPOLAR_BAR));
+}
+
+static uint8_t ui_renderer_template_custom_widget_is_bar(ui_template_custom_widget_kind_t kind)
+{
+    return (uint8_t)((kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE)
+            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH)
+            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DELAY)
+            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_FADE));
+}
+
+static void ui_renderer_template_draw_bar_value_text(int widget_x,
+                                                     int widget_y,
+                                                     int widget_w,
+                                                     int widget_h,
+                                                     const char *value_txt)
+{
+    if ((value_txt == NULL) || (value_txt[0] == '\0'))
+    {
+        return;
+    }
+
+    char fitted_value[20];
+    (void)snprintf(fitted_value, (uint32_t)sizeof(fitted_value), "%s", value_txt);
+    drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(fitted_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(widget_x, widget_w, fitted_value),
+                          (uint8_t)(widget_y + 6),
+                          fitted_value);
+}
+
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
                                                  const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                  const ui_template_subpage_t *subpage,
@@ -3769,6 +3749,10 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     {
         bottom_txt[0] = '\0';
     }
+    if (ui_renderer_template_custom_widget_is_bar(custom_widget) != 0U)
+    {
+        (void)snprintf(bottom_txt, (uint32_t)sizeof(bottom_txt), "%s", name_txt);
+    }
     ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
 
     if (custom_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
@@ -3794,6 +3778,14 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                         id,
                                                         value) != 0U)
         {
+            if (ui_renderer_template_custom_widget_is_bar(custom_widget) != 0U)
+            {
+                ui_renderer_template_draw_bar_value_text(widget_x,
+                                                         widget_y,
+                                                         UI_TEMPLATE_CARD_WIDGET_W,
+                                                         UI_TEMPLATE_CARD_WIDGET_H,
+                                                         value_txt);
+            }
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(0U);
@@ -3885,6 +3877,12 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
+    const uint8_t widget_is_bar = ui_renderer_template_widget_type_is_bar(widget_type);
+    if (widget_is_bar != 0U)
+    {
+        (void)snprintf(bottom_txt, (uint32_t)sizeof(bottom_txt), "%s", name_txt);
+        ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    }
 
     switch (widget_type)
     {
@@ -3963,14 +3961,40 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             }
             break;
 
-        case UIW_WIDGET_KNOB:
+        case UIW_WIDGET_BAR:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
+            uiw_draw_value_bar(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            ui_renderer_template_draw_bar_value_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value_txt);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
+            break;
+
+        case UIW_WIDGET_BIPOLAR_BAR:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
+            uiw_draw_bipolar_bar(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            ui_renderer_template_draw_bar_value_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value_txt);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
+            break;
+
         default:
         {
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_knob(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            uiw_draw_value_bar(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            ui_renderer_template_draw_bar_value_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value_txt);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);

@@ -124,6 +124,22 @@ static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
+static uiw_widget_type_t ui_page_template_mod_pick_widget(uint8_t slot,
+                                                          param_id_t id,
+                                                          const char *value_label,
+                                                          uiw_widget_type_t suggested_widget)
+{
+    (void)slot;
+    (void)value_label;
+
+    if ((id == PARAM_LFO1_TRIG) || (id == PARAM_LFO2_TRIG))
+    {
+        return UIW_WIDGET_ENUM_TEXT;
+    }
+
+    return suggested_widget;
+}
+
 static uint8_t ui_page_template_mod_param_text(uint8_t slot,
                                                param_id_t id,
                                                float value,
@@ -157,6 +173,7 @@ static uint8_t ui_page_template_mod_param_text(uint8_t slot,
 static ui_template_page_state_t g_ui_template_mod_state = {
     .family = 0,
     .family_resolver = ui_page_template_mod_resolve_family,
+    .widget_picker = ui_page_template_mod_pick_widget,
     .custom_widget_picker = ui_page_template_mod_pick_custom_widget,
     .param_text = ui_page_template_mod_param_text,
     .active_subpage = 0U,

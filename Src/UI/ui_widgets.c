@@ -5,74 +5,14 @@
 #include "drv_display.h"
 #include "font.h"
 
-#define UIW_KNOB_OUTER_RADIUS     10
-#define UIW_KNOB_INDICATOR_RADIUS 10
-#define UIW_KNOB_INDICATOR_SUBSTEPS 4
-#define UIW_KNOB_VECTOR_SCALE     9
-#define UIW_KNOB_MARGIN           0
-
 #define UIW_SWITCH_W              18
 #define UIW_SWITCH_H              8
 #define UIW_ENUM_BOX_H            12
+#define UIW_BAR_H                 7
+#define UIW_BAR_OFFSET_Y          4
 #define UIW_JACK_RING_OFFSET_Y    4
 #define UIW_KEYBOARD_H            12
 #define UIW_SHAPE_H               16
-
-static int uiw_min_int(int a, int b)
-{
-    return (a < b) ? a : b;
-}
-
-static void uiw_draw_point(int x, int y)
-{
-    drv_display_draw_line(x, y, x, y);
-}
-
-static int uiw_scale_ratio(int value, int numerator, int denominator)
-{
-    const int half = denominator / 2;
-
-    if (value < 0)
-    {
-        return -(((-value) * numerator + half) / denominator);
-    }
-
-    return (value * numerator + half) / denominator;
-}
-
-static void uiw_draw_circle_points(int cx, int cy, int x, int y)
-{
-    uiw_draw_point(cx + x, cy + y);
-    uiw_draw_point(cx - x, cy + y);
-    uiw_draw_point(cx + x, cy - y);
-    uiw_draw_point(cx - x, cy - y);
-    uiw_draw_point(cx + y, cy + x);
-    uiw_draw_point(cx - y, cy + x);
-    uiw_draw_point(cx + y, cy - x);
-    uiw_draw_point(cx - y, cy - x);
-}
-
-static void uiw_draw_circle_outline(int cx, int cy, int radius)
-{
-    int x = 0;
-    int y = radius;
-    int d = 1 - radius;
-
-    while (x <= y)
-    {
-        uiw_draw_circle_points(cx, cy, x, y);
-        x++;
-        if (d < 0)
-        {
-            d += (2 * x) + 1;
-        }
-        else
-        {
-            y--;
-            d += (2 * (x - y)) + 1;
-        }
-    }
-}
 
 static int uiw_center_x(int x, int w, const char *txt)
 {
@@ -121,84 +61,86 @@ static uint8_t uiw_label_starts_with(const char *label, const char *prefix)
     return 1U;
 }
 
-void uiw_draw_knob(int x, int y, int w, int h, float value, float vmin, float vmax)
+void uiw_draw_value_bar(int x, int y, int w, int h, float value, float vmin, float vmax)
 {
-    static const int8_t indicator_x[33] = {-5, -7, -7, -8, -8, -9, -9, -9, -8, -8, -7, -7, -5, -4, -3, -1, 0,
-                                            1, 3, 4, 5, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 5};
-    static const int8_t indicator_y[33] = {5, 5, 4, 3, 1, 0, -1, -1, -3, -4, -5, -5, -7, -7, -8, -9, -9,
-                                           -9, -8, -7, -7, -5, -5, -4, -3, -1, -1, 0, 1, 3, 4, 5, 5};
+    const int bx = x + 3;
+    const int by = y + (h / 2) - 3 + UIW_BAR_OFFSET_Y;
+    const int bw = (w > 8) ? (w - 6) : w;
+    float norm = 0.0f;
 
-    const int cx = x + (w / 2);
-    const int cy = y + (h / 2);
-    int outer_radius = UIW_KNOB_OUTER_RADIUS;
-    int indicator_radius = UIW_KNOB_INDICATOR_RADIUS;
-    int indicator_end_x = 0;
-    int indicator_end_y = 0;
-    int indicator_step = 16 * UIW_KNOB_INDICATOR_SUBSTEPS;
-    int indicator_vec_x = 0;
-    int indicator_vec_y = -9 * UIW_KNOB_INDICATOR_SUBSTEPS;
-    const int max_radius = uiw_min_int(w, h) / 2 - UIW_KNOB_MARGIN;
-
-    if (outer_radius > max_radius)
+    if (vmax > vmin)
     {
-        outer_radius = max_radius;
+        norm = (value - vmin) / (vmax - vmin);
     }
-    if (outer_radius < 2)
+    if (norm < 0.0f)
     {
-        outer_radius = 2;
+        norm = 0.0f;
     }
-    if (indicator_radius > outer_radius)
+    if (norm > 1.0f)
     {
-        indicator_radius = outer_radius;
-    }
-    if (indicator_radius < 1)
-    {
-        indicator_radius = 1;
+        norm = 1.0f;
     }
 
-    uiw_draw_circle_outline(cx, cy, outer_radius);
-
-    if (vmax <= vmin)
+    drv_display_draw_rect(bx, by, bw, UIW_BAR_H);
+    const int fill_w = (int)((norm * (float)(bw - 2)) + 0.5f);
+    if (fill_w > 0)
     {
-        indicator_step = 16 * UIW_KNOB_INDICATOR_SUBSTEPS;
+        drv_display_fill_rect(bx + 1, by + 1, fill_w, UIW_BAR_H - 2);
     }
-    else
+}
+
+void uiw_draw_bipolar_bar(int x, int y, int w, int h, float value, float vmin, float vmax)
+{
+    const int cy = y + (h / 2) + UIW_BAR_OFFSET_Y;
+    const int center = x + (w / 2);
+    const int left_span = (center - x) - 2;
+    const int right_span = (x + w - center) - 2;
+    float center_value = 0.0f;
+    float left_max = 1.0f;
+    float right_max = 1.0f;
+
+    if (!((vmin < 0.0f) && (vmax > 0.0f)))
     {
-        float norm = (value - vmin) / (vmax - vmin);
-        if (norm < 0.0f)
+        center_value = vmin + ((vmax - vmin) * 0.5f);
+    }
+    left_max = center_value - vmin;
+    right_max = vmax - center_value;
+    if (left_max <= 0.0001f)
+    {
+        left_max = 1.0f;
+    }
+    if (right_max <= 0.0001f)
+    {
+        right_max = 1.0f;
+    }
+
+    drv_display_draw_line(x + 2, cy, x + w - 3, cy);
+    drv_display_draw_line(center, y + 14, center, y + h - 7);
+
+    if ((value < (center_value - 0.0001f)) && (left_span > 0))
+    {
+        int len = (int)(((center_value - value) * (float)left_span / left_max) + 0.5f);
+        if (len > left_span)
         {
-            norm = 0.0f;
+            len = left_span;
         }
-        if (norm > 1.0f)
+        if (len > 0)
         {
-            norm = 1.0f;
+            drv_display_fill_rect(center - len, cy - 1, len, 3);
         }
-        indicator_step = (int)(norm * (float)(32 * UIW_KNOB_INDICATOR_SUBSTEPS) + 0.5f);
     }
-
-    if (indicator_step >= (32 * UIW_KNOB_INDICATOR_SUBSTEPS))
+    else if ((value > (center_value + 0.0001f)) && (right_span > 0))
     {
-        indicator_vec_x = indicator_x[32] * UIW_KNOB_INDICATOR_SUBSTEPS;
-        indicator_vec_y = indicator_y[32] * UIW_KNOB_INDICATOR_SUBSTEPS;
+        int len = (int)(((value - center_value) * (float)right_span / right_max) + 0.5f);
+        if (len > right_span)
+        {
+            len = right_span;
+        }
+        if (len > 0)
+        {
+            drv_display_fill_rect(center + 1, cy - 1, len, 3);
+        }
     }
-    else
-    {
-        const int base = indicator_step / UIW_KNOB_INDICATOR_SUBSTEPS;
-        const int frac = indicator_step - (base * UIW_KNOB_INDICATOR_SUBSTEPS);
-        indicator_vec_x = (indicator_x[base] * (UIW_KNOB_INDICATOR_SUBSTEPS - frac))
-                          + (indicator_x[base + 1] * frac);
-        indicator_vec_y = (indicator_y[base] * (UIW_KNOB_INDICATOR_SUBSTEPS - frac))
-                          + (indicator_y[base + 1] * frac);
-    }
-
-    indicator_end_x = uiw_scale_ratio(indicator_vec_x,
-                                      indicator_radius,
-                                      UIW_KNOB_VECTOR_SCALE * UIW_KNOB_INDICATOR_SUBSTEPS);
-    indicator_end_y = uiw_scale_ratio(indicator_vec_y,
-                                      indicator_radius,
-                                      UIW_KNOB_VECTOR_SCALE * UIW_KNOB_INDICATOR_SUBSTEPS);
-    drv_display_draw_line(cx, cy, cx + indicator_end_x, cy + indicator_end_y);
-    drv_display_draw_rect(cx - 1, cy - 1, 3, 3);
 }
 
 void uiw_draw_switch(int x, int y, int w, int h, uint8_t on)
@@ -380,7 +322,15 @@ uiw_widget_type_t uiw_pick_widget_type(const param_desc_t *desc, const char *enu
         {
             return UIW_WIDGET_FILTER_ICON;
         }
+
+        return UIW_WIDGET_ENUM_TEXT;
     }
 
-    return UIW_WIDGET_KNOB;
+    if ((desc->type == PARAM_TYPE_BIPOLAR)
+            || ((desc->min < 0.0f) && (desc->max > 0.0f)))
+    {
+        return UIW_WIDGET_BIPOLAR_BAR;
+    }
+
+    return UIW_WIDGET_BAR;
 }

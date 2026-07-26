@@ -956,6 +956,12 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         {
             return UIW_WIDGET_ENUM_TEXT;
         }
+        if ((id == PARAM_WAVE_FINE)
+                || (id == PARAM_WAVE_COARSE)
+                || (id == PARAM_WAVE_MODULATION))
+        {
+            return UIW_WIDGET_BIPOLAR_BAR;
+        }
         return suggested_widget;
     }
 
@@ -966,13 +972,14 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         case UI_WAVE_VALUE_STEPPED:
         case UI_WAVE_VALUE_ENUM:
             return UIW_WIDGET_ENUM_TEXT;
-        case UI_WAVE_VALUE_PERCENT:
         case UI_WAVE_VALUE_BIPOLAR_PERCENT:
         case UI_WAVE_VALUE_INTERVAL:
+            return UIW_WIDGET_BIPOLAR_BAR;
+        case UI_WAVE_VALUE_PERCENT:
         case UI_WAVE_VALUE_MORPH:
         case UI_WAVE_VALUE_RATE:
         default:
-            return UIW_WIDGET_KNOB;
+            return suggested_widget;
     }
 }
 

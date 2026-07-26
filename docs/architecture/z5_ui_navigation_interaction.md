@@ -1,5 +1,13 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-26 - widgets de valeur en barres
+
+- Le choix commun de widget `uiw_pick_widget_type()` ne retourne plus de potard circulaire pour les valeurs standard: les params continus/int unipolaires utilisent `UIW_WIDGET_BAR`, les params `PARAM_TYPE_BIPOLAR` ou a range signee traversant zero utilisent `UIW_WIDGET_BIPOLAR_BAR`.
+- Les enums restent des widgets texte, sauf les icones explicites waveform/filter deja reconnues; les bools restent des switchs et les custom widgets ADSR/waveform/Matrix continuent de passer par leurs renderers dedies.
+- Les widgets barre affichent leur valeur au-dessus de la barre dans la zone widget; le label bas reste le nom du parametre, y compris pendant le flash de tweak.
+- Le widget barre bipolaire commun est aussi reutilise par les widgets MOD/DEPTH/LFO centre existants; sa barre centrale est volontairement courte pour degager le label de valeur.
+- Les params `TRIG` des pages `MOD 1/2` `LFO 1`/`LFO 2` forcent le widget texte enum afin que le label `TRIG` ne soit jamais traite comme une forme `TRI`.
+
 ## Addendum 2026-07-26 - MOD 2/2 MULTI/SLEW
 
 - Correction 2026-07-26: `MULTI` (`M1A/M1B/M2A/M2B`) et les champs `S1SRC/S2SRC` de `SLEW` utilisent le widget texte de source Matrix (`LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`, `MULT1`, `MULT2`, `SLEW1`, `SLEW2`), jamais un potard continu; les labels longs de ces sources restent `env flt`, `env vca`, `env mod`.
