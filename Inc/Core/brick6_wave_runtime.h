@@ -58,7 +58,10 @@ typedef struct
     uint8_t has_active_note;
     uint8_t gate;
     uint8_t trigger;
+    uint16_t declick_remaining;
     float velocity;
+    float declick_start;
+    float last_output;
 } brick6_wave_runtime_voice_t;
 
 void brick6_wave_runtime_init(void);

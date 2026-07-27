@@ -14,6 +14,12 @@
 - Le chemin CLEAN garde l'interpolation lineaire intra-frame et inter-frames, mais saute la seconde frame quand `frame_count==1`, `frame0==frame1` ou `frame_frac==0`.
 - Le wrap de phase utilise un `if` rapide avec fallback borne pour les increments extremes; la justesse pitch reste portee par le meme `phase_inc` float.
 
+## Addendum 2026-07-27 - declick note-on Synth/Wave
+
+- `brick6_wave_runtime` garde un anti-click local au moteur: au note-on, la nouvelle forme Wave est crossfadee depuis le dernier sample de sortie de l'instance pendant `32` samples audio.
+- Ce declick ne remplace pas l'enveloppe musicale VCA mixer; il borne seulement la discontinuite creee par le reset de phase/POS/velocity propre a Wave.
+- Le fast path POS stable calcule `frame0/frame1/frame_frac` et les pointeurs de frames une seule fois par bloc quand `pos_smoothed` est deja au target remappe `START/END/POS`; l'interpolation inter-frame CLEAN reste active seulement si deux frames distinctes et une fraction non nulle sont necessaires.
+
 ## Addendum 2026-07-27 - smoothing POS Synth/Wave
 
 - `brick6_wave_runtime` lisse `POS` localement par oscillateur dans le chemin audio, apres remap `START/END` et avant selection de frame.
