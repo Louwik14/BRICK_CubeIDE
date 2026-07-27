@@ -267,6 +267,29 @@ static void project_v1_capture_sample_autoload(ProjectSaveV1 *project)
                                                  ram->path);
         }
     }
+
+    for (uint16_t slot = 0U; slot < WAVETABLE_POOL_MAX_SLOTS; ++slot)
+    {
+        const wavetable_slot_t *const wavetable = wavetable_pool_get_slot(slot);
+        if ((wavetable != 0)
+            && (wavetable->path[0] != '\0')
+            && ((wavetable->state == WAVETABLE_SLOT_READY)
+                || (wavetable->state == WAVETABLE_SLOT_ERROR)))
+        {
+            uint16_t global_index = wavetable->global_slot;
+            if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            {
+                (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                                         slot,
+                                                         &global_index);
+            }
+            (void)project_v1_sample_autoload_add(project,
+                                                 PROJECT_V1_SAMPLE_AUTOLOAD_KIND_WAVETABLE,
+                                                 slot,
+                                                 global_index,
+                                                 wavetable->path);
+        }
+    }
 }
 
 static uint32_t project_v1_stream_product_cost_bytes(uint32_t frames)
@@ -361,6 +384,11 @@ static void project_v1_prepare_autoload_progress_units(const ProjectSaveV1 *proj
             g_project_autoload_progress_units_known[i] = 1U;
         }
         else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM)
+        {
+            g_project_autoload_progress_units[i] = 1U;
+            g_project_autoload_progress_units_known[i] = 1U;
+        }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_WAVETABLE)
         {
             g_project_autoload_progress_units[i] = 1U;
             g_project_autoload_progress_units_known[i] = 1U;
@@ -515,6 +543,37 @@ static void project_v1_ram_restore_autoload_slots(const ProjectSaveV1 *project)
         (void)sampler_ram_pool_load_wav_at(slot->slot_index,
                                            (uint16_t)slot->global_index,
                                            slot->path);
+    }
+}
+
+static void project_v1_wavetable_restore_autoload_slots(const ProjectSaveV1 *project)
+{
+    wavetable_pool_reset();
+    if (project == 0)
+    {
+        return;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if ((slot->kind != (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_WAVETABLE)
+            || ((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->slot_index >= WAVETABLE_POOL_MAX_SLOTS)
+            || (slot->global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            || (slot->path[0] == '\0'))
+        {
+            continue;
+        }
+
+        (void)wavetable_pool_load_file_at(slot->slot_index,
+                                          (uint16_t)slot->global_index,
+                                          slot->path);
     }
 }
 
@@ -1234,6 +1293,13 @@ uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_pro
             out_progress->done = (uint16_t)(out_progress->done
                                             + project_v1_autoload_slot_units(i, slot));
         }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_WAVETABLE)
+        {
+            out_progress->total = (uint16_t)(out_progress->total
+                                             + project_v1_autoload_slot_units(i, slot));
+            out_progress->done = (uint16_t)(out_progress->done
+                                            + project_v1_autoload_slot_units(i, slot));
+        }
     }
 
     if ((out_progress->done >= out_progress->total)
@@ -1328,9 +1394,11 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     project_v1_prepare_autoload_progress_units(&g_project_work);
     sample_global_pool_reset();
     sampler_ram_pool_reset();
+    wavetable_pool_reset();
     sample_pool_restore_project_snapshot(&g_project_work.sample_pool);
     project_v1_restore_stream_global_slots(&g_project_work);
     project_v1_ram_restore_autoload_slots(&g_project_work);
+    project_v1_wavetable_restore_autoload_slots(&g_project_work);
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
@@ -1370,6 +1438,7 @@ uint8_t project_v1_load_blank(void)
     project_v1_reset_blank_transient_runtime();
     sample_global_pool_reset();
     sampler_ram_pool_reset();
+    wavetable_pool_reset();
     sample_pool_init();
     for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
     {

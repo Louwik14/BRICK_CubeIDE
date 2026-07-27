@@ -1,5 +1,29 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-27 - volume pot et luminosite low-cost
+
+- Le pot volume low-cost `POT_VOLUME` (`PB1` / `ADC1_INP5`) est relu dans la sequence DMA ADC1 Hall comme troisieme conversion, hors parametre de track, puis expose via `board_surface_read_master_volume_raw()` au controle global `brick6_master_control`.
+- `brick6_master_control` applique ce raw au `mixer_set_master()` global avec le meme mapping borne que le master pot historique: seuil mute bas, 512 pas, courbe quadratique.
+- Le scanner `mux_pots` reste inactif en low-cost: aucun macro pot produit n'est declare et il ne doit pas reprendre le mux Hall ni l'ADC2 utilises par le clavier/surface.
+- Le plafond global WS2812 low-cost est `LOWCOST_WS2812_BRIGHTNESS_PERCENT` dans `Board/LowCost/Src/board_leds_lowcost.c`; valeur courante: 1 %.
+
+## Addendum 2026-07-27 - pages TONE Synth/Wave
+
+- `ui_page_template_tone` enregistre maintenant le template `Synth/Wave`.
+- Layout final: `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
+- `TABLE` affiche un slot global wavetable pret ou `---`; `TUNE` garde le pas normal 1 demi-ton et le pas Shift 0.01 demi-ton via `ui_param`.
+- Le selecteur `MOD/MATRIX DEST` expose les destinations continues Wave avec labels courts `O1Ps/O1Lv/O1Tn/O2Ps/O2Lv/O2Tn`; `TABLE`, `START`, `END`, `PHASE` et `FLIP` ne sont pas proposes.
+- Les pages `OSC1 WAVE` et `OSC2 WAVE` utilisent un grand widget wavetable sur la largeur des 4 slots: cadre `x=1 y=17 w=126 h=31`, interieur utile `x=2 y=18 w=124 h=29`, sans nom long de table dans le graphe. Les 4 labels parametres bas restent `TABLE/POS/START/END`.
+- La preview affiche une trace fine de la frame wavetable courante apres remap `START/END/POS`; le rendu UI ne scanne jamais la table complete et lit seulement la frame 2048 samples affichee. `START` et `END` sont des ticks internes haut/bas, `POS` est un curseur vertical interne plus visible; aucun label texte `S/P/E` n'est dessine sous le graphe.
+
+## Addendum 2026-07-27 - browser Settings WAVETABLE
+
+- `Settings > Sample` expose maintenant l'entree `WAVE`, aux cotes de `Multi`, `RAM` et `Stream`.
+- Le browser reutilise la surface split existante du browser Sample: colonne gauche = fichiers/dossiers SD, colonne droite = slots globaux `SAMPLE_GLOBAL_KIND_WAVETABLE` deja charges.
+- Le dossier SD utilisateur est `0:/WAVETABLES`; les fichiers `.WAV` y sont listables comme wavetables chargeables. Les caches `.B6WT` sont internes et ranges sous `0:/WAVETABLES/.CACHE`.
+- `OK` sur un fichier WAV charge la wavetable via `wavetable_pool_load_wav()` dans le pool SDRAM resident et l'inscrit dans `sample_global_pool`; `SHIFT+OK` remplace le slot wavetable selectionne a droite.
+- `OK` cote slots libere le slot selectionne via `wavetable_pool_clear()`. `PAGE4` rescane le dossier courant sans passer par un second workflow utilisateur; le scan est borne a la vue Settings et ne cree pas de nouveau browser global.
+
 ## Addendum 2026-07-26 - widgets de valeur en barres
 
 - Le choix commun de widget `uiw_pick_widget_type()` ne retourne plus de potard circulaire pour les valeurs standard: les params continus/int unipolaires utilisent `UIW_WIDGET_BAR`, les params `PARAM_TYPE_BIPOLAR` ou a range signee traversant zero utilisent `UIW_WIDGET_BIPOLAR_BAR`.
@@ -73,7 +97,7 @@ Dependances de Z5 sans appartenir a Z5:
 - Z4 `seq_runtime/seq_edit/seq_model` (transport, pattern mode, clipboard seq).
 - Storage (`pattern_live_ram`, `undo_v1`) pour recall/store/undo.
 - Keyboard runtime/hall engine pour comportements mode hall.
-- Z6 `wav_loader` / `sample_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
+- Z6 `wav_loader` / `sample_pool` / `sampler_ram_pool` / `wavetable_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
 - Z6 `multi_sample_index` / `multi_sample_import` / `multi_sample_pool` pour le browser Settings/Sampler/Multi: Z5 affiche les dossiers instrument, prepare/load les indexes et expose `CLEAR` page 3 pour supprimer uniquement les `.brickmulti` directs du dossier courant apres confirmation.
 - Board low-cost: les 16 STEP binaires sont exposes comme lanes `0..15` par `board_surface_snapshot()` avec pression 0/max. Le pipeline commun Hall/UI reste responsable des transitions press/release, modes, track select, mute/pattern et pression logique.
 - La chaîne low-cost remappe les groupes physiques dans l'ordre SR4, SR3, SR2, SR1; l'ordre D0..D7 de chaque registre reste inchangé.
@@ -244,9 +268,10 @@ Etat page active:
 - Lecture: `ui_page_get`, `ui_page_get_id`, navigation/settings.
 
 Etat browser Settings/Sample:
-- `ui_page_settings` expose une racine `Settings > Sample` avec trois entrees: `Multi`, `RAM`, `Stream`.
+- `ui_page_settings` expose une racine `Settings > Sample` avec quatre entrees: `Multi`, `RAM`, `WAVE`, `Stream`.
 - `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi`, navigue dans les dossiers sous `0:/Multi/` et conserve `multi_sample_pool` comme autorite.
 - `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/RAM`, normal ou sliced via `Slice Count`.
+- `Settings > Sample > WAVE` est la vue filtre `kind=WAVETABLE` du catalogue global. Elle liste les `.WAV` sous `0:/WAVETABLES`, charge/importe via `wavetable_pool`, affiche les slots wavetable READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot wavetable.
 - `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Stream`.
 - Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
 - Dans ces headers, `X/256` represente la capacite de slots actifs du catalogue global sample (`sample_global_pool`); `X/16MB` represente le budget memoire produit RAM/page-cache du meme pool. Un refus de chargement par saturation de slots fait flasher seulement `X/256`; un refus par budget memoire RAM/page-cache fait flasher seulement `X/16MB`. Le backend remonte la cause exacte (`GLOBAL_SLOT_FULL` vs `GLOBAL_BUDGET_FULL`/`RAM_POOL_FULL`), l'UI ne la devine pas apres coup.
@@ -541,23 +566,23 @@ Points factuels:
   - pas de nouveau flux de navigation autonome.
 - Compat UI/restore:
   - un ancien couple `Synth/Sampler` est remappe vers `Sampler/RAM`,
-  - la famille `Synth` propose `Wave`,
-  - `Wave` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
+  - la famille `Synth` propose `Prism`, `Wave`, `Stack`,
+  - `Prism` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
 
 
 
-## 14.b Contrat UI Wave
-- `Synth/Wave` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
-- La famille template `TONE` Wave expose exactement 8 params dans l'ordre runtime:
+## 14.b Contrat UI Prism
+- `Synth/Prism` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
+- La famille template `TONE` Prism expose exactement 8 params dans l'ordre runtime:
   - `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
 - Le layout UI suit deux sous-pages:
   - `EDIT`: `EDIT`, `FINE`, `COARSE`, `FM`
   - `TONE`: `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`
-- L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Wave`.
+- L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Prism`.
 - Le clavier live réutilise le même seam track-aware que le scheduler:
-  - `note on/off` Wave passent par `keyboard_engine` puis `brick6_braids_runtime`
+  - `note on/off` Prism passent par `keyboard_engine` puis `brick6_braids_runtime`
   - aucun chemin UI local parallèle n'est autorisé pour le jeu de notes.
-- `PHASE RESET=Off` conserve le comportement historique; `On` force une sync phase au premier sample rendu apres note-on pour les moteurs Wave sensibles a `sync_block`, sans reset random.
+- `PHASE RESET=Off` conserve le comportement historique; `On` force une sync phase au premier sample rendu apres note-on pour les moteurs Prism sensibles a `sync_block`, sans reset random.
 
 
 ## 14.c Contrat MIX send2 delay
@@ -846,16 +871,16 @@ Points factuels:
 - Le flash est declenche uniquement par action utilisateur explicite sur le slot: edition directe encodeur, edition p-lock, live-rec p-lock issu de l'encodeur, ou edition de valeur scene/macro en assign. Playback p-lock, LFO, morph scene continu, macro pot physique, restore/recall et refresh UI ne declenchent pas le flash.
 - Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.
 
-## 27. Contrat UI Wave labels moteur
+## 27. Contrat UI Prism labels moteur
 
-- La page `TONE` de `Synth/Wave` conserve les IDs et l'ordre existants: `EDIT`, `FINE`, `COARSE`, `FM`, puis `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
-- Les slots herites `TIMBRE` et `COLOR` affichent des labels UI dynamiques, un widget local et une valeur formatee derives de la valeur courante de `PARAM_WAVE_EDIT`; les valeurs stockees, l'ordre des params et le format projet/pattern ne changent pas.
+- La page `TONE` de `Synth/Prism` conserve les IDs et l'ordre existants: `EDIT`, `FINE`, `COARSE`, `FM`, puis `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
+- Les slots herites `TIMBRE` et `COLOR` affichent des labels UI dynamiques, un widget local et une valeur formatee derives de la valeur courante de `PARAM_PRISM_EDIT`; les valeurs stockees, l'ordre des params et le format projet/pattern ne changent pas.
 - La table UI couvre les 39 moteurs actifs de `brick6_braids_runtime.cpp::kBraidsShapeMap`, incluant `Harm` et sans entree `Warm`.
-- Les formats locaux Wave sont bornes a `PARAM_WAVE_TIMBRE` et `PARAM_WAVE_COLOR`: continu unipolaire normalise `0.00..127.00`, pourcent bipolaire conserve, intervalle en demi-tons/centiemes quand le mapping Braids est prouve, enum discret, stepped, morph et rate normalise.
-- Les controles globaux visibles de `Synth/Wave` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
-- La surface `MOD/MATRIX DEST` reutilise la meme source de noms Wave que `TONE`: les destinations `MODEL/FINE/PITCH/FM AMT`, `A MOD` et les labels dynamiques `TIMBRE/COLOR` dependent du moteur Wave canonique courant de la track, sans resolution temps reel des changements temporaires p-lock/LFO.
-- `SawSq` garde `PARAM_WAVE_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
-- Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Wave car ils ne sont pas dans le mapping runtime actif.
+- Les formats locaux Prism sont bornes a `PARAM_PRISM_TIMBRE` et `PARAM_PRISM_COLOR`: continu unipolaire normalise `0.00..127.00`, pourcent bipolaire conserve, intervalle en demi-tons/centiemes quand le mapping Braids est prouve, enum discret, stepped, morph et rate normalise.
+- Les controles globaux visibles de `Synth/Prism` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
+- La surface `MOD/MATRIX DEST` reutilise la meme source de noms Prism que `TONE`: les destinations `MODEL/FINE/PITCH/FM AMT`, `A MOD` et les labels dynamiques `TIMBRE/COLOR` dependent du moteur Prism canonique courant de la track, sans resolution temps reel des changements temporaires p-lock/LFO.
+- `SawSq` garde `PARAM_PRISM_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
+- Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Prism car ils ne sont pas dans le mapping runtime actif.
 
 ## 28. Surface MOD LFO finale
 
@@ -888,7 +913,7 @@ Points factuels:
 - `PAGE3` ouvre le mode generique `Name Edit` pour renommer le slot Patch valide selectionne. `Name Edit` recoit buffer initial, longueur max, titre/contexte et callback; `PAGE1` annule sans mutation, `PAGE2` retourne le nom valide a l'appelant. En `Name Edit`, seul `ENC1` change le caractere courant de la frise sans modifier le nom; `ENC2`/`ENC3`/`ENC4` sont no-op. `PAGE3` valide le caractere courant a la position d'ecriture puis avance le curseur si possible. `PAGE4` fait un backspace borne, `SHIFT+PAGE2` valide un espace, `PAGE3`/`PAGE4` avec SHIFT restent no-op. Le curseur represente la prochaine position a ecrire et reste borne aux caracteres existants ou a l'unique position append. Le mode affiche le nom et une frise de caracteres en police lisible, n'ecrit pas la SD lui-meme: `Patch Assign` reste responsable de `patch_v1_rename_slot` et du feedback.
 - `PAGE4` demande confirmation puis delete le slot valide selectionne; le browser reste sur le prochain slot valide ou sur le slot devenu `EMPTY`.
 - Les filtres Patch Assign sont manuels apres l'entree: `ENC1` choisit le slot visible avec navigation bornee sans wrap, `ENC2` choisit Family (`ALL`, `SYNTH`, `SAMPLER`, `DRUM`, `INPUT`, `MASTER`) avec navigation bornee sans wrap, `ENC3` choisit Type selon Family avec navigation bornee sans wrap. A l'entree, Family/Type sont initialises depuis la track focus; changer les targets par Hall ne recale pas les filtres.
-- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/TRX BD/BD Analog`.
+- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/PRISM/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/TRX BD/BD Analog`.
 - Regle de visibilite: `Family ALL + Type ALL` montre tous les slots Patch valides puis `BAD PATCH`; les filtres precis montrent uniquement les patches valides correspondants. Si aucun slot n'est visible, le menu affiche `NO PATCH`.
 - Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
 - `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
@@ -1026,7 +1051,7 @@ Points factuels:
 ## Addendum 2026-07-24 - UI MOD Matrix et ENV3
 
 - L'ensemble `MOD` expose maintenant quatre pages: `MATRIX` (`SLOT/SOURCE/DEST/DEPTH`), `LFO 1` (`RATE/PHASE ou SLEW/SHAPE/TRIG`), `LFO 2` (`RATE/PHASE ou SLEW/SHAPE/TRIG`) et `LFO TIME` (`DELAY1/FADE1/DELAY2/FADE2`).
-- Les destinations dynamiques WAVE restent rendues par le widget LFO destination existant, mais l'edition de destination/profondeur appartient a la page `MATRIX`.
+- Les destinations dynamiques PRISM restent rendues par le widget LFO destination existant, mais l'edition de destination/profondeur appartient a la page `MATRIX`.
 - La liste `SOURCE` Matrix ajoute `ENV VCA` et `ENV FLT` aux sources existantes; les labels UI exacts sont conserves dans le catalogue parametre.
 - Le parametre `SLOT` utilise un widget custom monochrome 24x24: base tous slots actifs, remplacement bitmap par croix pour chaque slot inactif, puis focus du slot edite par-dessus. Un slot est actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
 - Correction 2026-07-24: le widget `SLOT` est rendu depuis les bitmaps 24x24 de reference et compose dynamiquement les huit slots de la track courante; le parametre `SOURCE` de `MOD/MATRIX` utilise un rendu texte direct (`OFF`, `LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`) et aucun widget circulaire, tandis que les labels de parametres restent `ENV FLT`, `ENV VCA`, `ENV3`.
@@ -1034,22 +1059,23 @@ Points factuels:
 
 ## Addendum 2026-07-25 - catalogue Synth/Stack
 
-- Le catalogue CFG `Synth` propose maintenant `Wave` et `Stack`.
-- `Wave` conserve ses labels, pages et comportement UI historiques; il n'est pas renomme en Braids et ne devient pas un alias de Stack.
+- Le catalogue CFG `Synth` propose maintenant `Prism`, `Wave` et `Stack`.
+- `Prism` conserve ses labels, pages et comportement UI historiques; il n'est pas renomme en Braids et ne devient pas un alias de Stack.
+- `Wave` reprend le nom produit et le widget waveform du choix de type; etat courant: sa surface TONE wavetable est branchee via l'addendum `pages TONE Synth/Wave`.
 - `Stack` est un type Synth distinct expose par les labels `Stack` / `STCK`. Cette passe n'ajoute pas encore de page TONE Stack ni de parametres Stack.
 
 ## Addendum 2026-07-25 - pages TONE Stack
 
 - Le type `Synth/Stack` possede une surface TONE dediee en quatre pages: `OSC1`, `OSC2`, `OSC3` avec `MODEL`, `TUNE`, `TIMBRE`, `COLOR`, puis `LVL` (`OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`).
-- Les labels affiches pour `TIMBRE` et `COLOR` sont resolus dynamiquement selon le modele du slot Stack courant; les labels Wave continuent d'utiliser le resolveur Braids historique.
-- `MODEL` Stack utilise un widget enum texte et reste distinct du parametre `MODEL` Wave historique.
+- Les labels affiches pour `TIMBRE` et `COLOR` sont resolus dynamiquement selon le modele du slot Stack courant; les labels Prism continuent d'utiliser le resolveur Braids historique.
+- `MODEL` Stack utilise un widget enum texte et reste distinct du parametre `MODEL` Prism historique.
 
 ## Addendum 2026-07-25 - preview waveform Stack
 
 - Le catalogue TONE Stack expose maintenant `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM` et `TRIFD`.
 - `SINFD/TRIFD` affichent `FOLD/SYM/SHAPE`; `SHAPE` affiche `SHAPE/MORPH`.
 - Le widget waveform Stack remplace le potard par une courbe calculee cote UI depuis `brick6_stack_waveform`, avec prise en compte des params du slot et sans capture audio.
-- Wave conserve ses widgets et labels historiques.
+- Prism conserve ses widgets et labels historiques.
 
 ## Addendum 2026-07-25 - sensibilite encodeur parametres discrets
 
@@ -1071,7 +1097,7 @@ Points factuels:
 - `Synth/Stack` alterne `TONE 1/2` et la page `VOICE` par pression repetee du bouton TONE.
 - `TONE 1/2` conserve les pages `OSC1`, `OSC2`, `OSC3`, `LVL`.
 - La page `VOICE` expose uniquement `OSC DETUNE` et `RESET`, avec deux emplacements vides conserves par le style template existant. Aucune page `OSC1+`, `OSC2+`, `OSC3+`, aucun `SPREAD` Stack et aucun parametre de nombre de voix ne sont exposes.
-- Wave conserve ses pages `EDIT` et `TONE` historiques.
+- Prism conserve ses pages `EDIT` et `TONE` historiques.
 
 ## Addendum 2026-07-25 - TRACK CFG 2/2 voice group
 
@@ -1107,8 +1133,8 @@ Points factuels:
 ## Addendum 2026-07-26 - reorganisations TONE/ENV
 
 - `COLORS/ENV` page `FILTER` expose `CUTOFF/RES/EG AMT/F TYPE`; en mode DJ/EQ3, elle expose `LOW/MID/HIGH/F TYPE`.
-- `Synth/Wave` page `TONE` expose maintenant `VOICE` (`PARAM1/PARAM2/A MOD/MODEL`) puis `EDIT` (`TUNE/FM AMT/PHASE`).
-- Le controle Wave `TUNE` utilise l'ID UI `PARAM_WAVE_COARSE` comme controle unifie: sans `SHIFT` le pas est `1 st`, avec `SHIFT` le pas est `0.01 st`; l'edition directe neutralise `PARAM_WAVE_FINE` a `0.5` et encode la valeur finale dans `PARAM_WAVE_COARSE`.
+- `Synth/Prism` page `TONE` expose maintenant `VOICE` (`PARAM1/PARAM2/A MOD/MODEL`) puis `EDIT` (`TUNE/FM AMT/PHASE`).
+- Le controle Prism `TUNE` utilise l'ID UI `PARAM_PRISM_COARSE` comme controle unifie: sans `SHIFT` le pas est `1 st`, avec `SHIFT` le pas est `0.01 st`; l'edition directe neutralise `PARAM_PRISM_FINE` a `0.5` et encode la valeur finale dans `PARAM_PRISM_COARSE`.
 - Le badge de track affiche `M#` uniquement pour une master ayant au moins une slave effective; une master orpheline revient au label simple `#`.
 
 ## Addendum 2026-07-26 - LINK choix discrets

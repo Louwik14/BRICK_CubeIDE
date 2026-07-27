@@ -1,5 +1,14 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-27 - TONE Synth/Wave
+
+- `PARAM_WAVE_OSC1_*` et `PARAM_WAVE_OSC2_*` ajoutent les 16 parametres TONE du moteur `Synth/Wave`: `TABLE`, `POS`, `START`, `END`, `LEVEL`, `TUNE`, `PHASE`, `FLIP`.
+- Les bases track-aware vivent dans `track_tone_sound_state.wave`; `param_registry` les lit/ecrit comme les autres TONE.
+- `param_backend_apply_tone_wave()` projette les valeurs vers `brick6_wave_runtime`: `TABLE` cible un slot global `SAMPLE_GLOBAL_KIND_WAVETABLE`, `POS/START/END/LEVEL` sont continus 0..1, `TUNE` est en demi-tons avec pas UI normal 1 st et Shift 0.01 st, `PHASE` et `FLIP` restent discrets.
+- `track_runtime` expose ces params uniquement via le layout TONE local `TRACK_RUNTIME_TYPE_WAVE`.
+- Le catalogue Matrix expose seulement les destinations Wave continues `OSC1 POS`, `OSC1 LEVEL`, `OSC1 TUNE`, `OSC2 POS`, `OSC2 LEVEL`, `OSC2 TUNE`; l'application RT directe passe par `brick6_wave_runtime_set_osc_pos/level/tune()` sans mutation de la base canonique.
+- `TABLE`, `START`, `END`, `PHASE` et `FLIP` restent exclus des destinations Matrix initiales: `TABLE/PHASE/FLIP` sont discrets/structurels, `START/END` restent des bornes statiques de scan; `POS` est l'entree continue modulee et lissee localement par le runtime Wave apres remap dans cette zone.
+
 ## Addendum 2026-07-26 - MOD operators MULTI/SLEW et LFO rate destinations
 
 - Correction UI-label 2026-07-26: les labels longs de sources Matrix `ENV FLT/ENV VCA/ENV3` sont exposes cote catalogue MOD comme `env flt/env vca/env mod`; les IDs runtime et valeurs enum ne changent pas.
@@ -107,10 +116,10 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - le bloc Wave est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
-  - `PARAM_WAVE_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
+  - le bloc Prism est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
+  - `PARAM_PRISM_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime,
-  - source unique de re-projection des params Wave apres reset/rebind d'instance runtime.
+  - source unique de re-projection des params Prism apres reset/rebind d'instance runtime.
   - Pour `PARAM_SAMPLER_SAMPLE` hors Multi, la valeur canonique utilisateur est un slot `sample_global_pool` actif `0..255`; l'apply Sampler resout ensuite `STREAM -> backend_index sample_pool` avant de toucher le runtime audio Classic.
 
 ## 2.c Contrat public du seam `param_registry`
@@ -199,7 +208,7 @@ Call-sites critiques:
 - La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
 - Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
 - Les assignations MACRO deja existantes hors p-lock (`MIX`) restent conservees par compatibilite produit, sans devenir p-lockables.
-- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Wave et MIX.
+- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Prism et MIX.
 - Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
 - Pendant un maintien de scene en overlay `M-Assign`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
@@ -405,15 +414,15 @@ Call-sites critiques:
   - emission CC via `midi_cc` seulement quand la valeur 7-bit change,
   - aucun backend audio ajoute.
 
-## 23.b Contrat LFO Wave / Drum direct
+## 23.b Contrat LFO Prism / Drum direct
 
-- Les destinations Wave directes sont `PARAM_WAVE_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
-- `PARAM_WAVE_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
-- Les labels de ces destinations Wave passent par le helper commun `param_wave_labels`: ils refletent l'etat canonique courant `PARAM_WAVE_EDIT` de la track et restent alignes avec les labels TONE, sans suivre dynamiquement les p-locks/LFO temporaires sur le choix de moteur.
+- Les destinations Prism directes sont `PARAM_PRISM_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
+- `PARAM_PRISM_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
+- Les labels de ces destinations Prism passent par le helper commun `param_prism_labels`: ils refletent l'etat canonique courant `PARAM_PRISM_EDIT` de la track et restent alignes avec les labels TONE, sans suivre dynamiquement les p-locks/LFO temporaires sur le choix de moteur.
 - Les destinations Drum directes actives sont les quatre controles `BD_ANALOG` exposes par le mapping TONE runtime: `PARAM_DRUM_TRX_BD_PITCH`, `DECAY`, `HARMONICS` et `PITCH_SWEEP`.
 - Les params Drum reserves/TRX (`SWEEP_DECAY`, `ATTACK`, `NOISE`, `DRIVE`) restent generiques/non exposes pour `BD_ANALOG`; ils n'ont pas de setter runtime actif clair dans `drum_synth`.
 - Application modulation runtime:
-  - `mod_lfo_v1` calcule toujours `base_value + modulation`, clamp avec les bornes catalogue, puis appelle le setter runtime Wave ou Drum,
+  - `mod_lfo_v1` calcule toujours `base_value + modulation`, clamp avec les bornes catalogue, puis appelle le setter runtime Prism ou Drum,
   - aucune mise a jour de base canonique `track_tone_sound_state`,
   - aucune emission UI/save/p-lock supplementaire,
   - release, changement de destination, depth 0 et double LFO meme destination conservent le contrat existant de restauration de la base.
@@ -668,14 +677,14 @@ Dette explicite post-passe 4:
 - Ces params sont stockes/restaurables via les flux `PARAM_COUNT`; `ARM=Rec` pilote le record simple existant cote Z5, `ARM=Overd` reste borne/no-op pour l'audio overdub non implemente, et `PLAY` est stocke sans lancer de playback Looper.
 - `seq_param_iface` et `mod_lfo_v1` excluent ces params du p-lock/LFO: ce sont des commandes de workflow, pas des modulations audio continues.
 
-## 34. Contrat Wave Phase Reset
+## 34. Contrat Prism Phase Reset
 
-- `PARAM_WAVE_PHASE_RESET` est un param TONE track-aware `Off/On`, default `Off`, stocke dans `track_tone_sound_state.wave.phase_reset`.
-- L'apply Wave met a jour la base canonique puis projette l'option vers `brick6_braids_runtime_set_phase_reset(instance_id, enabled)`.
+- `PARAM_PRISM_PHASE_RESET` est un param TONE track-aware `Off/On`, default `Off`, stocke dans `track_tone_sound_state.prism.phase_reset`.
+- L'apply Prism met a jour la base canonique puis projette l'option vers `brick6_braids_runtime_set_phase_reset(instance_id, enabled)`.
 - `Off` conserve le comportement historique: aucun reset de phase force au note-on.
 - `On` arme un reset phase one-shot au prochain `note_on`; l'execution audio passe par `sync_block[0]=1` sur le premier sous-bloc rendu.
 - Aucun reset random ni reinit locale complexe du moteur Mutable n'est associe a ce param.
-- `mod_lfo_v1` exclut `PARAM_WAVE_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
+- `mod_lfo_v1` exclut `PARAM_PRISM_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
 - `PARAM_COUNT` augmente; les snapshots/patterns/projets binaires produits par cette passe changent de layout parametre.
 
 ## 35. Contrat XFade Looper apres retrait buffer master
@@ -757,7 +766,7 @@ Dette explicite post-passe 4:
 
 - `mod_destination_catalog` porte maintenant le catalogue commun des destinations de modulation continues: validation track-aware, cache index/param par track, labels longs/courts et application RT directe.
 - `mod_lfo_v1` conserve la compatibilite de surface UI (`mod_lfo_v1_dest_*`) mais delegue au catalogue commun; il ne possede plus le cache destination ni le cache MIDI CC.
-- Les chemins RT directs existants (MIX, FILTER, VCA, Sampler, Wave, Drum, MIDI CC, fallback `param_registry_apply_track_value_rt_fast`) sont conserves sans changement fonctionnel, mais leur autorite est preparee pour etre consommee par la matrice de modulation.
+- Les chemins RT directs existants (MIX, FILTER, VCA, Sampler, Prism, Drum, MIDI CC, fallback `param_registry_apply_track_value_rt_fast`) sont conserves sans changement fonctionnel, mais leur autorite est preparee pour etre consommee par la matrice de modulation.
 
 ## 44. Contrat runtime Matrix et accumulation
 
@@ -788,11 +797,11 @@ Dette explicite post-passe 4:
 
 ## Addendum 2026-07-25 - parametres TONE Stack
 
-- Stack possede ses propres IDs TONE: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR par slot. Ils sont stockes dans `track_tone_sound_state.stack` et ne reutilisent aucun champ Wave.
+- Stack possede ses propres IDs TONE: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR par slot. Ils sont stockes dans `track_tone_sound_state.stack` et ne reutilisent aucun champ Prism.
 - Les writes hors IRQ passent par `param_backend_apply_tone_stack()` puis par la file `brick6_stack_runtime_submit_*`; le controle hors IRQ n'ecrit pas directement dans l'instance runtime Stack. Les projections runtime temporaires de p-lock utilisent les setters audio directs sans mutation de la base canonique.
 - Les p-locks TONE utilisent la table `track_runtime_tone_slots_stack[]`; `MODEL` est donc p-lockable comme parametre stepped Stack.
 - Le catalogue commun de modulation expose uniquement les destinations Stack continues: niveaux, bruit, TUNE, TIMBRE et COLOR. Les params `PARAM_STACK_OSC*_MODEL` sont exclus des destinations LFO/Matrix continues.
-- Wave conserve son catalogue de params, son apply backend et ses destinations historiques sans rerouting vers Stack.
+- Prism conserve son catalogue de params, son apply backend et ses destinations historiques sans rerouting vers Stack.
 - Le cache runtime param conserve les valeurs en `CTRL_STATE`; son masque de validite vit en `SEQ_STATE_D2` pour garder `RAM_D3` bornee quand le catalogue de params evolue.
 
 ## Addendum 2026-07-25 - simplification analogique Stack
@@ -820,8 +829,8 @@ Dette explicite post-passe 4:
 
 - Les `PARAM_STACK_OSC*_TUNE` stockent maintenant la valeur en centiemes de demi-ton via un `step=0.01`; le pas coarse `1.0` est une policy UI Z5, pas la resolution catalogue.
 - Le runtime Stack consomme ce pitch comme cents par slot oscillator et ne quantize plus la base Stack au demi-ton; les p-locks TONE encodent donc les valeurs fines exactes selon le step catalogue.
-- Wave/Braids garde le stockage interne `PARAM_WAVE_FINE` et `PARAM_WAVE_COARSE`; Z5 expose cependant un controle Wave `TUNE` unifie sur `PARAM_WAVE_COARSE`.
-- Pour ce controle UI, la valeur visible combine `COARSE + FINE`, l'edition directe remet `FINE` au neutre `0.5`, et l'encodage p-lock de `PARAM_WAVE_COARSE` conserve la resolution fine du controle unifie.
+- Prism/Braids garde le stockage interne `PARAM_PRISM_FINE` et `PARAM_PRISM_COARSE`; Z5 expose cependant un controle Prism `TUNE` unifie sur `PARAM_PRISM_COARSE`.
+- Pour ce controle UI, la valeur visible combine `COARSE + FINE`, l'edition directe remet `FINE` au neutre `0.5`, et l'encodage p-lock de `PARAM_PRISM_COARSE` conserve la resolution fine du controle unifie.
 
 ## Addendum 2026-07-26 - PARAM3 Stack et modeles Fold
 
@@ -834,3 +843,9 @@ Dette explicite post-passe 4:
 
 - LINK voice group propage maintenant les choix discrets `PARAM_FILTER_TYPE`, `PARAM_CFG_TRACK` et `PARAM_CFG_TRACK_TYPE` par valeur absolue source apres clamp, pas par delta relatif.
 - Les autres params LINK existants restent sur leur propagation relative bornee; les exclusions `PLAY`, p-locks, scheduler, automation, SPREAD/LINK et selecteurs Matrix restent inchangees.
+
+## Addendum 2026-07-27 - identite Synth/Wave avant TONE
+
+- `Synth/Wave` possede une identite runtime separee. Les `PARAM_WAVE_*` ont ete ajoutes ensuite par l'addendum TONE Wave ci-dessus.
+- Avant cette passe TONE, aucun slot TONE, apply backend, p-lock TONE ou destination Matrix Wave n'etait branche.
+- Les destinations Prism existantes restent attachees a `TRACK_RUNTIME_ENGINE_PRISM` et ne s'appliquent pas a `TRACK_RUNTIME_ENGINE_WAVE`.

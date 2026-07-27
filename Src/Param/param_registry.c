@@ -663,29 +663,29 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX4_B:
             *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
             return 1U;
-        case PARAM_WAVE_EDIT:
-            *out_value = state->wave.edit;
+        case PARAM_PRISM_EDIT:
+            *out_value = state->prism.edit;
             return 1U;
-        case PARAM_WAVE_FINE:
-            *out_value = state->wave.fine;
+        case PARAM_PRISM_FINE:
+            *out_value = state->prism.fine;
             return 1U;
-        case PARAM_WAVE_COARSE:
-            *out_value = state->wave.coarse;
+        case PARAM_PRISM_COARSE:
+            *out_value = state->prism.coarse;
             return 1U;
-        case PARAM_WAVE_FM:
-            *out_value = state->wave.fm;
+        case PARAM_PRISM_FM:
+            *out_value = state->prism.fm;
             return 1U;
-        case PARAM_WAVE_TIMBRE:
-            *out_value = state->wave.timbre;
+        case PARAM_PRISM_TIMBRE:
+            *out_value = state->prism.timbre;
             return 1U;
-        case PARAM_WAVE_MODULATION:
-            *out_value = state->wave.modulation;
+        case PARAM_PRISM_MODULATION:
+            *out_value = state->prism.modulation;
             return 1U;
-        case PARAM_WAVE_COLOR:
-            *out_value = state->wave.color;
+        case PARAM_PRISM_COLOR:
+            *out_value = state->prism.color;
             return 1U;
-        case PARAM_WAVE_PHASE_RESET:
-            *out_value = state->wave.phase_reset;
+        case PARAM_PRISM_PHASE_RESET:
+            *out_value = state->prism.phase_reset;
             return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
@@ -725,6 +725,38 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_STACK_PHASE_RESET:
             *out_value = state->stack.phase_reset;
+            return 1U;
+        case PARAM_WAVE_OSC1_TABLE:
+        case PARAM_WAVE_OSC2_TABLE:
+            *out_value = state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_POS:
+        case PARAM_WAVE_OSC2_POS:
+            *out_value = state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+            *out_value = state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_END:
+        case PARAM_WAVE_OSC2_END:
+            *out_value = state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_LEVEL:
+        case PARAM_WAVE_OSC2_LEVEL:
+            *out_value = state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_TUNE:
+        case PARAM_WAVE_OSC2_TUNE:
+            *out_value = state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_PHASE:
+        case PARAM_WAVE_OSC2_PHASE:
+            *out_value = state->wave.phase[(uint8_t)((id - PARAM_WAVE_OSC1_PHASE) / 8U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_FLIP:
+        case PARAM_WAVE_OSC2_FLIP:
+            *out_value = state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)];
             return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
@@ -904,29 +936,29 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX4_B:
             state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
             return 1U;
-        case PARAM_WAVE_EDIT:
-            state->wave.edit = value;
+        case PARAM_PRISM_EDIT:
+            state->prism.edit = value;
             return 1U;
-        case PARAM_WAVE_FINE:
-            state->wave.fine = value;
+        case PARAM_PRISM_FINE:
+            state->prism.fine = value;
             return 1U;
-        case PARAM_WAVE_COARSE:
-            state->wave.coarse = value;
+        case PARAM_PRISM_COARSE:
+            state->prism.coarse = value;
             return 1U;
-        case PARAM_WAVE_FM:
-            state->wave.fm = value;
+        case PARAM_PRISM_FM:
+            state->prism.fm = value;
             return 1U;
-        case PARAM_WAVE_TIMBRE:
-            state->wave.timbre = value;
+        case PARAM_PRISM_TIMBRE:
+            state->prism.timbre = value;
             return 1U;
-        case PARAM_WAVE_MODULATION:
-            state->wave.modulation = value;
+        case PARAM_PRISM_MODULATION:
+            state->prism.modulation = value;
             return 1U;
-        case PARAM_WAVE_COLOR:
-            state->wave.color = value;
+        case PARAM_PRISM_COLOR:
+            state->prism.color = value;
             return 1U;
-        case PARAM_WAVE_PHASE_RESET:
-            state->wave.phase_reset = clamp_value(value, 0.0f, 1.0f);
+        case PARAM_PRISM_PHASE_RESET:
+            state->prism.phase_reset = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
@@ -967,6 +999,38 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_STACK_PHASE_RESET:
             state->stack.phase_reset = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_TABLE:
+        case PARAM_WAVE_OSC2_TABLE:
+            state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 8U)] = clamp_value(value, 0.0f, param_registry[id].max);
+            return 1U;
+        case PARAM_WAVE_OSC1_POS:
+        case PARAM_WAVE_OSC2_POS:
+            state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+            state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_END:
+        case PARAM_WAVE_OSC2_END:
+            state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_LEVEL:
+        case PARAM_WAVE_OSC2_LEVEL:
+            state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_TUNE:
+        case PARAM_WAVE_OSC2_TUNE:
+            state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)] = clamp_value(value, -60.0f, 60.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_PHASE:
+        case PARAM_WAVE_OSC2_PHASE:
+            state->wave.phase[(uint8_t)((id - PARAM_WAVE_OSC1_PHASE) / 8U)] = clamp_value(value, 0.0f, 3.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_FLIP:
+        case PARAM_WAVE_OSC2_FLIP:
+            state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)] = clamp_value(value, 0.0f, 3.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

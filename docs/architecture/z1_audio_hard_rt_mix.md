@@ -6,11 +6,31 @@
 - Les anciennes capacites separees `CLASSIC=288002` et `DUAL=432002` sont retirees: `CLASSIC` et `DUAL` restent mutuellement exclusifs dans `mixer_process()` et utilisent le meme pool.
 - `DUAL` conserve sa reserve interne de redimensionnement `ceil(time)+8`; `CLASSIC` conserve son clamp temps a 6 s via `kMaxDelaySeconds`, malgre les quelques samples de garde supplementaires du pool commun.
 
+## Addendum 2026-07-27 - optimisation IRQ Synth/Wave CLEAN
+
+- `brick6_wave_runtime_render_instance()` retourne maintenant si un bloc a produit un signal Wave utile; Z1 ne soumet plus de buffer mono zero au mixer pour une instance inactive.
+- Le rendu Wave prepare un contexte par oscillo au debut du bloc: resolution table, pointeur SDRAM `FLOAT32_MONO`, `frame_count`, flags `FLIP`, niveau et bornes derivees. La boucle sample ne consulte plus `sample_global_pool` ni `wavetable_pool_get_slot()`.
+- Les oscillateurs a `LEVEL=0` ou table invalide sont exclus du hot path sample; leur smoothing `POS` avance en bloc pour garder l'etat local coherent sans lecture wavetable.
+- Le chemin CLEAN garde l'interpolation lineaire intra-frame et inter-frames, mais saute la seconde frame quand `frame_count==1`, `frame0==frame1` ou `frame_frac==0`.
+- Le wrap de phase utilise un `if` rapide avec fallback borne pour les increments extremes; la justesse pitch reste portee par le meme `phase_inc` float.
+
+## Addendum 2026-07-27 - smoothing POS Synth/Wave
+
+- `brick6_wave_runtime` lisse `POS` localement par oscillateur dans le chemin audio, apres remap `START/END` et avant selection de frame.
+- Le smoothing est un one-pole borne (`WAVE_POS_SMOOTH_COEFF=0.004`) avec snap final court; il ne modifie ni `track_tone_sound_state`, ni `param_store`, ni les bases Matrix.
+- L'etat `pos_smoothed` avance meme quand `LEVEL=0` ou quand la table n'est pas prete, afin qu'un oscillo reactualise ne saute pas brutalement vers une ancienne position.
+
+## Addendum 2026-07-27 - preview wavetable hors IRQ
+
+- `wavetable_pool` construit a la fin du chargement une preview compacte `WAVETABLE_PREVIEW_COLUMNS=124`, avec min/max par colonne et peak global.
+- Cette preview est stockee avec le slot resident SDRAM et invalidee par generation; elle est calculee hors IRQ audio, jamais pendant le rendu UI ou audio.
+- Z5 consomme uniquement cette preview pre-calculee pour les pages `OSC1/2 WAVE`; le scroll `TABLE` peut donc changer de table sans scan complet des frames a l'ecran.
+
 ## Addendum 2026-07-26 - Retrigger hard/soft ENV
 
 - Le mixer porte maintenant deux flags runtime par lane, `filter_retrigger_hard` et `vca_retrigger_hard`, projetes depuis les params track-aware `PARAM_ENV_RETRIG_FILTER` et `PARAM_ENV_RETRIG_VCA`.
 - `ON` conserve le comportement hard historique: l'enveloppe repart de zero au note-on. `OFF` utilise le retrigger soft de l'enveloppe existante: attaque depuis la valeur courante, sans rampe/declick/zero-cross additionnel.
-- Le chemin VCA amplitude reste `adsr_daisy_c_t`; le chemin filtre reste `env_adsr_peaks_t` via `env_adsr`. Les moteurs Wave/Stack/Braids ne sont pas modifies.
+- Le chemin VCA amplitude reste `adsr_daisy_c_t`; le chemin filtre reste `env_adsr_peaks_t` via `env_adsr`. Les moteurs Prism/Stack/Braids ne sont pas modifies.
 
 ## 1. Perimetre
 
@@ -27,13 +47,15 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/metronome_runtime.c` + `Inc/Audio/metronome_runtime.h` : generateur metronome hard-RT RAM-only, declenche par event Z4, rendu MAIN monitor-only.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Wave multi-instances (une instance mono par track Wave) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
+- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Prism multi-instances (une instance mono par track Prism) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
+- `Src/Core/brick6_wave_runtime.c` + `Inc/Core/brick6_wave_runtime.h` : runtime `Synth/Wave` mono, deux oscillateurs wavetable utilisateur par instance, lecture SDRAM uniquement depuis `wavetable_pool`, interpolation lineaire intra-frame et inter-frames, puis injection par `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Core/brick6_sampler_runtime.c` : declick minimal des stops/steals Sampler par capture du dernier echantillon rendu et tail RAM-only courte, mixee dans le buffer Sampler avant injection mixer.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
 - `Src/Sampler/sampler_ram_pool.c` + `Inc/Sampler/sampler_ram_pool.h` : backend resident RAM v1. Il charge explicitement des WAV PCM 16/24-bit mono/stereo hors IRQ vers un stockage interne `FLOAT32_INTERLEAVED` stereo alloue dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`, conserve sample_rate/frames/cout/generation, expose `channels=2`, inscrit les slots comme `kind=RAM` dans `sample_global_pool`, et porte l'overview waveform min/max derivee du sample RAM. Le consommateur IRQ courant est `Sampler/RAM`, normal ou sliced via `Slice Count`.
+- `Src/Sampler/wavetable_pool.c` + `Inc/Sampler/wavetable_pool.h` : backend resident WAVETABLE. Il charge hors IRQ un fichier `B6WT` depuis SD vers le meme `SAMPLE_PAGE_SLOT_POOL`, stocke les frames en `FLOAT32_MONO`, inscrit les slots comme `kind=WAVETABLE` dans `sample_global_pool`, et ne lit jamais la SD depuis l'audio IRQ.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
 - `Src/Sampler/sample_stream_fatfs_map.c` + `Inc/Sampler/sample_stream_fatfs_map.h` : certification hors IRQ des WAV STREAM contigus via FatFs CLMT. Les acces aux champs internes FatFs restent confines ici. Un fichier non certifie conserve le backend FatFs historique.
 - `Src/Sampler/sample_stream_backend_contiguous.c` + `Inc/Sampler/sample_stream_backend_contiguous.h` : backend V1 `STREAM_SAFE_CONTIGUOUS`; remplit une page cache float stereo depuis des secteurs SD physiques deja certifies, hors IRQ et sous l'autorite du `sample_stream_manager`.
@@ -49,7 +71,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
 Dependances de Z1 sans appartenir a Z1:
-- Engines synth/sampler (`drum`, `voice_manager`, wrappers Wave/Sampler).
+- Engines synth/sampler (`drum`, `voice_manager`, wrappers Prism/Sampler).
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
@@ -77,6 +99,7 @@ Contrat page-cache/streamer:
 - Le pool produit partageable est strictement `SAMPLE_PAGE_SLOT_POOL_COUNT` pages, soit `SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES=1024` pages de `SAMPLE_PAGE_BYTES=16384` octets dans la configuration courante: 16 777 216 octets (16 MiB). Les ranges `SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES=128` et `SAMPLE_PAGE_PRODUCT_MARGIN_PAGES=128` restent fixes et hors consommation permanente des samples RAM.
 - RAM v1 utilise ce meme `SAMPLE_PAGE_SLOT_POOL` que les presocles Stream/Multi: `sampler_ram_pool` demande des runs contigus de pages via `sample_page_cache_alloc_slot_pool_bytes()`, les garde pinnees comme pages permanentes brutes, stocke le WAV converti en `FLOAT32_INTERLEAVED` stereo, construit ensuite une overview waveform slot-owned hors IRQ, et libere ces pages au clear/reset via `sample_page_cache_release_slot_pool_allocation()`.
 - Le cout RAM enregistre dans `sample_global_pool.cost_bytes` est la capacite physique reelle allouee en pages SLOT_POOL (`ceil(data_bytes / SAMPLE_PAGE_BYTES) * SAMPLE_PAGE_BYTES`), pas un alignement logique de petit buffer. Aucun fallback vers `sample_cache`, `sample_voice_reader`, `sample_cache_start_voice_at` ou le streamer Classic; `Sampler/RAM` et `Sampler/RAM sliced mode` RAM lisent directement le `FLOAT32_INTERLEAVED` stereo resident.
+- WAVETABLE utilise la meme politique de pool resident que RAM: pages permanentes allouees par `sample_page_cache_alloc_slot_pool_bytes()`, cout global aligne sur les pages physiques et liberees par `sample_page_cache_release_slot_pool_allocation()`. Le futur runtime `Synth/Wave` devra lire uniquement ce pointeur SDRAM resident.
 
 ## 2. Autorite(s) de verite
 
@@ -233,7 +256,7 @@ Flux nominal prouve par code:
 4) Collecte des events/sources
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-- rendu engines externes (Drum, Wave mono par instance, Sampler stereo) -> `mixer_submit_external_*`
+- rendu engines externes (Drum, Prism mono par instance, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
 
@@ -497,12 +520,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le tampon `PREROLL_RAM` est une source de demarrage uniquement. Le runtime tente d'entrer dans le chemin normal `RAW/page-cache` avant d'utiliser START_RAM; START_RAM ne sert que de bridge post-REC quand la page RAW courante n'est pas encore disponible. Des que le playback Looper a lu un bloc depuis `RAW_PAGE_CACHE`, le take marque le relais RAW comme effectue et le preroll est consomme: les wraps suivants doivent repartir en `RAW_PAGE_CACHE` a la frame 0, jamais en `PREROLL_RAM`.
 - L'etat hot Looper `g_looper_tracks` est place en DTCM via `AUDIO_HOT` uniquement pour les metadonnees par track lues/ecrites par l'IRQ audio; les gros buffers restent hors DTCM (`g_looper_preroll_pcm` en `SDRAM_RECORDER`, rings writer en `SDRAM_RECORDER`, page-cache/buffers audio dans leurs sections existantes). Aucun DMA ne cible `g_looper_tracks`.
 
-## 19. Addendum - Wave Phase Reset
+## 19. Addendum - Prism Phase Reset
 
-- `Synth/Wave` conserve le comportement historique par defaut: `PHASE RESET=Off` laisse le `sync_block` nul et `MacroOscillator::Strike()` garde son contrat Mutable courant.
-- `PHASE RESET=On` arme un reset one-shot au `note_on` Wave, puis le premier sous-bloc rendu par `brick6_braids_runtime_render_instance()` pose `sync_block[0]=1` avant de consommer le flag.
-- Le reset reste track-aware par instance Wave et ne reset aucun generateur random.
-- Les moteurs Wave qui consomment deja `sync_block` reset leur phase au premier sample rendu; les moteurs sans entree sync pertinente restent des no-op implicites.
+- `Synth/Prism` conserve le comportement historique par defaut: `PHASE RESET=Off` laisse le `sync_block` nul et `MacroOscillator::Strike()` garde son contrat Mutable courant.
+- `PHASE RESET=On` arme un reset one-shot au `note_on` Prism, puis le premier sous-bloc rendu par `brick6_braids_runtime_render_instance()` pose `sync_block[0]=1` avant de consommer le flag.
+- Le reset reste track-aware par instance Prism et ne reset aucun generateur random.
+- Les moteurs Prism qui consomment deja `sync_block` reset leur phase au premier sample rendu; les moteurs sans entree sync pertinente restent des no-op implicites.
 - Le rendu reste borne en IRQ: buffers locaux de 24 samples, pas de malloc, pas de FatFs, pas de reset brutal du moteur Mutable.
 
 ## Addendum 2026-05-13 - retrait du buffer master
@@ -832,7 +855,7 @@ Clarification START/END/LOOP live:
 - La phase LFO avance par nombre de frames ecoulees, pas par nombre fixe de ticks 3000 Hz; un LFO rapide ne declenche donc pas plus d'updates qu'un LFO lent.
 - La valeur LFO est tenue sur la fenetre de controle; aucun ramp supplementaire ni instrumentation IRQ n'est ajoute dans cette passe.
 - Correction 2026-05-26: le mode experimental n'attend plus un accumulateur `MOD_LFO_WINDOW_RATE_FRAMES`; il applique immediatement un tick LFO avec le `frames` du bloc courant pour eviter un retard d'une fenetre au demarrage/reset et respecter les sous-fenetres eventuelles.
-- Correction 2026-05-26: le tick LFO est avance avant le rendu Drum/Sampler/Looper/Wave; les modulations moteur ne restent plus decalees d'une fenetre audio par rapport au rendu.
+- Correction 2026-05-26: le tick LFO est avance avant le rendu Drum/Sampler/Looper/Prism; les modulations moteur ne restent plus decalees d'une fenetre audio par rapport au rendu.
 
 ## Addendum 2026-05-27 - fast path Sampler/RAM actif
 
@@ -893,12 +916,12 @@ Clarification START/END/LOOP live:
 - Le chemin Drum IRQ ne lit plus `ui_get_active_track()`; le diagnostic local suit seulement le nombre de drums effectivement rendus.
 - `mixer_process()` conserve l'appel de projection `mix_track -> logical_track`, mais celui-ci est maintenant une lecture O(1) d'une table Z2 reconstruite hors IRQ.
 
-## Addendum 2026-05-29 - Wave/Braids rendu bloc fixe
+## Addendum 2026-05-29 - Prism/Braids rendu bloc fixe
 
 - `brick6_braids_runtime_render_instance()` ne transmet plus de taille partielle a `braids::MacroOscillator::Render()`: le wrapper genere uniquement des blocs complets de 24 samples (`kBraidsRenderBlockSize`).
-- Chaque instance Wave/Braids porte un cache de sortie statique de 24 samples avec offset/count pending. Le rendu IRQ consomme d'abord les samples pending, genere un nouveau bloc complet seulement si necessaire, puis conserve le surplus pour le prochain appel.
-- Ce cache reste local a l'instance (`BRICK6_BRAIDS_MAX_INSTANCES`), sans allocation dynamique ni etat global partage. Reset/all-notes-off vident le cache; un changement de shape Wave l'invalide pour eviter de rejouer des samples de l'ancien moteur.
-- Les sous-segments audio Z1 peuvent rester non multiples de 24 a cause des evenements sample-accurate; l'adaptation bloc-fixe appartient au wrapper Wave, pas a `audio.c` ni aux sources Mutable/Braids.
+- Chaque instance Prism/Braids porte un cache de sortie statique de 24 samples avec offset/count pending. Le rendu IRQ consomme d'abord les samples pending, genere un nouveau bloc complet seulement si necessaire, puis conserve le surplus pour le prochain appel.
+- Ce cache reste local a l'instance (`BRICK6_BRAIDS_MAX_INSTANCES`), sans allocation dynamique ni etat global partage. Reset/all-notes-off vident le cache; un changement de shape Prism l'invalide pour eviter de rejouer des samples de l'ancien moteur.
+- Les sous-segments audio Z1 peuvent rester non multiples de 24 a cause des evenements sample-accurate; l'adaptation bloc-fixe appartient au wrapper Prism, pas a `audio.c` ni aux sources Mutable/Braids.
 
 ## Addendum 2026-07-17 - frontiere Board audio premium
 
@@ -924,8 +947,8 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-07-25 - fondation runtime Stack
 
 - `Src/Core/brick6_stack_runtime.c` porte le runtime Stack v0: trois slots, niveaux Q15, noise, note on/off/all-notes-off/reset, pending mono 24 samples par instance et trim nominal Q15 applique apres somme.
-- Le chemin Z1 rend les tracks bindees `TRACK_RUNTIME_ENGINE_STACK` via `brick6_stack_runtime_render_instance()` puis les injecte en mono-native avec `mixer_submit_external_mono_native()`, comme source externe separee de Wave.
-- Le kernel audible actuel est volontairement provisoire et local a Stack; aucune instance `MacroOscillator` Braids n'est creee par slot et le runtime Wave historique reste rendu par `brick6_braids_runtime`.
+- Le chemin Z1 rend les tracks bindees `TRACK_RUNTIME_ENGINE_STACK` via `brick6_stack_runtime_render_instance()` puis les injecte en mono-native avec `mixer_submit_external_mono_native()`, comme source externe separee de Prism.
+- Le kernel audible actuel est volontairement provisoire et local a Stack; aucune instance `MacroOscillator` Braids n'est creee par slot et le runtime Prism historique reste rendu par `brick6_braids_runtime`.
 - La file de commandes Stack est dimensionnee pour absorber un refresh/reapply complet de toutes les instances Stack (`reset + 16 params` par track) sans overflow silencieux avant drainage audio.
 
 ## Addendum 2026-07-25 - catalogue et dispatch Stack
@@ -939,18 +962,18 @@ Clarification START/END/LOOP live:
 - Les modeles analogiques simples Stack actifs sont regroupes en `SINFD`, `TRIFD` et `SHAPE`; l'ancien modele `SOFT` prototype n'est plus expose.
 - `SINFD` utilise une base sine propre et `TRIFD` une base triangle, chacun avec `FOLD/SYM/SHAPE`; `FOLD=0` conserve strictement la forme non coloree et aucun oversampling local n'est utilise.
 - `SHAPE` reprend l'ancien comportement `SAW/SQUARE`: `TIMBRE` garde la forme/largeur d'impulsion et `COLOR` morphe `SAW -> SQUARE`; les extremites saw/square retournent directement la forme cible.
-- La math pure des formes analogiques Stack est factorisee dans `brick6_stack_waveform`, consommee par le runtime Stack et par la preview UI, sans instance `MacroOscillator` et sans toucher Wave/Braids.
+- La math pure des formes analogiques Stack est factorisee dans `brick6_stack_waveform`, consommee par le runtime Stack et par la preview UI, sans instance `MacroOscillator` et sans toucher Prism/Braids.
 
 ## Addendum 2026-07-25 - wavetable Stack
 
 - Le modele Stack `WAVETABLE` utilise les donnees Braids `wt_waves` via un adaptateur C++ local `brick6_stack_braids_resources`, sans copier la banque et sans instancier `MacroOscillator`.
 - `TIMBRE` scanne les 16 waves d'une banque et `COLOR` selectionne une des 16 banques derivees de `wt_waves`; `wt_map` et `wt_code` ne sont pas consommes par ce kernel Stack v1.
-- Wave/Braids garde son runtime et ses ressources historiques inchanges; l'adaptateur expose seulement l'echantillonnage table necessaire au kernel Stack.
+- Prism/Braids garde son runtime et ses ressources historiques inchanges; l'adaptateur expose seulement l'echantillonnage table necessaire au kernel Stack.
 
 ## Addendum 2026-07-25 - modeles complexes Stack
 
 - Les modeles Stack `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` ont maintenant des renderers locaux jouables, avec phases auxiliaires et feedback portes par `stack_osc_slot_t`.
-- Ces modeles utilisent le dispatch Stack resolu par slot et restent sans instance complete `MacroOscillator` ou `DigitalOscillator`; Wave/Braids conserve son runtime historique separe.
+- Ces modeles utilisent le dispatch Stack resolu par slot et restent sans instance complete `MacroOscillator` ou `DigitalOscillator`; Prism/Braids conserve son runtime historique separe.
 - `SUB` mixe un principal saw/square avec un sub divise, `FM` et `FEEDBACK FM` utilisent `TIMBRE` pour l'index et `COLOR` pour le ratio, `RING` emploie deux modulateurs detunes, `TRIPLE SAW/SQUARE` utilisent `TIMBRE` et `COLOR` comme detunes osc 2/3, et `SWARM` reste un ensemble saw detune simple.
 
 ## Addendum 2026-07-25 - VOICE Stack osc detune/reset
@@ -976,12 +999,33 @@ Clarification START/END/LOOP live:
 
 - Les modeles Stack `SINFD` et `TRIFD` ajoutent deux renderers locaux dedies, bases respectivement sur la sine Stack propre et la triangle Stack existante.
 - Leur wavefolder est factorise dans `brick6_stack_waveform`: `FOLD=0` retourne strictement la base clean; `SYM` ajoute un offset de fold dependant de `FOLD`; `SHAPE` arrondit le repli via la LUT sine Stack apres un miroir borne.
-- Aucun `sinf`, `tanhf`, `powf`, oversampling, filtre correctif, allocation ou acces Wave/Braids n'est ajoute dans le chemin sample Stack.
+- Aucun `sinf`, `tanhf`, `powf`, oversampling, filtre correctif, allocation ou acces Prism/Braids n'est ajoute dans le chemin sample Stack.
 - `SOFT` n'est plus un modele Stack actif: l'ancien slot enum 0 est remplace par `SINFD`. Les autres modeles Stack gardent leurs renderers et mappings sonores.
 
 ## Addendum 2026-07-26 - Stack renderers simples faible CPU
 
-- Les calibrations loudness/Braids-like propres a Stack sont retirees des renderers locaux non-Wave: `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` utilisent des moyennes simples de trois oscillateurs; `SWARM` n'a plus de filtre local ni de cinq lectures saw.
+- Les calibrations loudness/Braids-like propres a Stack sont retirees des renderers locaux non-Prism: `TRIPLE SAW`, `TRIPLE SQUARE` et `SWARM` utilisent des moyennes simples de trois oscillateurs; `SWARM` n'a plus de filtre local ni de cinq lectures saw.
 - `WAVETABLE` Stack lit une seule table selectionnee par `TIMBRE` dans la banque choisie par `COLOR`: plus de double demi-increment, moyenne ou crossfade de waves dans le chemin sample.
 - `SUB`, `FM`, `FEEDBACK FM`, `RING` et `SHAPE` gardent des formules Stack directes: balance sub lineaire, profondeur FM sans boost de phase, feedback FM borne par multiplication simple du sample precedent, ring en multiplication Q15, square/PWM sans gain Braids.
-- Le mix energie/levels, le soft clip de sortie Stack, la sine interpolee en `int64_t`, `SINFD/TRIFD`, `PARAM3` et la surface UI TONE Stack restent les autorites courantes; Wave/Braids historique reste separe.
+- Le mix energie/levels, le soft clip de sortie Stack, la sine interpolee en `int64_t`, `SINFD/TRIFD`, `PARAM3` et la surface UI TONE Stack restent les autorites courantes; Prism/Braids historique reste separe.
+
+## Addendum 2026-07-27 - identite Wave sans rendu audio
+
+- `TRACK_RUNTIME_ENGINE_WAVE` est reserve au futur moteur wavetable utilisateur.
+- A cette etape d'identite, aucun renderer Z1 Wave n'etait branche: aucune lecture SDRAM, aucun acces SD et aucun appel au runtime Prism/Braids n'etaient introduits pour `Synth/Wave`.
+
+## Addendum 2026-07-27 - asset WAVETABLE resident SDRAM
+
+- `wavetable_pool` ajoute le chargement resident SDRAM pour les futurs assets `Synth/Wave`.
+- Format courant charge: fichier `B6WT` little-endian, header 32 octets, `frame_sample_count=2048`, `frame_count>0`, samples source mono `S16` ou `F32`, conversion runtime en `FLOAT32_MONO`.
+- Le pool ne cree pas de streamer concurrent: il reutilise `SAMPLE_PAGE_SLOT_POOL` pour l'audio resident et `sample_global_pool` pour les slots, le budget et l'affichage memoire global.
+- Cette passe asset ne branchait pas encore le chemin audio; l'addendum runtime ci-dessous precise le branchement audio SDRAM-only de `TRACK_RUNTIME_ENGINE_WAVE`.
+
+## Addendum 2026-07-27 - runtime audio Synth/Wave
+
+- `brick6_wave_runtime` branche maintenant `TRACK_RUNTIME_ENGINE_WAVE` dans le rendu Z1.
+- Chaque instance suit `instance_id == track_id`, porte deux oscillateurs mono et lit les tables via `sample_global_pool`/`wavetable_pool`; le rendu audio consomme uniquement les pointeurs SDRAM `FLOAT32_MONO` deja charges.
+- Le rendu fait l'interpolation lineaire dans la frame 2048 samples et l'interpolation lineaire entre frames selon `POS` remappe dans `START/END`.
+- `POS` est smooth localement par oscillateur apres remap START/END. `LEVEL=0` coupe l'oscillateur. `TUNE` recalcule l'increment de phase en demi-tons. `PHASE` applique le depart 0/90/180/270 au note-on. `FLIP` applique inversion X et/ou lecture inverse Y.
+- Le moteur sort un mono externe vers `mixer_submit_external_mono_native`; aucune lecture SD, FatFs, allocation ou scan de table n'est introduit dans l'IRQ audio.
+- Hors passe: pages TONE, destinations Matrix et widget preview.

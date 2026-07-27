@@ -79,7 +79,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 
 - IRQ/DMA audio, `audio.c`, `audio_float.c`, `audio_io.c`.
 - `brick6_audio_runtime_dsp`, mixer, MasterFX, metronome render, XFade.
-- Engines audio: Drum/Plaits, Wave/Braids, Sampler voices, Looper playback.
+- Engines audio: Drum/Plaits, Prism/Braids, Sampler voices, Looper playback.
 - Application sample-accurate des events deja prepares.
 - LFO/audio-rate ou window-rate effectif.
 - Etat runtime strictement audio: voices, enveloppes, phase, playheads, readers actifs, tails, filters, VCA, delay/reverb histories.

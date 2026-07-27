@@ -6,6 +6,9 @@
 #include "tim.h"
 
 static board_surface_snapshot_t g_surface_snapshot;
+static volatile uint16_t *g_adc1_mailbox;
+static volatile uint8_t g_master_volume_valid;
+static volatile uint8_t g_master_volume_nonzero_seen;
 
 static uint32_t read_shift_register_bits(void)
 {
@@ -46,7 +49,7 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
     hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
-    hadc1.Init.NbrOfConversion = 2U;
+    hadc1.Init.NbrOfConversion = 3U;
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
     {
         return 0U;
@@ -71,13 +74,41 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
         return 0U;
     }
 
-    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 2U) != HAL_OK)
+    sConfig.Channel = ADC_CHANNEL_5;
+    sConfig.Rank = ADC_REGULAR_RANK_3;
+    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
+        return 0U;
+    }
+
+    g_adc1_mailbox = adc1_mailbox;
+    g_master_volume_valid = 0U;
+    g_master_volume_nonzero_seen = 0U;
+
+    if (hadc1.DMA_Handle == NULL)
+    {
+        g_adc1_mailbox = 0;
+        return 0U;
+    }
+    hadc1.DMA_Handle->Init.MemInc = DMA_MINC_ENABLE;
+    if (HAL_DMA_Init(hadc1.DMA_Handle) != HAL_OK)
+    {
+        g_adc1_mailbox = 0;
+        return 0U;
+    }
+
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 3U) != HAL_OK)
+    {
+        g_adc1_mailbox = 0;
+        g_master_volume_valid = 0U;
         return 0U;
     }
 
     if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_mailbox, 1U) != HAL_OK)
     {
+        g_adc1_mailbox = 0;
+        g_master_volume_valid = 0U;
+        g_master_volume_nonzero_seen = 0U;
         return 0U;
     }
 
@@ -87,12 +118,6 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 uint8_t board_surface_start_hall_scan_timer(void)
 {
     return (HAL_TIM_Base_Start(&htim6) == HAL_OK) ? 1U : 0U;
-}
-
-uint8_t board_surface_is_hall_adc1_callback(void *handle)
-{
-    ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
-    return ((hadc != NULL) && (hadc->Instance == ADC1)) ? 1U : 0U;
 }
 
 uint8_t board_surface_is_hall_adc2_callback(void *handle)
@@ -140,4 +165,36 @@ void board_surface_snapshot(board_surface_snapshot_t *snapshot)
         snapshot->sample_count[lane] = g_surface_snapshot.sample_count[lane] + 1U;
         snapshot->analog[lane] = 0U;
     }
+}
+
+uint8_t board_surface_read_master_volume_raw(uint16_t *raw)
+{
+    if ((raw == 0) || (g_adc1_mailbox == 0) || (g_master_volume_valid == 0U))
+    {
+        return 0U;
+    }
+
+    const uint16_t sample = g_adc1_mailbox[2U];
+    if (sample != 0U)
+    {
+        g_master_volume_nonzero_seen = 1U;
+    }
+    else if (g_master_volume_nonzero_seen == 0U)
+    {
+        return 0U;
+    }
+
+    *raw = sample;
+    return 1U;
+}
+
+uint8_t board_surface_is_hall_adc1_callback(void *handle)
+{
+    ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
+    const uint8_t is_adc1 = ((hadc != NULL) && (hadc->Instance == ADC1)) ? 1U : 0U;
+    if (is_adc1 != 0U)
+    {
+        g_master_volume_valid = 1U;
+    }
+    return is_adc1;
 }

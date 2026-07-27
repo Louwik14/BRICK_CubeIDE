@@ -447,7 +447,7 @@ Flux nominal prouve:
 - Quand aucun plock `PLAY` n'est present, la valeur de base vient maintenant de l'autorite seq canonique (`seq_param_iface_get_base_value`) et non d'un fallback default descriptor.
 - Le dispatch note moteur reste resolu par track runtime effectif:
   - `Sampler` -> `brick6_sampler_runtime`
-  - `Wave` -> `brick6_braids_runtime`
+  - `Prism` -> `brick6_braids_runtime`
   - `Drum` -> `drum_synth`
 - Ce dispatch ne rederive pas de logique produit locale et reste borne a la projection Z2.
 
@@ -772,5 +772,10 @@ Points factuels observes:
 - `seq_step_t.roll` porte le roll/retrig du step, separe de `LEN` et des p-locks.
 - Valeurs stockees: `OFF`, `1/20`, `1/24`, `1/32`, `1/40`, `1/48`, `1/64`, `1/80`.
 - Le scheduler lit le roll du step source et ajoute de vrais `NOTE_ON`/`NOTE_OFF` sample-domain dans la queue existante; le premier trig reste le trig principal et aucun sous-trig n'est emis a l'offset zero.
-- Les sous-trigs reutilisent les memes resolutions NOTE/VEL/LEN/MicTim et p-locks PLAY du step original; aucun effet audio de repetition, aucun changement Wave/Stack/Matrix n'est introduit.
+- Les sous-trigs reutilisent les memes resolutions NOTE/VEL/LEN/MicTim et p-locks PLAY du step original; aucun effet audio de repetition, aucun changement Prism/Stack/Matrix n'est introduit.
 - Les pending events roll sont nettoyes par les clears scheduler existants au STOP, changement de pattern ou lifecycle transport.
+
+## Addendum 2026-07-27 - Synth/Wave scheduler
+
+- `Synth/Wave` est exposable comme identite PLAY via Z2, mais cette passe ne branche aucun dispatch note vers un runtime wavetable.
+- Le scheduler ne redirige jamais Wave vers Prism/Braids; le branchement note-on/off Wave appartient a l'etape runtime audio Wave.

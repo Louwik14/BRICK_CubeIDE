@@ -42,6 +42,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/looper_storage.c` + `Inc/Storage/looper_storage.h`: autorite des paths Looper; validation des reservoirs RAW systeme, creation dossier durable, scan borne et reservation anti-ecrasement du nom final.
 - `Src/Storage/wav_loader.c`: scan catalogue et import WAV refuses pendant record audio actif/finalizing.
 - `Src/Storage/wav_loader.c`: catalogue RAM WAV persistant pour le browser Settings/Sampler; le boot charge seulement le fichier catalogue SD versionne, sans rescan. La synchronisation reelle avec `0:/Samples` passe par `REFRESH`/`REBUILD` explicites et respecte `sd_access_gate`.
+- `Src/Sampler/wavetable_pool.c` + `Inc/Sampler/wavetable_pool.h`: categorie logique d'asset audio `WAVETABLE`, chargee depuis SD vers SDRAM via le pool resident existant et inscrite dans `sample_global_pool`.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
@@ -145,6 +146,7 @@ Contrat boot/autoload projet v32:
 - Les slots `STREAM` attendus sont termines quand `sample_pool_get_state(slot)` n'est plus `PREPARING`: `LOADED`, `ERROR`, `MISSING` et `EMPTY` sont terminaux cote ecran boot.
 - Les slots `MULTI` attendus sont termines quand l'instrument est `READY` ou `ERROR`, ou quand le loader Multi n'a plus de travail pending et que le slot n'est plus `LOADING`. Avant de lancer les loads Multi, Z6 prelit les headers `.brickmulti` des slots autoload pour figer un total global en unites utilisateur: 1 unite par sample Multi, 1 unite par slot STREAM. Pendant le chargement actif, `multi_sample_get_load_diag()` expose `samples_ready/total_samples`; la progression visible additionne cet avancement au total global au lieu d'afficher les pages internes ou de repartir a 0 pour chaque Multi.
 - Les slots `RAM` attendus sont recharges synchroniquement hors IRQ par `sampler_ram_pool_load_wav_at(ram_slot, global_index, path)` pendant le load projet. La progression les compte comme une unite terminee apres l'appel; le cout produit est recalcule depuis les pages reelles allouees dans `SAMPLE_PAGE_SLOT_POOL`.
+- Les slots `WAVETABLE` attendus sont recharges synchroniquement hors IRQ par `wavetable_pool_load_file_at(wavetable_slot, global_index, path)` pendant le load projet; cette API accepte le path utilisateur WAV et reutilise le cache B6WT valide si present. La progression les compte comme une unite terminee apres l'appel; le cout produit est recalcule depuis les pages reelles allouees dans `SAMPLE_PAGE_SLOT_POOL`.
 - Un fichier RAM absent/invalide ou un refus SLOT_POOL/budget/backend pose un slot global `kind=RAM` en `ERROR` quand le slot global sauvegarde est disponible. Les tracks RAM gardent leur `PARAM_SAMPLER_SAMPLE` global et refusent ensuite proprement/silence via les validations runtime RAM.
 - En cas d'absence de boot context, de projet refuse ou d'ancien payload v27, l'etat loading se ferme proprement sans restore partiel supplementaire.
 
@@ -389,7 +391,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
-  - capture la liste durable `sample_autoload`: slots `STREAM` issus du `sample_pool`, slots `MULTI` issus du `multi_sample_pool`, slots `RAM` READY/ERROR issus du `sampler_ram_pool`,
+  - capture la liste durable `sample_autoload`: slots `STREAM` issus du `sample_pool`, slots `MULTI` issus du `multi_sample_pool`, slots `RAM` READY/ERROR issus du `sampler_ram_pool`, slots `WAVETABLE` READY/ERROR issus du `wavetable_pool`,
   - capture les assignations `Sampler/Multi` par track: path `.brickmulti` et gain Multi; aucun `instrument_id` runtime n'est sauvegarde,
   - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
@@ -400,7 +402,7 @@ Points de lecture principaux:
 - `project_v1_load_slot()`:
   - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
   - restaure le `sample_pool` du projet avant l'apply live,
-  - restaure les slots globaux `STREAM` depuis `sample_autoload`, puis recharge les slots `RAM` declares via `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` avant l'apply live,
+  - restaure les slots globaux `STREAM` depuis `sample_autoload`, puis recharge les slots `RAM` declares via `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` et les slots `WAVETABLE` declares via `wavetable_pool_load_file_at(slot_index, global_index, path)` avant l'apply live; pour `WAVETABLE`, le path peut etre le WAV utilisateur,
   - restaure les slots `MULTI` declares dans `sample_autoload` apres l'apply live via `multi_sample_load_instrument(path, slot_index)`; les refus restent non fatals et posent le diagnostic restore existant,
   - restaure le bloc MACRO projet depuis `ProjectSaveV1`,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
@@ -864,21 +866,22 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
 - Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
 - Les entrees `RAM` portent le path WAV complet et restaurent les slots `sampler_ram_pool` par `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` hors IRQ. Aucun audio brut n'est sauvegarde; `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`. Un echec d'ouverture/parse/decode/budget/SLOT_POOL/backend conserve si possible le slot global RAM en `ERROR` avec le path, sans pointeur audio stale.
-- Le bloc sert de source explicite pour la phase boot/autoload UI: la lecture projet, les loads STREAM/RAM synchrones et les loads MULTI cooperatifs alimentent la progression. RAM vaut une unite utilisateur terminee a la fin de son load synchrone.
+- Les entrees `WAVETABLE` portent le path utilisateur WAV ou le path prepare B6WT selon la source du slot courant; aucun audio brut n'est sauvegarde et `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`.
+- Le bloc sert de source explicite pour la phase boot/autoload UI: la lecture projet, les loads STREAM/RAM/WAVETABLE synchrones et les loads MULTI cooperatifs alimentent la progression. RAM et WAVETABLE valent une unite utilisateur terminee a la fin de leur load synchrone.
 
 ## Addendum 2026-05-23 - Sampler/Multi LOOP
 
 
 ## Addendum 2026-05-24 - catalogue global sample produit
 
-- `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 256 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
+- `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 256 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM/WAVETABLE`, avec `backend_index` separe du slot global.
 - `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`, lui aussi dimensionne sur la capacite active courante. Les limites de 16 pads/voix/pages UI ne bornent pas le nombre de samples RAM residents. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
 - Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. RAM est stocke en `FLOAT32_INTERLEAVED` stereo au load WAV; les anciens slots residents sont volatils et sont donc simplement recharges depuis leur path projet/autoload. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
 
 
 ## Addendum 2026-05-27 - contrat runtime du projet blank
 
-- `project_v1_load_blank()` neutralise maintenant hors IRQ les etats transitoires non persistables avant de recharger le boot snapshot: preview SD, voix/readers Sampler, runtime Looper, runtime Wave/Braids, voix Drum, mixer lanes/sends, buffers reverb/delay, XFade Looper, MacroFX et bases track sound/tone.
+- `project_v1_load_blank()` neutralise maintenant hors IRQ les etats transitoires non persistables avant de recharger le boot snapshot: preview SD, voix/readers Sampler, runtime Looper, runtime Prism/Braids, voix Drum, mixer lanes/sends, buffers reverb/delay, XFade Looper, MacroFX et bases track sound/tone.
 - Le reset lourd precede `pattern_live_apply_boot_snapshot()`; le boot snapshot reste l'autorite des defaults persistables et reprojette ensuite UI/runtime/params.
 - Depuis `Settings > Project > Load > Blank`, le retour UI force `CFG` pour eviter de rendre une page template devenue invalide apres remise a `Off` des tracks.
 
@@ -967,11 +970,11 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-07-25 - persistence Stack
 
-- `Synth/Stack` est persiste comme type de track distinct de `Synth/Wave`; aucun champ Wave n'est renomme, migre ou reutilise comme alias Stack.
+- `Synth/Stack` est persiste comme type de track distinct de `Synth/Prism`; aucun champ Prism n'est renomme, migre ou reutilise comme alias Stack.
 - Les parametres `PARAM_STACK_*` sont ajoutes au layout `PARAM_COUNT`: Pattern et Project les capturent via leurs matrices track-aware `track_values` / `track_valid`.
 - Les etats sonores Stack canoniques sont ajoutes a `track_tone_sound_state_t`; Patch et Kit les capturent donc dans leur snapshot tone comme les autres moteurs TONE.
-- Le resume d'un Kit encode `Stack` avec le label court `SK`; les labels `WV` Wave existants gardent leur signification historique.
-- `project_v1_load_blank()` neutralise maintenant aussi le runtime transitoire Stack via `brick6_stack_runtime_init()` pendant le reset blank, separement du reset Wave/Braids historique.
+- Le resume d'un Kit encode `Stack` avec le label court `SK`; les labels `PR` Prism existants gardent leur signification historique.
+- `project_v1_load_blank()` neutralise maintenant aussi le runtime transitoire Stack via `brick6_stack_runtime_init()` pendant le reset blank, separement du reset Prism/Braids historique.
 
 ## Addendum 2026-07-25 - versions simplification analogique Stack
 
@@ -1001,3 +1004,20 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - `pattern_sd_bank` ne conserve plus de copie permanente du boot pattern. Le fallback vers le boot snapshot appartient a `pattern_live_ram`, unique proprietaire du snapshot boot.
 - `project_sd_bank` ne conserve plus de `ProjectSaveV1` complet pour les verifications commit/equivalence; le checksum du bloc project live est calcule par lecture sequentielle dans le scratch pattern SD existant.
 
+
+## Addendum 2026-07-27 - persistence identite Synth/Wave
+
+- `UI_TRACK_TYPE_WAVE` est une nouvelle valeur de type track, valide uniquement sous `UI_TRACK_FAMILY_SYNTH`.
+- Aucun champ payload wavetable, asset SDRAM ou migration depuis `Synth/Prism` n'est ajoute dans cette passe.
+- Les donnees `Synth/Prism` existantes restent sous les IDs Prism; `Synth/Wave` ne les reutilise pas comme alias.
+
+## Addendum 2026-07-27 - asset WAVETABLE SDRAM
+
+- `sample_global_pool` expose maintenant le kind logique `SAMPLE_GLOBAL_KIND_WAVETABLE`, partageant les memes slots globaux, budget utilisateur 16 MiB et compteurs memoire que `STREAM`, `MULTI` et `RAM`.
+- `wavetable_pool` est le backend resident: les fichiers `B6WT` sont lus depuis SD hors IRQ via `SD_ACCESS_CLIENT_SAMPLE_CACHE`, convertis en `FLOAT32_MONO`, puis stockes dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`.
+- Le format `B6WT` courant est volontairement borne: magic `B6WT`, version `1`, header 32 octets, frame de 2048 samples, `frame_count>0`, data mono `S16` ou `F32` little-endian.
+- Le workflow UI de chargement manuel lit les fichiers WAV depuis `0:/WAVETABLES` via `Settings > Sample > WAVE`; il reutilise le browser Settings/Sample et charge les assets par `wavetable_pool_load_wav()`.
+- `wavetable_pool_load_wav()` accepte les WAV PCM mono/stereo 16/24/32-bit deja couverts par `wav_parser`/`wav_audio_codec`, impose une longueur mono effective non nulle et multiple de 2048 samples, decode les 32-bit WAV comme PCM int32, convertit en `FLOAT32_MONO`, clamp les samples importes/cache en `[-1,+1]`, puis cree une preview et un slot global `WAVETABLE`.
+- Le cache prepare reste `B6WT` version 1 dans `0:/WAVETABLES/.CACHE`. Le nom de cache encode un hash du path source, la taille, la date et l'heure FAT; le header conserve aussi taille source et stamp date/time dans les champs reserves. Un cache valide est prefere au redecodage WAV; un cache absent, invalide ou impossible a ecrire n'empeche pas l'import WAV vers SDRAM.
+- Project autoload capture/restaure les slots `WAVETABLE` comme les slots `RAM`: path + slot backend + slot global, sans audio brut dans le projet et sans scan SD implicite.
+- Etat courant: le browser UI, les parametres `TABLE`, la preview wavetable et le runtime audio `Synth/Wave` sont branches; la persistence reste limitee aux references d'assets, sans audio brut.

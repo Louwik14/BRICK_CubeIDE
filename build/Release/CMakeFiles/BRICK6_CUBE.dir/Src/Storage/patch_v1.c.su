@@ -10,11 +10,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:192
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:226:26:patch_v1_resolve_capture_group	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:272:6:patch_v1_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:278:19:patch_v1_capture_track	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:325:19:patch_v1_save_track_direct	3280	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:325:19:patch_v1_save_track_direct	3536	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:360:26:patch_v1_validate_loaded_patch	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:419:26:patch_v1_resolve_apply_targets	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:462:26:patch_v1_apply_loaded_patch_to_targets	112	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:545:19:patch_v1_apply_slot_to_track	3280	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:545:19:patch_v1_apply_slot_to_track	3536	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:595:19:patch_v1_rename_slot	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:628:19:patch_v1_delete_slot	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c:672:6:patch_v1_set_current_slot	16	static

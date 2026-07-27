@@ -1,0 +1,88 @@
+/**
+ * @file brick6_wave_runtime.h
+ * @brief Track-aware user wavetable runtime for Synth/Wave.
+ */
+
+#pragma once
+
+#include <stdint.h>
+
+#include "Seq/seq_types.h"
+#include "Sampler/sample_global_pool.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define BRICK6_WAVE_MAX_INSTANCES SEQ_TRACK_COUNT
+#define BRICK6_WAVE_OSC_COUNT     2U
+
+typedef enum
+{
+    BRICK6_WAVE_PHASE_0 = 0,
+    BRICK6_WAVE_PHASE_90,
+    BRICK6_WAVE_PHASE_180,
+    BRICK6_WAVE_PHASE_270,
+    BRICK6_WAVE_PHASE_COUNT
+} brick6_wave_phase_t;
+
+typedef enum
+{
+    BRICK6_WAVE_FLIP_OFF = 0,
+    BRICK6_WAVE_FLIP_X,
+    BRICK6_WAVE_FLIP_Y,
+    BRICK6_WAVE_FLIP_XY,
+    BRICK6_WAVE_FLIP_COUNT
+} brick6_wave_flip_t;
+
+typedef struct
+{
+    uint16_t table_global_slot;
+    uint16_t table_wavetable_slot;
+    uint32_t table_generation;
+    float level;
+    float tune_semitones;
+    float pos;
+    float start;
+    float end;
+    float pos_smoothed;
+    float phase;
+    float phase_inc;
+    uint8_t phase_mode;
+    uint8_t flip;
+} brick6_wave_runtime_osc_t;
+
+typedef struct
+{
+    uint8_t active_note;
+    uint8_t has_active_note;
+    uint8_t gate;
+    uint8_t trigger;
+    float velocity;
+} brick6_wave_runtime_voice_t;
+
+void brick6_wave_runtime_init(void);
+void brick6_wave_runtime_reset_instance(uint8_t instance_id);
+
+void brick6_wave_runtime_set_osc_table_global(uint8_t instance_id, uint8_t osc, uint16_t global_slot);
+void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot);
+void brick6_wave_runtime_set_osc_level(uint8_t instance_id, uint8_t osc, float level);
+void brick6_wave_runtime_set_osc_tune(uint8_t instance_id, uint8_t osc, float semitones);
+void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos);
+void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float start);
+void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end);
+void brick6_wave_runtime_set_osc_phase(uint8_t instance_id, uint8_t osc, brick6_wave_phase_t phase);
+void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_wave_flip_t flip);
+
+void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
+void brick6_wave_runtime_note_off(uint8_t instance_id, uint8_t note);
+void brick6_wave_runtime_all_notes_off(uint8_t instance_id);
+void brick6_wave_runtime_clear_trigger(uint8_t instance_id);
+uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
+
+const brick6_wave_runtime_voice_t *brick6_wave_runtime_get_voice(uint8_t instance_id);
+const brick6_wave_runtime_osc_t *brick6_wave_runtime_get_osc(uint8_t instance_id, uint8_t osc);
+
+#ifdef __cplusplus
+}
+#endif

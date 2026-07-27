@@ -62,7 +62,7 @@ Autorite wiring global inter-zones:
 - `brick6_app_init()`:
   - `audio_init(&hsai_BlockA2, &hsai_BlockB2)`
   - `audio_set_float_callback(brick6_audio_runtime_dsp)`
-  - ordre d'init runtime (drum/sampler/Wave, puis param/seq/storage/undo/control/hall/etc.).
+  - ordre d'init runtime (drum/sampler/Prism, puis param/seq/storage/undo/control/hall/etc.).
 - `brick6_audio_runtime_dsp()`:
   - point d'injection MAIN pour la preview SD via le buffer de lecture pre-resample.
 
@@ -385,8 +385,8 @@ Z0 appelle principalement:
 
 ## Addendum 2026-07-25 - init runtime Stack
 
-- `brick6_app_init()` initialise maintenant `brick6_stack_runtime_init()` apres le runtime Wave/Braids et avant `brick6_audio_runtime_init()`.
-- Stack reste un runtime Synth separe; cet init ne modifie pas l'ordre ni la semantique de `brick6_braids_runtime_init()` pour Wave.
+- `brick6_app_init()` initialise maintenant `brick6_stack_runtime_init()` apres le runtime Prism/Braids et avant `brick6_audio_runtime_init()`.
+- Stack reste un runtime Synth separe; cet init ne modifie pas l'ordre ni la semantique de `brick6_braids_runtime_init()` pour Prism.
 
 ## Addendum 2026-07-25 - temporisation boot Power low-cost
 

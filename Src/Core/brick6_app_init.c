@@ -29,6 +29,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_pool.h"
 #include "Sampler/sample_global_pool.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
@@ -39,6 +40,7 @@
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
@@ -120,6 +122,7 @@ void brick6_app_init(void)
     sample_page_cache_init();
     sample_global_pool_init();
     sampler_ram_pool_init();
+    wavetable_pool_init();
     multi_sample_pool_init();
 
     brick6_sampler_bootstrap_load_pool();
@@ -132,6 +135,7 @@ void brick6_app_init(void)
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
     brick6_stack_runtime_init();
+    brick6_wave_runtime_init();
     mixer_set_master(0.0f);
 
     brick6_audio_runtime_init();

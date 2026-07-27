@@ -23,7 +23,8 @@ typedef enum
     SAMPLE_GLOBAL_KIND_EMPTY = 0,
     SAMPLE_GLOBAL_KIND_STREAM,
     SAMPLE_GLOBAL_KIND_MULTI,
-    SAMPLE_GLOBAL_KIND_RAM
+    SAMPLE_GLOBAL_KIND_RAM,
+    SAMPLE_GLOBAL_KIND_WAVETABLE
 } sample_global_kind_t;
 
 typedef enum
@@ -90,6 +91,24 @@ uint8_t sample_global_pool_register_ram_error(uint16_t ram_slot,
 uint8_t sample_global_pool_register_ram_error_at(uint16_t global_index,
                                                  uint16_t ram_slot,
                                                  const char *path);
+uint8_t sample_global_pool_reserve_wavetable(uint16_t wavetable_slot,
+                                             const char *path,
+                                             uint32_t cost_bytes,
+                                             uint16_t *out_global_index);
+uint8_t sample_global_pool_register_wavetable(uint16_t wavetable_slot,
+                                              const char *path,
+                                              uint32_t cost_bytes,
+                                              uint16_t *out_global_index);
+uint8_t sample_global_pool_register_wavetable_at(uint16_t global_index,
+                                                 uint16_t wavetable_slot,
+                                                 const char *path,
+                                                 uint32_t cost_bytes);
+uint8_t sample_global_pool_register_wavetable_error(uint16_t wavetable_slot,
+                                                    const char *path,
+                                                    uint16_t *out_global_index);
+uint8_t sample_global_pool_register_wavetable_error_at(uint16_t global_index,
+                                                       uint16_t wavetable_slot,
+                                                       const char *path);
 
 void sample_global_pool_clear_slot(uint16_t global_index);
 void sample_global_pool_clear_backend(sample_global_kind_t kind, uint16_t backend_index);

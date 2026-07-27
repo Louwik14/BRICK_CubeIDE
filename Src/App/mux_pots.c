@@ -3,6 +3,8 @@
 #include "Board/board_controls.h"
 
 #define MUX_POTS_COUNT        6U
+
+#if !defined(BRICK6_VARIANT_LOWCOST)
 #define MUX_POTS_SETTLE_MS    1U
 #define MUX_POTS_DEADBAND     768U
 
@@ -24,9 +26,13 @@ static void mux_pots_select_channel(uint8_t channel)
 {
   board_controls_mux_pot_select(channel);
 }
+#endif
 
 void mux_pots_init(void)
 {
+#if defined(BRICK6_VARIANT_LOWCOST)
+  return;
+#else
   for (uint8_t i = 0U; i < MUX_POTS_COUNT; i++)
   {
     pot_values[i] = 0U;
@@ -38,10 +44,14 @@ void mux_pots_init(void)
   settle_started_ms = 0U;
 
   mux_pots_select_channel(current_channel);
+#endif
 }
 
 void mux_pots_scan(void)
 {
+#if defined(BRICK6_VARIANT_LOWCOST)
+  return;
+#else
   switch (scan_state)
   {
     case MUX_POTS_STATE_SELECT:
@@ -107,24 +117,35 @@ void mux_pots_scan(void)
       scan_state = MUX_POTS_STATE_SELECT;
       break;
   }
+#endif
 }
 
 uint16_t mux_pots_get(uint8_t pot)
 {
+#if defined(BRICK6_VARIANT_LOWCOST)
+  (void)pot;
+  return 0U;
+#else
   if (pot >= MUX_POTS_COUNT)
   {
     return 0U;
   }
 
   return pot_values[pot];
+#endif
 }
 
 uint8_t mux_pots_is_valid(uint8_t pot)
 {
+#if defined(BRICK6_VARIANT_LOWCOST)
+  (void)pot;
+  return 0U;
+#else
   if (pot >= MUX_POTS_COUNT)
   {
     return 0U;
   }
 
   return ((pot_valid_mask & (uint8_t)(1U << pot)) != 0U) ? 1U : 0U;
+#endif
 }

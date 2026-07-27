@@ -73,3 +73,8 @@ void board_surface_snapshot(board_surface_snapshot_t *snapshot)
     *snapshot = g_surface_snapshot;
 }
 
+uint8_t board_surface_read_master_volume_raw(uint16_t *raw)
+{
+    (void)raw;
+    return 0U;
+}

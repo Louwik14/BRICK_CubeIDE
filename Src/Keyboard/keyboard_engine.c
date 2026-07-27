@@ -21,6 +21,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -204,13 +205,17 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     {
         brick6_sampler_runtime_stop(track);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
     {
         brick6_braids_runtime_all_notes_off(ctx->instance_id);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
     {
         (void)brick6_stack_runtime_submit_all_notes_off(ctx->instance_id);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    {
+        brick6_wave_runtime_all_notes_off(ctx->instance_id);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
@@ -327,7 +332,7 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
             brick6_sampler_runtime_note_off_note(track, note);
         }
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
     {
         if (is_note_on != 0U)
         {
@@ -347,6 +352,17 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         else
         {
             (void)brick6_stack_runtime_submit_note_off(ctx->instance_id, note);
+        }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_wave_runtime_note_on(ctx->instance_id, note, velocity);
+        }
+        else
+        {
+            brick6_wave_runtime_note_off(ctx->instance_id, note);
         }
     }
 }

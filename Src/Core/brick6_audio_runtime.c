@@ -22,6 +22,7 @@
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
@@ -161,6 +162,33 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
     }
 }
 
+static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_tracks)
+{
+    static float prism_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t prism_tracks = 0U;
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                || (track_runtime_is_audio_routable(track) == 0U))
+        {
+            continue;
+        }
+
+        brick6_braids_runtime_render_instance(ctx->instance_id, prism_tmp, frames);
+        mixer_submit_external_mono_native(ctx->mix_track_id, prism_tmp, frames);
+        prism_tracks++;
+    }
+
+    if (out_prism_tracks != NULL)
+    {
+        *out_prism_tracks = prism_tracks;
+    }
+}
+
 static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
 {
     static float wave_tmp[AUDIO_BLOCK_SIZE];
@@ -177,9 +205,11 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
             continue;
         }
 
-        brick6_braids_runtime_render_instance(ctx->instance_id, wave_tmp, frames);
-        mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);
-        wave_tracks++;
+        if (brick6_wave_runtime_render_instance(ctx->instance_id, wave_tmp, frames) != 0U)
+        {
+            mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);
+            wave_tracks++;
+        }
     }
 
     if (out_wave_tracks != NULL)
@@ -187,7 +217,6 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         *out_wave_tracks = wave_tracks;
     }
 }
-
 static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_tracks)
 {
     static float stack_tmp[AUDIO_BLOCK_SIZE];
@@ -265,9 +294,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
 
     {
-        uint8_t wave_tracks = 0U;
-        brick6_render_wave_tracks(frames, &wave_tracks);
-        (void)wave_tracks;
+        uint8_t prism_tracks = 0U;
+        brick6_render_prism_tracks(frames, &prism_tracks);
+        (void)prism_tracks;
     }
 
     {
@@ -275,6 +304,12 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         brick6_stack_runtime_process_commands_from_audio();
         brick6_render_stack_tracks(frames, &stack_tracks);
         (void)stack_tracks;
+    }
+
+    {
+        uint8_t wave_tracks = 0U;
+        brick6_render_wave_tracks(frames, &wave_tracks);
+        (void)wave_tracks;
     }
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))

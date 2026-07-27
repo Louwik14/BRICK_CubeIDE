@@ -59,6 +59,7 @@ typedef enum
 typedef enum
 {
     PATCH_ASSIGN_TYPE_ALL = 0,
+    PATCH_ASSIGN_TYPE_PRISM,
     PATCH_ASSIGN_TYPE_WAVE,
     PATCH_ASSIGN_TYPE_RAM,
     PATCH_ASSIGN_TYPE_STREAM,
@@ -169,6 +170,7 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
     switch (filter)
     {
         case PATCH_ASSIGN_TYPE_ALL: return "ALL";
+        case PATCH_ASSIGN_TYPE_PRISM: return "PRISM";
         case PATCH_ASSIGN_TYPE_WAVE: return "WAVE";
         case PATCH_ASSIGN_TYPE_RAM: return "RAM";
         case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
@@ -211,7 +213,12 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
     switch (ui_page_patch_assign_family_filter_from_track(family))
     {
         case PATCH_ASSIGN_FAMILY_SYNTH:
-            return (type == UI_TRACK_TYPE_WAVE) ? PATCH_ASSIGN_TYPE_WAVE : PATCH_ASSIGN_TYPE_ALL;
+            switch (type)
+            {
+                case UI_TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
+                case UI_TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
+                default: return PATCH_ASSIGN_TYPE_ALL;
+            }
 
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             switch (type)
@@ -259,7 +266,8 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
     switch (family)
     {
         case PATCH_ASSIGN_FAMILY_SYNTH:
-            return (type == PATCH_ASSIGN_TYPE_WAVE) ? 1U : 0U;
+            return ((type == PATCH_ASSIGN_TYPE_PRISM)
+                    || (type == PATCH_ASSIGN_TYPE_WAVE)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             return ((type == PATCH_ASSIGN_TYPE_RAM)
@@ -352,6 +360,8 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
 
     switch (g_patch_assign_type_filter)
     {
+        case PATCH_ASSIGN_TYPE_PRISM:
+            return (type == UI_TRACK_TYPE_PRISM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_WAVE:
             return (type == UI_TRACK_TYPE_WAVE) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_RAM:

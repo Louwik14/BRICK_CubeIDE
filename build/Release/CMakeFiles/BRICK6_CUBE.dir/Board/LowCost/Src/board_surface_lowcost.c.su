@@ -1,7 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:31:6:board_surface_select_hall_mux	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:42:9:board_surface_start_hall_adc_dma	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:87:9:board_surface_start_hall_scan_timer	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:92:9:board_surface_is_hall_adc1_callback	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:98:9:board_surface_is_hall_adc2_callback	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:104:6:board_surface_update_lane	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:116:6:board_surface_snapshot	32	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:34:6:board_surface_select_hall_mux	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:45:9:board_surface_start_hall_adc_dma	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:118:9:board_surface_start_hall_scan_timer	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:123:9:board_surface_is_hall_adc2_callback	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:129:6:board_surface_update_lane	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:141:6:board_surface_snapshot	32	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:170:9:board_surface_read_master_volume_raw	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_surface_lowcost.c:191:9:board_surface_is_hall_adc1_callback	0	static

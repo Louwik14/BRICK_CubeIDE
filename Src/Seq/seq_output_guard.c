@@ -12,6 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/drum_synth.h"
@@ -161,13 +162,17 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                 drum_synth_all_notes_off_for_instance(resolved.descriptor.instance_id);
             }
         }
-        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
         {
             brick6_braids_runtime_all_notes_off(resolved.descriptor.instance_id);
         }
         else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
         {
             (void)brick6_stack_runtime_submit_all_notes_off(resolved.descriptor.instance_id);
+        }
+        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+        {
+            brick6_wave_runtime_all_notes_off(resolved.descriptor.instance_id);
         }
     }
 }

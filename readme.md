@@ -80,7 +80,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Wave`, `Stack`
+- `Synth`: `Prism`, `Wave`, `Stack`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
@@ -115,6 +115,7 @@ This separation is intentional. Do not add a second authority for the same state
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
 - `RAM` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; it plays global `kind=RAM/READY` slots from `sampler_ram_pool`
+- `WAVETABLE` assets share the global audio asset catalogue and SDRAM slot-pool; user WAVs load from `0:/WAVETABLES/*.WAV` into resident mono frame data for `Synth/Wave`, with internal `.B6WT` caches under `0:/WAVETABLES/.CACHE`
 - sample slots expose 256 active global slots backed by a 16 MiB product slot-pool; Stream, RAM and Multi share this catalogue while voice reserve and page-cache margin remain separate
 - RAM slicing is enabled by `Slice Count`: `Off` plays the global `Start`/`End` window normally, while `2..64` slices that same global window in a regular grid selected by `note % slice_count`; `Tune` and `Gain` remain global
 - `Stream` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, `Tune`, and `Sync Len`
@@ -128,15 +129,15 @@ This separation is intentional. Do not add a second authority for the same state
 - Multi Browser page 3 `CLEAR` deletes only visible `.brickmulti` indexes in the current Multi folder, so indexes can be regenerated without deleting WAVs
 - legacy slice handling remains internal compatibility, not a product mode
 
-### Wave
-- `Synth/Wave` is a track-aware mono engine exposed on `TONE`
+### Prism
+- `Synth/Prism` is a track-aware mono engine exposed on `TONE`
 - `TONE/EDIT`: `Edit`, `Fine`, `Coarse`, `FM`
 - `TONE/TONE`: `Timbre`, `Modulation`, `Color`, `Phase Reset`
-- `Phase Reset=Off` preserves the current Wave behavior
-- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Wave models that consume sync; random state is not reset
+- `Phase Reset=Off` preserves the current Prism behavior
+- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Prism models that consume sync; random state is not reset
 
 ### Stack
-- `Synth/Stack` is a separate mono engine from `Synth/Wave`; Wave remains the historical Braids runtime.
+- `Synth/Stack` is a separate mono engine from `Synth/Prism`; Prism remains the historical Braids runtime.
 - Stack exposes three independent oscillator slots plus noise through `TONE`.
 - `TONE/OSC1..OSC3`: `MODEL`, `PARAM1`, `PARAM2`, `PARAM3` per slot, with model-aware labels.
 - `TONE/LVL`: `OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`.
@@ -144,6 +145,14 @@ This separation is intentional. Do not add a second authority for the same state
 - Stack models: `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`, `TRIFD`.
 - `SINFD` / `TRIFD`: `FOLD`, `SYM`, `SHAPE`; `SOFT` is no longer an active Stack model.
 - The three slots and noise are summed mono into the normal track path: filter, inserts, VCA and mixer.
+
+### Wave
+- `Synth/Wave` is the user wavetable engine: two mono wavetable oscillators reading resident SDRAM `WAVETABLE` assets.
+- TONE pages: `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
+- Matrix destinations: `OSC1/2 POS`, `OSC1/2 LEVEL`, `OSC1/2 TUNE`; `TABLE`, `START`, `END`, `PHASE`, `FLIP` are not Matrix destinations.
+- `POS` is smoothed per oscillator inside the Wave runtime after `START/END` remap, so p-locks and Matrix modulation do not jump frames abruptly.
+- `OSC1/2 WAVE` pages show a wide precomputed wavetable preview with `START/END` zone and `POS`; UI rendering never scans the full table.
+- The track identity and runtime engine are separate from `Synth/Prism`.
 
 ### Sequencer
 - integrated sequencer

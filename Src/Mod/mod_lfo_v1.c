@@ -154,6 +154,8 @@ static ui_track_type_t mod_lfo_ui_type_from_ctx(const track_runtime_ctx_t *ctx)
             return UI_TRACK_TYPE_HYBRID;
         case TRACK_RUNTIME_TYPE_RAM:
             return UI_TRACK_TYPE_RAM;
+        case TRACK_RUNTIME_TYPE_PRISM:
+            return UI_TRACK_TYPE_PRISM;
         case TRACK_RUNTIME_TYPE_WAVE:
             return UI_TRACK_TYPE_WAVE;
         case TRACK_RUNTIME_TYPE_STACK:

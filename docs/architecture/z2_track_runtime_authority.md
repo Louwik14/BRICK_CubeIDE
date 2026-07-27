@@ -105,8 +105,8 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - map UI family/type -> runtime family/type
 - allocation mix_track
 - bind engine/instance avec quotas et reasons
-- `Synth/Wave` est le seul type Synth actif; il suit le meme contrat stable que les engines per-track: `instance_id == track_id` et `BRICK6_BRAIDS_MAX_INSTANCES == SEQ_TRACK_COUNT`. Il n'y a plus d'allocation dynamique par ordre de scan; une autre track qui change de family/type ne peut pas deplacer l'instance Wave d'une track existante.
-- Reset Wave: reset local par `runtime_instance` seulement quand l'owner reel de l'instance `track_id` change, puis re-projection immediate des params TONE depuis `track_tone_sound_state` pour le nouvel owner; une instance inchangee n'est ni reset ni replay inutilement.
+- `Synth/Prism`, `Synth/Wave` et `Synth/Stack` sont les types Synth actifs cote identite; chaque engine suit un contrat stable `instance_id == track_id`. `Prism` reste borne par `BRICK6_BRAIDS_MAX_INSTANCES == SEQ_TRACK_COUNT`; `Wave` est bind comme engine wavetable separe, reset par ownership Z2 et rendu en Z1 via `brick6_wave_runtime`. Il n'y a plus d'allocation dynamique par ordre de scan; une autre track qui change de family/type ne peut pas deplacer l'instance Prism d'une track existante.
+- Reset Prism: reset local par `runtime_instance` seulement quand l'owner reel de l'instance `track_id` change, puis re-projection immediate des params TONE depuis `track_tone_sound_state` pour le nouvel owner; une instance inchangee n'est ni reset ni replay inutilement.
 - binding Drum: `instance_id` stable par track logique (`instance_id == track_id`), pour eviter toute migration d'etat inter-track lors des reconfigurations de cardinalite Drum
 - calcul flags capabilities
 
@@ -269,7 +269,7 @@ Sorties de Z2:
 - `track_runtime_refresh_track(track)` reconstruit uniquement le contexte runtime de la track cible quand seul son dirty local est pose.
 - `track_runtime_refresh_track(track)` ne fait full refresh que si un dirty global est pose et que l'appel n'est pas en IRQ.
 - `track_runtime_refresh_if_dirty()` ne lance pas de `track_runtime_refresh_all()` depuis l'IRQ audio; un dirty observe en IRQ est ignore pour le bloc courant et compte comme diagnostic.
-- Les instances Wave restent stables par track logique (`instance_id == track_id`); un refresh local ne reset que l'instance dont l'owner reel change.
+- Les instances Prism restent stables par track logique (`instance_id == track_id`); un refresh local ne reset que l'instance dont l'owner reel change.
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR` sont consommes par le DSP master.
 
 ## 21. Contrat Drum Plaits direct
@@ -336,31 +336,41 @@ Sorties de Z2:
 
 ## Addendum 2026-07-25 - identite Synth/Stack
 
-- La family `Synth` expose maintenant deux types distincts: `Wave` et `Stack`.
-- `Wave` reste l'identite historique `TRACK_RUNTIME_TYPE_WAVE`, bindee a `TRACK_RUNTIME_ENGINE_WAVE` et au runtime Braids historique `brick6_braids_runtime`; aucune semantique Wave n'est renommee, migree ou reutilisee comme alias Stack.
+- La family `Synth` expose maintenant trois types distincts: `Prism`, `Wave` et `Stack`.
+- `Prism` reste l'identite historique `TRACK_RUNTIME_TYPE_PRISM`, bindee a `TRACK_RUNTIME_ENGINE_PRISM` et au runtime Braids historique `brick6_braids_runtime`; aucune semantique Prism n'est renommee, migree ou reutilisee comme alias Stack.
+- `Wave` est l'identite du moteur wavetable utilisateur: `TRACK_RUNTIME_TYPE_WAVE` bindee a `TRACK_RUNTIME_ENGINE_WAVE`, sans reutiliser le runtime Prism/Braids.
 - `Stack` est une nouvelle identite runtime separee: `TRACK_RUNTIME_TYPE_STACK` bindee par Z2 a `TRACK_RUNTIME_ENGINE_STACK`, avec ownership stable par track logique (`instance_id == track_id`).
 - Cette passe ajoute seulement l'identite et le binding structurel Stack. Aucun kernel, runtime audible, parametre TONE Stack, persistence Stack ou chemin de rendu Z1 Stack n'est encore branche.
 
 ## Addendum 2026-07-25 - ownership runtime Stack v0
 
 - `TRACK_RUNTIME_ENGINE_STACK` possede maintenant un runtime dedie initialise et resetable, avec instances stables par track logique (`instance_id == track_id`).
-- Les chemins note du clavier, du scheduler PLAY et du panic output guard dispatchent Stack vers `brick6_stack_runtime_*`; Wave conserve son dispatch historique vers `brick6_braids_runtime_*`.
-- Les resets d'ownership Stack sont separes des resets Wave et ne reappliquent aucun parametre Wave.
+- Les chemins note du clavier, du scheduler PLAY et du panic output guard dispatchent Stack vers `brick6_stack_runtime_*`; Prism conserve son dispatch historique vers `brick6_braids_runtime_*`.
+- Les resets d'ownership Stack sont separes des resets Prism et ne reappliquent aucun parametre Prism.
 - Les commandes Stack hors IRQ passent par la file `brick6_stack_runtime_submit_*`; Z1 les draine via `brick6_stack_runtime_process_commands_from_audio()` avant le rendu Stack.
 
 ## Addendum 2026-07-25 - catalogue Stack v0
 
-- Le catalogue modele Stack appartient au runtime Stack, pas a Wave; il ne renomme ni ne reutilise l'identite `TRACK_RUNTIME_TYPE_WAVE`.
+- Le catalogue modele Stack appartient au runtime Stack, pas a Prism; il ne renomme ni ne reutilise l'identite `TRACK_RUNTIME_TYPE_PRISM`.
 - Le changement de modele Stack passe par `brick6_stack_runtime_set_slot_model()` ou par la commande `brick6_stack_runtime_submit_slot_model()`, qui resolvent et stockent le renderer hors boucle sample.
 
 ## Addendum 2026-07-25 - slots TONE Stack
 
 - `TRACK_RUNTIME_TYPE_STACK` declare sa propre table de slots TONE dans `track_runtime_tone_slots_stack[]`: niveaux OSC1..3, bruit, puis MODEL/TUNE/TIMBRE/COLOR/PARAM3 pour chaque slot.
-- Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_wave[]`.
-- Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Wave.
+- Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_prism[]`.
+- Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Prism.
 
 ## Addendum 2026-07-25 - config voice group SPREAD/LINK
 
 - `track_state` porte maintenant deux champs de configuration par master de voice group: `voice_group_spread` (`0..1`, defaut `0`) et `voice_group_link` (`OFF/ON`, defaut `OFF`).
 - Ces champs appartiennent au modele master/slaves existant: les membres sont resolus par `track_runtime_collect_voice_group_members()` dans l'ordre stable master puis slaves contigus, plafonne a 8 par les consommateurs UI/param.
 - Z2 ne cree aucune nouvelle autorite de groupe: les roles `SOLO/MASTER/SLAVE` restent la structure, et SPREAD/LINK sont seulement des attributs de la master effective.
+
+## Addendum 2026-07-27 - identite Synth/Wave wavetable
+
+- `Synth/Wave` est ajoute comme type produit distinct de `Synth/Prism`.
+- Z2 mappe `UI_TRACK_TYPE_WAVE` vers `TRACK_RUNTIME_TYPE_WAVE` et bind ce type a `TRACK_RUNTIME_ENGINE_WAVE`, avec `instance_id == track_id`.
+- `TRACK_RUNTIME_ENGINE_WAVE` est un engine separe; il ne dispatch pas vers `brick6_braids_runtime` et ne partage pas l'ownership/reset Prism.
+- Depuis la passe runtime audio, Z2 reset `brick6_wave_runtime` quand l'owner `instance_id == track_id` change.
+- Depuis la passe TONE Wave, le mapping local `TRACK_RUNTIME_TYPE_WAVE -> params TONE` expose les 16 slots `OSC1/OSC2 TABLE/POS/START/END/LEVEL/TUNE/PHASE/FLIP`, et Z2 reapplique `brick6_wave_runtime` apres reset d'ownership.
+- Depuis la passe Matrix Wave, seules les destinations continues `POS/LEVEL/TUNE` par oscillo sont validables par le catalogue MOD; les autres params TONE Wave restent des parametres statiques ou discrets.

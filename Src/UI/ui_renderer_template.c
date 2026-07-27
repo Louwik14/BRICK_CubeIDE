@@ -27,6 +27,7 @@
 #include "Mod/mod_matrix.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_pool.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38
@@ -61,6 +62,12 @@
 #define UI_TEMPLATE_SAMPLER_TEXT_MAX_PX UI_TEMPLATE_CARD_LABEL_MAX_PX
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_W (UI_TEMPLATE_SAMPLER_WAVE_W - 2)
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_H (UI_TEMPLATE_SAMPLER_WAVE_H - 2)
+#define UI_TEMPLATE_WAVE_WT_X       1
+#define UI_TEMPLATE_WAVE_WT_Y       UI_TEMPLATE_FRAME_Y
+#define UI_TEMPLATE_WAVE_WT_W       126
+#define UI_TEMPLATE_WAVE_WT_H       31
+#define UI_TEMPLATE_WAVE_WT_INNER_W (UI_TEMPLATE_WAVE_WT_W - 2)
+#define UI_TEMPLATE_WAVE_WT_INNER_H (UI_TEMPLATE_WAVE_WT_H - 2)
 #define UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W (OLED_WIDTH - 2)
 
 typedef struct
@@ -2046,7 +2053,7 @@ static void ui_renderer_template_draw_cfg_synth_icon(int x, int y, int w, int h)
 
 static void ui_renderer_template_draw_cfg_wave_icon(int x, int y, int w, int h)
 {
-    static const char *const wave[29] = {
+    static const char *const pixels[29] = {
         "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
         "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
         "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
@@ -2086,7 +2093,7 @@ static void ui_renderer_template_draw_cfg_wave_icon(int x, int y, int w, int h)
     {
         for (uint8_t col = 0U; col < 30U; ++col)
         {
-            if (wave[row][col] == 'B')
+            if (pixels[row][col] == 'B')
             {
                 drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
             }
@@ -3178,6 +3185,25 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
     ui_renderer_template_fit_text(out, 96U);
 }
 
+static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_subpage_t *subpage)
+{
+    if ((ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_WAVE)
+            || (subpage == NULL))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
+                && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
+                && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
+                && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_END))
+            || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
+                && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
+                && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
+                && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_END)));
+}
+
 static int ui_renderer_template_sampler_ram_amp_to_y(int16_t value,
                                                      uint16_t peak,
                                                      int top,
@@ -3284,6 +3310,133 @@ static void ui_renderer_template_draw_sampler_ram_marker(float value,
     ui_renderer_template_draw_sampler_ram_marker_line(x, inner_y, inner_h, dotted);
     drv_display_set_draw_color(1U);
     ui_renderer_template_draw_sampler_ram_marker_label(x, label);
+}
+
+static void ui_renderer_template_draw_wave_wavetable_frame_trace(uint16_t global_slot,
+                                                                 float scan_pos,
+                                                                 int inner_x,
+                                                                 int inner_y,
+                                                                 int inner_w,
+                                                                 int inner_h)
+{
+    uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
+    if ((inner_w <= 1)
+            || (inner_h <= 1)
+            || (sample_global_pool_resolve_backend(global_slot,
+                                                   SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                                   &wavetable_slot) == 0U))
+    {
+        return;
+    }
+
+    const wavetable_slot_t *const table = wavetable_pool_get_slot(wavetable_slot);
+    if ((table == NULL)
+            || (table->state != WAVETABLE_SLOT_READY)
+            || (table->data == NULL)
+            || (table->frame_count == 0U)
+            || (table->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT))
+    {
+        return;
+    }
+
+    if (scan_pos < 0.0f) { scan_pos = 0.0f; }
+    if (scan_pos > 1.0f) { scan_pos = 1.0f; }
+
+    const uint32_t max_frame = (table->frame_count > 1U) ? (table->frame_count - 1U) : 0U;
+    uint32_t frame = (uint32_t)((scan_pos * (float)max_frame) + 0.5f);
+    if (frame > max_frame)
+    {
+        frame = max_frame;
+    }
+
+    const float *const src = &table->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
+    uint16_t peak = 0U;
+    for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
+    {
+        int32_t sample = (int32_t)(src[i] * 32767.0f);
+        if (sample < 0)
+        {
+            sample = -sample;
+        }
+        if (sample > 32767L)
+        {
+            sample = 32767L;
+        }
+        if ((uint16_t)sample > peak)
+        {
+            peak = (uint16_t)sample;
+        }
+    }
+    if (peak <= 1U)
+    {
+        return;
+    }
+
+    int prev_x = inner_x;
+    int prev_y = ui_renderer_template_sampler_ram_amp_to_y((int16_t)(src[0] * 32767.0f),
+                                                           peak,
+                                                           inner_y,
+                                                           inner_h);
+    for (int col = 1; col < inner_w; ++col)
+    {
+        const uint32_t sample_index =
+            (uint32_t)(((uint64_t)col * (uint64_t)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U))
+                       / (uint64_t)(inner_w - 1));
+        int32_t sample = (int32_t)(src[sample_index] * 32767.0f);
+        if (sample > 32767L)
+        {
+            sample = 32767L;
+        }
+        else if (sample < -32767L)
+        {
+            sample = -32767L;
+        }
+        const int x = inner_x + col;
+        const int y = ui_renderer_template_sampler_ram_amp_to_y((int16_t)sample,
+                                                                peak,
+                                                                inner_y,
+                                                                inner_h);
+        drv_display_draw_line(prev_x, prev_y, x, y);
+        prev_x = x;
+        prev_y = y;
+    }
+}
+
+static void ui_renderer_template_draw_wave_wavetable_tick(float value,
+                                                          uint32_t total_frames,
+                                                          int inner_x,
+                                                          int inner_y,
+                                                          int inner_w,
+                                                          int inner_h,
+                                                          uint8_t pos_marker)
+{
+    const int x = ui_renderer_template_sampler_ram_marker_x(value, total_frames, inner_x, inner_w);
+    if (x < 0)
+    {
+        return;
+    }
+
+    drv_display_set_draw_color(2U);
+    if (pos_marker != 0U)
+    {
+        const int center = inner_y + (inner_h / 2);
+        drv_display_draw_line(x, inner_y, x, inner_y + inner_h - 1);
+        if (x > inner_x)
+        {
+            drv_display_draw_pixel(x - 1, center, true);
+        }
+        if (x < (inner_x + inner_w - 1))
+        {
+            drv_display_draw_pixel(x + 1, center, true);
+        }
+    }
+    else
+    {
+        const int tick_h = (inner_h >= 12) ? 6 : 4;
+        drv_display_draw_line(x, inner_y, x, inner_y + tick_h - 1);
+        drv_display_draw_line(x, inner_y + inner_h - tick_h, x, inner_y + inner_h - 1);
+    }
+    drv_display_set_draw_color(1U);
 }
 
 static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_value)
@@ -3536,6 +3689,95 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
     }
 }
 
+static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                             const ui_template_subpage_t *subpage)
+{
+    const int wave_x = UI_TEMPLATE_WAVE_WT_X;
+    const int wave_y = UI_TEMPLATE_WAVE_WT_Y;
+    const int wave_w = UI_TEMPLATE_WAVE_WT_W;
+    const int wave_h = UI_TEMPLATE_WAVE_WT_H;
+    const int inner_x = wave_x + 1;
+    const int inner_y = wave_y + 1;
+    const int inner_w = UI_TEMPLATE_WAVE_WT_INNER_W;
+    const int inner_h = UI_TEMPLATE_WAVE_WT_INNER_H;
+    const int center_y = inner_y + (inner_h / 2);
+    float table_value = 0.0f;
+    float pos_value = 0.0f;
+    float start_value = 0.0f;
+    float end_value = 1.0f;
+
+    if ((subpage == NULL)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[0], &table_value, 0) == 0U))
+    {
+        drv_display_draw_rect(wave_x, wave_y, wave_w, wave_h);
+        return;
+    }
+
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[1], &pos_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[2], &start_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, subpage->param_bank.params[3], &end_value, 0);
+
+    if (start_value < 0.0f) { start_value = 0.0f; }
+    if (start_value > 1.0f) { start_value = 1.0f; }
+    if (end_value < 0.0f) { end_value = 0.0f; }
+    if (end_value > 1.0f) { end_value = 1.0f; }
+    if (pos_value < 0.0f) { pos_value = 0.0f; }
+    if (pos_value > 1.0f) { pos_value = 1.0f; }
+
+    if (end_value < start_value)
+    {
+        const float tmp = start_value;
+        start_value = end_value;
+        end_value = tmp;
+    }
+    const float scan_pos = start_value + ((end_value - start_value) * pos_value);
+    const uint16_t global_slot = (uint16_t)((table_value < 0.0f) ? 0.0f : (table_value + 0.5f));
+    const wavetable_preview_t *const preview = wavetable_pool_get_preview_for_global(global_slot);
+
+    drv_display_draw_rect(wave_x, wave_y, wave_w, wave_h);
+    for (int x = inner_x; x < (inner_x + inner_w); x += 2)
+    {
+        drv_display_draw_pixel(x, center_y, true);
+    }
+
+    if ((preview == 0)
+            || (preview->state != WAVETABLE_PREVIEW_READY)
+            || (preview->columns == 0U)
+            || (preview->frame_count == 0U))
+    {
+        return;
+    }
+
+    ui_renderer_template_draw_wave_wavetable_frame_trace(global_slot,
+                                                         scan_pos,
+                                                         inner_x,
+                                                         inner_y,
+                                                         inner_w,
+                                                         inner_h);
+
+    ui_renderer_template_draw_wave_wavetable_tick(start_value,
+                                                  preview->frame_count,
+                                                  inner_x,
+                                                  inner_y,
+                                                  inner_w,
+                                                  inner_h,
+                                                  0U);
+    ui_renderer_template_draw_wave_wavetable_tick(end_value,
+                                                  preview->frame_count,
+                                                  inner_x,
+                                                  inner_y,
+                                                  inner_w,
+                                                  inner_h,
+                                                  0U);
+    ui_renderer_template_draw_wave_wavetable_tick(scan_pos,
+                                                  preview->frame_count,
+                                                  inner_x,
+                                                  inner_y,
+                                                  inner_w,
+                                                  inner_h,
+                                                  1U);
+}
+
 static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_page_state_t *state,
                                                            const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                            uint8_t slot,
@@ -3592,6 +3834,26 @@ static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_temp
                           UI_TEMPLATE_SAMPLER_NAME_Y,
                           sample_label);
     ui_renderer_template_draw_sampler_ram_waveform(plock_frame_ctx);
+
+    if (subpage == NULL)
+    {
+        return;
+    }
+
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+    {
+        ui_renderer_template_draw_sampler_ram_slot_text(state,
+                                                        plock_frame_ctx,
+                                                        slot,
+                                                        subpage->param_bank.params[slot]);
+    }
+}
+
+static void ui_renderer_template_draw_wave_wavetable_placeholder(const ui_template_page_state_t *state,
+                                                                 const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                                 const ui_template_subpage_t *subpage)
+{
+    ui_renderer_template_draw_wave_wavetable_preview(plock_frame_ctx, subpage);
 
     if (subpage == NULL)
     {
@@ -4314,6 +4576,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
         if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
         {
             ui_renderer_template_draw_sampler_ram_wave_placeholder(state, &plock_frame_ctx, subpage);
+        }
+        else if (ui_renderer_template_is_wave_wavetable_subpage(subpage) != 0U)
+        {
+            ui_renderer_template_draw_wave_wavetable_placeholder(state, &plock_frame_ctx, subpage);
         }
         else
         {

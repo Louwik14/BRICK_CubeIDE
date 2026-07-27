@@ -7,6 +7,7 @@
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Mod/mod_env3.h"
@@ -186,13 +187,13 @@ static uint8_t param_backend_clip_search_index(float value)
     return (index <= 4U) ? index : 4U;
 }
 
-uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
     {
         return 0U;
     }
@@ -201,32 +202,32 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
 
     switch (id)
     {
-        case PARAM_WAVE_EDIT:
+        case PARAM_PRISM_EDIT:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 47.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.edit = (float)(uint8_t)(clamped + 0.5f);
+                state->prism.edit = (float)(uint8_t)(clamped + 0.5f);
             }
             brick6_braids_runtime_set_edit(instance_id, (float)(uint8_t)(clamped + 0.5f));
             return 1U;
         }
-        case PARAM_WAVE_FINE:
+        case PARAM_PRISM_FINE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.fine = clamped;
+                state->prism.fine = clamped;
             }
             brick6_braids_runtime_set_fine(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_COARSE:
+        case PARAM_PRISM_COARSE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.coarse = clamped;
+                state->prism.coarse = clamped;
             }
             else
             {
@@ -235,52 +236,52 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             brick6_braids_runtime_set_coarse(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_FM:
+        case PARAM_PRISM_FM:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.fm = clamped;
+                state->prism.fm = clamped;
             }
             brick6_braids_runtime_set_fm(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_TIMBRE:
+        case PARAM_PRISM_TIMBRE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.timbre = clamped;
+                state->prism.timbre = clamped;
             }
             brick6_braids_runtime_set_timbre(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_MODULATION:
+        case PARAM_PRISM_MODULATION:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.modulation = clamped;
+                state->prism.modulation = clamped;
             }
             brick6_braids_runtime_set_modulation(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_COLOR:
+        case PARAM_PRISM_COLOR:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.color = clamped;
+                state->prism.color = clamped;
             }
             brick6_braids_runtime_set_color(instance_id, clamped);
             return 1U;
         }
-        case PARAM_WAVE_PHASE_RESET:
+        case PARAM_PRISM_PHASE_RESET:
         {
             const float clamped = (value >= 0.5f) ? 1.0f : 0.0f;
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.phase_reset = clamped;
+                state->prism.phase_reset = clamped;
             }
             brick6_braids_runtime_set_phase_reset(instance_id, (clamped >= 0.5f) ? 1U : 0U);
             return 1U;
@@ -290,27 +291,27 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
     }
 }
 
-uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
+uint8_t param_backend_reapply_tone_prism_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
     {
         return 0U;
     }
 
     const uint8_t instance_id = ctx->instance_id;
-    brick6_braids_runtime_set_edit(instance_id, state->wave.edit);
-    brick6_braids_runtime_set_fine(instance_id, state->wave.fine);
-    brick6_braids_runtime_set_coarse(instance_id, state->wave.coarse);
-    brick6_braids_runtime_set_fm(instance_id, state->wave.fm);
-    brick6_braids_runtime_set_timbre(instance_id, state->wave.timbre);
-    brick6_braids_runtime_set_modulation(instance_id, state->wave.modulation);
-    brick6_braids_runtime_set_color(instance_id, state->wave.color);
-    brick6_braids_runtime_set_phase_reset(instance_id, (state->wave.phase_reset >= 0.5f) ? 1U : 0U);
+    brick6_braids_runtime_set_edit(instance_id, state->prism.edit);
+    brick6_braids_runtime_set_fine(instance_id, state->prism.fine);
+    brick6_braids_runtime_set_coarse(instance_id, state->prism.coarse);
+    brick6_braids_runtime_set_fm(instance_id, state->prism.fm);
+    brick6_braids_runtime_set_timbre(instance_id, state->prism.timbre);
+    brick6_braids_runtime_set_modulation(instance_id, state->prism.modulation);
+    brick6_braids_runtime_set_color(instance_id, state->prism.color);
+    brick6_braids_runtime_set_phase_reset(instance_id, (state->prism.phase_reset >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 
@@ -521,6 +522,152 @@ uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
     (void)brick6_stack_runtime_submit_noise_level(ctx->instance_id, state->stack.noise_level);
     (void)brick6_stack_runtime_submit_osc_detune(ctx->instance_id, state->stack.osc_detune);
     (void)brick6_stack_runtime_submit_phase_reset(ctx->instance_id, (state->stack.phase_reset >= 0.5f) ? 1U : 0U);
+    return 1U;
+}
+
+static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
+{
+    if ((out_osc == NULL) || (out_param == NULL)
+            || (id < PARAM_WAVE_OSC1_TABLE)
+            || (id > PARAM_WAVE_OSC2_FLIP))
+    {
+        return 0U;
+    }
+
+    const uint8_t rel = (uint8_t)(id - PARAM_WAVE_OSC1_TABLE);
+    *out_osc = (uint8_t)(rel / 8U);
+    *out_param = (uint8_t)(rel % 8U);
+    return (*out_osc < BRICK6_WAVE_OSC_COUNT) ? 1U : 0U;
+}
+
+uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->instance_id >= BRICK6_WAVE_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    uint8_t osc = 0U;
+    uint8_t slot_param = 0U;
+    if (param_backend_wave_slot_for_id(id, &osc, &slot_param) == 0U)
+    {
+        return 0U;
+    }
+
+    switch (slot_param)
+    {
+        case 0U:
+        {
+            const uint16_t global_slot = (uint16_t)(param_backend_clamp_value(value, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.table[osc] = (float)global_slot;
+            }
+            brick6_wave_runtime_set_osc_table_global(ctx->instance_id, osc, global_slot);
+            return 1U;
+        }
+        case 1U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.pos[osc] = clamped;
+            }
+            brick6_wave_runtime_set_osc_pos(ctx->instance_id, osc, clamped);
+            return 1U;
+        }
+        case 2U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.start[osc] = clamped;
+            }
+            brick6_wave_runtime_set_osc_start(ctx->instance_id, osc, clamped);
+            return 1U;
+        }
+        case 3U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.end[osc] = clamped;
+            }
+            brick6_wave_runtime_set_osc_end(ctx->instance_id, osc, clamped);
+            return 1U;
+        }
+        case 4U:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.level[osc] = clamped;
+            }
+            brick6_wave_runtime_set_osc_level(ctx->instance_id, osc, clamped);
+            return 1U;
+        }
+        case 5U:
+        {
+            const float clamped = param_backend_clamp_value(value, -60.0f, 60.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.tune[osc] = clamped;
+            }
+            brick6_wave_runtime_set_osc_tune(ctx->instance_id, osc, clamped);
+            return 1U;
+        }
+        case 6U:
+        {
+            const brick6_wave_phase_t phase = (brick6_wave_phase_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.phase[osc] = (float)(uint8_t)phase;
+            }
+            brick6_wave_runtime_set_osc_phase(ctx->instance_id, osc, phase);
+            return 1U;
+        }
+        default:
+        {
+            const brick6_wave_flip_t flip = (brick6_wave_flip_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->wave.flip[osc] = (float)(uint8_t)flip;
+            }
+            brick6_wave_runtime_set_osc_flip(ctx->instance_id, osc, flip);
+            return 1U;
+        }
+    }
+}
+
+uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((state == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->instance_id >= BRICK6_WAVE_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+    {
+        brick6_wave_runtime_set_osc_table_global(ctx->instance_id, osc, (uint16_t)(param_backend_clamp_value(state->wave.table[osc], 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f));
+        brick6_wave_runtime_set_osc_pos(ctx->instance_id, osc, param_backend_clamp_value(state->wave.pos[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_start(ctx->instance_id, osc, param_backend_clamp_value(state->wave.start[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_end(ctx->instance_id, osc, param_backend_clamp_value(state->wave.end[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_level(ctx->instance_id, osc, param_backend_clamp_value(state->wave.level[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_tune(ctx->instance_id, osc, param_backend_clamp_value(state->wave.tune[osc], -60.0f, 60.0f));
+        brick6_wave_runtime_set_osc_phase(ctx->instance_id, osc, (brick6_wave_phase_t)(uint8_t)(param_backend_clamp_value(state->wave.phase[osc], 0.0f, 3.0f) + 0.5f));
+        brick6_wave_runtime_set_osc_flip(ctx->instance_id, osc, (brick6_wave_flip_t)(uint8_t)(param_backend_clamp_value(state->wave.flip[osc], 0.0f, 3.0f) + 0.5f));
+    }
     return 1U;
 }
 
@@ -1192,7 +1339,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
             mixer_set_track_vca_release(ctx->mix_track_id, release_s);
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             {
                 brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
             }

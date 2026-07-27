@@ -15,21 +15,17 @@
 #include <stdint.h>
 
 #include "App/mux_pots.h"
+#include "Board/board_surface.h"
 #include "mixer.h"
 #include "Param/param_macro.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define LOWCOST_FORCE_MASTER_VOLUME_DIAG 1
+#define LOWCOST_FORCE_MASTER_VOLUME_DIAG_GAIN 0.75f
+#endif
+
 void brick6_master_control_process(void)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
-    static uint8_t initialized = 0U;
-
-    if (initialized == 0U)
-    {
-        mixer_set_master(0.75f);
-        initialized = 1U;
-    }
-    return;
-#else
     enum
     {
         POT_MACRO_BASE_INDEX = 0U,
@@ -37,6 +33,7 @@ void brick6_master_control_process(void)
         POT_MASTER_INDEX = 4U,
         POT_RAW_MAX = 65535U,
         POT_MUTE_THRESHOLD = 1024U,
+        POT_FALLBACK_GAIN_PERCENT = 75U,
         POT_MASTER_STEPS = 512U
     };
 
@@ -48,6 +45,7 @@ void brick6_master_control_process(void)
     };
     static const uint8_t macro_pot_index_map[POT_MACRO_COUNT] = { 2U, 1U, 0U, 3U };
 
+#if !defined(BRICK6_VARIANT_LOWCOST)
     for (uint8_t macro = 0U; macro < POT_MACRO_COUNT; ++macro)
     {
         const uint8_t pot_index = (uint8_t)(POT_MACRO_BASE_INDEX + macro_pot_index_map[macro]);
@@ -74,13 +72,40 @@ void brick6_master_control_process(void)
         macro_last_step[macro] = step;
         macro_initialized[macro] = 1U;
     }
+#else
+    (void)macro_initialized;
+    (void)macro_last_step;
+    (void)macro_pot_index_map;
+#endif
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#if (LOWCOST_FORCE_MASTER_VOLUME_DIAG != 0)
+    mixer_set_master(LOWCOST_FORCE_MASTER_VOLUME_DIAG_GAIN);
+    last_step = (uint16_t)((((uint32_t)POT_FALLBACK_GAIN_PERCENT
+                             * (uint32_t)(POT_MASTER_STEPS - 1U)) + 50U) / 100U);
+    initialized = 1U;
+    return;
+#endif
+    uint16_t raw = 0U;
+    if (board_surface_read_master_volume_raw(&raw) == 0U)
+    {
+        if (initialized == 0U)
+        {
+            mixer_set_master((float)POT_FALLBACK_GAIN_PERCENT / 100.0f);
+            last_step = (uint16_t)((((uint32_t)POT_FALLBACK_GAIN_PERCENT
+                                     * (uint32_t)(POT_MASTER_STEPS - 1U)) + 50U) / 100U);
+            initialized = 1U;
+        }
+        return;
+    }
+#else
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
     {
         return;
     }
 
     uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
+#endif
 
     if (raw <= POT_MUTE_THRESHOLD)
     {
@@ -116,5 +141,4 @@ void brick6_master_control_process(void)
 
     last_step = step;
     initialized = 1U;
-#endif
 }

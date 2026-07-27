@@ -12,6 +12,7 @@
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -485,7 +486,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             drum_synth_note_off_for_instance(resolved.descriptor.instance_id, note);
         }
     }
-    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
     {
         if (is_note_on != 0U)
         {
@@ -505,6 +506,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             brick6_stack_runtime_note_off(resolved.descriptor.instance_id, note);
+        }
+    }
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_wave_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+        }
+        else
+        {
+            brick6_wave_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)

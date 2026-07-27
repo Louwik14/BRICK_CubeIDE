@@ -10,13 +10,17 @@
 #define HALL_SAMPLE_FIFO_MASK  (HALL_SAMPLE_FIFO_SIZE - 1U)
 
 /*
- * ADC DMA mailboxes (1 sample per stream):
- * - DMA writes (ADC1/ADC2 circular, length 1)
+ * ADC DMA mailboxes (low-cost ADC1 scans hall A/C + volume):
+ * - DMA writes (ADC1 circular length 2/3 by variant, ADC2 circular length 1)
  * - CPU reads in hall_adc_process_pair()
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
+#if defined(BRICK6_VARIANT_LOWCOST)
+static DMA_BUFFER volatile uint16_t adc1_dma[3U];
+#else
 static DMA_BUFFER volatile uint16_t adc1_dma[2U];
+#endif
 static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
@@ -161,6 +165,9 @@ void hall_adc_init(void)
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
+#if defined(BRICK6_VARIANT_LOWCOST)
+    adc1_dma[2U] = 0U;
+#endif
     adc2_dma = 0U;
 
     hall_fifo_head = 0U;

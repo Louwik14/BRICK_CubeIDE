@@ -60,7 +60,7 @@ typedef struct
         float modulation;
         float color;
         float phase_reset;
-    } wave;
+    } prism;
     struct
     {
         float level[3];
@@ -73,6 +73,17 @@ typedef struct
         float osc_detune;
         float phase_reset;
     } stack;
+    struct
+    {
+        float table[2];
+        float pos[2];
+        float start[2];
+        float end[2];
+        float level[2];
+        float tune[2];
+        float phase[2];
+        float flip[2];
+    } wave;
     float midi_program;
     float midi_cc[12];
     struct

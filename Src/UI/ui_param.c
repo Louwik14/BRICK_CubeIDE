@@ -121,15 +121,15 @@ static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
             || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
 }
 
-static uint8_t ui_param_is_wave_tune(param_id_t param, uint8_t track)
+static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track)
 {
-    return (uint8_t)((param == PARAM_WAVE_COARSE)
+    return (uint8_t)((param == PARAM_PRISM_COARSE)
             && (track < UI_TRACK_COUNT)
             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_WAVE));
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_PRISM));
 }
 
-static float ui_param_wave_tune_normalized_from_parts(float coarse, float fine)
+static float ui_param_prism_tune_normalized_from_parts(float coarse, float fine)
 {
     float semitones = ((coarse - 0.5f) * 48.0f) + ((fine - 0.5f) * 2.0f);
     if (semitones < -24.0f)
@@ -1337,16 +1337,16 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
         return 1U;
     }
 
-    if (ui_param_is_wave_tune(param, track) != 0U)
+    if (ui_param_is_prism_tune(param, track) != 0U)
     {
         float coarse = 0.5f;
         float fine = 0.5f;
-        if ((param_registry_get_track_value(PARAM_WAVE_COARSE, track, &coarse) == 0U)
-                || (param_registry_get_track_value(PARAM_WAVE_FINE, track, &fine) == 0U))
+        if ((param_registry_get_track_value(PARAM_PRISM_COARSE, track, &coarse) == 0U)
+                || (param_registry_get_track_value(PARAM_PRISM_FINE, track, &fine) == 0U))
         {
             return 0U;
         }
-        *out_value = ui_param_wave_tune_normalized_from_parts(coarse, fine);
+        *out_value = ui_param_prism_tune_normalized_from_parts(coarse, fine);
         return 1U;
     }
 
@@ -1779,7 +1779,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
-    if (ui_param_is_wave_tune(param, track) != 0U)
+    if (ui_param_is_prism_tune(param, track) != 0U)
     {
         const float clamped = ui_param_clamp(value, 0.0f, 1.0f);
         float current_value = 0.0f;
@@ -1793,7 +1793,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             if (update_active_mirror != 0U)
             {
                 param_store_set_active(param, clamped);
-                param_store_set_active(PARAM_WAVE_FINE, 0.5f);
+                param_store_set_active(PARAM_PRISM_FINE, 0.5f);
             }
             return 1U;
         }
@@ -1801,12 +1801,12 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         ui_param_ensure_undo_transaction(encoder, param, track);
 
         const param_registry_track_edit_cmd_t fine_cmd = {
-            .id = PARAM_WAVE_FINE,
+            .id = PARAM_PRISM_FINE,
             .track = track,
             .value = 0.5f
         };
         const param_registry_track_edit_cmd_t coarse_cmd = {
-            .id = PARAM_WAVE_COARSE,
+            .id = PARAM_PRISM_COARSE,
             .track = track,
             .value = clamped
         };
@@ -1835,7 +1835,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         if (update_active_mirror != 0U)
         {
             param_store_set_active(param, clamped);
-            param_store_set_active(PARAM_WAVE_FINE, 0.5f);
+            param_store_set_active(PARAM_PRISM_FINE, 0.5f);
         }
         if (undo_v2_is_transaction_open() != 0U)
         {
@@ -1913,7 +1913,7 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
 
     if (ctx->shift_down != 0U)
     {
-        if (ui_param_is_wave_tune(desc->id, ctx->active_track) != 0U)
+        if (ui_param_is_prism_tune(desc->id, ctx->active_track) != 0U)
         {
             return 0.01f / 48.0f;
         }
@@ -1925,7 +1925,7 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
         }
     }
 
-    if (ui_param_is_wave_tune(desc->id, ctx->active_track) != 0U)
+    if (ui_param_is_prism_tune(desc->id, ctx->active_track) != 0U)
     {
         return 1.0f / 48.0f;
     }
@@ -2087,6 +2087,11 @@ static float ui_param_apply_delta_value(param_id_t param,
                                         float max_value,
                                         uint8_t shift_down)
 {
+    if ((param == PARAM_WAVE_OSC1_TUNE) || (param == PARAM_WAVE_OSC2_TUNE))
+    {
+        const float step = (shift_down != 0U) ? 0.01f : 1.0f;
+        return ui_param_clamp(current_value + ((float)delta * step), min_value, max_value);
+    }
     if (ui_param_is_lfo_rate(param) != 0U)
     {
         return ui_param_step_lfo_rate(current_value, delta, shift_down);

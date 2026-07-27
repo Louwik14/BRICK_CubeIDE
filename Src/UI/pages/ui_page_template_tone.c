@@ -6,7 +6,8 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Param/param_registry.h"
-#include "Param/param_wave_labels.h"
+#include "Param/param_prism_labels.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
@@ -75,14 +76,26 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_wave = {
+static const ui_template_family_t g_ui_template_tone_family_prism = {
     .family_title = "TONE",
     .nav_labels = { "VOICE", "EDIT", "-", "-" },
     .subpages = {
-        { .title = "VOICE", .param_bank = { .params = { PARAM_WAVE_TIMBRE, PARAM_WAVE_COLOR, PARAM_WAVE_MODULATION, PARAM_WAVE_EDIT } } },
-        { .title = "EDIT", .param_bank = { .params = { PARAM_WAVE_COARSE, PARAM_WAVE_FM, PARAM_WAVE_PHASE_RESET, PARAM_COUNT } } },
+        { .title = "VOICE", .param_bank = { .params = { PARAM_PRISM_TIMBRE, PARAM_PRISM_COLOR, PARAM_PRISM_MODULATION, PARAM_PRISM_EDIT } } },
+        { .title = "EDIT", .param_bank = { .params = { PARAM_PRISM_COARSE, PARAM_PRISM_FM, PARAM_PRISM_PHASE_RESET, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_wave = {
+    .family_title = "TONE",
+    .nav_labels = { "O1W", "O1V", "O2W", "O2V" },
+    .subpages = {
+        { .title = "OSC1 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_END } } },
+        { .title = "OSC1 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC1_LEVEL, PARAM_WAVE_OSC1_TUNE, PARAM_WAVE_OSC1_PHASE, PARAM_WAVE_OSC1_FLIP } } },
+        { .title = "OSC2 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_END } } },
+        { .title = "OSC2 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC2_LEVEL, PARAM_WAVE_OSC2_TUNE, PARAM_WAVE_OSC2_PHASE, PARAM_WAVE_OSC2_FLIP } } },
     },
     .default_subpage = 0U,
 };
@@ -111,17 +124,17 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .default_subpage = 0U,
 };
 
-typedef param_wave_label_value_kind_t ui_wave_value_kind_t;
-typedef param_wave_param_label_t ui_wave_param_label_t;
+typedef param_prism_label_value_kind_t ui_prism_value_kind_t;
+typedef param_prism_param_label_t ui_prism_param_label_t;
 
-#define UI_WAVE_VALUE_PERCENT          PARAM_WAVE_LABEL_VALUE_PERCENT
-#define UI_WAVE_VALUE_BIPOLAR_PERCENT  PARAM_WAVE_LABEL_VALUE_BIPOLAR_PERCENT
-#define UI_WAVE_VALUE_INTERVAL         PARAM_WAVE_LABEL_VALUE_INTERVAL
-#define UI_WAVE_VALUE_STEPPED          PARAM_WAVE_LABEL_VALUE_STEPPED
-#define UI_WAVE_VALUE_ENUM             PARAM_WAVE_LABEL_VALUE_ENUM
-#define UI_WAVE_VALUE_MORPH            PARAM_WAVE_LABEL_VALUE_MORPH
-#define UI_WAVE_VALUE_RATE             PARAM_WAVE_LABEL_VALUE_RATE
-#define UI_WAVE_VALUE_NONE             PARAM_WAVE_LABEL_VALUE_NONE
+#define UI_PRISM_VALUE_PERCENT          PARAM_PRISM_LABEL_VALUE_PERCENT
+#define UI_PRISM_VALUE_BIPOLAR_PERCENT  PARAM_PRISM_LABEL_VALUE_BIPOLAR_PERCENT
+#define UI_PRISM_VALUE_INTERVAL         PARAM_PRISM_LABEL_VALUE_INTERVAL
+#define UI_PRISM_VALUE_STEPPED          PARAM_PRISM_LABEL_VALUE_STEPPED
+#define UI_PRISM_VALUE_ENUM             PARAM_PRISM_LABEL_VALUE_ENUM
+#define UI_PRISM_VALUE_MORPH            PARAM_PRISM_LABEL_VALUE_MORPH
+#define UI_PRISM_VALUE_RATE             PARAM_PRISM_LABEL_VALUE_RATE
+#define UI_PRISM_VALUE_NONE             PARAM_PRISM_LABEL_VALUE_NONE
 
 static const ui_template_family_t g_ui_template_tone_family_midi = {
     .family_title = "TONE",
@@ -243,9 +256,9 @@ static uint8_t ui_page_template_tone_master_fx_u7(float value)
     return (uint8_t)(value + 0.5f);
 }
 
-#define UI_WAVE_PARAM_LABEL_COUNT param_wave_label_count()
+#define UI_PRISM_PARAM_LABEL_COUNT param_prism_label_count()
 
-static const int16_t g_wave_triple_intervals_q7[] = {
+static const int16_t g_prism_triple_intervals_q7[] = {
     -3072, -3072, -3068, -2944, -2816, -2688, -2560, -2432,
     -2304, -2180, -2176, -2048, -1920, -1792, -1664, -1540,
     -1536, -1408, -1280, -1152, -1024, -900, -896, -768,
@@ -257,7 +270,7 @@ static const int16_t g_wave_triple_intervals_q7[] = {
     3072
 };
 
-static const uint16_t g_wave_fm_frequency_quantizer[] = {
+static const uint16_t g_prism_fm_frequency_quantizer[] = {
     7168, 7168, 7168, 7360, 7552, 7744, 7936, 8128,
     8320, 8512, 8704, 8896, 9088, 9280, 9472, 9664,
     9856, 10048, 10240, 10240, 10240, 10432, 10624, 10816,
@@ -277,14 +290,14 @@ static const uint16_t g_wave_fm_frequency_quantizer[] = {
     25600
 };
 
-static const ui_wave_param_label_t *ui_page_template_tone_wave_labels_for_active_track(uint8_t *out_edit_index)
+static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_active_track(uint8_t *out_edit_index)
 {
     const uint8_t active_track = ui_get_active_track();
     uint8_t edit_index = 0U;
 
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_WAVE)
-            || (param_wave_edit_index_for_track(active_track, &edit_index) == 0U))
+            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_PRISM)
+            || (param_prism_edit_index_for_track(active_track, &edit_index) == 0U))
     {
         return NULL;
     }
@@ -294,10 +307,10 @@ static const ui_wave_param_label_t *ui_page_template_tone_wave_labels_for_active
         *out_edit_index = edit_index;
     }
 
-    return param_wave_labels_for_edit_index(edit_index);
+    return param_prism_labels_for_edit_index(edit_index);
 }
 
-static uint16_t ui_page_template_tone_wave_u15(float value)
+static uint16_t ui_page_template_tone_prism_u15(float value)
 {
     if (value < 0.0f)
     {
@@ -310,14 +323,14 @@ static uint16_t ui_page_template_tone_wave_u15(float value)
     return (uint16_t)(value * 32767.0f + 0.5f);
 }
 
-static void ui_page_template_tone_wave_format_percent(uint16_t raw,
+static void ui_page_template_tone_prism_format_percent(uint16_t raw,
                                                       char *out,
                                                       uint32_t out_len)
 {
     ui_format_param_127_00((float)raw, 0.0f, 32767.0f, out, out_len);
 }
 
-static void ui_page_template_tone_wave_format_bipolar_percent(uint16_t raw,
+static void ui_page_template_tone_prism_format_bipolar_percent(uint16_t raw,
                                                               char *out,
                                                               uint32_t out_len)
 {
@@ -330,7 +343,7 @@ static void ui_page_template_tone_wave_format_bipolar_percent(uint16_t raw,
     (void)snprintf(out, out_len, "%+ld%%", (long)scaled);
 }
 
-static void ui_page_template_tone_wave_format_bipolar_float(float value,
+static void ui_page_template_tone_prism_format_bipolar_float(float value,
                                                             float span,
                                                             const char *unit,
                                                             char *out,
@@ -351,7 +364,7 @@ static void ui_page_template_tone_wave_format_bipolar_float(float value,
     }
 }
 
-static void ui_page_template_tone_wave_format_model(float value,
+static void ui_page_template_tone_prism_format_model(float value,
                                                     char *out,
                                                     uint32_t out_len)
 {
@@ -362,16 +375,16 @@ static void ui_page_template_tone_wave_format_model(float value,
     {
         index = (uint8_t)(value + 0.5f);
     }
-    (void)param_wave_edit_index_from_value(value, &index);
+    (void)param_prism_edit_index_from_value(value, &index);
 
-    if (param_registry[PARAM_WAVE_EDIT].labels != NULL)
+    if (param_registry[PARAM_PRISM_EDIT].labels != NULL)
     {
-        label = param_registry[PARAM_WAVE_EDIT].labels[index];
+        label = param_registry[PARAM_PRISM_EDIT].labels[index];
     }
     (void)snprintf(out, out_len, "%s", (label != NULL) ? label : "---");
 }
 
-static void ui_page_template_tone_wave_format_q7_interval(int32_t q7,
+static void ui_page_template_tone_prism_format_q7_interval(int32_t q7,
                                                           char *out,
                                                           uint32_t out_len)
 {
@@ -393,12 +406,12 @@ static void ui_page_template_tone_wave_format_q7_interval(int32_t q7,
     (void)snprintf(out, out_len, "%+ldst", (long)semitones);
 }
 
-static int16_t ui_page_template_tone_wave_triple_interval_q7(uint16_t raw)
+static int16_t ui_page_template_tone_prism_triple_interval_q7(uint16_t raw)
 {
     uint8_t index_a = (uint8_t)(raw >> 9);
     uint8_t index_b = (uint8_t)(((raw >> 8) + 1U) >> 1);
     uint16_t xfade = (uint16_t)(raw << 8);
-    const uint8_t last = (uint8_t)((sizeof(g_wave_triple_intervals_q7) / sizeof(g_wave_triple_intervals_q7[0])) - 1U);
+    const uint8_t last = (uint8_t)((sizeof(g_prism_triple_intervals_q7) / sizeof(g_prism_triple_intervals_q7[0])) - 1U);
 
     if (index_a > last)
     {
@@ -409,12 +422,12 @@ static int16_t ui_page_template_tone_wave_triple_interval_q7(uint16_t raw)
         index_b = last;
     }
 
-    return (int16_t)(g_wave_triple_intervals_q7[index_a]
-                    + (((int32_t)(g_wave_triple_intervals_q7[index_b] - g_wave_triple_intervals_q7[index_a])
+    return (int16_t)(g_prism_triple_intervals_q7[index_a]
+                    + (((int32_t)(g_prism_triple_intervals_q7[index_b] - g_prism_triple_intervals_q7[index_a])
                         * (int32_t)xfade) >> 16));
 }
 
-static void ui_page_template_tone_wave_format_interval(uint8_t edit_index,
+static void ui_page_template_tone_prism_format_interval(uint8_t edit_index,
                                                        param_id_t id,
                                                        uint16_t raw,
                                                        char *out,
@@ -422,36 +435,36 @@ static void ui_page_template_tone_wave_format_interval(uint8_t edit_index,
 {
     int32_t q7 = 0L;
 
-    if ((edit_index == 4U) && (id == PARAM_WAVE_COLOR))
+    if ((edit_index == 4U) && (id == PARAM_PRISM_COLOR))
     {
         q7 = (int32_t)(raw >> 8);
     }
-    else if (((edit_index == 7U) || (edit_index == 8U)) && (id == PARAM_WAVE_TIMBRE))
+    else if (((edit_index == 7U) || (edit_index == 8U)) && (id == PARAM_PRISM_TIMBRE))
     {
         q7 = (int32_t)(raw >> 2);
     }
     else if ((edit_index >= 9U) && (edit_index <= 12U))
     {
-        q7 = (int32_t)ui_page_template_tone_wave_triple_interval_q7(raw);
+        q7 = (int32_t)ui_page_template_tone_prism_triple_interval_q7(raw);
     }
-    else if ((edit_index == 13U) && ((id == PARAM_WAVE_TIMBRE) || (id == PARAM_WAVE_COLOR)))
+    else if ((edit_index == 13U) && ((id == PARAM_PRISM_TIMBRE) || (id == PARAM_PRISM_COLOR)))
     {
         q7 = ((int32_t)raw - 16384L) >> 2;
     }
-    else if ((edit_index == 33U) && (id == PARAM_WAVE_COLOR))
+    else if ((edit_index == 33U) && (id == PARAM_PRISM_COLOR))
     {
         q7 = ((int32_t)raw - 16384L) >> 1;
     }
     else
     {
-        ui_page_template_tone_wave_format_percent(raw, out, out_len);
+        ui_page_template_tone_prism_format_percent(raw, out, out_len);
         return;
     }
 
-    ui_page_template_tone_wave_format_q7_interval(q7, out, out_len);
+    ui_page_template_tone_prism_format_q7_interval(q7, out, out_len);
 }
 
-static void ui_page_template_tone_wave_format_vowel(uint16_t raw,
+static void ui_page_template_tone_prism_format_vowel(uint16_t raw,
                                                     char *out,
                                                     uint32_t out_len)
 {
@@ -472,7 +485,7 @@ static void ui_page_template_tone_wave_format_vowel(uint16_t raw,
     }
 }
 
-static void ui_page_template_tone_wave_format_noise_mix(uint16_t raw,
+static void ui_page_template_tone_prism_format_noise_mix(uint16_t raw,
                                                         char *out,
                                                         uint32_t out_len)
 {
@@ -498,48 +511,48 @@ static void ui_page_template_tone_wave_format_noise_mix(uint16_t raw,
     }
 }
 
-static void ui_page_template_tone_wave_format_morph(uint8_t edit_index,
+static void ui_page_template_tone_prism_format_morph(uint8_t edit_index,
                                                     param_id_t id,
                                                     uint16_t raw,
                                                     char *out,
                                                     uint32_t out_len)
 {
-    if ((edit_index == 17U) && (id == PARAM_WAVE_TIMBRE))
+    if ((edit_index == 17U) && (id == PARAM_PRISM_TIMBRE))
     {
-        ui_page_template_tone_wave_format_vowel(raw, out, out_len);
+        ui_page_template_tone_prism_format_vowel(raw, out, out_len);
     }
-    else if ((edit_index == 32U) && (id == PARAM_WAVE_COLOR))
+    else if ((edit_index == 32U) && (id == PARAM_PRISM_COLOR))
     {
-        ui_page_template_tone_wave_format_noise_mix(raw, out, out_len);
+        ui_page_template_tone_prism_format_noise_mix(raw, out, out_len);
     }
     else
     {
-        ui_page_template_tone_wave_format_percent(raw, out, out_len);
+        ui_page_template_tone_prism_format_percent(raw, out, out_len);
     }
 }
 
-static void ui_page_template_tone_wave_format_stepped(uint8_t edit_index,
+static void ui_page_template_tone_prism_format_stepped(uint8_t edit_index,
                                                       param_id_t id,
                                                       uint16_t raw,
                                                       char *out,
                                                       uint32_t out_len)
 {
-    if ((edit_index == 15U) && (id == PARAM_WAVE_COLOR))
+    if ((edit_index == 15U) && (id == PARAM_PRISM_COLOR))
     {
         (void)snprintf(out, out_len, "M%02X", (unsigned int)(raw >> 8));
     }
-    else if (((edit_index == 20U) || (edit_index == 21U) || (edit_index == 22U)) && (id == PARAM_WAVE_COLOR))
+    else if (((edit_index == 20U) || (edit_index == 21U) || (edit_index == 22U)) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t index = (uint8_t)(raw >> 8);
-        if (index >= (uint8_t)(sizeof(g_wave_fm_frequency_quantizer) / sizeof(g_wave_fm_frequency_quantizer[0])))
+        if (index >= (uint8_t)(sizeof(g_prism_fm_frequency_quantizer) / sizeof(g_prism_fm_frequency_quantizer[0])))
         {
-            index = (uint8_t)((sizeof(g_wave_fm_frequency_quantizer) / sizeof(g_wave_fm_frequency_quantizer[0])) - 1U);
+            index = (uint8_t)((sizeof(g_prism_fm_frequency_quantizer) / sizeof(g_prism_fm_frequency_quantizer[0])) - 1U);
         }
-        ui_page_template_tone_wave_format_q7_interval(((int32_t)g_wave_fm_frequency_quantizer[index] - 16384L) >> 1,
+        ui_page_template_tone_prism_format_q7_interval(((int32_t)g_prism_fm_frequency_quantizer[index] - 16384L) >> 1,
                                                       out,
                                                       out_len);
     }
-    else if ((edit_index == 30U) && (id == PARAM_WAVE_COLOR))
+    else if ((edit_index == 30U) && (id == PARAM_PRISM_COLOR))
     {
         static const char *const k_labels[] = { "SMTH", "XFADE", "ROUGH", "LOFI" };
         uint8_t index = (uint8_t)(raw >> 13);
@@ -549,7 +562,7 @@ static void ui_page_template_tone_wave_format_stepped(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%s", k_labels[index]);
     }
-    else if ((edit_index == 34U) && (id == PARAM_WAVE_COLOR))
+    else if ((edit_index == 34U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t steps = (uint8_t)(1U + (raw >> 10));
         if (steps == 1U)
@@ -564,13 +577,13 @@ static void ui_page_template_tone_wave_format_stepped(uint8_t edit_index,
     }
 }
 
-static void ui_page_template_tone_wave_format_enum(uint8_t edit_index,
+static void ui_page_template_tone_prism_format_enum(uint8_t edit_index,
                                                    param_id_t id,
                                                    uint16_t raw,
                                                    char *out,
                                                    uint32_t out_len)
 {
-    if ((edit_index == 28U) && (id == PARAM_WAVE_COLOR))
+    if ((edit_index == 28U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t bank = (uint8_t)(((uint32_t)raw * 20U) >> 15);
         if (bank > 19U)
@@ -579,7 +592,7 @@ static void ui_page_template_tone_wave_format_enum(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%u/20", (unsigned int)(bank + 1U));
     }
-    else if ((edit_index == 31U) && (id == PARAM_WAVE_COLOR))
+    else if ((edit_index == 31U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t chord = (uint8_t)(raw >> 11);
         if (chord > 16U)
@@ -594,14 +607,14 @@ static void ui_page_template_tone_wave_format_enum(uint8_t edit_index,
     }
 }
 
-static void ui_page_template_tone_wave_format_value(uint8_t edit_index,
+static void ui_page_template_tone_prism_format_value(uint8_t edit_index,
                                                     param_id_t id,
-                                                    ui_wave_value_kind_t kind,
+                                                    ui_prism_value_kind_t kind,
                                                     float value,
                                                     char *out,
                                                     uint32_t out_len)
 {
-    const uint16_t raw = ui_page_template_tone_wave_u15(value);
+    const uint16_t raw = ui_page_template_tone_prism_u15(value);
 
     if ((out == NULL) || (out_len == 0U))
     {
@@ -610,43 +623,43 @@ static void ui_page_template_tone_wave_format_value(uint8_t edit_index,
 
     switch (kind)
     {
-        case UI_WAVE_VALUE_NONE:
+        case UI_PRISM_VALUE_NONE:
             (void)snprintf(out, out_len, "---");
             break;
-        case UI_WAVE_VALUE_BIPOLAR_PERCENT:
-            ui_page_template_tone_wave_format_bipolar_percent(raw, out, out_len);
+        case UI_PRISM_VALUE_BIPOLAR_PERCENT:
+            ui_page_template_tone_prism_format_bipolar_percent(raw, out, out_len);
             break;
-        case UI_WAVE_VALUE_INTERVAL:
-            ui_page_template_tone_wave_format_interval(edit_index, id, raw, out, out_len);
+        case UI_PRISM_VALUE_INTERVAL:
+            ui_page_template_tone_prism_format_interval(edit_index, id, raw, out, out_len);
             break;
-        case UI_WAVE_VALUE_STEPPED:
-            ui_page_template_tone_wave_format_stepped(edit_index, id, raw, out, out_len);
+        case UI_PRISM_VALUE_STEPPED:
+            ui_page_template_tone_prism_format_stepped(edit_index, id, raw, out, out_len);
             break;
-        case UI_WAVE_VALUE_ENUM:
-            ui_page_template_tone_wave_format_enum(edit_index, id, raw, out, out_len);
+        case UI_PRISM_VALUE_ENUM:
+            ui_page_template_tone_prism_format_enum(edit_index, id, raw, out, out_len);
             break;
-        case UI_WAVE_VALUE_MORPH:
-            ui_page_template_tone_wave_format_morph(edit_index, id, raw, out, out_len);
+        case UI_PRISM_VALUE_MORPH:
+            ui_page_template_tone_prism_format_morph(edit_index, id, raw, out, out_len);
             break;
-        case UI_WAVE_VALUE_RATE:
-        case UI_WAVE_VALUE_PERCENT:
+        case UI_PRISM_VALUE_RATE:
+        case UI_PRISM_VALUE_PERCENT:
         default:
-            ui_page_template_tone_wave_format_percent(raw, out, out_len);
+            ui_page_template_tone_prism_format_percent(raw, out, out_len);
             break;
     }
 }
 
-static uint8_t ui_page_template_tone_wave_kind_for_param(param_id_t id,
-                                                         const ui_wave_param_label_t *labels,
+static uint8_t ui_page_template_tone_prism_kind_for_param(param_id_t id,
+                                                         const ui_prism_param_label_t *labels,
                                                          const char **out_name,
-                                                         ui_wave_value_kind_t *out_kind)
+                                                         ui_prism_value_kind_t *out_kind)
 {
     if (labels == NULL)
     {
         return 0U;
     }
 
-    if (id == PARAM_WAVE_TIMBRE)
+    if (id == PARAM_PRISM_TIMBRE)
     {
         if (out_name != NULL)
         {
@@ -659,7 +672,7 @@ static uint8_t ui_page_template_tone_wave_kind_for_param(param_id_t id,
         return 1U;
     }
 
-    if (id == PARAM_WAVE_COLOR)
+    if (id == PARAM_PRISM_COLOR)
     {
         if (out_name != NULL)
         {
@@ -675,7 +688,7 @@ static uint8_t ui_page_template_tone_wave_kind_for_param(param_id_t id,
     return 0U;
 }
 
-static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
+static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
                                                      float value,
                                                      char *out_name,
                                                      uint32_t out_name_len,
@@ -683,9 +696,9 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
                                                      uint32_t out_value_len)
 {
     uint8_t edit_index = 0U;
-    const ui_wave_param_label_t *const labels = ui_page_template_tone_wave_labels_for_active_track(&edit_index);
+    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_active_track(&edit_index);
     const char *name = NULL;
-    ui_wave_value_kind_t kind = UI_WAVE_VALUE_PERCENT;
+    ui_prism_value_kind_t kind = UI_PRISM_VALUE_PERCENT;
 
     if (labels == NULL)
     {
@@ -694,55 +707,55 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
 
     switch (id)
     {
-        case PARAM_WAVE_EDIT:
+        case PARAM_PRISM_EDIT:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "MODEL");
             }
-            ui_page_template_tone_wave_format_model(value, out_value, out_value_len);
+            ui_page_template_tone_prism_format_model(value, out_value, out_value_len);
             return 1U;
 
-        case PARAM_WAVE_FINE:
+        case PARAM_PRISM_FINE:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "FINE");
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                ui_page_template_tone_wave_format_bipolar_float(value, 100.0f, "ct", out_value, out_value_len);
+                ui_page_template_tone_prism_format_bipolar_float(value, 100.0f, "ct", out_value, out_value_len);
             }
             return 1U;
 
-        case PARAM_WAVE_COARSE:
+        case PARAM_PRISM_COARSE:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "TUNE");
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                ui_page_template_tone_wave_format_bipolar_float(value, 24.0f, "st", out_value, out_value_len);
+                ui_page_template_tone_prism_format_bipolar_float(value, 24.0f, "st", out_value, out_value_len);
             }
             return 1U;
 
-        case PARAM_WAVE_FM:
+        case PARAM_PRISM_FM:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "FM AMT");
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                ui_page_template_tone_wave_format_percent(ui_page_template_tone_wave_u15(value), out_value, out_value_len);
+                ui_page_template_tone_prism_format_percent(ui_page_template_tone_prism_u15(value), out_value, out_value_len);
             }
             return 1U;
 
-        case PARAM_WAVE_MODULATION:
+        case PARAM_PRISM_MODULATION:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "A MOD");
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                ui_page_template_tone_wave_format_bipolar_percent(ui_page_template_tone_wave_u15(value), out_value, out_value_len);
+                ui_page_template_tone_prism_format_bipolar_percent(ui_page_template_tone_prism_u15(value), out_value, out_value_len);
             }
             return 1U;
 
@@ -750,7 +763,7 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
             break;
     }
 
-    if (ui_page_template_tone_wave_kind_for_param(id, labels, &name, &kind) == 0U)
+    if (ui_page_template_tone_prism_kind_for_param(id, labels, &name, &kind) == 0U)
     {
         return 0U;
     }
@@ -760,7 +773,7 @@ static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
         (void)snprintf(out_name, out_name_len, "%s", (name != NULL) ? name : "-");
     }
 
-    ui_page_template_tone_wave_format_value(edit_index, id, kind, value, out_value, out_value_len);
+    ui_page_template_tone_prism_format_value(edit_index, id, kind, value, out_value, out_value_len);
 
     return 1U;
 }
@@ -928,8 +941,8 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
                                                            const char *value_label,
                                                            uiw_widget_type_t suggested_widget)
 {
-    const ui_wave_param_label_t *const labels = ui_page_template_tone_wave_labels_for_active_track(NULL);
-    ui_wave_value_kind_t kind = UI_WAVE_VALUE_PERCENT;
+    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_active_track(NULL);
+    ui_prism_value_kind_t kind = UI_PRISM_VALUE_PERCENT;
 
     (void)slot;
     (void)value_label;
@@ -950,15 +963,15 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         return UIW_WIDGET_SWITCH;
     }
 
-    if (ui_page_template_tone_wave_kind_for_param(id, labels, NULL, &kind) == 0U)
+    if (ui_page_template_tone_prism_kind_for_param(id, labels, NULL, &kind) == 0U)
     {
-        if (id == PARAM_WAVE_EDIT)
+        if (id == PARAM_PRISM_EDIT)
         {
             return UIW_WIDGET_ENUM_TEXT;
         }
-        if ((id == PARAM_WAVE_FINE)
-                || (id == PARAM_WAVE_COARSE)
-                || (id == PARAM_WAVE_MODULATION))
+        if ((id == PARAM_PRISM_FINE)
+                || (id == PARAM_PRISM_COARSE)
+                || (id == PARAM_PRISM_MODULATION))
         {
             return UIW_WIDGET_BIPOLAR_BAR;
         }
@@ -967,17 +980,17 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     switch (kind)
     {
-        case UI_WAVE_VALUE_NONE:
+        case UI_PRISM_VALUE_NONE:
             return UIW_WIDGET_EMPTY;
-        case UI_WAVE_VALUE_STEPPED:
-        case UI_WAVE_VALUE_ENUM:
+        case UI_PRISM_VALUE_STEPPED:
+        case UI_PRISM_VALUE_ENUM:
             return UIW_WIDGET_ENUM_TEXT;
-        case UI_WAVE_VALUE_BIPOLAR_PERCENT:
-        case UI_WAVE_VALUE_INTERVAL:
+        case UI_PRISM_VALUE_BIPOLAR_PERCENT:
+        case UI_PRISM_VALUE_INTERVAL:
             return UIW_WIDGET_BIPOLAR_BAR;
-        case UI_WAVE_VALUE_PERCENT:
-        case UI_WAVE_VALUE_MORPH:
-        case UI_WAVE_VALUE_RATE:
+        case UI_PRISM_VALUE_PERCENT:
+        case UI_PRISM_VALUE_MORPH:
+        case UI_PRISM_VALUE_RATE:
         default:
             return suggested_widget;
     }
@@ -988,7 +1001,22 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
                                                                                  param_id_t id)
 {
     (void)slot;
-    (void)subpage;
+
+    if ((ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_WAVE)
+            && (subpage != NULL)
+            && (((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
+                    && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
+                    && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
+                    && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_END))
+                || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
+                    && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
+                    && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
+                    && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_END))))
+    {
+        (void)id;
+        return UI_TEMPLATE_CUSTOM_WIDGET_WAVE_WAVETABLE;
+    }
 
     uint8_t stack_slot = 0U;
     uint8_t stack_param = 0U;
@@ -1279,6 +1307,90 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE))
+    {
+        const char *name = NULL;
+        switch (id)
+        {
+            case PARAM_WAVE_OSC1_TABLE:
+            case PARAM_WAVE_OSC2_TABLE:
+                name = "TABLE";
+                break;
+            case PARAM_WAVE_OSC1_POS:
+            case PARAM_WAVE_OSC2_POS:
+                name = "POS";
+                break;
+            case PARAM_WAVE_OSC1_START:
+            case PARAM_WAVE_OSC2_START:
+                name = "START";
+                break;
+            case PARAM_WAVE_OSC1_END:
+            case PARAM_WAVE_OSC2_END:
+                name = "END";
+                break;
+            case PARAM_WAVE_OSC1_LEVEL:
+            case PARAM_WAVE_OSC2_LEVEL:
+                name = "LEVEL";
+                break;
+            case PARAM_WAVE_OSC1_TUNE:
+            case PARAM_WAVE_OSC2_TUNE:
+                name = "TUNE";
+                break;
+            case PARAM_WAVE_OSC1_PHASE:
+            case PARAM_WAVE_OSC2_PHASE:
+                name = "PHASE";
+                break;
+            case PARAM_WAVE_OSC1_FLIP:
+            case PARAM_WAVE_OSC2_FLIP:
+                name = "FLIP";
+                break;
+            default:
+                break;
+        }
+
+        if (name != NULL)
+        {
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "%s", name);
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                if ((id == PARAM_WAVE_OSC1_TABLE) || (id == PARAM_WAVE_OSC2_TABLE))
+                {
+                    const uint16_t global_slot = (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
+                    const sample_global_slot_t *const asset = sample_global_pool_get_slot(global_slot);
+                    if ((asset != NULL) && (asset->kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
+                            && (asset->state == SAMPLE_GLOBAL_STATE_READY))
+                    {
+                        (void)snprintf(out_value, out_value_len, "WT%03u", (unsigned int)global_slot);
+                    }
+                    else
+                    {
+                        (void)snprintf(out_value, out_value_len, "---");
+                    }
+                }
+                else if ((id == PARAM_WAVE_OSC1_TUNE) || (id == PARAM_WAVE_OSC2_TUNE))
+                {
+                    const int32_t cents = (int32_t)((value * 100.0f) + ((value >= 0.0f) ? 0.5f : -0.5f));
+                    if ((cents % 100L) == 0L)
+                    {
+                        (void)snprintf(out_value, out_value_len, "%+ldst", (long)(cents / 100L));
+                    }
+                    else
+                    {
+                        const char sign = (cents < 0L) ? '-' : '+';
+                        const int32_t abs_cents = (cents < 0L) ? -cents : cents;
+                        (void)snprintf(out_value, out_value_len, "%c%ld.%02ldst", sign, (long)(abs_cents / 100L), (long)(abs_cents % 100L));
+                    }
+                }
+            }
+            (void)slot;
+            return 1U;
+        }
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_RAM))
     {
@@ -1401,8 +1513,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     }
 
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
-            && (ui_page_template_tone_wave_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_PRISM)
+            && (ui_page_template_tone_prism_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
     {
         (void)slot;
         return 1U;
@@ -1589,6 +1701,10 @@ void ui_page_template_tone_register_families(void)
             if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_MASTER_FX))
             {
                 family_template = &g_ui_template_tone_family_master_fx;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
+            {
+                family_template = &g_ui_template_tone_family_prism;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_WAVE))
             {
