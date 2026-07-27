@@ -262,6 +262,8 @@ file(GLOB SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/*.cpp"
 )
 
+set(UI_ROLL_POPUP_SRC "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_roll_popup.c")
+
 list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_system_sync_internal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_edit_context_sync.c"
@@ -277,6 +279,8 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_lowcost_button_test.c"
 )
+list(REMOVE_ITEM SRC_UI_SRC "${UI_ROLL_POPUP_SRC}")
+list(REMOVE_DUPLICATES SRC_UI_SRC)
 
 # Mutable Instruments
 file(GLOB MUTABLE_CLOUDS_SRC
@@ -408,7 +412,10 @@ set(ALL_USER_SOURCES
 list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
 list(REMOVE_DUPLICATES ALL_USER_SOURCES)
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${ALL_USER_SOURCES}
+    "${UI_ROLL_POPUP_SRC}"
+)
 
 # --------------------------------------------------------------------------
 # Include directories

@@ -101,7 +101,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         }
 
         if ((brick6_sampler_runtime_track_has_active_ram_voice(ctx->track_id) != 0U)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_CLIP)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
                 && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI))
         {
             float *direct_l = NULL;

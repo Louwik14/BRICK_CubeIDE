@@ -271,66 +271,6 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
     }
 }
 
-static uint8_t pattern_live_map_legacy_mix_global(param_id_t id, uint8_t *out_track, param_id_t *out_param)
-{
-    if ((out_track == 0) || (out_param == 0))
-    {
-        return 0U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_GAIN))
-    {
-        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_GAIN);
-        *out_param = PARAM_MIX_LEVEL;
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_PAN) && (id <= PARAM_MIX_TRACK3_PAN))
-    {
-        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_PAN);
-        *out_param = PARAM_MIX_PAN;
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_MUTE) && (id <= PARAM_MIX_TRACK3_MUTE))
-    {
-        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_MUTE);
-        *out_param = PARAM_MIX_MUTE;
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_SEND0) && (id <= PARAM_MIX_TRACK3_SEND1))
-    {
-        const uint8_t offset = (uint8_t)(id - PARAM_MIX_TRACK0_SEND0);
-        *out_track = (uint8_t)(offset / 2U);
-        *out_param = ((offset % 2U) == 0U) ? PARAM_MIX_SEND1 : PARAM_MIX_SEND2;
-        return 1U;
-    }
-
-    return 0U;
-}
-
-static void pattern_live_apply_legacy_mix_globals_as_track_values(const PatternSaveV1 *pattern)
-{
-    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
-    {
-        const param_id_t id = (param_id_t)id_raw;
-        uint8_t track = 0U;
-        param_id_t target = PARAM_COUNT;
-
-        if ((pattern->globals.global_valid[id] == 0U)
-            || (pattern_live_map_legacy_mix_global(id, &track, &target) == 0U)
-            || (track >= SEQ_TRACK_COUNT)
-            || (target >= PARAM_COUNT)
-            || (pattern->mix.track_valid[track][target] != 0U))
-        {
-            continue;
-        }
-
-        (void)param_registry_apply_track_value(target, track, pattern->globals.global_values[id]);
-    }
-}
-
 static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step)
 {
     if (step == 0)
@@ -485,6 +425,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         {
             pattern_v1_step_t *const out_step = &out_pattern->seq.tracks[track].steps[step];
             out_step->trig = seq_model_get_trig(track, step);
+            out_step->roll = seq_model_get_step_roll(track, step);
 
             const uint8_t lock_count = seq_model_step_plock_count(track, step);
             out_step->lock_count = (lock_count > SEQ_STEP_MAX_LOCKS) ? SEQ_STEP_MAX_LOCKS : lock_count;
@@ -588,6 +529,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
         {
             const pattern_v1_step_t *const in_step = &seq->tracks[track].steps[step];
             seq_model_set_trig(track, step, in_step->trig);
+            seq_model_set_step_roll(track, step, in_step->roll);
             seq_model_step_plock_clear(track, step);
 
             const uint8_t lock_count = (in_step->lock_count > SEQ_STEP_MAX_LOCKS)
@@ -658,7 +600,6 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     }
 
     param_registry_batch_begin();
-    pattern_live_apply_legacy_mix_globals_as_track_values(ctx->pattern);
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
     {

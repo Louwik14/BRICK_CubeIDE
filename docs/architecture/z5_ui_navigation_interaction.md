@@ -1115,3 +1115,10 @@ Points factuels:
 
 - Le point d'insertion UI de LINK garde le delta pour les params continus existants, mais applique les choix `CFG/TRACK`, `CFG/TYPE` et `COLORS/F Type` par valeur absolue de la master.
 - La selection d'une slave relit ensuite les valeurs via les sources autoritaires par-track (`track_state` et `track_sound_state`), donc l'affichage slave suit sans miroir UI parallele.
+## Addendum 2026-07-26 - edition ROLL par step
+
+- En contexte STEP sequenceur, `STEP occupe maintenu + +` augmente le roll du step et `STEP occupe maintenu + -` le diminue jusqu'a `OFF`.
+- Les boutons `+/-` sont consommes uniquement quand un step occupe maintenu est eligible; sinon ils gardent le changement de page sequenceur existant.
+- Les steps vides maintenus ne declenchent pas l'edition roll.
+- Le feedback UI est un popup temporaire `ROLL` avec la valeur courante; il disparait au release du step ou apres 700 ms sans nouvel edit.
+- Les paliers `1/32`, `1/24` et `1/64` sont marques visuellement dans le popup OLED.

@@ -59,6 +59,10 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
+      "dependsOn": [
+        "Configure Release Lowcost"
+      ],
+      "dependsOrder": "sequence",
       "group": "build",
       "problemMatcher": [
         "$gcc"
@@ -75,6 +79,22 @@
         "Build Release"
       ],
       "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "Release",
+        "--target",
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "problemMatcher": []
     },
     {
@@ -102,6 +122,10 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
+      "dependsOn": [
+        "Configure Premium"
+      ],
+      "dependsOrder": "sequence",
       "group": "build",
       "problemMatcher": [
         "$gcc"

@@ -32,15 +32,11 @@ typedef enum
 {
     UI_TRACK_TYPE_AUDIO = 0,
     UI_TRACK_TYPE_HYBRID,
-    UI_TRACK_TYPE_SAMPLER, /* legacy compat value retained for old snapshots */
-    UI_TRACK_TYPE_ONE_SHOT = UI_TRACK_TYPE_SAMPLER,
-    UI_TRACK_TYPE_RAM = UI_TRACK_TYPE_ONE_SHOT, /* product name for the legacy persisted OneShot value */
-    UI_TRACK_TYPE_SLICER,
+    UI_TRACK_TYPE_RAM,
     UI_TRACK_TYPE_WAVE,
     UI_TRACK_TYPE_DRUM_TRX_BD,
     UI_TRACK_TYPE_MIDI,
-    UI_TRACK_TYPE_CLIP,
-    UI_TRACK_TYPE_STREAM = UI_TRACK_TYPE_CLIP, /* product name for the legacy persisted Clip value */
+    UI_TRACK_TYPE_STREAM,
     UI_TRACK_TYPE_MASTER_FX,
     UI_TRACK_TYPE_DRUM_BD_ANALOG,
     UI_TRACK_TYPE_LOOPER,

@@ -102,12 +102,10 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_HYBRID:
             return TRACK_RUNTIME_TYPE_HYBRID;
 
-        case UI_TRACK_TYPE_SAMPLER:
-            return TRACK_RUNTIME_TYPE_SAMPLER;
-        case UI_TRACK_TYPE_SLICER:
-            return TRACK_RUNTIME_TYPE_SLICER;
-        case UI_TRACK_TYPE_CLIP:
-            return TRACK_RUNTIME_TYPE_CLIP;
+        case UI_TRACK_TYPE_RAM:
+            return TRACK_RUNTIME_TYPE_RAM;
+        case UI_TRACK_TYPE_STREAM:
+            return TRACK_RUNTIME_TYPE_STREAM;
         case UI_TRACK_TYPE_WAVE:
             return TRACK_RUNTIME_TYPE_WAVE;
 
@@ -252,7 +250,9 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
 
-    if (((family == TRACK_RUNTIME_FAMILY_SYNTH) && (type != TRACK_RUNTIME_TYPE_SAMPLER))
+    if (((family == TRACK_RUNTIME_FAMILY_SYNTH)
+            && (type != TRACK_RUNTIME_TYPE_WAVE)
+            && (type != TRACK_RUNTIME_TYPE_STACK))
             || (family == TRACK_RUNTIME_FAMILY_DRUM))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_SYNTH;
@@ -261,8 +261,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 
     if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
             || (((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
-                || (type == TRACK_RUNTIME_TYPE_SAMPLER)
-                || (type == TRACK_RUNTIME_TYPE_SLICER)))
+                || (type == TRACK_RUNTIME_TYPE_RAM)))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
@@ -315,7 +314,7 @@ static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_c
     }
 
     return (uint8_t)(((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP)
+                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
                           || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
 }
 
@@ -363,15 +362,6 @@ static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_TUNE,
     PARAM_SAMPLER_LOOP_START,
     PARAM_SAMPLER_SLICE_COUNT
-};
-
-static const param_id_t g_track_runtime_tone_slots_slicer[] = {
-    PARAM_SAMPLER_SAMPLE,
-    PARAM_SAMPLER_SLICE_COUNT,
-    PARAM_SAMPLER_TUNE,
-    PARAM_SAMPLER_GAIN,
-    PARAM_SAMPLER_START,
-    PARAM_SAMPLER_END
 };
 
 static const param_id_t g_track_runtime_tone_slots_clip[] = {
@@ -454,17 +444,12 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtime_tone_slots_stack[0]));
             return 1U;
 
-        case TRACK_RUNTIME_TYPE_SAMPLER:
+        case TRACK_RUNTIME_TYPE_RAM:
             *out_table = g_track_runtime_tone_slots_sampler;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_sampler) / sizeof(g_track_runtime_tone_slots_sampler[0]));
             return 1U;
 
-        case TRACK_RUNTIME_TYPE_SLICER:
-            *out_table = g_track_runtime_tone_slots_slicer;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_slicer) / sizeof(g_track_runtime_tone_slots_slicer[0]));
-            return 1U;
-
-        case TRACK_RUNTIME_TYPE_CLIP:
+        case TRACK_RUNTIME_TYPE_STREAM:
             *out_table = g_track_runtime_tone_slots_clip;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]));
             return 1U;
@@ -577,7 +562,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
 
     if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_CLIP)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
                 && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_LOOPER))
             || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
@@ -799,9 +784,8 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if ((type == TRACK_RUNTIME_TYPE_SAMPLER)
-            || (type == TRACK_RUNTIME_TYPE_SLICER)
-            || (type == TRACK_RUNTIME_TYPE_CLIP)
+    if ((type == TRACK_RUNTIME_TYPE_RAM)
+            || (type == TRACK_RUNTIME_TYPE_STREAM)
             || (type == TRACK_RUNTIME_TYPE_MULTI))
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_SAMPLER, ctx->track_id);
@@ -1850,7 +1834,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             if (track_runtime_param_is_clip_only(param) != 0U)
             {
                 if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
                 {
                     return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
                 }

@@ -29,6 +29,7 @@ typedef struct
     uint8_t used;
     seq_step_id_t offset;
     uint8_t trig;
+    uint8_t roll;
     uint8_t lock_count;
     seq_clipboard_lock_t locks[SEQ_STEP_MAX_LOCKS];
 } seq_clipboard_step_t;
@@ -329,6 +330,7 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
         dst->used = 1U;
         dst->offset = (seq_step_id_t)(step - source_anchor);
         dst->trig = seq_model_get_trig(track, step);
+        dst->roll = seq_model_get_step_roll(track, step);
 
         const uint8_t lock_count = seq_model_step_plock_count(track, step);
         for (uint8_t l = 0U; l < lock_count; ++l)
@@ -424,6 +426,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         }
 
         seq_model_set_trig(target_track, target_step, src->trig);
+        seq_model_set_step_roll(target_track, target_step, src->roll);
         seq_model_step_plock_clear(target_track, target_step);
 
         seq_clipboard_paste_locks(target_track, target_step, src->locks, src->lock_count, &result);

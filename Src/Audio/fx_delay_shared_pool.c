@@ -4,8 +4,8 @@
 
 #include <string.h>
 
-AUDIO_DELAY_SDRAM static float g_delay_shared_l[FX_DELAY_SHARED_DUAL_CAPACITY];
-AUDIO_DELAY_SDRAM static float g_delay_shared_r[FX_DELAY_SHARED_DUAL_CAPACITY];
+AUDIO_DELAY_SDRAM static float g_delay_shared_l[FX_DELAY_SHARED_CAPACITY];
+AUDIO_DELAY_SDRAM static float g_delay_shared_r[FX_DELAY_SHARED_CAPACITY];
 
 static fx_delay_shared_owner_t g_delay_shared_owner = FX_DELAY_SHARED_OWNER_NONE;
 
@@ -24,9 +24,8 @@ uint32_t fx_delay_shared_pool_capacity(fx_delay_shared_owner_t owner)
     switch(owner)
     {
         case FX_DELAY_SHARED_OWNER_CLASSIC:
-            return FX_DELAY_SHARED_CLASSIC_CAPACITY;
         case FX_DELAY_SHARED_OWNER_DUAL:
-            return FX_DELAY_SHARED_DUAL_CAPACITY;
+            return FX_DELAY_SHARED_CAPACITY;
         case FX_DELAY_SHARED_OWNER_NONE:
         default:
             return 0U;

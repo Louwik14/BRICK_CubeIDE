@@ -10,7 +10,7 @@ namespace
 {
 constexpr float kDefaultSampleRate = 48000.0f;
 constexpr float kMaxDelaySeconds = 6.0f;
-constexpr uint32_t kDelayBufferSize = FX_DELAY_SHARED_DUAL_CAPACITY;
+constexpr uint32_t kDelayBufferSize = FX_DELAY_SHARED_CAPACITY;
 constexpr uint32_t kHaasBufferSize = 2402U;
 constexpr float kMinDelaySamples = 4.0f;
 constexpr float kTimeSmoothSeconds = 0.15f;

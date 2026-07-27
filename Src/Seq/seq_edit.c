@@ -779,6 +779,83 @@ void seq_edit_step_hold_update(void)
     }
 }
 
+uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step)
+{
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if (((g_seq_hold_state.pending[hall] != 0U) || (g_seq_hold_state.held[hall] != 0U))
+                && (g_seq_hold_state.track_id[hall] == track)
+                && (g_seq_hold_state.step_id[hall] == step)
+                && (hall_surface_is_pressed(hall) != 0U))
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
+                                       seq_track_id_t *out_track,
+                                       seq_step_id_t *out_step,
+                                       uint8_t *out_roll)
+{
+    if (delta == 0)
+    {
+        return 0U;
+    }
+
+    seq_track_id_t held_track = 0U;
+    seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
+    const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
+                                                           held_steps,
+                                                           (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                           1U);
+    for (uint8_t i = 0U; i < held_count; ++i)
+    {
+        const seq_step_id_t step = held_steps[i];
+        if (seq_model_step_is_active(held_track, step) == 0U)
+        {
+            continue;
+        }
+
+        uint8_t roll = seq_model_get_step_roll(held_track, step);
+        if (delta > 0)
+        {
+            if (roll < (uint8_t)(SEQ_STEP_ROLL_COUNT - 1U))
+            {
+                roll++;
+            }
+        }
+        else if (roll > (uint8_t)SEQ_STEP_ROLL_OFF)
+        {
+            roll--;
+        }
+
+        const uint8_t undo_started = seq_edit_begin_snapshot_undo(9U, held_track, step, roll);
+        seq_model_set_step_roll(held_track, step, roll);
+        seq_edit_finish_snapshot_undo(undo_started);
+        seq_edit_mark_step_edited(held_track, step);
+        seq_edit_clear_auto_note_pending(held_track, step);
+
+        if (out_track != 0)
+        {
+            *out_track = held_track;
+        }
+        if (out_step != 0)
+        {
+            *out_step = step;
+        }
+        if (out_roll != 0)
+        {
+            *out_roll = roll;
+        }
+        return 1U;
+    }
+
+    return 0U;
+}
+
 uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
                                     seq_step_id_t *out_steps,
                                     uint8_t max_steps,

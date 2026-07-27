@@ -1,18 +1,24 @@
-﻿# Z6 - State / Persistence / Patterns / Projects
+# Z6 - State / Persistence / Patterns / Projects
+
+Addendum 2026-07-27 - politique sauvegardes prototype:
+- Le format persistant courant est unique pour Project/Pattern/Patch/Kit et `.brickmulti`.
+- La retrocompatibilite des projets, patterns et presets n'est pas un objectif en phase prototype.
+- Les changements de structure modifient directement le format courant; aucune migration, conversion ascendante ou conservation d'ancien format n'est ajoutee sauf demande explicite.
+- Les constantes de version de formats restent a `1` pendant le prototype et ne sont jamais bumpées automatiquement.
+- Un bump de version ne se fait que sur demande explicite; sinon une evolution de structure peut rendre les anciens fichiers illisibles sans detection particuliere.
+- `PATTERN_VERSION=1`, `PROJECT_V1_FILE_VERSION=1`, `PATCH_SD_FILE_VERSION=1`, `KIT_SD_FILE_VERSION=1`, `MULTI_SAMPLE_INDEX_VERSION=1`, `SEQ_FILE_VERSION=1` et `WAV_LOADER_CATALOG_VERSION=1` designent uniquement le format courant.
+
 
 ## 1. Perimetre
 
 Addendum 2026-07-26 - ENV retrigger modes:
 - `PARAM_ENV_RETRIG_FILTER`, `PARAM_ENV_RETRIG_VCA` et `PARAM_ENV_RETRIG_MOD` augmentent le layout `PARAM_COUNT` et sont persistants via les snapshots track-aware existants.
-- `PATTERN_VERSION` passe a `38`, `PROJECT_V1_FILE_VERSION` a `50`, `PATCH_SD_FILE_VERSION` a `12` et `KIT_SD_FILE_VERSION` a `11`; les anciens payloads sont refuses par validation d'en-tete/taille sans migration.
 
 Addendum 2026-05-28 - formats REC START:
 - `PatternSaveV1.globals.rec_start_mode` stocke le contrat REC `START` (`DEFAULT/TRIG/ROLL 1/4/ROLL 1/2/ROLL 1`) a la place de l'ancien champ REC launch/count-in.
-- `PATTERN_VERSION` passe a `26` et `PROJECT_V1_FILE_VERSION` passe a `37`; les anciens fichiers sont refuses par validation d'en-tete, sans alias de compatibilite.
 
 Addendum 2026-05-28 - REC METRO:
 - `PARAM_CFG_METRO` est persiste comme parametre global REC CFG via `global_values`, pas par track.
-- `PATTERN_VERSION` passe a `27` et `PROJECT_V1_FILE_VERSION` passe a `38`; les anciens fichiers restent refuses par validation d'en-tete/payload.
 
 Perimetre operationnel de zone (appartient a Z6):
 - `Src/Storage/pattern_live_ram.c`
@@ -78,10 +84,10 @@ Autorite orchestration projet:
 Autorite persistence projet SD:
 - `project_sd_bank_store_slot()`, `project_sd_bank_load_slot()`, `project_sd_bank_delete_slot()`, `project_sd_bank_is_slot_equivalent_to_live()`.
 
-Compat prototype:
-- quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
-- pour Wave, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
-- pour le projet v28, les anciens projets v27 ne sont pas migres: `project_sd_bank` exige `PROJECT_V1_FILE_VERSION` exact et `sizeof(ProjectSaveV1)` avant de lire le payload.
+Politique sauvegardes prototype:
+- Les structures persistantes courantes sont modifiees directement pendant le prototype.
+- Aucune migration ni ancien format Project/Pattern/Patch/Kit n'est conserve sauf demande explicite.
+- Les constantes de version restent a `1`; les banques SD exigent seulement le format courant avant lecture.
 
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
@@ -104,17 +110,17 @@ Autorite catalogue WAV Settings/Sampler:
 - `wav_loader_catalog_refresh()` et `wav_loader_catalog_rebuild()` sont les seuls chemins qui scannent reellement `0:/Samples`. Ils reconstruisent `SAMPLE.CAT` sequentiellement, avec `parent_id` global stable, sans garder le catalogue complet en SDRAM apres ecriture.
 - La navigation Sampler charge des pages de dossier depuis `SAMPLE.CAT` uniquement. Le cache RAM garde deux pages LRU de `WAV_LOADER_CATALOG_VIEW_MAX=256` entrees; le scroll/page dans une page chargee est RAM-only.
 - Lire une page de dossier non cachee ouvre seulement `SAMPLE.CAT` et filtre les entrees par `parent_id` + offset local de page; aucune navigation ne parcourt l'arborescence FAT reelle ni ne parse les WAV. Si `streaming_critical` est actif et que la page demandee n'est pas deja cachee, l'acces est refuse et l'UI expose `SD BUSY`.
-- Les entrees persistantes portent toujours `path`, `name`, `parent_id`, `type`, `size`, `date`, `time`; les champs `size/date/time` restent dans `SAMPLE.CAT` pour evolution/refresh, pas requis par la vue UI courante. Le format courant du catalogue est V2: `path` vaut `WAV_LOADER_CATALOG_PATH_MAX=160` et `name` vaut `WAV_LOADER_CATALOG_NAME_MAX=48`, afin que les sous-dossiers courants ne soient plus tronques par l'ancien buffer 64 du browser plat.
-- Capacite catalogue globale restante: 9999 entrees persistantes, liee au format V1 (`count/capacity/parent_id/index` en 16 bits), pas a une table RAM. La saturation globale positionne `truncated` (`LIB FULL`); les paths trop longs sont diagnostiques separement (`PATH LONG`) pour ne pas confondre capacite catalogue et taille de vue. Il n'y a plus de limite produit fixe par dossier dans la vue Sampler: les dossiers plus grands que 256 entrees sont pagines depuis `SAMPLE.CAT`.
+- Les entrees persistantes portent toujours `path`, `name`, `parent_id`, `type`, `size`, `date`, `time`; les champs `size/date/time` restent dans `SAMPLE.CAT` pour evolution/refresh, pas requis par la vue UI courante. Le format courant du catalogue: `path` vaut `WAV_LOADER_CATALOG_PATH_MAX=160` et `name` vaut `WAV_LOADER_CATALOG_NAME_MAX=48`, afin que les sous-dossiers courants ne soient plus tronques par l'ancien buffer 64 du browser plat.
+- Capacite catalogue globale restante: 9999 entrees persistantes, liee aux champs courants `count/capacity/parent_id/index` en 16 bits, pas a une table RAM. La saturation globale positionne `truncated` (`LIB FULL`); les paths trop longs sont diagnostiques separement (`PATH LONG`) pour ne pas confondre capacite catalogue et taille de vue. Il n'y a plus de limite produit fixe par dossier dans la vue Sampler: les dossiers plus grands que 256 entrees sont pagines depuis `SAMPLE.CAT`.
 - Les operations firmware qui peuvent modifier la SD n'essaient plus de maintenir localement la photo; elles peuvent seulement appeler `wav_loader_catalog_mark_stale()` / `wav_loader_catalog_notify_file_created()`. Ce flag se manifeste dans le browser par `REFRESH LIB`. Les refus REFRESH/REBUILD dus a `streaming_critical`, writer actif, export Looper ou gate SD occupe ne detruisent plus la vue catalogue RAM courante; si une reconstruction echoue, Z5 garde l'emplacement courant autant que le cache existant le permet.
 
 Autorite index Sampler/Multi:
 - `multi_sample_index_*`.
-- Format durable courant: fichier binaire little-endian `.brickmulti`, magic `BRKMULTI`, version `2`, header 96 octets, CRC32 sur header avec champ CRC nul + tables + string table. La lecture accepte encore la version `1` sans metadonnees de loop.
+- Format durable courant unique: fichier binaire little-endian `.brickmulti`, magic `BRKMULTI`, version `1`, header 96 octets, records sample 52 octets, CRC32 sur header avec champ CRC nul + tables + string table.
 - Le fichier porte uniquement des metadonnees: instrument, samples, zones et paths WAV relatifs au dossier instrument; aucun audio brut, aucun path absolu obligatoire.
 - Tables bornees: 512 samples, 2048 zones, string table 65536 octets. Les WAV source restent directement sur SD dans le dossier instrument, typiquement `0:/Multi/<Instrument>/`.
-- `multi_sample_index_load()` lit et valide l'index hors IRQ via `sd_access_gate`; `multi_sample_index_apply_to_pool()` peuple `multi_sample_pool` en etat `INDEXED` uniquement. Il ne charge pas les page0, ne touche pas `sample_page_cache`, ne touche pas le streamer et ne branche pas le playback.
-- Le record sample `.brickmulti` v2 ajoute `has_loop`, `loop_begin` et `loop_end` en frames source absolues. Les bornes sont valides seulement si `loop_end > loop_begin` et `loop_end <= total_frames`; les records v1 sont charges avec `has_loop=0`. Le byte metadata trace toujours la source root/velocity (`smpl`, `inst`, filename ou alpha) et peut marquer une loop auto import (`MULTI_SAMPLE_INDEX_META_LOOP_AUTO`); il est propage vers le champ `flags` du `multi_sample_pool`.
+- `multi_sample_index_load()` lit et valide uniquement la version courante de l'index hors IRQ via `sd_access_gate`; `multi_sample_index_apply_to_pool()` peuple `multi_sample_pool` en etat `INDEXED` uniquement. Il ne charge pas les page0, ne touche pas `sample_page_cache`, ne touche pas le streamer et ne branche pas le playback.
+- Le record sample `.brickmulti` courant porte `has_loop`, `loop_begin` et `loop_end` en frames source absolues. Les bornes sont valides seulement si `loop_end > loop_begin` et `loop_end <= total_frames`. Le byte metadata trace toujours la source root/velocity (`smpl`, `inst`, filename ou alpha) et peut marquer une loop auto import (`MULTI_SAMPLE_INDEX_META_LOOP_AUTO`); il est propage vers le champ `flags` du `multi_sample_pool`.
 
 Autorite import Sampler/Multi:
 - `multi_sample_import_folder()`.
@@ -391,7 +397,6 @@ Points de lecture principaux:
   - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
   - stocke via `project_v1_store_snapshot_to_slot` -> `project_sd_bank_store_slot`,
-  - incremente save_counter,
   - commit boot context si slot actif valide.
 
 7. Load project:
@@ -458,7 +463,6 @@ Effets aval:
 - Couplage inter-zone eleve dans `pattern_live_apply_snapshot` (UI + Z2 + Z3 + Z4 dans une seule routine).
 - Dependance implicite a l'ordre d'appel superloop pour `pattern_live_service` (si non appele, queue pattern ne commute pas).
 - `dirty_pending_persist` est ecrit mais non exploite dans le flux observe (meta partiellement orpheline).
-- Parametres mix legacy `PARAM_MIX_TRACK0..3_*` traites comme tombstones: non captures en globals normaux, et migres load-only vers les params MIX track-aware quand un ancien snapshot contient gain/pan/mute/send.
 - `project_v1_apply_snapshot` est un orchestrateur mince: delegation du live apply a `pattern_live_apply_snapshot` + restauration etat actif/queued/slot projet.
 - Couplage UI implicite dans la condition de boundary (`seq_runtime_get_playhead_step(ui_get_active_track(), ...)`) au lieu d'une reference transport neutre.
 
@@ -520,14 +524,8 @@ Plus petite prochaine passe utile:
   - `Sample`, `Mode`, `Start`, `End`, `Gain`, `Tune`, `Loop Start`, `Slice Count`.
 - Compat restore:
   - les payloads pattern/projet gardent les memes champs family/type,
-  - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=RAM`,
-  - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `RAM`,
-  - aucun bump de format snapshot n'est requis pour cette seule sortie de family.
-- La grille Slice n'est jamais persistÃƒÂ©e:
+- La grille Slice n'est jamais persistÃ©e:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
-- `Slice Count` reste hors p-lock; `Slicer` n'est plus un type Track CFG visible et les configs legacy `Sampler/Slicer` sont normalisees en `Sampler/RAM` sans changer `PARAM_COUNT`.
-- `PROJECT_V1_FILE_VERSION` a ete incremente pour reflÃ¯Â¿Â½ter le payload Sampler v1 et le bloc MACRO projet.
-- `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquaient une ancienne rupture prototype Synth historique; les anciens payloads incompatibles restent refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 
@@ -539,14 +537,7 @@ Plus petite prochaine passe utile:
 - `PARAM_MIX_DELAY_TIME_R` persiste aussi une division musicale sync BPM; en DUAL/Tap elle sert de temps principal.
 - `PARAM_MIX_DELAY_TYPE` persiste le choix `CLASSIC`/`DUAL`; le default est `CLASSIC`.
 - Le restore pattern/projet les reapplique via `param_set()`, comme les autres globals utiles.
-- `PARAM_COUNT` change avec ces nouveaux params; la version pattern et la version project sont incrementees pour refuser proprement les anciens payloads prototype de taille incompatible.
-- `PATTERN_VERSION=10` et `PROJECT_V1_FILE_VERSION=13` marquent la rupture prototype ou le delay passe au contrat 8 params `TIME/X/WID/FDBK/HPF/LPF/REV/VOL`.
 - Les params reverb globaux `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont captures dans `PatternSaveV1.globals`.
-- `PARAM_COUNT` change avec ces deux globals; `PATTERN_VERSION=11` et `PROJECT_V1_FILE_VERSION=14` marquent la rupture prototype reverb HPF/LPF pre-reverb.
-- `PATTERN_VERSION=12` et `PROJECT_V1_FILE_VERSION=15` marquent la rupture prototype DUAL send2 delay.
-- Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
-- `PROJECT_V1_FILE_VERSION=16` marque la rupture prototype MACRO Scene/Switch 32 locks par scene: `ProjectSaveV1.macro` grossit, les anciens projets sont refuses proprement par version/payload_size, sans migration legacy.
-- `PATTERN_VERSION=13` et `PROJECT_V1_FILE_VERSION=18` marquent le retrait des IDs/type/params `TB3`; aucun remap ni preservation des anciens projets/configs `TB3` ou `DX7` n'est conserve.
 - `PatternSaveV1` ne change pas pour cette passe MACRO: les scenes/locks restent projet-only.
 
 
@@ -581,9 +572,6 @@ TODO policy SD/projet:
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
 - L'ajout du type Master/FX `COLOR` etend seulement l'enum de valeur stockee dans les params `PARAM_MASTER_FXn_TYPE`; `PARAM_COUNT`, `PatternSaveV1` et `ProjectSaveV1` ne changent pas.
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
-- Le retrait produit de Master/FX `TALK` et `PITCH` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..11`; `PARAM_COUNT` ne change pas, mais les formats pattern/projet/patch/kit sont bumpes pour refuser les anciens fichiers prototype.
-- Le retrait produit de Master/FX `ECHO` compacte l'enum des valeurs `PARAM_MASTER_FXn_TYPE` a `0..10`; `PARAM_COUNT` ne change pas. `PATTERN_VERSION=31`, `PROJECT_V1_FILE_VERSION=43`, `PATCH_SD_FILE_VERSION=5` et `KIT_SD_FILE_VERSION=4` refusent les anciens fichiers prototype sans migration legacy.
-- `STUTTER` et `FREEZE` sont des ressources uniques dans les 4 slots Master/FX sans changement de layout: les restaurations multiples sont normalisees par l'apply param Z3, qui conserve le premier slot du type unique concerne et remappe les suivants vers `OFF`. Aucun bump supplementaire de format n'est requis par cette contrainte.
 - L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
 
 ## Addendum 2026-05-08 - contrat SD audio recording multi-client
@@ -703,7 +691,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - L'ecriture disque se fait par chunks alignes secteur quand possible.
 - Le choix du prochain client prend le ring le plus rempli; ce point reste suffisant pour le client Looper unique courant.
 - Si un client overflow:
-  - incrementer les diagnostics critiques `overflow_count` / `dropped_frames`,
   - ne jamais bloquer l'audio,
   - traiter l'evenement comme bug d'architecture en usage supporte, pas comme workflow produit normal.
 - Si plusieurs clients overflow:
@@ -786,16 +773,12 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Apres auto-stop LEN, Z5 inhibe un redemarrage automatique tant que REC global et transport restent actifs, afin de conserver la prise RAW finalisee pour SAVE et de ne pas relancer/effacer une prise sans transition utilisateur.
 - La precision de duree depend du marker boundary audio consomme par Z1; Z6 ne porte pas l'autorite musicale et ne calcule pas les mesures.
 - `ARM=Overd` reste borne/no-op: aucun overdub audio reel n'est branche.
-- `PATTERN_VERSION=15` et `PROJECT_V1_FILE_VERSION=20` marquent le changement de layout `PARAM_COUNT`, l'ajout du type `Looper` et l'ajout de `PatternSaveV1.track_cfg.looper_route_enabled`.
-- `PATTERN_VERSION=16` et `PROJECT_V1_FILE_VERSION=21` marquent la rupture prototype du contrat TONE Looper: `MODE` est retire, `ARM` devient `Off/Rec/Overd`, `PLAY Off/Auto` remplace l'ancien slot; les anciens fichiers sont refuses par version/payload stricts.
 
 ## 34. Versioning LFO final
 
-- `PATTERN_VERSION=25` et `PROJECT_V1_FILE_VERSION=36` marquent la rupture prototype du contrat LFO final.
 - `PatternSaveV1` ne porte plus de bloc `mod`: les params LFO courants, Matrix et ENV3 sont stockes via les blocs track-aware.
 - Les anciennes sauvegardes prototype sont refusees par version/payload stricts; aucune migration produit complexe n'est requise.
 - La restauration Matrix/ENV3 refuse les anciens formats par version et n'applique aucun fallback LFO `DEST/DEPTH`.
-- `PATTERN_VERSION=17` et `PROJECT_V1_FILE_VERSION=22` marquent l'ajout de `PARAM_WAVE_PHASE_RESET` et le changement de layout `PARAM_COUNT`; les anciens fichiers prototype sont refuses par version/payload stricts.
 - La selection ROUT `Sampler/Looper` est capturee/restauree par matrice `looper track -> source track` dans le snapshot pattern; les projets la portent via leur snapshot live embarque.
 - Les etats internes writer (`TAKE_READY`, `FINALIZING`, etc.) restent caches; aucun etat `Temp/Saved/Finalizing` n'est expose comme param utilisateur Looper.
 - Aucun parametre SAVE/STAT Looper n'est expose en TONE.
@@ -822,7 +805,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-13 - rupture stockage retrait buffer master
 
-- `PATTERN_VERSION=18` et `PROJECT_V1_FILE_VERSION=23` marquent le retrait du type UI/runtime buffer master et des anciens params buffer de `PARAM_COUNT`.
 - Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.
 - Le XFade Looper persiste via `PARAM_LOOPER_XFADE` dans le layout courant.
 
@@ -830,14 +812,11 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - La prise Looper RAW transient porte maintenant une metadata runtime minimale pour un futur stretch Looper: frames enregistrees, duree musicale Q16, cadence source au REC et samples absolus start/stop.
 - Cette metadata reste runtime/transient dans cette passe: le RAW systeme n'est pas restaure comme prise durable au load projet, et SAVE RAW -> WAV continue de lire uniquement `recorded_frames` pour exporter l'audio.
-- Aucun changement de layout `PARAM_COUNT`, `PatternSaveV1` ou `ProjectSaveV1` n'est introduit par cette passe; aucun bump `PATTERN_VERSION` / `PROJECT_V1_FILE_VERSION` n'est requis.
 
 ## Addendum 2026-05-13 - params Looper STRETCH UI/state
 
-- `PATTERN_VERSION=19` et `PROJECT_V1_FILE_VERSION=24` marquent l'ajout de `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` au layout `PARAM_COUNT`.
 - Les anciens patterns/projets prototype sont refuses proprement par version/payload stricts; aucune migration legacy ni tombstone n'est conserve.
 - Les nouveaux params Looper persistent via les flux `PARAM_COUNT` existants, mais restent UI/state uniquement: aucun etat REC/PLAY/WRAP/SAVE/XFADE/ROUT ni metadata RAW n'est modifie par cette passe.
-- `PROJECT_V1_FILE_VERSION=25` marque l'ajout du bloc projet `Sampler/Multi` par track (`path .brickmulti` + gain). Les anciens projets prototype sont refuses proprement par version/payload stricts.
 
 ## Addendum 2026-05-15 - browser Samples split
 
@@ -845,7 +824,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Les paths WAV complets restent transmis a `sample_pool_load()` et `sd_preview_begin()`; seul le label UI retire `.wav`.
 - Les slots projet affiches a droite restent les slots `sample_pool` existants et continuent d'etre captures/restaures par `ProjectSaveV1.sample_pool`.
 - Le clear de slot appelle seulement `sample_pool_clear()` et ne supprime jamais le fichier SD source.
-- Aucun changement de layout `PatternSaveV1`, `ProjectSaveV1`, `PARAM_COUNT`, `PATTERN_VERSION` ou `PROJECT_V1_FILE_VERSION` n'est requis.
 
 ## Addendum 2026-05-15 - browser Multi-Sample Settings
 
@@ -856,7 +834,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le pool projet affiche et borne la consommation `multi_sample_pool` en samples sur `MULTI_SAMPLE_POOL_MAX_SAMPLES=512`; un index/import dont le nombre de samples depasse 512 est refuse avant load.
 - Les slots instruments portent maintenant le path `.brickmulti` en RAM froide pour eviter les doublons dans la session projet courante; ce path ne modifie pas le layout fichier projet.
 - L'assignation durable `track Sampler/Multi -> path .brickmulti` est mise a jour par le browser Settings/Multi-Sample lorsqu'un slot est charge ou reutilise pour la track active Multi; le restore recharge ce path puis rebranche l'id instrument runtime.
-- Aucun changement `PatternSaveV1`, `ProjectSaveV1`, `PARAM_COUNT`, `PATTERN_VERSION` ou `PROJECT_V1_FILE_VERSION` n'est requis.
 
 ## Addendum - cache waveform persistant `.brkwave`
 
@@ -872,15 +849,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-17 - retrait Synth historique
 
-- PATTERN_VERSION=20 et PROJECT_V1_FILE_VERSION=26 marquent le retrait du moteur Synth prototype retire et de ses anciens params TONE de PARAM_COUNT.
 - Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.
 
 ## Addendum 2026-05-18 - paths Sampler catalogue/load/preview
 
-- Le contrat path produit du Sampler classique est aligne sur le catalogue WAV V2: `SAMPLE_POOL_PATH_MAX=160`.
+- Le contrat path produit du Sampler classique est aligne sur le catalogue WAV courant: `SAMPLE_POOL_PATH_MAX=160`.
 - `sample_pool`, `sample_cache`, `sample_page_cache`, `sample_stream_manager` et `sd_preview` acceptent le meme path complet que `SAMPLE.CAT`; il n'y a plus de limite cachee a 64 ou 96 caracteres sur LOAD/preview apres affichage catalogue.
 - Les buffers path chauds restent des metadonnees froides SDRAM cote pool/cache/page-cache/preview; les strings de readers de stream actifs sont aussi separees en `SDRAM_SAMPLES`, hors IRQ audio critique, tandis que les handles `FIL` des readers STREAM sont en `STORAGE_STATE_SDRAM` avec init explicite au boot.
-- `PROJECT_V1_FILE_VERSION=27` marque la rupture prototype du snapshot projet `sample_pool` due a l'extension des paths de slots Sampler. Les anciens projets prototype sont refuses par version/payload stricts, sans migration legacy.
 
 ## Addendum 2026-05-18 - erreurs catalogue/preview non destructives
 
@@ -890,10 +865,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-21 - autoload slots sample projet
 
-- `PROJECT_V1_FILE_VERSION=28` marque l'ajout du bloc `ProjectSaveV1.sample_autoload`. Les anciens projets prototype restent refuses par validation stricte `version/payload_size`, sans migration legacy.
-- Migration Sampler Stream en cours: `PARAM_SAMPLER_SAMPLE` hors Multi porte deja un slot global actif. `PATTERN_VERSION=22` et `PROJECT_V1_FILE_VERSION=31` refusent les anciens payloads prototype dont cette valeur designait encore directement un index backend `sample_pool`.
-- `PROJECT_V1_SAMPLE_AUTOLOAD_VERSION=3` stocke l'identite `global_index` en plus du `slot_index` backend. Au restore Stream, le backend `sample_pool[SAMPLE_POOL_SIZE]` est restaure puis le slot global STREAM est force sur son `global_index` sauvegarde; Multi conserve son backend technique et capture aussi le `global_index`; RAM recharge son backend `sampler_ram_pool` au `slot_index` sauvegarde et force le slot global sauvegarde.
-- Le bloc liste des entrees bornees `{slot_index, global_index, kind, flags, path}` avec `kind=STREAM`, `MULTI` ou `RAM`. `PROJECT_V1_FILE_VERSION=32` marque la rupture prototype qui remplace la reservation RAM future par des slots RAM autoloadables.
 - Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
 - Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
 - Les entrees `RAM` portent le path WAV complet et restaurent les slots `sampler_ram_pool` par `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` hors IRQ. Aucun audio brut n'est sauvegarde; `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`. Un echec d'ouverture/parse/decode/budget/SLOT_POOL/backend conserve si possible le slot global RAM en `ERROR` avec le path, sans pointeur audio stale.
@@ -901,19 +872,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-23 - Sampler/Multi LOOP
 
-- `PATTERN_VERSION=21` et `PROJECT_V1_FILE_VERSION=29` marquent l'ajout append-only de `PARAM_SAMPLER_MULTI_LOOP` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
-- `MULTI_SAMPLE_INDEX_VERSION=2` marque l'ajout des metadonnees de loop WAV par sample dans `.brickmulti`; la lecture v1 reste acceptee avec `has_loop=0`.
 
 ## Addendum 2026-05-24 - catalogue global sample produit
 
 - `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 256 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
 - `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`, lui aussi dimensionne sur la capacite active courante. Les limites de 16 pads/voix/pages UI ne bornent pas le nombre de samples RAM residents. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
 - Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. RAM est stocke en `FLOAT32_INTERLEAVED` stereo au load WAV; les anciens slots residents sont volatils et sont donc simplement recharges depuis leur path projet/autoload. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
-- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v41: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades. `PROJECT_V1_FILE_VERSION=41` marque le passage des backends Stream/RAM actifs a 256 slots et du slot-pool physique a 1024 pages / 16 MiB; les anciens projets prototype sont refuses par version/payload stricts.
 
-- `PATTERN_VERSION=23` et `PROJECT_V1_FILE_VERSION=33` marquent le retrait prototype de `PARAM_SAMPLER_FADE_IN` / `PARAM_SAMPLER_FADE_OUT` de `PARAM_COUNT`; aucune migration ancienne valeur fade n'est conservee.
-- `PATTERN_VERSION=24` et `PROJECT_V1_FILE_VERSION=34` marquent l'ajout append-only de `PARAM_SAMPLER_LOOP_START` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
-- `PROJECT_V1_FILE_VERSION=35` marque l'alignement du backend volatile `sampler_ram_pool` sur la capacite active du catalogue global sample; les anciens projets prototype sont refuses par version/payload stricts.
 
 ## Addendum 2026-05-27 - contrat runtime du projet blank
 
@@ -948,14 +913,14 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Avant mutation, l'apply valide header/checksum/version, largeur, roles membres, family/type et refs asset Sampler deja `READY`; un asset manquant refuse `ASSET MISS` sans reload SD/page-cache/reader.
 - L'apply ne capture ni ne restaure sequence, pattern, p-lock, playhead, transport, voices, readers SD, page-cache, buffers audio, etat IRQ ni etat UI temporaire. Aucun apply partiel, Set, preview, rollback ou creation automatique de slaves n'est introduit.
 
-## Addendum 2026-05-29 - Kit V1 Ã©tape 2
+## Addendum 2026-05-29 - Kit V1 étape 2
 
-- `kit_v1` ajoute une persistence Z6 sÃ©parÃ©e de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sÃ©lectionnables.
-- Les slots Kit sont des fichiers indexÃ©s sous `0:/BRICK/KIT/K0000.B6K`, format magic `B6KT`, version `1`, header metadata (`name[32]`, `track_count`, summary compact 16 tracks max), `payload_size` et checksum du payload.
+- `kit_v1` ajoute une persistence Z6 séparée de Project/Pattern/Patch: un Kit est un snapshot sonore complet de la machine, pas un Set partiel et pas une collection de targets sélectionnables.
+- Les slots Kit sont des fichiers indexés sous `0:/BRICK/KIT/K0000.B6K`, format magic `B6KT`, version `1`, header metadata (`name[32]`, `track_count`, summary compact 16 tracks max), `payload_size` et checksum du payload.
 - Payload V1: pour les tracks `0..UI_TRACK_COUNT-1`, capture family/type, `track_sound_state_t`, `track_tone_sound_state_t`, reference asset Sampler optionnelle issue de `sample_global_pool`, et summary family/type/label/off pour miniature future.
-- Aucun pattern, sÃ©quence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, Ã©tat IRQ ni Ã©tat UI temporaire n'est capturÃ©.
-- `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accÃ¨s FatFs restent hors IRQ et exclusifs vis-Ã -vis des clients SD critiques.
-- Ã‰tape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Rename recharge le payload, met Ã  jour `meta.name`, puis rÃ©Ã©crit header/payload avec checksum recalculÃ©; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
+- Aucun pattern, séquence, p-lock, playhead, transport, voice, reader SD, page-cache, buffer audio, état IRQ ni état UI temporaire n'est capturé.
+- `kit_sd_bank` utilise `SD_ACCESS_CLIENT_KIT`; les accès FatFs restent hors IRQ et exclusifs vis-à-vis des clients SD critiques.
+- Étape 2 expose capture + save direct + browser metadata, miniature summary, rename et delete. Rename recharge le payload, met à jour `meta.name`, puis réécrit header/payload avec checksum recalculé; delete supprime le fichier et invalide le cache metadata en `EMPTY`.
 
 ## Addendum 2026-05-29 - Kit V1 etape 3
 
@@ -967,7 +932,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## Addendum 2026-05-29 - Pattern linked Kit
 
 - `PatternSaveV1.globals` porte maintenant `linked_kit_valid` et `linked_kit_slot`. Le pattern stocke uniquement une reference de slot Kit `B6KT`, jamais le payload Kit.
-- `PATTERN_VERSION=28` et `PROJECT_V1_FILE_VERSION=39` marquent la rupture de format; les anciens patterns/projets sont refuses par validation stricte version/taille, sans migration.
 - Au changement de pattern, un lien Kit valide applique le Kit complet via `kit_v1_apply_slot`, positionne le slot actif et nettoie le dirty apres succes. Un pattern sans lien invalide l'affichage Kit actif (`Kit: ---`) et n'applique pas de Kit implicite.
 - Apply Kit depuis le browser et Save Kit direct lient le slot Kit au pattern actif seulement apres succes. Un echec d'apply (`BAD KIT`, `ASSET MISS`, SD) ne change pas le lien.
 - Delete du slot Kit actif clear uniquement le lien du pattern actif; les autres patterns peuvent encore porter une reference devenue invalide et seront refuses proprement au prochain chargement.
@@ -975,9 +939,14 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-07-17 - lot 4B persistence low-cost
 
-- Aucun changement de structure `PatternSaveV1` / `ProjectSaveV1` n'est introduit dans ce lot: les versions restent celles du format courant.
 - En low-cost, les valeurs persistantes qui referencent `Input2..4` ou une route CUE/BOTH sont refusees/normalisees par les validations catalogue et les clamps runtime existants lors de l'application, sans migration inter-variante.
 - Premium conserve le format et les ressources exposees inchanges.
+
+## Addendum 2026-07-27 - undo_v2 low-cost mono-niveau
+
+- En low-cost uniquement, `undo_v2` garde un seul slot de transaction et un seul payload snapshot, donc un seul Undo et un seul Redo possibles.
+- Un nouvel edit remplace l'etat Undo courant et invalide l'eventuel Redo via le flux existant; Premium conserve l'historique multi-niveaux.
+- Aucun format Pattern/Project n'est modifie.
 
 ## Addendum 2026-07-23 - normalisation restore inputs low-cost
 
@@ -992,51 +961,42 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## Addendum 2026-07-24 - payload Kit/Patch Matrix et ENV3
 
 - `track_sound_state_t` porte maintenant la config canonique `mod_env3` et les slots `mod_matrix`; les payloads Kit/Patch capturent donc ces champs via leur snapshot sound.
-- `KIT_SD_FILE_VERSION=4` et `PATCH_SD_FILE_VERSION=5` marquent la rupture de payload; les anciens slots Kit/Patch sont refuses par validation stricte version/taille, sans migration implicite.
 - Les payloads dedies aux anciennes lanes LFO `DEST/DEPTH` ont ete retires du format courant; la Matrix/ENV3 n'a pas de conversion depuis ces anciens champs.
-- La passe runtime seule ne changeait pas `PatternSaveV1`; la surface param/UI ci-dessous introduit ensuite le bump Pattern/Project associe au layout `PARAM_COUNT`.
 
 ## Addendum 2026-07-24 - layout param Matrix/ENV3
 
 - `PARAM_MOD_MATRIX_SLOT/SOURCE/DEST/DEPTH` et `PARAM_ENV3_ATTACK/DECAY/SUSTAIN/RELEASE` sont ajoutes au layout `PARAM_COUNT`.
-- `PATTERN_VERSION=31` et `PROJECT_V1_FILE_VERSION=43` marquent la rupture de payload Pattern/Project; les anciens fichiers prototype sont refuses par validation stricte version/taille, sans migration implicite.
 - `PatternSaveV1` ne contient plus de bloc LFO separe: LFO source, Matrix et ENV3 sont persistants uniquement via les blocs track-aware du layout courant.
 - Les anciens params directs `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant au lieu d'etre convertis ou conserves en fallback.
-- Kit/Patch conservent leurs versions deja bumpÃ©es par la rupture `track_sound_state_t`: la surface param n'ajoute pas de nouveau champ dedie dans leurs headers.
 
 ## Addendum 2026-07-25 - persistence Stack
 
 - `Synth/Stack` est persiste comme type de track distinct de `Synth/Wave`; aucun champ Wave n'est renomme, migre ou reutilise comme alias Stack.
 - Les parametres `PARAM_STACK_*` sont ajoutes au layout `PARAM_COUNT`: Pattern et Project les capturent via leurs matrices track-aware `track_values` / `track_valid`.
-- `PATTERN_VERSION=32` et `PROJECT_V1_FILE_VERSION=44` marquent la rupture de payload Pattern/Project; en phase prototype, les anciens fichiers sont refuses par validation stricte `version/payload_size`, sans migration.
 - Les etats sonores Stack canoniques sont ajoutes a `track_tone_sound_state_t`; Patch et Kit les capturent donc dans leur snapshot tone comme les autres moteurs TONE.
-- `PATCH_SD_FILE_VERSION=6` et `KIT_SD_FILE_VERSION=5` marquent la rupture de payload Patch/Kit; les anciens slots sont refuses par validation stricte, sans compatibilite artificielle.
 - Le resume d'un Kit encode `Stack` avec le label court `SK`; les labels `WV` Wave existants gardent leur signification historique.
 - `project_v1_load_blank()` neutralise maintenant aussi le runtime transitoire Stack via `brick6_stack_runtime_init()` pendant le reset blank, separement du reset Wave/Braids historique.
 
 ## Addendum 2026-07-25 - versions simplification analogique Stack
 
 - Les valeurs enum `PARAM_STACK_OSC*_MODEL` changent de semantique prototype: les anciens modeles analogiques simples sont remplaces par la surface Stack courante, sans migration.
-- `PATTERN_VERSION=33`, `PROJECT_V1_FILE_VERSION=45`, `PATCH_SD_FILE_VERSION=7` et `KIT_SD_FILE_VERSION=6` marquent cette rupture de catalogue Stack.
 - Les formats restent refuses par validation stricte de version/taille; aucun remap des anciennes valeurs `SINE/TRIANGLE/SAW/PWM/...` n'est conserve.
 
 ## Addendum 2026-07-25 - persistence page VOICE Stack
 
 - Le retrait de l'unison interne Stack supprime les params prototype `VOICE count`, `DETUNE`, `SPREAD` et `DRIFT` ajoutes par erreur.
 - Le layout courant garde seulement `PARAM_STACK_OSC_DETUNE` et `PARAM_STACK_PHASE_RESET`; `track_tone_sound_state_t` porte `osc_detune` et `phase_reset`.
-- `PATTERN_VERSION=34`, `PROJECT_V1_FILE_VERSION=46`, `PATCH_SD_FILE_VERSION=8` et `KIT_SD_FILE_VERSION=7` marquent cette rupture prototype liee au layout `PARAM_COUNT` et au payload tone.
 - Defaults: `OSC DETUNE=0`, `RESET=FREE`, ce qui conserve son et cout Stack historiques.
 
 ## Addendum 2026-07-25 - persistence TRACK CFG group SPREAD/LINK
 
 - Le bloc track config Pattern/Project capture maintenant `voice_group_spread[]` et `voice_group_link[]` en plus des roles voice group.
-- `PATTERN_VERSION=35` et `PROJECT_V1_FILE_VERSION=47` marquent cette rupture prototype; aucune migration des anciens formats n'est conservee.
-- Patch Poly capture SPREAD/LINK sur le membre master et les reapplique sur la target master lors d'un apply poly; `PATCH_SD_FILE_VERSION=9`.
-- Kit capture roles, SPREAD et LINK par track avec les autres donnees structurelles full-machine; `KIT_SD_FILE_VERSION=8`.
 
 ## Addendum 2026-07-26 - persistence Stack PARAM3 / Fold
 
 - `PARAM_STACK_OSC1_PARAM3`, `PARAM_STACK_OSC2_PARAM3` et `PARAM_STACK_OSC3_PARAM3` sont ajoutes au layout `PARAM_COUNT`; Pattern/Project les capturent via les matrices track-aware existantes.
 - `track_tone_sound_state_t.stack` ajoute `param3[3]`, donc Patch et Kit capturent aussi cette surface TONE Stack.
-- `PATTERN_VERSION=37`, `PROJECT_V1_FILE_VERSION=49`, `PATCH_SD_FILE_VERSION=11` et `KIT_SD_FILE_VERSION=10` marquent cette rupture prototype; les anciens fichiers restent refuses par validation stricte version/taille, sans migration.
 - `SOFT` n'est plus un modele Stack actif: l'ancien index 0 devient `SINFD`; `TRIFD` est ajoute a la liste modele fold dediee. Aucune migration prototype des anciennes valeurs `SOFT` n'est conservee.
+Addendum 2026-07-26 - Step ROLL:
+- `pattern_v1_step_t` ajoute `roll` pour persister le retrig par step, separe de `trig`, `LEN` et des p-locks.
+

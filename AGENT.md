@@ -89,6 +89,18 @@ Règles :
 - les docs servent à cartographier le réel, pas à l’imposer
 - ne jamais patcher uniquement pour “faire coller” le code à une doc
 
+### Politique sauvegardes prototype
+- le projet est en phase de prototypage
+- la retrocompatibilite des projets, patterns et presets n'est pas requise
+- lors d'une modification d'une structure de sauvegarde, modifier directement la structure courante plutot que d'ajouter une migration, une conversion ou une compatibilite ascendante
+- ne pas creer de nouveaux formats `V2`, `V3`, etc. ni conserver d'anciens formats, sauf demande explicite
+- les anciens payloads doivent etre refuses par validation stricte du format courant quand ils ne correspondent plus
+- les constantes de version des formats de sauvegarde restent a `1` et ne doivent jamais etre incrementees automatiquement lors d'une modification de structure
+- pendant toute la phase de prototypage, une structure de sauvegarde evolue par modification directe du format courant
+- les anciens projets peuvent devenir illisibles sans migration, sans conversion et sans detection particuliere
+- aucun systeme de compatibilite ne doit etre ajoute
+- un bump de version ne doit etre effectue que sur demande explicite
+
 ---
 
 ## 4. Invariants système globaux

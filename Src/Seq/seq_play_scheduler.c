@@ -29,7 +29,7 @@
 #include "Seq/seq_runtime_control.h"
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
-#define SEQ_PLAY_SCHEDULER_EVENT_CAP 256U
+#define SEQ_PLAY_SCHEDULER_EVENT_CAP 512U
 #define SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP 64U
 
 
@@ -94,6 +94,13 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t note,
                                     uint8_t velocity,
                                     uint32_t event_token);
+static void seq_play_scheduler_push_note_retrigs(uint64_t note_on_sample_time,
+                                                 uint64_t len_samples,
+                                                 uint64_t step_span_q16,
+                                                 uint8_t roll,
+                                                 seq_track_id_t target_track,
+                                                 uint8_t note,
+                                                 uint8_t velocity);
 static uint32_t seq_play_scheduler_alloc_event_token(void);
 static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent);
 static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
@@ -285,6 +292,75 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
         g_seq_play_diag.queue_high_water = g_seq_play_event_count;
     }
     seq_play_scheduler_exit_critical(primask);
+}
+
+static void seq_play_scheduler_push_note_pair(uint64_t note_on_sample_time,
+                                              uint64_t note_off_sample_time,
+                                              seq_track_id_t target_track,
+                                              uint8_t note,
+                                              uint8_t velocity)
+{
+    const uint32_t event_token = seq_play_scheduler_alloc_event_token();
+    seq_play_scheduler_push(note_on_sample_time,
+                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
+                            target_track,
+                            note,
+                            velocity,
+                            event_token);
+    seq_play_scheduler_push(note_off_sample_time,
+                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                            target_track,
+                            note,
+                            0U,
+                            event_token);
+}
+
+static void seq_play_scheduler_push_note_retrigs(uint64_t note_on_sample_time,
+                                                 uint64_t len_samples,
+                                                 uint64_t step_span_q16,
+                                                 uint8_t roll,
+                                                 seq_track_id_t target_track,
+                                                 uint8_t note,
+                                                 uint8_t velocity)
+{
+    if (len_samples == 0U)
+    {
+        len_samples = 1U;
+    }
+
+    seq_play_scheduler_push_note_pair(note_on_sample_time,
+                                      note_on_sample_time + len_samples,
+                                      target_track,
+                                      note,
+                                      velocity);
+
+    const uint16_t divisor = seq_model_step_roll_divisor(roll);
+    if (divisor == 0U)
+    {
+        return;
+    }
+
+    const uint64_t interval_q16 = (step_span_q16 * 16ULL) / (uint64_t)divisor;
+    if (interval_q16 == 0U)
+    {
+        return;
+    }
+
+    uint64_t offset_q16 = interval_q16;
+    while (offset_q16 < step_span_q16)
+    {
+        const uint64_t offset_samples = (offset_q16 + 0x8000ULL) >> 16;
+        if (offset_samples != 0U)
+        {
+            const uint64_t retrig_on = note_on_sample_time + offset_samples;
+            seq_play_scheduler_push_note_pair(retrig_on,
+                                              retrig_on + len_samples,
+                                              target_track,
+                                              note,
+                                              velocity);
+        }
+        offset_q16 += interval_q16;
+    }
 }
 
 static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
@@ -785,6 +861,8 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     }
 
     const float samples_per_step_f = ((float)samples_per_step_q16) / 65536.0f;
+    const uint64_t track_step_span_q16 = seq_play_scheduler_track_step_span_samples_q16(track, samples_per_step_q16);
+    const uint8_t step_roll = seq_model_get_step_roll(track, step);
     uint8_t track_quant = 0U;
     if (track < SEQ_TRACK_COUNT)
     {
@@ -915,20 +993,13 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         const seq_track_id_t target_track = (group_master != 0U)
             ? param_track
             : (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, note);
-        const uint32_t event_token = seq_play_scheduler_alloc_event_token();
-
-        seq_play_scheduler_push(note_on_sample_time,
-                                (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
-                                target_track,
-                                note,
-                                vel,
-                                event_token);
-        seq_play_scheduler_push(note_off_sample_time,
-                                (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                                target_track,
-                                note,
-                                0U,
-                                event_token);
+        seq_play_scheduler_push_note_retrigs(note_on_sample_time,
+                                             len_samples,
+                                             track_step_span_q16,
+                                             step_roll,
+                                             target_track,
+                                             note,
+                                             vel);
     }
 
     if (has_first_note != 0U)

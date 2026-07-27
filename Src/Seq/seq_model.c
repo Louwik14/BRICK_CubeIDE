@@ -55,6 +55,11 @@ static uint8_t seq_model_step_is_valid(seq_step_id_t step)
     return (step < seq_model_get_editable_step_capacity()) ? 1U : 0U;
 }
 
+static uint8_t seq_model_normalize_roll(uint8_t roll)
+{
+    return (roll < (uint8_t)SEQ_STEP_ROLL_COUNT) ? roll : (uint8_t)SEQ_STEP_ROLL_OFF;
+}
+
 static seq_step_t *seq_model_get_step_mut(seq_track_id_t track, seq_step_id_t step)
 {
     if ((seq_model_track_is_valid(track) == 0U) || (seq_model_step_is_valid(step) == 0U))
@@ -293,6 +298,10 @@ uint8_t seq_model_load_project(const seq_project_data_t *project)
         {
             const seq_step_t *in_step = &project->tracks[tr].steps[st];
             g_seq_project.tracks[tr].steps[st].trig = (in_step->trig != 0U) ? 1U : 0U;
+            g_seq_project.tracks[tr].steps[st].roll =
+                (g_seq_project.tracks[tr].steps[st].trig != 0U)
+                    ? seq_model_normalize_roll(in_step->roll)
+                    : (uint8_t)SEQ_STEP_ROLL_OFF;
 
             uint16_t idx = in_step->lock_head;
             uint8_t imported = 0U;
@@ -349,6 +358,10 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step)
     seq_step_t *const s = &g_seq_project.tracks[track].steps[step];
     const uint32_t primask = seq_model_enter_critical();
     s->trig = (s->trig == 0U) ? 1U : 0U;
+    if (s->trig == 0U)
+    {
+        s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
+    }
     seq_model_exit_critical(primask);
 }
 
@@ -360,8 +373,65 @@ void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
     }
 
     const uint32_t primask = seq_model_enter_critical();
-    g_seq_project.tracks[track].steps[step].trig = (trig != 0U) ? 1U : 0U;
+    seq_step_t *const s = &g_seq_project.tracks[track].steps[step];
+    s->trig = (trig != 0U) ? 1U : 0U;
+    if (s->trig == 0U)
+    {
+        s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
+    }
     seq_model_exit_critical(primask);
+}
+
+uint8_t seq_model_get_step_roll(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if ((s == 0) || (s->trig == 0U))
+    {
+        return (uint8_t)SEQ_STEP_ROLL_OFF;
+    }
+
+    return seq_model_normalize_roll(s->roll);
+}
+
+void seq_model_set_step_roll(seq_track_id_t track, seq_step_id_t step, uint8_t roll)
+{
+    seq_step_t *const s = seq_model_get_step_mut(track, step);
+    if ((s == 0) || (s->trig == 0U))
+    {
+        return;
+    }
+
+    const uint32_t primask = seq_model_enter_critical();
+    s->roll = seq_model_normalize_roll(roll);
+    seq_model_exit_critical(primask);
+}
+
+uint16_t seq_model_step_roll_divisor(uint8_t roll)
+{
+    static const uint16_t k_divisors[SEQ_STEP_ROLL_COUNT] = {
+        0U, 20U, 24U, 32U, 40U, 48U, 64U, 80U
+    };
+
+    roll = seq_model_normalize_roll(roll);
+    return k_divisors[roll];
+}
+
+const char *seq_model_step_roll_label(uint8_t roll)
+{
+    static const char *const k_labels[SEQ_STEP_ROLL_COUNT] = {
+        "OFF", "1/20", "1/24", "1/32", "1/40", "1/48", "1/64", "1/80"
+    };
+
+    roll = seq_model_normalize_roll(roll);
+    return k_labels[roll];
+}
+
+uint8_t seq_model_step_roll_is_emphasized(uint8_t roll)
+{
+    roll = seq_model_normalize_roll(roll);
+    return (uint8_t)(((roll == (uint8_t)SEQ_STEP_ROLL_1_32)
+                      || (roll == (uint8_t)SEQ_STEP_ROLL_1_24)
+                      || (roll == (uint8_t)SEQ_STEP_ROLL_1_64)) ? 1U : 0U);
 }
 
 uint8_t seq_model_get_track_page(seq_track_id_t track)

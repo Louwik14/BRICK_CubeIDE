@@ -18,9 +18,8 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    51U /* MOD operators MULTI/SLEW params. */
+#define PROJECT_V1_FILE_VERSION    1U /* Prototype: current structure only, no automatic bump. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
-#define PROJECT_V1_SAMPLE_AUTOLOAD_VERSION 3U
 #define PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX SAMPLE_POOL_PATH_MAX
 #define PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT \
     (SAMPLE_POOL_SIZE + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS + SAMPLER_RAM_POOL_MAX_SLOTS)
@@ -120,7 +119,7 @@ typedef struct
 
 typedef struct
 {
-    uint16_t version;
+    uint16_t reserved0;
     uint16_t count;
     uint32_t reserved;
     project_v1_sample_autoload_slot_t slots[PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT];

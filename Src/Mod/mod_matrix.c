@@ -135,10 +135,8 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
     {
         case TRACK_RUNTIME_TYPE_HYBRID:
             return UI_TRACK_TYPE_HYBRID;
-        case TRACK_RUNTIME_TYPE_SAMPLER:
-            return UI_TRACK_TYPE_SAMPLER;
-        case TRACK_RUNTIME_TYPE_SLICER:
-            return UI_TRACK_TYPE_SLICER;
+        case TRACK_RUNTIME_TYPE_RAM:
+            return UI_TRACK_TYPE_RAM;
         case TRACK_RUNTIME_TYPE_WAVE:
             return UI_TRACK_TYPE_WAVE;
         case TRACK_RUNTIME_TYPE_STACK:
@@ -147,8 +145,8 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
             return UI_TRACK_TYPE_DRUM_TRX_BD;
         case TRACK_RUNTIME_TYPE_MIDI:
             return UI_TRACK_TYPE_MIDI;
-        case TRACK_RUNTIME_TYPE_CLIP:
-            return UI_TRACK_TYPE_CLIP;
+        case TRACK_RUNTIME_TYPE_STREAM:
+            return UI_TRACK_TYPE_STREAM;
         case TRACK_RUNTIME_TYPE_MASTER_FX:
             return UI_TRACK_TYPE_MASTER_FX;
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:

@@ -18,6 +18,8 @@ typedef struct
 {
     uint8_t trig;
     uint8_t lock_count;
+    uint8_t roll;
+    uint8_t reserved;
     pattern_v1_plock_t locks[SEQ_STEP_MAX_LOCKS];
 } pattern_v1_step_t;
 

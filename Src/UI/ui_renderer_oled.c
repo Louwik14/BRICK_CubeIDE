@@ -25,6 +25,7 @@
 #include "drv_display.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
+#include "ui_roll_popup.h"
 
 #define UI_RENDER_PERIOD_MS 16U
 
@@ -56,6 +57,7 @@ void ui_renderer_oled_draw(void)
     else if ((page != 0) && (page->render != 0))
     {
         page->render();
+        ui_roll_popup_render(HAL_GetTick());
     }
 
     g_ui_rendering = 0U;

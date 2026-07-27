@@ -767,3 +767,10 @@ Points factuels observes:
 - Au paste vers une master de groupe, le membre source N est applique au membre destination N. Si les largeurs source/destination divergent, les membres communs sont appliques et le resultat est marque partiel; les membres destination excedentaires ne sont pas touches.
 - Les slaves restent sans ensemble PLAY direct: le paste ecrit seulement leurs p-locks PLAY internes. Les locks PLAY d'un membre slave sont clears/reposes sur sa track, sans toucher les locks non-PLAY ni les pages PLAY des autres membres.
 - `LINK` n'intervient pas dans ce chemin: aucune propagation PLAY n'est declenchee par copy/paste.
+## Addendum 2026-07-26 - ROLL par step
+
+- `seq_step_t.roll` porte le roll/retrig du step, separe de `LEN` et des p-locks.
+- Valeurs stockees: `OFF`, `1/20`, `1/24`, `1/32`, `1/40`, `1/48`, `1/64`, `1/80`.
+- Le scheduler lit le roll du step source et ajoute de vrais `NOTE_ON`/`NOTE_OFF` sample-domain dans la queue existante; le premier trig reste le trig principal et aucun sous-trig n'est emis a l'offset zero.
+- Les sous-trigs reutilisent les memes resolutions NOTE/VEL/LEN/MicTim et p-locks PLAY du step original; aucun effet audio de repetition, aucun changement Wave/Stack/Matrix n'est introduit.
+- Les pending events roll sont nettoyes par les clears scheduler existants au STOP, changement de pattern ou lifecycle transport.

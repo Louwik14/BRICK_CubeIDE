@@ -1,5 +1,11 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-27 - pool SEND delay borne a 6 s
+
+- Le pool SDRAM partage des delays globaux SEND `CLASSIC`/`DUAL` est dimensionne sur la capacite reellement exploitable par le contrat courant 6 s: `FX_DELAY_SHARED_CAPACITY=288008` samples par canal, soit 2 304 064 octets pour L/R float32.
+- Les anciennes capacites separees `CLASSIC=288002` et `DUAL=432002` sont retirees: `CLASSIC` et `DUAL` restent mutuellement exclusifs dans `mixer_process()` et utilisent le meme pool.
+- `DUAL` conserve sa reserve interne de redimensionnement `ceil(time)+8`; `CLASSIC` conserve son clamp temps a 6 s via `kMaxDelaySeconds`, malgre les quelques samples de garde supplementaires du pool commun.
+
 ## Addendum 2026-07-26 - Retrigger hard/soft ENV
 
 - Le mixer porte maintenant deux flags runtime par lane, `filter_retrigger_hard` et `vca_retrigger_hard`, projetes depuis les params track-aware `PARAM_ENV_RETRIG_FILTER` et `PARAM_ENV_RETRIG_VCA`.
@@ -388,7 +394,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La reverb globale est processee uniquement selon l'autorite `Wet`: `fx_reverb_global_is_active()` retourne vrai si `Wet > 0`, et `mixer_process()` appelle alors `fx_reverb_global_process_block()` a chaque bloc audio, meme si `send_l/r[0]` est silencieux.
 - `Wet=0` coupe immediatement le cout reverb; aucun gate local base sur l'entree et aucun tail mixer local ne participent a la decision.
 - L'entree de la reverb globale est filtree en place par les params globaux `PARAM_MIX_REVERB_HPF` / `PARAM_MIX_REVERB_LPF` dans `mixer_process()`, apres l'eventuel wet delay `REV` et juste avant `fx_reverb_global_process_block()`.
-- Le DSP delay CLASSIC vit dans `fx_delay_stereo.*`; ses lignes L/R utilisent le pool partage `fx_delay_shared_pool.*` place en `.audio_delay_sdram`, dimensionne par le besoin DUAL. CLASSIC ne consomme que sa capacite historique.
+- Le DSP delay CLASSIC vit dans `fx_delay_stereo.*`; ses lignes L/R utilisent le pool partage `fx_delay_shared_pool.*` place en `.audio_delay_sdram`, borne a la capacite commune 6 s.
 - V1 expose le contrat 8 params `TIME`, `X`, `WID`, `FDBK`, `HPF`, `LPF`, `REV`, `VOL`; `TIME` est une division musicale sync BPM stockee comme enum et convertie en secondes via l'autorite tempo `seq_runtime`, tandis que le smoothing/interpolation reste dans le DSP delay.
 - `X` est un bool ping-pong, `HPF/LPF` filtrent la boucle feedback, `WID` est bipolaire et agit uniquement sur le retour wet hors boucle feedback.
 - `VOL=0` garde le retour master inaudible; le delay reste traite si `REV>0` afin d'alimenter la reverb globale.
@@ -414,7 +420,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `FBW` mappe le croisement/largeur de feedback; `WID` reste la largeur wet/haas/pingpong selon le mode.
 - `SWING` et `ACCENT` sont retires du backend DUAL produit V1; les IDs param restent reserves pour ne pas renumeroter le stockage indexe par `PARAM_COUNT`.
 - Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
-- Les buffers longs DUAL utilisent le meme pool partage `fx_delay_shared_pool.*` en `.audio_delay_sdram`; DUAL consomme toute la capacite du pool. CLASSIC et DUAL restent mutuellement exclusifs dans `mixer_process()`.
+- Les buffers longs DUAL utilisent le meme pool partage `fx_delay_shared_pool.*` en `.audio_delay_sdram`; le pool est dimensionne sur `ceil(6 s * 48 kHz) + 8` samples par canal. CLASSIC et DUAL restent mutuellement exclusifs dans `mixer_process()`.
 
 ## 14.b Addendum - reverb send RevB unique
 

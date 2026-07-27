@@ -388,7 +388,7 @@ uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id)
         return 0U;
     }
 
-    return ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
+    return ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_RAM)
             && (g_sampler_voice[track_id].slice_count != 0U))
                ? 1U
                : 0U;
@@ -1010,7 +1010,7 @@ static uint8_t brick6_sampler_runtime_track_is_clip(uint8_t track_id)
         return 0U;
     }
 
-    return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP) ? 1U : 0U;
+    return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM) ? 1U : 0U;
 }
 
 static uint8_t brick6_sampler_runtime_clip_mode_is_off(const brick6_sampler_clip_runtime_t *clip)
@@ -5771,7 +5771,7 @@ void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
     if ((ctx->track_id >= SEQ_TRACK_COUNT)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_CLIP)
+            || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
             || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI))
     {
         return;
@@ -5809,7 +5809,7 @@ void brick6_sampler_runtime_render_stream_track(const track_runtime_ctx_t *ctx,
     if ((ctx->track_id >= SEQ_TRACK_COUNT)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_CLIP))
+            || ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM))
     {
         return;
     }
@@ -5911,7 +5911,7 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
 
     switch ((track_runtime_type_t)ctx->type)
     {
-        case TRACK_RUNTIME_TYPE_CLIP:
+        case TRACK_RUNTIME_TYPE_STREAM:
             brick6_sampler_runtime_render_stream_track(ctx, out_l, out_r, frames);
             return;
 

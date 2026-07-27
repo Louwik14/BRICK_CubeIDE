@@ -1280,7 +1280,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 {
     const uint8_t active_track = ui_get_active_track();
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_SAMPLER))
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_RAM))
     {
         const char *name = NULL;
         switch (id)
@@ -1598,12 +1598,12 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_stack;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_SAMPLER))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_RAM))
             {
                 family_template = &g_ui_template_tone_family_sampler;
             }
 
-            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_CLIP))
+            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_STREAM))
             {
                 family_template = &g_ui_template_tone_family_clip;
             }

@@ -2459,11 +2459,11 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
                 ui_renderer_template_draw_cfg_hybrid_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_SAMPLER:
+            case UI_TRACK_TYPE_RAM:
                 ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_CLIP:
+            case UI_TRACK_TYPE_STREAM:
                 ui_renderer_template_draw_cfg_stream_icon(x, y, w, h);
                 return 1U;
 
@@ -3109,7 +3109,7 @@ static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_s
     }
 
     return (uint8_t)(((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-                      && (ui_get_track_type(active_track) == UI_TRACK_TYPE_SAMPLER)) ? 1U : 0U);
+                      && (ui_get_track_type(active_track) == UI_TRACK_TYPE_RAM)) ? 1U : 0U);
 }
 
 static const char *ui_renderer_template_path_basename(const char *path)

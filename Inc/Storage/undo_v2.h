@@ -6,8 +6,13 @@
 #include "Storage/pattern_live_ram.h"
 #include "Param/param_store.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define UNDO_V2_MAX_TRANSACTIONS 1U
+#define UNDO_V2_MAX_SNAPSHOTS 1U
+#else
 #define UNDO_V2_MAX_TRANSACTIONS 32U
 #define UNDO_V2_MAX_SNAPSHOTS 4U
+#endif
 #define UNDO_V2_MAX_PARAM_DELTAS 128U
 #define UNDO_V2_MAX_PLOCK_DELTAS 128U
 #define UNDO_V2_MAX_STEP_DELTAS 64U

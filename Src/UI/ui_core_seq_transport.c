@@ -1,5 +1,6 @@
 #include "ui_core_seq_transport.h"
 
+#include "stm32h7xx_hal.h"
 #include "Board/board_product.h"
 #include "buttons.h"
 #include "ui_page_manager.h"
@@ -9,6 +10,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clipboard.h"
+#include "ui_roll_popup.h"
 
 static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t hall_mode)
 {
@@ -175,12 +177,28 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
     {
         if (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
         {
+            seq_track_id_t roll_track = 0U;
+            seq_step_id_t roll_step = 0U;
+            uint8_t roll = 0U;
+            if (seq_edit_adjust_held_step_roll(1, &roll_track, &roll_step, &roll) != 0U)
+            {
+                ui_roll_popup_show(roll_track, roll_step, roll, HAL_GetTick());
+                return 1U;
+            }
             seq_edit_change_page(track, 1);
             return 1U;
         }
 
         if (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
         {
+            seq_track_id_t roll_track = 0U;
+            seq_step_id_t roll_step = 0U;
+            uint8_t roll = 0U;
+            if (seq_edit_adjust_held_step_roll(-1, &roll_track, &roll_step, &roll) != 0U)
+            {
+                ui_roll_popup_show(roll_track, roll_step, roll, HAL_GetTick());
+                return 1U;
+            }
             seq_edit_change_page(track, -1);
             return 1U;
         }

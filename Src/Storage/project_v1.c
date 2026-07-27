@@ -166,7 +166,6 @@ static void project_v1_sample_autoload_clear(ProjectSaveV1 *project)
     }
 
     memset(&project->sample_autoload, 0, sizeof(project->sample_autoload));
-    project->sample_autoload.version = PROJECT_V1_SAMPLE_AUTOLOAD_VERSION;
 }
 
 static uint8_t project_v1_sample_autoload_add(ProjectSaveV1 *project,
@@ -286,8 +285,7 @@ static uint32_t project_v1_stream_product_cost_bytes(uint32_t frames)
 
 static void project_v1_restore_stream_global_slots(const ProjectSaveV1 *project)
 {
-    if ((project == 0)
-        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if (project == 0)
     {
         return;
     }
@@ -338,8 +336,7 @@ static void project_v1_clear_autoload_progress_units(void)
 static void project_v1_prepare_autoload_progress_units(const ProjectSaveV1 *project)
 {
     project_v1_clear_autoload_progress_units();
-    if ((project == 0)
-        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if (project == 0)
     {
         return;
     }
@@ -411,8 +408,7 @@ static uint16_t project_v1_autoload_slot_units(uint16_t index,
 static uint16_t project_v1_sample_autoload_find_multi_slot(const ProjectSaveV1 *project,
                                                            const char *path)
 {
-    if ((project == 0) || (path == 0) || (path[0] == '\0')
-        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if ((project == 0) || (path == 0) || (path[0] == '\0'))
     {
         return MULTI_SAMPLE_POOL_INVALID_ID;
     }
@@ -448,8 +444,7 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
         }
     }
 
-    if ((project == 0)
-        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if (project == 0)
     {
         return;
     }
@@ -495,8 +490,7 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
 static void project_v1_ram_restore_autoload_slots(const ProjectSaveV1 *project)
 {
     sampler_ram_pool_reset();
-    if ((project == 0)
-        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if (project == 0)
     {
         return;
     }
@@ -1146,8 +1140,7 @@ uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_pro
     memset(out_progress, 0, sizeof(*out_progress));
     out_progress->complete = 1U;
 
-    if ((g_project_autoload_progress_active == 0U)
-        || (g_project_work.sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    if (g_project_autoload_progress_active == 0U)
     {
         return 1U;
     }

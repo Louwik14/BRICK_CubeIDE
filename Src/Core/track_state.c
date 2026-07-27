@@ -30,30 +30,9 @@ static void track_state_normalize_config(ui_track_config_t *config)
         return;
     }
 
-    if ((config->family == UI_TRACK_FAMILY_SYNTH)
-            && (config->type == UI_TRACK_TYPE_SAMPLER))
-    {
-        config->family = UI_TRACK_FAMILY_SAMPLER;
-        config->type = UI_TRACK_TYPE_ONE_SHOT;
-        return;
-    }
-
     if ((config->family == UI_TRACK_FAMILY_SAMPLER)
-            && (config->type == UI_TRACK_TYPE_SAMPLER))
-    {
-        config->type = UI_TRACK_TYPE_ONE_SHOT;
-        return;
-    }
-
-    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
-            && (config->type == UI_TRACK_TYPE_SLICER))
-    {
-        config->type = UI_TRACK_TYPE_ONE_SHOT;
-        return;
-    }
-
-    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
-            && ((config->type == UI_TRACK_TYPE_CLIP)
+            && ((config->type == UI_TRACK_TYPE_RAM)
+                || (config->type == UI_TRACK_TYPE_STREAM)
                 || (config->type == UI_TRACK_TYPE_LOOPER)
                 || (config->type == UI_TRACK_TYPE_MULTI)))
     {

@@ -21,8 +21,22 @@ typedef struct
     uint8_t lock_count;
     uint8_t trig;
     uint8_t lock_set_mask;
-    uint8_t reserved[3];
+    uint8_t roll;
+    uint8_t reserved[2];
 } seq_step_t;
+
+typedef enum
+{
+    SEQ_STEP_ROLL_OFF = 0,
+    SEQ_STEP_ROLL_1_20,
+    SEQ_STEP_ROLL_1_24,
+    SEQ_STEP_ROLL_1_32,
+    SEQ_STEP_ROLL_1_40,
+    SEQ_STEP_ROLL_1_48,
+    SEQ_STEP_ROLL_1_64,
+    SEQ_STEP_ROLL_1_80,
+    SEQ_STEP_ROLL_COUNT
+} seq_step_roll_t;
 
 typedef struct
 {
@@ -82,6 +96,11 @@ uint8_t seq_model_load_project(const seq_project_data_t *project);
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig);
+uint8_t seq_model_get_step_roll(seq_track_id_t track, seq_step_id_t step);
+void seq_model_set_step_roll(seq_track_id_t track, seq_step_id_t step, uint8_t roll);
+uint16_t seq_model_step_roll_divisor(uint8_t roll);
+const char *seq_model_step_roll_label(uint8_t roll);
+uint8_t seq_model_step_roll_is_emphasized(uint8_t roll);
 uint8_t seq_model_get_track_page(seq_track_id_t track);
 void seq_model_set_track_page(seq_track_id_t track, uint8_t page);
 void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps);

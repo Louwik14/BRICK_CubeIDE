@@ -46,7 +46,7 @@ static uint8_t param_backend_ctx_is_sampler_clip_or_looper(const track_runtime_c
     }
 
     return (uint8_t)(((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP)
+                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
                           || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
 }
 
@@ -602,7 +602,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         {
             uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
             uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 if (param_backend_stream_backend_from_global_selector(value,
                                                                       &global_slot,
@@ -698,7 +698,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_loop_start(track, param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -709,7 +709,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_clip_source_bpm(track, param_backend_clamp_value(value, 40.0f, 300.0f));
             return 1U;
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -721,7 +721,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                                                         (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_PITCH:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -732,7 +732,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_clip_pitch(track, param_backend_clamp_value(value, -12.0f, 12.0f));
             return 1U;
         case PARAM_SAMPLER_CLIP_PLAY_MODE:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -744,7 +744,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                                                       (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_LOOP:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -759,7 +759,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         {
             const uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
 
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -775,7 +775,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         {
             uint8_t grain_index;
 
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -795,7 +795,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             uint8_t grain_index;
             uint8_t hop_index;
 
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }
@@ -818,7 +818,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         {
             const uint8_t search_index = param_backend_clip_search_index(value);
 
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
                 return 0U;
             }

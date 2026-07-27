@@ -361,60 +361,60 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             }
             return 1U;
         case PARAM_SAMPLER_START:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_start(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_END:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_end(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_LOOP_START:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_loop_start(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_MODE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 3.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_TUNE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_tune(track, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
         {
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             static const uint8_t counts[] = {0U, 2U, 4U, 8U, 16U, 32U, 64U};
             const uint8_t idx = (uint8_t)(mod_destination_clampf(value, 0.0f, 6.0f) + 0.5f);
             brick6_sampler_runtime_set_slice_count(track, counts[idx]);
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_source_bpm(track, mod_destination_clampf(value, 40.0f, 300.0f));
             return 1U;
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_sync_length(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 4.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_PITCH:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_pitch(track, mod_destination_clampf(value, -12.0f, 12.0f));
             return 1U;
         case PARAM_SAMPLER_CLIP_PLAY_MODE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_play_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 1.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_LOOP:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_loop(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 1.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_clip_stretch_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 2.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_CLIP_GRAIN:
         {
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP) { return 0U; }
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             static const uint16_t grain_frames[] = {384U, 512U, 768U, 1024U, 1536U, 2048U};
             const uint8_t idx = (uint8_t)(mod_destination_clampf(value, 0.0f, 5.0f) + 0.5f);
             brick6_sampler_runtime_set_clip_grain_size(track, grain_frames[idx]);
@@ -422,7 +422,7 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
         }
         case PARAM_SAMPLER_CLIP_HOP:
         case PARAM_SAMPLER_CLIP_SEARCH:
-            return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP) ? 1U : 0U;
+            return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM) ? 1U : 0U;
         case PARAM_SAMPLER_MULTI_LOOP:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MULTI) { return 0U; }
             brick6_sampler_runtime_set_multi_loop(track, (mod_destination_clampf(value, 0.0f, 1.0f) >= 0.5f) ? 1U : 0U);

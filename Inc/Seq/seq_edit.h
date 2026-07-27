@@ -16,6 +16,11 @@ uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_
 void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index);
 void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index);
 void seq_edit_step_hold_update(void);
+uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
+                                       seq_track_id_t *out_track,
+                                       seq_step_id_t *out_step,
+                                       uint8_t *out_roll);
 uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
                                     seq_step_id_t *out_steps,
                                     uint8_t max_steps,
