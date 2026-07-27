@@ -10,8 +10,6 @@
 
 static uint8_t g_project_slot_has_data[PROJECT_V1_SLOT_COUNT];
 UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
-/* ProjectSaveV1 is too large for stack; project SD access is serialized by sd_access_gate. */
-UI_SDRAM static ProjectSaveV1 g_project_io_buffer;
 static project_sd_bank_error_t g_project_sd_last_error;
 typedef struct
 {
@@ -265,6 +263,36 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
                 }
             }
         }
+    }
+
+    return 1U;
+}
+
+static uint8_t project_sd_read_and_checksum_discard(FIL *fp, uint32_t byte_count, uint32_t *io_checksum)
+{
+    if ((fp == 0) || (io_checksum == 0))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    uint32_t remaining = byte_count;
+    while (remaining != 0U)
+    {
+        const UINT chunk = (remaining > sizeof(g_project_slot_buffer))
+            ? (UINT)sizeof(g_project_slot_buffer)
+            : (UINT)remaining;
+        UINT br = 0U;
+        if ((f_read(fp, &g_project_slot_buffer, chunk, &br) != FR_OK) || (br != chunk))
+        {
+            project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+            return 0U;
+        }
+
+        *io_checksum = project_sd_checksum_accumulate(*io_checksum,
+                                                      (const uint8_t *)&g_project_slot_buffer,
+                                                      (uint32_t)chunk);
+        remaining -= (uint32_t)chunk;
     }
 
     return 1U;
@@ -535,16 +563,11 @@ uint8_t project_sd_bank_commit_slot_patterns(uint8_t project_slot)
         goto done;
     }
 
-    if ((f_read(&fp, &g_project_io_buffer, sizeof(g_project_io_buffer), &br) != FR_OK)
-        || (br != sizeof(g_project_io_buffer)))
+    if (project_sd_read_and_checksum_discard(&fp, sizeof(ProjectSaveV1), &checksum) == 0U)
     {
-        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);        (void)f_close(&fp);
+        (void)f_close(&fp);
         goto done;
     }
-
-    checksum = project_sd_checksum_accumulate(checksum,
-                                              (const uint8_t *)&g_project_io_buffer,
-                                              sizeof(g_project_io_buffer));
     if (project_sd_walk_pattern_records(&fp, 0U, 0, &checksum, &has_pattern_changes) == 0U)
     {        (void)f_close(&fp);
         goto done;
@@ -841,17 +864,11 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
         goto done;
     }
 
-    if ((f_read(&fp, &g_project_io_buffer, sizeof(g_project_io_buffer), &br) != FR_OK)
-        || (br != sizeof(g_project_io_buffer)))
+    if (project_sd_read_and_checksum_discard(&fp, sizeof(ProjectSaveV1), &checksum) == 0U)
     {
-        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
         (void)f_close(&fp);
         goto done;
     }
-
-    checksum = project_sd_checksum_accumulate(checksum,
-                                              (const uint8_t *)&g_project_io_buffer,
-                                              sizeof(g_project_io_buffer));
     has_pattern_changes = 0U;
     if (project_sd_walk_pattern_records(&fp, 0U, 0, &checksum, &has_pattern_changes) == 0U)
     {

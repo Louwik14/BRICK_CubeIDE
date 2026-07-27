@@ -103,7 +103,7 @@ Autorite conversion WAV import Sampler:
 - `sd_access_gate` utilise le client exclusif `SD_ACCESS_CLIENT_WAV_CONVERT` tenu pendant toute la conversion; preview, sample cache et autres clients SD sont exclus pendant cette fenetre.
 - Refus de demarrage si record/finalize/export Looper actif, si `sample_cache` a du travail SD pending, ou si le gate SD n'est pas disponible.
 - La conversion ne modifie pas `sample_cache`, `sample_page_cache`, le streamer ou le runtime audio; apres conversion, l'import relance `sample_pool_load()` sur le path original.
-- Placement memoire: le contexte `g_wav_convert` et le pack buffer `g_wav_convert_pack` sont en SDRAM dediee `STORAGE_SCRATCH_SDRAM`; ils sont froids, FatFs/SD uniquement, hors IRQ audio et non DMA-owned.
+- Placement memoire: le contexte `g_wav_convert` est en SDRAM dediee `STORAGE_SCRATCH_SDRAM`; le pack buffer utilise `g_storage_shared_io`, scratch I/O commun aux conversions WAV et a l'export Looper RAW. Ces donnees sont froides, FatFs/SD uniquement, hors IRQ audio et non DMA-owned.
 
 Autorite catalogue WAV Settings/Sampler:
 - `wav_loader_catalog_init_load()` valide au boot le fichier persistant `0:/BRICK/SAMPLE.CAT` (magic/version/entry_size/count/checksum) et ne charge plus la table complete en RAM; aucun scan de `0:/Samples` n'est fait au boot.
@@ -178,7 +178,7 @@ Autorite writer SD audio multi-client:
 - `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`; en SAMPLE_WAV, elle patch le header puis sync/close/rename.
 - La transition `SAMPLE_WAV TAKE_READY -> Rec Edit` est RAM-only: copie du path finalise, frames, trim, vue et demandes cache. Si le path finalise est le fichier writer temporaire `0:/PROJECT/REC/AUDIOREC_TMP.WAV`, aucune demande `.wavecache` n'est emise; les services SD Rec Edit (`overview/editor cache`) restent differes pour empecher une lecture FatFs dans la meme passe UI que l'entree Rec Edit.
 - Les producteurs audio poussent uniquement vers les rings RAM; le hook Z1 appelle `multi_record_writer_push_audio_block_from_irq` depuis `mixer_process` seulement quand le client concerne est en `RECORDING` et que son autorite runtime a active la capture. Pour Audio Rec, `sample_capture_audio_hook_is_enabled()` devient vrai uniquement apres REC global + transport/quant, jamais sur le seul `ARM=REC`.
-- Placement memoire: les rings producteurs restent en `SDRAM_RECORDER`; le buffer pack PCM24 `g_pcm24_pack`, utilise seulement par `multi_record_writer_service()` hors IRQ, est en SDRAM dediee `RECORDER_SCRATCH_SDRAM`.
+- Placement memoire: les 2 rings producteurs actifs restent en `SDRAM_RECORDER`, un pour Looper RAW client 0 et un pour Audio Rec / Sample Capture client 1; le buffer pack PCM24 `g_pcm24_pack`, utilise seulement par `multi_record_writer_service()` hors IRQ, est en SDRAM dediee `RECORDER_SCRATCH_SDRAM`.
 - `multi_record_writer_any_active()` garde les operations globales incompatibles avec toute prise/finalisation audio; les guards pattern utilisent le filtre backend Looper RAW pour laisser Audio Rec `SAMPLE_WAV` cohabiter avec `pattern_load_request/service`.
 
 Politique SD pendant record audio actif/finalizing:
@@ -295,7 +295,6 @@ Points de lecture principaux:
 ### `pattern_sd_bank.c`
 - `g_slot_has_data[16][16]`, `g_slot_meta_cache_valid[16][16]`: cache presence pattern slots en D1.
 - `g_slot_checksum_cache[16][16]`: cache checksum pattern slots en `STORAGE_STATE_SDRAM`, metadata froide hors IRQ audio et non DMA-owned.
-- `g_boot_pattern` + `g_boot_pattern_valid`: fallback de chargement si fichier slot absent.
 - `g_pattern_write_chunk[4096]`: tampon chunk write pour payload pattern.
 
 ### `project_v1.c`
@@ -307,20 +306,18 @@ Points de lecture principaux:
 - `g_project_last_error`, `g_project_last_sd_error`: etat erreur expose API.
 
 ### `wav_loader.c`
-- `g_wav_pcm` reste en `AUDIO_COLD_SDRAM` pour le buffer PCM charge.
+- Le buffer legacy `g_wav_pcm` et son chemin `wav_loader_load_to_sdram` sont retires; le chargement audio produit passe par les backends Sampler/preview/stream/RAM dedies.
 - `g_wav_catalog_views` garde deux pages LRU de catalogue Sampler en `UI_SDRAM`; le catalogue complet reste dans `0:/BRICK/SAMPLE.CAT`.
-- `g_wav_fs` est place en `STORAGE_STATE_SDRAM`: handle FatFs froid, non DMA-owned, monte par service storage hors IRQ audio.
 - Le catalogue scanne `0:/Samples` uniquement pendant `REFRESH` / `REBUILD`; les dossiers sont ecrits avant les fichiers dans chaque dossier pour que le browser les affiche en tete.
 
 ### `project_sd_bank.c`
 - `g_project_slot_has_data[16]`: presence des slots projet.
-- `g_project_slot_buffer` (`PatternSaveV1`): buffer temporaire records pattern lors save/load.
-- `g_project_io_buffer` (`ProjectSaveV1`): buffer I/O projet froid en `UI_SDRAM`, utilise pour revalidation/compare sans allouer le payload projet massif sur la stack.
+- `g_project_slot_buffer` (`PatternSaveV1`): scratch sequentiel pour records pattern lors save/load et pour checksum streaming du bloc projet live; aucun `ProjectSaveV1` complet n'est conserve par le backend SD.
 - `g_project_sd_last_error`: erreur SD detaillee.
 
 ### Placement SDRAM froid storage/control
 - `CONTROL_STATE_SDRAM` / `.control_state_sdram`: etat control low-rate non IRQ audio; utilise pour `g_param_macro_sources`.
-- `STORAGE_STATE_SDRAM` / `.storage_state_sdram`: metadata/handles storage non DMA-owned et hors IRQ audio; utilise pour `g_slot_checksum_cache`, `g_pattern_slot_meta`, `g_sd_preview`, `g_wav_fs`, `g_sd_fs`, `g_sample_pool_fs`.
+- `STORAGE_STATE_SDRAM` / `.storage_state_sdram`: metadata/handles storage non DMA-owned et hors IRQ audio; utilise pour `g_slot_checksum_cache`, `g_pattern_slot_meta`, `g_sd_preview`, `g_sd_fs`, `g_sample_pool_fs`.
 - `UI_STATE_SDRAM` reste reserve aux etats UI explicites; `g_looper_save_diag` y est place car diagnostic UI froid.
 
 ### `boot_context_flash.c`
@@ -667,8 +664,7 @@ Pression RAM ring interne `int32_t stereo`:
 - 4 s utiles par client: 1536000 octets utiles, 1536008 octets alloues avec frame sentinel.
 
 Exemples de RAM ring brute:
-- 4 clients: environ 768 KB pour 0.5 s, 1.54 MB pour 1 s, 3.07 MB pour 2 s.
-- 4 clients produit courant: `12001` frames allouees/client, environ 384 KB pour 250 ms utiles.
+- 2 clients produit courant: `12001` frames allouees/client, environ 192 KB par client et 384 KB total pour 250 ms utiles.
 - 8 clients: environ 1.54 MB pour 0.5 s, 3.07 MB pour 1 s, 6.14 MB pour 2 s.
 - 16 clients: environ 3.07 MB pour 0.5 s, 6.14 MB pour 1 s, 12.29 MB pour 2 s.
 
@@ -795,12 +791,12 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le SAVE RAW exporte directement le reservoir RAW vers le path final et laisse le playback transient RAW courant attache au reservoir.
 - La notification catalogue apres SAVE reste seulement pour l'affichage `Settings > SAMPLER > SD`; elle ne devient pas l'autorite du playback Looper.
 - Le service SD reste ordonne par `brick6_app_process`: le writer record est servi avant tout pour terminer un drain/finalize deja actif; quand un SAVE RAW -> WAV est actif, l'export devient prioritaire avec budget `516096U` et suspend sample cache, refill Looper, pattern load et preview SD. Hors export actif, l'ordre normal redevient sample cache, refill Looper, export opportuniste si aucun refill Looper n'est pending, puis pattern load. `sample_cache_service` ne service que la plage hot `0..SAMPLE_CACHE_HOT_SAMPLE_CAPACITY-1`; le Looper service la plage transient `SAMPLE_PAGE_CACHE_LOOPER_ID_BASE..SAMPLE_PAGE_CACHE_LOOPER_ID_BASE+SEQ_TRACK_COUNT-1`.
-- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le contexte `g_looper_raw_export`, le buffer I/O SAVE `g_looper_raw_export_io` et le diagnostic `g_looper_raw_export_diag` sont froids, hors IRQ, places en SDRAM dediee `RECORDER_SCRATCH_SDRAM` et alignes 32 pour preserver RAM_D1 aux etats audio hot. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
+- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le contexte `g_looper_raw_export` et le diagnostic `g_looper_raw_export_diag` restent froids, hors IRQ, places en SDRAM dediee `RECORDER_SCRATCH_SDRAM`; le buffer I/O SAVE utilise `g_storage_shared_io`, scratch I/O commun aux conversions WAV et a l'export Looper RAW. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
 - Les logs UART SAVE Looper sont des traces de debug compile-time desactivees par defaut (`LOOPER_STORAGE_EXPORT_UART_LOG=0`); le comportement produit garde uniquement le diagnostic froid `g_looper_raw_export_diag`.
 - Le demarrage SAVE refuse un writer recording/finalizing, refuse transport running cote UI, stoppe une preview SD active avant reservation du path final, puis bloque les entrees project/pattern/import/scan via `looper_storage_raw_export_is_active()`. L'export ne cede plus a `sample_cache_has_pending_sd_work()`; un refus prolonge avant ouverture bascule en erreur `WAIT_TIMEOUT` pour ne pas laisser l'etat actif indefiniment.
 - Limite restante: le refill Looper partage le budget global du `sample_page_cache`; une page manquante produit un silence local jusqu'au prochain refill.
 - Le silence de page manquante ne bloque pas la position de lecture Looper: le playhead continue, et la demande de pages couvre une fenetre ahead modulo pour anticiper les pages suivantes et le wrap de boucle.
-- Le premier playback `PLAY=Auto` post-REC ne rattrape plus un retard par avance de playhead et ne depend plus de `TAKE_READY` quand START_RAM est disponible. Un preroll RAM statique de 1 s stereo `int32_t`, capture pendant le REC depuis le flux deja envoye au writer, sert de source de depart pendant que le RAW/page-cache se prepare. Le RAW systeme reste l'autorite complete/backing storage; si le backing RAW n'est pas encore attache a la sortie du preroll, l'audio ne bloque pas et le playhead attend. Une fois le backing RAW attache, les miss page-cache relevent du chemin normal Looper: silence local, playhead avance, refill hors IRQ.
+- Le premier playback `PLAY=Auto` post-REC ne rattrape plus un retard par avance de playhead et ne depend plus de `TAKE_READY` quand START_RAM est disponible. Un preroll RAM statique de 0.25 s stereo `int32_t`, capture pendant le REC depuis le flux deja envoye au writer, sert de source de depart pendant que le RAW/page-cache se prepare. Le RAW systeme reste l'autorite complete/backing storage; si le backing RAW n'est pas encore attache a la sortie du preroll, l'audio ne bloque pas et le playhead attend. Une fois le backing RAW attache, les miss page-cache relevent du chemin normal Looper: silence local, playhead avance, refill hors IRQ.
 - Le preroll RAM n'est pas une source de boucle permanente: apres le premier bloc lu depuis le RAW/page-cache, le runtime marque le relais RAW comme effectue et interdit toute reutilisation du preroll aux wraps suivants. La frame 0 apres wrap doit donc venir du RAW/page-cache.
 
 ## Addendum 2026-05-13 - rupture stockage retrait buffer master
@@ -999,4 +995,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `SOFT` n'est plus un modele Stack actif: l'ancien index 0 devient `SINFD`; `TRIFD` est ajoute a la liste modele fold dediee. Aucune migration prototype des anciennes valeurs `SOFT` n'est conservee.
 Addendum 2026-07-26 - Step ROLL:
 - `pattern_v1_step_t` ajoute `roll` pour persister le retrig par step, separe de `trig`, `LEN` et des p-locks.
+
+Addendum 2026-07-27 - simplification buffers Pattern/Project:
+- Le load pattern SD ecrit directement dans `pattern_live_ram.c::g_pattern_load_ready`; l'ancien snapshot intermediaire `g_pattern_load_work` est retire.
+- `pattern_sd_bank` ne conserve plus de copie permanente du boot pattern. Le fallback vers le boot snapshot appartient a `pattern_live_ram`, unique proprietaire du snapshot boot.
+- `project_sd_bank` ne conserve plus de `ProjectSaveV1` complet pour les verifications commit/equivalence; le checksum du bloc project live est calcule par lecture sequentielle dans le scratch pattern SD existant.
 

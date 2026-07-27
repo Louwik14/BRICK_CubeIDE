@@ -129,9 +129,9 @@ Z0 appelle principalement:
   - Ecriture: `sample_pool` lors du chargement WAV ou du restore projet.
   - Role: arena residante des samples projet, dimensionnee pour absorber le reste disponible de la SDRAM apres les reserves fixes; le boot n'injecte plus de sample par defaut.
 - `g_record_rings[...]` dans `multi_record_writer.c` (SDRAM_RECORDER int32 stereo):
-  - Role: rings RAM du writer Looper RAW multi-client, draines hors IRQ.
+  - Role: deux rings RAM du writer audio, client 0 Looper RAW et client 1 Audio Rec / Sample Capture, draines hors IRQ.
 - `g_looper_preroll_pcm[...]` dans `brick6_looper_runtime.c` (SDRAM_RECORDER int32 stereo):
-  - Role: tampon de demarrage 1 s post-REC Looper avant disponibilite RAW/page-cache.
+  - Role: tampon de demarrage 0.25 s post-REC Looper avant disponibilite RAW/page-cache.
 
 ### `Src/Core/engine_tasklet.c` (cadence non-RTOS rattachee Z0)
 - `volatile uint32_t engine_tick_count`:
@@ -315,7 +315,7 @@ Z0 appelle principalement:
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
 - Pendant une fenetre Sampler STREAM protegee active, `sd_access_gate` refuse toute nouvelle possession SD autre que `SD_ACCESS_CLIENT_SAMPLE_STREAM`: preview, convert/import, waveform/editor cache, pattern/project save/load et chargements samples non-stream sont differes tant que les locks de fenetre voix existent.
 - Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
-- Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
+- Dimensionnement record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 3.072 MiB pour les 2 clients statiques actifs. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
 
 ## 13. Addendum - Audio Rec / Rec Edit skeleton
 

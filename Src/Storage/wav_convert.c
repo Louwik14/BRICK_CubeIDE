@@ -7,6 +7,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_shared_io.h"
 #include "Storage/wav_audio_stream.h"
 #include "ff.h"
 
@@ -16,12 +17,11 @@
 #define WAV_CONVERT_TARGET_BYTES_PER_FRAME 6U
 #define WAV_CONVERT_WAV_DATA_OFFSET_BYTES 512U
 #define WAV_CONVERT_WAV_JUNK_BYTES 460U
-#define WAV_CONVERT_PACK_BYTES (512U * 126U)
-#define WAV_CONVERT_PACK_FRAMES (WAV_CONVERT_PACK_BYTES / WAV_CONVERT_TARGET_BYTES_PER_FRAME)
+#define WAV_CONVERT_PACK_FRAMES (STORAGE_SHARED_IO_BYTES / WAV_CONVERT_TARGET_BYTES_PER_FRAME)
 #define WAV_CONVERT_SERVICE_PACK_FRAMES 1024U
 #define WAV_CONVERT_PATH_MAX 64U
 
-_Static_assert((WAV_CONVERT_PACK_FRAMES * WAV_CONVERT_TARGET_BYTES_PER_FRAME) == WAV_CONVERT_PACK_BYTES,
+_Static_assert((WAV_CONVERT_PACK_FRAMES * WAV_CONVERT_TARGET_BYTES_PER_FRAME) == STORAGE_SHARED_IO_BYTES,
                "WAV convert pack chunk must be frame-aligned");
 _Static_assert(WAV_CONVERT_SERVICE_PACK_FRAMES <= WAV_CONVERT_PACK_FRAMES,
                "WAV convert service slice must fit the pack buffer");
@@ -64,8 +64,6 @@ typedef struct
 } wav_convert_ctx_t;
 
 STORAGE_SCRATCH_SDRAM static wav_convert_ctx_t g_wav_convert;
-STORAGE_SCRATCH_SDRAM static uint8_t
-    g_wav_convert_pack[WAV_CONVERT_PACK_FRAMES * WAV_CONVERT_TARGET_BYTES_PER_FRAME];
 
 static void wav_convert_write_le16(uint8_t *dst, uint16_t value)
 {
@@ -443,7 +441,7 @@ static uint8_t wav_convert_flush_pack(uint32_t byte_budget)
     }
 
     UINT bw = 0U;
-    const FRESULT fr = f_write(&g_wav_convert.dst, g_wav_convert_pack, bytes, &bw);
+    const FRESULT fr = f_write(&g_wav_convert.dst, g_storage_shared_io, bytes, &bw);
     if ((fr != FR_OK) || (bw != bytes))
     {
         wav_convert_fail((fr == FR_DENIED) ? WAV_CONVERT_ERROR_NO_SPACE : WAV_CONVERT_ERROR_WRITE_FAIL);
@@ -511,8 +509,8 @@ static uint8_t wav_convert_copy_phase(uint32_t byte_budget)
         {
             break;
         }
-        wav_convert_pack_frame(&g_wav_convert_pack[(g_wav_convert.pack_fill_frames + packed)
-                                                   * WAV_CONVERT_TARGET_BYTES_PER_FRAME],
+        wav_convert_pack_frame(&g_storage_shared_io[(g_wav_convert.pack_fill_frames + packed)
+                                                    * WAV_CONVERT_TARGET_BYTES_PER_FRAME],
                                left,
                                right);
     }

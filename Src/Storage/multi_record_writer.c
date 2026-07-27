@@ -57,6 +57,7 @@ static multi_record_writer_client_t g_record_clients[MULTI_RECORD_WRITER_MAX_CLI
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_pcm24_pack[MRW_PACK_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
 _Static_assert(MULTI_RECORD_WRITER_MAX_CLIENTS > 0U, "record writer needs at least one client");
+_Static_assert(MULTI_RECORD_WRITER_MAX_CLIENTS == 2U, "record writer has Looper RAW and Audio Rec clients only");
 _Static_assert(MULTI_RECORD_WRITER_RING_FRAMES > 1U, "record writer ring needs spare frame");
 _Static_assert(MULTI_RECORD_WRITER_SAMPLE_RATE_HZ == 48000U, "record writer target rate is fixed");
 _Static_assert(MULTI_RECORD_WRITER_CHANNELS == 2U, "record writer target is stereo");

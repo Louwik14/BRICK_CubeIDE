@@ -44,7 +44,6 @@ typedef enum
 UI_SDRAM static PatternSaveV1 g_current_pattern;
 UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
-UI_SDRAM static PatternSaveV1 g_pattern_load_work;
 UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
 STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
@@ -815,7 +814,7 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
     g_pattern_load_bank = bank;
     g_pattern_load_pattern = pattern;
     g_pattern_load_last_error = 0U;
-    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
+    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
 
     const uint8_t has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
     g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
@@ -858,14 +857,18 @@ void pattern_load_service(uint32_t byte_budget)
         sd_preview_stop();
     }
 
-    if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_work) == 0U)
+    if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_ready) == 0U)
     {
-        g_pattern_load_state = PATTERN_LOAD_ERROR;
-        g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
-        return;
+        if (pattern_sd_bank_slot_has_data(g_pattern_load_bank, g_pattern_load_pattern) != 0U)
+        {
+            g_pattern_load_state = PATTERN_LOAD_ERROR;
+            g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
+            return;
+        }
+
+        memcpy(&g_pattern_load_ready, &g_boot_pattern, sizeof(g_pattern_load_ready));
     }
 
-    memcpy(&g_pattern_load_ready, &g_pattern_load_work, sizeof(g_pattern_load_ready));
     g_pattern_load_state = PATTERN_LOAD_READY;
     g_pattern_load_last_error = 0U;
 }
@@ -921,7 +924,6 @@ void pattern_load_cancel(void)
     g_pattern_load_bank = 0U;
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
-    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
     memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
 }
 
@@ -1145,7 +1147,6 @@ void pattern_live_init(void)
     memset(&g_current_pattern, 0, sizeof(g_current_pattern));
     memset(&g_next_pattern, 0, sizeof(g_next_pattern));
     memset(&g_boot_pattern, 0, sizeof(g_boot_pattern));
-    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
     memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
     memset(&g_pattern_slot_meta, 0, sizeof(g_pattern_slot_meta));
     g_active_bank = 0U;
@@ -1170,11 +1171,11 @@ void pattern_live_init(void)
     {
         memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
         memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
-        pattern_sd_bank_init(&g_boot_pattern);
+        pattern_sd_bank_init();
     }
     else
     {
-        pattern_sd_bank_init(0);
+        pattern_sd_bank_init();
     }
 
     for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)

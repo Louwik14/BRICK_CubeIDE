@@ -24,8 +24,6 @@ typedef struct __attribute__((packed))
 static uint8_t g_slot_has_data[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static uint8_t g_slot_meta_cache_valid[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 STORAGE_STATE_SDRAM static uint32_t g_slot_checksum_cache[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
-UI_SDRAM static PatternSaveV1 g_boot_pattern;
-static uint8_t g_boot_pattern_valid;
 static DMA_BUFFER uint8_t g_pattern_write_chunk[PATTERN_WRITE_CHUNK_BYTES];
 
 static uint8_t pattern_sd_slot_is_valid(uint8_t bank, uint8_t pattern)
@@ -142,18 +140,11 @@ static uint8_t pattern_sd_scan_slots(void)
     return 1U;
 }
 
-void pattern_sd_bank_init(const PatternSaveV1 *boot_pattern)
+void pattern_sd_bank_init(void)
 {
     memset(&g_slot_has_data, 0, sizeof(g_slot_has_data));
     memset(&g_slot_meta_cache_valid, 0, sizeof(g_slot_meta_cache_valid));
     memset(&g_slot_checksum_cache, 0, sizeof(g_slot_checksum_cache));
-    g_boot_pattern_valid = 0U;
-
-    if (boot_pattern != 0)
-    {
-        memcpy(&g_boot_pattern, boot_pattern, sizeof(g_boot_pattern));
-        g_boot_pattern_valid = 1U;
-    }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATTERN) == 0U)
     {
@@ -321,10 +312,9 @@ uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *
     sd_access_trace_end("pattern_f_open_read", (int)fr_open, 0U);
     if (fr_open != FR_OK)
     {
-        if (g_boot_pattern_valid != 0U)
+        if ((fr_open == FR_NO_FILE) || (fr_open == FR_NO_PATH))
         {
-            memcpy(out_pattern, &g_boot_pattern, sizeof(*out_pattern));
-            ok = 1U;
+            pattern_sd_meta_cache_store(bank, pattern, 0U, 0U);
         }
         goto done;
     }

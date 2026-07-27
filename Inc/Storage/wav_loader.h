@@ -58,7 +58,6 @@ typedef struct
     FRESULT fatfs_result;
 } wav_loader_catalog_diag_t;
 
-bool wav_loader_load_to_sdram(const char *path, wav_info_t *info);
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len);
 void wav_loader_catalog_init_load(void);
 void wav_loader_catalog_refresh(void);
@@ -78,5 +77,3 @@ void wav_loader_catalog_mark_stale(void);
 uint8_t wav_loader_catalog_find_path(const char *path, uint16_t *out_index, wav_loader_catalog_entry_t *out_entry);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint16_t index);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get_child(uint16_t parent_id, uint16_t child_index);
-const float *wav_loader_get_interleaved_buffer(void);
-uint32_t wav_loader_get_capacity_frames(void);

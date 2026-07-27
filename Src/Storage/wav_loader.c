@@ -25,19 +25,14 @@
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/wav_audio_codec.h"
-#include "Storage/wav_audio_stream.h"
 #include "wav_parser.h"
 
-#define WAV_BUFFER_FRAMES (48000U)
-#define WAV_BUFFER_SAMPLES (WAV_BUFFER_FRAMES * 2U)
 #define WAV_LOADER_CATALOG_MAGIC (0x314C3657UL) /* W6L1 */
 #define WAV_LOADER_CATALOG_VERSION (1U)
 #define WAV_LOADER_CATALOG_PATH "0:/BRICK/SAMPLE.CAT"
 #define WAV_LOADER_SAMPLE_ROOT "0:/Samples"
 #define WAV_LOADER_CATALOG_VIEW_CACHE_COUNT (2U)
 
-static AUDIO_COLD_SDRAM float g_wav_pcm[WAV_BUFFER_SAMPLES];
 static uint16_t g_wav_catalog_count;
 static uint8_t g_wav_catalog_loaded;
 static uint8_t g_wav_catalog_truncated;
@@ -47,46 +42,8 @@ static uint8_t g_wav_catalog_last_io_error;
 static uint8_t g_wav_catalog_path_truncated;
 STORAGE_STATE_SDRAM static wav_loader_catalog_diag_t g_wav_catalog_diag;
 
-/**
- * @brief Point d'entrÃ©e pcm24_to_float.
- *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  pcm24_to_float.
- *
- * @param p ParamÃ¨tre d'entrÃ©e de l'API.
- *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-const float *wav_loader_get_interleaved_buffer(void)
-{
-    return g_wav_pcm;
-}
-
-/**
- * @brief Point d'entrÃ©e wav_loader_get_capacity_frames.
- *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  wav_loader_get_capacity_frames.
- *
- *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-uint32_t wav_loader_get_capacity_frames(void)
-{
-    return WAV_BUFFER_FRAMES;
-}
-
 
 #if WAV_LOADER_HAS_FATFS
-STORAGE_STATE_SDRAM static FATFS g_wav_fs;
-static uint8_t g_wav_fs_mounted;
-
 /**
  * @brief Point d'entrÃ©e wav_ext_is_wav.
  *
@@ -1069,143 +1026,5 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
     return true;
 #else
     return false;
-#endif
-}
-
-/**
- * @brief Point d'entrÃ©e wav_loader_load_to_sdram.
- *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  wav_loader_load_to_sdram.
- *
- * @param path ParamÃ¨tre d'entrÃ©e de l'API.
- * @param info ParamÃ¨tre d'entrÃ©e de l'API.
- *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
-{
-    uint32_t i;
-    wav_info_t local_info;
-    wav_info_t *const out_info = (info != 0) ? info : &local_info;
-
-    if ((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
-    {
-        return false;
-    }
-
-    for(i = 0U; i < WAV_BUFFER_SAMPLES; i++)
-        g_wav_pcm[i] = 0.0f;
-
-    memset(out_info, 0, sizeof(*out_info));
-
-#if WAV_LOADER_HAS_FATFS
-    FIL fp;
-    FRESULT fr;
-    uint32_t frames_loaded = 0U;
-
-    if(path == 0)
-    {        return false;
-    }
-
-    if(g_wav_fs_mounted == 0U)
-    {
-        fr = f_mount(&g_wav_fs, "0:", 1U);
-        if(fr != FR_OK)
-        {            return false;
-        }
-        g_wav_fs_mounted = 1U;
-    }
-
-    fr = f_open(&fp, path, FA_READ);
-    if(fr != FR_OK)
-    {        return false;
-    }
-
-    if(!wav_parser_parse_info(&fp, out_info))
-    {
-        (void)f_close(&fp);        return false;
-    }
-    if(!((out_info->audio_format == 1U) || (out_info->audio_format == 65534U)))
-    {
-        (void)f_close(&fp);        return false;
-    }
-
-    if(!((out_info->channels == 1U) || (out_info->channels == 2U)))
-    {
-        (void)f_close(&fp);        return false;
-    }
-
-    if(!((out_info->bits_per_sample == 16U) || (out_info->bits_per_sample == 24U) || (out_info->bits_per_sample == 32U)))
-    {
-        (void)f_close(&fp);        return false;
-    }
-
-    if((out_info->block_align == 0U) || (out_info->sample_rate == 0U))
-    {
-        (void)f_close(&fp);        return false;
-    }
-
-    {
-        const uint32_t source_frames = out_info->data_size / out_info->block_align;
-        const uint32_t target_rate = 48000U;
-        const uint32_t frames_to_load = (source_frames == 0U)
-            ? 0U
-            : (uint32_t)(((uint64_t)source_frames * (uint64_t)target_rate
-                          + (uint64_t)out_info->sample_rate - 1U)
-                         / (uint64_t)out_info->sample_rate);
-
-        if (frames_to_load == 0U)
-        {
-            (void)f_close(&fp);            return false;
-        }
-
-        wav_audio_stream_t stream;
-        wav_audio_stream_init(&stream, &fp, out_info, target_rate);
-        if (wav_audio_stream_start(&stream, out_info->data_offset) == 0U)
-        {
-            (void)f_close(&fp);            return false;
-        }
-
-        while ((frames_loaded < frames_to_load) && (frames_loaded < WAV_BUFFER_FRAMES))
-        {
-            float left = 0.0f;
-            float right = 0.0f;
-            if (wav_audio_stream_next_frame(&stream, &left, &right) == 0U)
-            {
-                break;
-            }
-
-            g_wav_pcm[frames_loaded * 2U + 0U] = left;
-            g_wav_pcm[frames_loaded * 2U + 1U] = right;
-            frames_loaded++;
-        }
-
-        if ((frames_loaded == 0U) || (stream.io_error != 0U))
-        {
-            (void)f_close(&fp);            return false;
-        }
-
-        if (info != 0)
-        {
-            info->audio_format = 1U;
-            info->sample_rate = target_rate;
-            info->byte_rate = target_rate * 2U * sizeof(float);
-            info->channels = 2U;
-            info->block_align = 2U * sizeof(float);
-            info->bits_per_sample = 32U;
-            info->data_offset = 0U;
-            info->data_size = frames_loaded * (2U * sizeof(float));
-        }
-
-        (void)f_close(&fp);
-        return true;
-    }
-#else
-    (void)path;    return false;
 #endif
 }

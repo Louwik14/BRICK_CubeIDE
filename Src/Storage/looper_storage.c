@@ -5,6 +5,7 @@
 #include "Storage/multi_record_writer.h"
 #include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_shared_io.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "usart.h"
@@ -15,8 +16,6 @@
 
 #define LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES 512U
 #define LOOPER_STORAGE_WAV_JUNK_BYTES 460U
-#define LOOPER_STORAGE_EXPORT_CHUNK_BYTES 64512U
-#define LOOPER_STORAGE_EXPORT_IO_BYTES LOOPER_STORAGE_EXPORT_CHUNK_BYTES
 #define LOOPER_STORAGE_EXPORT_WAIT_LIMIT 1000U
 #define LOOPER_STORAGE_EXPORT_UART_LOG 0U
 
@@ -29,6 +28,9 @@
 #define LOOPER_STORAGE_EXPORT_PHASE_CLOSE_DST 6U
 #define LOOPER_STORAGE_EXPORT_PHASE_CLOSE_SRC 7U
 #define LOOPER_STORAGE_EXPORT_COMPARE_FRAMES 16U
+
+_Static_assert((STORAGE_SHARED_IO_BYTES % LOOPER_STORAGE_RAW_BYTES_PER_FRAME) == 0U,
+               "Looper export shared I/O chunk must be frame-aligned");
 
 static uint16_t g_looper_storage_save_counter = 0U;
 static uint8_t g_looper_storage_raw_available = 0U;
@@ -85,7 +87,6 @@ typedef struct
 
 RECORDER_SCRATCH_SDRAM static looper_storage_raw_export_ctx_t g_looper_raw_export;
 RECORDER_SCRATCH_SDRAM static looper_storage_raw_export_diag_t g_looper_raw_export_diag;
-RECORDER_SCRATCH_SDRAM static uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
 
 static void looper_storage_raw_export_log(const char *fmt, ...)
 {
@@ -697,7 +698,7 @@ uint8_t looper_storage_raw_export_start(uint8_t track_id,
         (unsigned)raw_slot,
         (unsigned long)recorded_frames,
         (unsigned long)(recorded_frames * LOOPER_STORAGE_RAW_BYTES_PER_FRAME),
-        (unsigned long)LOOPER_STORAGE_EXPORT_CHUNK_BYTES,
+        (unsigned long)STORAGE_SHARED_IO_BYTES,
         (unsigned long)LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES,
         g_looper_raw_export.raw_path,
         g_looper_raw_export.final_path);
@@ -841,9 +842,9 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             {
                 request_bytes = byte_budget - (byte_budget % LOOPER_STORAGE_RAW_BYTES_PER_FRAME);
             }
-            if (request_bytes > sizeof(g_looper_raw_export_io))
+            if (request_bytes > sizeof(g_storage_shared_io))
             {
-                request_bytes = sizeof(g_looper_raw_export_io);
+                request_bytes = sizeof(g_storage_shared_io);
             }
             request_bytes -= request_bytes % LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
             if (request_bytes == 0U)
@@ -855,7 +856,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             UINT br = 0U;
             uint32_t tr = HAL_GetTick();
             FRESULT fr = f_read(&g_looper_raw_export.src,
-                                g_looper_raw_export_io,
+                                g_storage_shared_io,
                                 request_bytes,
                                 &br);
             tr = HAL_GetTick() - tr;
@@ -875,7 +876,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
 
             UINT bw = 0U;
             uint32_t tw = HAL_GetTick();
-            fr = f_write(&g_looper_raw_export.dst, g_looper_raw_export_io, request_bytes, &bw);
+            fr = f_write(&g_looper_raw_export.dst, g_storage_shared_io, request_bytes, &bw);
             tw = HAL_GetTick() - tw;
             g_looper_raw_export.write_calls++;
             g_looper_raw_export.write_bytes += bw;
