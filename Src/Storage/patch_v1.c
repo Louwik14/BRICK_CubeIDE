@@ -217,6 +217,9 @@ static patch_v1_result_t patch_v1_capture_member(uint8_t track,
     out_member->group_link = (role == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
         ? track_state_get_voice_group_link(track)
         : 0U;
+    out_member->group_seq_link = (role == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+        ? track_state_get_voice_group_seq_link(track)
+        : 0U;
     memcpy(&out_member->sound, sound, sizeof(out_member->sound));
     memcpy(&out_member->tone, tone, sizeof(out_member->tone));
     patch_v1_capture_sampler_asset(tone, &out_member->asset);
@@ -524,6 +527,7 @@ static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV
     {
         (void)track_state_set_voice_group_spread(targets[0], patch->members[0].group_spread);
         (void)track_state_set_voice_group_link(targets[0], patch->members[0].group_link);
+        (void)param_registry_commit_voice_group_seq_link(targets[0], patch->members[0].group_seq_link);
     }
 
     for (uint8_t i = 0U; i < width; ++i)

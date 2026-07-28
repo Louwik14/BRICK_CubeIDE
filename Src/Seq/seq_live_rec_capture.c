@@ -12,6 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 
+#include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_output_guard.h"
@@ -255,9 +256,7 @@ static int32_t seq_live_rec_capture_select_voice_deterministic(seq_track_id_t tr
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
                                                           seq_live_rec_source_t source)
 {
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(track, &role_u8);
-    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
         return 0U;
     }
@@ -378,6 +377,11 @@ static uint8_t seq_live_rec_capture_upsert_play_param(seq_track_id_t track,
                                                        param_id_t param_id,
                                                        float value)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
     seq_param_slot_t param_slot = 0U;
     if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
@@ -399,6 +403,11 @@ static uint8_t seq_live_rec_capture_delete_play_param(seq_track_id_t track,
                                                        seq_step_id_t step,
                                                        param_id_t param_id)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
     seq_param_slot_t param_slot = 0U;
     if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
@@ -452,7 +461,7 @@ static uint8_t seq_live_rec_capture_restore_play_param(seq_track_id_t track,
                                                        param_id_t param_id,
                                                        const seq_live_rec_capture_saved_param_t *saved)
 {
-    if (saved == 0)
+    if ((saved == 0) || (seq_edit_track_sequence_is_locked(track) != 0U))
     {
         return 0U;
     }

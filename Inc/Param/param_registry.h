@@ -1,6 +1,7 @@
 #pragma once
 
 #include "param_store.h"
+#include "UI/ui_core.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,6 +103,9 @@ uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *c
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value);
 void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track);
+uint8_t param_registry_commit_voice_group_seq_link(uint8_t master_track, uint8_t seq_link);
+uint8_t param_registry_commit_voice_group_seq_link_bulk(const uint8_t seq_link[UI_TRACK_COUNT]);
+void param_registry_clear_track_runtime_state(uint8_t track);
 /* Fast path reserved for RT modulation, not a general apply entry point. */
 uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value);
 

@@ -65,7 +65,7 @@ static const ui_template_family_t g_ui_template_cfg_group_master_family = {
         },
         {
             .title = "GROUP",
-            .param_bank = { .params = { PARAM_CFG_GROUP_SPREAD, PARAM_CFG_GROUP_LINK, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_CFG_GROUP_SPREAD, PARAM_CFG_GROUP_SPREAD_KEYTRK, PARAM_CFG_GROUP_LINK, PARAM_CFG_GROUP_SEQ_LINK } },
         },
         {
             .title = "-",
@@ -152,6 +152,15 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
                                                                                 const ui_template_subpage_t *subpage,
                                                                                 param_id_t id)
 {
+    if ((subpage != NULL)
+            && (subpage->param_bank.params[0] == PARAM_CFG_GROUP_SPREAD)
+            && (subpage->param_bank.params[1] == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+            && (slot < 2U)
+            && ((id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP;
+    }
+
     if ((subpage == NULL)
             || (subpage->param_bank.params[0] != PARAM_CFG_TRACK)
             || (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF))
@@ -184,6 +193,31 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
         default:
             return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
+}
+
+static uint8_t ui_page_template_cfg_param_text(uint8_t slot,
+                                               param_id_t id,
+                                               float value,
+                                               char *out_name,
+                                               uint32_t out_name_len,
+                                               char *out_value,
+                                               uint32_t out_value_len)
+{
+    (void)value;
+    (void)out_value;
+    (void)out_value_len;
+
+    if ((slot == 0U) && (id == PARAM_CFG_GROUP_SPREAD) && (out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "AMT");
+        return 1U;
+    }
+    if ((slot == 1U) && (id == PARAM_CFG_GROUP_SPREAD_KEYTRK) && (out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "KEY");
+        return 1U;
+    }
+    return 0U;
 }
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
@@ -257,6 +291,7 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
     .widget_picker = ui_page_template_cfg_pick_widget,
     .custom_widget_picker = ui_page_template_cfg_pick_custom_widget,
     .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
+    .param_text = ui_page_template_cfg_param_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

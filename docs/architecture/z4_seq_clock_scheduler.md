@@ -779,3 +779,515 @@ Points factuels observes:
 
 - `Synth/Wave` est exposable comme identite PLAY via Z2, mais cette passe ne branche aucun dispatch note vers un runtime wavetable.
 - Le scheduler ne redirige jamais Wave vers Prism/Braids; le branchement note-on/off Wave appartient a l'etape runtime audio Wave.
+
+## Addendum 2026-07-28 - decision d'autorite SEQ LINK cote Z4
+
+- Z4 n'est pas proprietaire de `SEQ LINK`.
+- Z4 consultera uniquement la projection Z2/track_state master-effective pour choisir la source de lecture p-lock playback.
+- Le futur routage `SEQ LINK` ne devra pas modifier `seq_model`, ne devra pas ecrire de p-lock, et ne devra pas synchroniser les locks des slaves.
+- Les consumers Z4 concernes par les prochaines etapes seront classes avant migration: boundary non-PLAY, scheduler PLAY, live-rec, edit/feedback et clipboard ne doivent pas etre supposes equivalents.
+- La decision de restauration runtime des locks actifs reste hors de cette etape: elle dependra de l'audit du cycle apply/restore existant.
+
+## Addendum 2026-07-28 - audit consommateurs p-lock pour SEQ LINK
+
+Audit code reel effectue avant conception du resolver:
+- API modele centrale:
+  - `seq_model_step_plock_find`, `seq_model_step_plock_collect`, `seq_model_step_plock_count`, `seq_model_step_plock_get_at`, `seq_model_step_has_play_plock`, `seq_model_step_has_non_play_plock` lisent le stockage local par track/step;
+  - `seq_model_step_plock_upsert`, `seq_model_step_plock_delete`, `seq_model_step_plock_clear` ecrivent ce stockage local;
+  - `seq_model_get_step_content`, `seq_model_get_step_visual`, `seq_model_get_step_state`, `seq_model_step_is_empty`, `seq_model_step_is_quick_note_eligible` lisent indirectement les sets de p-lock pour UI/LED/edit, pas pour playback audio.
+- Interface param p-lock:
+  - `seq_param_iface_param_to_slot` / `slot_to_param` portent le mapping `set/slot <-> param` et la validation supportee par track;
+  - `seq_param_iface_get_base_value`, `get_play_base_value`, `apply_lock`, `restore_base`, `set_play_base_value` gerent base/runtime temporaire, mais ne lisent pas les p-locks de step dans `seq_model`;
+  - `param_registry` lit/ecrit les bases PLAY via `seq_param_iface`, pas les locks de step; `param_macro` utilise seulement l'autorite de p-lockabilite.
+- Lecture playback actuelle:
+  - `seq_boundary_engine` collecte les locks du step courant via `seq_model_step_plock_collect`, filtre par support runtime, capture/restaure les bases via `seq_param_iface_get_base_value` / `restore_base`, puis applique via `seq_param_iface_apply_lock`;
+  - `seq_play_scheduler` teste `seq_model_step_has_play_plock`, lit les locks PLAY par `seq_model_step_plock_find` dans `seq_play_scheduler_get_locked_or_default`, puis retombe sur `seq_param_iface_get_play_base_value`;
+  - le scheduler groupe lit actuellement les p-locks PLAY des membres master+slaves, tandis que les slaves ne schedulent pas comme sources autonomes.
+- Lecture/ecriture live-rec:
+  - `seq_live_rec_session` et `seq_live_rec_capture` lisent des locks PLAY existants pour selection de voix, sauvegarde/restauration temporaire et detection de note;
+  - ces modules ecrivent/suppriment aussi des p-locks PLAY par `seq_model_step_plock_upsert/delete`;
+  - `seq_runtime_live_rec_param_write` route l'ecriture p-lock live vers la track cible/playhead courante, sans notion de source playback distante.
+- Edition UI:
+  - `ui_param_try_apply_seq_plock` lit l'eventuel lock existant du step maintenu puis upsert/delete le lock sur la track d'edition effective;
+  - `ui_param_try_apply_live_rec_plock` lit l'eventuel lock au playhead avant d'appeler `seq_runtime_live_rec_param_write`;
+  - `ui_param_try_get_seq_plock_feedback_with_frame` lit un lock local pour feedback visuel d'edition;
+  - `ui_renderer_template` consomme ce feedback pour widgets et previews; ce chemin est affichage/edition, pas playback.
+- Edition steps et gestes:
+  - `seq_edit` expose des wrappers directs vers `seq_model_step_plock_*`, utilise les reads pour quick note, hold, clear, undo et gestes low-cost;
+  - le geste LENGTH low-cost lit les locks PLAY existants et ecrit `LEN` localement sur les membres du groupe courant;
+  - `seq_led` lit les visuels de step via `seq_model_get_step_visual`, donc indirectement les sets de p-lock locaux.
+- Clipboard:
+  - `seq_clipboard` lit les locks d'un step par `count/get_at` ou `collect`, copie tous les locks mono-track, et ajoute un payload PLAY par membre de voice group;
+  - le paste clear/repose les locks par `clear/delete/upsert`, avec validation `seq_param_iface_slot_is_supported`;
+  - ce chemin reste stockage/edition explicite, pas lecture playback.
+- Persistence / undo:
+  - `pattern_live_ram` capture tous les p-locks par `count/get_at` et restaure par `clear/upsert`;
+  - `undo_v2` enregistre des deltas p-lock et les applique via `seq_edit_step_plock_apply_state`;
+  - ces chemins doivent conserver la topologie locale des donnees, sans suivre une source `SEQ LINK`.
+
+Chemins caches ou facilement oubliables:
+- les visuels de step (`seq_model_get_step_content/visual/state` puis `seq_led`) lisent les sets de locks sans appeler explicitement une API nommee playback;
+- `param_registry_get_track_value` pour le domaine PLAY lit la base PLAY `seq_param_iface`, pas le lock du step;
+- `seq_boundary_engine` collecte aujourd'hui tous les sets supportes, meme si le scheduler lit PLAY separement;
+- les chemins live-rec/capture lisent les p-locks PLAY pour choisir une voix et ne doivent pas etre confondus avec la lecture scheduler.
+
+Conclusion d'audit pour les etapes suivantes:
+- seuls `seq_boundary_engine` et `seq_play_scheduler` sont des candidats directs au futur routage de lecture playback `SEQ LINK`;
+- les chemins UI, live-rec, clipboard, undo, persistence, LED/visual et base PLAY doivent etre classes explicitement avant toute migration et ne doivent pas etre bascules automatiquement vers une source master.
+
+## Addendum 2026-07-28 - classification des chemins p-lock pour SEQ LINK
+
+Classification cible avant conception des resolvers:
+- Doit suivre `SEQ LINK`:
+  - `seq_boundary_engine` pour la lecture playback des p-locks non-PLAY appliques au boundary;
+  - `seq_play_scheduler` pour la lecture playback des p-locks PLAY qui produisent notes, velocity, length, microtiming, roll associe et Program Change;
+  - uniquement dans ces chemins, la source de lecture pourra devenir la master effective, tandis que la cible d'application/emission reste la track membre.
+- Doit ignorer `SEQ LINK`:
+  - `seq_model_step_plock_upsert/delete/clear` et tout le stockage `seq_model`;
+  - `pattern_live_ram` capture/apply Pattern/Project;
+  - `undo_v2` deltas p-lock et snapshots;
+  - `seq_clipboard` copy/paste/clear de steps;
+  - `seq_edit` clear/toggle/quick-note/LENGTH low-cost et wrappers d'ecriture p-lock;
+  - `ui_param_try_apply_seq_plock` et `ui_param_try_apply_live_rec_plock`;
+  - `seq_runtime_live_rec_param_write`, `seq_live_rec_session`, `seq_live_rec_capture`;
+  - `ui_param_try_get_seq_plock_feedback_with_frame` et `ui_renderer_template`;
+  - `seq_led` et les visuels derives de `seq_model_get_step_content/visual/state`.
+- Doit rester local a la track:
+  - bases PLAY dans `seq_param_iface_get_play_base_value` / `set_play_base_value`;
+  - bases non-PLAY et runtime-temp dans `seq_param_iface_get_base_value`, `apply_lock`, `restore_base`;
+  - validation `seq_param_iface_param_to_slot` / `slot_to_param` / `slot_is_supported`, qui doit valider la track cible d'application ou d'edition, pas une semantique inter-moteur;
+  - affichage UI de valeur editable et feedback de p-lock en edition;
+  - donnees PLAY stockees sur les slaves, meme lorsque leur lecture playback est ignoree.
+- Necessite une decision de design ulterieure:
+  - si les p-locks non-PLAY `PLAY` presents dans la collecte boundary doivent etre exclus explicitement avant routage, ou si la separation actuelle boundary/scheduler suffit;
+  - comment le scheduler traite `Program Change` sous `SEQ LINK`: source master par slot PLAY/MIDI, emission sur master seulement ou sur membre cible selon capacite;
+  - comment `ARP Hold` step consomme les notes source sous `SEQ LINK`: fenetre ARP master uniquement ou fenetre par membre cible;
+  - si le `roll` doit rester strictement le roll du step source master ou suivre un autre attribut local au membre;
+  - si la desactivation/activation de `SEQ LINK` pendant RUNNING requiert un flush/restore explicite des locks actifs, decision reportee a l'audit runtime dedie.
+
+Regles de migration:
+- aucun chemin d'ecriture ne doit etre route vers la source master par `SEQ LINK`;
+- aucun chemin de persistence, undo ou clipboard ne doit materialiser une copie issue de `SEQ LINK`;
+- aucun chemin UI ne doit afficher la valeur playback liee comme base editable;
+- tout consommateur nouveau de p-lock playback devra declarer explicitement s'il suit `SEQ LINK` ou s'il reste local.
+
+## Addendum 2026-07-28 - principe de routage p-lock playback SEQ LINK
+
+Principe commun avant design des resolvers:
+- Le routage p-lock playback separe toujours quatre notions:
+  - `target_track`: track qui recoit l'application runtime ou l'evenement PLAY;
+  - `source_track`: track dont les p-locks sont lus;
+  - `source_step`: step lu dans la source;
+  - `logical_address`: adresse positionnelle du lock, composee de `set`, `page` et `slot`.
+- En mode local ou `SEQ LINK=OFF`, `source_track == target_track` et le comportement reste le stockage local historique.
+- En `SEQ LINK=ON`, pour les membres d'un voice group, `source_track` devient la master effective et `target_track` reste le membre courant.
+- La source de lecture ne modifie jamais la cible d'application: un lock lu sur la master est valide/applique contre la track cible.
+- La correspondance reste strictement positionnelle. Le routage ne compare pas les noms, ne cherche pas de param equivalent entre moteurs, ne merge pas et ne copie pas.
+
+Adresse logique:
+- `set` reste l'ensemble p-lock existant: `COLORS`, `TONE`, `PLAY`, `MOD`, `MIX`.
+- `page` represente la page logique exposee par le consumer quand elle existe. Pour les surfaces actuellement stockees sans page explicite, la page peut etre derivee du slot ou fixee a `0` par le resolver specialise.
+- `slot` est le rang logique dans la page ou le slot p-lock deja persiste selon le set.
+- L'adresse logique ne devient pas un `param_id` global. La resolution finale `slot -> param` reste locale a la track cible via les autorites existantes, notamment les tables TONE par type runtime.
+
+Contrat source/cible:
+- Le resolver de lecture doit pouvoir retourner au minimum:
+  - cible d'application;
+  - source de lecture;
+  - step source;
+  - set;
+  - slot source;
+  - slot cible si une traduction positionnelle est necessaire;
+  - statut `local`, `linked`, `unsupported`, `no_lock`.
+- La validation de support runtime se fait cote cible. Une position presente sur la master mais absente/non supportee cote cible est ignoree proprement.
+- Les bases capturees/restaurees restent celles de la cible, jamais celles de la source.
+- Les valeurs lues restent les `value16` de la source. Leur decode/application utilise le param resolu cote cible afin de conserver le contrat positionnel volontaire.
+
+Portee:
+- Ce principe vaut pour la lecture playback uniquement.
+- Les prochaines etapes peuvent definir deux resolvers specialises si necessaire:
+  - un resolver boundary non-PLAY pour application/restauration runtime temporaire;
+  - un resolver PLAY pour scheduling note/program/ARP/roll/lookahead.
+- La philosophie commune est le couple `source de lecture` / `cible d'application`; elle n'impose pas une API unique si PLAY a des besoins differents.
+
+Contraintes:
+- pas de refresh implicite cache;
+- pas d'allocation;
+- cout borne par constantes existantes de tracks, steps et locks;
+- pas de dependance UI;
+- pas de mutation `seq_model`;
+- pas de stockage derive de `SEQ LINK`.
+
+## Addendum 2026-07-28 - design resolver non-PLAY SEQ LINK
+
+Objet:
+- Le resolver non-PLAY couvre uniquement la lecture playback boundary des sets `COLORS`, `TONE`, `MOD` et `MIX`.
+- `PLAY` est explicitement exclu de ce resolver et reste traite par le design PLAY dedie.
+- Le resolver ne possede ni transport, ni playhead, ni stockage p-lock, ni etat runtime applique. Il resout seulement une source de lecture et une cible d'application pour un boundary donne.
+
+Entrees minimales:
+- `target_track`: track dont le boundary est en cours de traitement et qui recevra l'apply/restauration runtime temporaire.
+- `target_step`: step courant de cette track, utilise comme step local en mode non linke.
+- `set_id`: set p-lock demande, limite aux sets non-PLAY autorises.
+- `source_entry`: entree p-lock candidate lue depuis la source, ou requete de collecte selon l'API retenue a l'etape de validation.
+- Contexte groupe lu via Z2: role, master effective, membres, et projection `SEQ LINK` master-effective.
+
+Sorties minimales:
+- `target_track`: inchange, pour rappeler que la cible d'application ne migre jamais.
+- `source_track`: track dont le p-lock est lu.
+- `source_step`: step lu cote source.
+- `set_id`.
+- `source_slot`: slot persiste lu dans la source.
+- `target_slot`: slot logique applique cote cible; pour les sets non-PLAY courants, il est identique au slot source sauf si une future page/slot explicite impose une traduction positionnelle.
+- `value16`: valeur lue sur la source.
+- statut: `LOCAL`, `LINKED`, `NO_LOCK`, `UNSUPPORTED`, `INVALID`.
+
+Resolution source:
+- Si `target_track` n'appartient pas a un groupe linke operationnel, `source_track = target_track` et `source_step = target_step`.
+- Si `scheduler_track` est la master d'un groupe avec `SEQ LINK=ON`, `source_track = master`, `source_step = scheduler_step`.
+- Si `target_track` est une slave d'un groupe avec `SEQ LINK=ON`, elle est appliquee par la boundary de sa master effective; `source_step` est donc le `scheduler_step` master, pas le step local de la slave.
+- Si la master effective est absente, orpheline, hors limites ou sans groupe exploitable, le resolver retombe en `LOCAL`.
+- Le resolver ne change pas les compteurs de step, ne recalcule pas les longueurs et ne force aucun alignement de pattern; l'eventuelle divergence de longueurs master/slave sera tranchee dans l'etape de validation d'interface.
+
+Resolution set/slot:
+- Les locks de la source sont lus comme `set_id + param_slot + value16`, jamais comme nom de parametre.
+- `set_id=PLAY` est ignore par ce resolver, meme si un lock PLAY est present dans la collecte brute du step source.
+- La validation de support se fait toujours avec `target_track`, `set_id`, `target_slot`.
+- Pour `TONE`, la conversion `slot -> param` reste celle du type runtime cible via Z2; un slot TONE master peut donc piloter une fonction differente sur la cible.
+- Pour `MIX`, seuls les slots MIX p-lockables existants restent admissibles cote cible.
+- Pour `MOD`, seuls les slots deja p-lockables restent admissibles; les selecteurs Matrix exclus du p-lock ne sont pas reintegres par `SEQ LINK`.
+- Pour `COLORS`, la cible effective filtre/engine reste resolue par les autorites Z2/Z3 existantes, pas par la source master.
+
+Apply/restore:
+- La capture de base se fait toujours sur `target_track + target_slot`.
+- L'apply temporaire se fait toujours sur `target_track`.
+- La restauration se fait toujours sur `target_track`.
+- `source_track` ne sert qu'a lire `value16`.
+- Un lock source non supporte cote cible est ignore sans fallback vers un param du meme nom ou un autre slot.
+
+Collecte boundary cible:
+- Option de design privilegiee: le boundary engine demande au resolver de produire une liste de locks non-PLAY applicables pour chaque `target_track/target_step`.
+- Cette liste reste bornee par `SEQ_STEP_MAX_LOCKS`.
+- En mode `LINKED`, la collecte brute se fait sur la source master mais le filtrage/support/base/apply se fait sur la cible.
+- En mode `LOCAL`, le comportement doit rester equivalent a la collecte actuelle.
+
+Limites volontaires:
+- Pas de merge master+slave: si `SEQ LINK=ON`, les locks non-PLAY de la slave sont ignores en playback.
+- Pas d'heritage: une absence de lock sur la master signifie absence de lock playback, meme si la slave possede un lock local.
+- Pas de copie ni de synchronisation.
+- Pas de mapping intelligent entre moteurs.
+- Pas de changement de l'affichage UI ni du feedback p-lock local.
+
+## Addendum 2026-07-28 - validation interface resolver non-PLAY SEQ LINK
+
+Interface validee pour migration future:
+- Le resolver non-PLAY doit etre une query pure appelee par `seq_boundary_engine`.
+- Il ne modifie ni `seq_model`, ni `seq_param_iface`, ni `track_state`, ni les locks actifs runtime.
+- Il ne declenche pas de refresh runtime implicite. Le caller garde la responsabilite d'avoir une projection Z2 coherente avant lecture.
+- Il ne lit aucune source UI et ne depend pas de la track active UI.
+
+Forme d'API cible:
+- Une API de collecte est preferee a une API `find` appelee en boucle.
+- Entree cible: `target_track`, `target_step`, buffer de sortie, capacite de sortie.
+- Sortie: liste bornee de locks applicables, chaque item portant `target_track`, `source_track`, `source_step`, `set_id`, `source_slot`, `target_slot`, `value16` et statut `LOCAL/LINKED`.
+- Les statuts `NO_LOCK`, `UNSUPPORTED` et `INVALID` restent des resultats internes/diagnostics possibles mais ne doivent pas grossir la liste appliquee.
+- Capacite maximale: `SEQ_STEP_MAX_LOCKS`, identique au boundary actuel.
+
+Responsabilites acceptees:
+- choisir la source de lecture selon `SEQ LINK` master-effective;
+- collecter au plus une fois les locks du step source;
+- exclure strictement `SEQ_PLOCK_SET_PLAY`;
+- traduire/porter l'adresse positionnelle `set/slot` vers la cible;
+- filtrer par support runtime cote cible;
+- retourner uniquement les locks applicables.
+
+Responsabilites refusees:
+- appliquer ou restaurer une valeur;
+- capturer une base;
+- resoudre une valeur UI visible;
+- creer un fallback vers les locks locaux de la slave quand la master n'a pas de lock;
+- deduire une correspondance par nom ou par moteur;
+- changer la progression de step, la longueur de pattern, le DIV ou le playhead;
+- decider de la politique de flush/restore lors d'un changement de source.
+
+Cas limites valides:
+- Master sans slave effective: resultat operationnel local.
+- Slave orpheline ou groupe invalide: resultat operationnel local.
+- `SEQ LINK=ON` mais slot source non supporte par la cible: lock ignore.
+- `SEQ LINK=ON` mais aucun lock non-PLAY sur la master: aucun lock applique, les locks locaux de la slave restent ignores en playback.
+- Longueurs master/slave divergentes: le resolver lit le `source_step` decide par le caller; aucune correction automatique n'est faite dans le resolver.
+- Lock source `PLAY` rencontre pendant collecte brute: ignore.
+
+Points reportes:
+- La politique exacte de `source_step` quand les longueurs master/slave divergent reste a valider avec le scheduler/boundary lors de la migration.
+- La necessite d'un flush/restore explicite lors d'activation/desactivation de `SEQ LINK` pendant RUNNING reste reportee a l'audit runtime dedie.
+- Les diagnostics publics du resolver ne sont pas requis pour la premiere migration; un compteur local peut etre ajoute seulement si utile et borne.
+
+## Addendum 2026-07-28 - migration boundary non-PLAY SEQ LINK
+
+Etat implemente:
+- `seq_boundary_engine` consomme maintenant une collecte dediee aux locks non-PLAY applicables au boundary.
+- La collecte separe `source_track/source_step/source_slot` et `target_track/target_slot`; l'application, la capture de base et la restauration restent cote cible.
+- Le resolver non-PLAY consulte maintenant la projection Z2 `track_runtime_get_voice_group_seq_link()` et route les membres d'un groupe `SEQ LINK=ON` vers la master effective comme source de lecture.
+- `SEQ_PLOCK_SET_PLAY` est explicitement exclu de cette collecte boundary; PLAY reste un consommateur distinct porte par `seq_play_scheduler`.
+- La validation de support reste faite contre la track cible via `seq_param_iface_slot_is_supported`, sans mapping par nom ni correspondance intelligente entre moteurs.
+
+Limites volontaires de cette etape:
+- la lecture playback non-PLAY du boundary suit la route commune Z4; le scheduler PLAY consomme la meme resolution `scheduler_track/scheduler_step -> source_track/source_step`;
+- aucun chemin d'ecriture `seq_model`, live-rec, clipboard, undo, persistence, UI ou LED n'est migre;
+- aucune politique de flush/restore runtime lors d'un changement de source n'est ajoutee.
+
+## Addendum 2026-07-28 - branchement effectif resolver non-PLAY SEQ LINK
+
+- `seq_plock_route_resolve()` garde le mode local par defaut.
+- Si la route commune retourne `linked=1`, la source non-PLAY devient la master effective du voice group et les cibles sont les membres collectes du groupe.
+- `source_step` est le `scheduler_step` de la master qui produit aussi les events PLAY du groupe; aucune projection de longueur slave n'est ajoutee.
+- La collecte lit les p-locks non-PLAY uniquement sur `source_track/source_step`, ignore toujours `SEQ_PLOCK_SET_PLAY`, puis valide chaque slot contre la cible par position logique `set/page/slot`.
+- Les p-locks non-PLAY locaux des slaves sont donc ignores pendant la lecture quand `SEQ LINK=ON`, sans copie, merge, suppression ni fallback local.
+
+## Addendum 2026-07-28 - design resolver PLAY SEQ LINK
+
+Objet:
+- Le resolver PLAY couvre uniquement la lecture playback du scheduler `seq_play_scheduler`.
+- Il ne remplace pas le resolver boundary non-PLAY: il partage le principe `source de lecture` / `cible d'emission`, mais garde une API adaptee au scheduling note/program/ARP/roll.
+- Les chemins live-rec, edit, clipboard, undo, persistence, UI feedback et LED restent hors de ce resolver.
+
+Unites de resolution:
+- `scheduler_track`: track appelee par le boundary Z4 courant; les tracks `SLAVE` restent ignorees comme sources autonomes.
+- `source_track`: track dont le step actif, les p-locks PLAY et le roll sont lus.
+- `source_step`: step lu dans `source_track`.
+- `target_track`: track qui recevra l'evenement note/program ou la fenetre ARP.
+- `target_voice`: voix PLAY logique cote cible, utilisee pour resoudre les bases et les slots `NOTE/VEL/LEN/MicTim`.
+- `source_voice`: voix PLAY logique lue cote source.
+
+Mode local:
+- Hors groupe master, `source_track == target_track == scheduler_track` et les voix `V1..V4` restent lues localement.
+- Pour une master de groupe sans `SEQ LINK`, le comportement existant reste volontairement conserve: chaque membre du groupe lit son propre slot `V1` local, et la master orchestre seulement l'emission vers les membres.
+- Le gate d'existence PLAY reste compatible avec ce modele: une master de groupe est schedulable si au moins un membre expose un lock PLAY sur le step courant.
+
+Mode `SEQ LINK=ON`:
+- La master effective devient l'unique `source_track` PLAY pour tous les membres du groupe.
+- La master elle-meme lit ses propres p-locks PLAY.
+- Chaque slave cible lit les p-locks PLAY de la master, puis applique cette adresse positionnelle sur sa propre voix cible.
+- Les p-locks PLAY locaux des slaves sont ignores en playback, sans suppression, sans copie, sans merge et sans fallback.
+- Si la master ne porte pas de lock PLAY pour une adresse, la base PLAY de la cible reste la valeur de repli pour cette adresse, afin de conserver les donnees PLAY de chaque track comme base locale non destructive.
+
+Correspondance positionnelle PLAY:
+- La correspondance reste strictement par position logique, jamais par nom de moteur.
+- En groupe, la position de membre selectionne seulement `target_track`; elle ne devient pas une voix PLAY source implicite.
+- La source PLAY privilegiee reste la meme page/voix logique que celle consommee par la cible. Dans le chemin groupe actuel, cela signifie `V1` pour chaque membre cible.
+- La cible d'emission reste le membre a la position logique de groupe courante.
+- Hors groupe, la position logique reste la voix `V1..V4` historique de la track.
+- La validation de support et les bases sont toujours lues cote cible via `seq_param_iface_param_to_slot`, `seq_param_iface_get_play_base_value` et les gardes `track_runtime_get_effective_param_status`.
+
+Roll:
+- Le roll est une donnee de step, pas un p-lock.
+- En `SEQ LINK=ON`, les retrigs doivent suivre le step source master afin que la master soit l'unique source de lecture sequenceur pour le groupe.
+- En `SEQ LINK=OFF`, le roll reste celui du step local deja utilise par le scheduler.
+
+Program Change:
+- `PARAM_MIDI_PROGRAM` est lu par la meme resolution PLAY/TONE existante que le scheduler utilise aujourd'hui, mais la cible d'emission doit rester la track cible supportant le Program Change.
+- En groupe `SEQ LINK=ON`, une lecture master ne doit pas forcer un Program Change sur une slave qui ne supporte pas cette capacite.
+- Le miroir `g_seq_play_midi_program_valid/last` reste indexe par cible d'emission, pas par source de lecture.
+
+ARP Hold:
+- `ARP Hold` reste une capacite de la track cible.
+- Les notes source qui alimentent la fenetre ARP peuvent venir de la master sous `SEQ LINK=ON`, mais la fenetre, la revision ARP, la phase et l'emission restent portees par la track cible.
+- Le resolver PLAY doit donc produire des notes resolues par cible avant l'appel aux chemins `keyboard_arp_*`; il ne doit pas rendre l'ARP lui-meme.
+
+Forme d'API cible:
+- Une API de resolution d'item PLAY est preferee: elle retourne pour une position scheduler la paire `source_track/source_step/source_voice` et `target_track/target_voice`.
+- Une API de gate peut etre separee pour savoir si un scheduler step contient une matiere PLAY audible sous le routage courant.
+- Les helpers de lecture de valeur doivent accepter explicitement `source_track/source_step/source_voice` et `target_track/target_voice`, afin que la lecture du lock et la lecture de base ne puissent pas etre confondues.
+- Les sorties doivent rester bornes par `SEQ_PLAY_SCHEDULER_VOICE_COUNT` hors groupe et par le plafond groupe existant de 8 membres.
+
+Responsabilites acceptees:
+- choisir la source PLAY selon `SEQ LINK` master-effective;
+- determiner les items cible a scheduler;
+- lire les locks PLAY sur la source par slot positionnel;
+- lire les bases PLAY cote cible quand le lock source est absent;
+- fournir le roll source applicable;
+- laisser le scheduler calculer timing, quant, queue, tokens et dispatch audio.
+
+Responsabilites refusees:
+- ecrire ou supprimer des locks PLAY;
+- modifier les donnees PLAY stockees sur les slaves;
+- modifier les roles de groupe ou la longueur des tracks;
+- capturer/restaurer des valeurs runtime non-PLAY;
+- fusionner master et slaves;
+- rendre l'ARP, pousser des events ou appliquer des notes directement.
+
+Points transmis a validation d'interface:
+- la confirmation de `source_voice` en groupe `SEQ LINK=ON` quand la largeur de groupe depasse la surface PLAY voix historique;
+- le traitement d'une longueur master/slave divergente: garder le `source_step` fourni par le boundary courant ou projeter le step master;
+- le maintien du gate actuel `has_group_play_plock` sous `SEQ LINK=ON`, qui devra tester la source master plutot que les locks locaux des membres;
+- l'emission Program Change en groupe, qui devra etre indexee par cible et filtree par capacite.
+
+## Addendum 2026-07-28 - validation interface resolver PLAY SEQ LINK
+
+Interface validee pour migration future:
+- Le resolver PLAY doit rester une query pure appelee par `seq_play_scheduler`.
+- Il ne modifie ni `seq_model`, ni `seq_param_iface`, ni `track_state`, ni les queues scheduler, ni les fenetres ARP.
+- Il ne declenche pas de refresh runtime implicite; le caller garde le refresh explicite au bord du scheduler.
+- Il ne lit aucune source UI et ne depend pas de la track active UI.
+
+Forme d'API cible:
+- Une API de preparation de contexte de scheduling est retenue pour isoler la logique groupe/SEQ LINK du corps de scheduling.
+- Entree contexte: `scheduler_track`, `scheduler_step`, `negative_lookahead`.
+- Sortie contexte:
+  - `source_track` et `source_step` pour le gate de trig et le roll;
+  - `linked` pour diagnostics internes;
+  - liste bornee d'items PLAY, chaque item portant `target_track`, `target_voice`, `source_track`, `source_step`, `source_voice`;
+  - `item_count`, plafonne par `SEQ_PLAY_SCHEDULER_VOICE_COUNT` hors groupe et par le plafond groupe existant de 8 membres.
+- Une API de lecture de valeur PLAY doit accepter explicitement:
+  - source: `source_track`, `source_step`, `source_voice`, `param_kind`;
+  - cible: `target_track`, `target_voice`, `param_kind`;
+  - sortie: `value16` resolue.
+- `param_kind` doit etre une enumeration interne simple (`NOTE`, `VEL`, `LEN`, `MICTIM`) plutot qu'un `param_id` source global, pour eviter de melanger lecture source et decode cible.
+
+Decisions validees:
+- En groupe `SEQ LINK=ON`, `source_track` est la master effective et `target_track` reste chaque membre du groupe.
+- En groupe, l'index de membre ne doit pas etre converti en `source_voice`. Le modele actuel de pages PLAY groupe selectionne une track membre et expose son `V1`; le resolver doit donc lire `source_voice=V1` pour ces items tant que cette surface reste en place.
+- Hors groupe, `source_voice == target_voice` pour les voix `V1..V4`.
+- Le gate de scheduling sous `SEQ LINK=ON` doit tester le step actif et les locks PLAY de `source_track/source_step`, pas les locks locaux des slaves.
+- Le roll sous `SEQ LINK=ON` est lu sur `source_track/source_step`.
+- La quantification, le DIV, les fenetres ARP et les compteurs de notes actives restent cibles/runtime locaux; ils ne sont pas portes par la source master.
+
+Lecture valeur:
+- Le lock est cherche sur `source_track/source_step` avec le slot PLAY derive de `source_voice + param_kind`.
+- Si le lock source est absent, la base PLAY de repli est lue sur `target_track/target_voice + param_kind`.
+- Le decode utilise le `param_id` cible, jamais un nom ou une fonction moteur source.
+- Une adresse source absente ou non supportee ne lit jamais les locks locaux de la slave en fallback.
+- Une cible dont le param PLAY est `BLOCKED_TRANSITIONAL` reste ignoree avant lecture.
+
+Program Change:
+- Le Program Change ne fait pas partie des quatre items voix PLAY et doit rester un sous-chemin explicite du scheduler.
+- Sous `SEQ LINK=ON`, la valeur peut etre lue depuis la master, mais l'emission et le miroir `valid/last` restent indexes par `target_track`.
+- L'emission est filtree par `seq_play_scheduler_track_supports_program_change` sur la cible.
+- Si plusieurs cibles produisent une premiere note au meme boundary, chaque cible admissible peut recevoir son propre Program Change schedule au premier note-on cible.
+
+ARP Hold:
+- La decision `ARP Hold` est lue sur la cible.
+- Les notes qui alimentent la fenetre ARP viennent des items PLAY resolus, donc potentiellement de la master sous `SEQ LINK=ON`.
+- `seq_play_scheduler_begin_arp_window` et `seq_play_scheduler_schedule_arp_window_slice` restent indexes par `target_track`.
+- Le resolver ne rend pas l'ARP et ne manipule pas la phase ARP.
+
+Cas limites valides:
+- Master sans slave effective: contexte local.
+- Slave appelee directement par le boundary scheduler: aucun item autonome, comme aujourd'hui.
+- Groupe invalide ou master effective absente: contexte local si la track n'est pas slave, sinon aucun item autonome.
+- Groupe de plus de 8 membres: plafond existant a 8 conserve.
+- Master sans lock PLAY sous `SEQ LINK=ON`: aucune matiere PLAY source; les locks locaux des slaves restent ignores en playback.
+- Lock source manquant pour `VEL`, `LEN` ou `MICTIM`: base cible correspondante utilisee comme repli.
+- Longueurs master/slave divergentes: pour cette migration, `source_step` reste le step fourni par le boundary de `scheduler_track`; aucune projection de longueur master n'est introduite.
+
+Responsabilites explicitement hors resolver:
+- calcul des offsets microtiming et quant;
+- allocation de tokens;
+- push de note-on/note-off/retrig/program;
+- dispatch audio/MIDI;
+- flush/restore runtime lors d'un changement de source;
+- affichage et edition des pages PLAY.
+
+## Addendum 2026-07-28 - migration scheduler PLAY SEQ LINK
+
+Etat implemente:
+- `seq_play_scheduler` prepare maintenant un contexte PLAY explicite avant le scheduling d'un step.
+- Ce contexte separe `scheduler_track`, `source_track/source_step`, `target_track`, `source_voice` et `target_voice`.
+- La lecture des valeurs `NOTE`, `VEL`, `LEN` et `MicTim` passe par un helper qui lit le lock sur la source et la base PLAY de repli sur la cible.
+- Le gate de presence PLAY lit les sources declarees par les items du contexte, au lieu de dupliquer la logique groupe directement dans le corps du scheduler.
+- Le roll est lu via la source du contexte.
+- Le resolver source consulte maintenant `track_runtime_get_voice_group_seq_link()`; en groupe `SEQ LINK=ON`, la master effective devient source PLAY pour tous les membres cibles du contexte.
+
+Etat volontairement local a cette etape:
+- En master de groupe, le contexte conserve le comportement existant hors `SEQ LINK`: chaque membre cible lit sa propre voix `V1` locale.
+- Les slaves appeles directement restent sans item autonome.
+- Le Program Change reste un sous-chemin explicite du scheduler; il lit la source du contexte mais conserve l'emission historique sur la track scheduler tant que le routage cible par item n'est pas branche.
+- L'ARP Hold conserve son indexation scheduler historique; la migration ARP par cible reste separee pour eviter une refonte implicite pendant cette etape.
+
+Limites volontaires:
+- aucun chemin d'ecriture `seq_model`, live-rec, clipboard, undo, persistence, UI ou LED n'est migre;
+- aucune copie, synchronisation, fusion ou suppression de locks PLAY slave n'est introduite;
+- aucune politique de flush/restore runtime lors d'un changement de source n'est ajoutee;
+- le routage cible du Program Change et des fenetres ARP reste une etape separee.
+
+## Addendum 2026-07-28 - branchement effectif resolver PLAY SEQ LINK
+
+- `seq_plock_route_resolve()` garde le mode local par defaut.
+- Si la projection Z2 `track_runtime_get_voice_group_seq_link(scheduler_track, out)` retourne `ON`, la route commune donne `source_track=master effective` et `linked=1`.
+- En master de groupe `SEQ LINK=ON`, chaque item membre conserve `target_track=member`, `target_voice=V1` et lit `source_track=master`, `source_step=scheduler_step`, `source_voice=V1`.
+- Le gate de matiere PLAY teste donc les locks PLAY de la master; les locks PLAY locaux des slaves sont ignores pendant la lecture, sans suppression ni fallback.
+- Les bases de repli restent lues cote cible pour `NOTE`, `VEL`, `LEN` et `MicTim`, ce qui conserve les donnees PLAY stockees sur chaque slave.
+- Le roll vient du step source master sous `SEQ LINK=ON`.
+- Les longueurs divergentes ne sont pas reprojetees: `source_step` reste le step fourni au scheduler.
+
+## Addendum 2026-07-28 - audit runtime changement de source SEQ LINK
+
+Constat code reel:
+- `seq_boundary_engine_process` applique/restaure les locks non-PLAY uniquement quand `prev_step_valid` est faux ou quand `prev_step[track] != play_step[track]`.
+- `seq_runtime_exec_begin_running_at_sample_q16` et `seq_runtime_exec_stop_lifecycle_apply` restaurent explicitement tous les locks actifs via `seq_boundary_engine_restore_all_active_locks`.
+- Entre deux boundaries d'une meme track, aucune reevaluation automatique des p-locks non-PLAY n'a lieu.
+- `seq_runtime_active_lock_t` stocke seulement la cible appliquee (`set_id`, `param_slot`, `base_value16`) et ne stocke pas l'identite de source p-lock.
+- `seq_param_iface_apply_lock` pose un etat runtime-temp verrouille; `seq_param_iface_restore_base` est le seul chemin observe qui relache explicitement ce runtime-temp.
+- Le scheduler PLAY queue des events sample-domain; ces events ne sont pas recalcules si la source de lecture change apres leur planification.
+- Le lookahead negatif peut deja avoir pousse des events du prochain step avant le boundary cible.
+
+Decision:
+- Le moteur ne recalcule pas naturellement tous les parametres au changement de source `SEQ LINK`.
+- Un changement effectif de source pendant RUNNING doit donc declencher une reconciliation runtime explicite.
+- Cette reconciliation n'est pas necessaire quand le transport est STOPPED: le prochain START restaure/reseed deja les locks actifs et reschedule depuis l'etat courant.
+
+Contrat cible de reconciliation:
+- Z2/track_state reste proprietaire du flag; Z4 recoit seulement une notification post-commit indiquant que le routage de lecture p-lock d'un groupe peut avoir change.
+- La notification doit etre explicite, par exemple une future commande interne `seq_runtime_on_seq_link_changed(master_track)`.
+- Cette commande ne doit pas modifier `seq_model`, ne doit pas copier de locks et ne doit pas changer les roles de groupe.
+- Les tracks affectees sont la master effective et les membres collectes du groupe au moment de la notification, avec le meme plafond operationnel que le scheduler.
+
+Reconciliation non-PLAY:
+- Pour chaque track cible affectee, restaurer les locks actifs via `seq_boundary_engine_restore_all_active_locks`.
+- Invalider le boundary courant de la track cible (`prev_step_valid=0`) afin que le prochain passage par `seq_boundary_engine_process` reapplique les locks du step courant depuis la nouvelle source.
+- L'application immediate du step courant est acceptable uniquement si elle passe par le meme boundary engine; il ne faut pas creer un second chemin apply special pour `SEQ LINK`.
+
+Reconciliation PLAY:
+- Les events deja queues peuvent provenir de l'ancienne source; ils doivent etre consideres stale lors d'un changement RUNNING.
+- La solution propre est un clear scheduler borne par cible ou par groupe, conservant les invariants de token/note-off.
+- Tant qu'un clear scoped n'existe pas, un clear global du scheduler serait fonctionnel mais trop large; il doit etre evite comme premiere implementation sauf decision produit explicite.
+- Les notes deja actives doivent garder une sortie coherente: le chemin de clear choisi doit soit emettre les note-off necessaires via les guards existants, soit etre couple a un panic/output-guard scoped.
+
+Decision de timing:
+- La reconciliation doit etre appelee apres commit du flag `SEQ LINK`, jamais avant.
+- Si elle est appelee RUNNING, elle doit s'executer hors IRQ audio et rester bornee par constantes de groupe/track.
+- Les effets audio du changement peuvent etre pris en compte au prochain boundary musical; une reapplication sample-immediate n'est pas requise pour cette feature.
+
+Etat implemente:
+- `seq_runtime_on_seq_link_changed(master_track)` est le seam Z4 explicite appele apres commit du flag par `param_registry`.
+- Si le transport est STOPPED, la notification ne fait rien: le prochain START reseed deja les locks actifs et la queue scheduler.
+- Si le transport est RUNNING, la notification collecte la master et ses membres bornes a 8, restaure les locks actifs non-PLAY de chaque cible et invalide leur boundary courant via `seq_boundary_engine_invalidate_track()`.
+- `seq_play_scheduler_clear_tracks()` fournit un clear scheduler borne par tracks cible: il retire les events queues du groupe, coupe les notes actives connues pour ces tracks, nettoie les fenetres ARP et conserve les autres tracks.
+- La relecture effective se fait au prochain boundary musical par les resolvers existants; aucune application sample-immediate ni second chemin apply special `SEQ LINK` n'est introduit.
+
+Limites maintenues:
+- la notification ne modifie ni `seq_model`, ni les p-locks stockes, ni les roles de groupe;
+- la reconciliation ne materialise aucune copie issue de `SEQ LINK`;
+- les races avec des events deja collectes par le bloc audio restent traitees par les guards/tokens existants, sans nouveau chemin IRQ.
+
+## Addendum 2026-07-28 - route logique commune SEQ LINK
+
+- `seq_plock_route` porte la resolution commune `scheduler_track/scheduler_step -> source_track/source_step + targets` pour les consumers playback Z4.
+- Le scheduler PLAY et le boundary non-PLAY consomment cette meme route: en `SEQ LINK=ON`, la boundary de la master applique les locks non-PLAY sur chaque cible du groupe depuis le meme `source_track/source_step` que les items PLAY.
+- Une slave appelee par sa propre boundary reste ignoree comme source autonome quand elle est drivee par `SEQ LINK`; ses locks locaux restent stockes mais ne sont pas lus en playback.
+- Hors `SEQ LINK`, le comportement reste local: les non-PLAY suivent la boundary de chaque track et le scheduler de master de groupe conserve ses sources membres locales.
+
+## Addendum 2026-07-28 - Track snapshot et sequence
+
+- Le snapshot Track capture/restaure la sequence de la track avec trigs, rolls et p-locks par step, ainsi que `SEQ Length`, page UI, div, quant et swing.
+- Avant restore/clear Track, `track_snapshot` appelle `seq_runtime_clear_tracks()` sur les tracks concernees pour retirer les evenements et notes residuels sans clear global.
+- Le clipboard de steps reste separe; le clipboard Track utilise maintenant le snapshot canonique quand l'intention utilisateur cible toute la track.
+
+## Addendum 2026-07-28 - verrou edition sequence slave SEQ LINK
+
+- `seq_edit_track_sequence_is_locked()` est le garde d'edition utilisateur pour la sequence Pattern d'une track.
+- Le verrou est actif uniquement si la track cible est `SLAVE` et que la projection `SEQ LINK` effective est `ON`.
+- Les chemins d'edition steps, rolls, p-locks, paste/clear de steps, live-rec PLAY, undo snapshot et parametres runtime de sequence (`LENGTH`, `DIV`, `QUANT`, `SWING`) consultent ce garde avant toute ecriture Pattern.
+- Le verrou ne modifie pas `seq_model`, ne supprime aucune donnee locale et ne participe pas a la persistence; Pattern/Project restore restent des chemins de chargement, pas des edits utilisateur.
+- Le scheduler et la boundary ignoraient deja l'emission autonome des slaves sous `SEQ LINK=ON` via `seq_plock_route`: aucune modification scheduler n'est requise pour cette regle UI.

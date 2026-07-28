@@ -32,6 +32,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
+#include "Core/track_state_internal.h"
 #include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
@@ -47,7 +48,90 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        float clamped,
                                                        uint8_t rt_fast);
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
+static uint8_t param_registry_track_is_sampler_multi(uint8_t track);
 static float clamp_value(float v, float lo, float hi);
+
+uint8_t param_registry_commit_voice_group_seq_link(uint8_t master_track, uint8_t seq_link)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    const uint8_t before = track_state_get_voice_group_seq_link(master_track);
+    const uint8_t next = (seq_link != 0U) ? 1U : 0U;
+    if (track_state_set_voice_group_seq_link_raw(master_track, next) == false)
+    {
+        return 0U;
+    }
+
+    if (before != next)
+    {
+        seq_runtime_on_seq_link_changed(master_track);
+    }
+    return 1U;
+}
+
+uint8_t param_registry_commit_voice_group_seq_link_bulk(const uint8_t seq_link[UI_TRACK_COUNT])
+{
+    if (seq_link == NULL)
+    {
+        return 0U;
+    }
+
+    uint8_t before[UI_TRACK_COUNT];
+    uint8_t next[UI_TRACK_COUNT];
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        before[track] = track_state_get_voice_group_seq_link(track);
+        next[track] = (seq_link[track] != 0U) ? 1U : 0U;
+    }
+
+    if (track_state_apply_voice_group_seq_link_bulk_raw(next) == false)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (before[track] != next[track])
+        {
+            seq_runtime_on_seq_link_changed(track);
+        }
+    }
+    return 1U;
+}
+
+static uint8_t param_registry_prism_param_slot(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
+{
+    if ((out_osc == NULL) || (out_param == NULL))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_PRISM_EDIT: *out_osc = 0U; *out_param = 0U; return 1U;
+        case PARAM_PRISM_FINE: *out_osc = 0U; *out_param = 1U; return 1U;
+        case PARAM_PRISM_COARSE: *out_osc = 0U; *out_param = 2U; return 1U;
+        case PARAM_PRISM_FM: *out_osc = 0U; *out_param = 3U; return 1U;
+        case PARAM_PRISM_TIMBRE: *out_osc = 0U; *out_param = 4U; return 1U;
+        case PARAM_PRISM_MODULATION: *out_osc = 0U; *out_param = 5U; return 1U;
+        case PARAM_PRISM_COLOR: *out_osc = 0U; *out_param = 6U; return 1U;
+        case PARAM_PRISM_PHASE_RESET: *out_osc = 0U; *out_param = 7U; return 1U;
+        case PARAM_PRISM_LEVEL: *out_osc = 0U; *out_param = 8U; return 1U;
+        case PARAM_PRISM_OSC2_EDIT: *out_osc = 1U; *out_param = 0U; return 1U;
+        case PARAM_PRISM_OSC2_FINE: *out_osc = 1U; *out_param = 1U; return 1U;
+        case PARAM_PRISM_OSC2_COARSE: *out_osc = 1U; *out_param = 2U; return 1U;
+        case PARAM_PRISM_OSC2_FM: *out_osc = 1U; *out_param = 3U; return 1U;
+        case PARAM_PRISM_OSC2_TIMBRE: *out_osc = 1U; *out_param = 4U; return 1U;
+        case PARAM_PRISM_OSC2_MODULATION: *out_osc = 1U; *out_param = 5U; return 1U;
+        case PARAM_PRISM_OSC2_COLOR: *out_osc = 1U; *out_param = 6U; return 1U;
+        case PARAM_PRISM_OSC2_PHASE_RESET: *out_osc = 1U; *out_param = 7U; return 1U;
+        case PARAM_PRISM_OSC2_LEVEL: *out_osc = 1U; *out_param = 8U; return 1U;
+        default: return 0U;
+    }
+}
 
 static void param_registry_sync_active_cfg_mirror_for_track(uint8_t track)
 {
@@ -157,11 +241,21 @@ static uint8_t param_registry_apply_voice_group_spread(uint8_t master_track, flo
         return 1U;
     }
 
+    const uint8_t keytrack = track_state_get_voice_group_spread_keytrack(master);
     const float denom = (float)(member_count - 1U);
     for (uint8_t i = 0U; i < member_count; ++i)
     {
         const float normalized = ((denom > 0.0f) ? (((float)i / denom) * 2.0f) : 0.0f) - 1.0f;
-        (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], normalized * spread);
+        if ((keytrack != 0U) && (param_registry_track_is_sampler_multi(members[i]) != 0U))
+        {
+            (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], 0.0f);
+            brick6_sampler_runtime_refresh_multi_group_spread(members[i]);
+        }
+        else
+        {
+            (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], normalized * spread);
+            brick6_sampler_runtime_refresh_multi_group_spread(members[i]);
+        }
     }
 
     return 1U;
@@ -189,6 +283,20 @@ static uint8_t param_apply_cfg_group_value(param_id_t id, uint8_t track, float c
     if (id == PARAM_CFG_GROUP_LINK)
     {
         return (track_state_set_voice_group_link(master, (clamped >= 0.5f) ? 1U : 0U) != false) ? 1U : 0U;
+    }
+
+    if (id == PARAM_CFG_GROUP_SEQ_LINK)
+    {
+        return param_registry_commit_voice_group_seq_link(master, (clamped >= 0.5f) ? 1U : 0U);
+    }
+
+    if (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+    {
+        if (track_state_set_voice_group_spread_keytrack(master, (clamped >= 0.5f) ? 1U : 0U) == false)
+        {
+            return 0U;
+        }
+        return param_registry_apply_voice_group_spread(master, track_state_get_voice_group_spread(master));
     }
 
     return 0U;
@@ -631,29 +739,44 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
             *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
             return 1U;
         case PARAM_PRISM_EDIT:
-            *out_value = state->prism.edit;
-            return 1U;
         case PARAM_PRISM_FINE:
-            *out_value = state->prism.fine;
-            return 1U;
         case PARAM_PRISM_COARSE:
-            *out_value = state->prism.coarse;
-            return 1U;
         case PARAM_PRISM_FM:
-            *out_value = state->prism.fm;
-            return 1U;
         case PARAM_PRISM_TIMBRE:
-            *out_value = state->prism.timbre;
-            return 1U;
         case PARAM_PRISM_MODULATION:
-            *out_value = state->prism.modulation;
-            return 1U;
         case PARAM_PRISM_COLOR:
-            *out_value = state->prism.color;
-            return 1U;
         case PARAM_PRISM_PHASE_RESET:
-            *out_value = state->prism.phase_reset;
-            return 1U;
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_EDIT:
+        case PARAM_PRISM_OSC2_FINE:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_OSC2_FM:
+        case PARAM_PRISM_OSC2_TIMBRE:
+        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC2_PHASE_RESET:
+        case PARAM_PRISM_OSC2_LEVEL:
+        {
+            uint8_t osc = 0U;
+            uint8_t param = 0U;
+            if (param_registry_prism_param_slot(id, &osc, &param) == 0U)
+            {
+                return 0U;
+            }
+            switch (param)
+            {
+                case 0U: *out_value = state->prism.edit[osc]; return 1U;
+                case 1U: *out_value = state->prism.fine[osc]; return 1U;
+                case 2U: *out_value = state->prism.coarse[osc]; return 1U;
+                case 3U: *out_value = state->prism.fm[osc]; return 1U;
+                case 4U: *out_value = state->prism.timbre[osc]; return 1U;
+                case 5U: *out_value = state->prism.modulation[osc]; return 1U;
+                case 6U: *out_value = state->prism.color[osc]; return 1U;
+                case 7U: *out_value = state->prism.phase_reset[osc]; return 1U;
+                case 8U: *out_value = state->prism.level[osc]; return 1U;
+                default: return 0U;
+            }
+        }
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -916,29 +1039,44 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
             return 1U;
         case PARAM_PRISM_EDIT:
-            state->prism.edit = value;
-            return 1U;
         case PARAM_PRISM_FINE:
-            state->prism.fine = value;
-            return 1U;
         case PARAM_PRISM_COARSE:
-            state->prism.coarse = value;
-            return 1U;
         case PARAM_PRISM_FM:
-            state->prism.fm = value;
-            return 1U;
         case PARAM_PRISM_TIMBRE:
-            state->prism.timbre = value;
-            return 1U;
         case PARAM_PRISM_MODULATION:
-            state->prism.modulation = value;
-            return 1U;
         case PARAM_PRISM_COLOR:
-            state->prism.color = value;
-            return 1U;
         case PARAM_PRISM_PHASE_RESET:
-            state->prism.phase_reset = clamp_value(value, 0.0f, 1.0f);
-            return 1U;
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_EDIT:
+        case PARAM_PRISM_OSC2_FINE:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_OSC2_FM:
+        case PARAM_PRISM_OSC2_TIMBRE:
+        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC2_PHASE_RESET:
+        case PARAM_PRISM_OSC2_LEVEL:
+        {
+            uint8_t osc = 0U;
+            uint8_t param = 0U;
+            if (param_registry_prism_param_slot(id, &osc, &param) == 0U)
+            {
+                return 0U;
+            }
+            switch (param)
+            {
+                case 0U: state->prism.edit[osc] = value; return 1U;
+                case 1U: state->prism.fine[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 2U: state->prism.coarse[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 3U: state->prism.fm[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 4U: state->prism.timbre[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 5U: state->prism.modulation[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 6U: state->prism.color[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 7U: state->prism.phase_reset[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 8U: state->prism.level[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                default: return 0U;
+            }
+        }
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -1340,15 +1478,35 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
 
             case PARAM_CFG_GROUP_SPREAD:
             case PARAM_CFG_GROUP_LINK:
+            case PARAM_CFG_GROUP_SPREAD_KEYTRK:
+            case PARAM_CFG_GROUP_SEQ_LINK:
             {
                 uint8_t master = track;
                 if (track_runtime_get_voice_group_effective_master(track, &master) == 0U)
                 {
                     return 0U;
                 }
-                *out_value = (id == PARAM_CFG_GROUP_SPREAD)
-                    ? track_state_get_voice_group_spread(master)
-                    : (float)track_state_get_voice_group_link(master);
+                if (id == PARAM_CFG_GROUP_SPREAD)
+                {
+                    *out_value = track_state_get_voice_group_spread(master);
+                }
+                else if (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+                {
+                    *out_value = (float)track_state_get_voice_group_spread_keytrack(master);
+                }
+                else if (id == PARAM_CFG_GROUP_SEQ_LINK)
+                {
+                    uint8_t seq_link = 0U;
+                    if (track_runtime_get_voice_group_seq_link(track, &seq_link) == 0U)
+                    {
+                        return 0U;
+                    }
+                    *out_value = (float)seq_link;
+                }
+                else
+                {
+                    *out_value = (float)track_state_get_voice_group_link(master);
+                }
                 return 1U;
             }
 
@@ -1522,6 +1680,20 @@ void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t trac
     }
 }
 
+void param_registry_clear_track_runtime_state(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        param_registry_release_track_value_runtime_temp((param_id_t)raw_id, track);
+    }
+    param_registry_runtime_cache_clear_track(track);
+}
+
 /* Command surface: track-aware apply and post-commit routing. */
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
@@ -1547,7 +1719,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return ok;
     }
 
-    if ((id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_LINK))
+    if ((id == PARAM_CFG_GROUP_SPREAD)
+            || (id == PARAM_CFG_GROUP_LINK)
+            || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+            || (id == PARAM_CFG_GROUP_SEQ_LINK))
     {
         return param_apply_cfg_group_value(id, track, clamped);
     }

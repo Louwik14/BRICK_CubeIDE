@@ -14,7 +14,7 @@ static const param_id_t g_track_sound_lfo_default_params[MOD_LFO_COUNT_PER_TRACK
     { PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE },
 };
 
-static void track_sound_state_set_defaults(track_sound_state_t *state)
+void track_sound_state_make_default(track_sound_state_t *state)
 {
     if (state == NULL)
     {
@@ -74,7 +74,7 @@ void track_sound_state_init(void)
 {
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        track_sound_state_set_defaults(&g_track_sound_state[track]);
+        track_sound_state_make_default(&g_track_sound_state[track]);
     }
     mod_matrix_rebuild_route_cache_all();
 }

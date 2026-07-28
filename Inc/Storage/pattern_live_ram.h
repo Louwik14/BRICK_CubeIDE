@@ -39,6 +39,7 @@ typedef struct
     uint8_t voice_group_role[SEQ_TRACK_COUNT];
     float voice_group_spread[SEQ_TRACK_COUNT];
     uint8_t voice_group_link[SEQ_TRACK_COUNT];
+    uint8_t voice_group_seq_link[SEQ_TRACK_COUNT];
     uint8_t looper_route_enabled[SEQ_TRACK_COUNT][SEQ_TRACK_COUNT];
 } pattern_v1_track_cfg_block_t;
 

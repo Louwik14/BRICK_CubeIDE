@@ -52,14 +52,15 @@ typedef struct
     } master_fx;
     struct
     {
-        float edit;
-        float fine;
-        float coarse;
-        float fm;
-        float timbre;
-        float modulation;
-        float color;
-        float phase_reset;
+        float edit[2];
+        float fine[2];
+        float coarse[2];
+        float fm[2];
+        float timbre[2];
+        float modulation[2];
+        float color[2];
+        float phase_reset[2];
+        float level[2];
     } prism;
     struct
     {
@@ -104,6 +105,7 @@ typedef struct
 } track_tone_sound_state_t;
 
 void track_tone_sound_state_init(void);
+void track_tone_sound_state_make_default(track_tone_sound_state_t *out_state);
 track_tone_sound_state_t *track_tone_sound_state_get(uint8_t track);
 const track_tone_sound_state_t *track_tone_sound_state_get_const(uint8_t track);
 

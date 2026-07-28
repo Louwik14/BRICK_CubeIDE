@@ -11,6 +11,7 @@
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Storage/undo_v2.h"
 #include "Storage/kit_v1.h"
@@ -485,6 +486,11 @@ void apply_cfg_metro(float v)
 void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
+    if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) != 0U)
+    {
+        return;
+    }
+
     const uint8_t gesture_key = (0x50000000UL
                                  | ((uint32_t)track << 16)
                                  | (uint32_t)((uint8_t)(v + 0.5f)));
@@ -509,19 +515,31 @@ void apply_seq_length(float v)
 void apply_seq_div(float v)
 {
     /* Command surface: track div is written explicitly on the active track. */
-    seq_runtime_set_track_div(ui_get_active_track(), seq_div_ui_to_runtime(v));
+    const uint8_t track = ui_get_active_track();
+    if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) == 0U)
+    {
+        seq_runtime_set_track_div(track, seq_div_ui_to_runtime(v));
+    }
 }
 
 void apply_seq_quant(float v)
 {
     /* Command surface: track quant is written explicitly on the active track. */
-    seq_runtime_set_track_quant(ui_get_active_track(), (uint8_t)(v + 0.5f));
+    const uint8_t track = ui_get_active_track();
+    if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) == 0U)
+    {
+        seq_runtime_set_track_quant(track, (uint8_t)(v + 0.5f));
+    }
 }
 
 void apply_seq_swing(float v)
 {
     /* Command surface: track swing is written explicitly on the active track. */
-    seq_runtime_set_track_swing(ui_get_active_track(), (uint8_t)(v + 0.5f));
+    const uint8_t track = ui_get_active_track();
+    if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) == 0U)
+    {
+        seq_runtime_set_track_swing(track, (uint8_t)(v + 0.5f));
+    }
 }
 
 void apply_kbd_root(float v) { keyboard_runtime_set_root((uint8_t)(clamp_value(v, 0.0f, 11.0f) + 0.5f)); }

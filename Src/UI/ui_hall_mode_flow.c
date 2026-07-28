@@ -210,7 +210,9 @@ static uint8_t ui_hall_mode_flow_capture_track_sound_copy(uint8_t source_track,
                 || (id == PARAM_CFG_MIDI_CH)
                 || (id == PARAM_CFG_MIDI_SRC)
                 || (id == PARAM_CFG_GROUP_SPREAD)
-                || (id == PARAM_CFG_GROUP_LINK))
+                || (id == PARAM_CFG_GROUP_LINK)
+                || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+                || (id == PARAM_CFG_GROUP_SEQ_LINK))
         {
             continue;
         }

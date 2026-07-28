@@ -12,6 +12,7 @@
 #include "Storage/project_v1.h"
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
+#include "Core/track_snapshot.h"
 #include "param_registry.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_edit.h"
@@ -43,17 +44,7 @@ typedef struct
 {
     uint8_t valid;
     uint8_t source_track;
-    ui_track_config_t config;
-    uint8_t midi_channel;
-    ui_track_midi_source_t midi_source;
-    uint8_t seq_page;
-    uint8_t seq_length;
-    uint8_t seq_div;
-    uint8_t seq_quant;
-    uint8_t seq_swing;
-    uint8_t param_count;
-    param_id_t params[PARAM_COUNT];
-    float values[PARAM_COUNT];
+    track_snapshot_t snapshot;
 } ui_track_clipboard_t;
 
 typedef struct
@@ -193,7 +184,10 @@ static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_s
         const param_id_t id = subpage->param_bank.params[i];
         if ((id >= PARAM_COUNT) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
                 || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
-                || (id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_LINK))
+                || (id == PARAM_CFG_GROUP_SPREAD)
+                || (id == PARAM_CFG_GROUP_LINK)
+                || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+                || (id == PARAM_CFG_GROUP_SEQ_LINK))
         {
             continue;
         }
@@ -363,31 +357,6 @@ static uint8_t ui_core_clipboard_is_active_page_button_held(void)
     return (button_down(active_page_button) != 0U) ? 1U : 0U;
 }
 
-static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
-                                                  const param_id_t *params,
-                                                  const float *values,
-                                                  uint8_t count)
-{
-    if ((params == 0) || (values == 0))
-    {
-        return 0U;
-    }
-
-    /* Consumer-edge refresh: clipboard apply runs against a refreshed projection. */
-    track_runtime_refresh_track(track);
-    param_registry_batch_begin();
-    uint8_t applied = 0U;
-    for (uint8_t i = 0U; i < count; ++i)
-    {
-        if (param_registry_apply_track_value(params[i], track, values[i]) != 0U)
-        {
-            ++applied;
-        }
-    }
-    param_registry_batch_end();
-    return applied;
-}
-
 static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
                                                       const param_id_t *params,
                                                       uint8_t count)
@@ -417,75 +386,24 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     memset(cb, 0, sizeof(*cb));
 
     cb->source_track = track;
-    cb->config = ui_get_track_config(track);
-    cb->midi_channel = ui_get_track_midi_channel(track);
-    cb->midi_source = ui_get_track_midi_source(track);
-    cb->seq_page = seq_model_get_track_page(track);
-    cb->seq_length = seq_model_get_track_length(track);
-    (void)seq_runtime_get_track_div(track, &cb->seq_div);
-    (void)seq_runtime_get_track_quant(track, &cb->seq_quant);
-    (void)seq_runtime_get_track_swing(track, &cb->seq_swing);
-
-    /* Consumer-edge refresh: clipboard copy snapshots projection after explicit refresh. */
     track_runtime_refresh_track(track);
-    uint8_t count = 0U;
-    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    if (track_snapshot_capture(track, &cb->snapshot) == 0U)
     {
-        const param_id_t id = (param_id_t)raw_id;
-        const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, id);
-        if ((status != TRACK_RUNTIME_PARAM_ALLOWED) && (status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
-        {
-            continue;
-        }
-
-        float value = 0.0f;
-        if (param_registry_get_track_value(id, track, &value) == 0U)
-        {
-            continue;
-        }
-
-        cb->params[count] = id;
-        cb->values[count] = value;
-        ++count;
+        return 0U;
     }
 
-    cb->param_count = count;
     cb->valid = 1U;
     return 1U;
 }
 
 static uint8_t ui_core_clipboard_clear_track(uint8_t track)
 {
-    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    track_snapshot_t snapshot;
+    if (track_snapshot_make_default(track, &snapshot) == 0U)
     {
-        const param_id_t id = (param_id_t)raw_id;
-        (void)param_registry_apply_track_value(id, track, param_registry[id].default_value);
+        return 0U;
     }
-
-    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-    {
-        seq_model_set_trig(track, step, 0U);
-        seq_model_step_plock_clear(track, step);
-    }
-
-    seq_model_set_track_page(track, 0U);
-    seq_model_set_track_length(track, (uint8_t)SEQ_MAX_STEPS);
-    seq_runtime_set_track_div(track, 1U);
-    seq_runtime_set_track_quant(track, 0U);
-    seq_runtime_set_track_swing(track, 0U);
-    (void)seq_runtime_set_playhead_step(track, 0U);
-
-    (void)ui_set_track_midi_channel(track, (uint8_t)((track < 16U) ? (track + 1U) : 16U));
-    (void)ui_set_track_midi_source(track, UI_TRACK_MIDI_SRC_ALL);
-    (void)ui_set_track_family(track, UI_TRACK_FAMILY_OFF);
-    (void)ui_set_track_type(track, UI_TRACK_TYPE_AUDIO);
-    return 1U;
-}
-
-static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipboard_t *cb)
-{
-    (void)cb;
-    return 0U;
+    return track_snapshot_apply(track, &snapshot);
 }
 
 static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboard_t *cb)
@@ -495,7 +413,7 @@ static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboa
         return 0U;
     }
 
-    return (uint8_t)ui_track_family_is_input(cb->config.family);
+    return (uint8_t)ui_track_family_is_input(cb->snapshot.config.family);
 }
 
 static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
@@ -512,42 +430,9 @@ static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
     return UI_TRACK_FAMILY_COUNT;
 }
 
-static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_track,
-                                                             uint8_t target_track,
-                                                             ui_track_family_t target_family,
-                                                             ui_track_type_t target_type)
-{
-    if ((source_track >= UI_TRACK_COUNT) || (target_track >= UI_TRACK_COUNT))
-    {
-        return 0U;
-    }
-
-    uint8_t family[UI_TRACK_COUNT];
-    uint8_t type[UI_TRACK_COUNT];
-    uint8_t midi_channel[UI_TRACK_COUNT];
-    uint8_t midi_source[UI_TRACK_COUNT];
-
-    for (uint8_t i = 0U; i < UI_TRACK_COUNT; ++i)
-    {
-        const ui_track_config_t cfg = ui_get_track_config(i);
-        family[i] = (uint8_t)cfg.family;
-        type[i] = (uint8_t)cfg.type;
-        midi_channel[i] = ui_get_track_midi_channel(i);
-        midi_source[i] = (uint8_t)ui_get_track_midi_source(i);
-    }
-
-    family[source_track] = (uint8_t)UI_TRACK_FAMILY_OFF;
-    type[source_track] = (uint8_t)UI_TRACK_TYPE_AUDIO;
-    family[target_track] = (uint8_t)target_family;
-    type[target_track] = (uint8_t)target_type;
-
-    return (uint8_t)(ui_restore_track_config_bulk(family, type, midi_channel, midi_source) ? 1U : 0U);
-}
-
 static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 {
-    ui_track_clipboard_t *const cb_mut = &g_ui_clipboard.track;
-    const ui_track_clipboard_t *const cb = cb_mut;
+    ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
     if (cb->valid == 0U)
     {
         return 0U;
@@ -557,58 +442,31 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
     const uint8_t source_track_valid = (source_track < UI_TRACK_COUNT) ? 1U : 0U;
     const uint8_t source_equals_target = (uint8_t)((source_track_valid != 0U) && (source_track == track));
 
-    ui_track_family_t target_family = cb->config.family;
+    ui_track_family_t target_family = cb->snapshot.config.family;
     uint8_t clear_source_after_success = 0U;
 
-    if ((source_equals_target == 0U) && (source_track_valid != 0U))
+    if ((source_equals_target == 0U)
+            && (source_track_valid != 0U)
+            && (ui_core_clipboard_track_is_input_exclusive(cb) != 0U))
     {
-        if (ui_core_clipboard_track_is_simple_exclusive(cb) != 0U)
+        const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
+        if (free_input != UI_TRACK_FAMILY_COUNT)
+        {
+            target_family = free_input;
+        }
+        else
         {
             clear_source_after_success = 1U;
         }
-        else if (ui_core_clipboard_track_is_input_exclusive(cb) != 0U)
-        {
-            const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
-            if (free_input != UI_TRACK_FAMILY_COUNT)
-            {
-                target_family = free_input;
-            }
-            else
-            {
-                clear_source_after_success = 1U;
-            }
-        }
     }
 
-    if ((clear_source_after_success != 0U) && (source_equals_target == 0U))
-    {
-        if (ui_core_clipboard_move_exclusive_track_config(source_track, track, target_family, cb->config.type) == 0U)
-        {
-            return 0U;
-        }
-    }
-    else
-    {
-        if (ui_set_track_family(track, target_family) == false)
-        {
-            return 0U;
-        }
-        if (ui_set_track_type(track, cb->config.type) == false)
-        {
-            return 0U;
-        }
-    }
-
-    (void)ui_set_track_midi_channel(track, cb->midi_channel);
-    (void)ui_set_track_midi_source(track, cb->midi_source);
-    seq_model_set_track_page(track, cb->seq_page);
-    seq_model_set_track_length(track, cb->seq_length);
-    seq_runtime_set_track_div(track, cb->seq_div);
-    seq_runtime_set_track_quant(track, cb->seq_quant);
-    seq_runtime_set_track_swing(track, cb->seq_swing);
-
-    const uint8_t applied = ui_core_clipboard_apply_param_list(track, cb->params, cb->values, cb->param_count);
-    if ((cb->param_count > 0U) && (applied == 0U))
+    const track_snapshot_apply_options_t options = {
+        .has_family_override = (target_family != cb->snapshot.config.family) ? 1U : 0U,
+        .family_override = target_family,
+        .clear_source_track = clear_source_after_success,
+        .source_track = source_track
+    };
+    if (track_snapshot_apply_ex(track, &cb->snapshot, &options) == 0U)
     {
         return 0U;
     }
@@ -620,7 +478,7 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
             return 0U;
         }
 
-        cb_mut->source_track = track;
+        cb->source_track = track;
     }
 
     ui_edit_context_sync_active_track(0U);

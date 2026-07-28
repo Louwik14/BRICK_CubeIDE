@@ -125,6 +125,7 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
+void seq_runtime_on_seq_link_changed(uint8_t master_track);
 
 /* Queries / diagnostics. */
 uint8_t seq_runtime_is_running(void);

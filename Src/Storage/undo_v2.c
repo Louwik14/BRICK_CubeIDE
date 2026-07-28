@@ -385,16 +385,32 @@ static uint8_t undo_v2_apply_param_value(const undo_v2_param_delta_t *delta, uin
     switch (delta->param_id)
     {
         case PARAM_SEQ_LENGTH:
+            if (seq_edit_track_sequence_is_locked((seq_track_id_t)delta->track) != 0U)
+            {
+                return 0U;
+            }
             seq_model_set_track_length(delta->track, (uint8_t)(value + 0.5f));
             seq_runtime_on_track_length_changed(delta->track);
             return 1U;
         case PARAM_SEQ_DIV:
+            if (seq_edit_track_sequence_is_locked((seq_track_id_t)delta->track) != 0U)
+            {
+                return 0U;
+            }
             seq_runtime_set_track_div(delta->track, (value < 0.5f) ? 1U : (value < 1.5f) ? 2U : (value < 2.5f) ? 4U : 8U);
             return 1U;
         case PARAM_SEQ_QUANT:
+            if (seq_edit_track_sequence_is_locked((seq_track_id_t)delta->track) != 0U)
+            {
+                return 0U;
+            }
             seq_runtime_set_track_quant(delta->track, (uint8_t)(value + 0.5f));
             return 1U;
         case PARAM_SEQ_SWING:
+            if (seq_edit_track_sequence_is_locked((seq_track_id_t)delta->track) != 0U)
+            {
+                return 0U;
+            }
             seq_runtime_set_track_swing(delta->track, (uint8_t)(value + 0.5f));
             return 1U;
         case PARAM_ARP_HOLD:
@@ -479,6 +495,76 @@ static undo_v2_status_t undo_v2_apply_param_transaction(const undo_v2_tx_entry_t
     return UNDO_V2_STATUS_OK;
 }
 
+static uint8_t undo_v2_locked_sequence_snapshot_matches_current(const PatternSaveV1 *snapshot)
+{
+    if (snapshot == 0)
+    {
+        return 0U;
+    }
+
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_TRACK_COUNT; ++track)
+    {
+        if (seq_edit_track_sequence_is_locked(track) == 0U)
+        {
+            continue;
+        }
+
+        const pattern_v1_track_seq_t *const snap_track = &snapshot->seq.tracks[track];
+        if (snap_track->length_steps != seq_model_get_track_length(track))
+        {
+            return 0U;
+        }
+
+        uint8_t runtime_value = 0U;
+        if ((seq_runtime_get_track_div(track, &runtime_value) == 0U)
+                || (snapshot->globals.track_div[track] != runtime_value)
+                || (seq_runtime_get_track_quant(track, &runtime_value) == 0U)
+                || (snapshot->globals.track_quant[track] != runtime_value)
+                || (seq_runtime_get_track_swing(track, &runtime_value) == 0U)
+                || (snapshot->globals.track_swing[track] != runtime_value))
+        {
+            return 0U;
+        }
+
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+        {
+            const pattern_v1_step_t *const snap_step = &snap_track->steps[step];
+            if ((snap_step->trig != seq_model_get_trig(track, step))
+                    || (snap_step->roll != seq_model_get_step_roll(track, step)))
+            {
+                return 0U;
+            }
+
+            seq_plock_entry_t current_locks[SEQ_STEP_MAX_LOCKS];
+            uint8_t current_count = 0U;
+            if ((seq_model_step_plock_collect(track,
+                                              step,
+                                              current_locks,
+                                              SEQ_STEP_MAX_LOCKS,
+                                              &current_count) == 0U)
+                    || (snap_step->lock_count != current_count))
+            {
+                return 0U;
+            }
+
+            for (uint8_t i = 0U; i < current_count; ++i)
+            {
+                const pattern_v1_plock_t *const snap_lock = &snap_step->locks[i];
+                const seq_plock_entry_t *const current_lock = &current_locks[i];
+                if ((snap_lock->set_id != current_lock->set_id)
+                        || (snap_lock->param_slot != current_lock->param_slot)
+                        || (snap_lock->value16 != current_lock->value16)
+                        || (snap_lock->flags != current_lock->flags))
+                {
+                    return 0U;
+                }
+            }
+        }
+    }
+
+    return 1U;
+}
+
 static undo_v2_status_t undo_v2_apply_snapshot_transaction(const undo_v2_tx_entry_t *tx, uint8_t use_after)
 {
     if ((tx == 0) || (tx->kind != UNDO_V2_TX_KIND_SNAPSHOT) || (tx->mode != UNDO_V2_TX_MODE_SNAPSHOT))
@@ -509,6 +595,11 @@ static undo_v2_status_t undo_v2_apply_snapshot_transaction(const undo_v2_tx_entr
             return UNDO_V2_STATUS_ERR_APPLY_FAILED;
         }
         snapshot = &payload->before_snapshot;
+    }
+
+    if (undo_v2_locked_sequence_snapshot_matches_current(snapshot) == 0U)
+    {
+        return UNDO_V2_STATUS_ERR_APPLY_FAILED;
     }
 
     return (pattern_live_apply_snapshot(snapshot, 0U) != 0U)
@@ -608,6 +699,8 @@ uint8_t undo_v2_param_is_undoable(param_id_t param_id)
         case PARAM_CFG_MIDI_SRC:
         case PARAM_CFG_GROUP_SPREAD:
         case PARAM_CFG_GROUP_LINK:
+        case PARAM_CFG_GROUP_SPREAD_KEYTRK:
+        case PARAM_CFG_GROUP_SEQ_LINK:
             return 0U;
 
         default:

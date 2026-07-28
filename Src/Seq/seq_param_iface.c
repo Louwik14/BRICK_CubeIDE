@@ -871,7 +871,7 @@ seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
     const param_desc_t *const desc = &param_registry[param];
     float clamped = value;
 
-    if (param == PARAM_PRISM_COARSE)
+    if ((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
     {
         if (clamped < 0.0f)
         {
@@ -922,7 +922,7 @@ float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16
 
     const param_desc_t *const desc = &param_registry[param];
 
-    if (param == PARAM_PRISM_COARSE)
+    if ((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
     {
         float value = (float)value16 / 4800.0f;
         if (value < 0.0f)

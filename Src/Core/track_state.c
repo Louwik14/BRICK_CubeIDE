@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "Core/track_state_internal.h"
 #include "UI/ui_track_catalog.h"
 
 static ui_track_config_t g_track_configs[UI_TRACK_COUNT];
@@ -9,7 +10,9 @@ static uint8_t g_track_midi_channel[UI_TRACK_COUNT];
 static ui_track_midi_source_t g_track_midi_source[UI_TRACK_COUNT];
 static track_voice_group_role_t g_track_voice_group_role[UI_TRACK_COUNT];
 static float g_track_voice_group_spread[UI_TRACK_COUNT];
+static uint8_t g_track_voice_group_spread_keytrack[UI_TRACK_COUNT];
 static uint8_t g_track_voice_group_link[UI_TRACK_COUNT];
+static uint8_t g_track_voice_group_seq_link[UI_TRACK_COUNT];
 static uint32_t g_track_revision[UI_TRACK_COUNT];
 static uint32_t g_track_state_global_revision = 0U;
 
@@ -124,7 +127,9 @@ void track_state_init(void)
         g_track_midi_source[track] = UI_TRACK_MIDI_SRC_ALL;
         g_track_voice_group_role[track] = TRACK_VOICE_GROUP_ROLE_SOLO;
         g_track_voice_group_spread[track] = 0.0f;
+        g_track_voice_group_spread_keytrack[track] = 0U;
         g_track_voice_group_link[track] = 0U;
+        g_track_voice_group_seq_link[track] = 0U;
         g_track_revision[track] = 0U;
     }
 
@@ -227,6 +232,24 @@ uint8_t track_state_get_voice_group_link(uint8_t master_track)
     return (g_track_voice_group_link[master_track] != 0U) ? 1U : 0U;
 }
 
+uint8_t track_state_get_voice_group_spread_keytrack(uint8_t master_track)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+    return (g_track_voice_group_spread_keytrack[master_track] != 0U) ? 1U : 0U;
+}
+
+uint8_t track_state_get_voice_group_seq_link(uint8_t master_track)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+    return (g_track_voice_group_seq_link[master_track] != 0U) ? 1U : 0U;
+}
+
 bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t role)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT))
@@ -288,6 +311,38 @@ bool track_state_set_voice_group_link(uint8_t master_track, uint8_t link)
         return true;
     }
     g_track_voice_group_link[master_track] = link;
+    track_state_bump_revision(master_track);
+    return true;
+}
+
+bool track_state_set_voice_group_spread_keytrack(uint8_t master_track, uint8_t enabled)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+    enabled = (enabled != 0U) ? 1U : 0U;
+    if (g_track_voice_group_spread_keytrack[master_track] == enabled)
+    {
+        return true;
+    }
+    g_track_voice_group_spread_keytrack[master_track] = enabled;
+    track_state_bump_revision(master_track);
+    return true;
+}
+
+bool track_state_set_voice_group_seq_link_raw(uint8_t master_track, uint8_t seq_link)
+{
+    if (master_track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+    seq_link = (seq_link != 0U) ? 1U : 0U;
+    if (g_track_voice_group_seq_link[master_track] == seq_link)
+    {
+        return true;
+    }
+    g_track_voice_group_seq_link[master_track] = seq_link;
     track_state_bump_revision(master_track);
     return true;
 }
@@ -595,6 +650,26 @@ bool track_state_apply_voice_group_config_bulk(const float spread[UI_TRACK_COUNT
         {
             g_track_voice_group_spread[track] = next_spread;
             g_track_voice_group_link[track] = next_link;
+            track_state_bump_revision(track);
+        }
+    }
+
+    return true;
+}
+
+bool track_state_apply_voice_group_seq_link_bulk_raw(const uint8_t seq_link[UI_TRACK_COUNT])
+{
+    if (seq_link == NULL)
+    {
+        return false;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const uint8_t next_seq_link = (seq_link[track] != 0U) ? 1U : 0U;
+        if (g_track_voice_group_seq_link[track] != next_seq_link)
+        {
+            g_track_voice_group_seq_link[track] = next_seq_link;
             track_state_bump_revision(track);
         }
     }

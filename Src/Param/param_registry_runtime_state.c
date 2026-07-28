@@ -40,6 +40,17 @@ void param_registry_runtime_cache_set(uint8_t track, param_id_t id, float value)
     g_param_runtime_track_valid[track][id] = 1U;
 }
 
+void param_registry_runtime_cache_clear_track(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    memset(g_param_runtime_track_values[track], 0, sizeof(g_param_runtime_track_values[track]));
+    memset(g_param_runtime_track_valid[track], 0, sizeof(g_param_runtime_track_valid[track]));
+}
+
 void param_registry_runtime_commit_authoritative_write(uint8_t track,
                                                        param_id_t id,
                                                        float value,

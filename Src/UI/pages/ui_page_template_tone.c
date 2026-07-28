@@ -78,12 +78,12 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
 
 static const ui_template_family_t g_ui_template_tone_family_prism = {
     .family_title = "TONE",
-    .nav_labels = { "VOICE", "EDIT", "-", "-" },
+    .nav_labels = { "O1V", "O1E", "O2V", "O2E" },
     .subpages = {
-        { .title = "VOICE", .param_bank = { .params = { PARAM_PRISM_TIMBRE, PARAM_PRISM_COLOR, PARAM_PRISM_MODULATION, PARAM_PRISM_EDIT } } },
-        { .title = "EDIT", .param_bank = { .params = { PARAM_PRISM_COARSE, PARAM_PRISM_FM, PARAM_PRISM_PHASE_RESET, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "OSC1 VOICE", .param_bank = { .params = { PARAM_PRISM_TIMBRE, PARAM_PRISM_COLOR, PARAM_PRISM_MODULATION, PARAM_PRISM_EDIT } } },
+        { .title = "OSC1 EDIT", .param_bank = { .params = { PARAM_PRISM_LEVEL, PARAM_PRISM_COARSE, PARAM_PRISM_FM, PARAM_PRISM_PHASE_RESET } } },
+        { .title = "OSC2 VOICE", .param_bank = { .params = { PARAM_PRISM_OSC2_TIMBRE, PARAM_PRISM_OSC2_COLOR, PARAM_PRISM_OSC2_MODULATION, PARAM_PRISM_OSC2_EDIT } } },
+        { .title = "OSC2 EDIT", .param_bank = { .params = { PARAM_PRISM_OSC2_LEVEL, PARAM_PRISM_OSC2_COARSE, PARAM_PRISM_OSC2_FM, PARAM_PRISM_OSC2_PHASE_RESET } } },
     },
     .default_subpage = 0U,
 };
@@ -308,23 +308,38 @@ static const uint16_t g_prism_fm_frequency_quantizer[] = {
     25600
 };
 
-static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_active_track(uint8_t *out_edit_index)
+static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_param(param_id_t id, uint8_t *out_edit_index)
 {
     const uint8_t active_track = ui_get_active_track();
-    uint8_t edit_index = 0U;
-
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_PRISM)
-            || (param_prism_edit_index_for_track(active_track, &edit_index) == 0U))
+            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_PRISM))
     {
         return NULL;
     }
 
+    const param_id_t edit_param = ((id == PARAM_PRISM_OSC2_TIMBRE)
+                                   || (id == PARAM_PRISM_OSC2_COLOR)
+                                   || (id == PARAM_PRISM_OSC2_EDIT)
+                                   || (id == PARAM_PRISM_OSC2_FINE)
+                                   || (id == PARAM_PRISM_OSC2_COARSE)
+                                   || (id == PARAM_PRISM_OSC2_FM)
+                                   || (id == PARAM_PRISM_OSC2_MODULATION)
+                                   || (id == PARAM_PRISM_OSC2_LEVEL)
+                                   || (id == PARAM_PRISM_OSC2_PHASE_RESET))
+        ? PARAM_PRISM_OSC2_EDIT
+        : PARAM_PRISM_EDIT;
+    float edit = 0.0f;
+    if (param_registry_get_track_value(edit_param, active_track, &edit) == 0U)
+    {
+        return NULL;
+    }
+
+    uint8_t edit_index = 0U;
+    (void)param_prism_edit_index_from_value(edit, &edit_index);
     if (out_edit_index != NULL)
     {
         *out_edit_index = edit_index;
     }
-
     return param_prism_labels_for_edit_index(edit_index);
 }
 
@@ -687,7 +702,7 @@ static uint8_t ui_page_template_tone_prism_kind_for_param(param_id_t id,
         return 0U;
     }
 
-    if (id == PARAM_PRISM_TIMBRE)
+    if ((id == PARAM_PRISM_TIMBRE) || (id == PARAM_PRISM_OSC2_TIMBRE))
     {
         if (out_name != NULL)
         {
@@ -700,7 +715,7 @@ static uint8_t ui_page_template_tone_prism_kind_for_param(param_id_t id,
         return 1U;
     }
 
-    if (id == PARAM_PRISM_COLOR)
+    if ((id == PARAM_PRISM_COLOR) || (id == PARAM_PRISM_OSC2_COLOR))
     {
         if (out_name != NULL)
         {
@@ -724,7 +739,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
                                                      uint32_t out_value_len)
 {
     uint8_t edit_index = 0U;
-    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_active_track(&edit_index);
+    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_param(id, &edit_index);
     const char *name = NULL;
     ui_prism_value_kind_t kind = UI_PRISM_VALUE_PERCENT;
 
@@ -736,6 +751,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
     switch (id)
     {
         case PARAM_PRISM_EDIT:
+        case PARAM_PRISM_OSC2_EDIT:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "MODEL");
@@ -744,6 +760,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             return 1U;
 
         case PARAM_PRISM_FINE:
+        case PARAM_PRISM_OSC2_FINE:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "FINE");
@@ -755,6 +772,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             return 1U;
 
         case PARAM_PRISM_COARSE:
+        case PARAM_PRISM_OSC2_COARSE:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "TUNE");
@@ -766,6 +784,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             return 1U;
 
         case PARAM_PRISM_FM:
+        case PARAM_PRISM_OSC2_FM:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "FM AMT");
@@ -777,6 +796,7 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             return 1U;
 
         case PARAM_PRISM_MODULATION:
+        case PARAM_PRISM_OSC2_MODULATION:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "A MOD");
@@ -784,6 +804,30 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             if ((out_value != NULL) && (out_value_len > 0U))
             {
                 ui_page_template_tone_prism_format_bipolar_percent(ui_page_template_tone_prism_u15(value), out_value, out_value_len);
+            }
+            return 1U;
+
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_LEVEL:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "LVL");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                ui_page_template_tone_prism_format_percent(ui_page_template_tone_prism_u15(value), out_value, out_value_len);
+            }
+            return 1U;
+
+        case PARAM_PRISM_PHASE_RESET:
+        case PARAM_PRISM_OSC2_PHASE_RESET:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "PHASE");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                (void)snprintf(out_value, out_value_len, "%s", (value >= 0.5f) ? "ON" : "OFF");
             }
             return 1U;
 
@@ -969,7 +1013,7 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
                                                            const char *value_label,
                                                            uiw_widget_type_t suggested_widget)
 {
-    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_active_track(NULL);
+    const ui_prism_param_label_t *const labels = ui_page_template_tone_prism_labels_for_param(id, NULL);
     ui_prism_value_kind_t kind = UI_PRISM_VALUE_PERCENT;
 
     (void)slot;
@@ -993,13 +1037,16 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     if (ui_page_template_tone_prism_kind_for_param(id, labels, NULL, &kind) == 0U)
     {
-        if (id == PARAM_PRISM_EDIT)
+        if ((id == PARAM_PRISM_EDIT) || (id == PARAM_PRISM_OSC2_EDIT))
         {
             return UIW_WIDGET_ENUM_TEXT;
         }
         if ((id == PARAM_PRISM_FINE)
                 || (id == PARAM_PRISM_COARSE)
-                || (id == PARAM_PRISM_MODULATION))
+                || (id == PARAM_PRISM_MODULATION)
+                || (id == PARAM_PRISM_OSC2_FINE)
+                || (id == PARAM_PRISM_OSC2_COARSE)
+                || (id == PARAM_PRISM_OSC2_MODULATION))
         {
             return UIW_WIDGET_BIPOLAR_BAR;
         }

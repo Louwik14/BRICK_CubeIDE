@@ -17,6 +17,8 @@ typedef struct
 
 void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
                                                   seq_track_id_t track);
+void seq_boundary_engine_invalidate_track(seq_runtime_state_t *state,
+                                          seq_track_id_t track);
 void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state);
 void seq_boundary_engine_process(seq_runtime_state_t *state,
                                  seq_boundary_hit_t *out_hits,

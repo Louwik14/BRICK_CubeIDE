@@ -79,6 +79,7 @@ typedef struct
 } track_sound_state_t;
 
 void track_sound_state_init(void);
+void track_sound_state_make_default(track_sound_state_t *out_state);
 track_sound_state_t *track_sound_state_get(uint8_t track);
 const track_sound_state_t *track_sound_state_get_const(uint8_t track);
 

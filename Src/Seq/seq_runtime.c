@@ -15,6 +15,7 @@
 #include "Storage/memory_layout.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/engine_tasklet.h"
+#include "Core/track_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
@@ -906,6 +907,44 @@ void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
 
     /* Post-commit notification: runtime relays a committed program change to the scheduler. */
     seq_play_scheduler_live_midi_program_changed(track, program_value);
+}
+
+void seq_runtime_on_seq_link_changed(uint8_t master_track)
+{
+    if (master_track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    uint8_t members[8U];
+    uint8_t member_count = 0U;
+    if ((track_runtime_collect_voice_group_members(master_track,
+                                                   members,
+                                                   (uint8_t)(sizeof(members) / sizeof(members[0])),
+                                                   &member_count) == 0U)
+            || (member_count == 0U))
+    {
+        members[0] = master_track;
+        member_count = 1U;
+    }
+
+    if (g_seq_runtime.running == 0U)
+    {
+        return;
+    }
+
+    seq_play_scheduler_clear_tracks(members, member_count);
+    for (uint8_t i = 0U; i < member_count; ++i)
+    {
+        const seq_track_id_t track = members[i];
+        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
+        seq_boundary_engine_invalidate_track(&g_seq_runtime, track);
+    }
+}
+
+void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count)
+{
+    seq_play_scheduler_clear_tracks(tracks, track_count);
 }
 
 void seq_runtime_on_track_pattern_change(uint8_t track)

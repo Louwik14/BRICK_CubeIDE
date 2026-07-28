@@ -1,5 +1,12 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-28 - TONE Prism dual-osc
+
+- Le bloc canonique Prism dans `track_tone_sound_state.prism` est maintenant indexe par oscillateur pour `MODEL/FINE/TUNE/FM AMT/PARAM1/AMOD/PARAM2/PHASE/LVL`.
+- OSC1 reutilise les IDs historiques `PARAM_PRISM_*`; `PARAM_PRISM_LEVEL` et les IDs `PARAM_PRISM_OSC2_*` completent le layout courant. Pas de migration projet/pattern complexe dans cette passe.
+- L'apply Prism projette chaque write vers `brick6_braids_runtime_set_osc_*`; l'edition UI de `TUNE` continue d'utiliser le controle unifie `COARSE + FINE`, avec `FINE` remis a `0.5` lors d'un edit direct.
+- Les destinations Matrix Prism finales sont explicites et continues: `OSC1/OSC2 PARAM1`, `PARAM2`, `AMOD`, `TUNE`, `FM AMT`, `LVL`. `MODEL`, `FINE` et `PHASE` sont exclus des destinations continues.
+
 ## Addendum 2026-07-27 - TONE Synth/Wave
 
 - `PARAM_WAVE_OSC1_*` et `PARAM_WAVE_OSC2_*` portent les 16 parametres TONE principaux du moteur `Synth/Wave`: `TABLE`, `POS`, `START`, `END`, `LEVEL`, `TUNE`, `PHASE`, `FLIP`.
@@ -835,10 +842,10 @@ Dette explicite post-passe 4:
 
 ## Addendum 2026-07-25 - TRACK CFG group SPREAD/LINK
 
-- `PARAM_CFG_GROUP_SPREAD` et `PARAM_CFG_GROUP_LINK` sont des commandes CFG speciales resolues par `param_registry` vers la master effective du voice group; elles ne passent pas par les domaines TONE/COLORS/MIX/PLAY.
+- `PARAM_CFG_GROUP_SPREAD`, `PARAM_CFG_GROUP_LINK` et `PARAM_CFG_GROUP_SEQ_LINK` sont des commandes CFG speciales resolues par `param_registry` vers la master effective du voice group; elles ne passent pas par les domaines TONE/COLORS/MIX/PLAY.
 - SPREAD reutilise `PARAM_MIX_PAN` comme point d'application: pour `n=2..8`, la position du membre `i` est `spread * (((i / (n - 1)) * 2) - 1)`, donc centree autour de zero, avec `i=0` master puis slaves dans l'ordre logique.
 - LINK est intercepte en un seul point UI, apres l'edition manuelle de base et avant toute propagation secondaire: le delta propage est `valeur_apres_source - valeur_avant_source`, donc le delta reellement accepte apres clamp.
-- LINK inclut les edits manuels de base sur `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, et sur domaines compatibles `TONE`, `COLORS`, `MIX` et `MOD` pour params continus/int non enum/bool. Il exclut strictement `PLAY`, p-locks, live-rec p-locks, scheduler, modulation, automation, commandes, navigation, SPREAD et LINK.
+- LINK inclut les edits manuels de base sur `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, et sur domaines compatibles `TONE`, `COLORS`, `MIX` et `MOD` pour params continus/int non enum/bool. Il exclut strictement `PLAY`, p-locks, live-rec p-locks, scheduler, modulation, automation, commandes, navigation, `SPREAD`, `LINK` et `SEQ LINK`.
 - La recursion est bloquee par un garde local de propagation; une ecriture propagee ne redevient jamais source LINK.
 
 ## Addendum 2026-07-26 - resolution fine TONE Stack
@@ -858,10 +865,37 @@ Dette explicite post-passe 4:
 ## Addendum 2026-07-26 - LINK choix structurels et filtre
 
 - LINK voice group propage maintenant les choix discrets `PARAM_FILTER_TYPE`, `PARAM_CFG_TRACK` et `PARAM_CFG_TRACK_TYPE` par valeur absolue source apres clamp, pas par delta relatif.
-- Les autres params LINK existants restent sur leur propagation relative bornee; les exclusions `PLAY`, p-locks, scheduler, automation, SPREAD/LINK et selecteurs Matrix restent inchangees.
+- Les autres params LINK existants restent sur leur propagation relative bornee; les exclusions `PLAY`, p-locks, scheduler, automation, `SPREAD`/`LINK`/`SEQ LINK` et selecteurs Matrix restent inchangees.
 
 ## Addendum 2026-07-27 - identite Synth/Wave avant TONE
 
 - `Synth/Wave` possede une identite runtime separee. Les `PARAM_WAVE_*` ont ete ajoutes ensuite par l'addendum TONE Wave ci-dessus.
 - Avant cette passe TONE, aucun slot TONE, apply backend, p-lock TONE ou destination Matrix Wave n'etait branche.
 - Les destinations Prism existantes restent attachees a `TRACK_RUNTIME_ENGINE_PRISM` et ne s'appliquent pas a `TRACK_RUNTIME_ENGINE_WAVE`.
+
+## Addendum 2026-07-28 - PARAM CFG GROUP SPREAD KEYTRK
+
+- `PARAM_CFG_GROUP_SPREAD_KEYTRK` ajoute le toggle `KEYTRK` de `CFG/GROUP`, resolu par `param_registry` vers la master effective du voice group comme `SPREAD` et `LINK`.
+- `KEYTRK=OFF` garde le comportement `SPREAD` existant: pan MIX des membres `spread * (((i / (n - 1)) * 2) - 1)`.
+- `KEYTRK=ON` neutralise le pan MIX seulement pour les membres `Sampler/Multi` et laisse `brick6_sampler_runtime` appliquer un pan par voix Multi.
+- Courbe keytrack: facteur lineaire borne `0.5 + note/127 * 0.75`, soit `0.5..1.25`, multiplie par le pan de spread puis clamp `-1..1`.
+- `LINK` reste exclu de `SPREAD` et `KEYTRK`; aucune propagation LINK secondaire, p-lock ou modulation n'est ajoutee.
+
+## Addendum 2026-07-28 - PARAM CFG GROUP SEQ LINK
+
+- `PARAM_CFG_GROUP_SEQ_LINK` ajoute le toggle utilisateur `SEQ LINK` de `CFG/GROUP`.
+- L'apply est centralise dans `param_registry`: la track active est resolue vers la master effective du voice group, puis le flag est commite via `param_registry_commit_voice_group_seq_link()`.
+- La lecture valeur passe par la projection master-effective `track_runtime_get_voice_group_seq_link()` afin qu'une track hors groupe operationnel reste affichee `OFF`.
+
+## Addendum 2026-07-28 - contrat commit SEQ LINK
+
+- `SEQ LINK` se modifie maintenant par `param_registry_commit_voice_group_seq_link()` ou `param_registry_commit_voice_group_seq_link_bulk()`, quelle que soit l'origine: UI, Pattern/Project, Kit, Patch Poly ou snapshot track.
+- Ces APIs sont le point unique qui ecrit le stockage brut Z2 puis emet la notification post-commit Z4 `seq_runtime_on_seq_link_changed()` quand la valeur brute change.
+- Les mutations brutes `track_state_*_seq_link_raw()` sont reservees a ce contrat interne et ne constituent pas une surface d'appel produit.
+- `SEQ LINK` reste une commande de structure CFG: pas de p-lock, pas de modulation, pas de live-rec, pas de propagation par `CFG GROUP LINK`.
+
+## Addendum 2026-07-28 - reset runtime cache par Track snapshot
+
+- `param_registry_clear_track_runtime_state(track)` neutralise les overlays temporaires par parametre puis vide le cache runtime track-scoped.
+- Ce chemin est consomme par `track_snapshot` avant restore/clear d'une track afin d'eviter qu'un parametre ancien non reapplique reste lisible par fallback cache.
+- Les bases canoniques restent `track_sound_state`, `track_tone_sound_state`, FILTER/LFO/Matrix/PLAY; le cache runtime n'est pas une source de persistence.

@@ -82,6 +82,8 @@ typedef struct
     uint8_t type;
     uint8_t voice_group_role;
     uint8_t voice_group_link;
+    uint8_t voice_group_seq_link;
+    uint8_t reserved[3];
     float voice_group_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;

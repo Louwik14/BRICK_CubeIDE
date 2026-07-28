@@ -14,7 +14,9 @@
 #define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
 #define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
 #define UI_CFG_GROUP_SPREAD_PARAM ((param_id_t)PARAM_CFG_GROUP_SPREAD)
+#define UI_CFG_GROUP_SPREAD_KEYTRK_PARAM ((param_id_t)PARAM_CFG_GROUP_SPREAD_KEYTRK)
 #define UI_CFG_GROUP_LINK_PARAM ((param_id_t)PARAM_CFG_GROUP_LINK)
+#define UI_CFG_GROUP_SEQ_LINK_PARAM ((param_id_t)PARAM_CFG_GROUP_SEQ_LINK)
 #define UI_CFG_START_PARAM ((param_id_t)PARAM_CFG_START)
 #define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
 #define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
@@ -52,7 +54,14 @@ void ui_active_track_sync_mirror(void)
             master_track = active_track;
         }
         param_store_set_active(UI_CFG_GROUP_SPREAD_PARAM, track_state_get_voice_group_spread(master_track));
+        param_store_set_active(UI_CFG_GROUP_SPREAD_KEYTRK_PARAM,
+                               (float)track_state_get_voice_group_spread_keytrack(master_track));
         param_store_set_active(UI_CFG_GROUP_LINK_PARAM, (float)track_state_get_voice_group_link(master_track));
+        {
+            uint8_t seq_link = 0U;
+            (void)track_runtime_get_voice_group_seq_link(active_track, &seq_link);
+            param_store_set_active(UI_CFG_GROUP_SEQ_LINK_PARAM, (float)seq_link);
+        }
     }
     param_store_set_active(UI_CFG_START_PARAM, (float)seq_runtime_get_rec_start_mode());
     param_store_set_active(UI_CFG_TEMPO_PARAM, (float)seq_runtime_get_tempo_bpm_milli() / 1000.0f);

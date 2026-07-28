@@ -123,10 +123,15 @@ static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
 
 static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track)
 {
-    return (uint8_t)((param == PARAM_PRISM_COARSE)
+    return (uint8_t)(((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
             && (track < UI_TRACK_COUNT)
             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_PRISM));
+}
+
+static param_id_t ui_param_prism_fine_for_tune(param_id_t param)
+{
+    return (param == PARAM_PRISM_OSC2_COARSE) ? PARAM_PRISM_OSC2_FINE : PARAM_PRISM_FINE;
 }
 
 static float ui_param_prism_tune_normalized_from_parts(float coarse, float fine)
@@ -389,7 +394,8 @@ static uint8_t ui_param_get_seq_runtime_track_value(param_id_t param, uint8_t tr
 
 static uint8_t ui_param_apply_seq_runtime_track_value(param_id_t param, uint8_t track, float value)
 {
-    if (ui_param_seq_runtime_track_is_valid(track) == 0U)
+    if ((ui_param_seq_runtime_track_is_valid(track) == 0U)
+            || (seq_edit_track_sequence_is_locked((seq_track_id_t)track) != 0U))
     {
         return 0U;
     }
@@ -1120,7 +1126,10 @@ void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t
 
 static uint8_t ui_param_is_track_scoped(param_id_t param)
 {
-    if ((param == PARAM_CFG_GROUP_SPREAD) || (param == PARAM_CFG_GROUP_LINK))
+    if ((param == PARAM_CFG_GROUP_SPREAD)
+            || (param == PARAM_CFG_GROUP_LINK)
+            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+            || (param == PARAM_CFG_GROUP_SEQ_LINK))
     {
         return 1U;
     }
@@ -1142,7 +1151,10 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
         return 0U;
     }
 
-    if ((param == PARAM_CFG_GROUP_SPREAD) || (param == PARAM_CFG_GROUP_LINK))
+    if ((param == PARAM_CFG_GROUP_SPREAD)
+            || (param == PARAM_CFG_GROUP_LINK)
+            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+            || (param == PARAM_CFG_GROUP_SEQ_LINK))
     {
         return 0U;
     }
@@ -1341,8 +1353,8 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
     {
         float coarse = 0.5f;
         float fine = 0.5f;
-        if ((param_registry_get_track_value(PARAM_PRISM_COARSE, track, &coarse) == 0U)
-                || (param_registry_get_track_value(PARAM_PRISM_FINE, track, &fine) == 0U))
+        if ((param_registry_get_track_value(param, track, &coarse) == 0U)
+                || (param_registry_get_track_value(ui_param_prism_fine_for_tune(param), track, &fine) == 0U))
         {
             return 0U;
         }
@@ -1387,6 +1399,8 @@ static uint8_t ui_param_group_link_param_is_allowed(param_id_t param, const para
 
     if ((param == PARAM_CFG_GROUP_SPREAD)
             || (param == PARAM_CFG_GROUP_LINK)
+            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
+            || (param == PARAM_CFG_GROUP_SEQ_LINK)
             || (param == PARAM_CFG_MIDI_CH)
             || (param == PARAM_CFG_MIDI_SRC))
     {
@@ -1793,7 +1807,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             if (update_active_mirror != 0U)
             {
                 param_store_set_active(param, clamped);
-                param_store_set_active(PARAM_PRISM_FINE, 0.5f);
+                param_store_set_active(ui_param_prism_fine_for_tune(param), 0.5f);
             }
             return 1U;
         }
@@ -1801,12 +1815,12 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         ui_param_ensure_undo_transaction(encoder, param, track);
 
         const param_registry_track_edit_cmd_t fine_cmd = {
-            .id = PARAM_PRISM_FINE,
+            .id = ui_param_prism_fine_for_tune(param),
             .track = track,
             .value = 0.5f
         };
         const param_registry_track_edit_cmd_t coarse_cmd = {
-            .id = PARAM_PRISM_COARSE,
+            .id = param,
             .track = track,
             .value = clamped
         };
@@ -1835,7 +1849,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         if (update_active_mirror != 0U)
         {
             param_store_set_active(param, clamped);
-            param_store_set_active(PARAM_PRISM_FINE, 0.5f);
+            param_store_set_active(ui_param_prism_fine_for_tune(param), 0.5f);
         }
         if (undo_v2_is_transaction_open() != 0U)
         {
@@ -2164,6 +2178,12 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
     }
 
     const seq_track_id_t param_track = active_track;
+    if ((seq_edit_track_sequence_is_locked(param_track) != 0U)
+            || (seq_edit_track_sequence_is_locked(held_track) != 0U))
+    {
+        return 1U;
+    }
+
     uint8_t set_id = 0U;
     seq_param_slot_t param_slot = 0U;
     if (ui_param_resolve_seq_slot(param_track, param, &set_id, &param_slot) == 0U)

@@ -178,9 +178,22 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             continue;
         }
 
-        brick6_braids_runtime_render_instance(ctx->instance_id, prism_tmp, frames);
-        mixer_submit_external_mono_native(ctx->mix_track_id, prism_tmp, frames);
-        prism_tracks++;
+        float *direct_mono = NULL;
+        if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
+        {
+            if (brick6_braids_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
+            {
+                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                prism_tracks++;
+            }
+            continue;
+        }
+
+        if (brick6_braids_runtime_render_instance(ctx->instance_id, prism_tmp, frames) != 0U)
+        {
+            mixer_submit_external_mono_native(ctx->mix_track_id, prism_tmp, frames);
+            prism_tracks++;
+        }
     }
 
     if (out_prism_tracks != NULL)

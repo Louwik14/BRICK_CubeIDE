@@ -234,3 +234,16 @@ Documents conserves pour tracabilite uniquement:
 - Z2 porte les attributs de groupe master/slaves `SPREAD` et `LINK` dans `track_state`; Z5 les expose uniquement en `CFG 2/2` sur une master avec slaves.
 - Z3 applique SPREAD via le pan MIX existant et intercepte LINK au point unique d'edition manuelle UI; `PLAY`, p-locks et scheduler restent exclus.
 - Z6 persiste ces attributs dans Pattern/Project et les payloads Patch Poly/Kit selon leurs autorites respectives.
+
+## Addendum 2026-07-28 - decision SEQ LINK
+
+- `SEQ LINK` est un nouvel attribut structurel de voice group distinct de `CFG GROUP LINK`.
+- Autorite cible: `track_state` en Z2, avec lecture master-effective exposee aux consumers. Z4 consulte seulement cette projection pour la source de lecture p-lock playback.
+- Z5 route l'edition utilisateur vers `PARAM_CFG_GROUP_SEQ_LINK`, Z3 commit dans `track_state`, Z6 persiste l'attribut avec la configuration de groupe. Aucun stockage p-lock n'est modifie par cette decision.
+
+## Addendum 2026-07-28 - Multi Spread Keytrack
+
+- Z2 porte `CFG GROUP SPREAD KEYTRK` comme attribut transient de voice group; Z3 expose `PARAM_CFG_GROUP_SPREAD_KEYTRK` et conserve `LINK` separe.
+- Z1 applique le keytrack uniquement dans le rendu `Sampler/Multi`; `KEYTRK=OFF` garde le spread historique par pan MIX.
+- Z5 affiche `SPREAD` en double-widget `AMT` + `KEY`, avec `LINK` et `SEQ LINK` conserves sur `CFG/GROUP`.
+- Etat courant: le stockage brut `track_state`, le contrat commit unique `param_registry_commit_voice_group_seq_link*()`, la projection `track_runtime_get_voice_group_seq_link()`, l'edition `CFG/GROUP > SEQ LINK`, la persistence Z6, la route logique commune Z4 boundary non-PLAY / scheduler PLAY et la reconciliation RUNNING post-commit existent.

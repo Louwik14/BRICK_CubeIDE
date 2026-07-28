@@ -415,6 +415,7 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
     uint8_t role[UI_TRACK_COUNT];
     float group_spread[UI_TRACK_COUNT];
     uint8_t group_link[UI_TRACK_COUNT];
+    uint8_t group_seq_link[UI_TRACK_COUNT];
 
     if (kit == 0)
     {
@@ -430,6 +431,7 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
         role[track] = kit->tracks[track].voice_group_role;
         group_spread[track] = kit->tracks[track].voice_group_spread;
         group_link[track] = kit->tracks[track].voice_group_link;
+        group_seq_link[track] = kit->tracks[track].voice_group_seq_link;
     }
 
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
@@ -441,6 +443,10 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
         return 0U;
     }
     if (track_state_apply_voice_group_config_bulk(group_spread, group_link) == false)
+    {
+        return 0U;
+    }
+    if (param_registry_commit_voice_group_seq_link_bulk(group_seq_link) == 0U)
     {
         return 0U;
     }
@@ -507,6 +513,7 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
         dst->voice_group_role = (uint8_t)track_state_get_voice_group_role(track);
         dst->voice_group_spread = track_state_get_voice_group_spread(track);
         dst->voice_group_link = track_state_get_voice_group_link(track);
+        dst->voice_group_seq_link = track_state_get_voice_group_seq_link(track);
         memcpy(&dst->sound, sound, sizeof(dst->sound));
         memcpy(&dst->tone, tone, sizeof(dst->tone));
         if (kit_v1_track_uses_sampler_asset(family, type) != 0U)

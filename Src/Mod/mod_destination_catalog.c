@@ -130,13 +130,18 @@ static uint8_t mod_destination_is_direct_prism(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_PRISM_EDIT:
-        case PARAM_PRISM_FINE:
         case PARAM_PRISM_COARSE:
         case PARAM_PRISM_FM:
         case PARAM_PRISM_TIMBRE:
         case PARAM_PRISM_MODULATION:
         case PARAM_PRISM_COLOR:
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_OSC2_FM:
+        case PARAM_PRISM_OSC2_TIMBRE:
+        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC2_LEVEL:
             return 1U;
         default:
             return 0U;
@@ -469,27 +474,41 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
 
     switch (dest)
     {
-        case PARAM_PRISM_EDIT:
-            brick6_braids_runtime_set_edit(ctx->instance_id,
-                                           (float)(uint8_t)(mod_destination_clampf(value, 0.0f, 38.0f) + 0.5f));
-            return 1U;
-        case PARAM_PRISM_FINE:
-            brick6_braids_runtime_set_fine(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
         case PARAM_PRISM_COARSE:
-            brick6_braids_runtime_set_coarse(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_coarse(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_FM:
-            brick6_braids_runtime_set_fm(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_fm(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_TIMBRE:
-            brick6_braids_runtime_set_timbre(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_timbre(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_MODULATION:
-            brick6_braids_runtime_set_modulation(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_modulation(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_COLOR:
-            brick6_braids_runtime_set_color(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_color(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_LEVEL:
+            brick6_braids_runtime_set_osc_level(ctx->instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_COARSE:
+            brick6_braids_runtime_set_osc_coarse(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_FM:
+            brick6_braids_runtime_set_osc_fm(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_TIMBRE:
+            brick6_braids_runtime_set_osc_timbre(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_MODULATION:
+            brick6_braids_runtime_set_osc_modulation(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_COLOR:
+            brick6_braids_runtime_set_osc_color(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC2_LEVEL:
+            brick6_braids_runtime_set_osc_level(ctx->instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -875,7 +894,12 @@ static uint8_t mod_destination_param_matches_track_context(ui_track_family_t fam
         {
             return 0U;
         }
-        if ((dest == PARAM_PRISM_PHASE_RESET)
+        if ((dest == PARAM_PRISM_EDIT)
+                || (dest == PARAM_PRISM_FINE)
+                || (dest == PARAM_PRISM_PHASE_RESET)
+                || (dest == PARAM_PRISM_OSC2_EDIT)
+                || (dest == PARAM_PRISM_OSC2_FINE)
+                || (dest == PARAM_PRISM_OSC2_PHASE_RESET)
                 || (dest == PARAM_MIDI_PROGRAM)
                 || (dest == PARAM_STACK_OSC_DETUNE)
                 || (dest == PARAM_STACK_PHASE_RESET)
@@ -1157,6 +1181,26 @@ static const char *mod_destination_wave_label_for_param(param_id_t dest)
     }
 }
 
+static const char *mod_destination_prism_label_for_param(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_PRISM_TIMBRE: return "OSC1 PARAM1";
+        case PARAM_PRISM_COLOR: return "OSC1 PARAM2";
+        case PARAM_PRISM_MODULATION: return "OSC1 AMOD";
+        case PARAM_PRISM_COARSE: return "OSC1 TUNE";
+        case PARAM_PRISM_FM: return "OSC1 FM AMT";
+        case PARAM_PRISM_LEVEL: return "OSC1 LVL";
+        case PARAM_PRISM_OSC2_TIMBRE: return "OSC2 PARAM1";
+        case PARAM_PRISM_OSC2_COLOR: return "OSC2 PARAM2";
+        case PARAM_PRISM_OSC2_MODULATION: return "OSC2 AMOD";
+        case PARAM_PRISM_OSC2_COARSE: return "OSC2 TUNE";
+        case PARAM_PRISM_OSC2_FM: return "OSC2 FM AMT";
+        case PARAM_PRISM_OSC2_LEVEL: return "OSC2 LVL";
+        default: return NULL;
+    }
+}
+
 uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
 {
     if ((out == NULL) || (out_len == 0U))
@@ -1192,7 +1236,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     {
         name = "lfo3rate";
     }
-    else if (param_prism_label_for_track_param(track, dest, &name) == 0U)
+    else if ((name = mod_destination_prism_label_for_param(dest)) == NULL)
     {
         if (mod_destination_stack_label_for_track_param(track, dest, &name) == 0U)
         {
@@ -1258,6 +1302,18 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_STACK_OSC1_PARAM3:
         case PARAM_STACK_OSC2_PARAM3:
         case PARAM_STACK_OSC3_PARAM3: return "P3";
+        case PARAM_PRISM_TIMBRE: return "O1P1";
+        case PARAM_PRISM_COLOR: return "O1P2";
+        case PARAM_PRISM_MODULATION: return "O1AM";
+        case PARAM_PRISM_COARSE: return "O1Tn";
+        case PARAM_PRISM_FM: return "O1FM";
+        case PARAM_PRISM_LEVEL: return "O1Lv";
+        case PARAM_PRISM_OSC2_TIMBRE: return "O2P1";
+        case PARAM_PRISM_OSC2_COLOR: return "O2P2";
+        case PARAM_PRISM_OSC2_MODULATION: return "O2AM";
+        case PARAM_PRISM_OSC2_COARSE: return "O2Tn";
+        case PARAM_PRISM_OSC2_FM: return "O2FM";
+        case PARAM_PRISM_OSC2_LEVEL: return "O2Lv";
         case PARAM_WAVE_OSC1_POS: return "O1Ps";
         case PARAM_WAVE_OSC1_LEVEL: return "O1Lv";
         case PARAM_WAVE_OSC1_TUNE: return "O1Tn";
@@ -1309,11 +1365,12 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     }
 
     const char *label = NULL;
-    if (param_prism_label_for_track_param(track, dest, &label) == 0U)
+    label = mod_destination_short_label_for_param(dest);
+    if (label == NULL)
     {
         if (mod_destination_stack_label_for_track_param(track, dest, &label) == 0U)
         {
-            label = mod_destination_short_label_for_param(dest);
+            (void)param_prism_label_for_track_param(track, dest, &label);
         }
     }
     if (label == NULL)

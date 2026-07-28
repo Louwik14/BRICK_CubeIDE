@@ -130,11 +130,14 @@ This separation is intentional. Do not add a second authority for the same state
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Prism
-- `Synth/Prism` is a track-aware mono engine exposed on `TONE`
-- `TONE/EDIT`: `Edit`, `Fine`, `Coarse`, `FM`
-- `TONE/TONE`: `Timbre`, `Modulation`, `Color`, `Phase Reset`
-- `Phase Reset=Off` preserves the current Prism behavior
-- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Prism models that consume sync; random state is not reset
+- `Synth/Prism` is a track-aware mono engine with two Braids oscillators exposed on `TONE`
+- `TONE/OSC1 VOICE`: `PARAM1`, `PARAM2`, `AMOD`, `MODEL`
+- `TONE/OSC1 EDIT`: `LVL`, `TUNE`, `FM AMT`, `PHASE`
+- `TONE/OSC2 VOICE`: `PARAM1`, `PARAM2`, `AMOD`, `MODEL`
+- `TONE/OSC2 EDIT`: `LVL`, `TUNE`, `FM AMT`, `PHASE`
+- `PHASE=Off` preserves the free phase behavior for that oscillator
+- `PHASE=On` sends a one-shot sync pulse on the first rendered sample after note-on for Prism models that consume sync; random state is not reset
+- `OSC1 LVL=100%` and `OSC2 LVL=0%` preserve the former single-oscillator Prism behavior; two active oscillators are level-normalized before the mono track output
 
 ### Stack
 - `Synth/Stack` is a separate mono engine from `Synth/Prism`; Prism remains the historical Braids runtime.
@@ -175,7 +178,7 @@ This separation is intentional. Do not add a second authority for the same state
 - Low-cost `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, engine-filtered value, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG`; a missing or invalid Hall calibration opens `CALIBRATION`, and low-cost validates its 24 keyboard keys in two 12-key stages before saving
-- voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` and `LINK`; slaves and standalone tracks keep the historical CFG page only, and `PLAY` remains independent per member
+- voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` (`AMT` + `KEY`), `LINK`, and `SEQ LINK`; `KEY` enables Multi spread keytrack, slaves and standalone tracks keep the historical CFG page only, and `PLAY` data remains non-destructive per member
 
 ### Parameter system
 - UI-side parameter control

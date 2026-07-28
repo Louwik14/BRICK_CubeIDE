@@ -1,5 +1,13 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-28 - Prism dual-osc Braids
+
+- `brick6_braids_runtime` porte maintenant deux oscillateurs `MacroOscillator` par instance Prism (`instance_id == track_id`), avec note/gate/trigger/VCA de track partages.
+- Chaque oscillo a ses propres `MODEL/PARAM1/PARAM2/AMOD/LVL/TUNE/FM AMT/PHASE`; `LVL=0` coupe le rendu Mutable de l'oscillo correspondant dans cette passe.
+- La sortie Prism reste mono et passe par le meme submit mixer historique quand au moins un oscillo est actif; si les deux `LVL` sont nuls, Prism ne soumet pas de buffer au mixer.
+- Le mix interne normalise par somme de niveaux: un seul oscillo a `LVL=100%` garde le niveau historique, deux oscillateurs a `100%` sont ponderes a `0.5+0.5`.
+- Impact IRQ attendu: cout fixe de track partage conserve; cout DSP Braids double uniquement quand les deux oscillateurs ont un `LVL` actif.
+
 ## Addendum 2026-07-27 - pool SEND delay borne a 6 s
 
 - Le pool SDRAM partage des delays globaux SEND `CLASSIC`/`DUAL` est dimensionne sur la capacite reellement exploitable par le contrat courant 6 s: `FX_DELAY_SHARED_CAPACITY=288008` samples par canal, soit 2 304 064 octets pour L/R float32.
@@ -29,6 +37,7 @@
 
 - Le mixer expose `mixer_begin_external_mono_native()` / `mixer_commit_external_mono_native()` pour reserver directement le buffer mono externe d'une lane.
 - `brick6_render_wave_tracks()` rend Wave directement dans ce buffer quand la reservation est possible; le fallback `mixer_submit_external_mono_native()` reste conserve si la lane est deja occupe.
+- `brick6_render_prism_tracks()` suit le meme contrat no-copy mono pour Prism; le fallback historique par `prism_tmp` reste conserve si la reservation mixer echoue.
 - Le format reste `MIXER_EXTERNAL_FORMAT_MONO_NATIVE`, le chemin audio mixer aval est inchange.
 
 ## Addendum 2026-07-28 - nearest sample experimental Synth/Wave
@@ -1058,3 +1067,9 @@ Clarification START/END/LOOP live:
 - `POS` est smooth localement par oscillateur apres remap START/END. `LEVEL=0` coupe l'oscillateur. `TUNE` recalcule l'increment de phase en demi-tons. `PHASE` applique le depart 0/90/180/270 au note-on. `FLIP` applique inversion X et/ou lecture inverse Y.
 - Le moteur sort un mono externe vers `mixer_submit_external_mono_native`; aucune lecture SD, FatFs, allocation ou scan de table n'est introduit dans l'IRQ audio.
 - Hors passe: pages TONE, destinations Matrix et widget preview.
+
+## Addendum 2026-07-28 - Multi spread keytrack
+
+- Le rendu `Sampler/Multi` peut appliquer un pan par voix uniquement quand `CFG/GROUP SPREAD KEYTRK=ON` sur la master effective du voice group.
+- `KEYTRK=OFF` conserve strictement le chemin existant: le spread reste le pan MIX de track applique hors renderer Multi.
+- `KEYTRK=ON` utilise le facteur borne `0.5 + note/127 * 0.75` (`0.5..1.25`) sur le pan de membre du groupe; les graves sont donc recentres et les notes aigues plus larges, sans lecture SD, allocation ni nouveau moteur.

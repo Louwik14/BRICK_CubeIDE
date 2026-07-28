@@ -31,6 +31,7 @@ typedef struct
 
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
+void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.

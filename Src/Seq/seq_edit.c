@@ -72,6 +72,24 @@ static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
+uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 1U;
+    }
+
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return 0U;
+    }
+
+    uint8_t seq_link = 0U;
+    return ((track_runtime_get_voice_group_seq_link(track, &seq_link) != 0U) && (seq_link != 0U)) ? 1U : 0U;
+}
+
 static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
                                                seq_track_id_t track,
                                                seq_step_id_t step,
@@ -403,6 +421,11 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
 uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
                                                 uint8_t hall_index)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     seq_step_id_t end_step = 0U;
     if (seq_edit_map_hall_to_step(track, hall_index, &end_step) == 0U)
     {
@@ -417,6 +440,11 @@ static uint8_t seq_edit_lowcost_apply_length_to_voice(seq_track_id_t track,
                                                       uint8_t voice,
                                                       uint8_t length_steps)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     const param_id_t len_param = seq_edit_lowcost_length_param_for_voice(voice);
     seq_param_slot_t len_slot = 0U;
     if (seq_param_iface_param_to_slot(track, (uint8_t)SEQ_PLOCK_SET_PLAY, len_param, &len_slot) == 0U)
@@ -435,6 +463,11 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
                                                  uint8_t end_hall,
                                                  seq_step_id_t end_step)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     seq_step_id_t start_step = 0U;
     if (seq_edit_lowcost_find_range_length_source(track, end_step, end_hall, &start_step) == 0U)
     {
@@ -538,7 +571,10 @@ uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
 uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
                                                 uint8_t hall_index)
 {
-    (void)track;
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
     (void)hall_index;
     return 0U;
 }
@@ -558,6 +594,11 @@ static void seq_edit_apply_short_action(uint8_t hall)
 
     const seq_track_id_t track = g_seq_hold_state.track_id[hall];
     const seq_step_id_t step = g_seq_hold_state.step_id[hall];
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return;
+    }
+
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, step, hall);
     if ((g_seq_hold_state.pressed_active[hall] == 0U)
             && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
@@ -631,6 +672,11 @@ void seq_edit_init(void)
 
 uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     seq_step_id_t step = 0U;
     if (seq_edit_map_hall_to_step(track, hall_index, &step) == 0U)
     {
@@ -698,6 +744,11 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
 {
     if (hall_index >= SEQ_STEPS_PER_PAGE)
     {
+        return;
+    }
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        seq_edit_reset_hall_press_state(hall_index);
         return;
     }
 
@@ -811,6 +862,11 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
                                                            held_steps,
                                                            (uint8_t)SEQ_STEPS_PER_PAGE,
                                                            1U);
+    if (seq_edit_track_sequence_is_locked(held_track) != 0U)
+    {
+        return 0U;
+    }
+
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
@@ -968,6 +1024,11 @@ seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
                                                   seq_value16_t value16,
                                                   uint8_t flags)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return SEQ_PLOCK_OP_INVALID;
+    }
+
     return seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
 }
 
@@ -976,6 +1037,11 @@ void seq_edit_step_plock_commit(seq_track_id_t track,
                                 uint8_t set_id,
                                 seq_param_slot_t param_slot)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return;
+    }
+
     if (seq_edit_is_play_note_param(track, set_id, param_slot) != 0U)
     {
         seq_model_set_trig(track, step, 1U);
@@ -994,6 +1060,11 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   uint8_t set_id,
                                                   seq_param_slot_t param_slot)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return SEQ_PLOCK_OP_INVALID;
+    }
+
     seq_plock_entry_t before_entry;
     const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param_slot, &before_entry);
     const uint8_t before_trig = seq_model_get_trig(track, step);
@@ -1037,6 +1108,11 @@ uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
                                         uint8_t flags,
                                         uint8_t trig_active)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return 0U;
+    }
+
     if (present != 0U)
     {
         const seq_plock_op_status_t status = seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
@@ -1060,6 +1136,11 @@ uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
 
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        return;
+    }
+
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(5U, track, step, 0U);
     seq_model_step_plock_clear(track, step);
     seq_edit_finish_snapshot_undo(undo_started);
@@ -1090,6 +1171,15 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
                              uint8_t dest_count,
                              seq_clipboard_paste_result_t *out_result)
 {
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
+    {
+        if (out_result != 0)
+        {
+            memset(out_result, 0, sizeof(*out_result));
+        }
+        return 0U;
+    }
+
     seq_step_id_t first_step = 0U;
     if ((dest_steps != 0) && (dest_count != 0U))
     {
@@ -1105,7 +1195,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
                           const seq_step_id_t *steps,
                           uint8_t step_count)
 {
-    if (steps == 0)
+    if ((steps == 0) || (seq_edit_track_sequence_is_locked(track) != 0U))
     {
         return;
     }

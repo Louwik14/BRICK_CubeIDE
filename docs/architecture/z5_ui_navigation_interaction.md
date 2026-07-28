@@ -1,5 +1,12 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-28 - pages TONE Prism dual-osc
+
+- `Synth/Prism` expose maintenant quatre pages TONE: `OSC1 VOICE`, `OSC1 EDIT`, `OSC2 VOICE`, `OSC2 EDIT`.
+- Les pages `VOICE` portent `PARAM1/PARAM2/AMOD/MODEL`; les pages `EDIT` portent `LVL/TUNE/FM AMT/PHASE`.
+- Les labels dynamiques `PARAM1/PARAM2` sont resolus par oscillo depuis le `MODEL` canonique du meme oscillo.
+- `TUNE` garde le pas normal `1 st` et le pas `SHIFT` `0.01 st`; l'affichage montre les centiemes quand la valeur n'est pas entiere.
+
 ## Addendum 2026-07-28 - destination UI apres creation depuis Off
 
 - La selection d'une track `Off` conserve le comportement de focus existant: la navigation resout l'ensemble courant et retombe sur `CFG` si l'ensemble memorise n'est pas disponible.
@@ -1133,7 +1140,7 @@ Points factuels:
 ## Addendum 2026-07-25 - TRACK CFG 2/2 voice group
 
 - `CFG` reste mono-page pour une track seule, une slave et une master sans slave.
-- Quand la track active est `MASTER` d'un voice group avec au moins une slave, `CFG` expose une deuxieme page `GROUP` avec seulement `SPREAD` et `LINK`; les deux autres slots restent vides.
+- Quand la track active est `MASTER` d'un voice group avec au moins une slave, `CFG` expose une deuxieme page `GROUP` avec `SPREAD` (`AMT` + `KEY`), `LINK` et `SEQ LINK`.
 - Le cycle par reapppui sur le raccourci CFG utilise la selection de subpage template existante; les pages non disponibles restent neutralisees par `PARAM_COUNT`.
 - LINK propage aussi les edits manuels `CFG/TRACK` et `CFG/TYPE` aux membres compatibles du voice group, via le meme delta apres clamp que les autres valeurs de base.
 - `PLAY` conserve son contrat totalement independant par membre: LINK ne s'execute jamais dans le domaine PLAY, ne propage pas NOTE/VEL/LEN/MicTim, ne touche aucun p-lock PLAY et ne change pas la lecture scheduler par membre.
@@ -1205,3 +1212,30 @@ Points factuels:
 - Les actions globales de navigation gardent la priorite sous `MUTE`/`MUTE hold`: `SHIFT + STEP`, `SHIFT + HALL` en contexte `KEYBOARD`, et les raccourcis de touches noires sans `SHIFT` en contexte `SEQ` passent par les chemins existants.
 - Pendant `MUTE`, les entrees clavier lisent le mode de jeu sous-jacent memorise a l'entree du mute (`SEQ`, `KEYBOARD` ou `ARP`) via `ui_core_mute_get_passthrough_hall_mode()`. Le rendu conserve le label/LED `MUTE`; seul le routage input clavier utilise ce mode pass-through.
 - Un HALL/STEP de track sans `SHIFT` reste proprietaire du mute et ne descend pas vers la navigation ou le clavier. Un HALL/STEP avec `SHIFT` n'est pas capture par `ui_core_mute`; la suppression de note posee par le raccourci continue de bloquer uniquement l'evenement de note correspondant.
+
+## Addendum 2026-07-28 - decision UI SEQ LINK
+
+- Z5 ne possede pas `SEQ LINK`: l'UI expose une commande utilisateur et lit une projection master-effective.
+- L'edition cible toujours la master effective du voice group via `PARAM_CFG_GROUP_SEQ_LINK`; une slave ne devient pas proprietaire local du flag.
+- `SEQ LINK` est expose sur `CFG/GROUP` apres `LINK`, comme commande separee de `CFG GROUP LINK`.
+- Les pages et feedback p-lock restent non destructifs: activer/desactiver `SEQ LINK` ne doit ni clear, ni copier, ni masquer durablement les p-locks stockes sur les slaves.
+
+## Addendum 2026-07-28 - CFG GROUP SPREAD double-widget
+
+- `CFG/GROUP` d'une master avec slaves expose maintenant `SPREAD` sur deux slots: `AMT` en barre a gauche et `KEY` en switch a droite, avec titre commun `SPREAD`.
+- `LINK` et `SEQ LINK` restent visibles sur la meme page, apres le double-widget.
+- Le switch commun ON/OFF affiche sa valeur au-dessus et descend de l'offset des widgets barre pour aligner verticalement les surfaces de controle.
+
+## Addendum 2026-07-28 - clipboard Track snapshot canonique
+
+- `TRACK + COPY`, `TRACK + PASTE` et `TRACK + SHIFT + PASTE` passent maintenant par `track_snapshot`.
+- Le snapshot Track capture/restaure la config structurelle, MIDI, attributs voice-group, bases `track_sound_state`, bases `track_tone_sound_state`, sequence de track, rolls, p-locks et reglages runtime sequenceur par track.
+- Le clipboard Track ne reconstruit plus une track depuis la liste des params actuellement exposables par le runtime; cette liste reste reservee aux scopes ensemble/page.
+- `CLEAR Track` applique un snapshot par defaut identique au modele de creation neuve: `Off/Audio`, MIDI par index de track, voice-group neutralise, sequence vide et bases sound/tone par defaut.
+- Les exceptions de ressources exclusives `Input1..4` sont passees comme options d'apply au snapshot; Z5 ne porte plus de mutation structurelle Track parallele.
+
+## Addendum 2026-07-28 - indicateur sequence controlee par Master
+
+- Une slave avec `SEQ LINK=ON` garde ses pages accessibles, mais toute edition de sequence est refusee par le garde Z4.
+- Le header template affiche un indicateur inverse `MxSEQ`, ou `x` est la master effective, quand la sequence de la track active est controlee par la Master.
+- Les parametres permanents de sound design restent editables: le verrou ne cible que les donnees de sequence stockees dans le Pattern.

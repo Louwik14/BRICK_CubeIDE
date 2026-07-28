@@ -146,7 +146,7 @@ void uiw_draw_bipolar_bar(int x, int y, int w, int h, float value, float vmin, f
 void uiw_draw_switch(int x, int y, int w, int h, uint8_t on)
 {
     const int sx = x + ((w - UIW_SWITCH_W) / 2);
-    const int sy = y + ((h - UIW_SWITCH_H) / 2);
+    const int sy = y + ((h - UIW_SWITCH_H) / 2) + UIW_BAR_OFFSET_Y;
 
     drv_display_draw_rect(sx, sy, UIW_SWITCH_W, UIW_SWITCH_H);
     if (on != 0U)

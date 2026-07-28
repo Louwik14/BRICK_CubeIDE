@@ -1028,3 +1028,19 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Le cache prepare reste `B6WT` version 1 dans `0:/WAVETABLES/.CACHE`. Le nom de cache encode un hash du path source, la taille, la date et l'heure FAT; le header conserve aussi taille source et stamp date/time dans les champs reserves. Un cache valide est prefere au redecodage WAV; un cache absent, invalide ou impossible a ecrire n'empeche pas l'import WAV vers SDRAM.
 - Project autoload capture/restaure les slots `WAVETABLE` comme les slots `RAM`: path + slot backend + slot global, sans audio brut dans le projet et sans scan SD implicite.
 - Etat courant: le browser UI, les parametres `TABLE`, la preview wavetable et le runtime audio `Synth/Wave` sont branches; la persistence reste limitee aux references d'assets, sans audio brut.
+
+## Addendum 2026-07-28 - decision persistence SEQ LINK
+
+- `SEQ LINK` est persiste comme attribut structurel de voice group dans le meme bloc logique que les roles `SOLO/MASTER/SLAVE` et les attributs `SPREAD/LINK`.
+- Pattern/Project capturent `voice_group_seq_link[]` depuis `track_state` et le restaurent via le contrat commit bulk `param_registry_commit_voice_group_seq_link_bulk()`, apres validation/restauration des roles puis de la config `SPREAD/LINK`.
+- Kit capture `voice_group_seq_link` par payload track et le restaure par le meme contrat commit bulk, avec les autres attributs structurels de groupe.
+- Patch Poly capture `group_seq_link` uniquement sur le membre master et le reapplique via `param_registry_commit_voice_group_seq_link()` uniquement quand le patch cible un groupe `P2..P4`; les patchs mono ne materialisent pas d'etat de groupe.
+- Aucun p-lock, playhead, lock actif runtime ou donnees PLAY derivees ne sont captures pour `SEQ LINK`.
+- Aucune migration prototype n'est requise: les formats courants `PatternSaveV1`, `KitSaveV1` et `PatchSaveV1` sont etendus directement.
+
+## Addendum 2026-07-28 - Track snapshot local non-SD
+
+- `track_snapshot` est le format RAM local utilise par le clipboard Track et le clear Track; il ne cree aucun format SD.
+- Son payload est volontairement plus large qu'un Patch: il inclut sequence/p-locks et reglages runtime sequenceur par track, car son contrat est de restaurer une track live complete.
+- La fabrication du snapshot Track par defaut est pure: elle remplit un payload RAM local et ne modifie l'etat live qu'au moment de l'apply canonique.
+- Patch/Kit conservent leurs contrats de persistence separes: Patch/Kit restent des snapshots sonores et n'absorbent pas ce payload clipboard.

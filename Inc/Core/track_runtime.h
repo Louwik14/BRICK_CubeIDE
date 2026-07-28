@@ -229,6 +229,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
 uint8_t track_runtime_get_voice_group_role(uint8_t track, uint8_t *out_role);
 uint8_t track_runtime_get_voice_group_effective_master(uint8_t track, uint8_t *out_master_track);
+uint8_t track_runtime_get_voice_group_seq_link(uint8_t track, uint8_t *out_seq_link);
 uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,
                                                   uint8_t *out_members,
                                                   uint8_t out_members_capacity,

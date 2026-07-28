@@ -1,5 +1,12 @@
 # Z2 - Track Runtime Authority
 
+## Addendum 2026-07-28 - mapping TONE Prism dual-osc
+
+- `Synth/Prism` conserve son identite `TRACK_RUNTIME_TYPE_PRISM` / `TRACK_RUNTIME_ENGINE_PRISM` et son instance stable `instance_id == track_id`.
+- Le mapping TONE Prism expose maintenant 16 slots: `OSC1 PARAM1/PARAM2/AMOD/MODEL/LVL/TUNE/FM AMT/PHASE`, puis les memes slots `OSC2`.
+- `MODEL` et `PHASE` restent des params TONE structurels/discrets; les destinations Matrix continues Prism sont bornees aux params continus explicites par oscillo.
+- Les resets d'ownership Prism reappliquent les deux blocs oscillateurs depuis `track_tone_sound_state.prism`; aucune autorite runtime parallele n'est ajoutee.
+
 ## 1. Périmètre
 Zone opérationnelle:
 - Inc/Core/track_state.h
@@ -317,7 +324,7 @@ Sorties de Z2:
 
 - `track_state` porte l'autorite des roles `TRACK_VOICE_GROUP_ROLE_SOLO`, `TRACK_VOICE_GROUP_ROLE_MASTER`, `TRACK_VOICE_GROUP_ROLE_SLAVE`.
 - Un groupe valide est contigu: un `MASTER` suivi de `SLAVE` a droite; un `SLAVE` ne peut exister que si sa gauche est `MASTER` ou `SLAVE`.
-- Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master` et `track_runtime_collect_voice_group_members`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
+- Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master`, `track_runtime_collect_voice_group_members` et `track_runtime_get_voice_group_seq_link`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
 - Patch Poly v2 consomme ce modele comme source structurelle: capture depuis master/slaves officiels et apply polyX uniquement vers un groupe cible deja declare de meme largeur.
 - Z2 ne stocke aucune reference a un Patch et ne devient pas une autorite de persistence Patch.
 - Projection UI: une track `SLAVE` ne publie pas l'ensemble `PLAY`; le `MASTER` reste le seul point d'edition PLAY du groupe.
@@ -364,7 +371,7 @@ Sorties de Z2:
 
 - `track_state` porte maintenant deux champs de configuration par master de voice group: `voice_group_spread` (`0..1`, defaut `0`) et `voice_group_link` (`OFF/ON`, defaut `OFF`).
 - Ces champs appartiennent au modele master/slaves existant: les membres sont resolus par `track_runtime_collect_voice_group_members()` dans l'ordre stable master puis slaves contigus, plafonne a 8 par les consommateurs UI/param.
-- Z2 ne cree aucune nouvelle autorite de groupe: les roles `SOLO/MASTER/SLAVE` restent la structure, et SPREAD/LINK sont seulement des attributs de la master effective.
+- Z2 ne cree aucune nouvelle autorite de groupe: les roles `SOLO/MASTER/SLAVE` restent la structure, et SPREAD/LINK/SEQ LINK sont seulement des attributs de la master effective.
 
 ## Addendum 2026-07-27 - identite Synth/Wave wavetable
 
@@ -374,3 +381,38 @@ Sorties de Z2:
 - Depuis la passe runtime audio, Z2 reset `brick6_wave_runtime` quand l'owner `instance_id == track_id` change.
 - Depuis la passe TONE Wave, le mapping local `TRACK_RUNTIME_TYPE_WAVE -> params TONE` expose les 16 slots `OSC1/OSC2 TABLE/POS/START/END/LEVEL/TUNE/PHASE/FLIP`, et Z2 reapplique `brick6_wave_runtime` apres reset d'ownership.
 - Depuis la passe Matrix Wave, seules les destinations continues `POS/LEVEL/TUNE` par oscillo sont validables par le catalogue MOD; les autres params TONE Wave restent des parametres statiques ou discrets.
+
+## Addendum 2026-07-28 - decision d'autorite SEQ LINK
+
+- `SEQ LINK` est un attribut structurel du voice group, distinct de `CFG GROUP LINK`.
+- Le stockage canonique cible vit dans `track_state`, sous forme d'un flag par track logique, significatif uniquement sur une master effective de voice group.
+- Valeur par defaut: `OFF`. Un flag stocke sur une track `SOLO` ou `SLAVE` est ignore par les queries master-effective.
+- Proprietaire: `track_state` possede le champ brut, sa normalisation et les mutations bulk. Z2 expose seulement des projections track-aware/master-effective.
+- Les roles `SOLO/MASTER/SLAVE` restent l'autorite structurelle du groupe; `SEQ LINK` ne cree pas une seconde autorite de membership.
+- Droits de mutation cibles:
+  - init/defaults: `track_state_init`;
+  - edit utilisateur: commande parametre `PARAM_CFG_GROUP_SEQ_LINK` routee par Z5 vers Z3/`param_registry`, puis commit dans `track_state` sur la master effective;
+  - restore/capture live: Z6 via les flux bulk track-config, apres validation du payload courant;
+  - aucun consumer Z4, UI feedback, clipboard ou scheduler ne modifie ce flag directement.
+- Droits de consultation cibles:
+  - Z4 consulte la projection pour choisir une source de lecture p-lock playback;
+  - Z5 consulte la projection pour visibilite/affichage et ne decide pas localement la verite du flag;
+  - Z6 consulte/capture la valeur canonique dans le meme bloc structurel que les roles voice group;
+  - Z3 consulte seulement pour appliquer la commande utilisateur et ne devient pas proprietaire du flag.
+- Semantique master-effective: une lecture depuis une slave remonte a la master effective; si le groupe est invalide, orphelin ou sans slave effective, le resultat operationnel est `OFF`.
+- `SEQ LINK` ne modifie ni le stockage des p-locks, ni les roles du groupe, ni les donnees PLAY des slaves. Il selectionne seulement la source de lecture playback qui sera definie en Z4.
+
+## Addendum 2026-07-28 - CFG GROUP spread keytrack
+
+- `track_state` porte maintenant l'attribut transient `voice_group_spread_keytrack` par master effective de voice group, distinct de `voice_group_spread` et de `voice_group_link`.
+- Valeur par defaut: `OFF`. `OFF` conserve le spread historique applique par pan MIX de groupe. `ON` active seulement la projection keytrack du spread pour les voix `Sampler/Multi`.
+- Cette option ne cree pas de nouvelle autorite de membership: les roles `MASTER/SLAVE` et la collecte des membres restent portes par Z2.
+
+## Addendum 2026-07-28 - stockage/projection SEQ LINK
+
+- `track_state` porte maintenant le champ brut `voice_group_seq_link[]`, initialise a `OFF`.
+- Mutations brutes cote Z2: `track_state_set_voice_group_seq_link_raw()` et `track_state_apply_voice_group_seq_link_bulk_raw()` restent reservees au contrat commit `param_registry_commit_voice_group_seq_link*()`.
+- Lecture brute autorisee pour capture/persistence future: `track_state_get_voice_group_seq_link()`.
+- Projection runtime master-effective: `track_runtime_get_voice_group_seq_link(track, out)` retourne `ON` uniquement si la master effective est une vraie master avec au moins une slave collectable et si son flag brut est `ON`.
+- Une track `SOLO`, une master sans slave effective, une slave orpheline ou un groupe invalide donnent operationnellement `OFF`.
+- L'edition UI et le parametre catalogue sont branches par l'etape Z3/Z5 suivante; la persistence et la consommation Z4 effective restent separees.

@@ -320,14 +320,22 @@ static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_c
 }
 
 static const param_id_t g_track_runtime_tone_slots_prism[] = {
+    PARAM_PRISM_TIMBRE,
+    PARAM_PRISM_COLOR,
+    PARAM_PRISM_MODULATION,
     PARAM_PRISM_EDIT,
-    PARAM_PRISM_FINE,
+    PARAM_PRISM_LEVEL,
     PARAM_PRISM_COARSE,
     PARAM_PRISM_FM,
-    PARAM_PRISM_TIMBRE,
-    PARAM_PRISM_MODULATION,
-    PARAM_PRISM_COLOR,
-    PARAM_PRISM_PHASE_RESET
+    PARAM_PRISM_PHASE_RESET,
+    PARAM_PRISM_OSC2_TIMBRE,
+    PARAM_PRISM_OSC2_COLOR,
+    PARAM_PRISM_OSC2_MODULATION,
+    PARAM_PRISM_OSC2_EDIT,
+    PARAM_PRISM_OSC2_LEVEL,
+    PARAM_PRISM_OSC2_COARSE,
+    PARAM_PRISM_OSC2_FM,
+    PARAM_PRISM_OSC2_PHASE_RESET
 };
 
 static const param_id_t g_track_runtime_tone_slots_stack[] = {
@@ -1607,6 +1615,16 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_PRISM_MODULATION:
         case PARAM_PRISM_COLOR:
         case PARAM_PRISM_PHASE_RESET:
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_EDIT:
+        case PARAM_PRISM_OSC2_FINE:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_OSC2_FM:
+        case PARAM_PRISM_OSC2_TIMBRE:
+        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC2_PHASE_RESET:
+        case PARAM_PRISM_OSC2_LEVEL:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -2089,5 +2107,36 @@ uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,
     }
 
     *out_count = count;
+    return 1U;
+}
+
+uint8_t track_runtime_get_voice_group_seq_link(uint8_t track, uint8_t *out_seq_link)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_seq_link == NULL))
+    {
+        return 0U;
+    }
+
+    *out_seq_link = 0U;
+
+    uint8_t master_track = track;
+    if (track_runtime_get_voice_group_effective_master(track, &master_track) == 0U)
+    {
+        return 1U;
+    }
+
+    if (track_state_get_voice_group_role(master_track) != TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        return 1U;
+    }
+
+    uint8_t member_count = 0U;
+    if ((track_runtime_collect_voice_group_members(master_track, NULL, 0U, &member_count) == 0U)
+            || (member_count <= 1U))
+    {
+        return 1U;
+    }
+
+    *out_seq_link = track_state_get_voice_group_seq_link(master_track);
     return 1U;
 }

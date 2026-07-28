@@ -69,7 +69,8 @@ typedef struct
     uint8_t type;
     float group_spread;
     uint8_t group_link;
-    uint8_t reserved[3];
+    uint8_t group_seq_link;
+    uint8_t reserved[2];
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     patch_v1_asset_ref_t asset;
