@@ -877,6 +877,8 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     }
 
     const ui_track_config_t config = track_state_get_config(track);
+    const uint8_t creates_track_from_off =
+        (uint8_t)((config.family == UI_TRACK_FAMILY_OFF) && (family != UI_TRACK_FAMILY_OFF));
 
     if (config.family == family)
     {
@@ -912,10 +914,14 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     }
 
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
+    const ui_core_runtime_bridge_post_sync_fn post_sync =
+        ((active_track_touched != 0U) && (creates_track_from_off != 0U))
+            ? ui_core_runtime_bridge_post_track_creation_from_off
+            : ui_core_runtime_bridge_post_track_structure_change;
     if (ui_core_runtime_bridge_apply_track_family_change(track,
                                                           family,
                                                           active_track_touched,
-                                                          ui_core_runtime_bridge_post_track_structure_change) == false)
+                                                          post_sync) == false)
     {
         return false;
     }

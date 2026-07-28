@@ -1,5 +1,16 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-28 - destination UI apres creation depuis Off
+
+- La selection d'une track `Off` conserve le comportement de focus existant: la navigation resout l'ensemble courant et retombe sur `CFG` si l'ensemble memorise n'est pas disponible.
+- La creation d'une track depuis `Off` vers une family/type non-Off neutralise explicitement l'ancien ensemble demande et force la destination UI `CFG`.
+- Cette regle vit dans le chemin central post-reconfiguration actif (`ui_active_track_sync_after_track_creation_from_off` -> `ui_edit_context_sync_active_track_created_from_off` -> `ui_navigation_sync_created_track_destination`) et ne s'applique pas aux changements de type d'une track deja non-Off.
+
+## Addendum 2026-07-28 - LFO RATE etendu
+
+- Le widget et le format `RATE` des pages `MOD/LFO 1..3` suivent les constantes centrales LFO: plage libre negative jusqu'a `80.00Hz`, `OFF` a `0`, sync positive jusqu'a `1/128`.
+- L'encodeur garde la grammaire existante: depuis `OFF`, sens positif -> premier index sync `8BAR`, sens negatif -> Hz libre; en plage sync, pas entier et SHIFT ne change pas le pas; en plage libre, pas `1.00Hz` sans SHIFT et `0.01Hz` avec SHIFT.
+
 ## Addendum 2026-07-28 - diagnostic Hall low-cost dans Settings
 
 - La racine low-cost de `Settings` expose une sous-categorie extensible `TEST`; son premier diagnostic est `TEST > HALL`.
@@ -1179,3 +1190,18 @@ Points factuels:
 - En maintien `TRACK`, les tracks presentes non-slaves restent en bleu sombre, une track `SLAVE` de voice group est rendue en bleu clair; la track active reste blanche prioritaire, y compris si elle est slave.
 - En mode `MUTE`, le rendu mute reste prioritaire sur le maintien `TRACK`: une slave non mutee est vert clair, une slave mutee est rouge clair, et les tracks non-slaves conservent le vert/rouge mute existant.
 - Le scale Q8 low-cost conserve visible toute composante couleur non nulle sans devoir saturer le bleu sombre des tracks normales.
+
+## Addendum 2026-07-28 - ownership LEDs step pendant MUTE
+
+- L'ownership des LEDs step est resolu par contrat central `ui_step_led_ownership`: une page/ensemble qui a besoin des LEDs step est prioritaire sur le rendu `MUTE`.
+- Les pages `SEQ`, et en low-cost les pages `KEYBOARD`/`ARP` quand les lanes STEP binaires restent le sequenceur, reprennent l'ownership des LEDs step.
+- Le rendu LED applique l'ordre: pages/workflows explicites (`Patch Assign`, overlay `MACRO`), page proprietaire des LEDs step, `MUTE`, `TRACK hold`, mode step normal, puis autres overlays/modes.
+- Une navigation ou une entree en prepare MUTE vers une page proprietaire des LEDs step annule les mutes prepares sans les appliquer: le snapshot prepare est remplace par l'etat runtime courant.
+- Hors page proprietaire des LEDs step, `MUTE` et `MUTE hold` continuent a afficher les tracks et les mutes prepares restent conserves jusqu'a apply ou sortie existante.
+
+## Addendum 2026-07-28 - priorite input sous MUTE
+
+- `MUTE` n'est pas un overlay bloquant global: `ui_core_mute` capture seulement `SHIFT+MUTE`, le bouton MUTE, et les HALL/STEP de track utilises sans `SHIFT` pour quick mute ou prepare mute.
+- Les actions globales de navigation gardent la priorite sous `MUTE`/`MUTE hold`: `SHIFT + STEP`, `SHIFT + HALL` en contexte `KEYBOARD`, et les raccourcis de touches noires sans `SHIFT` en contexte `SEQ` passent par les chemins existants.
+- Pendant `MUTE`, les entrees clavier lisent le mode de jeu sous-jacent memorise a l'entree du mute (`SEQ`, `KEYBOARD` ou `ARP`) via `ui_core_mute_get_passthrough_hall_mode()`. Le rendu conserve le label/LED `MUTE`; seul le routage input clavier utilise ce mode pass-through.
+- Un HALL/STEP de track sans `SHIFT` reste proprietaire du mute et ne descend pas vers la navigation ou le clavier. Un HALL/STEP avec `SHIFT` n'est pas capture par `ui_core_mute`; la suppression de note posee par le raccourci continue de bloquer uniquement l'evenement de note correspondant.

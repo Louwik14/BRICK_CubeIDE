@@ -38,7 +38,7 @@
 - Les params track-aware MOD persistants `PARAM_MOD_MULTI_*` configurent `MULT1=M1A*M1B` et `MULT2=M2A*M2B`; les sorties sont clampées `-1..1`.
 - Les params track-aware MOD persistants `PARAM_MOD_SLEW_*` configurent `SLEW1/SLEW2`; `AMT` est borné `0..1` et converti en coefficient linéaire borné au tick Matrix/LFO, jamais par sample audio.
 - Les opérateurs sont évalués dans `mod_lfo_v1_process_block()` juste avant `mod_matrix_process_track()`. Les sources opérateur lues par d'autres opérateurs utilisent l'état opérateur précédent du tick courant/précédent; les cycles directs `SLEW1->SLEW1`, `SLEW2->SLEW2`, `SLEW1<->SLEW2` et les boucles directes `MULT*` sont ignorés.
-- `PARAM_LFO1_RATE`, `PARAM_LFO2_RATE` et `PARAM_LFO3_RATE` sont destinations continues Matrix avec labels `L1Rt/lfo1rate`, `L2Rt/lfo2rate` et `L3Rt/lfo3rate`; l'application RT passe par le temp overlay LFO et la valeur modulee est clampee sans rate negatif cote destination.
+- `PARAM_LFO1_RATE`, `PARAM_LFO2_RATE` et `PARAM_LFO3_RATE` sont destinations continues Matrix avec labels `L1Rt/lfo1rate`, `L2Rt/lfo2rate` et `L3Rt/lfo3rate`; l'application RT passe par le temp overlay LFO et la valeur modulee est clampee sans rate negatif cote destination. La Matrix conserve donc le comportement sync/index positif: elle peut moduler `OFF` et les divisions sync, mais ne descend pas dans la plage Hz libre negative.
 
 ## Addendum 2026-07-26 - ENV retrigger hard/soft
 
@@ -744,7 +744,7 @@ Dette explicite post-passe 4:
 
 - Chaque track possede 3 LFO symetriques; la config canonique reste dans `track_sound_state.mod_lfo[MOD_LFO_COUNT_PER_TRACK]` et l'execution dans `mod_lfo_v1`.
 - Surface par LFO: `RATE`, `SHAPE`, `TRIG`, `PHASE`; destination et profondeur appartiennent uniquement a `mod_matrix`.
-- `RATE` est bipolaire: valeur negative = Hz libre continu `0..12.00Hz`, `0` = `OFF`, valeur positive `1..15` = table sync stable `8BAR, 4BAR, 2BAR, 1BAR, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, 1/64`.
+- `RATE` est bipolaire: valeur negative = Hz libre continu `0..80.00Hz`, `0` = `OFF`, valeur positive `1..16` = table sync stable `8BAR, 4BAR, 2BAR, 1BAR, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, 1/64, 1/128`.
 - Le mode Hz convertit directement la frequence en `phase_inc`, sans dependance BPM; le mode sync convertit la division via le BPM courant. `OFF` coupe la source LFO.
 - `SHAPE` expose `SIN`, `TRI`, `SAW`, `SQR`, `RND`, `SIN+`, `TRI+`, `SQR+`, `RSAW`. Les formes `+` sont unipolaires `0..1`; les autres restent bipolaires `-1..1`. La matrice applique ensuite `base + source * depth` puis clamp destination.
 - `TRIG`: `FREE` tourne sans reset; `TRIG` reset la phase au note/trig sans servir de gate ON/OFF; `HOLD` capture la valeur LFO au trig et la tient; `ONE` joue un cycle a l'activation effective et a chaque trig puis stoppe/restaure la base.

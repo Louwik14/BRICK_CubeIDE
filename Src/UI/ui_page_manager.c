@@ -20,6 +20,7 @@
  */
 
 #include "ui_page_manager.h"
+#include "ui_core_mute.h"
 #include "ui_param.h"
 
 #define UI_PAGE_MANAGER_MAX_PAGES UI_PAGE_COUNT
@@ -106,6 +107,7 @@ void ui_page_set(uint8_t page_id)
     }
 
     g_ui_current_page_id = page_id;
+    ui_core_mute_cancel_prepared_if_step_led_owner(page_id);
 
     if ((next_page != 0) && (next_page->enter != 0))
     {

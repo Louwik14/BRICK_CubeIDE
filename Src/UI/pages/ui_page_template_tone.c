@@ -367,18 +367,28 @@ static void ui_page_template_tone_prism_format_bipolar_float(float value,
                                                             char *out,
                                                             uint32_t out_len)
 {
-    int32_t display = (int32_t)(((value - 0.5f) * span * 2.0f) + ((value >= 0.5f) ? 0.5f : -0.5f));
-    if ((display > -1L) && (display < 1L))
+    int32_t cents = (int32_t)((((value - 0.5f) * span * 2.0f) * 100.0f) + ((value >= 0.5f) ? 0.5f : -0.5f));
+    if ((cents > -1L) && (cents < 1L))
     {
-        display = 0L;
+        cents = 0L;
     }
-    if (display == 0L)
+    if (cents == 0L)
     {
         (void)snprintf(out, out_len, "0%s", (unit != NULL) ? unit : "");
     }
+    else if ((cents % 100L) == 0L)
+    {
+        (void)snprintf(out, out_len, "%+ld%s", (long)(cents / 100L), (unit != NULL) ? unit : "");
+    }
     else
     {
-        (void)snprintf(out, out_len, "%+ld%s", (long)display, (unit != NULL) ? unit : "");
+        const char *sign = "+";
+        if (cents < 0L)
+        {
+            sign = "-";
+            cents = -cents;
+        }
+        (void)snprintf(out, out_len, "%s%ld.%02ld%s", sign, (long)(cents / 100L), (long)(cents % 100L), (unit != NULL) ? unit : "");
     }
 }
 

@@ -2043,7 +2043,7 @@ static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t 
         {
             next = 0.0f;
         }
-        return ui_param_clamp(next, 0.0f, 15.0f);
+        return ui_param_clamp(next, 0.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
     }
 
     if (current_value < -0.0001f)
@@ -2054,7 +2054,7 @@ static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t 
         {
             next = 0.0f;
         }
-        return ui_param_clamp(next, -12.0f, 0.0f);
+        return ui_param_clamp(next, -LFO_FREE_MAX_HZ, 0.0f);
     }
 
     if (dir > 0)

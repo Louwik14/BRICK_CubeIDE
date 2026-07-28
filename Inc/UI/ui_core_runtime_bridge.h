@@ -98,5 +98,6 @@ void ui_core_runtime_bridge_sync_active_track_mirror(void);
 void ui_core_runtime_bridge_sync_active_track_midi_channel(void);
 void ui_core_runtime_bridge_sync_active_track_midi_source(void);
 void ui_core_runtime_bridge_post_track_structure_change(uint8_t sync_active_track_ui_context);
+void ui_core_runtime_bridge_post_track_creation_from_off(uint8_t sync_active_track_ui_context);
 
 #endif /* UI_CORE_RUNTIME_BRIDGE_H */

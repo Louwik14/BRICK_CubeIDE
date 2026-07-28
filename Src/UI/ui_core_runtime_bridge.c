@@ -1599,3 +1599,8 @@ void ui_core_runtime_bridge_post_track_structure_change(uint8_t sync_active_trac
 {
     ui_active_track_sync_after_track_structure_change(sync_active_track_ui_context);
 }
+
+void ui_core_runtime_bridge_post_track_creation_from_off(uint8_t sync_active_track_ui_context)
+{
+    ui_active_track_sync_after_track_creation_from_off(sync_active_track_ui_context);
+}

@@ -355,3 +355,14 @@ void ui_navigation_sync_active_track_ensemble(void)
         return;
     }
 }
+
+void ui_navigation_sync_created_track_destination(void)
+{
+    g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
+    ui_navigation_refresh_active_track_runtime();
+
+    if (ui_page_get_id() != UI_PAGE_TEMPLATE_CFG)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_CFG);
+    }
+}

@@ -25,6 +25,7 @@
 #include "Storage/undo_v2.h"
 #include "buttons.h"
 #include "ui_core.h"
+#include "ui_core_mute.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -181,6 +182,12 @@ static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t
     return 1U;
 }
 
+static ui_hall_mode_t keyboard_input_effective_input_mode(void)
+{
+    const ui_hall_mode_t mode = ui_get_hall_mode();
+    return (mode == UI_HALL_MODE_MUTE) ? ui_core_mute_get_passthrough_hall_mode() : mode;
+}
+
 static uint8_t keyboard_input_lowcost_chromatic_note(uint8_t key)
 {
     hall_key_metadata_t meta;
@@ -250,7 +257,7 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
 
     if (pressed)
     {
-        const ui_hall_mode_t mode = ui_get_hall_mode();
+        const ui_hall_mode_t mode = keyboard_input_effective_input_mode();
         if (keyboard_input_lowcost_shortcut_press(key, mode) != 0U)
         {
             g_lowcost_key_consumed[key] = 1U;
@@ -271,7 +278,7 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
 
     if (pressed)
     {
-        const ui_hall_mode_t mode = ui_get_hall_mode();
+        const ui_hall_mode_t mode = keyboard_input_effective_input_mode();
         if (mode == UI_HALL_MODE_SEQ)
         {
             hall_key_metadata_t meta;
@@ -299,7 +306,7 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
     const ui_hall_mode_effective_view_t effective_view =
         ui_hall_mode_resolve_effective_view(active_track, hall_mode);
 
@@ -320,7 +327,7 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 static void keyboard_input_note_off_sink(uint8_t note)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
     const ui_hall_mode_effective_view_t effective_view =
         ui_hall_mode_resolve_effective_view(active_track, hall_mode);
 
@@ -341,7 +348,7 @@ static void keyboard_input_note_off_sink(uint8_t note)
 static void keyboard_input_all_notes_off_sink(void)
 {
     if (ui_hall_mode_resolve_effective_view(ui_get_active_track(),
-                                            ui_get_hall_mode()) != UI_HALL_MODE_VIEW_ROUT)
+                                            keyboard_input_effective_input_mode()) != UI_HALL_MODE_VIEW_ROUT)
     {
         keyboard_arp_all_notes_off_track(ui_get_active_track());
     }

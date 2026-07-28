@@ -8,6 +8,8 @@
 #include "App/Hall/hall_engine.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "ui_page_manager.h"
+#include "ui_step_led_ownership.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -223,6 +225,13 @@ static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
     }
 }
 
+static void ui_core_mute_cancel_prepared_to_current_state(void)
+{
+    ui_core_mute_capture_current_to_buffer(g_ui_core_mute.initial_state);
+    memcpy(g_ui_core_mute.prepared_state, g_ui_core_mute.initial_state, sizeof(g_ui_core_mute.prepared_state));
+    g_ui_core_mute.hold_quick_prepare_armed = 0U;
+}
+
 static void ui_core_mute_exit_to_previous_mode(ui_core_mute_set_hall_mode_fn set_hall_mode)
 {
     if (set_hall_mode == 0)
@@ -282,6 +291,7 @@ static void ui_core_mute_enter_prepare(ui_core_mute_set_hall_mode_fn set_hall_mo
     g_ui_core_mute.submode = UI_MUTE_SUBMODE_PREPARE;
     g_ui_core_mute.hold_quick_prepare_armed = 0U;
     set_hall_mode(UI_HALL_MODE_MUTE);
+    ui_core_mute_cancel_prepared_if_step_led_owner(ui_page_get_id());
 }
 
 static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn set_hall_mode)
@@ -369,6 +379,18 @@ void ui_core_mute_reset(void)
     ui_core_mute_init();
 }
 
+void ui_core_mute_cancel_prepared_if_step_led_owner(uint8_t page_id)
+{
+    if ((g_ui_core_mute.active == 0U)
+        || (g_ui_core_mute.submode != UI_MUTE_SUBMODE_PREPARE)
+        || (ui_step_led_ownership_page_needs_step_leds(page_id) == 0U))
+    {
+        return;
+    }
+
+    ui_core_mute_cancel_prepared_to_current_state();
+}
+
 uint8_t ui_core_mute_is_active(void)
 {
     return g_ui_core_mute.active;
@@ -377,6 +399,18 @@ uint8_t ui_core_mute_is_active(void)
 ui_mute_submode_t ui_core_mute_get_submode(void)
 {
     return g_ui_core_mute.submode;
+}
+
+ui_hall_mode_t ui_core_mute_get_passthrough_hall_mode(void)
+{
+    if ((g_ui_core_mute.active == 0U)
+        || (g_ui_core_mute.prev_mode_valid == 0U)
+        || (g_ui_core_mute.prev_mode == UI_HALL_MODE_MUTE))
+    {
+        return UI_HALL_MODE_SEQ;
+    }
+
+    return g_ui_core_mute.prev_mode;
 }
 
 ui_mute_state_t ui_core_mute_get_state(void)
@@ -530,17 +564,15 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 0U;
     }
 
+    if (((ev->type == UI_EVENT_HALL_PRESS) || (ev->type == UI_EVENT_HALL_RELEASE))
+        && (ev->id < HALL_UI_LANE_COUNT)
+        && (*io_shift_down != 0U))
+    {
+        return 0U;
+    }
+
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_TRACK_COUNT))
     {
-        const uint8_t quick_like_submode =
-            (uint8_t)((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
-                      || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK));
-
-        if ((*io_shift_down != 0U) && (quick_like_submode == 0U))
-        {
-            return 1U;
-        }
-
         if (suppress_hall_note != 0)
         {
             suppress_hall_note(ev->id);
@@ -560,15 +592,6 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < UI_TRACK_COUNT))
     {
-        const uint8_t quick_like_submode =
-            (uint8_t)((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
-                      || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK));
-
-        if ((*io_shift_down != 0U) && (quick_like_submode == 0U))
-        {
-            return 1U;
-        }
-
         return 1U;
     }
 

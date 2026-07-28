@@ -91,20 +91,24 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         && (macro_overlay_hall_context == 0U)
         && (lowcost_range_length_candidate == 0U))
     {
-        const ui_mute_submode_t mute_submode = ui_core_mute_get_submode();
-        const uint8_t allow_shift_mode_redirect =
-            (mute_active == 0U) || (mute_submode == UI_MUTE_SUBMODE_PREPARE);
-        if (allow_shift_mode_redirect != 0U)
-        {
-            ui_hall_mode_flow_handle_shift_hall_action(hall,
-                                                       now_ms,
-                                                       mode_tap_ms,
-                                                       hall_note_suppressed);
-        }
+        ui_hall_mode_flow_handle_shift_hall_action(hall,
+                                                   now_ms,
+                                                   mode_tap_ms,
+                                                   hall_note_suppressed);
         return;
     }
 
     (void)hall_mode;
+
+    if ((mute_active != 0U)
+        && (shift_down == 0U)
+        && (track_select_armed == 0U)
+        && (was_pressed == 0U)
+        && (pressed != 0U)
+        && (hall < UI_TRACK_COUNT))
+    {
+        hall_note_suppressed[hall] = 1U;
+    }
 
     if ((macro_overlay_hall_context != 0U) && (mute_active == 0U))
     {

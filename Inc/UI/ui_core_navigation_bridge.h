@@ -13,5 +13,6 @@ void ui_core_navigation_bridge_request_hall_mode_page(ui_hall_mode_t target_mode
 void ui_core_navigation_bridge_request_cfg_page(void);
 void ui_core_navigation_bridge_open_rec_cfg_page(void);
 void ui_core_navigation_bridge_sync_active_track_ensemble(void);
+void ui_core_navigation_bridge_sync_created_track_destination(void);
 
 #endif /* UI_CORE_NAVIGATION_BRIDGE_H */

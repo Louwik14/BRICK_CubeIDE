@@ -43,3 +43,8 @@ void ui_core_navigation_bridge_sync_active_track_ensemble(void)
 {
     ui_navigation_sync_active_track_ensemble();
 }
+
+void ui_core_navigation_bridge_sync_created_track_destination(void)
+{
+    ui_navigation_sync_created_track_destination();
+}

@@ -15,7 +15,6 @@
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
-#define MOD_LFO_SYNC_RATE_COUNT 15U
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
 #define MOD_LFO_LEGACY_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
@@ -33,7 +32,7 @@
 #define MOD_LFO_SINE_LUT_SIZE 256U
 #define MOD_LFO_RATE_OFF_EPS 0.0001f
 
-/* Positive RATE values index this tempo-sync table: 1=8BAR ... 15=1/64. */
+/* Positive RATE values index this tempo-sync table: 1=8BAR ... 16=1/128. */
 static const float g_mod_lfo_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
     8.0f, 4.0f, 2.0f, 1.0f,
     0.5f, 0.33333334f,
@@ -41,7 +40,7 @@ static const float g_mod_lfo_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
     0.125f, 0.08333334f,
     0.0625f, 0.04166667f,
     0.03125f, 0.020833334f,
-    0.015625f
+    0.015625f, 0.0078125f
 };
 
 static const float g_mod_lfo_sine_lut[MOD_LFO_SINE_LUT_SIZE + 1U] = {
@@ -680,7 +679,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     {
         case MOD_LFO_PARAM_RATE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-            s->rate = mod_lfo_clampf(value, -12.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
+            s->rate = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT);
             if (s->rate > 0.0f)
             {
                 s->rate = mod_lfo_quantize_sync_rate(s->rate);
@@ -742,7 +741,7 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     switch (param)
     {
         case MOD_LFO_PARAM_RATE:
-            rt->temp.rate = mod_lfo_clampf(value, -12.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
+            rt->temp.rate = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT);
             if (rt->temp.rate > 0.0f)
             {
                 rt->temp.rate = mod_lfo_quantize_sync_rate(rt->temp.rate);

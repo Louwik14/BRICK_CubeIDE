@@ -25,7 +25,6 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_engine.h"
-#include "Board/board_product.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -41,6 +40,7 @@
 #include "UI/ui_navigation.h"
 #include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
+#include "UI/ui_step_led_ownership.h"
 #include "UI/pages/ui_page_patch_assign.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
@@ -662,20 +662,7 @@ static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
 
 static bool led_hall_mode_uses_seq_scene(ui_hall_mode_t mode)
 {
-    if (mode == UI_HALL_MODE_SEQ)
-    {
-        return true;
-    }
-
-    if (led_hall_mode_uses_keyboard_scene(mode) == false)
-    {
-        return false;
-    }
-
-    const board_product_capabilities_t *const caps = board_product_capabilities();
-    return ((caps != NULL)
-            && (caps->has_step_binary_lanes != 0U)
-            && (caps->has_separate_hall_keyboard != 0U));
+    return (ui_step_led_ownership_hall_mode_needs_step_leds(mode) != 0U);
 }
 
 static void led_apply_normal_rec_scene(led_id_t led)
@@ -713,9 +700,10 @@ static void led_apply_fixed_scene(void)
     param_id_t macro_param = PARAM_COUNT;
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
     const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_page_id = ui_page_get_id();
     const ui_hall_rout_context_t rout_context =
         ui_hall_mode_resolve_rout_context(active_track, hall_mode);
-    const button_id_t active_button = ui_navigation_get_button_for_page(ui_page_get_id());
+    const button_id_t active_button = ui_navigation_get_button_for_page(active_page_id);
     const led_id_t active_param_led = led_remap_param_led_for_button(active_button);
     if (ui_macro_interaction_get_active_slot_lock(&macro_param) != 0U)
     {
@@ -746,6 +734,10 @@ static void led_apply_fixed_scene(void)
                 led_apply_macro_scene_hall_scene(hall);
             }
         }
+    }
+    else if (ui_step_led_ownership_page_needs_step_leds(active_page_id) != 0U)
+    {
+        seq_led_render_active_track_page();
     }
     else if (hall_mode == UI_HALL_MODE_MUTE)
     {

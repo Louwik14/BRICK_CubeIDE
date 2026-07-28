@@ -120,9 +120,9 @@ static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 64U, 96U};
 static const uint8_t g_ui_template_footer_w[4] = {32U, 32U, 32U, 32U};
 static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
                                                                "F#", "G", "G#", "A", "A#", "B"};
-static const char *const g_ui_template_lfo_sync_labels[15] = {
+static const char *const g_ui_template_lfo_sync_labels[MOD_LFO_SYNC_RATE_COUNT] = {
     "8BAR", "4BAR", "2BAR", "1BAR", "1/2", "1/2T", "1/4", "1/4T",
-    "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/32T", "1/64"
+    "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/32T", "1/64", "1/128"
 };
 
 static void ui_renderer_template_format_semitones(float value, char *out, uint32_t out_len)
@@ -326,7 +326,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             {
                 idx--;
             }
-            if (idx < 15U)
+            if (idx < MOD_LFO_SYNC_RATE_COUNT)
             {
                 (void)snprintf(out, out_len, "%s", g_ui_template_lfo_sync_labels[idx]);
                 return;
@@ -1367,7 +1367,7 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
     {
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE:
         {
-            const float max_abs = (value > 0.0001f) ? 15.0f : 12.0f;
+            const float max_abs = (value > 0.0001f) ? (float)MOD_LFO_SYNC_RATE_COUNT : LFO_FREE_MAX_HZ;
             ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, max_abs);
             return 1U;
         }

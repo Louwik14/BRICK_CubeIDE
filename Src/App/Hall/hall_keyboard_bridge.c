@@ -4,6 +4,7 @@
 #include "Board/board_product.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "ui_core.h"
+#include "ui_core_mute.h"
 
 void hall_keyboard_bridge_init(void)
 {
@@ -35,8 +36,12 @@ void hall_keyboard_bridge_process(void)
             continue;
         }
 
-        uint8_t injection_allowed = ui_hall_allows_injection(ui_get_active_track(), ui_get_hall_mode());
-        if ((has_separate_hall_keyboard != 0U) && (ui_get_hall_mode() == UI_HALL_MODE_SEQ))
+        const ui_hall_mode_t raw_mode = ui_get_hall_mode();
+        const ui_hall_mode_t input_mode = (raw_mode == UI_HALL_MODE_MUTE)
+            ? ui_core_mute_get_passthrough_hall_mode()
+            : raw_mode;
+        uint8_t injection_allowed = ui_hall_allows_injection(ui_get_active_track(), input_mode);
+        if ((has_separate_hall_keyboard != 0U) && (input_mode == UI_HALL_MODE_SEQ))
         {
             injection_allowed = 1U;
         }

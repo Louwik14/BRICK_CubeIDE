@@ -42,6 +42,8 @@ typedef enum
 } mod_lfo_param_t;
 
 #define MOD_LFO_COUNT_PER_TRACK 3U
+#define LFO_FREE_MAX_HZ 80.0f
+#define MOD_LFO_SYNC_RATE_COUNT 16U
 
 void mod_lfo_v1_init(void);
 void mod_lfo_v1_reset_runtime(void);
