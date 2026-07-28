@@ -1,0 +1,45 @@
+#include "ui_step_led_ownership.h"
+
+#include "Board/board_product.h"
+#include "ui_page_manager.h"
+
+uint8_t ui_step_led_ownership_page_needs_step_leds(uint8_t page_id)
+{
+    if (page_id == UI_PAGE_TEMPLATE_SEQ)
+    {
+        return 1U;
+    }
+
+    if ((page_id == UI_PAGE_TEMPLATE_KEYBOARD) || (page_id == UI_PAGE_TEMPLATE_ARP))
+    {
+        const board_product_capabilities_t *const caps = board_product_capabilities();
+        return ((caps != 0)
+                && (caps->has_step_binary_lanes != 0U)
+                && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
+uint8_t ui_step_led_ownership_hall_mode_needs_step_leds(ui_hall_mode_t mode)
+{
+    if (mode == UI_HALL_MODE_SEQ)
+    {
+        return 1U;
+    }
+
+    if ((mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP))
+    {
+        const board_product_capabilities_t *const caps = board_product_capabilities();
+        return ((caps != 0)
+                && (caps->has_step_binary_lanes != 0U)
+                && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
+uint8_t ui_step_led_ownership_mute_may_render_for_page(uint8_t page_id)
+{
+    return (ui_step_led_ownership_page_needs_step_leds(page_id) == 0U) ? 1U : 0U;
+}

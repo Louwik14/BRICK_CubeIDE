@@ -195,6 +195,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
     {
         case MOD_MATRIX_SOURCE_LFO1:
         case MOD_MATRIX_SOURCE_LFO2:
+        case MOD_MATRIX_SOURCE_LFO3:
         case MOD_MATRIX_SOURCE_ENV3:
         case MOD_MATRIX_SOURCE_MULTI1:
         case MOD_MATRIX_SOURCE_MULTI2:
@@ -315,7 +316,9 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->valid = 1U;
         dst->destination = (uint16_t)destination;
         dst->base_value = base;
-        dst->min_value = ((destination == PARAM_LFO1_RATE) || (destination == PARAM_LFO2_RATE)) ? 0.0f : desc->min;
+        dst->min_value = ((destination == PARAM_LFO1_RATE)
+                          || (destination == PARAM_LFO2_RATE)
+                          || (destination == PARAM_LFO3_RATE)) ? 0.0f : desc->min;
         dst->max_value = desc->max;
     }
 
@@ -336,7 +339,8 @@ void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT
         }
         slots[0].source = (uint8_t)MOD_MATRIX_SOURCE_LFO1;
         slots[1].source = (uint8_t)MOD_MATRIX_SOURCE_LFO2;
-        slots[2].source = (uint8_t)MOD_MATRIX_SOURCE_ENV3;
+        slots[2].source = (uint8_t)MOD_MATRIX_SOURCE_LFO3;
+        slots[3].source = (uint8_t)MOD_MATRIX_SOURCE_ENV3;
     }
 
     if (selected_slot != NULL)

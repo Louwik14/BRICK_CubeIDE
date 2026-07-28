@@ -968,6 +968,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PatternSaveV1` ne contient plus de bloc LFO separe: LFO source, Matrix et ENV3 sont persistants uniquement via les blocs track-aware du layout courant.
 - Les anciens params directs `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant au lieu d'etre convertis ou conserves en fallback.
 
+## Addendum 2026-07-28 - layout LFO3 sans DELAY/FADE
+
+- Les params `PARAM_LFO1_DELAY`, `PARAM_LFO1_FADE`, `PARAM_LFO2_DELAY` et `PARAM_LFO2_FADE` sont retires du layout courant.
+- Les params LFO courants sont `PARAM_LFO1_RATE/SHAPE/TRIG/PHASE`, `PARAM_LFO2_RATE/SHAPE/TRIG/PHASE` et `PARAM_LFO3_RATE/SHAPE/TRIG/PHASE`.
+- `PARAM_COUNT` reste inchange: les quatre slots retires sont remplaces par les quatre params de `LFO3`.
+- Aucune migration prototype n'est conservee; Pattern/Project/Patch/Kit capturent directement le layout courant via `PARAM_COUNT` et `track_sound_state_t`.
+
 ## Addendum 2026-07-25 - persistence Stack
 
 - `Synth/Stack` est persiste comme type de track distinct de `Synth/Prism`; aucun champ Prism n'est renomme, migre ou reutilise comme alias Stack.
@@ -1014,10 +1021,10 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 ## Addendum 2026-07-27 - asset WAVETABLE SDRAM
 
 - `sample_global_pool` expose maintenant le kind logique `SAMPLE_GLOBAL_KIND_WAVETABLE`, partageant les memes slots globaux, budget utilisateur 16 MiB et compteurs memoire que `STREAM`, `MULTI` et `RAM`.
-- `wavetable_pool` est le backend resident: les fichiers `B6WT` sont lus depuis SD hors IRQ via `SD_ACCESS_CLIENT_SAMPLE_CACHE`, convertis en `FLOAT32_MONO`, puis stockes dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`.
-- Le format `B6WT` courant est volontairement borne: magic `B6WT`, version `1`, header 32 octets, frame de 2048 samples, `frame_count>0`, data mono `S16` ou `F32` little-endian.
+- `wavetable_pool` est le backend resident: les fichiers `B6WT` sont lus depuis SD hors IRQ via `SD_ACCESS_CLIENT_SAMPLE_CACHE`, valides en `S16_MONO`, puis stockes dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`.
+- Le format `B6WT` courant est volontairement borne: magic `B6WT`, version `1`, header 32 octets, frame de 2048 samples, `frame_count>0`, data mono `S16` little-endian. Les caches `F32` precedents sont invalides/refuses.
 - Le workflow UI de chargement manuel lit les fichiers WAV depuis `0:/WAVETABLES` via `Settings > Sample > WAVE`; il reutilise le browser Settings/Sample et charge les assets par `wavetable_pool_load_wav()`.
-- `wavetable_pool_load_wav()` accepte les WAV PCM mono/stereo 16/24/32-bit deja couverts par `wav_parser`/`wav_audio_codec`, impose une longueur mono effective non nulle et multiple de 2048 samples, decode les 32-bit WAV comme PCM int32, convertit en `FLOAT32_MONO`, clamp les samples importes/cache en `[-1,+1]`, puis cree une preview et un slot global `WAVETABLE`.
+- `wavetable_pool_load_wav()` accepte les WAV PCM mono/stereo 16/24/32-bit deja couverts par `wav_parser`/`wav_audio_codec`, impose une longueur mono effective non nulle et multiple de 2048 samples, decode les 32-bit WAV comme PCM int32, convertit en `S16_MONO`, sature les samples importes/cache dans le domaine `int16_t`, puis cree une preview et un slot global `WAVETABLE`.
 - Le cache prepare reste `B6WT` version 1 dans `0:/WAVETABLES/.CACHE`. Le nom de cache encode un hash du path source, la taille, la date et l'heure FAT; le header conserve aussi taille source et stamp date/time dans les champs reserves. Un cache valide est prefere au redecodage WAV; un cache absent, invalide ou impossible a ecrire n'empeche pas l'import WAV vers SDRAM.
 - Project autoload capture/restaure les slots `WAVETABLE` comme les slots `RAM`: path + slot backend + slot global, sans audio brut dans le projet et sans scan SD implicite.
 - Etat courant: le browser UI, les parametres `TABLE`, la preview wavetable et le runtime audio `Synth/Wave` sont branches; la persistence reste limitee aux references d'assets, sans audio brut.

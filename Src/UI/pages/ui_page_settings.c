@@ -33,6 +33,11 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#include "App/Hall/hall_adc.h"
+#include "App/Hall/hall_engine.h"
+#endif
+
 typedef enum
 {
     UI_SETTINGS_VIEW_ROOT = 0,
@@ -48,6 +53,10 @@ typedef enum
     UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
     UI_SETTINGS_VIEW_PROJECT_MANAGE,
     UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT,
+#if defined(BRICK6_VARIANT_LOWCOST)
+    UI_SETTINGS_VIEW_TEST,
+    UI_SETTINGS_VIEW_TEST_HALL,
+#endif
 
     UI_SETTINGS_VIEW_COUNT
 } ui_settings_view_t;
@@ -186,6 +195,10 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
+#if defined(BRICK6_VARIANT_LOWCOST)
+    uint8_t hall_test_key;
+    uint8_t hall_test_mux;
+#endif
     ui_settings_sampler_catalog_mode_t sampler_catalog_mode;
     uint16_t sample_entry_count;
     uint16_t sample_child_count;
@@ -2990,6 +3003,12 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "PROJECT > MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return "MANAGE > SLOT";
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_TEST:
+            return "TEST";
+        case UI_SETTINGS_VIEW_TEST_HALL:
+            return "TEST > HALL";
+#endif
         default:
             return "SETTINGS";
     }
@@ -3000,7 +3019,11 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return 3U;
+#else
             return 2U;
+#endif
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -3023,6 +3046,12 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return PROJECT_V1_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_TEST:
+            return 1U;
+        case UI_SETTINGS_VIEW_TEST_HALL:
+            return 0U;
+#endif
         default:
             return 0U;
     }
@@ -3038,7 +3067,15 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "SAMPLE";
             }
+#if defined(BRICK6_VARIANT_LOWCOST)
+            if (index == 1U)
+            {
+                return "PROJECT";
+            }
+            return "TEST";
+#else
             return "PROJECT";
+#endif
         case UI_SETTINGS_VIEW_SAMPLE:
             if (index == 0U)
             {
@@ -3156,6 +3193,10 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "SAVE TO";
             }
             return "DELETE";
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_TEST:
+            return (index == 0U) ? "HALL" : "-";
+#endif
         default:
             return "-";
     }
@@ -3271,11 +3312,35 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE);
             }
+#if defined(BRICK6_VARIANT_LOWCOST)
+            else if (level->selected_index == 1U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
+            }
+            else
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST);
+            }
+#else
             else
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
+#endif
             break;
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_TEST:
+            if (level->selected_index == 0U)
+            {
+                g_ui_settings.hall_test_key = 0U;
+                g_ui_settings.hall_test_mux = 0U;
+                g_ui_settings.encoder_accum[0U] = 0;
+                g_ui_settings.encoder_accum[1U] = 0;
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
+            }
+            break;
+#endif
 
         case UI_SETTINGS_VIEW_SAMPLE:
             if (level->selected_index == 0U)
@@ -3546,6 +3611,10 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
+#if defined(BRICK6_VARIANT_LOWCOST)
+    g_ui_settings.hall_test_key = 0U;
+    g_ui_settings.hall_test_mux = 0U;
+#endif
     g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD;
     g_ui_settings.sampler_slot_count = 0U;
     g_ui_settings.project_slot_count = 0U;
@@ -4865,6 +4934,75 @@ static void ui_page_settings_render_wavetable_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+static void ui_page_settings_render_test_hall(void)
+{
+    char line[24];
+    const uint8_t key = g_ui_settings.hall_test_key;
+    const uint8_t mux = g_ui_settings.hall_test_mux;
+    const uint16_t raw = hall_adc_get_raw(key);
+    hall_velocity_debug_t debug = {0};
+    hall_engine_get_velocity_debug(key, &debug);
+    const uint8_t calibration_valid =
+        ((debug.calibrated != 0U) && (debug.range_valid != 0U)) ? 1U : 0U;
+
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text(0U, 0U, "TEST > HALL");
+    drv_display_draw_line(0, 9, 127, 9);
+
+    (void)snprintf(line,
+                   sizeof(line),
+                   "HALL %02u / 24",
+                   (unsigned)(key + 1U));
+    drv_display_draw_text(0U, 12U, line);
+    (void)snprintf(line,
+                   sizeof(line),
+                   "MUX %u",
+                   (unsigned)mux);
+    drv_display_draw_text(76U, 12U, line);
+
+    drv_display_set_font(&FONT_4X6);
+    (void)snprintf(line, sizeof(line), "RAW %u", (unsigned)raw);
+    drv_display_draw_text(0U, 22U, line);
+    (void)snprintf(line, sizeof(line), "FILT %u", (unsigned)debug.raw_current);
+    drv_display_draw_text(64U, 22U, line);
+
+    if (calibration_valid != 0U)
+    {
+        (void)snprintf(line, sizeof(line), "RAW LOW %u", (unsigned)debug.min_current);
+        drv_display_draw_text(0U, 32U, line);
+        (void)snprintf(line, sizeof(line), "RAW HIGH %u", (unsigned)debug.max_current);
+        drv_display_draw_text(0U, 40U, line);
+    }
+    else
+    {
+        drv_display_draw_text(0U, 32U, "RAW LOW ---");
+        drv_display_draw_text(0U, 40U, "RAW HIGH ---");
+    }
+
+    (void)snprintf(line,
+                   sizeof(line),
+                   "PRESS %s",
+                   (debug.state != 0U) ? "ON" : "OFF");
+    drv_display_draw_text(0U, 48U, line);
+    (void)snprintf(line,
+                   sizeof(line),
+                   "VEL %u",
+                   (unsigned)debug.velocity);
+    drv_display_draw_text(72U, 48U, line);
+
+    (void)snprintf(line,
+                   sizeof(line),
+                   "M%u %u %u %u",
+                   (unsigned)mux,
+                   (unsigned)hall_adc_get_mux_raw(0U, mux),
+                   (unsigned)hall_adc_get_mux_raw(1U, mux),
+                   (unsigned)hall_adc_get_mux_raw(2U, mux));
+    drv_display_draw_text(0U, 56U, line);
+
+}
+#endif
+
 static void ui_page_settings_render(void)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
@@ -4897,6 +5035,13 @@ static void ui_page_settings_render(void)
         ui_page_settings_render_wavetable_browser();
         return;
     }
+#if defined(BRICK6_VARIANT_LOWCOST)
+    if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
+    {
+        ui_page_settings_render_test_hall();
+        return;
+    }
+#endif
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text(0U, 0U, ui_page_settings_view_title(level->view));
@@ -5017,6 +5162,54 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     {
         return;
     }
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+    if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
+    {
+        if (encoder > 1U)
+        {
+            return;
+        }
+
+        g_ui_settings.encoder_accum[encoder] =
+            (int16_t)(g_ui_settings.encoder_accum[encoder] + delta);
+        const int16_t step =
+            (int16_t)(g_ui_settings.encoder_accum[encoder] / UI_SETTINGS_ENCODER_DIVIDER);
+        g_ui_settings.encoder_accum[encoder] =
+            (int16_t)(g_ui_settings.encoder_accum[encoder]
+                      - (step * UI_SETTINGS_ENCODER_DIVIDER));
+        if (step != 0)
+        {
+            if (encoder == 0U)
+            {
+                int32_t key = (int32_t)g_ui_settings.hall_test_key + step;
+                if (key < 0)
+                {
+                    key = 0;
+                }
+                else if (key >= HALL_KEY_COUNT)
+                {
+                    key = HALL_KEY_COUNT - 1U;
+                }
+                g_ui_settings.hall_test_key = (uint8_t)key;
+            }
+            else
+            {
+                int32_t mux = (int32_t)g_ui_settings.hall_test_mux + step;
+                if (mux < 0)
+                {
+                    mux = 0;
+                }
+                else if (mux >= 8)
+                {
+                    mux = 7;
+                }
+                g_ui_settings.hall_test_mux = (uint8_t)mux;
+            }
+        }
+        return;
+    }
+#endif
 
     if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
         || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)

@@ -21,7 +21,6 @@
 
 #include "mixer.h"
 
-#include "adsr_daisy_c.h"
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
 #include "fx_biquad_filter.h"
@@ -66,7 +65,7 @@ typedef struct {
     fx_biquad_filter_t biquad;
     fx_biquad_filter_mono_t biquad_mono;
     env_adsr_t filter_env;
-    adsr_daisy_c_t vca_env;
+    env_adsr_t vca_env;
     fx_dj_eq3_t eq3;
     fx_dj_eq3_mono_t eq3_mono;
     float sample_rate;
@@ -514,11 +513,6 @@ static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
     return (uint16_t)(clamped * 32767.0f + 0.5f);
 }
 
-static float mixer_track_vca_clamp_time_s(float time_s)
-{
-    return clampf_local(time_s, MIXER_FILTER_ATTACK_MIN_S, MIXER_FILTER_ATTACK_MAX_S);
-}
-
 static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filter_t *filter, float env)
 {
     float cutoff_hz = filter->cutoff_hz;
@@ -632,12 +626,12 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
     env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_peaks(1.0f));
     env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
-    adsr_daisy_c_init(&filter->vca_env, filter->sample_rate, 1U);
-    adsr_daisy_c_set_attack(&filter->vca_env, mixer_track_vca_clamp_time_s(0.001f));
-    adsr_daisy_c_set_decay(&filter->vca_env, mixer_track_vca_clamp_time_s(0.001f));
-    adsr_daisy_c_set_sustain(&filter->vca_env, 1.0f);
-    adsr_daisy_c_set_release(&filter->vca_env, mixer_track_vca_clamp_time_s(0.001f));
-    adsr_daisy_c_reset(&filter->vca_env);
+    env_adsr_init(&filter->vca_env, filter->sample_rate);
+    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
+    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
+    env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_peaks(1.0f));
+    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
+    env_adsr_reset(&filter->vca_env);
 
     mixer_track_filter_reset_dsp(filter);
 }
@@ -1907,7 +1901,8 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    adsr_daisy_c_set_attack(&g_track_filters[track_id].vca_env, mixer_track_vca_clamp_time_s(attack_s));
+    env_adsr_set_attack(&g_track_filters[track_id].vca_env,
+                        mixer_track_filter_time_s_to_peaks(attack_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
@@ -1915,7 +1910,8 @@ void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    adsr_daisy_c_set_decay(&g_track_filters[track_id].vca_env, mixer_track_vca_clamp_time_s(decay_s));
+    env_adsr_set_decay(&g_track_filters[track_id].vca_env,
+                       mixer_track_filter_time_s_to_peaks(decay_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
@@ -1923,7 +1919,8 @@ void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    adsr_daisy_c_set_sustain(&g_track_filters[track_id].vca_env, clampf_local(sustain, 0.0f, 1.0f));
+    env_adsr_set_sustain(&g_track_filters[track_id].vca_env,
+                         mixer_track_filter_sustain_to_peaks(sustain));
 }
 
 void mixer_set_track_vca_release(uint32_t track_id, float release_s)
@@ -1931,7 +1928,8 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    adsr_daisy_c_set_release(&g_track_filters[track_id].vca_env, mixer_track_vca_clamp_time_s(release_s));
+    env_adsr_set_release(&g_track_filters[track_id].vca_env,
+                         mixer_track_filter_time_s_to_peaks(release_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
@@ -1947,7 +1945,7 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
         g_track_filters[track_id].vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
         g_track_filters[track_id].vca_gate = 0U;
         g_track_filters[track_id].vca_env_value = 0.0f;
-        adsr_daisy_c_reset(&g_track_filters[track_id].vca_env);
+        env_adsr_reset(&g_track_filters[track_id].vca_env);
     }
 }
 
@@ -1977,7 +1975,7 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
     {
         filter->vca_note_active = 1U;
         filter->vca_gate = 1U;
-        adsr_daisy_c_retrigger(&filter->vca_env, filter->vca_retrigger_hard);
+        env_adsr_retrigger(&filter->vca_env, filter->vca_retrigger_hard != 0U);
     }
 }
 
@@ -2000,6 +1998,7 @@ void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note)
     {
         filter->vca_note_active = 0U;
         filter->vca_gate = 0U;
+        env_adsr_gate_off(&filter->vca_env);
     }
 }
 
@@ -2014,7 +2013,7 @@ void mixer_track_vca_all_notes_off(uint32_t track_id)
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->vca_gate = 0U;
     filter->vca_env_value = 0.0f;
-    adsr_daisy_c_reset(&filter->vca_env);
+    env_adsr_reset(&filter->vca_env);
 }
 
 uint8_t mixer_track_vca_is_running(uint32_t track_id)
@@ -2026,7 +2025,7 @@ uint8_t mixer_track_vca_is_running(uint32_t track_id)
     if (filter->vca_enabled == 0U)
         return 0U;
 
-    return adsr_daisy_c_is_running(&filter->vca_env);
+    return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
 }
 
 float mixer_get_track_vca_env_value(uint32_t track_id)
@@ -2159,6 +2158,43 @@ void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
     }
 
     g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
+uint8_t __attribute__((used)) mixer_begin_external_mono_native(uint32_t track_id,
+                                                               uint32_t frames,
+                                                               float **out_mono)
+{
+    if (out_mono != NULL)
+    {
+        *out_mono = NULL;
+    }
+
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (out_mono == NULL)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return 0U;
+    }
+
+    *out_mono = g_external_track_mono[track_id];
+    return 1U;
+}
+
+void __attribute__((used)) mixer_commit_external_mono_native(uint32_t track_id, uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return;
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MONO_NATIVE;
     g_external_track_frames_valid[track_id] = (uint16_t)frames;
     g_external_track_enabled[track_id] = 1U;
 }
@@ -2443,7 +2479,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float gain_l = gain_cur * pan_l;
                 const float gain_r = gain_cur * pan_r;
                 const float vca_gain = (g_track_filters[t].vca_enabled != 0U)
-                        ? adsr_daisy_c_process(&g_track_filters[t].vca_env, g_track_filters[t].vca_gate)
+                        ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
                         : 1.0f;
                 if (g_track_filters[t].vca_enabled != 0U)
                 {

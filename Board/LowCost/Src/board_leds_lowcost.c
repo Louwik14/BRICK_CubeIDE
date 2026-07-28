@@ -11,11 +11,26 @@
 #define LED_RESET_SLOTS 100U
 #define WS2812_0 84U
 #define WS2812_1 175U
-#define LOWCOST_WS2812_BRIGHTNESS_PERCENT 1U
+#define LOWCOST_WS2812_BRIGHTNESS_Q8 4U
 #define LED_BUFFER_SIZE ((BOARD_LED_TRANSPORT_COUNT * LED_BITS_PER_LED) + LED_RESET_SLOTS)
 
 static DMA_BUFFER uint32_t pwm_buffer[LED_BUFFER_SIZE];
 static volatile uint8_t dma_busy;
+
+static uint8_t led_transport_scale_component(uint8_t value)
+{
+    if (value == 0U)
+    {
+        return 0U;
+    }
+
+    uint16_t scaled = ((uint16_t)value * LOWCOST_WS2812_BRIGHTNESS_Q8) >> 8;
+    if (scaled == 0U)
+    {
+        scaled = 1U;
+    }
+    return (uint8_t)scaled;
+}
 
 static void led_transport_encode(const uint8_t *rgb, uint32_t count)
 {
@@ -24,9 +39,9 @@ static void led_transport_encode(const uint8_t *rgb, uint32_t count)
     for (uint32_t i = 0U; i < count; i++)
     {
         const uint8_t colors[3] = {
-            (uint8_t)(((uint16_t)rgb[(i * 3U) + 1U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U),
-            (uint8_t)(((uint16_t)rgb[(i * 3U) + 0U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U),
-            (uint8_t)(((uint16_t)rgb[(i * 3U) + 2U] * LOWCOST_WS2812_BRIGHTNESS_PERCENT) / 100U)
+            led_transport_scale_component(rgb[(i * 3U) + 1U]),
+            led_transport_scale_component(rgb[(i * 3U) + 0U]),
+            led_transport_scale_component(rgb[(i * 3U) + 2U])
         };
 
         for (uint32_t c = 0U; c < 3U; c++)

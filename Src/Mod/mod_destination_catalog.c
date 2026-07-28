@@ -206,7 +206,7 @@ static uint8_t mod_destination_is_direct_midi_cc(param_id_t dest)
 
 static uint8_t mod_destination_is_lfo_rate(param_id_t dest)
 {
-    return ((dest == PARAM_LFO1_RATE) || (dest == PARAM_LFO2_RATE)) ? 1U : 0U;
+    return ((dest == PARAM_LFO1_RATE) || (dest == PARAM_LFO2_RATE) || (dest == PARAM_LFO3_RATE)) ? 1U : 0U;
 }
 
 static uint8_t mod_destination_midi_cc_cache_index(param_id_t dest, uint8_t *out_index)
@@ -782,7 +782,7 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     {
         (void)ctx;
         return mod_lfo_v1_apply_track_param_temp(track,
-                                                 (dest == PARAM_LFO1_RATE) ? 0U : 1U,
+                                                 (uint8_t)(dest - PARAM_LFO1_RATE) / (uint8_t)MOD_LFO_PARAM_COUNT,
                                                  MOD_LFO_PARAM_RATE,
                                                  value);
     }
@@ -831,15 +831,14 @@ static uint8_t mod_destination_is_internal_lfo_param(param_id_t id)
     switch (id)
     {
         case PARAM_LFO1_SHAPE:
-        case PARAM_LFO1_DELAY:
         case PARAM_LFO1_TRIG:
-        case PARAM_LFO1_FADE:
-        case PARAM_LFO1_PHASE_SLEW:
+        case PARAM_LFO1_PHASE:
         case PARAM_LFO2_SHAPE:
-        case PARAM_LFO2_DELAY:
         case PARAM_LFO2_TRIG:
-        case PARAM_LFO2_FADE:
-        case PARAM_LFO2_PHASE_SLEW:
+        case PARAM_LFO2_PHASE:
+        case PARAM_LFO3_SHAPE:
+        case PARAM_LFO3_TRIG:
+        case PARAM_LFO3_PHASE:
             return 1U;
         default:
             return 0U;
@@ -1189,6 +1188,10 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     {
         name = "lfo2rate";
     }
+    else if (dest == PARAM_LFO3_RATE)
+    {
+        name = "lfo3rate";
+    }
     else if (param_prism_label_for_track_param(track, dest, &name) == 0U)
     {
         if (mod_destination_stack_label_for_track_param(track, dest, &name) == 0U)
@@ -1225,6 +1228,7 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
     {
         case PARAM_LFO1_RATE: return "L1Rt";
         case PARAM_LFO2_RATE: return "L2Rt";
+        case PARAM_LFO3_RATE: return "L3Rt";
         case PARAM_MIX_LEVEL: return "Lvl";
         case PARAM_MIX_SEND1: return "Snd1";
         case PARAM_MIX_SEND2: return "Snd2";

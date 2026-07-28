@@ -15,7 +15,6 @@
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
-#define MOD_LFO_COUNT_PER_TRACK 2U
 #define MOD_LFO_SYNC_RATE_COUNT 15U
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
@@ -53,8 +52,6 @@ typedef struct
 {
     uint32_t phase;
     uint32_t phase_inc;
-    uint32_t delay_remaining_frames;
-    uint32_t fade_elapsed_frames;
     float current;
     float hold_value;
     float slew_value;
@@ -65,7 +62,6 @@ typedef struct
     uint8_t one_running;
     uint8_t one_done;
     uint8_t hold_valid;
-    uint8_t hold_capture_pending;
     uint8_t slew_valid;
     uint8_t active;
     uint8_t temp_valid_mask;
@@ -204,14 +200,10 @@ static float mod_lfo_effective_field(const mod_lfo_runtime_state_t *rt,
             return source->rate;
         case MOD_LFO_PARAM_SHAPE:
             return source->shape;
-        case MOD_LFO_PARAM_DELAY:
-            return source->delay;
         case MOD_LFO_PARAM_TRIG:
             return source->trig;
-        case MOD_LFO_PARAM_FADE:
-            return source->fade;
-        case MOD_LFO_PARAM_PHASE_SLEW:
-            return source->phase_slew;
+        case MOD_LFO_PARAM_PHASE:
+            return source->phase;
         default:
             return 0.0f;
     }
@@ -282,19 +274,6 @@ static uint32_t mod_lfo_phase_inc_from_rate(float rate)
     return mod_lfo_phase_inc_from_rate_with_bpm(rate, seq_runtime_get_tempo_bpm_milli());
 }
 
-static uint32_t mod_lfo_seconds_to_frames(float seconds)
-{
-    if (seconds <= 0.0f)
-    {
-        return 0U;
-    }
-    if (seconds > 60.0f)
-    {
-        seconds = 60.0f;
-    }
-    return (uint32_t)((seconds * MOD_LFO_AUDIO_SAMPLE_RATE) + 0.5f);
-}
-
 static uint32_t mod_lfo_phase_from_degrees(float degrees)
 {
     degrees = mod_lfo_clampf(degrees, 0.0f, 360.0f);
@@ -305,7 +284,7 @@ static uint32_t mod_lfo_phase_from_degrees(float degrees)
     return (uint32_t)(((double)degrees / 360.0) * 4294967296.0);
 }
 
-static void mod_lfo_start_phase(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t shape, float phase_slew)
+static void mod_lfo_start_phase(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t shape, float phase)
 {
     if (rt == NULL)
     {
@@ -319,7 +298,7 @@ static void mod_lfo_start_phase(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t sha
     }
     else
     {
-        rt->phase = mod_lfo_phase_from_degrees(phase_slew);
+        rt->phase = mod_lfo_phase_from_degrees(phase);
     }
     rt->slew_valid = 0U;
 }
@@ -412,7 +391,6 @@ static void mod_lfo_capture_hold_value(mod_lfo_runtime_state_t *rt, mod_lfo_shap
 
     rt->hold_value = mod_lfo_wave(shape, rt->phase, rt);
     rt->hold_valid = 1U;
-    rt->hold_capture_pending = 0U;
 }
 
 static uint8_t mod_lfo_is_effectively_active(uint8_t track,
@@ -433,7 +411,7 @@ static uint8_t mod_lfo_is_effectively_active(uint8_t track,
     }
 
     return mod_matrix_source_has_active_route(track,
-                                              (lfo_index == 0U) ? MOD_MATRIX_SOURCE_LFO1 : MOD_MATRIX_SOURCE_LFO2,
+                                              (mod_matrix_source_t)((uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo_index),
                                               family,
                                               type,
                                               ctx);
@@ -455,7 +433,6 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
                 {
                     g_mod_lfo_runtime[track][lfo].active = 0U;
-                    g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
                 }
                 g_mod_lfo_track_had_matrix_routes[track] = 0U;
             }
@@ -480,7 +457,6 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
                 {
                     g_mod_lfo_runtime[track][lfo].active = 0U;
-                    g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
                 }
                 g_mod_lfo_track_had_matrix_routes[track] = 0U;
             }
@@ -530,16 +506,13 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if (mod_lfo_is_effectively_active(track, lfo, family, type, ctx) == 0U)
             {
                 rt->active = 0U;
-                rt->hold_capture_pending = 0U;
                 continue;
             }
 
             const float rate = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_RATE);
             const float shape = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_SHAPE);
             const float trig_f = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG);
-            const float fade = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_FADE);
-            const float phase_slew = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_PHASE_SLEW);
-            const float delay = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_DELAY);
+            const float phase = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_PHASE);
             const mod_lfo_shape_t shape_id = (mod_lfo_shape_t)((uint8_t)(shape + 0.5f));
             const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)(trig_f + 0.5f));
 
@@ -547,50 +520,24 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if (rt->phase_inc == 0U)
             {
                 rt->active = 0U;
-                rt->hold_capture_pending = 0U;
                 continue;
             }
 
             if (rt->active == 0U)
             {
                 rt->active = 1U;
-                rt->delay_remaining_frames = mod_lfo_seconds_to_frames(delay);
-                rt->fade_elapsed_frames = 0U;
                 rt->one_done = 0U;
                 rt->one_running = (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U;
-                rt->hold_capture_pending = 0U;
-                mod_lfo_start_phase(rt, shape_id, phase_slew);
+                mod_lfo_start_phase(rt, shape_id, phase);
                 if (trig == MOD_LFO_TRIG_HOLD)
                 {
-                    if (rt->delay_remaining_frames > 0U)
-                    {
-                        rt->hold_capture_pending = 1U;
-                    }
-                    else
-                    {
-                        mod_lfo_capture_hold_value(rt, shape_id);
-                    }
+                    mod_lfo_capture_hold_value(rt, shape_id);
                 }
             }
 
             if ((trig == MOD_LFO_TRIG_ONE) && (rt->one_done != 0U))
             {
                 continue;
-            }
-
-            if (rt->delay_remaining_frames > 0U)
-            {
-                if (rt->delay_remaining_frames > elapsed_frames)
-                {
-                    rt->delay_remaining_frames -= elapsed_frames;
-                    continue;
-                }
-                rt->delay_remaining_frames = 0U;
-                rt->fade_elapsed_frames = 0U;
-                if ((trig == MOD_LFO_TRIG_HOLD) && (rt->hold_capture_pending != 0U))
-                {
-                    mod_lfo_capture_hold_value(rt, shape_id);
-                }
             }
 
             const uint32_t phase_prev = rt->phase;
@@ -621,7 +568,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 
             if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
             {
-                const float slew_norm = mod_lfo_clampf(phase_slew / 360.0f, 0.0f, 1.0f);
+                const float slew_norm = mod_lfo_clampf(phase / 360.0f, 0.0f, 1.0f);
                 const float coeff = 1.0f - (slew_norm * 0.95f);
                 if (rt->slew_valid == 0U)
                 {
@@ -635,21 +582,9 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 rt->current = rt->slew_value;
             }
 
-            float amp = 1.0f;
-            const uint32_t fade_frames = mod_lfo_seconds_to_frames(fabsf(fade));
-            if (fade_frames > 0U)
-            {
-                rt->fade_elapsed_frames += elapsed_frames;
-                if (rt->fade_elapsed_frames > fade_frames)
-                {
-                    rt->fade_elapsed_frames = fade_frames;
-                }
-                const float pos = (float)rt->fade_elapsed_frames / (float)fade_frames;
-                amp = (fade < 0.0f) ? pos : (1.0f - pos);
-            }
-
-            source_values[(lfo == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_LFO1 : (uint8_t)MOD_MATRIX_SOURCE_LFO2] = rt->current * amp;
-            source_valid[(lfo == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_LFO1 : (uint8_t)MOD_MATRIX_SOURCE_LFO2] = 1U;
+            const uint8_t source = (uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo;
+            source_values[source] = rt->current;
+            source_valid[source] = 1U;
         }
 
         mod_matrix_process_operators(track, source_values, source_valid, elapsed_frames);
@@ -673,8 +608,6 @@ void mod_lfo_v1_init(void)
         {
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
-            g_mod_lfo_runtime[track][lfo].delay_remaining_frames = 0U;
-            g_mod_lfo_runtime[track][lfo].fade_elapsed_frames = 0U;
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
             g_mod_lfo_runtime[track][lfo].hold_value = 0.0f;
             g_mod_lfo_runtime[track][lfo].slew_value = 0.0f;
@@ -685,7 +618,6 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].one_running = 0U;
             g_mod_lfo_runtime[track][lfo].one_done = 0U;
             g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
@@ -720,11 +652,8 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].one_running = 0U;
             g_mod_lfo_runtime[track][lfo].one_done = 0U;
             g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
-            g_mod_lfo_runtime[track][lfo].delay_remaining_frames = 0U;
-            g_mod_lfo_runtime[track][lfo].fade_elapsed_frames = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
         }
     }
@@ -760,7 +689,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             if (rt->phase_inc == 0U)
             {
                 rt->active = 0U;
-                rt->hold_capture_pending = 0U;
             }
             return 1U;
 
@@ -771,11 +699,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->slew_valid = 0U;
             return 1U;
 
-        case MOD_LFO_PARAM_DELAY:
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-            s->delay = mod_lfo_clampf(value, 0.0f, 10.0f);
-            return 1U;
-
         case MOD_LFO_PARAM_TRIG:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
@@ -783,20 +706,12 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->one_running = 0U;
             rt->one_done = 0U;
             rt->hold_valid = 0U;
-            rt->hold_capture_pending = 0U;
             rt->active = 0U;
-            rt->fade_elapsed_frames = 0U;
             return 1U;
 
-        case MOD_LFO_PARAM_FADE:
+        case MOD_LFO_PARAM_PHASE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-            s->fade = mod_lfo_clampf(value, -10.0f, 10.0f);
-            rt->fade_elapsed_frames = 0U;
-            return 1U;
-
-        case MOD_LFO_PARAM_PHASE_SLEW:
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-            s->phase_slew = mod_lfo_clampf(value, 0.0f, 360.0f);
+            s->phase = mod_lfo_clampf(value, 0.0f, 360.0f);
             rt->slew_valid = 0U;
             return 1U;
 
@@ -836,7 +751,6 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             if (rt->phase_inc == 0U)
             {
                 rt->active = 0U;
-                rt->hold_capture_pending = 0U;
             }
             break;
 
@@ -846,28 +760,17 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             rt->slew_valid = 0U;
             break;
 
-        case MOD_LFO_PARAM_DELAY:
-            rt->temp.delay = mod_lfo_clampf(value, 0.0f, 10.0f);
-            break;
-
         case MOD_LFO_PARAM_TRIG:
             rt->temp.trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
             rt->triggered = 0U;
             rt->one_running = 0U;
             rt->one_done = 0U;
             rt->hold_valid = 0U;
-            rt->hold_capture_pending = 0U;
             rt->active = 0U;
-            rt->fade_elapsed_frames = 0U;
             break;
 
-        case MOD_LFO_PARAM_FADE:
-            rt->temp.fade = mod_lfo_clampf(value, -10.0f, 10.0f);
-            rt->fade_elapsed_frames = 0U;
-            break;
-
-        case MOD_LFO_PARAM_PHASE_SLEW:
-            rt->temp.phase_slew = mod_lfo_clampf(value, 0.0f, 360.0f);
+        case MOD_LFO_PARAM_PHASE:
+            rt->temp.phase = mod_lfo_clampf(value, 0.0f, 360.0f);
             rt->slew_valid = 0U;
             break;
 
@@ -914,20 +817,12 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             *out_value = s->shape;
             return 1U;
 
-        case MOD_LFO_PARAM_DELAY:
-            *out_value = s->delay;
-            return 1U;
-
         case MOD_LFO_PARAM_TRIG:
             *out_value = s->trig;
             return 1U;
 
-        case MOD_LFO_PARAM_FADE:
-            *out_value = s->fade;
-            return 1U;
-
-        case MOD_LFO_PARAM_PHASE_SLEW:
-            *out_value = s->phase_slew;
+        case MOD_LFO_PARAM_PHASE:
+            *out_value = s->phase;
             return 1U;
 
         default:
@@ -997,25 +892,16 @@ void mod_lfo_v1_note_trigger(uint8_t track)
         }
 
         rt->triggered = 1U;
-        rt->delay_remaining_frames = mod_lfo_seconds_to_frames(s->delay);
-        rt->fade_elapsed_frames = 0U;
         rt->one_done = 0U;
         rt->one_running = (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U;
 
         if ((trig == MOD_LFO_TRIG_TRIG) || (trig == MOD_LFO_TRIG_ONE))
         {
-            mod_lfo_start_phase(rt, shape, s->phase_slew);
+            mod_lfo_start_phase(rt, shape, s->phase);
         }
         else if (trig == MOD_LFO_TRIG_HOLD)
         {
-            if (rt->delay_remaining_frames > 0U)
-            {
-                rt->hold_capture_pending = 1U;
-            }
-            else
-            {
-                mod_lfo_capture_hold_value(rt, shape);
-            }
+            mod_lfo_capture_hold_value(rt, shape);
         }
     }
 }

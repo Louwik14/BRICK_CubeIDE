@@ -552,6 +552,48 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         return 0U;
     }
 
+    if (id == PARAM_WAVE_FRAME_INTERP)
+    {
+        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->wave.frame_interp = (float)enabled;
+        }
+        brick6_wave_runtime_set_frame_interp(ctx->instance_id, enabled);
+        return 1U;
+    }
+    if (id == PARAM_WAVE_SAMPLE_INTERP)
+    {
+        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->wave.sample_interp = (float)enabled;
+        }
+        brick6_wave_runtime_set_sample_interp(ctx->instance_id, enabled);
+        return 1U;
+    }
+    if (id == PARAM_WAVE_POS_UPDATE)
+    {
+        const brick6_wave_pos_update_t update =
+            (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->wave.pos_update = (float)(uint8_t)update;
+        }
+        brick6_wave_runtime_set_pos_update(ctx->instance_id, update);
+        return 1U;
+    }
+    if (id == PARAM_WAVE_POS_SMOOTH)
+    {
+        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->wave.pos_smooth = (float)enabled;
+        }
+        brick6_wave_runtime_set_pos_smooth(ctx->instance_id, enabled);
+        return 1U;
+    }
+
     uint8_t osc = 0U;
     uint8_t slot_param = 0U;
     if (param_backend_wave_slot_for_id(id, &osc, &slot_param) == 0U)
@@ -668,6 +710,11 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
         brick6_wave_runtime_set_osc_phase(ctx->instance_id, osc, (brick6_wave_phase_t)(uint8_t)(param_backend_clamp_value(state->wave.phase[osc], 0.0f, 3.0f) + 0.5f));
         brick6_wave_runtime_set_osc_flip(ctx->instance_id, osc, (brick6_wave_flip_t)(uint8_t)(param_backend_clamp_value(state->wave.flip[osc], 0.0f, 3.0f) + 0.5f));
     }
+    brick6_wave_runtime_set_frame_interp(ctx->instance_id, (state->wave.frame_interp >= 0.5f) ? 1U : 0U);
+    brick6_wave_runtime_set_sample_interp(ctx->instance_id, (state->wave.sample_interp >= 0.5f) ? 1U : 0U);
+    brick6_wave_runtime_set_pos_update(ctx->instance_id,
+                                       (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(state->wave.pos_update, 0.0f, 3.0f) + 0.5f));
+    brick6_wave_runtime_set_pos_smooth(ctx->instance_id, (state->wave.pos_smooth >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 

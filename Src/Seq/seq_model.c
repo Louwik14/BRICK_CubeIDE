@@ -50,6 +50,29 @@ static uint8_t seq_model_clamp_playback_length(uint8_t length_steps)
     return length_steps;
 }
 
+static uint8_t seq_model_page_count_for_length(uint8_t length_steps)
+{
+#if defined(BRICK6_VARIANT_LOWCOST)
+    const uint8_t length = seq_model_clamp_playback_length(length_steps);
+    uint8_t page_count = (uint8_t)((length + (SEQ_STEPS_PER_PAGE - 1U)) / SEQ_STEPS_PER_PAGE);
+    if (page_count > SEQ_PAGE_COUNT)
+    {
+        page_count = SEQ_PAGE_COUNT;
+    }
+    return page_count;
+#else
+    (void)length_steps;
+    return SEQ_PAGE_COUNT;
+#endif
+}
+
+static uint8_t seq_model_clamp_ui_page_for_length(uint8_t page, uint8_t length_steps)
+{
+    const uint8_t page_count = seq_model_page_count_for_length(length_steps);
+    const uint8_t max_page = (page_count > 0U) ? (uint8_t)(page_count - 1U) : 0U;
+    return (page > max_page) ? max_page : page;
+}
+
 static uint8_t seq_model_step_is_valid(seq_step_id_t step)
 {
     return (step < seq_model_get_editable_step_capacity()) ? 1U : 0U;
@@ -287,12 +310,8 @@ uint8_t seq_model_load_project(const seq_project_data_t *project)
         }
         g_seq_project.tracks[tr].length_steps = length_steps;
 
-        uint8_t ui_page = project->tracks[tr].ui_page;
-        if (ui_page >= SEQ_PAGE_COUNT)
-        {
-            ui_page = (uint8_t)(SEQ_PAGE_COUNT - 1U);
-        }
-        g_seq_project.tracks[tr].ui_page = ui_page;
+        g_seq_project.tracks[tr].ui_page =
+            seq_model_clamp_ui_page_for_length(project->tracks[tr].ui_page, length_steps);
 
         for (seq_step_id_t st = 0U; st < SEQ_MAX_STEPS; ++st)
         {
@@ -451,12 +470,8 @@ void seq_model_set_track_page(seq_track_id_t track, uint8_t page)
         return;
     }
 
-    if (page >= SEQ_PAGE_COUNT)
-    {
-        page = (uint8_t)(SEQ_PAGE_COUNT - 1U);
-    }
-
-    g_seq_project.tracks[track].ui_page = page;
+    g_seq_project.tracks[track].ui_page =
+        seq_model_clamp_ui_page_for_length(page, g_seq_project.tracks[track].length_steps);
 }
 
 void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
@@ -467,6 +482,9 @@ void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
     }
 
     g_seq_project.tracks[track].length_steps = seq_model_clamp_playback_length(length_steps);
+    g_seq_project.tracks[track].ui_page =
+        seq_model_clamp_ui_page_for_length(g_seq_project.tracks[track].ui_page,
+                                           g_seq_project.tracks[track].length_steps);
 }
 
 uint8_t seq_model_get_track_length(seq_track_id_t track)

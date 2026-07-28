@@ -8,6 +8,8 @@
 #include "App/Hall/hall_engine.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "ui_page_manager.h"
+#include "ui_step_led_ownership.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -223,6 +225,21 @@ static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
     }
 }
 
+static void ui_core_mute_cancel_prepared_for_step_owner(uint8_t page_id)
+{
+    if ((g_ui_core_mute.active == 0U)
+        || (g_ui_core_mute.submode != UI_MUTE_SUBMODE_PREPARE)
+        || (ui_step_led_ownership_page_needs_step_leds(page_id) == 0U))
+    {
+        return;
+    }
+
+    ui_core_mute_capture_current_to_buffer(g_ui_core_mute.initial_state);
+    memcpy(g_ui_core_mute.prepared_state, g_ui_core_mute.initial_state, sizeof(g_ui_core_mute.prepared_state));
+    g_ui_core_mute.submode = UI_MUTE_SUBMODE_HOLD_QUICK;
+    g_ui_core_mute.hold_quick_prepare_armed = 0U;
+}
+
 static void ui_core_mute_exit_to_previous_mode(ui_core_mute_set_hall_mode_fn set_hall_mode)
 {
     if (set_hall_mode == 0)
@@ -282,6 +299,7 @@ static void ui_core_mute_enter_prepare(ui_core_mute_set_hall_mode_fn set_hall_mo
     g_ui_core_mute.submode = UI_MUTE_SUBMODE_PREPARE;
     g_ui_core_mute.hold_quick_prepare_armed = 0U;
     set_hall_mode(UI_HALL_MODE_MUTE);
+    ui_core_mute_cancel_prepared_for_step_owner(ui_page_get_id());
 }
 
 static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn set_hall_mode)
@@ -367,6 +385,11 @@ void ui_core_mute_init(void)
 void ui_core_mute_reset(void)
 {
     ui_core_mute_init();
+}
+
+void ui_core_mute_handle_page_step_led_ownership(uint8_t page_id)
+{
+    ui_core_mute_cancel_prepared_for_step_owner(page_id);
 }
 
 uint8_t ui_core_mute_is_active(void)

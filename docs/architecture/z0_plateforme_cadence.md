@@ -356,18 +356,18 @@ Z0 appelle principalement:
 - L'initialisation lazy de l'OLED reste commune et autoritative dans le premier `ui_tasklet_poll()`. Sur low-cost, ce premier poll redevient atteignable lorsque les callbacks audio font avancer `engine_tick_count`; aucun second chemin d'initialisation display n'est ajoute.
 - La chaine confirmee reste: callbacks DMA RX SAI1 -> `engine_tasklet_notify_frames()` -> `engine_tasklet_poll()` -> `engine_tick_count` -> `ui_tasklet_poll()` -> `drv_display_init()`, puis renderer et service de flush SPI5/DMA.
 
-## Addendum 2026-07-23 - bypass boot calibration Hall low-cost temporaire
+## Addendum 2026-07-28 - boot calibration Hall low-cost
 
-- `BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION`, localise dans `brick6_app_init.c`, fait demarrer uniquement la variante low-cost sur `CFG` quand aucune calibration Hall valide n'est chargee.
-- Le chargement reste tente, aucune calibration fictive n'est installee et aucune ecriture de calibration n'est effectuee par le bypass.
-- Premium conserve l'ouverture automatique de `CALIBRATION` en cas de calibration absente/invalide. Sans calibration effective, `hall_engine` continue d'invalider les etats de touches et d'ignorer leurs entrees.
+- Le bypass temporaire low-cost de calibration Hall est retire de `brick6_app_init.c`.
+- Une calibration Hall chargee et valide ouvre `CFG`; une calibration absente ou invalide ouvre automatiquement `CALIBRATION`.
+- La calibration low-cost n'est appliquee au moteur et sauvegardee qu'apres validation commune des 24 touches.
 
 ## Addendum 2026-07-23 - bootstrap audio low-cost
 
 - Le codec low-cost est le `TLV320AIC3204` sur `I2C1`, adresse 7 bits `0x18`; son reset exploitable par le firmware est le reset logiciel du codec.
 - `SAI1_A` fournit le TX maitre a 48 kHz avec MCLK 12,288 MHz, trames stereo de 64 bits et deux slots actifs de 32 bits transportant chacun 24 bits utiles.
 - Le DMA TX low-cost reste circulaire en mots 32 bits. Les deux slots doivent rester explicitement actifs dans CubeMX et dans le code genere.
-- Tant que le potentiometre low-cost n'est pas monte, le controle master ignore le multiplexeur ADC et initialise une fois le gain master a 75 %. Le chemin premium reste inchange.
+- Tant que le potentiometre low-cost n'est pas monte, `PB1` ne participe ni a la sequence ADC Hall ni au traitement runtime; le controle master conserve son gain fixe temporaire. Le chemin premium reste inchange.
 
 ## Addendum 2026-07-23 - entree bootloader systeme low-cost
 

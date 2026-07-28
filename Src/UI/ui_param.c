@@ -2025,12 +2025,7 @@ static int16_t ui_param_filter_stepped_encoder_delta(const ui_param_encoder_cont
 
 static uint8_t ui_param_is_lfo_rate(param_id_t param)
 {
-    return ((param == PARAM_LFO1_RATE) || (param == PARAM_LFO2_RATE)) ? 1U : 0U;
-}
-
-static uint8_t ui_param_is_lfo_delay(param_id_t param)
-{
-    return ((param == PARAM_LFO1_DELAY) || (param == PARAM_LFO2_DELAY)) ? 1U : 0U;
+    return ((param == PARAM_LFO1_RATE) || (param == PARAM_LFO2_RATE) || (param == PARAM_LFO3_RATE)) ? 1U : 0U;
 }
 
 static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t shift_down)
@@ -2069,16 +2064,6 @@ static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t 
     return (shift_down != 0U) ? -0.01f : -1.0f;
 }
 
-static float ui_param_step_lfo_delay(float current_value,
-                                     int16_t delta,
-                                     uint8_t shift_down,
-                                     float min_value,
-                                     float max_value)
-{
-    const float step = (shift_down != 0U) ? 0.01f : 1.0f;
-    return ui_param_clamp(current_value + ((float)delta * step), min_value, max_value);
-}
-
 static float ui_param_apply_delta_value(param_id_t param,
                                         float current_value,
                                         int16_t delta,
@@ -2095,10 +2080,6 @@ static float ui_param_apply_delta_value(param_id_t param,
     if (ui_param_is_lfo_rate(param) != 0U)
     {
         return ui_param_step_lfo_rate(current_value, delta, shift_down);
-    }
-    if (ui_param_is_lfo_delay(param) != 0U)
-    {
-        return ui_param_step_lfo_delay(current_value, delta, shift_down, min_value, max_value);
     }
     return ui_param_clamp(current_value + ((float)delta * edit_step), min_value, max_value);
 }
@@ -2140,7 +2121,7 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
             continue;
         }
 
-        float next_value = ((ui_param_is_lfo_rate(param) != 0U) || (ui_param_is_lfo_delay(param) != 0U))
+        float next_value = (ui_param_is_lfo_rate(param) != 0U)
             ? ui_param_apply_delta_value(param, current_value, delta, edit_step, min_value, max_value, 0U)
             : ui_param_clamp(current_value + requested_delta, min_value, max_value);
         if (ui_param_value_is_same(next_value, current_value) != 0U)

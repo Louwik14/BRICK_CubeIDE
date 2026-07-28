@@ -110,6 +110,10 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->wave.tune[1] = param_registry[PARAM_WAVE_OSC2_TUNE].default_value;
     state->wave.phase[1] = param_registry[PARAM_WAVE_OSC2_PHASE].default_value;
     state->wave.flip[1] = param_registry[PARAM_WAVE_OSC2_FLIP].default_value;
+    state->wave.frame_interp = param_registry[PARAM_WAVE_FRAME_INTERP].default_value;
+    state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
+    state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;
+    state->wave.pos_smooth = param_registry[PARAM_WAVE_POS_SMOOTH].default_value;
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;

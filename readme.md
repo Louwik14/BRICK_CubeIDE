@@ -18,7 +18,7 @@ This repository targets a playable, deterministic instrument firmware. It is not
 Variant audio resources:
 - Premium exposes the four stereo input sources `Input1..4`.
 - Low-cost exposes one stereo line input, `Input1`; `Input2..4` are absent from its catalogs and UI.
-- On the low-cost revision without the volume potentiometer fitted, master volume temporarily starts at 75% and does not depend on the potentiometer ADC.
+- On the low-cost revision without the volume potentiometer fitted, master volume uses a temporary fixed gain; PB1 is absent from the ADC sequence and runtime processing.
 
 ## 2. Product priorities
 
@@ -159,8 +159,8 @@ This separation is intentional. Do not add a second authority for the same state
 - transport / clock / scheduler
 - `SEQ Length` defaults to 16 steps on new or blank projects; saved projects keep their stored per-track length
 - parameter locks
-- modulation baseline with two LFOs per track
-- MOD LFO pages are `LFO1`, `LFO1#`, `LFO2`, `LFO2#`; `RATE` is Hz-left / OFF-center / tempo-sync-right
+- modulation baseline with three LFOs per track
+- MOD LFO pages are `LFO 1`, `LFO 2`, `LFO 3`; each exposes `RATE`, grouped `SHAPE/PHASE`, then `TRIG` in slot 4. For `RND`, the `PHASE` slot is shown as `Slew`.
 - LFO shapes include bipolar `SIN/TRI/SAW/SQR/RND/RSAW` and positive `SIN+/TRI+/SQR+`; trig modes are `FREE/TRIG/HOLD/ONE`
 - live-performance oriented behavior
 
@@ -172,8 +172,9 @@ This separation is intentional. Do not add a second authority for the same state
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches; default is `ON`/hard.
+- Low-cost `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, engine-filtered value, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
 - no product VU/peak meter in the mixer header
-- boot default (normal path): track 1 focused on `CFG`; premium keeps the missing/invalid Hall calibration page priority, while low-cost temporarily bypasses only its automatic opening and keeps uncalibrated Hall inputs disabled
+- boot default (normal path): track 1 focused on `CFG`; a missing or invalid Hall calibration opens `CALIBRATION`, and low-cost validates its 24 keyboard keys in two 12-key stages before saving
 - voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` and `LINK`; slaves and standalone tracks keep the historical CFG page only, and `PLAY` remains independent per member
 
 ### Parameter system

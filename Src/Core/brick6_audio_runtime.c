@@ -205,6 +205,17 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
             continue;
         }
 
+        float *direct_mono = NULL;
+        if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
+        {
+            if (brick6_wave_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
+            {
+                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                wave_tracks++;
+            }
+            continue;
+        }
+
         if (brick6_wave_runtime_render_instance(ctx->instance_id, wave_tmp, frames) != 0U)
         {
             mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);

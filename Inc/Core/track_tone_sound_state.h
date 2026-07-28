@@ -83,6 +83,10 @@ typedef struct
         float tune[2];
         float phase[2];
         float flip[2];
+        float frame_interp;
+        float sample_interp;
+        float pos_update;
+        float pos_smooth;
     } wave;
     float midi_program;
     float midi_cc[12];

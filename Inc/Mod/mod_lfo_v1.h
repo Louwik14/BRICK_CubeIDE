@@ -36,12 +36,12 @@ typedef enum
 {
     MOD_LFO_PARAM_RATE = 0,
     MOD_LFO_PARAM_SHAPE,
-    MOD_LFO_PARAM_DELAY,
     MOD_LFO_PARAM_TRIG,
-    MOD_LFO_PARAM_FADE,
-    MOD_LFO_PARAM_PHASE_SLEW,
+    MOD_LFO_PARAM_PHASE,
     MOD_LFO_PARAM_COUNT
 } mod_lfo_param_t;
+
+#define MOD_LFO_COUNT_PER_TRACK 3U
 
 void mod_lfo_v1_init(void);
 void mod_lfo_v1_reset_runtime(void);

@@ -1,6 +1,7 @@
 #include "Mod/mod_env3.h"
 
 #include <stdbool.h>
+#include <math.h>
 #include <string.h>
 
 #include "Audio/env_adsr.h"
@@ -37,7 +38,8 @@ static float mod_env3_clampf(float v, float lo, float hi)
 static uint16_t mod_env3_seconds_to_u16(float seconds)
 {
     const float normalized = mod_env3_clampf(seconds, 0.0f, 30.0f) / 30.0f;
-    return (uint16_t)(mod_env3_clampf(normalized, 0.0f, 1.0f) * 65535.0f);
+    const float shaped = cbrtf(mod_env3_clampf(normalized, 0.0f, 1.0f));
+    return (uint16_t)(shaped * 65535.0f + 0.5f);
 }
 
 static uint16_t mod_env3_sustain_to_u15(float value)

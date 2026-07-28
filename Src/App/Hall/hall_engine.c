@@ -22,6 +22,12 @@
 #define HALL_USER_CAPTURE_FIFO_LEN         16U
 #define HALL_USER_VEL_POINT_COUNT          10U
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define HALL_PRESS_DECREASES_RAW           1U
+#else
+#define HALL_PRESS_DECREASES_RAW           0U
+#endif
+
 typedef struct
 {
     uint16_t min;
@@ -226,7 +232,11 @@ static uint16_t hall_compute_position_percent(uint16_t raw,
     }
 
     range = (uint16_t)(max_value - min_value);
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+    delta = (raw < max_value) ? (uint32_t)(max_value - raw) : 0U;
+#else
     delta = (raw > min_value) ? (uint32_t)(raw - min_value) : 0U;
+#endif
     limited_delta = (delta > range) ? range : delta;
     position_percent = (uint16_t)((limited_delta * 100U) / range);
 
@@ -347,19 +357,36 @@ static void hall_update_triggers(uint8_t key)
         hi_ppm = 1000U;
     }
 
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+    hall_buttons[key].trig_lo = (uint16_t)(hall_max[key] - ((range * hi_ppm) / 1000U));
+    hall_buttons[key].trig_hi = (uint16_t)(hall_max[key] - ((range * lo_ppm) / 1000U));
+    hall_buttons[key].vel_start_th = (uint16_t)(hall_max[key] -
+                                  ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+#else
     hall_buttons[key].trig_lo = (uint16_t)(hall_min[key] + ((range * lo_ppm) / 1000U));
     hall_buttons[key].trig_hi = (uint16_t)(hall_min[key] + ((range * hi_ppm) / 1000U));
     hall_buttons[key].vel_start_th = (uint16_t)(hall_min[key] +
                                   ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+#endif
 
     if (HALL_VEL_TIME_END_PPM == 0U)
     {
-        hall_buttons[key].vel_end_th = hall_buttons[key].trig_hi;
+        hall_buttons[key].vel_end_th =
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+            hall_buttons[key].trig_lo;
+#else
+            hall_buttons[key].trig_hi;
+#endif
     }
     else
     {
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+        hall_buttons[key].vel_end_th = (uint16_t)(hall_max[key] -
+                                    ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+#else
         hall_buttons[key].vel_end_th = (uint16_t)(hall_min[key] +
                                     ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+#endif
     }
 
     hall_trig_lo[key] = hall_buttons[key].trig_lo;
@@ -777,13 +804,27 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
 
     hall_buttons[key].prev_out = hall_buttons[key].curr_out;
 
-    if (raw > hall_buttons[key].prev_raw)
+    if (HALL_PRESS_DECREASES_RAW != 0U)
+    {
+        if (raw < hall_buttons[key].prev_raw)
+        {
+            dv = (uint16_t)(hall_buttons[key].prev_raw - raw);
+        }
+    }
+    else if (raw > hall_buttons[key].prev_raw)
     {
         dv = (uint16_t)(raw - hall_buttons[key].prev_raw);
     }
     hall_buttons[key].prev_raw = raw;
 
-    if ((hall_buttons[key].curr_out == 0U) && (raw <= hall_buttons[key].trig_lo))
+    if ((hall_buttons[key].curr_out == 0U)
+            &&
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+            (raw >= hall_buttons[key].trig_hi)
+#else
+            (raw <= hall_buttons[key].trig_lo)
+#endif
+       )
     {
         hall_buttons[key].dv_peak = 0U;
         hall_buttons[key].sum_dv = 0U;
@@ -807,7 +848,14 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
         }
         hall_buttons[key].sum_dv = (uint16_t)sum;
 
-        if ((hall_buttons[key].time_active == 0U) && (raw >= hall_buttons[key].vel_start_th))
+        if ((hall_buttons[key].time_active == 0U)
+                &&
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+                (raw <= hall_buttons[key].vel_start_th)
+#else
+                (raw >= hall_buttons[key].vel_start_th)
+#endif
+           )
         {
             hall_buttons[key].time_active = 1U;
             hall_buttons[key].time_count = 0U;
@@ -820,21 +868,41 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
                 hall_buttons[key].time_count++;
             }
 
-            if (raw >= hall_buttons[key].vel_end_th)
+            if (
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+                    raw <= hall_buttons[key].vel_end_th
+#else
+                    raw >= hall_buttons[key].vel_end_th
+#endif
+               )
             {
                 hall_buttons[key].time_active = 0U;
             }
         }
     }
 
-    if ((hall_buttons[key].curr_out == 0U) && (raw >= hall_buttons[key].trig_hi))
+    if ((hall_buttons[key].curr_out == 0U)
+            &&
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+            (raw <= hall_buttons[key].trig_lo)
+#else
+            (raw >= hall_buttons[key].trig_hi)
+#endif
+       )
     {
         hall_buttons[key].curr_out = 1U;
         hall_last_metric[key] = hall_buttons[key].dv_peak;
         hall_velocity[key] = hall_velocity_compute(key, range);
         hall_velocity_valid[key] = 1U;
     }
-    else if ((hall_buttons[key].curr_out != 0U) && (raw <= hall_buttons[key].trig_lo))
+    else if ((hall_buttons[key].curr_out != 0U)
+             &&
+#if (HALL_PRESS_DECREASES_RAW != 0U)
+             (raw >= hall_buttons[key].trig_hi)
+#else
+             (raw <= hall_buttons[key].trig_lo)
+#endif
+            )
     {
         hall_buttons[key].curr_out = 0U;
     }

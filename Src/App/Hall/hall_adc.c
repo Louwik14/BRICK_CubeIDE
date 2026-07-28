@@ -10,17 +10,13 @@
 #define HALL_SAMPLE_FIFO_MASK  (HALL_SAMPLE_FIFO_SIZE - 1U)
 
 /*
- * ADC DMA mailboxes (low-cost ADC1 scans hall A/C + volume):
- * - DMA writes (ADC1 circular length 2/3 by variant, ADC2 circular length 1)
- * - CPU reads in hall_adc_process_pair()
+ * ADC DMA mailboxes:
+ * - premium: ADC1/ADC2 each write one Hall MUX sample
+ * - low-cost: ADC1 writes Hall MUX 0/2, ADC2 writes Hall MUX 1
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
-#if defined(BRICK6_VARIANT_LOWCOST)
-static DMA_BUFFER volatile uint16_t adc1_dma[3U];
-#else
 static DMA_BUFFER volatile uint16_t adc1_dma[2U];
-#endif
 static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
@@ -37,45 +33,9 @@ static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_count;
 static volatile uint8_t adc1_ready;
 static volatile uint8_t adc2_ready;
-/*
- * Table de remap physique MUX -> index logique hall.
- *
- * Mapping demandé :
- * hall 0 -> mux 4
- * hall 1 -> mux 6
- * hall 2 -> mux 7
- * hall 3 -> mux 5
- * hall 4 -> mux 3
- * hall 5 -> mux 0
- * hall 6 -> mux 1
- * hall 7 -> mux 2
- * hall 8 -> mux 12
- * hall 9 -> mux 14
- * hall 10 -> mux 15
- * hall 11 -> mux 13
- * hall 12 -> mux 11
- * hall 13 -> mux 8
- * hall 14 -> mux 9
- * hall 15 -> mux 10
- *
- * Donc inverse MUX -> hall :
- * mux 0  -> hall 5
- * mux 1  -> hall 6
- * mux 2  -> hall 7
- * mux 3  -> hall 4
- * mux 4  -> hall 0
- * mux 5  -> hall 3
- * mux 6  -> hall 1
- * mux 7  -> hall 2
- * mux 8  -> hall 13
- * mux 9  -> hall 14
- * mux 10 -> hall 15
- * mux 11 -> hall 12
- * mux 12 -> hall 8
- * mux 13 -> hall 11
- * mux 14 -> hall 9
- * mux 15 -> hall 10
- */
+#if defined(BRICK6_VARIANT_LOWCOST)
+static volatile uint16_t hall_mux_raw[3U][HALL_MUX_COUNT];
+#endif
 static void hall_mux_select(uint8_t index)
 {
     board_surface_select_hall_mux(index);
@@ -129,6 +89,12 @@ static void hall_adc_process_pair(void)
         return;
     }
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+    hall_mux_raw[0U][hall_mux_index] = v1;
+    hall_mux_raw[1U][hall_mux_index] = v2;
+    hall_mux_raw[2U][hall_mux_index] = v3;
+#endif
+
     {
         uint8_t key_a = 0U;
         uint8_t key_b = 0U;
@@ -165,9 +131,6 @@ void hall_adc_init(void)
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
-    adc1_dma[2U] = 0U;
-#endif
     adc2_dma = 0U;
 
     hall_fifo_head = 0U;
@@ -183,6 +146,14 @@ void hall_adc_init(void)
         hall_raw[i] = 0U;
         hall_sample_count[i] = 0U;
     }
+#if defined(BRICK6_VARIANT_LOWCOST)
+    for (uint8_t mux = 0U; mux < HALL_MUX_COUNT; mux++)
+    {
+        hall_mux_raw[0U][mux] = 0U;
+        hall_mux_raw[1U][mux] = 0U;
+        hall_mux_raw[2U][mux] = 0U;
+    }
+#endif
 
     if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
     {
@@ -231,6 +202,18 @@ uint8_t hall_adc_get_mux_index(void)
 {
     return hall_mux_index;
 }
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+uint16_t hall_adc_get_mux_raw(uint8_t mux_adc, uint8_t mux_channel)
+{
+    if ((mux_adc >= 3U) || (mux_channel >= HALL_MUX_COUNT))
+    {
+        return 0U;
+    }
+
+    return hall_mux_raw[mux_adc][mux_channel];
+}
+#endif
 
 uint32_t hall_adc_get_sample_count(uint8_t key)
 {

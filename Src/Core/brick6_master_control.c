@@ -15,13 +15,11 @@
 #include <stdint.h>
 
 #include "App/mux_pots.h"
-#include "Board/board_surface.h"
 #include "mixer.h"
 #include "Param/param_macro.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
-#define LOWCOST_FORCE_MASTER_VOLUME_DIAG 1
-#define LOWCOST_FORCE_MASTER_VOLUME_DIAG_GAIN 0.75f
+#define LOWCOST_FIXED_MASTER_GAIN 0.5f
 #endif
 
 void brick6_master_control_process(void)
@@ -33,12 +31,13 @@ void brick6_master_control_process(void)
         POT_MASTER_INDEX = 4U,
         POT_RAW_MAX = 65535U,
         POT_MUTE_THRESHOLD = 1024U,
-        POT_FALLBACK_GAIN_PERCENT = 75U,
         POT_MASTER_STEPS = 512U
     };
 
     static uint8_t initialized = 0U;
+#if !defined(BRICK6_VARIANT_LOWCOST)
     static uint16_t last_step = 0xFFFFU;
+#endif
     static uint8_t macro_initialized[POT_MACRO_COUNT] = { 0U, 0U, 0U, 0U };
     static uint16_t macro_last_step[POT_MACRO_COUNT] = {
         0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU
@@ -79,25 +78,12 @@ void brick6_master_control_process(void)
 #endif
 
 #if defined(BRICK6_VARIANT_LOWCOST)
-#if (LOWCOST_FORCE_MASTER_VOLUME_DIAG != 0)
-    mixer_set_master(LOWCOST_FORCE_MASTER_VOLUME_DIAG_GAIN);
-    last_step = (uint16_t)((((uint32_t)POT_FALLBACK_GAIN_PERCENT
-                             * (uint32_t)(POT_MASTER_STEPS - 1U)) + 50U) / 100U);
-    initialized = 1U;
-    return;
-#endif
-    uint16_t raw = 0U;
-    if (board_surface_read_master_volume_raw(&raw) == 0U)
+    if (initialized == 0U)
     {
-        if (initialized == 0U)
-        {
-            mixer_set_master((float)POT_FALLBACK_GAIN_PERCENT / 100.0f);
-            last_step = (uint16_t)((((uint32_t)POT_FALLBACK_GAIN_PERCENT
-                                     * (uint32_t)(POT_MASTER_STEPS - 1U)) + 50U) / 100U);
-            initialized = 1U;
-        }
-        return;
+        mixer_set_master(LOWCOST_FIXED_MASTER_GAIN);
+        initialized = 1U;
     }
+    return;
 #else
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
     {
@@ -105,7 +91,6 @@ void brick6_master_control_process(void)
     }
 
     uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
-#endif
 
     if (raw <= POT_MUTE_THRESHOLD)
     {
@@ -141,4 +126,5 @@ void brick6_master_control_process(void)
 
     last_step = step;
     initialized = 1U;
+#endif
 }

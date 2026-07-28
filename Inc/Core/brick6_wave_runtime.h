@@ -35,6 +35,15 @@ typedef enum
     BRICK6_WAVE_FLIP_COUNT
 } brick6_wave_flip_t;
 
+typedef enum
+{
+    BRICK6_WAVE_POS_UPDATE_FULL = 0,
+    BRICK6_WAVE_POS_UPDATE_8,
+    BRICK6_WAVE_POS_UPDATE_16,
+    BRICK6_WAVE_POS_UPDATE_32,
+    BRICK6_WAVE_POS_UPDATE_COUNT
+} brick6_wave_pos_update_t;
+
 typedef struct
 {
     uint16_t table_global_slot;
@@ -46,8 +55,8 @@ typedef struct
     float start;
     float end;
     float pos_smoothed;
-    float phase;
-    float phase_inc;
+    uint32_t phase;
+    uint32_t phase_inc;
     uint8_t phase_mode;
     uint8_t flip;
 } brick6_wave_runtime_osc_t;
@@ -58,11 +67,16 @@ typedef struct
     uint8_t has_active_note;
     uint8_t gate;
     uint8_t trigger;
-    uint16_t declick_remaining;
     float velocity;
-    float declick_start;
-    float last_output;
 } brick6_wave_runtime_voice_t;
+
+typedef struct
+{
+    uint8_t frame_interp_enabled;
+    uint8_t sample_interp_enabled;
+    uint8_t pos_smooth_enabled;
+    brick6_wave_pos_update_t pos_update;
+} brick6_wave_runtime_quality_t;
 
 void brick6_wave_runtime_init(void);
 void brick6_wave_runtime_reset_instance(uint8_t instance_id);
@@ -76,6 +90,10 @@ void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float s
 void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end);
 void brick6_wave_runtime_set_osc_phase(uint8_t instance_id, uint8_t osc, brick6_wave_phase_t phase);
 void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_wave_flip_t flip);
+void brick6_wave_runtime_set_frame_interp(uint8_t instance_id, uint8_t enabled);
+void brick6_wave_runtime_set_sample_interp(uint8_t instance_id, uint8_t enabled);
+void brick6_wave_runtime_set_pos_update(uint8_t instance_id, brick6_wave_pos_update_t update);
+void brick6_wave_runtime_set_pos_smooth(uint8_t instance_id, uint8_t enabled);
 
 void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
 void brick6_wave_runtime_note_off(uint8_t instance_id, uint8_t note);
@@ -85,6 +103,7 @@ uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono
 
 const brick6_wave_runtime_voice_t *brick6_wave_runtime_get_voice(uint8_t instance_id);
 const brick6_wave_runtime_osc_t *brick6_wave_runtime_get_osc(uint8_t instance_id, uint8_t osc);
+const brick6_wave_runtime_quality_t *brick6_wave_runtime_get_quality(uint8_t instance_id);
 
 #ifdef __cplusplus
 }

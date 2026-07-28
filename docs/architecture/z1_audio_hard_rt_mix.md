@@ -6,19 +6,42 @@
 - Les anciennes capacites separees `CLASSIC=288002` et `DUAL=432002` sont retirees: `CLASSIC` et `DUAL` restent mutuellement exclusifs dans `mixer_process()` et utilisent le meme pool.
 - `DUAL` conserve sa reserve interne de redimensionnement `ceil(time)+8`; `CLASSIC` conserve son clamp temps a 6 s via `kMaxDelaySeconds`, malgre les quelques samples de garde supplementaires du pool commun.
 
-## Addendum 2026-07-27 - optimisation IRQ Synth/Wave CLEAN
+## Addendum 2026-07-28 - optimisation IRQ Synth/Wave S16 CLEAN
 
-- `brick6_wave_runtime_render_instance()` retourne maintenant si un bloc a produit un signal Wave utile; Z1 ne soumet plus de buffer mono zero au mixer pour une instance inactive.
-- Le rendu Wave prepare un contexte par oscillo au debut du bloc: resolution table, pointeur SDRAM `FLOAT32_MONO`, `frame_count`, flags `FLIP`, niveau et bornes derivees. La boucle sample ne consulte plus `sample_global_pool` ni `wavetable_pool_get_slot()`.
-- Les oscillateurs a `LEVEL=0` ou table invalide sont exclus du hot path sample; leur smoothing `POS` avance en bloc pour garder l'etat local coherent sans lecture wavetable.
-- Le chemin CLEAN garde l'interpolation lineaire intra-frame et inter-frames, mais saute la seconde frame quand `frame_count==1`, `frame0==frame1` ou `frame_frac==0`.
-- Le wrap de phase utilise un `if` rapide avec fallback borne pour les increments extremes; la justesse pitch reste portee par le meme `phase_inc` float.
+- `brick6_wave_runtime_render_instance()` signale maintenant si un bloc Wave a produit un signal utile; Z1 ne soumet plus de buffer mono zero au mixer pour une instance inactive.
+- Le rendu Wave `S16_MONO` prepare un contexte par oscillateur au debut du bloc: pointeur `int16_t`, `frame_count`, `max_frame`, niveau et flags `FLIP`. La boucle sample ne relit plus `wavetable_pool_get_slot()` ni les checks generation.
+- Les oscillateurs muets (`LEVEL=0`) ou invalides sont exclus du hot path sample; leur `POS` smoothed avance seulement en bloc pour garder l'etat local coherent.
+- Le chemin CLEAN conserve l'interpolation lineaire intra-frame et inter-frame. Si `frame_count==1`, `frame0==frame1` ou une fraction de frame tombe sous epsilon, une seule frame S16 est lue.
+- Quand `POS` est deja stable sur le bloc, `frame0/frame1/frame_frac` et les pointeurs de frames sont pre-calcules une fois par bloc; le chemin dynamique reste utilise pendant le smoothing ou une modulation POS effective.
 
-## Addendum 2026-07-27 - declick note-on Synth/Wave
+## Addendum 2026-07-28 - chunk POS experimental Synth/Wave
 
-- `brick6_wave_runtime` garde un anti-click local au moteur: au note-on, la nouvelle forme Wave est crossfadee depuis le dernier sample de sortie de l'instance pendant `32` samples audio.
-- Ce declick ne remplace pas l'enveloppe musicale VCA mixer; il borne seulement la discontinuite creee par le reset de phase/POS/velocity propre a Wave.
-- Le fast path POS stable calcule `frame0/frame1/frame_frac` et les pointeurs de frames une seule fois par bloc quand `pos_smoothed` est deja au target remappe `START/END/POS`; l'interpolation inter-frame CLEAN reste active seulement si deux frames distinctes et une fraction non nulle sont necessaires.
+- En chemin dynamique Wave, `POS` continue d'etre smooth par sample quand `SMOOTH=ON`, mais la frame wavetable effective peut etre selectionnee par chunks via `POSUPD`.
+- Valeur Eco courante: `POSUPD=16`; `FULL` restaure le recalcul sample-rate.
+
+## Addendum 2026-07-28 - phase Q32 experimental Synth/Wave
+
+- Le runtime Wave remplace la phase float par une phase entiere Q32 par oscillateur; le wrap est l'overflow naturel `uint32_t`.
+- La conversion audio reste en interpolation lineaire intra-frame S16: index `phase >> 21`, fraction `(phase & 0x1FFFFF) / 2^21` pour les frames 2048 samples.
+- `TUNE`, note-on et `PHASE 0/90/180/270` conservent leur autorite musicale; seul le hot path phase/index/wrap est allege.
+
+## Addendum 2026-07-28 - no-copy mono Synth/Wave
+
+- Le mixer expose `mixer_begin_external_mono_native()` / `mixer_commit_external_mono_native()` pour reserver directement le buffer mono externe d'une lane.
+- `brick6_render_wave_tracks()` rend Wave directement dans ce buffer quand la reservation est possible; le fallback `mixer_submit_external_mono_native()` reste conserve si la lane est deja occupe.
+- Le format reste `MIXER_EXTERNAL_FORMAT_MONO_NATIVE`, le chemin audio mixer aval est inchange.
+
+## Addendum 2026-07-28 - nearest sample experimental Synth/Wave
+
+- `SAMPLE=OFF` desactive l'interpolation intra-frame Wave pour isoler son cout IRQ.
+- La selection sample utilise le nearest Q32: `(phase + 2^20) >> 21`, masque 2047, puis miroir `FLIP_Y` si actif.
+- Le rendu lit une seule valeur `S16` par frame wavetable et par sample audio; `TUNE`, `PHASE`, `POS`, chunk POS et no-copy mixer restent inchanges.
+
+## Addendum 2026-07-28 - qualite runtime Synth/Wave
+
+- Les leviers Wave `FRAME`, `SAMPLE`, `POSUPD` et `SMOOTH` sont maintenant portes par l'instance runtime Wave, plus par des switches compile-time.
+- Defaults runtime: inter-frame OFF, intra-frame OFF, recalcul POS par chunks de 16 samples, smoothing POS ON.
+- `POSUPD FULL` force le recalcul frame/POS a chaque sample audio pendant le chemin dynamique; `8/16/32` gardent le chunking borne. `SMOOTH OFF` applique directement la position remappee `START/END/POS`.
 
 ## Addendum 2026-07-27 - smoothing POS Synth/Wave
 
@@ -36,7 +59,7 @@
 
 - Le mixer porte maintenant deux flags runtime par lane, `filter_retrigger_hard` et `vca_retrigger_hard`, projetes depuis les params track-aware `PARAM_ENV_RETRIG_FILTER` et `PARAM_ENV_RETRIG_VCA`.
 - `ON` conserve le comportement hard historique: l'enveloppe repart de zero au note-on. `OFF` utilise le retrigger soft de l'enveloppe existante: attaque depuis la valeur courante, sans rampe/declick/zero-cross additionnel.
-- Le chemin VCA amplitude reste `adsr_daisy_c_t`; le chemin filtre reste `env_adsr_peaks_t` via `env_adsr`. Les moteurs Prism/Stack/Braids ne sont pas modifies.
+- Les chemins VCA amplitude et filtre utilisent `env_adsr_peaks_t` via `env_adsr`; le VCA partage le mapping temporel Peak ADSR `1 ms..5 s` deja utilise par ENV FLT. Les moteurs Prism/Stack/Braids ne sont pas modifies.
 
 ## 1. Perimetre
 
@@ -61,7 +84,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
 - `Src/Sampler/sampler_ram_pool.c` + `Inc/Sampler/sampler_ram_pool.h` : backend resident RAM v1. Il charge explicitement des WAV PCM 16/24-bit mono/stereo hors IRQ vers un stockage interne `FLOAT32_INTERLEAVED` stereo alloue dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`, conserve sample_rate/frames/cout/generation, expose `channels=2`, inscrit les slots comme `kind=RAM` dans `sample_global_pool`, et porte l'overview waveform min/max derivee du sample RAM. Le consommateur IRQ courant est `Sampler/RAM`, normal ou sliced via `Slice Count`.
-- `Src/Sampler/wavetable_pool.c` + `Inc/Sampler/wavetable_pool.h` : backend resident WAVETABLE. Il charge hors IRQ un fichier `B6WT` depuis SD vers le meme `SAMPLE_PAGE_SLOT_POOL`, stocke les frames en `FLOAT32_MONO`, inscrit les slots comme `kind=WAVETABLE` dans `sample_global_pool`, et ne lit jamais la SD depuis l'audio IRQ.
+- `Src/Sampler/wavetable_pool.c` + `Inc/Sampler/wavetable_pool.h` : backend resident WAVETABLE. Il charge hors IRQ un fichier `B6WT` depuis SD vers le meme `SAMPLE_PAGE_SLOT_POOL`, stocke les frames en `S16_MONO`, inscrit les slots comme `kind=WAVETABLE` dans `sample_global_pool`, et ne lit jamais la SD depuis l'audio IRQ.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
 - `Src/Sampler/sample_stream_fatfs_map.c` + `Inc/Sampler/sample_stream_fatfs_map.h` : certification hors IRQ des WAV STREAM contigus via FatFs CLMT. Les acces aux champs internes FatFs restent confines ici. Un fichier non certifie conserve le backend FatFs historique.
 - `Src/Sampler/sample_stream_backend_contiguous.c` + `Inc/Sampler/sample_stream_backend_contiguous.h` : backend V1 `STREAM_SAFE_CONTIGUOUS`; remplit une page cache float stereo depuis des secteurs SD physiques deja certifies, hors IRQ et sous l'autorite du `sample_stream_manager`.
@@ -1023,15 +1046,15 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-07-27 - asset WAVETABLE resident SDRAM
 
 - `wavetable_pool` ajoute le chargement resident SDRAM pour les futurs assets `Synth/Wave`.
-- Format courant charge: fichier `B6WT` little-endian, header 32 octets, `frame_sample_count=2048`, `frame_count>0`, samples source mono `S16` ou `F32`, conversion runtime en `FLOAT32_MONO`.
+- Format courant charge: fichier `B6WT` little-endian, header 32 octets, `frame_sample_count=2048`, `frame_count>0`, data mono `S16`; les anciens caches `F32` sont refuses.
 - Le pool ne cree pas de streamer concurrent: il reutilise `SAMPLE_PAGE_SLOT_POOL` pour l'audio resident et `sample_global_pool` pour les slots, le budget et l'affichage memoire global.
 - Cette passe asset ne branchait pas encore le chemin audio; l'addendum runtime ci-dessous precise le branchement audio SDRAM-only de `TRACK_RUNTIME_ENGINE_WAVE`.
 
 ## Addendum 2026-07-27 - runtime audio Synth/Wave
 
 - `brick6_wave_runtime` branche maintenant `TRACK_RUNTIME_ENGINE_WAVE` dans le rendu Z1.
-- Chaque instance suit `instance_id == track_id`, porte deux oscillateurs mono et lit les tables via `sample_global_pool`/`wavetable_pool`; le rendu audio consomme uniquement les pointeurs SDRAM `FLOAT32_MONO` deja charges.
-- Le rendu fait l'interpolation lineaire dans la frame 2048 samples et l'interpolation lineaire entre frames selon `POS` remappe dans `START/END`.
+- Chaque instance suit `instance_id == track_id`, porte deux oscillateurs mono et lit les tables via `sample_global_pool`/`wavetable_pool`; le rendu audio consomme uniquement les pointeurs SDRAM `S16_MONO` deja charges.
+- Le rendu fait l'interpolation lineaire en float dans la frame 2048 samples a partir de valeurs `int16_t`, puis l'interpolation lineaire entre frames selon `POS` remappe dans `START/END`; la conversion `int16_t -> float` reste locale au hot path et le mixer reste float.
 - `POS` est smooth localement par oscillateur apres remap START/END. `LEVEL=0` coupe l'oscillateur. `TUNE` recalcule l'increment de phase en demi-tons. `PHASE` applique le depart 0/90/180/270 au note-on. `FLIP` applique inversion X et/ou lecture inverse Y.
 - Le moteur sort un mono externe vers `mixer_submit_external_mono_native`; aucune lecture SD, FatFs, allocation ou scan de table n'est introduit dans l'IRQ audio.
 - Hors passe: pages TONE, destinations Matrix et widget preview.

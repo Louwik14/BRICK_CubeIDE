@@ -213,16 +213,16 @@ static void apply_lfo_active_track(uint8_t lfo, mod_lfo_param_t param, float v)
 
 void apply_lfo1_rate(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_RATE, v); }
 void apply_lfo1_shape(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo1_delay(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_DELAY, v); }
 void apply_lfo1_trig(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo1_fade(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_FADE, v); }
-void apply_lfo1_phase_slew(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_PHASE_SLEW, v); }
+void apply_lfo1_phase(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_PHASE, v); }
 void apply_lfo2_rate(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_RATE, v); }
 void apply_lfo2_shape(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo2_delay(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_DELAY, v); }
 void apply_lfo2_trig(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo2_fade(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_FADE, v); }
-void apply_lfo2_phase_slew(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_PHASE_SLEW, v); }
+void apply_lfo2_phase(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_PHASE, v); }
+void apply_lfo3_rate(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_RATE, v); }
+void apply_lfo3_shape(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo3_trig(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_TRIG, v); }
+void apply_lfo3_phase(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_PHASE, v); }
 
 void apply_mod_matrix_slot(float v)
 {

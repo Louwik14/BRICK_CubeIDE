@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 
 #ifdef __cplusplus
@@ -13,10 +14,8 @@ typedef struct
 {
     float rate;
     float shape;
-    float delay;
     float trig;
-    float fade;
-    float phase_slew;
+    float phase;
 } track_mod_lfo_state_t;
 
 typedef struct
@@ -71,7 +70,7 @@ typedef struct
     float env_retrig_filter;
     float env_retrig_vca;
     float env_retrig_mod;
-    track_mod_lfo_state_t mod_lfo[2];
+    track_mod_lfo_state_t mod_lfo[MOD_LFO_COUNT_PER_TRACK];
     track_mod_multi_state_t mod_multi[2];
     track_mod_slew_state_t mod_slew[2];
     track_mod_env3_state_t mod_env3;

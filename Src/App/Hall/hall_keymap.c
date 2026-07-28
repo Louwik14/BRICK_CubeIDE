@@ -8,30 +8,30 @@
 #define K_BLACK(id, black, chroma) { id, HALL_KEY_KIND_BLACK, 0U, black, chroma, 1U }
 
 static const hall_key_metadata_t g_lowcost_key_metadata[HALL_KEY_COUNT] = {
-    K_WHITE(0U, 1U, 0U),   /* B1 */
-    K_WHITE(1U, 2U, 2U),   /* B2 */
-    K_WHITE(2U, 3U, 4U),   /* B3 */
-    K_WHITE(3U, 4U, 5U),   /* B4 */
-    K_WHITE(4U, 5U, 7U),   /* B5 */
-    K_WHITE(5U, 6U, 9U),   /* B6 */
-    K_WHITE(6U, 7U, 11U),  /* B7 */
-    K_WHITE(7U, 8U, 12U),  /* B8 */
-    K_WHITE(8U, 9U, 14U),  /* B9 */
-    K_WHITE(9U, 10U, 16U), /* B10 */
-    K_WHITE(10U, 11U, 17U),/* B11 */
-    K_WHITE(11U, 12U, 19U),/* B12 */
-    K_WHITE(12U, 13U, 21U),/* B13 */
-    K_WHITE(13U, 14U, 23U),/* B14 */
-    K_BLACK(14U, 1U, 1U),  /* N1 */
-    K_BLACK(15U, 2U, 3U),  /* N2 */
-    K_BLACK(16U, 3U, 6U),  /* N3 */
-    K_BLACK(17U, 4U, 8U),  /* N4 */
-    K_BLACK(18U, 5U, 10U), /* N5 */
-    K_BLACK(19U, 6U, 13U), /* N6 */
-    K_BLACK(20U, 7U, 15U), /* N7 */
-    K_BLACK(21U, 8U, 18U), /* N8 */
-    K_BLACK(22U, 9U, 20U), /* N9 */
-    K_BLACK(23U, 10U, 22U),/* N10 */
+    K_WHITE(0U, 1U, 0U),    /* F1 */
+    K_BLACK(1U, 1U, 1U),    /* F#1 */
+    K_WHITE(2U, 2U, 2U),    /* G1 */
+    K_BLACK(3U, 2U, 3U),    /* G#1 */
+    K_WHITE(4U, 3U, 4U),    /* A1 */
+    K_BLACK(5U, 3U, 5U),    /* A#1 */
+    K_WHITE(6U, 4U, 6U),    /* B1 */
+    K_WHITE(7U, 5U, 7U),    /* C2 */
+    K_BLACK(8U, 4U, 8U),    /* C#2 */
+    K_WHITE(9U, 6U, 9U),    /* D2 */
+    K_BLACK(10U, 5U, 10U),  /* D#2 */
+    K_WHITE(11U, 7U, 11U),  /* E2 */
+    K_WHITE(12U, 8U, 12U),  /* F2 */
+    K_BLACK(13U, 6U, 13U),  /* F#2 */
+    K_WHITE(14U, 9U, 14U),  /* G2 */
+    K_BLACK(15U, 7U, 15U),  /* G#2 */
+    K_WHITE(16U, 10U, 16U), /* A2 */
+    K_BLACK(17U, 8U, 17U),  /* A#2 */
+    K_WHITE(18U, 11U, 18U), /* B2 */
+    K_WHITE(19U, 12U, 19U), /* C3 */
+    K_BLACK(20U, 9U, 20U),  /* C#3 */
+    K_WHITE(21U, 13U, 21U), /* D3 */
+    K_BLACK(22U, 10U, 22U), /* D#3 */
+    K_WHITE(23U, 14U, 23U), /* E3 */
 };
 
 static const uint8_t g_premium_key_from_mux[2U][8U] = {
@@ -40,9 +40,9 @@ static const uint8_t g_premium_key_from_mux[2U][8U] = {
 };
 
 static const uint8_t g_lowcost_key_from_mux[3U][8U] = {
-    { 14U, 15U, 16U, 0U, 1U, 4U, 2U, 3U },
-    { 19U, 18U, 17U, 20U, 5U, 8U, 6U, 7U },
-    { 13U, 22U, 21U, 23U, 9U, 12U, 10U, 11U },
+    { 1U,  3U,  5U,  0U,  2U,  7U,  4U,  6U },
+    { 13U, 10U, 8U,  15U, 9U,  14U, 11U, 12U },
+    { 23U, 20U, 17U, 22U, 16U, 21U, 18U, 19U },
 };
 
 _Static_assert((sizeof(g_lowcost_key_metadata) / sizeof(g_lowcost_key_metadata[0])) == 24U,
@@ -53,31 +53,29 @@ _Static_assert((sizeof(g_lowcost_key_from_mux[0]) / sizeof(g_lowcost_key_from_mu
                "Low-cost Hall keyboard must define 8 channels per mux");
 
 #define LOWCOST_KEY_ID_MASK 0x00FFFFFFUL
-#define LOWCOST_B_MASK 0x00003FFFUL
-#define LOWCOST_N_MASK 0x000003FFUL
+#define LOWCOST_WHITE_KEY_MASK ( \
+    (1UL << 0U) | (1UL << 2U) | (1UL << 4U) | (1UL << 6U) | \
+    (1UL << 7U) | (1UL << 9U) | (1UL << 11U) | (1UL << 12U) | \
+    (1UL << 14U) | (1UL << 16U) | (1UL << 18U) | (1UL << 19U) | \
+    (1UL << 21U) | (1UL << 23U))
+#define LOWCOST_BLACK_KEY_MASK ( \
+    (1UL << 1U) | (1UL << 3U) | (1UL << 5U) | (1UL << 8U) | \
+    (1UL << 10U) | (1UL << 13U) | (1UL << 15U) | (1UL << 17U) | \
+    (1UL << 20U) | (1UL << 22U))
 #define LOWCOST_MUX_KEY_MASK ( \
-    (1UL << 14U) | (1UL << 15U) | (1UL << 16U) | (1UL << 0U) | \
-    (1UL << 1U) | (1UL << 4U) | (1UL << 2U) | (1UL << 3U) | \
-    (1UL << 19U) | (1UL << 18U) | (1UL << 17U) | (1UL << 20U) | \
-    (1UL << 5U) | (1UL << 8U) | (1UL << 6U) | (1UL << 7U) | \
-    (1UL << 13U) | (1UL << 22U) | (1UL << 21U) | (1UL << 23U) | \
-    (1UL << 9U) | (1UL << 12U) | (1UL << 10U) | (1UL << 11U))
-#define LOWCOST_B_PRESENT_MASK ( \
-    (1UL << 0U) | (1UL << 1U) | (1UL << 2U) | (1UL << 3U) | \
-    (1UL << 4U) | (1UL << 5U) | (1UL << 6U) | (1UL << 7U) | \
-    (1UL << 8U) | (1UL << 9U) | (1UL << 10U) | (1UL << 11U) | \
-    (1UL << 12U) | (1UL << 13U))
-#define LOWCOST_N_PRESENT_MASK ( \
-    (1UL << 0U) | (1UL << 1U) | (1UL << 2U) | (1UL << 3U) | \
-    (1UL << 4U) | (1UL << 5U) | (1UL << 6U) | (1UL << 7U) | \
-    (1UL << 8U) | (1UL << 9U))
+    (1UL << 1U) | (1UL << 3U) | (1UL << 5U) | (1UL << 0U) | \
+    (1UL << 2U) | (1UL << 7U) | (1UL << 4U) | (1UL << 6U) | \
+    (1UL << 13U) | (1UL << 10U) | (1UL << 8U) | (1UL << 15U) | \
+    (1UL << 9U) | (1UL << 14U) | (1UL << 11U) | (1UL << 12U) | \
+    (1UL << 23U) | (1UL << 20U) | (1UL << 17U) | (1UL << 22U) | \
+    (1UL << 16U) | (1UL << 21U) | (1UL << 18U) | (1UL << 19U))
 
 _Static_assert(LOWCOST_MUX_KEY_MASK == LOWCOST_KEY_ID_MASK,
                "Low-cost Hall keyboard mux table must contain 24 unique logical keys");
-_Static_assert(LOWCOST_B_PRESENT_MASK == LOWCOST_B_MASK,
-               "Low-cost Hall keyboard metadata must contain B1..B14 exactly once");
-_Static_assert(LOWCOST_N_PRESENT_MASK == LOWCOST_N_MASK,
-               "Low-cost Hall keyboard metadata must contain N1..N10 exactly once");
+_Static_assert((LOWCOST_WHITE_KEY_MASK | LOWCOST_BLACK_KEY_MASK) == LOWCOST_KEY_ID_MASK,
+               "Low-cost Hall keyboard metadata must cover 24 chromatic keys");
+_Static_assert((LOWCOST_WHITE_KEY_MASK & LOWCOST_BLACK_KEY_MASK) == 0U,
+               "Low-cost Hall keyboard white/black key sets must not overlap");
 
 static uint8_t hall_keymap_is_lowcost(void)
 {

@@ -25,6 +25,7 @@ void hall_calibration_process(void);
 
 uint8_t hall_calibration_is_done(void);
 uint8_t hall_calibration_is_key_done(uint8_t key);
+uint8_t hall_calibration_get_stage(void);
 
 uint8_t hall_calibration_get_count(uint8_t key);
 

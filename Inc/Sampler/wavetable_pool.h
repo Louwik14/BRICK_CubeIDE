@@ -31,13 +31,12 @@ typedef enum
 typedef enum
 {
     WAVETABLE_FORMAT_NONE = 0,
-    WAVETABLE_FORMAT_FLOAT32_MONO
+    WAVETABLE_FORMAT_S16_MONO
 } wavetable_format_t;
 
 typedef enum
 {
-    WAVETABLE_FILE_SAMPLE_S16 = 1,
-    WAVETABLE_FILE_SAMPLE_F32 = 2
+    WAVETABLE_FILE_SAMPLE_S16 = 1
 } wavetable_file_sample_format_t;
 
 typedef enum
@@ -99,7 +98,7 @@ typedef struct
     wavetable_format_t format;
     uint32_t frame_sample_count;
     uint32_t frame_count;
-    float *data;
+    int16_t *data;
     uint32_t data_offset;
     uint16_t first_page_slot;
     uint16_t page_count;
@@ -131,7 +130,7 @@ void wavetable_pool_clear(uint16_t wavetable_slot);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);
-const float *wavetable_pool_get_data(uint16_t wavetable_slot);
+const int16_t *wavetable_pool_get_data(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global_slot);
 uint32_t wavetable_pool_get_used_bytes(void);

@@ -8,6 +8,12 @@
 
 SEQ_STATE_D2 static track_sound_state_t g_track_sound_state[SEQ_TRACK_COUNT];
 
+static const param_id_t g_track_sound_lfo_default_params[MOD_LFO_COUNT_PER_TRACK][MOD_LFO_PARAM_COUNT] = {
+    { PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE },
+    { PARAM_LFO2_RATE, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG, PARAM_LFO2_PHASE },
+    { PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE },
+};
+
 static void track_sound_state_set_defaults(track_sound_state_t *state)
 {
     if (state == NULL)
@@ -42,18 +48,13 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->env_retrig_filter = param_registry[PARAM_ENV_RETRIG_FILTER].default_value;
     state->env_retrig_vca = param_registry[PARAM_ENV_RETRIG_VCA].default_value;
     state->env_retrig_mod = param_registry[PARAM_ENV_RETRIG_MOD].default_value;
-    state->mod_lfo[0].rate = param_registry[PARAM_LFO1_RATE].default_value;
-    state->mod_lfo[0].shape = param_registry[PARAM_LFO1_SHAPE].default_value;
-    state->mod_lfo[0].delay = param_registry[PARAM_LFO1_DELAY].default_value;
-    state->mod_lfo[0].trig = param_registry[PARAM_LFO1_TRIG].default_value;
-    state->mod_lfo[0].fade = param_registry[PARAM_LFO1_FADE].default_value;
-    state->mod_lfo[0].phase_slew = param_registry[PARAM_LFO1_PHASE_SLEW].default_value;
-    state->mod_lfo[1].rate = param_registry[PARAM_LFO2_RATE].default_value;
-    state->mod_lfo[1].shape = param_registry[PARAM_LFO2_SHAPE].default_value;
-    state->mod_lfo[1].delay = param_registry[PARAM_LFO2_DELAY].default_value;
-    state->mod_lfo[1].trig = param_registry[PARAM_LFO2_TRIG].default_value;
-    state->mod_lfo[1].fade = param_registry[PARAM_LFO2_FADE].default_value;
-    state->mod_lfo[1].phase_slew = param_registry[PARAM_LFO2_PHASE_SLEW].default_value;
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        state->mod_lfo[lfo].rate = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_RATE]].default_value;
+        state->mod_lfo[lfo].shape = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_SHAPE]].default_value;
+        state->mod_lfo[lfo].trig = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_TRIG]].default_value;
+        state->mod_lfo[lfo].phase = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_PHASE]].default_value;
+    }
     state->mod_multi[0].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_1_A].default_value;
     state->mod_multi[0].source_b = (uint8_t)param_registry[PARAM_MOD_MULTI_1_B].default_value;
     state->mod_multi[1].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_2_A].default_value;

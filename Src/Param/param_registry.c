@@ -259,6 +259,12 @@ extern const param_desc_t param_registry[PARAM_COUNT];
 
 static uint8_t g_param_registry_batch_depth = 0U;
 
+static const param_id_t g_param_registry_lfo_params[MOD_LFO_COUNT_PER_TRACK][MOD_LFO_PARAM_COUNT] = {
+    { PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE },
+    { PARAM_LFO2_RATE, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG, PARAM_LFO2_PHASE },
+    { PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE },
+};
+
 static uint8_t param_registry_batch_is_active(void)
 {
     return (g_param_registry_batch_depth != 0U) ? 1U : 0U;
@@ -287,59 +293,20 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
         return 0U;
     }
 
-    switch (id)
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
-        case PARAM_LFO1_RATE:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_RATE;
-            return 1U;
-        case PARAM_LFO1_SHAPE:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_SHAPE;
-            return 1U;
-        case PARAM_LFO1_DELAY:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_DELAY;
-            return 1U;
-        case PARAM_LFO1_TRIG:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_TRIG;
-            return 1U;
-        case PARAM_LFO1_FADE:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_FADE;
-            return 1U;
-        case PARAM_LFO1_PHASE_SLEW:
-            *out_lfo_index = 0U;
-            *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
-            return 1U;
-        case PARAM_LFO2_RATE:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_RATE;
-            return 1U;
-        case PARAM_LFO2_SHAPE:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_SHAPE;
-            return 1U;
-        case PARAM_LFO2_DELAY:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_DELAY;
-            return 1U;
-        case PARAM_LFO2_TRIG:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_TRIG;
-            return 1U;
-        case PARAM_LFO2_FADE:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_FADE;
-            return 1U;
-        case PARAM_LFO2_PHASE_SLEW:
-            *out_lfo_index = 1U;
-            *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
-            return 1U;
-        default:
-            return 0U;
+        for (uint8_t param = 0U; param < (uint8_t)MOD_LFO_PARAM_COUNT; ++param)
+        {
+            if (g_param_registry_lfo_params[lfo][param] == id)
+            {
+                *out_lfo_index = lfo;
+                *out_lfo_param = (mod_lfo_param_t)param;
+                return 1U;
+            }
+        }
     }
+
+    return 0U;
 }
 
 static uint8_t param_env3_map(param_id_t id, mod_env3_param_t *out_env_param)
@@ -758,6 +725,18 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC2_FLIP:
             *out_value = state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)];
             return 1U;
+        case PARAM_WAVE_FRAME_INTERP:
+            *out_value = state->wave.frame_interp;
+            return 1U;
+        case PARAM_WAVE_SAMPLE_INTERP:
+            *out_value = state->wave.sample_interp;
+            return 1U;
+        case PARAM_WAVE_POS_UPDATE:
+            *out_value = state->wave.pos_update;
+            return 1U;
+        case PARAM_WAVE_POS_SMOOTH:
+            *out_value = state->wave.pos_smooth;
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -1031,6 +1010,18 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC1_FLIP:
         case PARAM_WAVE_OSC2_FLIP:
             state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)] = clamp_value(value, 0.0f, 3.0f);
+            return 1U;
+        case PARAM_WAVE_FRAME_INTERP:
+            state->wave.frame_interp = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_SAMPLE_INTERP:
+            state->wave.sample_interp = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_POS_UPDATE:
+            state->wave.pos_update = clamp_value(value, 0.0f, 3.0f);
+            return 1U;
+        case PARAM_WAVE_POS_SMOOTH:
+            state->wave.pos_smooth = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

@@ -113,41 +113,16 @@ static void wavetable_pool_encode_header(uint8_t *dst,
     wavetable_pool_write_u16(&dst[6], WAVETABLE_POOL_HEADER_SIZE);
     wavetable_pool_write_u32(&dst[8], WAVETABLE_FRAME_SAMPLE_COUNT);
     wavetable_pool_write_u32(&dst[12], frame_count);
-    wavetable_pool_write_u16(&dst[16], (uint16_t)WAVETABLE_FILE_SAMPLE_F32);
+    wavetable_pool_write_u16(&dst[16], (uint16_t)WAVETABLE_FILE_SAMPLE_S16);
     wavetable_pool_write_u16(&dst[18], source_stamp);
     wavetable_pool_write_u32(&dst[20], WAVETABLE_POOL_HEADER_SIZE);
-    wavetable_pool_write_u32(&dst[24], frame_count * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(float));
+    wavetable_pool_write_u32(&dst[24], frame_count * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(int16_t));
     wavetable_pool_write_u32(&dst[28], source_size);
 }
 
-static float wavetable_pool_s16_to_float(const uint8_t *p)
+static int16_t wavetable_pool_s16_from_le(const uint8_t *p)
 {
-    const int16_t v = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-    return (float)v * (1.0f / 32768.0f);
-}
-
-static float wavetable_pool_f32_to_float(const uint8_t *p)
-{
-    float value = 0.0f;
-    memcpy(&value, p, sizeof(value));
-    return value;
-}
-
-static float wavetable_pool_clamp_float_sample(float value)
-{
-    if (value > 1.0f)
-    {
-        return 1.0f;
-    }
-    if (value < -1.0f)
-    {
-        return -1.0f;
-    }
-    if (value != value)
-    {
-        return 0.0f;
-    }
-    return value;
+    return (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
 }
 
 static uint16_t wavetable_pool_preview_abs_i16(int16_t value)
@@ -155,7 +130,7 @@ static uint16_t wavetable_pool_preview_abs_i16(int16_t value)
     return (value < 0) ? (uint16_t)(-value) : (uint16_t)value;
 }
 
-static int16_t wavetable_pool_preview_float_to_i16(float value)
+static int16_t wavetable_pool_float_to_s16(float value)
 {
     if (value > 1.0f)
     {
@@ -164,6 +139,10 @@ static int16_t wavetable_pool_preview_float_to_i16(float value)
     else if (value < -1.0f)
     {
         value = -1.0f;
+    }
+    if (value != value)
+    {
+        return 0;
     }
     return (int16_t)(value * 32767.0f);
 }
@@ -208,12 +187,12 @@ static void wavetable_pool_preview_build(wavetable_slot_t *slot)
             col = WAVETABLE_PREVIEW_COLUMNS - 1U;
         }
 
-        const float *const src = &slot->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
+        const int16_t *const src = &slot->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
         int16_t frame_min = 32767;
         int16_t frame_max = -32768;
         for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
         {
-            const int16_t s = wavetable_pool_preview_float_to_i16(src[i]);
+            const int16_t s = src[i];
             if (s < frame_min)
             {
                 frame_min = s;
@@ -267,19 +246,11 @@ static uint8_t wavetable_pool_header_valid(const wavetable_file_header_t *header
         return 0U;
     }
 
-    uint32_t bytes_per_sample = 0U;
-    if (header->sample_format == (uint16_t)WAVETABLE_FILE_SAMPLE_S16)
-    {
-        bytes_per_sample = 2U;
-    }
-    else if (header->sample_format == (uint16_t)WAVETABLE_FILE_SAMPLE_F32)
-    {
-        bytes_per_sample = 4U;
-    }
-    else
+    if (header->sample_format != (uint16_t)WAVETABLE_FILE_SAMPLE_S16)
     {
         return 0U;
     }
+    const uint32_t bytes_per_sample = sizeof(int16_t);
 
     if (header->frame_count > (UINT32_MAX / WAVETABLE_FRAME_SAMPLE_COUNT))
     {
@@ -555,14 +526,14 @@ static wavetable_result_t wavetable_pool_load_file_impl(uint16_t wavetable_slot,
     }
 
     const uint32_t sample_count = header.frame_count * WAVETABLE_FRAME_SAMPLE_COUNT;
-    if (sample_count > (UINT32_MAX / sizeof(float)))
+    if (sample_count > (UINT32_MAX / sizeof(int16_t)))
     {
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
         wavetable_pool_set_last(WAVETABLE_RESULT_TOO_LARGE);
         return WAVETABLE_RESULT_TOO_LARGE;
     }
-    const uint32_t data_bytes = sample_count * sizeof(float);
+    const uint32_t data_bytes = sample_count * sizeof(int16_t);
     const uint32_t page_count =
         (data_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
     const uint32_t cost = page_count * SAMPLE_PAGE_BYTES;
@@ -609,7 +580,7 @@ static wavetable_result_t wavetable_pool_load_file_impl(uint16_t wavetable_slot,
     slot->state = WAVETABLE_SLOT_LOADING;
     slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     (void)wavetable_pool_copy_path(slot->path, sizeof(slot->path), register_path);
-    slot->format = WAVETABLE_FORMAT_FLOAT32_MONO;
+    slot->format = WAVETABLE_FORMAT_S16_MONO;
     slot->frame_sample_count = WAVETABLE_FRAME_SAMPLE_COUNT;
     slot->frame_count = header.frame_count;
     slot->data_offset = (uint32_t)allocation.first_slot * SAMPLE_PAGE_BYTES;
@@ -618,7 +589,7 @@ static wavetable_result_t wavetable_pool_load_file_impl(uint16_t wavetable_slot,
     slot->generation = wavetable_pool_next_generation();
     slot->data_bytes = data_bytes;
     slot->cost_bytes_aligned = allocation.capacity_bytes;
-    slot->data = (float *)allocation.data;
+    slot->data = (int16_t *)allocation.data;
     slot->error = WAVETABLE_RESULT_OK;
     wavetable_pool_preview_clear(&slot->preview);
 
@@ -630,8 +601,7 @@ static wavetable_result_t wavetable_pool_load_file_impl(uint16_t wavetable_slot,
         return WAVETABLE_RESULT_READ_FAIL;
     }
 
-    const uint32_t source_bytes_per_sample =
-        (header.sample_format == (uint16_t)WAVETABLE_FILE_SAMPLE_S16) ? 2U : 4U;
+    const uint32_t source_bytes_per_sample = sizeof(int16_t);
     uint32_t samples_done = 0U;
     while (samples_done < sample_count)
     {
@@ -658,13 +628,11 @@ static wavetable_result_t wavetable_pool_load_file_impl(uint16_t wavetable_slot,
             return WAVETABLE_RESULT_READ_FAIL;
         }
 
-        float *const dst = &slot->data[samples_done];
+        int16_t *const dst = &slot->data[samples_done];
         const uint8_t *src = g_wavetable_pool_io;
         for (uint32_t i = 0U; i < samples_chunk; ++i)
         {
-            dst[i] = (source_bytes_per_sample == 2U)
-                ? wavetable_pool_s16_to_float(src)
-                : wavetable_pool_clamp_float_sample(wavetable_pool_f32_to_float(src));
+            dst[i] = wavetable_pool_s16_from_le(src);
             src += source_bytes_per_sample;
         }
         samples_done += samples_chunk;
@@ -774,7 +742,7 @@ static void wavetable_pool_write_cache_file(const char *cache_path,
         return;
     }
 
-    const uint32_t data_bytes = slot->frame_count * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(float);
+    const uint32_t data_bytes = slot->frame_count * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(int16_t);
     const uint8_t *src = (const uint8_t *)slot->data;
     uint32_t done = 0U;
     while (done < data_bytes)
@@ -872,14 +840,14 @@ static wavetable_result_t wavetable_pool_load_wav_impl(uint16_t wavetable_slot,
     }
 
     const uint32_t sample_count = wav_info.data_size / wav_info.block_align;
-    if (sample_count > (UINT32_MAX / sizeof(float)))
+    if (sample_count > (UINT32_MAX / sizeof(int16_t)))
     {
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
         wavetable_pool_set_last(WAVETABLE_RESULT_TOO_LARGE);
         return WAVETABLE_RESULT_TOO_LARGE;
     }
-    const uint32_t data_bytes = sample_count * sizeof(float);
+    const uint32_t data_bytes = sample_count * sizeof(int16_t);
     const uint32_t page_count = (data_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
     const uint32_t cost = page_count * SAMPLE_PAGE_BYTES;
     if ((cost == 0U) || (cost > sample_page_cache_slot_pool_total_bytes()))
@@ -925,7 +893,7 @@ static wavetable_result_t wavetable_pool_load_wav_impl(uint16_t wavetable_slot,
     slot->state = WAVETABLE_SLOT_LOADING;
     slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     (void)wavetable_pool_copy_path(slot->path, sizeof(slot->path), path);
-    slot->format = WAVETABLE_FORMAT_FLOAT32_MONO;
+    slot->format = WAVETABLE_FORMAT_S16_MONO;
     slot->frame_sample_count = WAVETABLE_FRAME_SAMPLE_COUNT;
     slot->frame_count = sample_count / WAVETABLE_FRAME_SAMPLE_COUNT;
     slot->data_offset = (uint32_t)allocation.first_slot * SAMPLE_PAGE_BYTES;
@@ -934,7 +902,7 @@ static wavetable_result_t wavetable_pool_load_wav_impl(uint16_t wavetable_slot,
     slot->generation = wavetable_pool_next_generation();
     slot->data_bytes = data_bytes;
     slot->cost_bytes_aligned = allocation.capacity_bytes;
-    slot->data = (float *)allocation.data;
+    slot->data = (int16_t *)allocation.data;
     slot->error = WAVETABLE_RESULT_OK;
     wavetable_pool_preview_clear(&slot->preview);
 
@@ -974,7 +942,7 @@ static wavetable_result_t wavetable_pool_load_wav_impl(uint16_t wavetable_slot,
         }
 
         const uint8_t *src = g_wavetable_pool_io;
-        float *const dst = &slot->data[frames_done];
+        int16_t *const dst = &slot->data[frames_done];
         for (uint32_t i = 0U; i < frames_chunk; ++i)
         {
             float left = 0.0f;
@@ -984,7 +952,7 @@ static wavetable_result_t wavetable_pool_load_wav_impl(uint16_t wavetable_slot,
                                                 wav_info.bits_per_sample,
                                                 &left,
                                                 &right);
-            dst[i] = wavetable_pool_clamp_float_sample(
+            dst[i] = wavetable_pool_float_to_s16(
                 (wav_info.channels == 1U) ? left : ((left + right) * 0.5f));
             src += wav_info.block_align;
         }
@@ -1120,7 +1088,7 @@ wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot)
     return (slot != 0) ? slot->state : WAVETABLE_SLOT_ERROR;
 }
 
-const float *wavetable_pool_get_data(uint16_t wavetable_slot)
+const int16_t *wavetable_pool_get_data(uint16_t wavetable_slot)
 {
     const wavetable_slot_t *const slot = wavetable_pool_get_slot(wavetable_slot);
     return ((slot != 0) && (slot->state == WAVETABLE_SLOT_READY)) ? slot->data : 0;

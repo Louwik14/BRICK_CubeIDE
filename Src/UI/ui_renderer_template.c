@@ -203,6 +203,7 @@ static const char *ui_renderer_template_matrix_source_label(float value)
         "OFF",
         "LFO1",
         "LFO2",
+        "LFO3",
         "ENV1",
         "ENV2",
         "ENV3",
@@ -222,6 +223,7 @@ static const char *ui_renderer_template_matrix_source_value_label(float value)
         "Off",
         "LFO 1",
         "LFO 2",
+        "LFO 3",
         "env flt",
         "env vca",
         "env mod",
@@ -310,7 +312,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         }
     }
 
-    if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE))
+    if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE) || (id == PARAM_LFO3_RATE))
     {
         if (value < -0.0001f)
         {
@@ -331,32 +333,6 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             }
         }
         (void)snprintf(out, out_len, "OFF");
-        return;
-    }
-
-    if ((id == PARAM_LFO1_FADE) || (id == PARAM_LFO2_FADE))
-    {
-        if ((value > -0.0001f) && (value < 0.0001f))
-        {
-            (void)snprintf(out, out_len, "OFF");
-            return;
-        }
-        const char *prefix = (value < 0.0f) ? "IN " : "OUT ";
-        const float seconds = (value < 0.0f) ? -value : value;
-        if (seconds < 1.0f)
-        {
-            (void)snprintf(out, out_len, "%s%lums", prefix, (unsigned long)((seconds * 1000.0f) + 0.5f));
-        }
-        else
-        {
-            (void)snprintf(out, out_len, "%s%.2fs", prefix, (double)seconds);
-        }
-        return;
-    }
-
-    if ((id == PARAM_LFO1_DELAY) || (id == PARAM_LFO2_DELAY))
-    {
-        ui_renderer_template_format_fixed(value, 2U, "s", out, out_len);
         return;
     }
 
@@ -1272,14 +1248,14 @@ static uint8_t ui_renderer_template_draw_stack_fold_group(const ui_param_seq_plo
                                                            param3_value);
 }
 
-static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int h, param_id_t id, float value)
+static uint8_t ui_renderer_template_draw_lfo_phase(int x, int y, int w, int h, param_id_t id, float value)
 {
     if ((w <= 2) || (h <= 2))
     {
         return 0U;
     }
 
-    const uint8_t lfo = (id == PARAM_LFO1_PHASE_SLEW) ? 0U : 1U;
+    const uint8_t lfo = (uint8_t)(id - PARAM_LFO1_PHASE) / (uint8_t)MOD_LFO_PARAM_COUNT;
     const uint8_t track = ui_get_active_track();
     float shape_value = 0.0f;
     (void)mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, &shape_value);
@@ -1299,14 +1275,6 @@ static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int
     return 1U;
 }
 
-static const char *ui_renderer_template_lfo_shape_short_label(uint8_t shape)
-{
-    static const char *const labels[] = {
-        "SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW"
-    };
-    return (shape < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[shape] : "-";
-}
-
 static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shape_id,
                                                                  param_id_t phase_id,
                                                                  float shape_value,
@@ -1324,31 +1292,20 @@ static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shap
     (void)shape_id;
     (void)phase_id;
     const uint8_t shape = ui_renderer_template_lfo_shape_from_value(shape_value);
-    char shape_label[8];
-    (void)snprintf(shape_label, sizeof(shape_label), "%s", ui_renderer_template_lfo_shape_short_label(shape));
-    drv_display_set_font(&FONT_4X6);
-    ui_renderer_template_fit_text(shape_label, 22U);
-
-    const int label_w = 24;
-    const int label_x = x + 1;
-    const int label_y = y + ((h - (int)drv_display_font_height()) / 2);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(label_x, label_w, shape_label),
-                          (uint8_t)label_y,
-                          shape_label);
-
-    const int wave_x = x + label_w + 1;
-    const int wave_w = w - label_w - 2;
-    const int wave_h = (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH) ? (h - 9) : h;
-    if (ui_renderer_template_draw_lfo_wave_shape(wave_x, y, wave_w, wave_h, shape) == 0U)
-    {
-        return 0U;
-    }
+    const int half_w = w / 2;
+    const int phase_x = x + half_w;
+    const int phase_w = w - half_w;
 
     if (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH)
     {
-        const int bar_y = y + h - 7;
-        const int bar_x = wave_x + 2;
-        const int bar_w = (wave_w > 4) ? (wave_w - 4) : wave_w;
+        if (ui_renderer_template_draw_lfo_wave_shape(x, y, half_w, h, shape) == 0U)
+        {
+            return 0U;
+        }
+
+        const int bar_y = y + ((h - 5) / 2);
+        const int bar_x = phase_x + 3;
+        const int bar_w = (phase_w > 6) ? (phase_w - 6) : phase_w;
         float norm = phase_value / 360.0f;
         if (norm < 0.0f)
         {
@@ -1359,7 +1316,7 @@ static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shap
             norm = 1.0f;
         }
         drv_display_draw_rect(bar_x, bar_y, bar_w, 5);
-        const int fill_w = (int)((norm * (float)(bar_w - 2)) + 0.5f);
+        const int fill_w = (bar_w > 2) ? (int)((norm * (float)(bar_w - 2)) + 0.5f) : 0;
         if (fill_w > 0)
         {
             drv_display_fill_rect(bar_x + 1, bar_y + 1, fill_w, 3);
@@ -1367,6 +1324,11 @@ static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shap
     }
     else
     {
+        if (ui_renderer_template_draw_lfo_wave_shape(x, y, w, h, shape) == 0U)
+        {
+            return 0U;
+        }
+
         float phase = phase_value;
         if (phase < 0.0f)
         {
@@ -1376,9 +1338,9 @@ static uint8_t ui_renderer_template_render_lfo_shape_phase_group(param_id_t shap
         {
             phase = 360.0f;
         }
-        const uint8_t plot_w = (uint8_t)((wave_w > 2) ? (wave_w - 2) : wave_w);
-        const int cursor_x = wave_x + 1 + (int)((phase * (float)(plot_w - 1U)) / 360.0f);
-        drv_display_draw_line(cursor_x, y + 1, cursor_x, y + wave_h - 2);
+        const uint8_t plot_w = (uint8_t)((w > 2) ? (w - 2) : w);
+        const int cursor_x = x + 1 + (int)((phase * (float)(plot_w - 1U)) / 360.0f);
+        drv_display_draw_line(cursor_x, y + 1, cursor_x, y + h - 2);
     }
     return 1U;
 }
@@ -1425,14 +1387,8 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
             return 1U;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE:
             return ui_renderer_template_draw_lfo_shape_widget(x, y, w, h, value);
-        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DELAY:
-            ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 10.0f);
-            return 1U;
-        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_FADE:
-            ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, 10.0f);
-            return 1U;
-        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW:
-            return ui_renderer_template_draw_lfo_phase_slew(x, y, w, h, id, value);
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE:
+            return ui_renderer_template_draw_lfo_phase(x, y, w, h, id, value);
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP:
             return 0U;
         default:
@@ -3062,10 +3018,11 @@ static uint8_t ui_renderer_template_lfo_shape_phase_group_is_active(const ui_tem
         return 0U;
     }
 
-    const param_id_t phase_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST];
-    const param_id_t shape_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST + 1U];
-    if (!(((phase_param == PARAM_LFO1_PHASE_SLEW) && (shape_param == PARAM_LFO1_SHAPE))
-            || ((phase_param == PARAM_LFO2_PHASE_SLEW) && (shape_param == PARAM_LFO2_SHAPE))))
+    const param_id_t shape_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST];
+    const param_id_t phase_param = subpage->param_bank.params[UI_TEMPLATE_LFO_GROUP_SLOT_FIRST + 1U];
+    if (!(((shape_param == PARAM_LFO1_SHAPE) && (phase_param == PARAM_LFO1_PHASE))
+            || ((shape_param == PARAM_LFO2_SHAPE) && (phase_param == PARAM_LFO2_PHASE))
+            || ((shape_param == PARAM_LFO3_SHAPE) && (phase_param == PARAM_LFO3_PHASE))))
     {
         return 0U;
     }
@@ -3349,11 +3306,11 @@ static void ui_renderer_template_draw_wave_wavetable_frame_trace(uint16_t global
         frame = max_frame;
     }
 
-    const float *const src = &table->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
+    const int16_t *const src = &table->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
     uint16_t peak = 0U;
     for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
     {
-        int32_t sample = (int32_t)(src[i] * 32767.0f);
+        int32_t sample = (int32_t)src[i];
         if (sample < 0)
         {
             sample = -sample;
@@ -3373,7 +3330,7 @@ static void ui_renderer_template_draw_wave_wavetable_frame_trace(uint16_t global
     }
 
     int prev_x = inner_x;
-    int prev_y = ui_renderer_template_sampler_ram_amp_to_y((int16_t)(src[0] * 32767.0f),
+    int prev_y = ui_renderer_template_sampler_ram_amp_to_y(src[0],
                                                            peak,
                                                            inner_y,
                                                            inner_h);
@@ -3382,7 +3339,7 @@ static void ui_renderer_template_draw_wave_wavetable_frame_trace(uint16_t global
         const uint32_t sample_index =
             (uint32_t)(((uint64_t)col * (uint64_t)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U))
                        / (uint64_t)(inner_w - 1));
-        int32_t sample = (int32_t)(src[sample_index] * 32767.0f);
+        int32_t sample = (int32_t)src[sample_index];
         if (sample > 32767L)
         {
             sample = 32767L;
@@ -3877,9 +3834,7 @@ static uint8_t ui_renderer_template_widget_type_is_bar(uiw_widget_type_t widget_
 static uint8_t ui_renderer_template_custom_widget_is_bar(ui_template_custom_widget_kind_t kind)
 {
     return (uint8_t)((kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE)
-            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH)
-            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DELAY)
-            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_FADE));
+            || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH));
 }
 
 static void ui_renderer_template_draw_bar_value_text(int widget_x,
@@ -4067,8 +4022,8 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                            UI_TEMPLATE_CARD_WIDGET_W,
                                                            UI_TEMPLATE_CARD_WIDGET_H,
                                                            value) != 0U)
-                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW)
-                ? (ui_renderer_template_draw_lfo_phase_slew(widget_x,
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE)
+                ? (ui_renderer_template_draw_lfo_phase(widget_x,
                                                             widget_y,
                                                             UI_TEMPLATE_CARD_WIDGET_W,
                                                             UI_TEMPLATE_CARD_WIDGET_H,

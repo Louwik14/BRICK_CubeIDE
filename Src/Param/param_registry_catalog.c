@@ -39,6 +39,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
 static const char *const g_wave_phase_labels[] = {"0", "90", "180", "270", NULL};
 static const char *const g_wave_flip_labels[] = {"OFF", "X", "Y", "XY", NULL};
+static const char *const g_wave_pos_update_labels[] = {"FULL", "8", "16", "32", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_route_labels[] = {"None", "Master", NULL};
 #define PARAM_MIX_ROUTE_MAX 1.0f
@@ -89,7 +90,13 @@ static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", 
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
-static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "env flt", "env vca", "env mod", "MULT1", "MULT2", "SLEW1", "SLEW2", NULL};
+static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "LFO 3", "env flt", "env vca", "env mod", "MULT1", "MULT2", "SLEW1", "SLEW2", NULL};
+
+#define PARAM_DESC_LFO(_rate, _shape, _trig, _phase, _apply_rate, _apply_shape, _apply_trig, _apply_phase) \
+    PARAM_DESC_EX((_rate), "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, (_apply_rate)), \
+    PARAM_DESC_EX((_shape), "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, (_apply_shape)), \
+    PARAM_DESC_EX((_trig), "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, (_apply_trig)), \
+    PARAM_DESC_EX((_phase), "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, (_apply_phase))
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -262,29 +269,20 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_HARMONICS, "Harm", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_DRIVE, "Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
-    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo1_rate),
-    PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
-    PARAM_DESC_EX(PARAM_LFO1_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_delay),
-    PARAM_DESC_EX(PARAM_LFO1_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo1_trig),
-    PARAM_DESC_EX(PARAM_LFO1_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_fade),
-    PARAM_DESC_EX(PARAM_LFO1_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo1_phase_slew),
-    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo2_rate),
-    PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
-    PARAM_DESC_EX(PARAM_LFO2_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_delay),
-    PARAM_DESC_EX(PARAM_LFO2_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo2_trig),
-    PARAM_DESC_EX(PARAM_LFO2_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_fade),
-    PARAM_DESC_EX(PARAM_LFO2_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo2_phase_slew),
+    PARAM_DESC_LFO(PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE, apply_lfo1_rate, apply_lfo1_shape, apply_lfo1_trig, apply_lfo1_phase),
+    PARAM_DESC_LFO(PARAM_LFO2_RATE, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG, PARAM_LFO2_PHASE, apply_lfo2_rate, apply_lfo2_shape, apply_lfo2_trig, apply_lfo2_phase),
+    PARAM_DESC_LFO(PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE, apply_lfo3_rate, apply_lfo3_shape, apply_lfo3_trig, apply_lfo3_phase),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_SLOT, "Slot", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_slot),
-    PARAM_DESC_EX(PARAM_MOD_MATRIX_SOURCE, "Source", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_matrix_source),
+    PARAM_DESC_EX(PARAM_MOD_MATRIX_SOURCE, "Source", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_matrix_source),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_dest),
     PARAM_DESC_EX(PARAM_MOD_MATRIX_DEPTH, "Depth", PARAM_TYPE_BIPOLAR, -127.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_mod_matrix_depth),
-    PARAM_DESC_EX(PARAM_MOD_MULTI_1_A, "M1A", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_a),
-    PARAM_DESC_EX(PARAM_MOD_MULTI_1_B, "M1B", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_b),
-    PARAM_DESC_EX(PARAM_MOD_MULTI_2_A, "M2A", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_a),
-    PARAM_DESC_EX(PARAM_MOD_MULTI_2_B, "M2B", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 5.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_b),
-    PARAM_DESC_EX(PARAM_MOD_SLEW_1_SOURCE, "S1SRC", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_1_source),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_1_A, "M1A", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_a),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_1_B, "M1B", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_1_b),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_2_A, "M2A", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_a),
+    PARAM_DESC_EX(PARAM_MOD_MULTI_2_B, "M2B", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 6.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_multi_2_b),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_1_SOURCE, "S1SRC", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_1_source),
     PARAM_DESC_EX(PARAM_MOD_SLEW_1_AMOUNT, "S1AMT", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mod_slew_1_amount),
-    PARAM_DESC_EX(PARAM_MOD_SLEW_2_SOURCE, "S2SRC", PARAM_TYPE_ENUM, 0.0f, 9.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_2_source),
+    PARAM_DESC_EX(PARAM_MOD_SLEW_2_SOURCE, "S2SRC", PARAM_TYPE_ENUM, 0.0f, 10.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_mod_matrix_source_labels, apply_mod_slew_2_source),
     PARAM_DESC_EX(PARAM_MOD_SLEW_2_AMOUNT, "S2AMT", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mod_slew_2_amount),
     PARAM_DESC_EX(PARAM_ENV3_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_attack),
     PARAM_DESC_EX(PARAM_ENV3_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_env3_decay),
@@ -406,6 +404,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_WAVE_OSC2_TUNE, "TUNE", PARAM_TYPE_BIPOLAR, -60.0f, 60.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_PHASE, "PHASE", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_phase_labels, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_FLIP, "FLIP", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_flip_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_FRAME_INTERP, "FRAME", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_SAMPLE_INTERP, "SAMPLE", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_POS_UPDATE, "POSUPD", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_wave_pos_update_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_POS_SMOOTH, "SMOOTH", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
 
     PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),

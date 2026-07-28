@@ -12,6 +12,7 @@ typedef void (*ui_core_mute_suppress_hall_note_fn)(uint8_t hall);
 
 void ui_core_mute_init(void);
 void ui_core_mute_reset(void);
+void ui_core_mute_handle_page_step_led_ownership(uint8_t page_id);
 uint8_t ui_core_mute_is_active(void);
 ui_mute_submode_t ui_core_mute_get_submode(void);
 ui_mute_state_t ui_core_mute_get_state(void);

@@ -370,7 +370,11 @@ static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_OSC2_LEVEL,
     PARAM_WAVE_OSC2_TUNE,
     PARAM_WAVE_OSC2_PHASE,
-    PARAM_WAVE_OSC2_FLIP
+    PARAM_WAVE_OSC2_FLIP,
+    PARAM_WAVE_FRAME_INTERP,
+    PARAM_WAVE_SAMPLE_INTERP,
+    PARAM_WAVE_POS_UPDATE,
+    PARAM_WAVE_POS_SMOOTH
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -1640,6 +1644,10 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_WAVE_OSC2_TUNE:
         case PARAM_WAVE_OSC2_PHASE:
         case PARAM_WAVE_OSC2_FLIP:
+        case PARAM_WAVE_FRAME_INTERP:
+        case PARAM_WAVE_SAMPLE_INTERP:
+        case PARAM_WAVE_POS_UPDATE:
+        case PARAM_WAVE_POS_SMOOTH:
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX1_LEVEL:
         case PARAM_MASTER_FX1_A:
@@ -1739,16 +1747,16 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
 
         case PARAM_LFO1_RATE:
         case PARAM_LFO1_SHAPE:
-        case PARAM_LFO1_DELAY:
         case PARAM_LFO1_TRIG:
-        case PARAM_LFO1_FADE:
-        case PARAM_LFO1_PHASE_SLEW:
+        case PARAM_LFO1_PHASE:
         case PARAM_LFO2_RATE:
         case PARAM_LFO2_SHAPE:
-        case PARAM_LFO2_DELAY:
         case PARAM_LFO2_TRIG:
-        case PARAM_LFO2_FADE:
-        case PARAM_LFO2_PHASE_SLEW:
+        case PARAM_LFO2_PHASE:
+        case PARAM_LFO3_RATE:
+        case PARAM_LFO3_SHAPE:
+        case PARAM_LFO3_TRIG:
+        case PARAM_LFO3_PHASE:
         case PARAM_MOD_MATRIX_SLOT:
         case PARAM_MOD_MATRIX_SOURCE:
         case PARAM_MOD_MATRIX_DEST:

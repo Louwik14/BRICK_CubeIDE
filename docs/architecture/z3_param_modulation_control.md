@@ -2,12 +2,30 @@
 
 ## Addendum 2026-07-27 - TONE Synth/Wave
 
-- `PARAM_WAVE_OSC1_*` et `PARAM_WAVE_OSC2_*` ajoutent les 16 parametres TONE du moteur `Synth/Wave`: `TABLE`, `POS`, `START`, `END`, `LEVEL`, `TUNE`, `PHASE`, `FLIP`.
+- `PARAM_WAVE_OSC1_*` et `PARAM_WAVE_OSC2_*` portent les 16 parametres TONE principaux du moteur `Synth/Wave`: `TABLE`, `POS`, `START`, `END`, `LEVEL`, `TUNE`, `PHASE`, `FLIP`.
 - Les bases track-aware vivent dans `track_tone_sound_state.wave`; `param_registry` les lit/ecrit comme les autres TONE.
 - `param_backend_apply_tone_wave()` projette les valeurs vers `brick6_wave_runtime`: `TABLE` cible un slot global `SAMPLE_GLOBAL_KIND_WAVETABLE`, `POS/START/END/LEVEL` sont continus 0..1, `TUNE` est en demi-tons avec pas UI normal 1 st et Shift 0.01 st, `PHASE` et `FLIP` restent discrets.
 - `track_runtime` expose ces params uniquement via le layout TONE local `TRACK_RUNTIME_TYPE_WAVE`.
 - Le catalogue Matrix expose seulement les destinations Wave continues `OSC1 POS`, `OSC1 LEVEL`, `OSC1 TUNE`, `OSC2 POS`, `OSC2 LEVEL`, `OSC2 TUNE`; l'application RT directe passe par `brick6_wave_runtime_set_osc_pos/level/tune()` sans mutation de la base canonique.
 - `TABLE`, `START`, `END`, `PHASE` et `FLIP` restent exclus des destinations Matrix initiales: `TABLE/PHASE/FLIP` sont discrets/structurels, `START/END` restent des bornes statiques de scan; `POS` est l'entree continue modulee et lissee localement par le runtime Wave apres remap dans cette zone.
+
+## Addendum 2026-07-28 - TONE 2/2 qualite Synth/Wave
+
+- `PARAM_WAVE_FRAME_INTERP`, `PARAM_WAVE_SAMPLE_INTERP`, `PARAM_WAVE_POS_UPDATE` et `PARAM_WAVE_POS_SMOOTH` ajoutent les quatre reglages qualite/coût de `Synth/Wave`.
+- Les bases track-aware vivent dans `track_tone_sound_state.wave` avec defaults Eco: `FRAME=OFF`, `SAMPLE=OFF`, `POSUPD=16`, `SMOOTH=ON`.
+- `param_backend_apply_tone_wave()` projette ces reglages vers l'instance `brick6_wave_runtime` sans les exposer comme destinations Matrix.
+
+## Addendum 2026-07-28 - ENV3 timing
+
+- ENV3 reutilise les conversions musicales UI `param_filter_ui127_to_attack_s/decay_s/release_s` (`1 ms..5 s` exponentiel) mais doit inverser la loi cubique interne de `env_adsr_peaks_t` avant d'ecrire les champs `uint16_t`.
+- Les temps ENV3 `ATTACK/DECAY/RELEASE` couvrent donc maintenant la meme plage cible `1 ms..5 s` que ENV FLT au lieu d'etre recompacts par une deuxieme loi cubique vers environ `1 sample..139 ms`.
+- Ce changement est local a `mod_env3` et ne modifie ni ENV FLT ni ENV VCA.
+
+## Addendum 2026-07-28 - ENV VCA Peak ADSR
+
+- ENV VCA musicale utilise maintenant `env_adsr_peaks_t` via `env_adsr`, comme ENV FLT et ENV3, au lieu du wrapper `adsr_daisy_c_t`.
+- Les params existants `PARAM_VCA_ATTACK/DECAY/SUSTAIN/RELEASE` restent inchanges cote UI et passent par les conversions musicales `param_filter_ui127_to_attack_s/decay_s/release_s` puis par le mapping inverse Peak ADSR du mixer (`1 ms..5 s` reel).
+- `mixer_get_track_vca_env_value()` continue d'exposer la derniere sortie VCA normalisee `0..1` pour la Matrix; aucune ADSR parallele n'est ajoutee.
 
 ## Addendum 2026-07-26 - MOD operators MULTI/SLEW et LFO rate destinations
 
@@ -20,7 +38,7 @@
 - Les params track-aware MOD persistants `PARAM_MOD_MULTI_*` configurent `MULT1=M1A*M1B` et `MULT2=M2A*M2B`; les sorties sont clampées `-1..1`.
 - Les params track-aware MOD persistants `PARAM_MOD_SLEW_*` configurent `SLEW1/SLEW2`; `AMT` est borné `0..1` et converti en coefficient linéaire borné au tick Matrix/LFO, jamais par sample audio.
 - Les opérateurs sont évalués dans `mod_lfo_v1_process_block()` juste avant `mod_matrix_process_track()`. Les sources opérateur lues par d'autres opérateurs utilisent l'état opérateur précédent du tick courant/précédent; les cycles directs `SLEW1->SLEW1`, `SLEW2->SLEW2`, `SLEW1<->SLEW2` et les boucles directes `MULT*` sont ignorés.
-- `PARAM_LFO1_RATE` et `PARAM_LFO2_RATE` deviennent destinations continues Matrix avec labels `L1Rt/lfo1rate` et `L2Rt/lfo2rate`; l'application RT passe par le temp overlay LFO et la valeur modulée est clampée sans rate négatif côté destination.
+- `PARAM_LFO1_RATE`, `PARAM_LFO2_RATE` et `PARAM_LFO3_RATE` sont destinations continues Matrix avec labels `L1Rt/lfo1rate`, `L2Rt/lfo2rate` et `L3Rt/lfo3rate`; l'application RT passe par le temp overlay LFO et la valeur modulee est clampee sans rate negatif cote destination.
 
 ## Addendum 2026-07-26 - ENV retrigger hard/soft
 
@@ -178,11 +196,11 @@ Call-sites critiques:
 
 - Trig LFO BRICK6:
   - Les evenements trig LFO actuels sont les note-on valides emis par le scheduler sequenceur et le clavier runtime; il n'existe pas encore de parametre separe type `LFO.T`.
-  - `FREE` ignore ces trigs: phase/delay ne sont pas relances par les notes. Le delay s'applique une fois a l'activation effective du LFO (`RATE != OFF` et route Matrix active) puis la modulation continue.
+  - `FREE` ignore ces trigs: la phase n'est pas relancee par les notes et la modulation continue tant que `RATE != OFF` et qu'une route Matrix active consomme la source.
   - `TRIG` ne gate pas le LFO: avec une destination, une depth et un rate valides, le LFO reste actif; chaque trig LFO rephase selon `PHASE` et relance `DELAY`/`FADE`.
   - `HOLD` tient la derniere valeur capturee; chaque trig LFO relance `DELAY`, puis capture une nouvelle valeur. Entre deux captures, la sortie appliquee reste stable.
   - `ONE` arme un cycle a l'activation effective et a chaque trig LFO; apres un cycle complet, la destination est relachee vers sa base, donc la modulation revient a zero jusqu'au prochain trig.
-  - Pour `RND`, le slot dynamique est `SLEW`: aucun offset de phase n'est applique, et `HOLD` capture une nouvelle valeur sample-and-hold.
+  - Pour `RND`, aucun offset de phase n'est applique, et `HOLD` capture une nouvelle valeur sample-and-hold.
 
 - Coexistence base write / modulation RT:
   - Contrat: un write track-aware autoritatif resynchronise la base LFO active (`mod_lfo_v1_resync_base_on_authoritative_write`).
@@ -724,15 +742,13 @@ Dette explicite post-passe 4:
 
 ## 39. Contrat LFO final
 
-- Chaque track possede 2 LFO symetriques; la config canonique reste dans `track_sound_state.mod_lfo[2]` et l'execution dans `mod_lfo_v1`.
-- Surface par LFO: `RATE`, `SHAPE`, puis `DELAY`, `TRIG`, `FADE`, `PHASE_SLEW`; destination et profondeur appartiennent uniquement a `mod_matrix`.
+- Chaque track possede 3 LFO symetriques; la config canonique reste dans `track_sound_state.mod_lfo[MOD_LFO_COUNT_PER_TRACK]` et l'execution dans `mod_lfo_v1`.
+- Surface par LFO: `RATE`, `SHAPE`, `TRIG`, `PHASE`; destination et profondeur appartiennent uniquement a `mod_matrix`.
 - `RATE` est bipolaire: valeur negative = Hz libre continu `0..12.00Hz`, `0` = `OFF`, valeur positive `1..15` = table sync stable `8BAR, 4BAR, 2BAR, 1BAR, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, 1/64`.
 - Le mode Hz convertit directement la frequence en `phase_inc`, sans dependance BPM; le mode sync convertit la division via le BPM courant. `OFF` coupe la source LFO.
 - `SHAPE` expose `SIN`, `TRI`, `SAW`, `SQR`, `RND`, `SIN+`, `TRI+`, `SQR+`, `RSAW`. Les formes `+` sont unipolaires `0..1`; les autres restent bipolaires `-1..1`. La matrice applique ensuite `base + source * depth` puis clamp destination.
 - `TRIG`: `FREE` tourne sans reset; `TRIG` reset la phase au note/trig sans servir de gate ON/OFF; `HOLD` capture la valeur LFO au trig et la tient; `ONE` joue un cycle a l'activation effective et a chaque trig puis stoppe/restaure la base.
-- `DELAY` retarde l'effectivite une fois a l'activation effective du LFO. Les modes `TRIG`, `HOLD` et `ONE` relancent aussi ce delay a chaque trig LFO; `FREE` ignore les trigs note/clavier et ne relance pas son delay.
-- `FADE` est bipolaire: negatif = fade-in d'amplitude, `0` = direct/OFF, positif = fade-out. Il agit sur l'amplitude LFO effective, jamais sur la base destination.
-- `PHASE_SLEW` est `PHASE` en degres pour les shapes non random et `SLEW` pour `RND`; le slew lisse la valeur sample-and-hold par tick borne.
+- `PHASE` est en degres pour les shapes periodiques. Pour `RND`, le meme parametre reste la quantite de slew de la sortie sample-and-hold afin de conserver le controle utile sans ajouter un cinquieme parametre LFO.
 - Les triggers LFO arrivent par `mod_lfo_v1_note_trigger(track)`, appele depuis les chemins note sequenceur et clavier apres resolution track, sans dependance UI fragile.
 - En mode window-rate, si une fenetre traverse le wrap, la nouvelle valeur est appliquee a toute la fenetre courante, comme les autres formes tenues par fenetre; aucun ramp ni interpolation random n'est introduit.
 
@@ -773,7 +789,7 @@ Dette explicite post-passe 4:
 - `mod_matrix` porte l'autorite runtime d'accumulation des modulations continues par track: 8 slots statiques, source explicite, destination catalogue commune, depth bipolaire et etat `enabled` distinct.
 - `mod_matrix` maintient un cache runtime borne des routes configurees: flag global `any route`, flag par track et masque des sources par track. Ces caches sont reconstruits a l'init/reset et maintenus par les edits Matrix source/destination/depth afin que l'IRQ audio puisse court-circuiter le chemin quand aucune route n'existe.
 - Les slots actifs sont regroupes par destination a chaque fenetre control-rate; la valeur appliquee est `base + somme(depth * source)`, puis clamp unique aux bornes du parametre.
-- `mod_lfo_v1` ne route plus directement vers une destination: il produit les sources `LFO1` et `LFO2` et orchestre la lecture des sources runtime `ENV3`, `ENV VCA` et `ENV FLT`; les anciens champs `DEST/DEPTH` ne sont plus une surface de compatibilite Matrix/ENV3.
+- `mod_lfo_v1` ne route plus directement vers une destination: il produit les sources `LFO1`, `LFO2` et `LFO3` et orchestre la lecture des sources runtime `ENV3`, `ENV VCA` et `ENV FLT`; les anciens champs `DEST/DEPTH` ne sont plus une surface de compatibilite Matrix/ENV3.
 - `ENV VCA` et `ENV FLT` exposent uniquement la derniere sortie normalisee `0..1` des enveloppes mixer existantes: VCA et filtre conservent leur role audio d'origine, aucune ADSR parallele n'est creee, et la Matrix utilise seulement la profondeur bipolaire pour inverser.
 - Les sources liees aux enveloppes mixer sont invalidees par `mod_matrix` si la track courante ne supporte pas reellement le VCA gate ou le filtre; une route invalide apres changement de type relache la destination vers sa base au tick suivant.
 - Le chemin audio Matrix derive famille/type depuis `track_runtime_ctx_t`; il ne relit pas l'etat UI pour exposer ou valider ces sources.
@@ -788,7 +804,7 @@ Dette explicite post-passe 4:
 
 ## 46. Contrat surface MOD/ENV Matrix
 
-- La surface MOD expose `MATRIX`, `LFO 1`, `LFO 2`, `LFO TIME`; les champs `DEST/DEPTH` ne sont plus edites dans les pages LFO et passent uniquement par `mod_matrix`.
+- La surface MOD expose `MATRIX`, `LFO 1`, `LFO 2`, `LFO 3`; les champs `DEST/DEPTH` ne sont plus edites dans les pages LFO et passent uniquement par `mod_matrix`.
 - Les params `PARAM_MOD_MATRIX_SLOT/SOURCE/DEST/DEPTH` sont des params track-aware MOD qui adressent le slot selectionne par track. `SLOT` est un selecteur d'edition, pas un slot de modulation actif.
 - Pour LINK de voice group, `PARAM_MOD_MATRIX_DEPTH` est la seule valeur Matrix compatible; la propagation conserve explicitement l'index de slot source. `SLOT`, `SOURCE` et `DEST` restent des selecteurs/structure et ne sont pas propages.
 - Les anciens ids `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant; aucun tombstone n'est conserve pour Matrix/ENV3.

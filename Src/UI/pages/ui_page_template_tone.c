@@ -13,7 +13,7 @@
 #include "ui_renderer_template.h"
 #include "ui_template_page.h"
 
-static uint8_t g_ui_template_tone_stack_subset = 0U;
+static uint8_t g_ui_template_tone_subset = 0U;
 
 static const ui_template_family_t g_ui_template_tone_family_master_fx = {
     .family_title = "TONE",
@@ -89,13 +89,25 @@ static const ui_template_family_t g_ui_template_tone_family_prism = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_wave = {
-    .family_title = "TONE",
+    .family_title = "TONE 1/2",
     .nav_labels = { "O1W", "O1V", "O2W", "O2V" },
     .subpages = {
         { .title = "OSC1 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_END } } },
         { .title = "OSC1 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC1_LEVEL, PARAM_WAVE_OSC1_TUNE, PARAM_WAVE_OSC1_PHASE, PARAM_WAVE_OSC1_FLIP } } },
         { .title = "OSC2 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_END } } },
         { .title = "OSC2 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC2_LEVEL, PARAM_WAVE_OSC2_TUNE, PARAM_WAVE_OSC2_PHASE, PARAM_WAVE_OSC2_FLIP } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_wave_quality = {
+    .family_title = "TONE 2/2",
+    .nav_labels = { "QUAL", "-", "-", "-" },
+    .subpages = {
+        { .title = "QUALITY", .param_bank = { .params = { PARAM_WAVE_FRAME_INTERP, PARAM_WAVE_SAMPLE_INTERP, PARAM_WAVE_POS_UPDATE, PARAM_WAVE_POS_SMOOTH } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -178,9 +190,15 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
     const uint8_t active_track = ui_get_active_track();
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
-            && (g_ui_template_tone_stack_subset != 0U))
+            && (g_ui_template_tone_subset != 0U))
     {
         return &g_ui_template_tone_family_stack_global;
+    }
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
+            && (g_ui_template_tone_subset != 0U))
+    {
+        return &g_ui_template_tone_family_wave_quality;
     }
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
@@ -1345,6 +1363,18 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             case PARAM_WAVE_OSC2_FLIP:
                 name = "FLIP";
                 break;
+            case PARAM_WAVE_FRAME_INTERP:
+                name = "FRAME";
+                break;
+            case PARAM_WAVE_SAMPLE_INTERP:
+                name = "SAMPLE";
+                break;
+            case PARAM_WAVE_POS_UPDATE:
+                name = "POSUPD";
+                break;
+            case PARAM_WAVE_POS_SMOOTH:
+                name = "SMOOTH";
+                break;
             default:
                 break;
         }
@@ -1384,6 +1414,22 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                         const int32_t abs_cents = (cents < 0L) ? -cents : cents;
                         (void)snprintf(out_value, out_value_len, "%c%ld.%02ldst", sign, (long)(abs_cents / 100L), (long)(abs_cents % 100L));
                     }
+                }
+                else if ((id == PARAM_WAVE_FRAME_INTERP)
+                        || (id == PARAM_WAVE_SAMPLE_INTERP)
+                        || (id == PARAM_WAVE_POS_SMOOTH))
+                {
+                    (void)snprintf(out_value, out_value_len, "%s", (value >= 0.5f) ? "On" : "Off");
+                }
+                else if (id == PARAM_WAVE_POS_UPDATE)
+                {
+                    static const char *const k_labels[] = { "FULL", "8", "16", "32" };
+                    uint8_t index = (uint8_t)((value < 0.0f) ? 0.0f : value + 0.5f);
+                    if (index >= (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])))
+                    {
+                        index = 0U;
+                    }
+                    (void)snprintf(out_value, out_value_len, "%s", k_labels[index]);
                 }
             }
             (void)slot;
@@ -1751,7 +1797,7 @@ void ui_page_template_tone_register_families(void)
 
 void ui_page_template_tone_open_primary(void)
 {
-    g_ui_template_tone_stack_subset = 0U;
+    g_ui_template_tone_subset = 0U;
     g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
     ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
 }
@@ -1760,13 +1806,14 @@ void ui_page_template_tone_toggle_subset(void)
 {
     const uint8_t active_track = ui_get_active_track();
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_STACK))
+            || ((ui_get_track_type(active_track) != UI_TRACK_TYPE_STACK)
+                && (ui_get_track_type(active_track) != UI_TRACK_TYPE_WAVE)))
     {
         ui_page_template_tone_open_primary();
         return;
     }
 
-    g_ui_template_tone_stack_subset = (g_ui_template_tone_stack_subset == 0U) ? 1U : 0U;
+    g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
     g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
     ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
 }

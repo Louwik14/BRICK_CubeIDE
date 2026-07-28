@@ -125,6 +125,10 @@ void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_stereo(uint32_t track_id, const float *left, const float *right, uint32_t frames);
+uint8_t mixer_begin_external_mono_native(uint32_t track_id,
+                                         uint32_t frames,
+                                         float **out_mono);
+void mixer_commit_external_mono_native(uint32_t track_id, uint32_t frames);
 uint8_t mixer_begin_external_stereo(uint32_t track_id,
                                     uint32_t frames,
                                     float **out_left,

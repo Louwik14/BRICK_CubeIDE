@@ -13,23 +13,41 @@
 #define WAVE_A4_FREQ               440.0f
 #define WAVE_POS_SMOOTH_COEFF      0.004f
 #define WAVE_POS_SMOOTH_SNAP       0.000001f
-#define WAVE_FRAME_SAMPLE_COUNT_F  ((float)WAVETABLE_FRAME_SAMPLE_COUNT)
-#define WAVE_NOTE_ON_DECLICK_SAMPLES (32U)
-#define WAVE_NOTE_ON_DECLICK_RECIP   (1.0f / (float)WAVE_NOTE_ON_DECLICK_SAMPLES)
+#define WAVE_FRAME_FRAC_EPS        0.000001f
+#define WAVE_DEFAULT_FRAME_INTERP  0U
+#define WAVE_DEFAULT_SAMPLE_INTERP 0U
+#define WAVE_DEFAULT_POS_UPDATE    BRICK6_WAVE_POS_UPDATE_16
+#define WAVE_DEFAULT_POS_SMOOTH    1U
+#define WAVE_PHASE_INDEX_BITS      11U
+#define WAVE_PHASE_FRAC_BITS       (32U - WAVE_PHASE_INDEX_BITS)
+#define WAVE_PHASE_FRAC_MASK       ((1UL << WAVE_PHASE_FRAC_BITS) - 1UL)
+#define WAVE_PHASE_FRAC_TO_FLOAT   (1.0f / (float)(1UL << WAVE_PHASE_FRAC_BITS))
+#define WAVE_PHASE_SAMPLE_ROUND    (1UL << (WAVE_PHASE_FRAC_BITS - 1U))
+#define WAVE_PHASE_SCALE           4294967296.0
+#define WAVE_PHASE_90              0x40000000UL
+#define WAVE_PHASE_180             0x80000000UL
+#define WAVE_PHASE_270             0xC0000000UL
+#define WAVE_S16_TO_FLOAT          (1.0f / 32768.0f)
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define WAVE_OUTPUT_TRIM           0.30f
+#else
+#define WAVE_OUTPUT_TRIM           1.0f
+#endif
 
 typedef struct
 {
     brick6_wave_runtime_osc_t osc[BRICK6_WAVE_OSC_COUNT];
     brick6_wave_runtime_voice_t voice;
+    brick6_wave_runtime_quality_t quality;
 } brick6_wave_runtime_instance_t;
 
 typedef struct
 {
     brick6_wave_runtime_osc_t *osc;
-    const float *data;
+    const int16_t *data;
+    const int16_t *frame0_data;
+    const int16_t *frame1_data;
     uint32_t frame_count;
-    const float *frame0_data;
-    const float *frame1_data;
     float max_frame;
     float frame_frac;
     float level;
@@ -37,7 +55,11 @@ typedef struct
     uint8_t invert;
     uint8_t pos_stable;
     uint8_t frame_interp;
-    uint8_t valid;
+    uint8_t frame_interp_enabled;
+    uint8_t sample_interp_enabled;
+    uint8_t pos_smooth_enabled;
+    uint8_t pos_update_samples;
+    uint8_t pos_chunk_remaining;
 } wave_osc_block_ctx_t;
 
 AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
@@ -134,26 +156,38 @@ static void wave_resolve_table(brick6_wave_runtime_osc_t *osc)
     osc->table_generation = 0U;
 }
 
-static float wave_note_to_phase_inc(float note, float tune_semitones)
+static uint32_t wave_note_to_phase_inc(float note, float tune_semitones)
 {
     const float semitone_from_a4 = (note + tune_semitones) - WAVE_A4_NOTE;
     const float hz = WAVE_A4_FREQ * powf(2.0f, semitone_from_a4 * (1.0f / 12.0f));
-    return ((float)WAVETABLE_FRAME_SAMPLE_COUNT * hz) * (1.0f / WAVE_SAMPLE_RATE);
+    float cycles_per_sample = hz * (1.0f / WAVE_SAMPLE_RATE);
+    cycles_per_sample -= floorf(cycles_per_sample);
+    if (cycles_per_sample < 0.0f)
+    {
+        cycles_per_sample += 1.0f;
+    }
+
+    const double scaled = (double)cycles_per_sample * WAVE_PHASE_SCALE;
+    if (scaled >= 4294967295.5)
+    {
+        return 0xFFFFFFFFUL;
+    }
+    return (uint32_t)(scaled + 0.5);
 }
 
-static float wave_phase_start(uint8_t phase_mode)
+static uint32_t wave_phase_start(uint8_t phase_mode)
 {
     switch ((brick6_wave_phase_t)phase_mode)
     {
         case BRICK6_WAVE_PHASE_90:
-            return (float)WAVETABLE_FRAME_SAMPLE_COUNT * 0.25f;
+            return WAVE_PHASE_90;
         case BRICK6_WAVE_PHASE_180:
-            return (float)WAVETABLE_FRAME_SAMPLE_COUNT * 0.5f;
+            return WAVE_PHASE_180;
         case BRICK6_WAVE_PHASE_270:
-            return (float)WAVETABLE_FRAME_SAMPLE_COUNT * 0.75f;
+            return WAVE_PHASE_270;
         case BRICK6_WAVE_PHASE_0:
         default:
-            return 0.0f;
+            return 0U;
     }
 }
 
@@ -190,7 +224,9 @@ static float wave_smooth_pos(brick6_wave_runtime_osc_t *osc)
     return wave_clampf(osc->pos_smoothed, 0.0f, 1.0f);
 }
 
-static void wave_advance_pos_silent_block(brick6_wave_runtime_osc_t *osc, uint32_t frames)
+static void wave_advance_pos_silent_block(brick6_wave_runtime_osc_t *osc,
+                                          uint32_t frames,
+                                          uint8_t smooth_enabled)
 {
     if ((osc == NULL) || (frames == 0U))
     {
@@ -198,6 +234,12 @@ static void wave_advance_pos_silent_block(brick6_wave_runtime_osc_t *osc, uint32
     }
 
     const float target_pos = wave_remap_pos_to_scan_zone(osc);
+    if (smooth_enabled == 0U)
+    {
+        osc->pos_smoothed = wave_clampf(target_pos, 0.0f, 1.0f);
+        return;
+    }
+
     const float delta = target_pos - osc->pos_smoothed;
     if (wave_absf(delta) <= WAVE_POS_SMOOTH_SNAP)
     {
@@ -223,6 +265,22 @@ static void wave_snap_pos(brick6_wave_runtime_osc_t *osc)
     if (osc != NULL)
     {
         osc->pos_smoothed = wave_clampf(wave_remap_pos_to_scan_zone(osc), 0.0f, 1.0f);
+    }
+}
+
+static uint8_t wave_pos_update_to_samples(brick6_wave_pos_update_t update)
+{
+    switch (update)
+    {
+        case BRICK6_WAVE_POS_UPDATE_8:
+            return 8U;
+        case BRICK6_WAVE_POS_UPDATE_32:
+            return 32U;
+        case BRICK6_WAVE_POS_UPDATE_16:
+            return 16U;
+        case BRICK6_WAVE_POS_UPDATE_FULL:
+        default:
+            return 1U;
     }
 }
 
@@ -252,7 +310,7 @@ static void wave_reset_osc(brick6_wave_runtime_osc_t *osc, uint8_t osc_index)
     osc->pos_smoothed = 0.0f;
     osc->phase_mode = (uint8_t)BRICK6_WAVE_PHASE_0;
     osc->flip = (uint8_t)BRICK6_WAVE_FLIP_OFF;
-    osc->phase = 0.0f;
+    osc->phase = 0U;
     osc->phase_inc = wave_note_to_phase_inc((float)WAVE_DEFAULT_NOTE, 0.0f);
 }
 
@@ -267,57 +325,60 @@ static void wave_reset_instance(brick6_wave_runtime_instance_t *instance)
     {
         wave_reset_osc(&instance->osc[osc], osc);
     }
+    instance->quality.frame_interp_enabled = WAVE_DEFAULT_FRAME_INTERP;
+    instance->quality.sample_interp_enabled = WAVE_DEFAULT_SAMPLE_INTERP;
+    instance->quality.pos_update = WAVE_DEFAULT_POS_UPDATE;
+    instance->quality.pos_smooth_enabled = WAVE_DEFAULT_POS_SMOOTH;
 }
 
-static float wave_read_frame_sample(const float *frame_data,
-                                    float phase,
-                                    uint8_t reverse)
+static float wave_read_frame_sample(const int16_t *frame_data,
+                                    uint32_t phase,
+                                    uint8_t reverse,
+                                    uint8_t sample_interp_enabled)
 {
-    float read_phase = phase;
+    if (sample_interp_enabled == 0U)
+    {
+        uint32_t i0 = (phase + WAVE_PHASE_SAMPLE_ROUND) >> WAVE_PHASE_FRAC_BITS;
+        i0 &= (WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
+        if (reverse != 0U)
+        {
+            i0 = (WAVETABLE_FRAME_SAMPLE_COUNT - 1U - i0)
+                 & (WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
+        }
+
+        return (float)frame_data[i0] * WAVE_S16_TO_FLOAT;
+    }
+
+    uint32_t i0 = phase >> WAVE_PHASE_FRAC_BITS;
+    uint32_t frac_q = phase & WAVE_PHASE_FRAC_MASK;
     if (reverse != 0U)
     {
-        read_phase = ((float)WAVETABLE_FRAME_SAMPLE_COUNT - 1.0f) - read_phase;
+        if (frac_q != 0U)
+        {
+            i0 = (WAVETABLE_FRAME_SAMPLE_COUNT - 2U - i0)
+                 & (WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
+            frac_q = (WAVE_PHASE_FRAC_MASK + 1U) - frac_q;
+        }
+        else
+        {
+            i0 = (WAVETABLE_FRAME_SAMPLE_COUNT - 1U - i0)
+                 & (WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
+        }
     }
 
-    uint32_t i0 = (uint32_t)read_phase;
-    if (i0 >= WAVETABLE_FRAME_SAMPLE_COUNT)
-    {
-        i0 = WAVETABLE_FRAME_SAMPLE_COUNT - 1U;
-    }
-    uint32_t i1 = i0 + 1U;
-    if (i1 >= WAVETABLE_FRAME_SAMPLE_COUNT)
-    {
-        i1 = 0U;
-    }
-
-    const float frac = read_phase - (float)i0;
-    const float a = frame_data[i0];
-    const float b = frame_data[i1];
-    return a + ((b - a) * frac);
+    const uint32_t i1 = (i0 + 1U) & (WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
+    const float frac = (float)frac_q * WAVE_PHASE_FRAC_TO_FLOAT;
+    const float a = (float)frame_data[i0];
+    const float b = (float)frame_data[i1];
+    return (a + ((b - a) * frac)) * WAVE_S16_TO_FLOAT;
 }
 
-static void wave_wrap_phase(brick6_wave_runtime_osc_t *osc)
+static void wave_advance_phase(brick6_wave_runtime_osc_t *osc)
 {
     osc->phase += osc->phase_inc;
-    if (osc->phase >= WAVE_FRAME_SAMPLE_COUNT_F)
-    {
-        osc->phase -= WAVE_FRAME_SAMPLE_COUNT_F;
-        while (osc->phase >= WAVE_FRAME_SAMPLE_COUNT_F)
-        {
-            osc->phase -= WAVE_FRAME_SAMPLE_COUNT_F;
-        }
-    }
-    else if (osc->phase < 0.0f)
-    {
-        osc->phase += WAVE_FRAME_SAMPLE_COUNT_F;
-        while (osc->phase < 0.0f)
-        {
-            osc->phase += WAVE_FRAME_SAMPLE_COUNT_F;
-        }
-    }
 }
 
-static void wave_prepare_stable_frame(wave_osc_block_ctx_t *ctx, float smoothed_pos)
+static void wave_select_frame_from_pos(wave_osc_block_ctx_t *ctx, float smoothed_pos)
 {
     const float frame_f = smoothed_pos * ctx->max_frame;
     uint32_t frame0 = (uint32_t)frame_f;
@@ -331,15 +392,40 @@ static void wave_prepare_stable_frame(wave_osc_block_ctx_t *ctx, float smoothed_
         frame1 = frame0;
     }
 
-    ctx->frame_frac = frame_f - (float)frame0;
+    float frame_frac = frame_f - (float)frame0;
+    if (ctx->frame_interp_enabled == 0U)
+    {
+        if ((frame_frac >= 0.5f) && (frame1 != frame0))
+        {
+            frame0 = frame1;
+        }
+        frame_frac = 0.0f;
+    }
+    else if (((1.0f - frame_frac) <= WAVE_FRAME_FRAC_EPS) && (frame1 != frame0))
+    {
+        frame0 = frame1;
+        frame_frac = 0.0f;
+    }
+    else if (frame_frac <= WAVE_FRAME_FRAC_EPS)
+    {
+        frame_frac = 0.0f;
+    }
+
+    ctx->frame_frac = frame_frac;
     ctx->frame0_data = &ctx->data[frame0 * WAVETABLE_FRAME_SAMPLE_COUNT];
     ctx->frame1_data = &ctx->data[frame1 * WAVETABLE_FRAME_SAMPLE_COUNT];
-    ctx->frame_interp = ((frame1 != frame0) && (ctx->frame_frac != 0.0f)) ? 1U : 0U;
+    ctx->frame_interp = ((frame1 != frame0) && (frame_frac != 0.0f)) ? 1U : 0U;
+}
+
+static void wave_prepare_stable_frame(wave_osc_block_ctx_t *ctx, float smoothed_pos)
+{
+    wave_select_frame_from_pos(ctx, smoothed_pos);
     ctx->pos_stable = 1U;
 }
 
 static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
                                       wave_osc_block_ctx_t *ctx,
+                                      const brick6_wave_runtime_quality_t *quality,
                                       uint32_t frames)
 {
     memset(ctx, 0, sizeof(*ctx));
@@ -349,10 +435,14 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
     }
 
     ctx->osc = osc;
+    ctx->frame_interp_enabled = (quality != NULL) ? quality->frame_interp_enabled : WAVE_DEFAULT_FRAME_INTERP;
+    ctx->sample_interp_enabled = (quality != NULL) ? quality->sample_interp_enabled : WAVE_DEFAULT_SAMPLE_INTERP;
+    ctx->pos_smooth_enabled = (quality != NULL) ? quality->pos_smooth_enabled : WAVE_DEFAULT_POS_SMOOTH;
+    ctx->pos_update_samples = wave_pos_update_to_samples((quality != NULL) ? quality->pos_update : WAVE_DEFAULT_POS_UPDATE);
     ctx->level = osc->level;
     if (ctx->level <= 0.0f)
     {
-        wave_advance_pos_silent_block(osc, frames);
+        wave_advance_pos_silent_block(osc, frames, ctx->pos_smooth_enabled);
         return 0U;
     }
 
@@ -376,7 +466,7 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
     {
         osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
         osc->table_generation = 0U;
-        wave_advance_pos_silent_block(osc, frames);
+        wave_advance_pos_silent_block(osc, frames, ctx->pos_smooth_enabled);
         return 0U;
     }
 
@@ -387,57 +477,47 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
                     || (osc->flip == (uint8_t)BRICK6_WAVE_FLIP_XY)) ? 1U : 0U;
     ctx->invert = ((osc->flip == (uint8_t)BRICK6_WAVE_FLIP_X)
                    || (osc->flip == (uint8_t)BRICK6_WAVE_FLIP_XY)) ? 1U : 0U;
+
     const float target_pos = wave_remap_pos_to_scan_zone(osc);
-    if (wave_absf(target_pos - osc->pos_smoothed) <= WAVE_POS_SMOOTH_SNAP)
+    if ((ctx->pos_smooth_enabled == 0U) || (wave_absf(target_pos - osc->pos_smoothed) <= WAVE_POS_SMOOTH_SNAP))
     {
         osc->pos_smoothed = wave_clampf(target_pos, 0.0f, 1.0f);
         wave_prepare_stable_frame(ctx, osc->pos_smoothed);
     }
-    ctx->valid = 1U;
     return 1U;
 }
 
-static float wave_render_osc_sample_dynamic_ctx(const wave_osc_block_ctx_t *ctx)
+static float wave_render_osc_sample_dynamic_ctx(wave_osc_block_ctx_t *ctx)
 {
     brick6_wave_runtime_osc_t *const osc = ctx->osc;
-    const float smoothed_pos = wave_smooth_pos(osc);
-    const float frame_f = smoothed_pos * ctx->max_frame;
-    uint32_t frame0 = (uint32_t)frame_f;
-    if (frame0 >= ctx->frame_count)
+    float smoothed_pos = osc->pos_smoothed;
+    if (ctx->pos_smooth_enabled != 0U)
     {
-        frame0 = ctx->frame_count - 1U;
+        smoothed_pos = wave_smooth_pos(osc);
     }
-    uint32_t frame1 = frame0 + 1U;
-    if (frame1 >= ctx->frame_count)
+    else
     {
-        frame1 = frame0;
+        smoothed_pos = wave_clampf(wave_remap_pos_to_scan_zone(osc), 0.0f, 1.0f);
+        osc->pos_smoothed = smoothed_pos;
     }
 
-    const float frame_frac = frame_f - (float)frame0;
-    const float *const frame0_data = &ctx->data[frame0 * WAVETABLE_FRAME_SAMPLE_COUNT];
-    float out = wave_read_frame_sample(frame0_data, osc->phase, ctx->reverse);
-    if ((frame1 != frame0) && (frame_frac != 0.0f))
+    if (ctx->pos_chunk_remaining == 0U)
     {
-        const float *const frame1_data = &ctx->data[frame1 * WAVETABLE_FRAME_SAMPLE_COUNT];
-        const float b = wave_read_frame_sample(frame1_data, osc->phase, ctx->reverse);
-        out += (b - out) * frame_frac;
+        wave_select_frame_from_pos(ctx, smoothed_pos);
+        ctx->pos_chunk_remaining = ctx->pos_update_samples;
     }
+    ctx->pos_chunk_remaining--;
 
-    if (ctx->invert != 0U)
-    {
-        out = -out;
-    }
-    wave_wrap_phase(osc);
-    return out * ctx->level;
-}
-
-static float wave_render_osc_sample_stable_ctx(const wave_osc_block_ctx_t *ctx)
-{
-    brick6_wave_runtime_osc_t *const osc = ctx->osc;
-    float out = wave_read_frame_sample(ctx->frame0_data, osc->phase, ctx->reverse);
+    float out = wave_read_frame_sample(ctx->frame0_data,
+                                       osc->phase,
+                                       ctx->reverse,
+                                       ctx->sample_interp_enabled);
     if (ctx->frame_interp != 0U)
     {
-        const float b = wave_read_frame_sample(ctx->frame1_data, osc->phase, ctx->reverse);
+        const float b = wave_read_frame_sample(ctx->frame1_data,
+                                               osc->phase,
+                                               ctx->reverse,
+                                               ctx->sample_interp_enabled);
         out += (b - out) * ctx->frame_frac;
     }
 
@@ -445,24 +525,32 @@ static float wave_render_osc_sample_stable_ctx(const wave_osc_block_ctx_t *ctx)
     {
         out = -out;
     }
-    wave_wrap_phase(osc);
+    wave_advance_phase(osc);
     return out * ctx->level;
 }
 
-static float wave_apply_note_on_declick(brick6_wave_runtime_voice_t *voice, float sample)
+static float wave_render_osc_sample_stable_ctx(const wave_osc_block_ctx_t *ctx)
 {
-    if (voice->declick_remaining == 0U)
+    brick6_wave_runtime_osc_t *const osc = ctx->osc;
+    float out = wave_read_frame_sample(ctx->frame0_data,
+                                       osc->phase,
+                                       ctx->reverse,
+                                       ctx->sample_interp_enabled);
+    if (ctx->frame_interp != 0U)
     {
-        voice->last_output = sample;
-        return sample;
+        const float b = wave_read_frame_sample(ctx->frame1_data,
+                                               osc->phase,
+                                               ctx->reverse,
+                                               ctx->sample_interp_enabled);
+        out += (b - out) * ctx->frame_frac;
     }
 
-    const float fade = (float)(WAVE_NOTE_ON_DECLICK_SAMPLES - voice->declick_remaining)
-        * WAVE_NOTE_ON_DECLICK_RECIP;
-    const float out = voice->declick_start + ((sample - voice->declick_start) * fade);
-    voice->declick_remaining--;
-    voice->last_output = out;
-    return out;
+    if (ctx->invert != 0U)
+    {
+        out = -out;
+    }
+    wave_advance_phase(osc);
+    return out * ctx->level;
 }
 
 void brick6_wave_runtime_init(void)
@@ -604,6 +692,45 @@ void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_w
         ((uint8_t)flip < (uint8_t)BRICK6_WAVE_FLIP_COUNT) ? (uint8_t)flip : 0U;
 }
 
+void brick6_wave_runtime_set_frame_interp(uint8_t instance_id, uint8_t enabled)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->quality.frame_interp_enabled = (enabled != 0U) ? 1U : 0U;
+    }
+}
+
+void brick6_wave_runtime_set_sample_interp(uint8_t instance_id, uint8_t enabled)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->quality.sample_interp_enabled = (enabled != 0U) ? 1U : 0U;
+    }
+}
+
+void brick6_wave_runtime_set_pos_update(uint8_t instance_id, brick6_wave_pos_update_t update)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->quality.pos_update =
+            ((uint8_t)update < (uint8_t)BRICK6_WAVE_POS_UPDATE_COUNT)
+                ? update
+                : WAVE_DEFAULT_POS_UPDATE;
+    }
+}
+
+void brick6_wave_runtime_set_pos_smooth(uint8_t instance_id, uint8_t enabled)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->quality.pos_smooth_enabled = (enabled != 0U) ? 1U : 0U;
+    }
+}
+
 void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
@@ -616,9 +743,6 @@ void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velo
     instance->voice.gate = 1U;
     instance->voice.trigger = 1U;
     instance->voice.velocity = wave_clampf((float)velocity * (1.0f / 127.0f), 0.0f, 1.0f);
-    instance->voice.declick_start = instance->voice.last_output;
-    instance->voice.declick_remaining =
-        (instance->voice.velocity > 0.0f) ? WAVE_NOTE_ON_DECLICK_SAMPLES : 0U;
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
         instance->osc[osc].phase = wave_phase_start(instance->osc[osc].phase_mode);
@@ -653,9 +777,6 @@ void brick6_wave_runtime_all_notes_off(uint8_t instance_id)
     instance->voice.has_active_note = 0U;
     instance->voice.trigger = 0U;
     instance->voice.velocity = 0.0f;
-    instance->voice.declick_remaining = 0U;
-    instance->voice.declick_start = 0.0f;
-    instance->voice.last_output = 0.0f;
 }
 
 void brick6_wave_runtime_clear_trigger(uint8_t instance_id)
@@ -684,15 +805,16 @@ uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono
     uint8_t active_osc_count = 0U;
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
-        if (wave_prepare_osc_block(&instance->osc[osc], &osc_ctx[active_osc_count], frames) != 0U)
+        if (wave_prepare_osc_block(&instance->osc[osc],
+                                   &osc_ctx[active_osc_count],
+                                   &instance->quality,
+                                   frames) != 0U)
         {
             active_osc_count++;
         }
     }
     if (active_osc_count == 0U)
     {
-        instance->voice.last_output = 0.0f;
-        instance->voice.declick_remaining = 0U;
         return 0U;
     }
 
@@ -706,8 +828,7 @@ uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono
                 ? wave_render_osc_sample_stable_ctx(&osc_ctx[osc])
                 : wave_render_osc_sample_dynamic_ctx(&osc_ctx[osc]);
         }
-        out_mono[frame] =
-            wave_apply_note_on_declick(&instance->voice, mono * instance->voice.velocity);
+        out_mono[frame] = mono * instance->voice.velocity * WAVE_OUTPUT_TRIM;
     }
     return 1U;
 }
@@ -726,4 +847,10 @@ const brick6_wave_runtime_osc_t *brick6_wave_runtime_get_osc(uint8_t instance_id
         return NULL;
     }
     return &instance->osc[osc];
+}
+
+const brick6_wave_runtime_quality_t *brick6_wave_runtime_get_quality(uint8_t instance_id)
+{
+    const brick6_wave_runtime_instance_t *const instance = wave_get_instance(instance_id);
+    return (instance != NULL) ? &instance->quality : NULL;
 }

@@ -1,20 +1,42 @@
 # Z5 - UI / Navigation / Interaction
 
-## Addendum 2026-07-27 - volume pot et luminosite low-cost
+## Addendum 2026-07-28 - diagnostic Hall low-cost dans Settings
 
-- Le pot volume low-cost `POT_VOLUME` (`PB1` / `ADC1_INP5`) est relu dans la sequence DMA ADC1 Hall comme troisieme conversion, hors parametre de track, puis expose via `board_surface_read_master_volume_raw()` au controle global `brick6_master_control`.
-- `brick6_master_control` applique ce raw au `mixer_set_master()` global avec le meme mapping borne que le master pot historique: seuil mute bas, 512 pas, courbe quadratique.
-- Le scanner `mux_pots` reste inactif en low-cost: aucun macro pot produit n'est declare et il ne doit pas reprendre le mux Hall ni l'ADC2 utilises par le clavier/surface.
-- Le plafond global WS2812 low-cost est `LOWCOST_WS2812_BRIGHTNESS_PERCENT` dans `Board/LowCost/Src/board_leds_lowcost.c`; valeur courante: 1 %.
+- La racine low-cost de `Settings` expose une sous-categorie extensible `TEST`; son premier diagnostic est `TEST > HALL`.
+- `TEST > HALL` selectionne les 24 touches avec l'encodeur 1, index interne borne `0..23` sans wrap, et affiche `1..24`; l'encodeur 2 selectionne une adresse MUX brute `0..7`.
+- Le rendu est strictement read-only: RAW vient de `hall_adc`, FILTER du dernier sample filtre effectivement remis a `hall_engine`, et MIN/MAX/pressed/velocity des snapshots du moteur Hall. La derniere ligne affiche aussi les trois raws ADC/MUX avant mapping Hall pour l'adresse MUX selectionnee.
+- Une calibration absente laisse RAW/FILTER visibles, affiche MIN/MAX `---` et n'installe aucune valeur fictive. `PAGE 1` remonte de Hall vers Test, puis de Test vers la racine Settings.
+- En low-cost, la polarite physique Hall est decroissante a l'appui: l'autorite Hall conserve et expose les bornes numeriques `RAW LOW` / `RAW HIGH`, puis normalise position, pressed et velocity dans ce sens sans permuter l'affichage diagnostic.
+
+## Addendum 2026-07-28 - calibration Hall low-cost 24 touches
+
+- La page `CALIBRATION` low-cost expose deux etapes automatiques de 12 touches physiques: `0..11`, puis `12..23`.
+- Chaque etape dessine la meme octave `F, F#, G, G#, A, A#, B, C, C#, D, D#, E`, soit 7 touches blanches et 5 noires, avec progression individuelle.
+- La premiere etape reste uniquement en RAM. La seconde valide les 24 couples min/max, applique la calibration au moteur Hall, la sauvegarde, puis ouvre `CFG`.
+- Les 16 lanes Hall/STEP de navigation UI restent une surface distincte et ne bornent pas le clavier Hall low-cost de 24 touches.
+- Le rendu OLED de cette octave dessine les blanches en premier, limite leur remplissage a la bande basse sous les noires, tronque les separateurs de blanches a cette meme zone basse, puis masque et redessine les noires par-dessus. La validation d'une touche declenche uniquement un flash UI court borne, detecte par transition `not done -> done`, sans modifier la calibration Hall ni la persistence.
+
+## Addendum 2026-07-28 - acquisition Hall et volume low-cost
+
+- Le clavier Hall low-cost utilise trois conversions par adresse MUX: ADC1 scanne `MUX_HALL_ANAL01` (`PC1/INP11`) puis `MUX_HALL_ANAL03` (`PA5/INP19`) dans un buffer DMA incrementant de deux demi-mots; ADC2 echantillonne `MUX_HALL_ANAL02` (`PA4/INP18`) dans son buffer DMA d'un demi-mot.
+- Les trois MUX partagent les GPIO d'adresse `PA10/PA9/PA8 = S0/S1/S2`; chaque groupe de trois raws est demultiplexe par la table explicite `mux physique + canal 0..7 -> Hall 0..23`.
+- Le pot volume non monte `POT_VOLUME` (`PB1`) est completement retire de la sequence ADC1 et de la lecture runtime low-cost. `board_surface_read_master_volume_raw()` reste indisponible et `mux_pots` reste inactif; le chemin premium est inchange.
+- Le transport WS2812 low-cost utilise `LOWCOST_WS2812_BRIGHTNESS_Q8` dans `Board/LowCost/Src/board_leds_lowcost.c`; valeur courante: `4/256` avec plancher `1` pour toute composante source non nulle.
 
 ## Addendum 2026-07-27 - pages TONE Synth/Wave
 
 - `ui_page_template_tone` enregistre maintenant le template `Synth/Wave`.
-- Layout final: `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
+- Layout `TONE 1/2`: `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
 - `TABLE` affiche un slot global wavetable pret ou `---`; `TUNE` garde le pas normal 1 demi-ton et le pas Shift 0.01 demi-ton via `ui_param`.
 - Le selecteur `MOD/MATRIX DEST` expose les destinations continues Wave avec labels courts `O1Ps/O1Lv/O1Tn/O2Ps/O2Lv/O2Tn`; `TABLE`, `START`, `END`, `PHASE` et `FLIP` ne sont pas proposes.
 - Les pages `OSC1 WAVE` et `OSC2 WAVE` utilisent un grand widget wavetable sur la largeur des 4 slots: cadre `x=1 y=17 w=126 h=31`, interieur utile `x=2 y=18 w=124 h=29`, sans nom long de table dans le graphe. Les 4 labels parametres bas restent `TABLE/POS/START/END`.
 - La preview affiche une trace fine de la frame wavetable courante apres remap `START/END/POS`; le rendu UI ne scanne jamais la table complete et lit seulement la frame 2048 samples affichee. `START` et `END` sont des ticks internes haut/bas, `POS` est un curseur vertical interne plus visible; aucun label texte `S/P/E` n'est dessine sous le graphe.
+
+## Addendum 2026-07-28 - TONE 2/2 qualite Synth/Wave
+
+- Le bouton `TONE` alterne maintenant `Synth/Wave` entre `TONE 1/2` (pages oscillateurs existantes) et `TONE 2/2`.
+- `TONE 2/2` expose une page `QUALITY` avec `FRAME`, `SAMPLE`, `POSUPD`, `SMOOTH`.
+- Preset Premium manuel: `FRAME=ON`, `SAMPLE=ON`, `POSUPD=FULL`, `SMOOTH=ON`; Eco courant par defaut: `OFF/OFF/16/ON`.
 
 ## Addendum 2026-07-27 - browser Settings WAVETABLE
 
@@ -30,19 +52,19 @@
 - Les enums restent des widgets texte, sauf les icones explicites waveform/filter deja reconnues; les bools restent des switchs et les custom widgets ADSR/waveform/Matrix continuent de passer par leurs renderers dedies.
 - Les widgets barre affichent leur valeur au-dessus de la barre dans la zone widget; le label bas reste le nom du parametre, y compris pendant le flash de tweak.
 - Le widget barre bipolaire commun est aussi reutilise par les widgets MOD/DEPTH/LFO centre existants; sa barre centrale est volontairement courte pour degager le label de valeur.
-- Les params `TRIG` des pages `MOD 1/2` `LFO 1`/`LFO 2` forcent le widget texte enum afin que le label `TRIG` ne soit jamais traite comme une forme `TRI`.
+- Les params `TRIG` des pages `MOD 1/2` `LFO 1`/`LFO 2`/`LFO 3` forcent le widget texte enum afin que le label `TRIG` ne soit jamais traite comme une forme `TRI`.
 
 ## Addendum 2026-07-26 - MOD 2/2 MULTI/SLEW
 
-- Correction 2026-07-26: `MULTI` (`M1A/M1B/M2A/M2B`) et les champs `S1SRC/S2SRC` de `SLEW` utilisent le widget texte de source Matrix (`LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`, `MULT1`, `MULT2`, `SLEW1`, `SLEW2`), jamais un potard continu; les labels longs de ces sources restent `env flt`, `env vca`, `env mod`.
+- Correction 2026-07-26: `MULTI` (`M1A/M1B/M2A/M2B`) et les champs `S1SRC/S2SRC` de `SLEW` utilisent le widget texte de source Matrix (`LFO1`, `LFO2`, `LFO3`, `ENV1`, `ENV2`, `ENV3`, `MULT1`, `MULT2`, `SLEW1`, `SLEW2`), jamais un potard continu; les labels longs de ces sources restent `env flt`, `env vca`, `env mod`.
 - Correction 2026-07-26: `S1AMT/S2AMT` utilisent une barre unipolaire de quantite, et `MATRIX/DEPTH` utilise une barre bipolaire centree.
 - Correction 2026-07-26: les liaisons visuelles MOD sont des fleches coudees 1 px entre les widgets sources et cibles, pas des fleches droites.
 
 - L'ensemble `MOD` alterne maintenant `MOD 1/2` et `MOD 2/2` par réappui sur le bouton MOD.
-- `MOD 1/2` conserve `MATRIX`, `LFO 1`, `LFO 2`, `TIME`.
+- `MOD 1/2` conserve `MATRIX`, `LFO 1`, `LFO 2`, `LFO 3`.
 - `MOD 2/2` expose `MULTI` (`M1A/M1B/M2A/M2B`) et `SLEW` (`S1SRC/S1AMT/S2SRC/S2AMT`).
 - Les sélecteurs de sources réutilisent le widget source Matrix et ajoutent `MULT1`, `MULT2`, `SLEW1`, `SLEW2`.
-- Les destinations Matrix affichent les labels Stack dynamiques par modèle pour `TIMBRE/COLOR/PARAM3`, dont `SINFD/TRIFD = FOLD/SYM/SHAPE`, et les destinations LFO rate `L1Rt/L2Rt`.
+- Les destinations Matrix affichent les labels Stack dynamiques par modele pour `TIMBRE/COLOR/PARAM3`, dont `SINFD/TRIFD = FOLD/SYM/SHAPE`, et les destinations LFO rate `L1Rt/L2Rt/L3Rt`.
 
 ## Addendum 2026-07-26 - ENV 2/2 RETRIG
 
@@ -720,11 +742,11 @@ Points factuels:
 - Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
 - Les buffers median de calibration Hall (`g_min_buffer`, `g_max_buffer`) restent utilises uniquement par la page calibration / `hall_calibration_process()` et sont places en `CTRL_STATE` D3; ils ne sont ni audio hard-RT ni DMA-owned.
 
-### Bypass boot calibration Hall low-cost temporaire (2026-07-23)
+### Calibration Hall low-cost au boot (2026-07-28)
 
-- Premium garde le contrat normal: calibration absente/invalide -> page `CALIBRATION`.
-- Low-cost passe temporairement sur `CFG` via le flag Z0 local `BRICK6_TEMP_LOWCOST_BYPASS_AUTO_HALL_CALIBRATION`; les pages de calibration restent enregistrees et accessibles manuellement.
-- Ce bypass ne marque jamais le moteur Hall comme calibre: tant que `hall_engine_set_calibration()` n'a pas recu de valeurs valides, les entrees Hall sont ignorees.
+- Une calibration absente ou invalide conserve la page boot `CALIBRATION`; une calibration valide chargee ouvre `CFG`.
+- Le workflow low-cost calibre d'abord les touches physiques `0..11`, conserve ces valeurs en RAM, puis calibre `12..23`.
+- Aucun apply moteur ni aucune sauvegarde Flash n'intervient entre les deux etapes; les 24 couples min/max sont valides ensemble avant apply, sauvegarde et retour vers `CFG`.
 
 
 ## 9. Contrat query stricte - filter target
@@ -884,15 +906,13 @@ Points factuels:
 
 ## 28. Surface MOD LFO finale
 
-- L'ensemble `MOD` expose quatre sous-pages dans cet ordre: `MATRIX`, `LFO 1`, `LFO 2`, `LFO TIME`.
+- L'ensemble `MOD` expose quatre sous-pages dans cet ordre: `MATRIX`, `LFO 1`, `LFO 2`, `LFO 3`.
 - `MATRIX`: `SLOT`, `SOURCE`, `DEST`, `DEPTH`.
-- Dans `MATRIX`, les choix vides sont libelles `Off` pour la source et la destination; les sources exposent `LFO 1`, `LFO 2`, `ENV 3`, `ENV VCA`, `ENV FLT`; un slot est visuellement actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
+- Dans `MATRIX`, les choix vides sont libelles `Off` pour la source et la destination; les sources exposent `LFO 1`, `LFO 2`, `LFO 3`, `ENV 3`, `ENV VCA`, `ENV FLT`, `MULT1`, `MULT2`, `SLEW1`, `SLEW2`; un slot est visuellement actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
 - `ENV VCA` et `ENV FLT` peuvent etre selectionnees sur la surface commune, mais restent des sources runtime track-aware: si le VCA ou l'enveloppe filtre n'existe pas pour la track effective, la route est invalide et ne cree pas de modulation fantome.
-- `LFO 1`/`LFO 2`: `RATE`, `PHASE` ou `SLEW`, `SHAPE`, `TRIG`; `TIME`: `DELAY1`, `FADE1`, `DELAY2`, `FADE2`.
+- `LFO 1`/`LFO 2`/`LFO 3`: `RATE`, puis le groupe visuel `SHAPE/PHASE`, puis `TRIG` en slot 4; la page `LFO TIME` est retiree. Pour la shape `RND`, la waveform reste au-dessus de `SHAPE` et le slot `PHASE` s'affiche `Slew`.
 - `RATE` affiche `OFF` au centre, `x.xxHz` a gauche et les divisions musicales a droite. L'encodeur sans SHIFT avance le cote Hz par pas lisibles de 1Hz; avec SHIFT il edite le cote Hz au pas fin de `0.01Hz`. Le cote sync reste discret par index.
-- `DELAY` affiche toujours une valeur en secondes `x.xxs`; sans SHIFT l'edition avance par pas de 1s en conservant la fraction, avec SHIFT par pas de `0.01s`.
-- Le slot `PHASE_SLEW` renomme dynamiquement le label en `PHASE` ou `SLEW` selon la shape du LFO concerne, meme si `SHAPE` est sur la page precedente.
-- Sur `LFO 1`/`LFO 2`, les slots physiques 2 et 3 restent deux encodeurs independants (`PHASE/SLEW` puis `SHAPE`) mais sont fusionnes visuellement dans un widget large de deux parametres: label de forme, miniature de forme et curseur de phase pour les formes non aleatoires, ou barre `SLEW` quand la forme est `RND`.
+- `PHASE` reste un controle dedie en degres pour les formes periodiques; en `RND`, le meme slot s'affiche `Slew` et controle le lissage sample-and-hold.
 
 ## 29. Retour UI apres load blank
 
@@ -984,7 +1004,7 @@ Points factuels:
 
 - La variante low-cost conserve l'ordre SR physique de `Board/LowCost/Src/board_controls_lowcost.c`: les 32 bits bruts restent ceux des quatre registres et ne sont pas reordonnes. Apres cette lecture, une table explicite remappe uniquement les IDs observes par la page de test vers les `button_id_t` produit; les IDs non revalides, dont Encoder2/3/4, gardent leur interpretation existante. Le driver SR ne code aucune fonction `SHIFT`: il retourne seulement des `button_id_t`.
 - Les STEP low-cost sont aussi reprojetes vers les 16 lanes Hall UI par `board_surface_snapshot()`, via les IDs `BTN_STEP_1..BTN_STEP_16`; debounce/pressed/released restent dans le driver commun boutons et les press/release Hall restent dans le pipeline Z5.
-- Le clavier Hall low-cost separe utilise une table autoritative `mux index + channel -> logical key ID` dans `hall_keymap`: MUX1/MUX2/MUX3 couvrent les 24 touches `B1..B14` et `N1..N10`. Les metadonnees de touche portent explicitement type blanche/noire, index blanc/noir, position chromatique et validite.
+- Le clavier Hall low-cost separe utilise une table autoritative `mux index + channel -> logical key ID` dans `hall_keymap`: MUX1/MUX2/MUX3 couvrent les 24 touches chromatiques `F1..E3`, avec key IDs `0..23` dans cet ordre. Les metadonnees de touche portent explicitement type blanche/noire, index blanc/noir, position chromatique et validite.
 - Z5 conserve 16 lanes UI (`HALL_UI_LANE_COUNT`) distinctes des 24 touches clavier (`HALL_KEY_COUNT`); le pipeline UI commun ne deduit jamais blanche/noire depuis le mux, le canal ADC ou l'ordre d'acquisition.
 - Les raccourcis serigraphies des touches noires low-cost sont portes par `keyboard_input`, pas par Board: en `KEYBOARD`, `SHIFT + N1..N10`; en `SEQ`, `N1..N10` sans `SHIFT`. Une touche noire consommee reste marquee jusqu'au release et ne produit ni `note-on` ni `note-off`.
 - Table raccourcis low-cost: `N1 Tone`, `N2 Env` (ensemble interne `COLORS`, libelle visuel `ENV`), `N3 Play`, `N4 Mod`, `N5 Mix`, `N6 Undo`, `N7 Redo`, `N8` sans action, `N9 Rec Config` via le meme chemin que `SHIFT + REC`, `N10 Settings`. Les actions reutilisent la navigation, les pages et l'undo existants.
@@ -1002,7 +1022,7 @@ Points factuels:
 - La projection des 16 lanes Hall/STEP reste unique via `led_remap_led_for_hall()`: premium garde le remap physique Hall existant, low-cost projette directement les lanes `0..15` vers `LED_STEP_1..16`.
 - La LED REC reutilise uniquement l'etat REC existant de Z4 (`seq_runtime_rec_*`); aucune autorite REC LED separee n'est ajoutee.
 - Les quatre LEDs SEQ sont rendues par la logique commune `seq_led`: elles indiquent le nombre de pages actives, la page editee et, pendant le transport, l'ecart entre page editee et page de lecture. La Board ne porte que le transport physique.
-- Le transport WS2812 low-cost applique un plafond global de 10 % a chaque composante RGB. Les 16 steps gardent le chainage explicite `BTN_STEP_n -> lane Hall n-1 -> LED_STEP_n -> WS2812 n`; aucune permutation physique n'est implicite.
+- Le transport WS2812 low-cost applique un scale Q8 avec plancher non nul par composante RGB active. Les 16 steps gardent le chainage explicite `BTN_STEP_n -> lane Hall n-1 -> LED_STEP_n -> WS2812 n`; aucune permutation physique n'est implicite.
 - Le pinout encodeurs low-cost autoritatif est: ENC1 `A=PG14/B=PG13`, ENC2 `A=PG12/B=PG11`, ENC3 `A=PG10/B=PG9`, ENC4 `A=PD7/B=PD6`. Les quatre lignes sont des GPIO input avec pull-up interne; aucun AF n'est assigne sur ces broches.
 - Les encodeurs low-cost inversent leur signe dans le driver commun. `LOWCOST_ENCODER_TYPE` selectionne `BOARD_ENCODER_TYPE_CONTINUOUS` (defaut, une transition quadrature par increment) ou `BOARD_ENCODER_TYPE_MECHANICAL_24_DETENTS` (quatre transitions quadrature par cran, reste signe conserve lors d'un changement de direction); premium reste a une transition et signe historique.
 
@@ -1050,11 +1070,11 @@ Points factuels:
 
 ## Addendum 2026-07-24 - UI MOD Matrix et ENV3
 
-- L'ensemble `MOD` expose maintenant quatre pages: `MATRIX` (`SLOT/SOURCE/DEST/DEPTH`), `LFO 1` (`RATE/PHASE ou SLEW/SHAPE/TRIG`), `LFO 2` (`RATE/PHASE ou SLEW/SHAPE/TRIG`) et `LFO TIME` (`DELAY1/FADE1/DELAY2/FADE2`).
+- L'ensemble `MOD` expose maintenant quatre pages: `MATRIX` (`SLOT/SOURCE/DEST/DEPTH`), `LFO 1`, `LFO 2` et `LFO 3`, chaque LFO portant `RATE/SHAPE/PHASE/TRIG` cote slots UI tout en gardant le modele canonique `RATE/SHAPE/TRIG/PHASE`.
 - Les destinations dynamiques PRISM restent rendues par le widget LFO destination existant, mais l'edition de destination/profondeur appartient a la page `MATRIX`.
 - La liste `SOURCE` Matrix ajoute `ENV VCA` et `ENV FLT` aux sources existantes; les labels UI exacts sont conserves dans le catalogue parametre.
 - Le parametre `SLOT` utilise un widget custom monochrome 24x24: base tous slots actifs, remplacement bitmap par croix pour chaque slot inactif, puis focus du slot edite par-dessus. Un slot est actif uniquement si `source != OFF`, `destination != OFF` et `depth != 0`.
-- Correction 2026-07-24: le widget `SLOT` est rendu depuis les bitmaps 24x24 de reference et compose dynamiquement les huit slots de la track courante; le parametre `SOURCE` de `MOD/MATRIX` utilise un rendu texte direct (`OFF`, `LFO1`, `LFO2`, `ENV1`, `ENV2`, `ENV3`) et aucun widget circulaire, tandis que les labels de parametres restent `ENV FLT`, `ENV VCA`, `ENV3`.
+- Correction 2026-07-24: le widget `SLOT` est rendu depuis les bitmaps 24x24 de reference et compose dynamiquement les huit slots de la track courante; le parametre `SOURCE` de `MOD/MATRIX` utilise un rendu texte direct (`OFF`, `LFO1`, `LFO2`, `LFO3`, `ENV1`, `ENV2`, `ENV3`) et aucun widget circulaire, tandis que les labels de parametres restent `ENV FLT`, `ENV VCA`, `ENV3`.
 - L'ensemble visuel `ENV` utilise la page 4 libre pour `ENV 3` (`ATTACK/DECAY/SUSTAIN/RELEASE`) avec le widget ADSR commun.
 
 ## Addendum 2026-07-25 - catalogue Synth/Stack
@@ -1106,7 +1126,7 @@ Points factuels:
 - Le cycle par reapppui sur le raccourci CFG utilise la selection de subpage template existante; les pages non disponibles restent neutralisees par `PARAM_COUNT`.
 - LINK propage aussi les edits manuels `CFG/TRACK` et `CFG/TYPE` aux membres compatibles du voice group, via le meme delta apres clamp que les autres valeurs de base.
 - `PLAY` conserve son contrat totalement independant par membre: LINK ne s'execute jamais dans le domaine PLAY, ne propage pas NOTE/VEL/LEN/MicTim, ne touche aucun p-lock PLAY et ne change pas la lecture scheduler par membre.
-- Pour `MOD`, LINK propage seulement les valeurs numeriques compatibles: LFO `RATE/DELAY/FADE/PHASE_SLEW`, ENV3 `ATTACK/DECAY/SUSTAIN/RELEASE` et Matrix `DEPTH`.
+- Pour `MOD`, LINK propage seulement les valeurs numeriques compatibles: LFO `RATE/PHASE`, ENV3 `ATTACK/DECAY/SUSTAIN/RELEASE` et Matrix `DEPTH`.
 - Matrix `SLOT`, `SOURCE` et `DEST` restent exclus comme selecteurs/structure. La propagation de `DEPTH` cible le meme slot Matrix que la source, puis restaure le slot selectionne de la track cible.
 
 ## Addendum 2026-07-25 - clipboard step master PLAY
@@ -1148,3 +1168,22 @@ Points factuels:
 - Les steps vides maintenus ne declenchent pas l'edition roll.
 - Le feedback UI est un popup temporaire `ROLL` avec la valeur courante; il disparait au release du step ou apres 700 ms sans nouvel edit.
 - Les paliers `1/32`, `1/24` et `1/64` sont marques visuellement dans le popup OLED.
+
+## Addendum 2026-07-28 - LED TRACK hold
+
+- Quand `TRACK` est maintenu hors overlay MACRO, le renderer LED Hall affiche les lanes tracks `0..UI_TRACK_COUNT-1` en bleu et la track active en blanc prioritaire; les lanes hors tracks restent eteintes.
+- Ce rendu reste strictement borne au maintien `TRACK` et ne modifie pas les rendus normaux SEQ/MUTE/PATTERN/KEYBOARD ni le blink jaune quick length.
+
+## Addendum 2026-07-28 - LEDs relations master/slave
+
+- En maintien `TRACK`, les tracks presentes non-slaves restent en bleu sombre, une track `SLAVE` de voice group est rendue en bleu clair; la track active reste blanche prioritaire, y compris si elle est slave.
+- En mode `MUTE`, le rendu mute reste prioritaire sur le maintien `TRACK`: une slave non mutee est vert clair, une slave mutee est rouge clair, et les tracks non-slaves conservent le vert/rouge mute existant.
+- Le scale Q8 low-cost conserve visible toute composante couleur non nulle sans devoir saturer le bleu sombre des tracks normales.
+
+## Addendum 2026-07-28 - ownership LEDs step pendant MUTE
+
+- L'ownership des LEDs step est resolu par contrat central `ui_step_led_ownership`: une page/ensemble qui a besoin des LEDs step est prioritaire sur le rendu `MUTE`.
+- Les pages `SEQ`, et en low-cost les pages `KEYBOARD`/`ARP` quand les lanes STEP binaires restent le sequenceur, reprennent l'ownership des LEDs step.
+- Le rendu LED applique l'ordre: pages/workflows explicites (`Patch Assign`, overlay `MACRO`), page proprietaire des LEDs step, `MUTE`, `TRACK hold`, mode step normal, puis autres overlays/modes.
+- Une navigation ou une entree en prepare MUTE vers une page proprietaire des LEDs step annule les mutes prepares sans les appliquer; l'etat revient au snapshot runtime courant et le sous-mode redevient `HOLD_QUICK`.
+- Hors page proprietaire des LEDs step, `MUTE` et `MUTE hold` continuent a afficher les tracks et les mutes prepares restent conserves jusqu'a apply ou sortie existante.
