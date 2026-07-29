@@ -89,6 +89,11 @@ typedef struct
         float pos_update;
         float pos_smooth;
     } wave;
+    struct
+    {
+        float model;
+        float param[15];
+    } daisy;
     float midi_program;
     float midi_cc[12];
     struct

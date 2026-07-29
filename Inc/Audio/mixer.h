@@ -68,8 +68,6 @@ void mixer_set_reverb_wet(float wet);
 void mixer_set_reverb_size(float size);
 void mixer_set_reverb_decay(float decay);
 void mixer_set_reverb_pre_delay(float pre_delay);
-void mixer_set_reverb_surround(float surround);
-void mixer_set_reverb_type(uint8_t type);
 void mixer_set_reverb_hpf(float hpf);
 void mixer_set_reverb_lpf(float lpf);
 void mixer_set_delay_type(uint8_t type);

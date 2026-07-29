@@ -860,6 +860,26 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_POS_SMOOTH:
             *out_value = state->wave.pos_smooth;
             return 1U;
+        case PARAM_DAISY_MODEL:
+            *out_value = state->daisy.model;
+            return 1U;
+        case PARAM_DAISY_PARAM1:
+        case PARAM_DAISY_PARAM2:
+        case PARAM_DAISY_PARAM3:
+        case PARAM_DAISY_PARAM4:
+        case PARAM_DAISY_PARAM5:
+        case PARAM_DAISY_PARAM6:
+        case PARAM_DAISY_PARAM7:
+        case PARAM_DAISY_PARAM8:
+        case PARAM_DAISY_PARAM9:
+        case PARAM_DAISY_PARAM10:
+        case PARAM_DAISY_PARAM11:
+        case PARAM_DAISY_PARAM12:
+        case PARAM_DAISY_PARAM13:
+        case PARAM_DAISY_PARAM14:
+        case PARAM_DAISY_PARAM15:
+            *out_value = state->daisy.param[(uint8_t)(id - PARAM_DAISY_PARAM1)];
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -1160,6 +1180,26 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_WAVE_POS_SMOOTH:
             state->wave.pos_smooth = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_DAISY_MODEL:
+            state->daisy.model = clamp_value(value, 0.0f, 8.0f);
+            return 1U;
+        case PARAM_DAISY_PARAM1:
+        case PARAM_DAISY_PARAM2:
+        case PARAM_DAISY_PARAM3:
+        case PARAM_DAISY_PARAM4:
+        case PARAM_DAISY_PARAM5:
+        case PARAM_DAISY_PARAM6:
+        case PARAM_DAISY_PARAM7:
+        case PARAM_DAISY_PARAM8:
+        case PARAM_DAISY_PARAM9:
+        case PARAM_DAISY_PARAM10:
+        case PARAM_DAISY_PARAM11:
+        case PARAM_DAISY_PARAM12:
+        case PARAM_DAISY_PARAM13:
+        case PARAM_DAISY_PARAM14:
+        case PARAM_DAISY_PARAM15:
+            state->daisy.param[(uint8_t)(id - PARAM_DAISY_PARAM1)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

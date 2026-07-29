@@ -50,6 +50,7 @@ Lit ce document si le sujet touche :
 - mixage
 - taps recorder Looper dans le pipeline audio
 - playback Looper via pages RAM pretes dans le pipeline mixer
+- runtimes synth mono externes Prism / Stack / Wave / Daisy et leurs imports DSP
 - metronome MAIN monitor-only post-capture/post-MasterFX
 
 Doc :
@@ -76,7 +77,7 @@ Lit ce document si le sujet touche :
 - modulation LFO
 - coexistence global / track-aware / legacy
 - modèle paramétrique par track
-- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + MIDI simple + TRX BD reserve + BD Analog)
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + Daisy + MIDI simple + TRX BD reserve + BD Analog)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
@@ -192,6 +193,11 @@ Documents conserves pour tracabilite uniquement:
 
 ## 7. Addendum 2026-05-13
 
+## Addendum 2026-07-28 - Synth/Daisy etape 1
+
+- Z2/Z5 ajoutent l'identite structurelle `Synth/Daisy` pour le futur moteur DaisySP: type CFG distinct, runtime engine reserve, instance stable par track.
+- Depuis les etapes runtime/catalogue/integration, Z1 rend les sources DaisySP importees, Z3/Z5 exposent `MODEL` + 15 params TONE generiques a layout dynamique, Z3 publie les destinations Matrix continues Daisy et Z6 capture/restaure le bloc TONE Daisy courant.
+
 ## Addendum 2026-07-26 - MOD operators Matrix
 
 - Z3 étend l'autorité Matrix avec des opérateurs control-rate `MULTI/SLEW` et des destinations `LFO rate`; Z5 expose cette surface en `MOD 2/2`.
@@ -237,13 +243,19 @@ Documents conserves pour tracabilite uniquement:
 
 ## Addendum 2026-07-28 - decision SEQ LINK
 
-- `SEQ LINK` est un nouvel attribut structurel de voice group distinct de `CFG GROUP LINK`.
-- Autorite cible: `track_state` en Z2, avec lecture master-effective exposee aux consumers. Z4 consulte seulement cette projection pour la source de lecture p-lock playback.
-- Z5 route l'edition utilisateur vers `PARAM_CFG_GROUP_SEQ_LINK`, Z3 commit dans `track_state`, Z6 persiste l'attribut avec la configuration de groupe. Aucun stockage p-lock n'est modifie par cette decision.
+- `SEQ LINK` est un attribut structurel de voice group distinct de `CFG GROUP LINK`.
+- Autorite cible: `track_state` en Z2, avec lecture master-effective exposee aux consumers. Z4 peut consulter cette projection pour les p-locks non-PLAY, mais le pipeline PLAY conserve son adressage historique par track cible.
+- Z5 route l'edition utilisateur vers `PARAM_CFG_GROUP_SEQ_LINK`, Z3 commit dans `track_state`, Z6 persiste l'attribut avec la configuration de groupe. Aucun stockage p-lock PLAY n'est modifie par cette decision.
+
+## Addendum 2026-07-28 - correction pipeline PLAY master group
+
+- `SEQ LINK` ne modifie pas l'ensemble PLAY d'une master de voice group: ON et OFF gardent le meme comportement PLAY.
+- En PLAY, une master de groupe schedule les membres, mais chaque membre lit ses propres p-locks/base PLAY `V1` comme avant; la source master ne remplace jamais les notes PLAY des cibles.
+- La route commune Z4 peut rester consommee pour la liste bornee des cibles, mais la provenance des p-locks PLAY reste locale a la track cible.
 
 ## Addendum 2026-07-28 - Multi Spread Keytrack
 
 - Z2 porte `CFG GROUP SPREAD KEYTRK` comme attribut transient de voice group; Z3 expose `PARAM_CFG_GROUP_SPREAD_KEYTRK` et conserve `LINK` separe.
 - Z1 applique le keytrack uniquement dans le rendu `Sampler/Multi`; `KEYTRK=OFF` garde le spread historique par pan MIX.
 - Z5 affiche `SPREAD` en double-widget `AMT` + `KEY`, avec `LINK` et `SEQ LINK` conserves sur `CFG/GROUP`.
-- Etat courant: le stockage brut `track_state`, le contrat commit unique `param_registry_commit_voice_group_seq_link*()`, la projection `track_runtime_get_voice_group_seq_link()`, l'edition `CFG/GROUP > SEQ LINK`, la persistence Z6, la route logique commune Z4 boundary non-PLAY / scheduler PLAY et la reconciliation RUNNING post-commit existent.
+- Etat courant: le stockage brut `track_state`, le contrat commit unique `param_registry_commit_voice_group_seq_link*()`, la projection `track_runtime_get_voice_group_seq_link()`, l'edition `CFG/GROUP > SEQ LINK`, la persistence Z6, la route logique Z4 pour boundary non-PLAY, les cibles PLAY de groupe et la reconciliation RUNNING post-commit existent.

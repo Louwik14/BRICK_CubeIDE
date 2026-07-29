@@ -22,6 +22,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
 uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track);
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state);
 uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track);
+uint8_t param_backend_apply_tone_daisy(uint8_t track, param_id_t id, float value, uint8_t update_base_state);
+uint8_t param_backend_reapply_tone_daisy_runtime(uint8_t track);
 uint8_t param_backend_apply_tone_drum(uint8_t track,
                                       const track_runtime_ctx_t *ctx,
                                       param_id_t id,

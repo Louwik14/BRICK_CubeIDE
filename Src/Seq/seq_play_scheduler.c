@@ -12,6 +12,7 @@
 #include <string.h>
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
@@ -572,6 +573,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             brick6_wave_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DAISY)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_daisy_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+        }
+        else
+        {
+            brick6_daisy_runtime_note_off(resolved.descriptor.instance_id, note);
+        }
+    }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         if (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
@@ -1027,9 +1039,9 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
         return 0U;
     }
 
-    out_context->source_track = route.source_track;
-    out_context->source_step = route.source_step;
-    out_context->linked = route.linked;
+    out_context->source_track = scheduler_track;
+    out_context->source_step = scheduler_step;
+    out_context->linked = 0U;
     out_context->group_master = route.group_master;
     out_context->source_roll = seq_model_get_step_roll(out_context->source_track,
                                                        out_context->source_step);
@@ -1043,17 +1055,11 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
     {
         for (uint8_t i = 0U; i < route.target_count; ++i)
         {
-            const seq_track_id_t item_source_track = (out_context->linked != 0U)
-                ? out_context->source_track
-                : route.targets[i];
-            const seq_step_id_t item_source_step = (out_context->linked != 0U)
-                ? out_context->source_step
-                : scheduler_step;
             seq_play_scheduler_context_add_item(out_context,
                                                 route.targets[i],
                                                 0U,
-                                                item_source_track,
-                                                item_source_step,
+                                                route.targets[i],
+                                                scheduler_step,
                                                 0U);
         }
         return 1U;

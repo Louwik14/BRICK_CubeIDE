@@ -43,6 +43,7 @@ typedef enum
     UI_TRACK_TYPE_MULTI,
     UI_TRACK_TYPE_STACK,
     UI_TRACK_TYPE_WAVE,
+    UI_TRACK_TYPE_DAISY,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 

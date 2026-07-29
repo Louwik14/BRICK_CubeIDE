@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
@@ -499,6 +500,8 @@ static patch_v1_result_t patch_v1_apply_loaded_patch_to_targets(const PatchSaveV
     {
         keyboard_engine_all_notes_off_for_track(targets[i]);
         brick6_sampler_runtime_reset_track(targets[i]);
+        brick6_daisy_runtime_all_notes_off(targets[i]);
+        brick6_daisy_runtime_reset_instance(targets[i]);
     }
 
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)

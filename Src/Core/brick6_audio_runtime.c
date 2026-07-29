@@ -19,6 +19,7 @@
 #include "Audio/fx_master_macro.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -241,6 +242,46 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         *out_wave_tracks = wave_tracks;
     }
 }
+static void brick6_render_daisy_tracks(uint32_t frames, uint8_t *out_daisy_tracks)
+{
+    static float daisy_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t daisy_tracks = 0U;
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+                || (track_runtime_is_audio_routable(track) == 0U))
+        {
+            continue;
+        }
+
+        float *direct_mono = NULL;
+        if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
+        {
+            if (brick6_daisy_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
+            {
+                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                daisy_tracks++;
+            }
+            continue;
+        }
+
+        if (brick6_daisy_runtime_render_instance(ctx->instance_id, daisy_tmp, frames) != 0U)
+        {
+            mixer_submit_external_mono_native(ctx->mix_track_id, daisy_tmp, frames);
+            daisy_tracks++;
+        }
+    }
+
+    if (out_daisy_tracks != NULL)
+    {
+        *out_daisy_tracks = daisy_tracks;
+    }
+}
+
 static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_tracks)
 {
     static float stack_tmp[AUDIO_BLOCK_SIZE];
@@ -334,6 +375,12 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t wave_tracks = 0U;
         brick6_render_wave_tracks(frames, &wave_tracks);
         (void)wave_tracks;
+    }
+
+    {
+        uint8_t daisy_tracks = 0U;
+        brick6_render_daisy_tracks(frames, &daisy_tracks);
+        (void)daisy_tracks;
     }
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))

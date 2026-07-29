@@ -1,6 +1,7 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:37:6:ui_active_track_sync_mirror	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:63:6:ui_active_track_sync_mirror_cfg_midi_channel	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:68:6:ui_active_track_sync_mirror_cfg_midi_source	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:73:6:ui_active_track_sync_full_after_reconfigure	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:79:6:ui_active_track_sync_after_track_structure_change	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:90:6:ui_active_track_sync_full_after_global_restore	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:39:6:ui_active_track_sync_mirror	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:72:6:ui_active_track_sync_mirror_cfg_midi_channel	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:77:6:ui_active_track_sync_mirror_cfg_midi_source	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:82:6:ui_active_track_sync_full_after_reconfigure	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:88:6:ui_active_track_sync_after_track_structure_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:99:6:ui_active_track_sync_after_track_creation_from_off	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c:110:6:ui_active_track_sync_full_after_global_restore	8	static

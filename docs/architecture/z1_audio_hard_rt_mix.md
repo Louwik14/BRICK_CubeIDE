@@ -1,5 +1,22 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-28 - controles runtime Synth/Daisy
+
+- `brick6_daisy_runtime` consomme maintenant `MODEL` et 15 params normalises depuis Z3, sans allocation ni I/O dans le rendu IRQ.
+- Les conversions couteuses de ratio/frequence restent appliquees aux writes ou au note-on; la boucle sample lit l'etat d'instance deja projete.
+- `OSC BANK` et `HARMONIC` normalisent leurs gains internes avant rendu pour limiter les saturations quand plusieurs registres/harmoniques sont ouverts.
+- Les modeles Daisy restent bases sur les implementations DaisySP importees; le backend `brick6_daisy_math` demeure la frontiere trigonometrie/MIDI-to-frequency remplacable.
+- La Matrix applique les destinations Daisy continues par setter runtime direct, sans mutation de la base canonique pendant la modulation.
+
+## Addendum 2026-07-28 - runtime audio Synth/Daisy et import DaisySP
+
+- `brick6_daisy_runtime` branche `TRACK_RUNTIME_ENGINE_DAISY` dans Z1 comme moteur mono externe separe de Prism, Stack et Wave, avec instances statiques `instance_id == track_id` a 48 kHz.
+- Les sources DaisySP importees sous `Drivers/Daisy_SP/Source/Synthesis` couvrent uniquement OSC, VAR SAW, VAR SHAPE, FM2, FORMANT, VOSIM, Z OSC, OSC BANK et HARMONIC, avec licence conservee sous `Drivers/Daisy_SP/LICENSE`.
+- Le build liste explicitement les `.cpp` DaisySP consommes; `Oscillator` reutilise l'implementation DaisySP historique deja presente sous `Src/Audio/oscillator.cpp` au lieu de compiler un doublon.
+- Le rendu Daisy utilise le chemin mono-native du mixer (`mixer_begin_external_mono_native` / fallback submit), sans allocation, I/O, attente ni scan non borne dans l'IRQ; les notes viennent du scheduler PLAY et du clavier via le descriptor Z2.
+- La fondation initiale exposait seulement le modele par defaut `OSC`; le catalogue TONE Daisy est maintenant projete vers ce runtime par l'addendum controle ci-dessus.
+- `brick6_daisy_math` isole les appels trigo/MIDI-to-frequency utilises par le runtime pour permettre un remplacement ulterieur par la LUT sinus Q15 sans reecrire les moteurs.
+
 ## Addendum 2026-07-28 - Prism dual-osc Braids
 
 - `brick6_braids_runtime` porte maintenant deux oscillateurs `MacroOscillator` par instance Prism (`instance_id == track_id`), avec note/gate/trigger/VCA de track partages.
@@ -486,7 +503,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## 14.b Addendum - reverb send RevB unique
 
 - `RevB` est l'unique backend global send1 runtime compile; Drumboy, GVerb et Oliverb runtime sont retires.
-- `PARAM_MIX_REVERB_TYPE` reste un tombstone de stockage (`0/RevB`) pour ne pas renumeroter `PARAM_COUNT`; il n'est plus expose dans la page MIX active.
+- Aucun parametre de type/backend reverb n'est conserve: `RevB` est l'unique backend runtime et la retrocompatibilite projet prototype n'est pas maintenue.
 - La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
 - `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
 - `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
@@ -496,11 +513,11 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
   - `Decay` -> feedback/time,
   - `PreD` -> predelay local,
   - `LPF` -> damping interne en plus du prefiltre d'entree global.
-- `Surr` reste reserve/tombstone et n'a pas d'effet runtime RevB.
+- Les anciens controles `Type` et `Surr` sont retires du layout courant: `Type` ne selectionnait aucun autre backend et `Surr` ne rejoignait pas `RevB`.
 - RAM conservee pour RevB: `g_revb_engine_buffer[32768]` en D1 via `AUDIO_WARM` soit environ 128 KiB, plus predelay environ 17 KiB en D1 et scratch bloc DTCM.
 - RAM liberee estimee par retrait runtime: Drumboy environ 60 KiB DTCM + 21 KiB RAM_D2, GVerb environ 1.28 MiB SDRAM + petit etat DTCM, Oliverb environ 128 KiB SDRAM + scratch/etat DTCM.
 - Cout IRQ attendu: environ 3% avec le buffer RevB en `AUDIO_WARM`.
-- Un point de mesure DWT local est expose par `fx_reverb_global_get_last_cycles()` / `fx_reverb_global_get_max_cycles()` autour du process reverb global.
+- La mesure DWT locale reverb est retiree; le seul point de mesure de charge IRQ reste `cpu_load`.
 - Les sources Mutable/Inspiration dormantes (`clouds/*`, `rings/*`, `braids/*`, `plaits/*`, `stmlib/*`, `Inspiration/*`) ne sont pas supprimees par ce retrait car elles peuvent servir d'autres ports ou references non-runtime.
 
 ## 15. Addendum - retrait COLORS/CRUNCH

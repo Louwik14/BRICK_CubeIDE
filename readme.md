@@ -80,7 +80,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Prism`, `Wave`, `Stack`
+- `Synth`: `Prism`, `Wave`, `Stack`, `Daisy`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
@@ -156,6 +156,13 @@ This separation is intentional. Do not add a second authority for the same state
 - `POS` is smoothed per oscillator inside the Wave runtime after `START/END` remap, so p-locks and Matrix modulation do not jump frames abruptly.
 - `OSC1/2 WAVE` pages show a wide precomputed wavetable preview with `START/END` zone and `POS`; UI rendering never scans the full table.
 - The track identity and runtime engine are separate from `Synth/Prism`.
+
+### Daisy
+- `Synth/Daisy` is a separate mono 48 kHz runtime using selected DaisySP synthesis sources.
+- TONE always starts with `MODEL` and exposes only the slots used by the selected model.
+- Models: `OSC`, `VAR SAW`, `VAR SHAPE`, `FM2`, `FORMANT`, `VOSIM`, `Z OSC`, `OSC BANK`, `HARMONIC`.
+- `OSC BANK` and `HARMONIC` normalize their internal levels to limit overloads.
+- Matrix exposes only continuous parameters valid for the active model; `MODEL` and discrete slots stay excluded.
 
 ### Sequencer
 - integrated sequencer

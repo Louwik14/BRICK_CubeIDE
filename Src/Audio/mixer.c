@@ -177,19 +177,16 @@ typedef enum
 
 static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 #define MIXER_REVERB_PREDELAY_MAX_S 0.090f
-#define MIXER_REVERB_SURROUND_MAX_S 0.018f
 #define MIXER_REVERB_INPUT_LPF_MIN_ALPHA 0.01f
 #define MIXER_REVERB_INPUT_LPF_MAX_ALPHA 0.85f
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
 #define MIXER_EQ3_NUM_STAGES 3U
 typedef struct
 {
-    fx_reverb_global_type_t type;
     float wet;
     float size;
     float decay;
     float pre_delay;
-    float surround;
     float hpf;
     float lpf;
 } mixer_reverb_state_t;
@@ -205,12 +202,10 @@ typedef struct
 } mixer_reverb_input_filter_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
-    .type = FX_REVERB_GLOBAL_TYPE_REVB,
     .wet = 0.0f,
     .size = 0.0f,
     .decay = 0.50f,
     .pre_delay = 0.50f,
-    .surround = 0.50f,
     .hpf = 0.0f,
     .lpf = 0.0f,
 };
@@ -221,12 +216,6 @@ static float mixer_reverb_predelay_ui_to_seconds(float v)
 {
     const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
     return clamped * MIXER_REVERB_PREDELAY_MAX_S;
-}
-
-static float mixer_reverb_surround_ui_to_seconds(float v)
-{
-    const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
-    return clamped * MIXER_REVERB_SURROUND_MAX_S;
 }
 
 static float mixer_reverb_input_lpf_alpha(float lpf)
@@ -1309,12 +1298,10 @@ static float clamp_pan(float pan)
  */
 static void mixer_reverb_state_reset_defaults(void)
 {
-    g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
     g_reverb.wet = 0.0f;
     g_reverb.size = 0.0f;
     g_reverb.decay = 0.50f;
     g_reverb.pre_delay = 0.50f;
-    g_reverb.surround = 0.50f;
     g_reverb.hpf = 0.0f;
     g_reverb.lpf = 0.0f;
 }
@@ -1324,12 +1311,10 @@ void mixer_reset_runtime_state(void)
     mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     memset(&g_reverb_input_filter, 0, sizeof(g_reverb_input_filter));
-    fx_reverb_global_set_type(g_reverb.type);
     fx_reverb_global_set_wet(g_reverb.wet);
     fx_reverb_global_set_size(g_reverb.size);
     fx_reverb_global_set_decay(g_reverb.decay);
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
-    fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
     fx_reverb_global_set_lpf(g_reverb.lpf);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
@@ -1629,19 +1614,6 @@ void mixer_set_reverb_pre_delay(float pre_delay)
 {
     g_reverb.pre_delay = clamp01(pre_delay);
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
-}
-
-void mixer_set_reverb_surround(float surround)
-{
-    g_reverb.surround = clamp01(surround);
-    fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
-}
-
-void mixer_set_reverb_type(uint8_t type)
-{
-    (void)type;
-    g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
-    fx_reverb_global_set_type(g_reverb.type);
 }
 
 void mixer_set_reverb_hpf(float hpf)

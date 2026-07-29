@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:7:6:void daisysp::OscillatorBank::Init(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:33:7:float daisysp::OscillatorBank::Process()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:114:6:void daisysp::OscillatorBank::SetFreq(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:122:6:void daisysp::OscillatorBank::SetAmplitudes(const float*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:131:6:void daisysp::OscillatorBank::SetSingleAmp(float, int)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp:141:6:void daisysp::OscillatorBank::SetGain(float)	0	static

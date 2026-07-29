@@ -3,6 +3,7 @@
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
@@ -185,6 +186,74 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
         case PARAM_WAVE_OSC2_LEVEL:
         case PARAM_WAVE_OSC2_TUNE:
             return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t mod_destination_daisy_model_for_track(uint8_t track, brick6_daisy_model_t *out_model)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_model == NULL))
+    {
+        return 0U;
+    }
+
+    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
+    if (tone == NULL)
+    {
+        return 0U;
+    }
+
+    uint8_t model = (uint8_t)(mod_destination_clampf(tone->daisy.model,
+                                                     0.0f,
+                                                     (float)(BRICK6_DAISY_MODEL_COUNT - 1U)) + 0.5f);
+    if (model >= (uint8_t)BRICK6_DAISY_MODEL_COUNT)
+    {
+        model = (uint8_t)BRICK6_DAISY_MODEL_OSC;
+    }
+    *out_model = (brick6_daisy_model_t)model;
+    return 1U;
+}
+
+static uint8_t mod_destination_daisy_param_index(param_id_t dest, uint8_t *out_index)
+{
+    if ((out_index == NULL) || (dest < PARAM_DAISY_PARAM1) || (dest > PARAM_DAISY_PARAM15))
+    {
+        return 0U;
+    }
+
+    *out_index = (uint8_t)(dest - PARAM_DAISY_PARAM1);
+    return (*out_index < BRICK6_DAISY_PARAM_COUNT) ? 1U : 0U;
+}
+
+static uint8_t mod_destination_daisy_param_is_continuous(uint8_t track, param_id_t dest)
+{
+    uint8_t param_index = 0U;
+    brick6_daisy_model_t model = BRICK6_DAISY_MODEL_OSC;
+    if ((mod_destination_daisy_param_index(dest, &param_index) == 0U)
+            || (mod_destination_daisy_model_for_track(track, &model) == 0U))
+    {
+        return 0U;
+    }
+
+    switch (model)
+    {
+        case BRICK6_DAISY_MODEL_OSC:
+            return (param_index == 1U) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_VAR_SAW:
+            return (param_index <= 1U) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_VAR_SHAPE:
+            return ((param_index == 0U) || (param_index == 1U) || (param_index == 3U)) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_FM2:
+        case BRICK6_DAISY_MODEL_FORMANT:
+            return (param_index <= 1U) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_VOSIM:
+        case BRICK6_DAISY_MODEL_Z_OSC:
+            return (param_index <= 2U) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_OSC_BANK:
+            return (param_index <= 7U) ? 1U : 0U;
+        case BRICK6_DAISY_MODEL_HARMONIC:
+            return ((param_index >= 1U) && (param_index <= 14U)) ? 1U : 0U;
         default:
             return 0U;
     }
@@ -714,6 +783,27 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
     }
 }
 
+static uint8_t mod_destination_apply_daisy_rt(uint8_t track,
+                                              param_id_t dest,
+                                              const track_runtime_ctx_t *ctx,
+                                              float value)
+{
+    (void)track;
+
+    uint8_t param_index = 0U;
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+            || (ctx->instance_id >= BRICK6_DAISY_MAX_INSTANCES)
+            || (mod_destination_daisy_param_index(dest, &param_index) == 0U))
+    {
+        return 0U;
+    }
+
+    brick6_daisy_runtime_set_param(ctx->instance_id, param_index, mod_destination_clampf(value, 0.0f, 1.0f));
+    return 1U;
+}
+
 static uint8_t mod_destination_apply_drum_rt(uint8_t track,
                                              param_id_t dest,
                                              const track_runtime_ctx_t *ctx,
@@ -833,6 +923,10 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     {
         return mod_destination_apply_wave_rt(track, dest, ctx, value);
     }
+    if (mod_destination_daisy_param_is_continuous(track, dest) != 0U)
+    {
+        return mod_destination_apply_daisy_rt(track, dest, ctx, value);
+    }
     if (mod_destination_is_direct_drum(dest) != 0U)
     {
         return mod_destination_apply_drum_rt(track, dest, ctx, value);
@@ -864,7 +958,8 @@ static uint8_t mod_destination_is_internal_lfo_param(param_id_t id)
     }
 }
 
-static uint8_t mod_destination_param_matches_track_context(ui_track_family_t family,
+static uint8_t mod_destination_param_matches_track_context(uint8_t track,
+                                                           ui_track_family_t family,
                                                            param_id_t dest,
                                                            track_runtime_param_domain_t domain,
                                                            const track_runtime_ctx_t *ctx)
@@ -878,6 +973,10 @@ static uint8_t mod_destination_param_matches_track_context(ui_track_family_t fam
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_WAVE)
         {
             return mod_destination_is_direct_wave(dest);
+        }
+        if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DAISY)
+        {
+            return mod_destination_daisy_param_is_continuous(track, dest);
         }
         if ((dest == PARAM_LOOPER_ARM)
                 || (dest == PARAM_LOOPER_LEN)
@@ -1033,7 +1132,7 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
         return 0U;
     }
 
-    if (mod_destination_param_matches_track_context(family, dest, rule.domain, ctx) == 0U)
+    if (mod_destination_param_matches_track_context(track, family, dest, rule.domain, ctx) == 0U)
     {
         return 0U;
     }
@@ -1181,6 +1280,61 @@ static const char *mod_destination_wave_label_for_param(param_id_t dest)
     }
 }
 
+static const char *mod_destination_daisy_label_for_track_param(uint8_t track, param_id_t dest)
+{
+    uint8_t param_index = 0U;
+    brick6_daisy_model_t model = BRICK6_DAISY_MODEL_OSC;
+    if ((mod_destination_daisy_param_index(dest, &param_index) == 0U)
+            || (mod_destination_daisy_model_for_track(track, &model) == 0U))
+    {
+        return NULL;
+    }
+
+    switch (model)
+    {
+        case BRICK6_DAISY_MODEL_OSC:
+            return (param_index == 1U) ? "PW" : NULL;
+        case BRICK6_DAISY_MODEL_VAR_SAW:
+            return (param_index == 0U) ? "SHAPE" : ((param_index == 1U) ? "PW" : NULL);
+        case BRICK6_DAISY_MODEL_VAR_SHAPE:
+            if (param_index == 0U) { return "SHAPE"; }
+            if (param_index == 1U) { return "PW"; }
+            if (param_index == 3U) { return "SYNC RATIO"; }
+            return NULL;
+        case BRICK6_DAISY_MODEL_FM2:
+            return (param_index == 0U) ? "RATIO" : ((param_index == 1U) ? "INDEX" : NULL);
+        case BRICK6_DAISY_MODEL_FORMANT:
+            return (param_index == 0U) ? "FORMANT" : ((param_index == 1U) ? "PHASE" : NULL);
+        case BRICK6_DAISY_MODEL_VOSIM:
+            if (param_index == 0U) { return "FORMANT 1"; }
+            if (param_index == 1U) { return "FORMANT 2"; }
+            if (param_index == 2U) { return "SHAPE"; }
+            return NULL;
+        case BRICK6_DAISY_MODEL_Z_OSC:
+            if (param_index == 0U) { return "FORMANT"; }
+            if (param_index == 1U) { return "SHAPE"; }
+            if (param_index == 2U) { return "MODE"; }
+            return NULL;
+        case BRICK6_DAISY_MODEL_OSC_BANK:
+        {
+            static const char *const k_reg_labels[] = {
+                "REG 1", "REG 2", "REG 3", "REG 4", "REG 5", "REG 6", "REG 7", "GAIN"
+            };
+            return (param_index < 8U) ? k_reg_labels[param_index] : NULL;
+        }
+        case BRICK6_DAISY_MODEL_HARMONIC:
+        {
+            static const char *const k_harm_labels[] = {
+                NULL, "H1", "H2", "H3", "H4", "H5", "H6", "H7",
+                "H8", "H9", "H10", "H11", "H12", "H13", "H14"
+            };
+            return (param_index < 15U) ? k_harm_labels[param_index] : NULL;
+        }
+        default:
+            return NULL;
+    }
+}
+
 static const char *mod_destination_prism_label_for_param(param_id_t dest)
 {
     switch (dest)
@@ -1243,7 +1397,11 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
             name = mod_destination_wave_label_for_param(dest);
             if (name == NULL)
             {
-                name = param_registry[dest].name;
+                name = mod_destination_daisy_label_for_track_param(track, dest);
+                if (name == NULL)
+                {
+                    name = param_registry[dest].name;
+                }
             }
         }
     }
@@ -1370,7 +1528,11 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     {
         if (mod_destination_stack_label_for_track_param(track, dest, &label) == 0U)
         {
-            (void)param_prism_label_for_track_param(track, dest, &label);
+            label = mod_destination_daisy_label_for_track_param(track, dest);
+            if (label == NULL)
+            {
+                (void)param_prism_label_for_track_param(track, dest, &label);
+            }
         }
     }
     if (label == NULL)

@@ -1,5 +1,20 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-28 - pages TONE Synth/Daisy dynamiques
+
+- `Synth/Daisy` expose maintenant une famille TONE resolue dynamiquement depuis `PARAM_DAISY_MODEL`.
+- Le slot 1 de la premiere page reste toujours `MODEL`; les slots/pages inutiles sont neutralises par `PARAM_COUNT`, donc non selectionnables au lieu d'etre remplis artificiellement.
+- Layouts actifs: `OSC`, `VAR SAW`, `VAR SHAPE`, `FM2`, `FORMANT`, `VOSIM`, `Z OSC`, `OSC BANK` et `HARMONIC`, avec au plus quatre pages de quatre slots.
+- Les labels visibles des params Daisy sont derives du modele courant (`WAVE/PW`, ratios, formants, registres, harmoniques, etc.) sans changer les IDs stockes `PARAM_DAISY_PARAM1..15`.
+- Le changement de modele reconstruit la famille TONE et normalise la page active vers une page selectionnable.
+- `MOD/MATRIX DEST` reprend les memes labels dynamiques Daisy pour les params continus du modele actif; les slots structurels/discrets ne sont pas proposes.
+
+## Addendum 2026-07-28 - catalogue CFG Synth/Daisy etape 1
+
+- Le catalogue CFG `Synth` propose maintenant `Prism`, `Wave`, `Stack` et `Daisy`.
+- `Daisy` est expose par les labels `Daisy` / `DASY` comme identite de track reservee au futur moteur DaisySP.
+- Cette etape avait reserve seulement l'identite CFG; les pages TONE Daisy sont maintenant enregistrees par l'addendum dynamique ci-dessus.
+
 ## Addendum 2026-07-28 - pages TONE Prism dual-osc
 
 - `Synth/Prism` expose maintenant quatre pages TONE: `OSC1 VOICE`, `OSC1 EDIT`, `OSC2 VOICE`, `OSC2 EDIT`.
@@ -636,7 +651,7 @@ Points factuels:
   - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
   - `REV2`: reservee/vide,
   - `REV3`: `HPF`, `LPF`.
-- La page active MIX n'expose plus `REV2/Type`; `PARAM_MIX_REVERB_TYPE` reste reserve en stockage avec `0/RevB`, et `RevB` est l'unique reverb SEND runtime.
+- La page active MIX n'expose plus de choix `Type` reverb: `RevB` est l'unique reverb SEND runtime et aucun tombstone de backend n'est conserve.
 - Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
 - Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:

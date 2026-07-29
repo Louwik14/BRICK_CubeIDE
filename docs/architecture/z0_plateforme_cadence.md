@@ -1,5 +1,10 @@
 # Z0 - Plateforme / Cadence
 
+## Addendum 2026-07-28 - init runtime Synth/Daisy
+
+- `brick6_app_init()` initialise maintenant `brick6_daisy_runtime_init()` apres Prism, Stack et Wave, avant `brick6_audio_runtime_init()` et avant `audio_start()`.
+- Daisy reste un runtime Synth separe; cet init ne modifie pas l'ordre ni la semantique des runtimes Prism/Braids, Stack ou Wave.
+
 ## 1. Perimetre
 
 Perimetre operationnel de zone (appartient a Z0):

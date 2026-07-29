@@ -172,13 +172,6 @@ list(REMOVE_ITEM SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_granular.cpp"
 )
 
-list(APPEND SRC_AUDIO_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_delay_shared_pool.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/metronome_runtime.c"
-)
-
 file(GLOB SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"
@@ -363,6 +356,16 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/utils/*.cpp"
 )
 
+set(DAISY_SP_SYNTHESIS_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/fm2.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp"
+)
+
 
 
 # --------------------------------------------------------------------------
@@ -408,6 +411,7 @@ set(ALL_USER_SOURCES
     ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC}
     ${MUTABLE_STMLIB_UTILS_SRC}
+    ${DAISY_SP_SYNTHESIS_SRC}
 )
 
 list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
@@ -444,6 +448,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude
+    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source
+    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Utility
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments

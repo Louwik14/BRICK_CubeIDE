@@ -4,12 +4,14 @@
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
+#include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Param/param_filter.h"
 #include "Sampler/multi_sample_pool.h"
@@ -767,6 +769,70 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
     brick6_wave_runtime_set_pos_update(ctx->instance_id,
                                        (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(state->wave.pos_update, 0.0f, 3.0f) + 0.5f));
     brick6_wave_runtime_set_pos_smooth(ctx->instance_id, (state->wave.pos_smooth >= 0.5f) ? 1U : 0U);
+    return 1U;
+}
+
+uint8_t param_backend_apply_tone_daisy(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+            || (ctx->instance_id >= BRICK6_DAISY_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    if (id == PARAM_DAISY_MODEL)
+    {
+        const brick6_daisy_model_t model =
+            (brick6_daisy_model_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, (float)(BRICK6_DAISY_MODEL_COUNT - 1U)) + 0.5f);
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->daisy.model = (float)(uint8_t)model;
+        }
+        brick6_daisy_runtime_set_model(ctx->instance_id, model);
+        mod_destination_catalog_invalidate_track(track);
+        return 1U;
+    }
+
+    if ((id >= PARAM_DAISY_PARAM1) && (id <= PARAM_DAISY_PARAM15))
+    {
+        const uint8_t param_index = (uint8_t)(id - PARAM_DAISY_PARAM1);
+        const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->daisy.param[param_index] = clamped;
+        }
+        brick6_daisy_runtime_set_param(ctx->instance_id, param_index, clamped);
+        return 1U;
+    }
+
+    return 0U;
+}
+
+uint8_t param_backend_reapply_tone_daisy_runtime(uint8_t track)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((state == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+            || (ctx->instance_id >= BRICK6_DAISY_MAX_INSTANCES))
+    {
+        return 0U;
+    }
+
+    brick6_daisy_runtime_set_model(ctx->instance_id,
+                                   (brick6_daisy_model_t)(uint8_t)(param_backend_clamp_value(state->daisy.model,
+                                                                                             0.0f,
+                                                                                             (float)(BRICK6_DAISY_MODEL_COUNT - 1U)) + 0.5f));
+    for (uint8_t i = 0U; i < BRICK6_DAISY_PARAM_COUNT; ++i)
+    {
+        brick6_daisy_runtime_set_param(ctx->instance_id, i, param_backend_clamp_value(state->daisy.param[i], 0.0f, 1.0f));
+    }
     return 1U;
 }
 

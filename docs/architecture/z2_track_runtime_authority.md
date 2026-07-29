@@ -1,5 +1,26 @@
 # Z2 - Track Runtime Authority
 
+## Addendum 2026-07-28 - ownership runtime Synth/Daisy
+
+- `TRACK_RUNTIME_ENGINE_DAISY` possede maintenant un runtime dedie initialise et resetable, avec instances stables par track logique (`instance_id == track_id`).
+- Les chemins note du clavier, du scheduler PLAY et du panic output guard dispatchent Daisy vers `brick6_daisy_runtime_*`; Prism, Stack et Wave conservent leurs dispatchs historiques.
+- Les resets d'ownership Daisy sont separes de Prism/Stack/Wave; depuis l'etape catalogue ils reappliquent le modele et les bases TONE Daisy.
+- Depuis l'etape catalogue, `TRACK_RUNTIME_TYPE_DAISY` expose 16 slots TONE generiques: `MODEL` puis `PARAM1..PARAM15`; la validite visible des slots est resolue dynamiquement par le modele actif cote Z5.
+
+## Addendum 2026-07-28 - catalogue TONE Synth/Daisy
+
+- `Synth/Daisy` expose maintenant son catalogue de 9 modeles via `PARAM_DAISY_MODEL`: `OSC`, `VAR SAW`, `VAR SHAPE`, `FM2`, `FORMANT`, `VOSIM`, `Z OSC`, `OSC BANK`, `HARMONIC`.
+- Les params TONE Daisy restent un stockage generique compact (`PARAM_DAISY_PARAM1..15`) pour conserver une seule autorite param/P-lock; le sens musical est donne par le modele courant, sans creer une famille de params par algorithme.
+- `MODEL` est toujours le premier slot de la surface Daisy; les slots non utiles ne sont pas declares dans la page active.
+- Les resets d'ownership Daisy reappliquent maintenant `MODEL` et les 15 bases generiques au runtime apres reset.
+
+## Addendum 2026-07-28 - identite Synth/Daisy etape 1
+
+- `Synth/Daisy` est ajoute comme type produit distinct de `Synth/Prism`, `Synth/Wave` et `Synth/Stack`.
+- Z2 mappe `UI_TRACK_TYPE_DAISY` vers `TRACK_RUNTIME_TYPE_DAISY` et bind ce type a `TRACK_RUNTIME_ENGINE_DAISY`, avec `instance_id == track_id`.
+- Cette etape avait reserve seulement l'identite et le binding structurel avant le branchement runtime audio Daisy.
+- Cette etape avait masque `TONE` temporairement; le catalogue TONE Daisy courant leve cette restriction.
+
 ## Addendum 2026-07-28 - mapping TONE Prism dual-osc
 
 - `Synth/Prism` conserve son identite `TRACK_RUNTIME_TYPE_PRISM` / `TRACK_RUNTIME_ENGINE_PRISM` et son instance stable `instance_id == track_id`.

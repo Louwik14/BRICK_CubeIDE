@@ -1,5 +1,10 @@
 # Z6 - State / Persistence / Patterns / Projects
 
+Addendum 2026-07-28 - persistence Synth/Daisy:
+- `track_tone_sound_state.daisy` est capture/restaure par Pattern/Project/Patch/Kit via les structures courantes, sans migration ni bump de version pendant le prototype.
+- Les snapshots Track, Patch, Kit et Project neutralisent/reset aussi le runtime Daisy avant reapply pour eviter une voix ou un modele ancien apres changement de type/restauration.
+- `Kit V1` ajoute le label resume `DY` pour les tracks `Synth/Daisy`.
+
 Addendum 2026-07-27 - politique sauvegardes prototype:
 - Le format persistant courant est unique pour Project/Pattern/Patch/Kit et `.brickmulti`.
 - La retrocompatibilite des projets, patterns et presets n'est pas un objectif en phase prototype.

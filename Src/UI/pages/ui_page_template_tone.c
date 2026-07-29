@@ -4,6 +4,7 @@
 
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_daisy_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
@@ -136,6 +137,96 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .default_subpage = 0U,
 };
 
+static ui_template_family_t g_ui_template_tone_family_daisy = {
+    .family_title = "TONE",
+    .nav_labels = { "P1", "-", "-", "-" },
+    .subpages = {
+        { .title = "P1", .param_bank = { .params = { PARAM_DAISY_MODEL, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static void ui_page_template_tone_daisy_set_subpage(uint8_t idx,
+                                                    const char *title,
+                                                    param_id_t p0,
+                                                    param_id_t p1,
+                                                    param_id_t p2,
+                                                    param_id_t p3)
+{
+    g_ui_template_tone_family_daisy.nav_labels[idx] = title;
+    g_ui_template_tone_family_daisy.subpages[idx].title = title;
+    g_ui_template_tone_family_daisy.subpages[idx].param_bank.params[0] = p0;
+    g_ui_template_tone_family_daisy.subpages[idx].param_bank.params[1] = p1;
+    g_ui_template_tone_family_daisy.subpages[idx].param_bank.params[2] = p2;
+    g_ui_template_tone_family_daisy.subpages[idx].param_bank.params[3] = p3;
+}
+
+static brick6_daisy_model_t ui_page_template_tone_daisy_active_model(void)
+{
+    float model_value = 0.0f;
+    if (param_registry_get_track_value(PARAM_DAISY_MODEL, ui_get_active_track(), &model_value) == 0U)
+    {
+        return BRICK6_DAISY_MODEL_OSC;
+    }
+
+    uint8_t model = (uint8_t)((model_value < 0.0f) ? 0.0f : model_value + 0.5f);
+    if (model >= (uint8_t)BRICK6_DAISY_MODEL_COUNT)
+    {
+        model = 0U;
+    }
+    return (brick6_daisy_model_t)model;
+}
+
+static void ui_page_template_tone_sync_daisy_family(void)
+{
+    ui_page_template_tone_daisy_set_subpage(0U, "P1", PARAM_DAISY_MODEL, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_daisy_set_subpage(1U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_daisy_set_subpage(2U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_daisy_set_subpage(3U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+
+    switch (ui_page_template_tone_daisy_active_model())
+    {
+        case BRICK6_DAISY_MODEL_OSC:
+            ui_page_template_tone_daisy_set_subpage(0U, "OSC", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_VAR_SAW:
+            ui_page_template_tone_daisy_set_subpage(0U, "VSAW", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_VAR_SHAPE:
+            ui_page_template_tone_daisy_set_subpage(0U, "VSHP", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_DAISY_PARAM3);
+            ui_page_template_tone_daisy_set_subpage(1U, "SYNC", PARAM_DAISY_PARAM4, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_FM2:
+            ui_page_template_tone_daisy_set_subpage(0U, "FM2", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_FORMANT:
+            ui_page_template_tone_daisy_set_subpage(0U, "FORM", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_VOSIM:
+            ui_page_template_tone_daisy_set_subpage(0U, "VOSIM", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_DAISY_PARAM3);
+            break;
+        case BRICK6_DAISY_MODEL_Z_OSC:
+            ui_page_template_tone_daisy_set_subpage(0U, "ZOSC", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_DAISY_PARAM3);
+            break;
+        case BRICK6_DAISY_MODEL_OSC_BANK:
+            ui_page_template_tone_daisy_set_subpage(0U, "BANK1", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_DAISY_PARAM3);
+            ui_page_template_tone_daisy_set_subpage(1U, "BANK2", PARAM_DAISY_PARAM4, PARAM_DAISY_PARAM5, PARAM_DAISY_PARAM6, PARAM_DAISY_PARAM7);
+            ui_page_template_tone_daisy_set_subpage(2U, "GAIN", PARAM_DAISY_PARAM8, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case BRICK6_DAISY_MODEL_HARMONIC:
+            ui_page_template_tone_daisy_set_subpage(0U, "H1", PARAM_DAISY_MODEL, PARAM_DAISY_PARAM1, PARAM_DAISY_PARAM2, PARAM_DAISY_PARAM3);
+            ui_page_template_tone_daisy_set_subpage(1U, "H2", PARAM_DAISY_PARAM4, PARAM_DAISY_PARAM5, PARAM_DAISY_PARAM6, PARAM_DAISY_PARAM7);
+            ui_page_template_tone_daisy_set_subpage(2U, "H3", PARAM_DAISY_PARAM8, PARAM_DAISY_PARAM9, PARAM_DAISY_PARAM10, PARAM_DAISY_PARAM11);
+            ui_page_template_tone_daisy_set_subpage(3U, "H4", PARAM_DAISY_PARAM12, PARAM_DAISY_PARAM13, PARAM_DAISY_PARAM14, PARAM_DAISY_PARAM15);
+            break;
+        default:
+            break;
+    }
+}
+
 typedef param_prism_label_value_kind_t ui_prism_value_kind_t;
 typedef param_prism_param_label_t ui_prism_param_label_t;
 
@@ -188,6 +279,12 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
 static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DAISY))
+    {
+        ui_page_template_tone_sync_daisy_family();
+        return &g_ui_template_tone_family_daisy;
+    }
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
             && (g_ui_template_tone_subset != 0U))
@@ -1373,6 +1470,138 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
     }
 }
 
+static float ui_page_template_tone_daisy_ratio(float value, float min_ratio, float max_ratio)
+{
+    if (value < 0.0f)
+    {
+        value = 0.0f;
+    }
+    else if (value > 1.0f)
+    {
+        value = 1.0f;
+    }
+    return min_ratio + ((max_ratio - min_ratio) * value);
+}
+
+static uint8_t ui_page_template_tone_daisy_param_text(param_id_t id,
+                                                      float value,
+                                                      char *out_name,
+                                                      uint32_t out_name_len,
+                                                      char *out_value,
+                                                      uint32_t out_value_len)
+{
+    static const char *const k_model_labels[] = {"OSC", "VAR SAW", "VAR SHAPE", "FM2", "FORMANT", "VOSIM", "Z OSC", "OSC BANK", "HARMONIC"};
+    static const char *const k_osc_wave_labels[] = {"SIN", "TRI", "SAW", "RAMP", "SQR", "BTRI", "BSAW", "BSQR"};
+    const char *name = NULL;
+
+    if (id == PARAM_DAISY_MODEL)
+    {
+        uint8_t model = (uint8_t)((value < 0.0f) ? 0.0f : value + 0.5f);
+        if (model >= (uint8_t)(sizeof(k_model_labels) / sizeof(k_model_labels[0])))
+        {
+            model = 0U;
+        }
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "MODEL");
+        }
+        if ((out_value != NULL) && (out_value_len > 0U))
+        {
+            (void)snprintf(out_value, out_value_len, "%s", k_model_labels[model]);
+        }
+        return 1U;
+    }
+
+    if ((id < PARAM_DAISY_PARAM1) || (id > PARAM_DAISY_PARAM15))
+    {
+        return 0U;
+    }
+
+    const uint8_t param_index = (uint8_t)(id - PARAM_DAISY_PARAM1);
+    const brick6_daisy_model_t model = ui_page_template_tone_daisy_active_model();
+
+    switch (model)
+    {
+        case BRICK6_DAISY_MODEL_OSC:
+            name = (param_index == 0U) ? "WAVE" : ((param_index == 1U) ? "PW" : NULL);
+            break;
+        case BRICK6_DAISY_MODEL_VAR_SAW:
+            name = (param_index == 0U) ? "SHAPE" : ((param_index == 1U) ? "PW" : NULL);
+            break;
+        case BRICK6_DAISY_MODEL_VAR_SHAPE:
+            if (param_index == 0U) { name = "SHAPE"; }
+            else if (param_index == 1U) { name = "PW"; }
+            else if (param_index == 2U) { name = "SYNC"; }
+            else if (param_index == 3U) { name = "SYNC RATIO"; }
+            break;
+        case BRICK6_DAISY_MODEL_FM2:
+            name = (param_index == 0U) ? "RATIO" : ((param_index == 1U) ? "INDEX" : NULL);
+            break;
+        case BRICK6_DAISY_MODEL_FORMANT:
+            name = (param_index == 0U) ? "FORMANT" : ((param_index == 1U) ? "PHASE" : NULL);
+            break;
+        case BRICK6_DAISY_MODEL_VOSIM:
+            if (param_index == 0U) { name = "FORMANT 1"; }
+            else if (param_index == 1U) { name = "FORMANT 2"; }
+            else if (param_index == 2U) { name = "SHAPE"; }
+            break;
+        case BRICK6_DAISY_MODEL_Z_OSC:
+            if (param_index == 0U) { name = "FORMANT"; }
+            else if (param_index == 1U) { name = "SHAPE"; }
+            else if (param_index == 2U) { name = "MODE"; }
+            break;
+        case BRICK6_DAISY_MODEL_OSC_BANK:
+            if (param_index < 7U) { static const char *const k_reg[] = {"REG 1", "REG 2", "REG 3", "REG 4", "REG 5", "REG 6", "REG 7"}; name = k_reg[param_index]; }
+            else if (param_index == 7U) { name = "GAIN"; }
+            break;
+        case BRICK6_DAISY_MODEL_HARMONIC:
+            if (param_index == 0U) { name = "FIRST"; }
+            else if (param_index < 15U) { static const char *const k_h[] = {"", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14"}; name = k_h[param_index]; }
+            break;
+        default:
+            break;
+    }
+
+    if (name == NULL)
+    {
+        return 0U;
+    }
+
+    if ((out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "%s", name);
+    }
+    if ((out_value != NULL) && (out_value_len > 0U))
+    {
+        if ((model == BRICK6_DAISY_MODEL_OSC) && (param_index == 0U))
+        {
+            uint8_t wave = (uint8_t)((value * 7.0f) + 0.5f);
+            if (wave > 7U) { wave = 0U; }
+            (void)snprintf(out_value, out_value_len, "%s", k_osc_wave_labels[wave]);
+        }
+        else if (((model == BRICK6_DAISY_MODEL_VAR_SHAPE) && (param_index == 2U)))
+        {
+            (void)snprintf(out_value, out_value_len, "%s", (value >= 0.5f) ? "ON" : "OFF");
+        }
+        else if (((model == BRICK6_DAISY_MODEL_VAR_SHAPE) && (param_index == 3U))
+                || ((model == BRICK6_DAISY_MODEL_FM2) && (param_index == 0U))
+                || ((model == BRICK6_DAISY_MODEL_FORMANT) && (param_index == 0U))
+                || ((model == BRICK6_DAISY_MODEL_VOSIM) && (param_index <= 1U))
+                || ((model == BRICK6_DAISY_MODEL_Z_OSC) && (param_index == 0U)))
+        {
+            const float ratio = (model == BRICK6_DAISY_MODEL_FM2)
+                ? ui_page_template_tone_daisy_ratio(value, 0.25f, 8.0f)
+                : ui_page_template_tone_daisy_ratio(value, 0.5f, (param_index == 1U && model == BRICK6_DAISY_MODEL_VOSIM) ? 12.0f : 8.0f);
+            (void)snprintf(out_value, out_value_len, "%.2fx", ratio);
+        }
+        else if ((model == BRICK6_DAISY_MODEL_HARMONIC) && (param_index == 0U))
+        {
+            (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(1U + (uint8_t)((value * 15.0f) + 0.5f)));
+        }
+    }
+    return 1U;
+}
+
 static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 param_id_t id,
                                                 float value,
@@ -1382,6 +1611,14 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DAISY)
+            && (ui_page_template_tone_daisy_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
+    {
+        (void)slot;
+        return 1U;
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE))
     {
@@ -1816,6 +2053,10 @@ void ui_page_template_tone_register_families(void)
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_STACK))
             {
                 family_template = &g_ui_template_tone_family_stack;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_DAISY))
+            {
+                family_template = &g_ui_template_tone_family_daisy;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_RAM))
             {

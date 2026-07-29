@@ -1,5 +1,14 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-28 - TONE Synth/Daisy catalogue generique
+
+- `PARAM_DAISY_MODEL` et `PARAM_DAISY_PARAM1..15` ajoutent le stockage TONE canonique du moteur `Synth/Daisy`.
+- Les bases vivent dans `track_tone_sound_state.daisy`; `param_registry` les lit/ecrit comme les autres TONE track-aware et `param_backend_apply_tone_daisy()` projette les writes vers `brick6_daisy_runtime`.
+- Les 15 params generiques restent normalises `0..1`; leur nom musical depend du `MODEL` courant et appartient a Z5, afin d'eviter un catalogue parallele par algorithme.
+- Le cache runtime `g_param_runtime_track_values` passe en `SEQ_STATE_D2` comme son masque de validite pour absorber la croissance de `PARAM_COUNT` sans saturer `RAM_D3`; ce cache reste non persistant et non autoritatif.
+- Les p-locks TONE Daisy passent par les slots `TRACK_RUNTIME_TYPE_DAISY` existants. Les destinations Matrix Daisy sont publiees dynamiquement par modele actif: params continus uniquement, `MODEL`, `WAVE`, `SYNC` et `FIRST` exclus.
+- Un write `PARAM_DAISY_MODEL` invalide le cache destination Matrix de la track pour que la liste MOD suive le layout TONE courant.
+
 ## Addendum 2026-07-28 - TONE Prism dual-osc
 
 - Le bloc canonique Prism dans `track_tone_sound_state.prism` est maintenant indexe par oscillateur pour `MODEL/FINE/TUNE/FM AMT/PARAM1/AMOD/PARAM2/PHASE/LVL`.
@@ -519,9 +528,9 @@ Call-sites critiques:
 - Le delay n'est pas un `fx_pool` slot et ne cree pas d'autorite par track.
 - `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont globaux et filtrent l'entree stereo de la reverb globale en pre-reverb.
 - Leur apply passe par `apply_mix_reverb_hpf/lpf` puis `mixer_set_reverb_hpf/lpf`; `0.0` reste neutre pour les deux params.
-- `PARAM_MIX_REVERB_TYPE` reste un tombstone global `0/RevB` pour ne pas renumeroter `PARAM_COUNT`; il ne choisit plus de backend runtime.
-- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/RevB`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` est converti en secondes par le setter mixer.
-- `RevB` consomme les params globaux utiles (`Wet`, `Size`, `Decay`, `PreD`, `LPF`) sans nouveau slot `PARAM_COUNT`; `Surr` reste reserve et neutre pour ce backend.
+- Les anciens params `PARAM_MIX_REVERB_TYPE` et `PARAM_MIX_REVERB_SURR` sont retires du layout courant: le premier ne choisissait aucun backend, le second n'avait aucun effet DSP.
+- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` est converti en secondes par le setter mixer.
+- `RevB` consomme les params globaux utiles (`Wet`, `Size`, `Decay`, `PreD`, `LPF`) sans choix de backend.
 
 ## 28. Contrat send2 delay DUAL
 
