@@ -24,6 +24,7 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 };
 
 static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
+static uint8_t g_ui_last_subpage_by_page[UI_PAGE_COUNT];
 
 static void ui_navigation_refresh_active_track_runtime(void)
 {
@@ -33,15 +34,23 @@ static void ui_navigation_refresh_active_track_runtime(void)
 
 static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 {
-    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
+    switch (page_id)
     {
-        if (g_ui_nav_rules[i].target_page == page_id)
-        {
+        case UI_PAGE_TEMPLATE_COLORS:
+        case UI_PAGE_TEMPLATE_CFG:
+        case UI_PAGE_TEMPLATE_TONE:
+        case UI_PAGE_TEMPLATE_MOD:
+        case UI_PAGE_TEMPLATE_KEYBOARD:
+        case UI_PAGE_TEMPLATE_ARP:
+        case UI_PAGE_TEMPLATE_SEQ:
+        case UI_PAGE_TEMPLATE_MIX:
+        case UI_PAGE_TEMPLATE_PLAY:
+        case UI_PAGE_TEMPLATE_VCA:
             return 1U;
-        }
-    }
 
-    return 0U;
+        default:
+            return 0U;
+    }
 }
 
 static uint8_t ui_navigation_is_page_available(uint8_t page_id)
@@ -180,27 +189,6 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
     if (ui_navigation_is_page_available(page_id) == 0U)
     {
         return;
-    }
-
-    if (page_id == UI_PAGE_TEMPLATE_MIX)
-    {
-        ui_page_template_mix_open_primary();
-    }
-    else if (page_id == UI_PAGE_TEMPLATE_COLORS)
-    {
-        ui_page_template_colors_open_primary();
-    }
-    else if (page_id == UI_PAGE_TEMPLATE_TONE)
-    {
-        ui_page_template_tone_open_primary();
-    }
-    else if (page_id == UI_PAGE_TEMPLATE_PLAY)
-    {
-        ui_page_template_play_open_primary();
-    }
-    else if (page_id == UI_PAGE_TEMPLATE_MOD)
-    {
-        ui_page_template_mod_open_primary();
     }
 
     g_ui_requested_ensemble_page = page_id;
@@ -365,4 +353,33 @@ void ui_navigation_sync_created_track_destination(void)
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
     }
+}
+
+void ui_navigation_remember_template_subpage(uint8_t page_id, uint8_t subpage_index)
+{
+    if ((ui_navigation_is_ensemble_page(page_id) == 0U) || (subpage_index >= 4U))
+    {
+        return;
+    }
+
+    g_ui_last_subpage_by_page[page_id] = subpage_index;
+}
+
+void ui_navigation_restore_current_template_subpage(void)
+{
+    const uint8_t page_id = ui_page_get_id();
+    if (ui_navigation_is_ensemble_page(page_id) == 0U)
+    {
+        return;
+    }
+
+    const ui_page_t *page = ui_page_get();
+    if ((page == 0) || (page->context == 0))
+    {
+        return;
+    }
+
+    g_ui_requested_ensemble_page = page_id;
+    ui_template_page_select_nearest_subpage((ui_template_page_state_t *)page->context,
+                                            g_ui_last_subpage_by_page[page_id]);
 }

@@ -1,5 +1,11 @@
 # Embedded Audio Engine - Product Overview
 
+## Synth/DELUGE - SKEW et WIDTH
+
+- `SINE`, `TRI`, `SAW`, `A-SAW`, `A-SQUARE`: SKEW manuel `0..100 %`, neutre a `0 %`.
+- `SQUARE`: WIDTH `0..100 %`, carre normal a `50 %`.
+- La Matrix peut toujours moduler SKEW sous zero; seul le reglage manuel est unipolaire.
+
 ## 1. Vision
 
 Standalone embedded audio machine for live use.
@@ -80,7 +86,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Prism`, `Wave`, `Stack`, `Daisy`
+- `Synth`: `Prism`, `Wave`, `Stack`, `DELUGE`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
@@ -157,12 +163,13 @@ This separation is intentional. Do not add a second authority for the same state
 - `OSC1/2 WAVE` pages show a wide precomputed wavetable preview with `START/END` zone and `POS`; UI rendering never scans the full table.
 - The track identity and runtime engine are separate from `Synth/Prism`.
 
-### Daisy
-- `Synth/Daisy` is a separate mono 48 kHz runtime using selected DaisySP synthesis sources.
-- TONE always starts with `MODEL` and exposes only the slots used by the selected model.
-- Models: `OSC`, `VAR SAW`, `VAR SHAPE`, `FM2`, `FORMANT`, `VOSIM`, `Z OSC`, `OSC BANK`, `HARMONIC`.
-- `OSC BANK` and `HARMONIC` normalize their internal levels to limit overloads.
-- Matrix exposes only continuous parameters valid for the active model; `MODEL` and discrete slots stay excluded.
+### DELUGE
+- `Synth/DELUGE` is a mono 48 kHz GPL-3.0 port of the Synthstrom Deluge basic oscillators, adapted from NEON to bounded scalar Cortex-M7 fixed-point rendering.
+- Upstream reference: `SynthstromAudible/DelugeFirmware` commit `0d9cbf0440f0555e2544cc1eb019b31675637008`.
+- Models: `SINE`, `TRI`, `SQUARE`, `A-SQUARE`, `SAW`, `A-SAW`; default `SQUARE`.
+- TONE pages: `MAIN` (`MODEL`, `LEVEL`, `TUNE`, `FINE`) and `SHAPE` (`WIDTH` for `SQUARE`, `SKEW` for the other five models, `PHASE`, `RETRIG`, empty).
+- The port keeps Deluge Q32 phase, sine/triangle and 20-band anti-alias table selection, analog square and mystery-synth analog saw tables, PWM and non-square read distortion.
+- Matrix exposes `LEVEL`, `TUNE`, `FINE`, `WIDTH/SKEW`; `MODEL`, `PHASE`, `RETRIG` remain discrete/structural.
 
 ### Sequencer
 - integrated sequencer

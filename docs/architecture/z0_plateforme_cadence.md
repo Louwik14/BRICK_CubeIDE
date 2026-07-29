@@ -1,9 +1,15 @@
 # Z0 - Plateforme / Cadence
 
-## Addendum 2026-07-28 - init runtime Synth/Daisy
+## Addendum 2026-07-29 - copie ITCM au reset
 
-- `brick6_app_init()` initialise maintenant `brick6_daisy_runtime_init()` apres Prism, Stack et Wave, avant `brick6_audio_runtime_init()` et avant `audio_start()`.
-- Daisy reste un runtime Synth separe; cet init ne modifie pas l'ordre ni la semantique des runtimes Prism/Braids, Stack ou Wave.
+- Les linker scripts Flash low-cost et premium exposent `.itcm_text` en execution ITCM `0x00000000` avec image de chargement en Flash, symboles `__itcm_text_load__`, `__itcm_text_start__`, `__itcm_text_end__`, et entree `.itcm_text` / `.itcm_text.*`.
+- Les startups reellement compilees `Board/LowCost/Generated/Startup/startup_stm32h743xx.s` et `Board/Premium/Generated/Startup/startup_stm32h743xx.s` copient `.itcm_text` depuis Flash vers ITCM juste apres `SystemInit()` et avant la copie `.data`, le zero `.bss`, les constructeurs C++ et `main()`.
+- Les caches I/D ne sont actives que plus tard dans `main()`, donc cette copie ne necessite pas de maintenance cache locale. L'MPU courant ne declare pas de region ITCM XN et `HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT)` garde l'ITCM executable par defaut.
+
+## Addendum 2026-07-29 - init runtime Synth/DELUGE
+
+- `brick6_app_init()` initialise `brick6_deluge_runtime_init()` apres Prism, Stack et Wave, avant `brick6_audio_runtime_init()` et `audio_start()`.
+- DELUGE remplace en place l'ancien runtime de test Daisy; l'ordre et la semantique des autres moteurs restent inchanges.
 
 ## 1. Perimetre
 

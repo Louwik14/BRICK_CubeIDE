@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Core/brick6_sampler_runtime.h"
-#include "Core/brick6_daisy_runtime.h"
+#include "Core/brick6_deluge_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
@@ -53,7 +53,7 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
                 case UI_TRACK_TYPE_PRISM: return KIT_V1_LABEL_PR;
                 case UI_TRACK_TYPE_WAVE: return KIT_V1_LABEL_WV;
                 case UI_TRACK_TYPE_STACK: return KIT_V1_LABEL_SK;
-                case UI_TRACK_TYPE_DAISY: return KIT_V1_LABEL_DY;
+                case UI_TRACK_TYPE_DELUGE: return KIT_V1_LABEL_DL;
                 default: return KIT_V1_LABEL_UNKNOWN;
             }
 
@@ -608,8 +608,8 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
     {
         keyboard_engine_all_notes_off_for_track(track);
         brick6_sampler_runtime_reset_track(track);
-        brick6_daisy_runtime_all_notes_off(track);
-        brick6_daisy_runtime_reset_instance(track);
+        brick6_deluge_runtime_all_notes_off(track);
+        brick6_deluge_runtime_reset_instance(track);
     }
 
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
@@ -786,7 +786,7 @@ const char *kit_v1_label_code_short_name(uint8_t label_code)
         case KIT_V1_LABEL_PR: return "PR";
         case KIT_V1_LABEL_WV: return "WV";
         case KIT_V1_LABEL_SK: return "SK";
-        case KIT_V1_LABEL_DY: return "DY";
+        case KIT_V1_LABEL_DL: return "DL";
         case KIT_V1_LABEL_RM: return "RM";
         case KIT_V1_LABEL_ST: return "ST";
         case KIT_V1_LABEL_ML: return "ML";

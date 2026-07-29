@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp:7:6:void daisysp::FormantOscillator::Init(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp:20:7:float daisysp::FormantOscillator::Process()	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp:59:6:void daisysp::FormantOscillator::SetFormantFreq(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp:68:6:void daisysp::FormantOscillator::SetCarrierFreq(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp:77:6:void daisysp::FormantOscillator::SetPhaseShift(float)	0	static

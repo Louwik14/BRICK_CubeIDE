@@ -1,4 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:38:41:ui_page_template_mod_pick_custom_widget	12	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:83:16:ui_page_template_mod_param_text	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:33:36:ui_page_template_mod_resolve_family	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:122:6:ui_page_template_mod_register_families	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:69:16:ui_page_template_mod_is_lfo_param	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:88:41:ui_page_template_mod_pick_custom_widget	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:135:26:ui_page_template_mod_pick_widget	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:151:16:ui_page_template_mod_param_text	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:59:36:ui_page_template_mod_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:200:6:ui_page_template_mod_open_primary	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:207:6:ui_page_template_mod_toggle_subset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c:214:6:ui_page_template_mod_register_families	16	static

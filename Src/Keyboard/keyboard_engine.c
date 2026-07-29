@@ -19,7 +19,7 @@
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_daisy_runtime.h"
+#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
@@ -218,9 +218,9 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     {
         brick6_wave_runtime_all_notes_off(ctx->instance_id);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
     {
-        brick6_daisy_runtime_all_notes_off(ctx->instance_id);
+        brick6_deluge_runtime_all_notes_off(ctx->instance_id);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
@@ -370,15 +370,15 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
             brick6_wave_runtime_note_off(ctx->instance_id, note);
         }
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
     {
         if (is_note_on != 0U)
         {
-            brick6_daisy_runtime_note_on(ctx->instance_id, note, velocity);
+            brick6_deluge_runtime_note_on(ctx->instance_id, note, velocity);
         }
         else
         {
-            brick6_daisy_runtime_note_off(ctx->instance_id, note);
+            brick6_deluge_runtime_note_off(ctx->instance_id, note);
         }
     }
 }

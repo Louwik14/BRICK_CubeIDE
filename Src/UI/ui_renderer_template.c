@@ -6,6 +6,7 @@
 #include "cpu_load.h"
 #include "drv_display.h"
 #include "font.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "mixer.h"
 #include "param_registry.h"
 #include "ui_core.h"
@@ -4401,7 +4402,12 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
                        (unsigned long)((bpm_milli % 1000U) / 100U));
     }
 
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
     const char *hall_mode_label = ui_get_hall_mode_short_label();
+    if (ui_hall_mode_resolve_effective_view(active_track, hall_mode) == UI_HALL_MODE_VIEW_KEYBOARD)
+    {
+        hall_mode_label = keyboard_runtime_get_omnichord() ? "CHORD" : "KBD";
+    }
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
 
     ui_renderer_template_draw_brick_frame(0, 0, 15, 15);

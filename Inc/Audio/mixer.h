@@ -109,6 +109,7 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
 void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_vca_all_notes_off(uint32_t track_id);
 uint8_t mixer_track_vca_is_running(uint32_t track_id);
+uint8_t mixer_track_vca_requires_source(uint32_t track_id);
 float mixer_get_track_vca_env_value(uint32_t track_id);
 float mixer_get_track_filter_env_value(uint32_t track_id);
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);

@@ -50,7 +50,7 @@ Lit ce document si le sujet touche :
 - mixage
 - taps recorder Looper dans le pipeline audio
 - playback Looper via pages RAM pretes dans le pipeline mixer
-- runtimes synth mono externes Prism / Stack / Wave / Daisy et leurs imports DSP
+- runtimes synth mono externes Prism / Stack / Wave / DELUGE et leurs imports DSP
 - metronome MAIN monitor-only post-capture/post-MasterFX
 
 Doc :
@@ -77,7 +77,7 @@ Lit ce document si le sujet touche :
 - modulation LFO
 - coexistence global / track-aware / legacy
 - modèle paramétrique par track
-- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + Daisy + MIDI simple + TRX BD reserve + BD Analog)
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + DELUGE + MIDI simple + TRX BD reserve + BD Analog)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
@@ -193,10 +193,12 @@ Documents conserves pour tracabilite uniquement:
 
 ## 7. Addendum 2026-05-13
 
-## Addendum 2026-07-28 - Synth/Daisy etape 1
+## Addendum 2026-07-29 - remplacement Synth/Daisy par Synth/DELUGE
 
-- Z2/Z5 ajoutent l'identite structurelle `Synth/Daisy` pour le futur moteur DaisySP: type CFG distinct, runtime engine reserve, instance stable par track.
-- Depuis les etapes runtime/catalogue/integration, Z1 rend les sources DaisySP importees, Z3/Z5 exposent `MODEL` + 15 params TONE generiques a layout dynamique, Z3 publie les destinations Matrix continues Daisy et Z6 capture/restaure le bloc TONE Daisy courant.
+- Z1 remplace le moteur de test DaisySP par un port GPL-3.0 des oscillateurs basic-wave Deluge, scalarise pour Cortex-M7, a phase/tables fixed-point et comportement fixe non degrade.
+- La reference figee du port est le commit upstream `0d9cbf0440f0555e2544cc1eb019b31675637008` de `SynthstromAudible/DelugeFirmware`.
+- Z2 conserve le point d'ownership mono par track sous les nouvelles identites DELUGE; Z3 porte sept params dedies, Z5 deux pages TONE, Z6 leur snapshot sans migration prototype.
+- L'ancien runtime/math/oscillateur Daisy et les sources `Drivers/Daisy_SP/Source/Synthesis` exclusives sont retires; la Utility DaisySP reste consommee par le compresseur et le Moog ladder, hors moteur DELUGE.
 
 ## Addendum 2026-07-26 - MOD operators Matrix
 

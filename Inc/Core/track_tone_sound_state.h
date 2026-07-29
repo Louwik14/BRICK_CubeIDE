@@ -92,8 +92,13 @@ typedef struct
     struct
     {
         float model;
-        float param[15];
-    } daisy;
+        float level;
+        float tune;
+        float fine;
+        float width;
+        float phase;
+        float retrig;
+    } deluge;
     float midi_program;
     float midi_cc[12];
     struct

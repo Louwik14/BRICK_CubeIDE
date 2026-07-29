@@ -1,19 +1,24 @@
 # Z5 - UI / Navigation / Interaction
 
-## Addendum 2026-07-28 - pages TONE Synth/Daisy dynamiques
+## Addendum 2026-07-29 - affichage Deluge SKEW/WIDTH
 
-- `Synth/Daisy` expose maintenant une famille TONE resolue dynamiquement depuis `PARAM_DAISY_MODEL`.
-- Le slot 1 de la premiere page reste toujours `MODEL`; les slots/pages inutiles sont neutralises par `PARAM_COUNT`, donc non selectionnables au lieu d'etre remplis artificiellement.
-- Layouts actifs: `OSC`, `VAR SAW`, `VAR SHAPE`, `FM2`, `FORMANT`, `VOSIM`, `Z OSC`, `OSC BANK` et `HARMONIC`, avec au plus quatre pages de quatre slots.
-- Les labels visibles des params Daisy sont derives du modele courant (`WAVE/PW`, ratios, formants, registres, harmoniques, etc.) sans changer les IDs stockes `PARAM_DAISY_PARAM1..15`.
-- Le changement de modele reconstruit la famille TONE et normalise la page active vers une page selectionnable.
-- `MOD/MATRIX DEST` reprend les memes labels dynamiques Daisy pour les params continus du modele actif; les slots structurels/discrets ne sont pas proposes.
+- Sur `TONE/SHAPE`, `SINE`, `TRI`, `SAW`, `A-SAW` et `A-SQUARE` affichent `SKEW 0..100 %`, sans signe ni demi-course negative manuelle.
+- `SQUARE` affiche toujours `WIDTH 0..100 %`; `50 %` est le carre normal.
+- Aucun changement renderer: le texte contextuel et le domaine du registre existants portent cette distinction.
 
-## Addendum 2026-07-28 - catalogue CFG Synth/Daisy etape 1
+## Addendum 2026-07-29 - memoire de page par ensemble
 
-- Le catalogue CFG `Synth` propose maintenant `Prism`, `Wave`, `Stack` et `Daisy`.
-- `Daisy` est expose par les labels `Daisy` / `DASY` comme identite de track reservee au futur moteur DaisySP.
-- Cette etape avait reserve seulement l'identite CFG; les pages TONE Daisy sont maintenant enregistrees par l'addendum dynamique ci-dessus.
+- `ui_navigation` porte une memoire runtime volatile de derniere subpage par ensemble template normal (`CFG`, `COLORS`, `TONE`, `MOD`, `KEYBOARD`, `ARP`, `SEQ`, `MIX`, `PLAY`, `VCA`).
+- Le restore passe par `ui_page_manager` apres `enter()` et selectionne la subpage memorisee via `ui_template_page_select_nearest_subpage()`, avec bornage vers une subpage selectionnable si le layout dynamique a change.
+- `REC`, `KIT`, `PATCH` et `SETTINGS` restent hors memoire d'ensemble: leur ouverture ne modifie pas l'ensemble demande courant et leur retour vers une page template normale relance seulement le restore volatile de cette page.
+
+## Addendum 2026-07-29 - catalogue et pages TONE Synth/DELUGE
+
+- Le catalogue CFG `Synth` propose `Prism`, `Wave`, `Stack`, `DELUGE`; les labels visible/court sont `DELUGE` / `DLUG`.
+- TONE expose seulement deux pages: `MAIN = MODEL, LEVEL, TUNE, FINE` et `SHAPE = WIDTH/SKEW, PHASE, RETRIG, vide`.
+- Le premier label de SHAPE vaut `WIDTH` uniquement pour `SQUARE` et `SKEW` pour `SINE`/`TRI`/`A-SQUARE`/`SAW`/`A-SAW`, sans changer l'identite param stockee.
+- RETRIG reutilise le widget bool ON/OFF. PHASE est affiche en degres et porte le suffixe `FREE` lorsque RETRIG est OFF pour signaler que sa valeur sera seulement consommee par un futur note-on retrigge.
+- Les pages 3/4 restent neutralisees par `PARAM_COUNT`; aucun slot artificiel n'est ajoute.
 
 ## Addendum 2026-07-28 - pages TONE Prism dual-osc
 
@@ -1227,6 +1232,11 @@ Points factuels:
 - Les actions globales de navigation gardent la priorite sous `MUTE`/`MUTE hold`: `SHIFT + STEP`, `SHIFT + HALL` en contexte `KEYBOARD`, et les raccourcis de touches noires sans `SHIFT` en contexte `SEQ` passent par les chemins existants.
 - Pendant `MUTE`, les entrees clavier lisent le mode de jeu sous-jacent memorise a l'entree du mute (`SEQ`, `KEYBOARD` ou `ARP`) via `ui_core_mute_get_passthrough_hall_mode()`. Le rendu conserve le label/LED `MUTE`; seul le routage input clavier utilise ce mode pass-through.
 - Un HALL/STEP de track sans `SHIFT` reste proprietaire du mute et ne descend pas vers la navigation ou le clavier. Un HALL/STEP avec `SHIFT` n'est pas capture par `ui_core_mute`; la suppression de note posee par le raccourci continue de bloquer uniquement l'evenement de note correspondant.
+
+## Addendum 2026-07-29 - priorite raccourcis Hall en ARP
+
+- En low-cost, les raccourcis des touches noires `SHIFT + Hall` reutilisent la meme autorite que le mode `KEYBOARD` aussi lorsque le mode effectif est `ARP`.
+- Le press consomme la touche avant routage musical vers l'arp et le release correspondant reste consomme; sans `SHIFT`, le jeu ARP reste inchange.
 
 ## Addendum 2026-07-28 - decision UI SEQ LINK
 

@@ -1,21 +1,46 @@
 # Z1 - Audio Hard-RT et Mix
 
-## Addendum 2026-07-28 - controles runtime Synth/Daisy
+## Addendum 2026-07-29 - domaine manuel SKEW Deluge
 
-- `brick6_daisy_runtime` consomme maintenant `MODEL` et 15 params normalises depuis Z3, sans allocation ni I/O dans le rendu IRQ.
-- Les conversions couteuses de ratio/frequence restent appliquees aux writes ou au note-on; la boucle sample lit l'etat d'instance deja projete.
-- `OSC BANK` et `HARMONIC` normalisent leurs gains internes avant rendu pour limiter les saturations quand plusieurs registres/harmoniques sont ouverts.
-- Les modeles Daisy restent bases sur les implementations DaisySP importees; le backend `brick6_daisy_math` demeure la frontiere trigonometrie/MIDI-to-frequency remplacable.
-- La Matrix applique les destinations Daisy continues par setter runtime direct, sans mutation de la base canonique pendant la modulation.
+- `SINE`, `TRI`, `SAW`, `A-SAW` et `A-SQUARE` consomment un SKEW manuel unipolaire `0..100 %`: `0 %` est neutre et `100 %` la deformation maximale.
+- La conversion des 51 positions manuelles reprend exactement `computeFinalValueForHalfPrecisionMenuItem()` du commit Deluge fige: `0 -> 0`, les positions intermediaires utilisent `(menu * (2147483648 / 25)) >> 1`, et `50 -> INT32_MAX`.
+- La Matrix conserve un resultat SKEW bipolaire continu, clampe seulement a `[-1,+1]` avant conversion Q31; le cote negatif reste donc accessible par modulation.
+- `SQUARE` garde son interpretation WIDTH absolue `0..100 %`, avec le carre normal a `50 %` et une conversion signee autour de ce centre.
 
-## Addendum 2026-07-28 - runtime audio Synth/Daisy et import DaisySP
+## Addendum 2026-07-29 - avance groupee exacte ENV FLT
 
-- `brick6_daisy_runtime` branche `TRACK_RUNTIME_ENGINE_DAISY` dans Z1 comme moteur mono externe separe de Prism, Stack et Wave, avec instances statiques `instance_id == track_id` a 48 kHz.
-- Les sources DaisySP importees sous `Drivers/Daisy_SP/Source/Synthesis` couvrent uniquement OSC, VAR SAW, VAR SHAPE, FM2, FORMANT, VOSIM, Z OSC, OSC BANK et HARMONIC, avec licence conservee sous `Drivers/Daisy_SP/LICENSE`.
-- Le build liste explicitement les `.cpp` DaisySP consommes; `Oscillator` reutilise l'implementation DaisySP historique deja presente sous `Src/Audio/oscillator.cpp` au lieu de compiler un doublon.
-- Le rendu Daisy utilise le chemin mono-native du mixer (`mixer_begin_external_mono_native` / fallback submit), sans allocation, I/O, attente ni scan non borne dans l'IRQ; les notes viennent du scheduler PLAY et du clavier via le descriptor Z2.
-- La fondation initiale exposait seulement le modele par defaut `OSC`; le catalogue TONE Daisy est maintenant projete vers ce runtime par l'addendum controle ci-dessus.
-- `brick6_daisy_math` isole les appels trigo/MIDI-to-frequency utilises par le runtime pour permettre un remplacement ulterieur par la LUT sinus Q15 sans reecrire les moteurs.
+- Le VCA PEAK conserve strictement son appel `env_adsr_process_step()` par sample et son gain sample-rate.
+- ENV FLT conserve ses points de cutoff historiques au premier sample de chaque chunk de 8 et sa valeur terminale exposee a la Matrix, mais avance les sept etapes intermediaires par une primitive groupee exacte.
+- La primitive groupee reproduit l'etat Q32/Q15 terminal de la boucle sample, y compris les franchissements ATTACK/DECAY/SUSTAIN/RELEASE/IDLE; un etat ou increment non canonique reprend volontairement l'ancien calcul sample par sample.
+- Les segments audio raccourcis par les evenements sequenceur gardent leurs longueurs et leurs points de cutoff propres; aucune interpolation ni approximation n'est ajoutee.
+
+## Addendum 2026-07-29 - optimisation silence et preparation Synth/DELUGE
+
+- DELUGE interroge l'etat reel de l'enveloppe VCA PEAK avant de reserver une source mixer. Apres note-off, le renderer reste actif pendant toute la release puis devient analytique lorsque la VCA atteint `IDLE`; une VCA desactivee exige toujours la source.
+- Les blocs sans voix, a `LEVEL=0` stable ou apres release terminee n'ouvrent plus le chemin mono-native. La phase Q32 conserve exactement son avance par `phase_increment * frames`; la fin analytique d'une rampe LEVEL rejoint sa cible comme le bloc rendu.
+- NOTE/TUNE/FINE utilisent une preparation dirty et une cle de pitch effectif en cents. MODEL conserve son type oscillateur natif et WIDTH/SKEW sa conversion Q31; Matrix continue d'appliquer ses valeurs avant la preparation du bloc DELUGE.
+- Un LEVEL stable conserve l'ordre de conversion et des multiplications de sortie mais evite la division et l'accumulation de rampe. Aucun chemin oscillateur, table, interpolation, arrondi ou saturation Deluge n'est modifie.
+
+## Addendum 2026-07-29 - placement ITCM noyau REVB
+
+- Le hot path REVB global place en ITCM uniquement `fx_reverb_revb_global_process_send_mono_to_stereo_wet()` et `mifx::Reverb::Process(const float*, float*, float*, size_t)` via les macros centralisees `ITCM_TEXT` / `ITCM_TEXT_NAMED` de `Inc/Storage/memory_layout.h`.
+- Les buffers de delay, predelay, etats mutables, init/reset/setters et mapping parametres restent dans leurs regions existantes; aucun calcul sonore, parametre ou rendu n'est modifie.
+- Verification Release/Premium du 2026-07-29: `.itcm_text` occupe `0x488` octets (1160 B), soit 64 KiB - 1160 B = 64376 B restants, dans les deux variantes. La boucle DSP `mifx::Reverb::Process()` est hors ligne et resident en ITCM a `0x00000000`; le wrapper REVB est a `0x00000358`.
+- Le gain CPU doit etre mesure uniquement sur la machine avec le CPU Load global, reverb seule activee puis desactivee; aucune instrumentation DWT locale n'appartient a ce chemin.
+
+## Addendum 2026-07-29 - runtime audio Synth/DELUGE
+
+- `brick6_deluge_runtime` remplace en place l'ancien moteur Synth/Daisy et reste un moteur mono externe a instances statiques `instance_id == track_id`, rendu dans le chemin mixer mono-native existant.
+- Le snapshot upstream de reference est `SynthstromAudible/DelugeFirmware` commit `0d9cbf0440f0555e2544cc1eb019b31675637008` (main, 2026-05-13). Les cinq fichiers de grandes tables sont identiques a ce snapshot hors include local; la LUT sinus et les six tables triangle sont extraites sans changement de valeurs. Le renderer est une adaptation scalaire auditee, pas un blob source identique.
+- Le PWM conserve la semantique d'interpolation Q15 du chemin normal pre-refactor Argon, recoupee au commit `530ca42171b3e5499d918309126ef6979e05b13e`; le snapshot principal reste l'autorite pour les tables, seuils, associations et chemins oscillateur.
+- Le DSP porte directement les chemins basic-wave GPL-3.0 de `SynthstromAudible/DelugeFirmware`: phase Q32 avec wrap naturel, LUT sinus, triangle mathematique sous le seuil `69273666`, tables triangle anti-alias dans l'aigu, selection `getTableNumber()` sur 20 bandes, tables saw/square, `analogSquareTables` et `analogSawTables` mystery synth A/B.
+- Le comportement normal non degrade est fixe: equivalent `cpuDireness=0`, donc chemins mathematiques Deluge aux bandes basses et tables aux bandes prevues; aucune adaptation sonore a la charge globale.
+- Les operations NEON/Argon sont remplacees par des boucles scalaires Cortex-M7 qui conservent les conventions Q31/Q32, l'interpolation, le PWM square, la correction de bande PWM (`phaseIncrement * 0.6`) et la distorsion WIDTH/SKEW des autres formes. La difference obligatoire est l'ordonnancement scalaire au lieu des groupes SIMD de quatre samples.
+- Les tables `const int16_t` sont liees en `.rodata` Flash. Seuls l'etat chaud par instance et un scratch Q31 borne a `AUDIO_BLOCK_SIZE` vivent en RAM rapide; aucune allocation, I/O, FFT ou operation non bornee n'entre dans l'IRQ.
+- BRICK genere les increments Q32 pour 48 kHz par interpolation semitone/cents bornee, sans reprendre de constante de pitch 44,1 kHz. Les seuils Deluge exprimes en phase increment restent inchanges car ils sont deja dans le domaine Q32.
+- `LEVEL` est lisse dans le bloc avant conversion vers le buffer float BRICK. Le note-off conserve la source pendant la release de l'enveloppe VCA externe; `all-notes-off` coupe explicitement cette source. En mode `RETRIG=OFF`, la phase Q32 continue aussi pendant le silence; en mode `RETRIG=ON`, chaque note-on repart de `PHASE`.
+- Les chemins skew bas en frequence conservent les boucles speciales Deluge du triangle et du saw bruts; les tables triangle aigu restent actives dans le renderer sync scalaire. Les shifts/wraps et produits saturants de l'adaptation sont exprimes sans overflow signe C/C++.
+- L'audit WIDTH/SKEW contre le commit upstream fige confirme que la phase principale Q32 avance toujours de `phaseIncrement * frames`. Les cinq formes non-SQUARE emploient cette phase comme resetter: `SINE`/`TRI`/`SAW`/`A-SAW` font varier la phase de lecture interne de `1x` a `2x` selon `abs(SKEW)`, tandis que `A-SQUARE` la fait varier de `1x` a `0.5x`. A l'extreme, les quatre premieres formes rendent explicitement deux cycles par cycle principal et peuvent donc donner l'impression de `+12 st`, sans modifier la frequence de la phase principale; ce doublement n'existe pas dans l'arithmetique `A-SQUARE`. `SQUARE` reste le chemin PWM separe.
 
 ## Addendum 2026-07-28 - Prism dual-osc Braids
 
@@ -371,9 +396,9 @@ Placement memoire valide pour la reverb SEND runtime:
 
 Placement code ITCM:
 - `ITCMRAM` est disponible comme region linker dediee au code hot.
-- La macro explicite `AUDIO_CODE_HOT` cible la section `.itcm_text`.
-- Aucune fonction audio n'est placee en ITCM pour l'instant; la passe RevB ITCM a ete retiree faute de gain IRQ attendu.
-- Avant toute future annotation, le mecanisme de copie boot de `.itcm_text` devra etre reinstalle et valide explicitement.
+- Les macros explicites `ITCM_TEXT` / `ITCM_TEXT_NAMED` ciblent `.itcm_text` / `.itcm_text.*`; `AUDIO_CODE_HOT` reste un alias de compatibilite.
+- La copie boot de `.itcm_text` est installee dans les startups LowCost/Premium.
+- REVB utilise actuellement l'ITCM pour son wrapper SEND global et le corps DSP mono de `mifx::Reverb::Process()`.
 
 Granular / fx_pool:
 - Le backend granular legacy de `fx_pool` est retire du produit: plus de buffers `grain_buffer_l/r`, plus de storage granular SDRAM, et `FX_GRANULAR` reste seulement un tombstone refuse par `fx_pool_activate_slot()`.

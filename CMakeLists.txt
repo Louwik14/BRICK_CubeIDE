@@ -356,18 +356,6 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/utils/*.cpp"
 )
 
-set(DAISY_SP_SYNTHESIS_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/fm2.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/formantosc.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/oscillatorbank.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp"
-)
-
-
-
 # --------------------------------------------------------------------------
 # Exclusions
 # --------------------------------------------------------------------------
@@ -411,7 +399,6 @@ set(ALL_USER_SOURCES
     ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC}
     ${MUTABLE_STMLIB_UTILS_SRC}
-    ${DAISY_SP_SYNTHESIS_SRC}
 )
 
 list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
@@ -448,9 +435,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude
-    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Utility
-    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib

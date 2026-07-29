@@ -68,3 +68,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bri
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1588:6:ui_core_runtime_bridge_sync_active_track_midi_channel	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1593:6:ui_core_runtime_bridge_sync_active_track_midi_source	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1598:6:ui_core_runtime_bridge_post_track_structure_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1603:6:ui_core_runtime_bridge_post_track_creation_from_off	8	static

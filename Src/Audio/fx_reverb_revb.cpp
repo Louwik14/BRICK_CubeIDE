@@ -147,10 +147,11 @@ void fx_reverb_revb_global_set_lpf(float lpf)
     apply_params();
 }
 
+ITCM_TEXT_NAMED("fx_reverb_revb_global")
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
-                                                            float *out_l,
-                                                            float *out_r,
-                                                            uint32_t frames)
+                                                           float *out_l,
+                                                           float *out_r,
+                                                           uint32_t frames)
 {
     if((in == 0) || (out_l == 0) || (out_r == 0))
         return;

@@ -176,7 +176,10 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Hybrid`
 
 #### Pour `Synth`
-- `Plaits`
+- `Prism`
+- `Wave`
+- `Stack`
+- `DELUGE`
 
 #### Pour `Sampler`
 - `RAM`

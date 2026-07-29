@@ -30,6 +30,8 @@
 
 #include "stmlib/stmlib.h"
 
+#include "Storage/memory_layout.h"
+
 #include "fx_revb_engine.h"
 
 namespace mifx {
@@ -48,6 +50,7 @@ namespace mifx {
             diffusion_ = 0.625f;
         }
 
+        ITCM_TEXT_NAMED("mifx_reverb_process_stereo")
         void Process(float *left, float *right, size_t size) {
             // This is the Griesinger topology described in the Dattorro paper
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
@@ -139,6 +142,7 @@ namespace mifx {
             lp_decay_2_ = lp_2;
         }
 
+        ITCM_TEXT_NAMED("mifx_reverb_process_mono")
         void Process(const float* in, float *left, float *right, size_t size) {
             // This is the Griesinger topology described in the Dattorro paper
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).

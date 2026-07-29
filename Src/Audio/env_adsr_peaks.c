@@ -1,5 +1,7 @@
 #include "env_adsr_peaks.h"
 
+#include <stddef.h>
+
 #define ENV_ADSR_Q15_MAX 32767
 #define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu
 #define ENV_ADSR_MAX_SEGMENT_SECONDS 30u
@@ -220,6 +222,110 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
             env->value = 0;
             env->phase = 0;
             env->phase_increment = 0;
+        }
+    }
+
+    return env->value;
+}
+
+int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
+                                       uint32_t steps,
+                                       int16_t *first_value)
+{
+    if(steps == 0u)
+    {
+        if(first_value != NULL)
+            *first_value = env->value;
+        return env->value;
+    }
+
+    if(first_value != NULL)
+    {
+        *first_value = env_adsr_peaks_process_step(env);
+        steps--;
+        if(steps == 0u)
+            return env->value;
+    }
+
+    while(steps > 0u)
+    {
+        if(env->stage == ENV_ADSR_PEAKS_STAGE_IDLE)
+        {
+            return 0;
+        }
+
+        if(env->stage == ENV_ADSR_PEAKS_STAGE_SUSTAIN)
+        {
+            env->value = (int16_t)env->sustain;
+            return env->value;
+        }
+
+        if(((env->stage != ENV_ADSR_PEAKS_STAGE_ATTACK)
+                && (env->stage != ENV_ADSR_PEAKS_STAGE_DECAY)
+                && (env->stage != ENV_ADSR_PEAKS_STAGE_RELEASE))
+                || (env->phase_increment == 0u))
+        {
+            do
+            {
+                (void)env_adsr_peaks_process_step(env);
+                steps--;
+            } while(steps > 0u);
+            return env->value;
+        }
+
+        const uint32_t steps_before_wrap =
+                (UINT32_MAX - env->phase) / env->phase_increment;
+
+        if(steps <= steps_before_wrap)
+        {
+            env->phase += env->phase_increment * steps;
+
+            uint16_t curve = 0u;
+            if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
+                curve = phase_curve_quartic(env->phase);
+            else
+                curve = phase_curve_exponential(env->phase);
+
+            env->value = interpolate_q15(env->start_value, env->target_value, curve);
+            return env->value;
+        }
+
+        const uint32_t steps_to_wrap = steps_before_wrap + 1u;
+        env->phase += env->phase_increment * steps_to_wrap;
+        steps -= steps_to_wrap;
+
+        if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
+        {
+            env->start_value = ENV_ADSR_Q15_MAX;
+            env->target_value = (int16_t)env->sustain;
+            env->phase = 0u;
+            env->phase_increment = env->decay_increment;
+            env->stage = ENV_ADSR_PEAKS_STAGE_DECAY;
+            env->value = ENV_ADSR_Q15_MAX;
+        }
+        else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
+        {
+            if(env->gate_high)
+            {
+                env->stage = ENV_ADSR_PEAKS_STAGE_SUSTAIN;
+                env->value = (int16_t)env->sustain;
+            }
+            else
+            {
+                env->start_value = (int16_t)env->sustain;
+                env->target_value = 0;
+                env->phase = 0u;
+                env->phase_increment = env->release_increment;
+                env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
+                env->value = (int16_t)env->sustain;
+            }
+        }
+        else
+        {
+            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
+            env->value = 0;
+            env->phase = 0u;
+            env->phase_increment = 0u;
         }
     }
 

@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:130:6:void daisysp::VariableShapeOscillator::SetFreq(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:137:6:void daisysp::VariableShapeOscillator::SetPW(float)	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:150:6:void daisysp::VariableShapeOscillator::SetWaveshape(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:155:6:void daisysp::VariableShapeOscillator::SetSync(bool)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:160:6:void daisysp::VariableShapeOscillator::SetSyncFreq(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:7:6:void daisysp::VariableShapeOscillator::Init(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:168:7:float daisysp::VariableShapeOscillator::ComputeNaiveSample(float, float, float, float, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variableshapeosc.cpp:24:7:float daisysp::VariableShapeOscillator::Process()	48	static,ignoring_inline_asm

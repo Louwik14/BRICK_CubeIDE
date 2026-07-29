@@ -140,9 +140,9 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     {
         applied = param_backend_apply_tone_wave(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DAISY)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
     {
-        applied = param_backend_apply_tone_daisy(track, id, effective_value, update_base_state);
+        applied = param_backend_apply_tone_deluge(track, id, effective_value, update_base_state);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {

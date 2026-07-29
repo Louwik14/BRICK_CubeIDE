@@ -1,7 +1,7 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:185:23:keyboard_input_effective_input_mode	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:348:13:keyboard_input_all_notes_off_sink	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:327:13:keyboard_input_note_off_sink	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:306:13:keyboard_input_note_on_sink	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:187:23:keyboard_input_effective_input_mode	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:350:13:keyboard_input_all_notes_off_sink	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:329:13:keyboard_input_note_off_sink	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:308:13:keyboard_input_note_on_sink	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:102:13:keyboard_input_lowcost_nav_button	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:357:6:keyboard_input_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:370:6:keyboard_input_process_hall	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:359:6:keyboard_input_init	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:372:6:keyboard_input_process_hall	40	static

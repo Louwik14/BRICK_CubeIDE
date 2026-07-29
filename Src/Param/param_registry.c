@@ -860,26 +860,13 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_POS_SMOOTH:
             *out_value = state->wave.pos_smooth;
             return 1U;
-        case PARAM_DAISY_MODEL:
-            *out_value = state->daisy.model;
-            return 1U;
-        case PARAM_DAISY_PARAM1:
-        case PARAM_DAISY_PARAM2:
-        case PARAM_DAISY_PARAM3:
-        case PARAM_DAISY_PARAM4:
-        case PARAM_DAISY_PARAM5:
-        case PARAM_DAISY_PARAM6:
-        case PARAM_DAISY_PARAM7:
-        case PARAM_DAISY_PARAM8:
-        case PARAM_DAISY_PARAM9:
-        case PARAM_DAISY_PARAM10:
-        case PARAM_DAISY_PARAM11:
-        case PARAM_DAISY_PARAM12:
-        case PARAM_DAISY_PARAM13:
-        case PARAM_DAISY_PARAM14:
-        case PARAM_DAISY_PARAM15:
-            *out_value = state->daisy.param[(uint8_t)(id - PARAM_DAISY_PARAM1)];
-            return 1U;
+        case PARAM_DELUGE_MODEL: *out_value = state->deluge.model; return 1U;
+        case PARAM_DELUGE_LEVEL: *out_value = state->deluge.level; return 1U;
+        case PARAM_DELUGE_TUNE: *out_value = state->deluge.tune; return 1U;
+        case PARAM_DELUGE_FINE: *out_value = state->deluge.fine; return 1U;
+        case PARAM_DELUGE_WIDTH: *out_value = state->deluge.width; return 1U;
+        case PARAM_DELUGE_PHASE: *out_value = state->deluge.phase; return 1U;
+        case PARAM_DELUGE_RETRIG: *out_value = state->deluge.retrig; return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -1181,26 +1168,13 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_POS_SMOOTH:
             state->wave.pos_smooth = clamp_value(value, 0.0f, 1.0f);
             return 1U;
-        case PARAM_DAISY_MODEL:
-            state->daisy.model = clamp_value(value, 0.0f, 8.0f);
-            return 1U;
-        case PARAM_DAISY_PARAM1:
-        case PARAM_DAISY_PARAM2:
-        case PARAM_DAISY_PARAM3:
-        case PARAM_DAISY_PARAM4:
-        case PARAM_DAISY_PARAM5:
-        case PARAM_DAISY_PARAM6:
-        case PARAM_DAISY_PARAM7:
-        case PARAM_DAISY_PARAM8:
-        case PARAM_DAISY_PARAM9:
-        case PARAM_DAISY_PARAM10:
-        case PARAM_DAISY_PARAM11:
-        case PARAM_DAISY_PARAM12:
-        case PARAM_DAISY_PARAM13:
-        case PARAM_DAISY_PARAM14:
-        case PARAM_DAISY_PARAM15:
-            state->daisy.param[(uint8_t)(id - PARAM_DAISY_PARAM1)] = clamp_value(value, 0.0f, 1.0f);
-            return 1U;
+        case PARAM_DELUGE_MODEL: state->deluge.model = clamp_value(value, 0.0f, 5.0f); return 1U;
+        case PARAM_DELUGE_LEVEL: state->deluge.level = clamp_value(value, 0.0f, 1.0f); return 1U;
+        case PARAM_DELUGE_TUNE: state->deluge.tune = clamp_value(value, -48.0f, 48.0f); return 1U;
+        case PARAM_DELUGE_FINE: state->deluge.fine = clamp_value(value, -100.0f, 100.0f); return 1U;
+        case PARAM_DELUGE_WIDTH: state->deluge.width = clamp_value(value, 0.0f, 1.0f); return 1U;
+        case PARAM_DELUGE_PHASE: state->deluge.phase = clamp_value(value, 0.0f, 360.0f); return 1U;
+        case PARAM_DELUGE_RETRIG: state->deluge.retrig = clamp_value(value, 0.0f, 1.0f); return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;
             return 1U;

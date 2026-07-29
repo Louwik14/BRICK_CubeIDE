@@ -1,9 +1,14 @@
 # Z6 - State / Persistence / Patterns / Projects
 
-Addendum 2026-07-28 - persistence Synth/Daisy:
-- `track_tone_sound_state.daisy` est capture/restaure par Pattern/Project/Patch/Kit via les structures courantes, sans migration ni bump de version pendant le prototype.
-- Les snapshots Track, Patch, Kit et Project neutralisent/reset aussi le runtime Daisy avant reapply pour eviter une voix ou un modele ancien apres changement de type/restauration.
-- `Kit V1` ajoute le label resume `DY` pour les tracks `Synth/Daisy`.
+## Addendum 2026-07-29 - persistence SKEW/WIDTH Deluge
+
+- Snapshots live, Patterns, Projects, Patch et Kit persistent directement le nouveau domaine manuel `PARAM_DELUGE_WIDTH = 0..1`; le defaut `SQUARE` est `0.5`.
+- Les p-locks TONE utilisent le pas registre `0.02`. Aucune migration de l'ancien domaine bipolaire prototype n'est fournie.
+
+Addendum 2026-07-29 - persistence Synth/DELUGE:
+- `track_tone_sound_state.deluge` et les sept params DELUGE sont captures/restaures par Pattern/Project/Patch/Kit via les structures courantes.
+- Les anciens champs generiques Daisy sont retires sans migration, conformement a la politique prototype; les anciens fichiers peuvent devenir illisibles.
+- Les snapshots neutralisent/reset le runtime DELUGE avant reapply. Le resume Kit utilise `DL`.
 
 Addendum 2026-07-27 - politique sauvegardes prototype:
 - Le format persistant courant est unique pour Project/Pattern/Patch/Kit et `.brickmulti`.

@@ -826,20 +826,18 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
     uint32_t i = 0U;
     while(i < frames)
     {
-        const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        filter->filter_env_value = env;
-        fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
-
         uint32_t chunk = frames - i;
         if(chunk > MIXER_FILTER_UPDATE_PERIOD)
         {
             chunk = MIXER_FILTER_UPDATE_PERIOD;
         }
 
-        for(uint32_t j = 1U; j < chunk; ++j)
-        {
-            filter->filter_env_value = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        }
+        int16_t first_value = 0;
+        const int16_t terminal_value =
+                env_adsr_process_advance(&filter->filter_env, chunk, &first_value);
+        const float env = (float)first_value * (1.0f / 32767.0f);
+        filter->filter_env_value = (float)terminal_value * (1.0f / 32767.0f);
+        fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
 
         fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
         i += chunk;
@@ -853,20 +851,18 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
     uint32_t i = 0U;
     while(i < frames)
     {
-        const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        filter->filter_env_value = env;
-        fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
-
         uint32_t chunk = frames - i;
         if(chunk > MIXER_FILTER_UPDATE_PERIOD)
         {
             chunk = MIXER_FILTER_UPDATE_PERIOD;
         }
 
-        for(uint32_t j = 1U; j < chunk; ++j)
-        {
-            filter->filter_env_value = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        }
+        int16_t first_value = 0;
+        const int16_t terminal_value =
+                env_adsr_process_advance(&filter->filter_env, chunk, &first_value);
+        const float env = (float)first_value * (1.0f / 32767.0f);
+        filter->filter_env_value = (float)terminal_value * (1.0f / 32767.0f);
+        fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
 
         fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
         i += chunk;
@@ -1996,6 +1992,18 @@ uint8_t mixer_track_vca_is_running(uint32_t track_id)
     const mixer_track_filter_t *const filter = &g_track_filters[track_id];
     if (filter->vca_enabled == 0U)
         return 0U;
+
+    return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
+}
+
+uint8_t mixer_track_vca_requires_source(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return 1U;
+
+    const mixer_track_filter_t *const filter = &g_track_filters[track_id];
+    if (filter->vca_enabled == 0U)
+        return 1U;
 
     return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
 }

@@ -1,13 +1,24 @@
 # Z3 - Param / Modulation / Control
 
-## Addendum 2026-07-28 - TONE Synth/Daisy catalogue generique
+## Addendum 2026-07-29 - autorite SKEW/WIDTH Deluge
 
-- `PARAM_DAISY_MODEL` et `PARAM_DAISY_PARAM1..15` ajoutent le stockage TONE canonique du moteur `Synth/Daisy`.
-- Les bases vivent dans `track_tone_sound_state.daisy`; `param_registry` les lit/ecrit comme les autres TONE track-aware et `param_backend_apply_tone_daisy()` projette les writes vers `brick6_daisy_runtime`.
-- Les 15 params generiques restent normalises `0..1`; leur nom musical depend du `MODEL` courant et appartient a Z5, afin d'eviter un catalogue parallele par algorithme.
-- Le cache runtime `g_param_runtime_track_values` passe en `SEQ_STATE_D2` comme son masque de validite pour absorber la croissance de `PARAM_COUNT` sans saturer `RAM_D3`; ce cache reste non persistant et non autoritatif.
-- Les p-locks TONE Daisy passent par les slots `TRACK_RUNTIME_TYPE_DAISY` existants. Les destinations Matrix Daisy sont publiees dynamiquement par modele actif: params continus uniquement, `MODEL`, `WAVE`, `SYNC` et `FIRST` exclus.
-- Un write `PARAM_DAISY_MODEL` invalide le cache destination Matrix de la track pour que la liste MOD suive le layout TONE courant.
+- `PARAM_DELUGE_WIDTH` porte desormais une base manuelle `0..1`, pas l'ancienne course bipolaire `-1..+1`; son defaut persiste est `0.5` pour le modele `SQUARE`.
+- Pour les cinq autres modeles, la valeur est interpretee comme SKEW unipolaire et la transition de modele remappe la valeur afin de conserver la deformation native, notamment `SQUARE 50 % <-> SKEW 0 %`.
+- Les p-locks encodent le nouveau domaine manuel avec un pas `0.02`. La Matrix elargit localement son domaine runtime SKEW a `[-1,+1]` sans modifier la base autoritative ni son domaine de sauvegarde.
+
+## Addendum 2026-07-29 - avance groupee exacte ENV3
+
+- ENV3 conserve sa cadence Matrix par segment audio et le decalage temporel existant, mais remplace la boucle de `elapsed_frames` appels sample par une avance groupee jusqu'a l'unique valeur terminale consommee.
+- L'avance groupee conserve exactement phase, stage, valeur, gate et transitions PEAK; les retriggers hard/soft restent appliques aux memes frontieres de segments sample-accurate.
+- Aucun lissage, interpolation, etat runtime persistant ou buffer n'est ajoute.
+
+## Addendum 2026-07-29 - TONE Synth/DELUGE
+
+- Le stockage canonique vit dans `track_tone_sound_state.deluge` avec les IDs dedies `PARAM_DELUGE_MODEL/LEVEL/TUNE/FINE/WIDTH/PHASE/RETRIG`; les anciens 15 params generiques Daisy sont retires sans compatibilite prototype.
+- Plages/defaults: MODEL `SQUARE`, LEVEL `100%`, TUNE `-48..+48 st` default `0`, FINE `-100..+100 ct` default `0`, WIDTH/SKEW bipolaire default `0`, PHASE `0..360 deg` default `0`, RETRIG `OFF`.
+- `param_backend_apply_tone_deluge()` garde `track_tone_sound_state` comme autorite puis projette par setters runtime. MODEL ne modifie aucun autre champ.
+- WIDTH utilise une seule identite stockee: duty symetrique a zero uniquement pour `SQUARE`, distorsion de lecture Deluge a zero neutre pour les cinq autres formes, y compris `A-SQUARE`. Les valeurs extremes sont clampees a `[-1,+1]` avant conversion symetrique exacte vers le domaine signed Q31 natif (`-1 -> -INT32_MAX`, `+1 -> INT32_MAX`), sans repli de signe ni cas `INT32_MIN` dangereux pour la valeur absolue du renderer.
+- Matrix publie uniquement les destinations continues `LEVEL`, `TUNE`, `FINE`, `WIDTH/SKEW`; MODEL, PHASE et RETRIG restent structurels/discrets.
 
 ## Addendum 2026-07-28 - TONE Prism dual-osc
 

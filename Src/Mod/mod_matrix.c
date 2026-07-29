@@ -143,8 +143,8 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
             return UI_TRACK_TYPE_WAVE;
         case TRACK_RUNTIME_TYPE_STACK:
             return UI_TRACK_TYPE_STACK;
-        case TRACK_RUNTIME_TYPE_DAISY:
-            return UI_TRACK_TYPE_DAISY;
+        case TRACK_RUNTIME_TYPE_DELUGE:
+            return UI_TRACK_TYPE_DELUGE;
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
             return UI_TRACK_TYPE_DRUM_TRX_BD;
         case TRACK_RUNTIME_TYPE_MIDI:
@@ -318,7 +318,9 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->valid = 1U;
         dst->destination = (uint16_t)destination;
         dst->base_value = base;
-        dst->min_value = ((destination == PARAM_LFO1_RATE)
+        dst->min_value = (destination == PARAM_DELUGE_WIDTH)
+                          ? -1.0f
+                          : ((destination == PARAM_LFO1_RATE)
                           || (destination == PARAM_LFO2_RATE)
                           || (destination == PARAM_LFO3_RATE)) ? 0.0f : desc->min;
         dst->max_value = desc->max;

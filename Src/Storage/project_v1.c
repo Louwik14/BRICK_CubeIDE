@@ -1,4 +1,4 @@
-﻿#include "Storage/project_v1.h"
+#include "Storage/project_v1.h"
 
 #include <string.h>
 
@@ -13,7 +13,7 @@
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_daisy_runtime.h"
+#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -600,7 +600,7 @@ static void project_v1_reset_blank_transient_runtime(void)
     brick6_sampler_runtime_service();
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
-    brick6_daisy_runtime_init();
+    brick6_deluge_runtime_init();
     brick6_stack_runtime_init();
     drum_synth_all_notes_off_all();
     mixer_reset_runtime_state();

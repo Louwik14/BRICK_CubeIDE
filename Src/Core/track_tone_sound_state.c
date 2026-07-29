@@ -126,11 +126,13 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
     state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;
     state->wave.pos_smooth = param_registry[PARAM_WAVE_POS_SMOOTH].default_value;
-    state->daisy.model = param_registry[PARAM_DAISY_MODEL].default_value;
-    for (uint8_t i = 0U; i < 15U; ++i)
-    {
-        state->daisy.param[i] = param_registry[(param_id_t)(PARAM_DAISY_PARAM1 + i)].default_value;
-    }
+    state->deluge.model = param_registry[PARAM_DELUGE_MODEL].default_value;
+    state->deluge.level = param_registry[PARAM_DELUGE_LEVEL].default_value;
+    state->deluge.tune = param_registry[PARAM_DELUGE_TUNE].default_value;
+    state->deluge.fine = param_registry[PARAM_DELUGE_FINE].default_value;
+    state->deluge.width = param_registry[PARAM_DELUGE_WIDTH].default_value;
+    state->deluge.phase = param_registry[PARAM_DELUGE_PHASE].default_value;
+    state->deluge.retrig = param_registry[PARAM_DELUGE_RETRIG].default_value;
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;

@@ -4,7 +4,7 @@
 
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_daisy_runtime.h"
+#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -52,8 +52,8 @@ static void track_snapshot_runtime_quiesce(uint8_t track)
     (void)brick6_stack_runtime_submit_reset_instance(track);
     brick6_wave_runtime_all_notes_off(track);
     brick6_wave_runtime_reset_instance(track);
-    brick6_daisy_runtime_all_notes_off(track);
-    brick6_daisy_runtime_reset_instance(track);
+    brick6_deluge_runtime_all_notes_off(track);
+    brick6_deluge_runtime_reset_instance(track);
     drum_synth_all_notes_off_for_instance(track);
     param_registry_clear_track_runtime_state(track);
 }

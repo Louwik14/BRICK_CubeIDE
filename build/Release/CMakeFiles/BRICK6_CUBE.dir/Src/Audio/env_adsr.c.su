@@ -8,7 +8,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:33:6:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:38:6:env_adsr_gate_off	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:43:6:env_adsr_retrigger	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:48:9:env_adsr_process_step	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:53:9:env_adsr_value	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:58:24:env_adsr_stage	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:63:6:env_adsr_bank_init	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:69:6:env_adsr_bank_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:53:9:env_adsr_process_advance	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:60:9:env_adsr_value	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:65:24:env_adsr_stage	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:70:6:env_adsr_bank_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c:76:6:env_adsr_bank_reset	8	static

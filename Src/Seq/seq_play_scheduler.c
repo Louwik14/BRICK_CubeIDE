@@ -12,7 +12,7 @@
 #include <string.h>
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_daisy_runtime.h"
+#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
@@ -573,15 +573,15 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             brick6_wave_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
-    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DAISY)
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DELUGE)
     {
         if (is_note_on != 0U)
         {
-            brick6_daisy_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+            brick6_deluge_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
         }
         else
         {
-            brick6_daisy_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_deluge_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)

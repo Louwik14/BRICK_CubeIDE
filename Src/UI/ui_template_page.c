@@ -6,6 +6,7 @@
 #include "buttons.h"
 #include "Storage/memory_layout.h"
 #include "ui_page_manager.h"
+#include "ui_navigation.h"
 #include "ui_renderer_template.h"
 
 UI_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
@@ -19,6 +20,21 @@ static ui_template_page_state_t *ui_template_page_get_active_state(void)
     }
 
     return (ui_template_page_state_t *)page->context;
+}
+
+static uint8_t ui_template_page_state_is_active(const ui_template_page_state_t *state)
+{
+    return (uint8_t)((state != NULL) && (state == ui_template_page_get_active_state()));
+}
+
+static void ui_template_page_remember_if_active(const ui_template_page_state_t *state)
+{
+    if (ui_template_page_state_is_active(state) == 0U)
+    {
+        return;
+    }
+
+    ui_navigation_remember_template_subpage(ui_page_get_id(), state->active_subpage);
 }
 
 static uint8_t ui_template_page_is_subpage_enabled(const ui_template_page_state_t *state, uint8_t subpage_index)
@@ -114,6 +130,7 @@ void ui_template_page_normalize_active_subpage(ui_template_page_state_t *state)
             || (ui_template_page_is_subpage_selectable(state, state->active_subpage) == 0U))
     {
         state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
+        ui_template_page_remember_if_active(state);
     }
 }
 
@@ -129,6 +146,7 @@ static void ui_template_page_sync_resolved_family(ui_template_page_state_t *stat
     {
         state->resolved_family = family;
         state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
+        ui_template_page_remember_if_active(state);
     }
 }
 
@@ -233,7 +251,36 @@ void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t su
 
     state->active_subpage = subpage_index;
     state->has_visited = 1U;
+    ui_template_page_remember_if_active(state);
     ui_template_page_apply_active_bank(state);
+}
+
+void ui_template_page_select_nearest_subpage(ui_template_page_state_t *state, uint8_t subpage_index)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    if ((state == 0) || (family == 0))
+    {
+        return;
+    }
+
+    uint8_t requested = subpage_index;
+    if (requested >= 4U)
+    {
+        requested = 3U;
+    }
+
+    for (uint8_t i = 0U; i <= requested; ++i)
+    {
+        const uint8_t candidate = (uint8_t)(requested - i);
+        if (ui_template_page_is_subpage_selectable(state, candidate) != 0U)
+        {
+            ui_template_page_select_subpage(state, candidate);
+            return;
+        }
+    }
+
+    ui_template_page_select_subpage(state,
+                                    ui_template_page_get_first_selectable_subpage(state, family->default_subpage));
 }
 
 const ui_template_subpage_t *ui_template_page_get_active_subpage(const ui_template_page_state_t *state)

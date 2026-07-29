@@ -50,5 +50,8 @@ void env_adsr_peaks_gate_off(env_adsr_peaks_t *env);
 void env_adsr_peaks_retrigger(env_adsr_peaks_t *env, bool hard_reset);
 
 int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env);
+int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
+                                       uint32_t steps,
+                                       int16_t *first_value);
 int16_t env_adsr_peaks_value(const env_adsr_peaks_t *env);
 env_adsr_peaks_stage_t env_adsr_peaks_stage(const env_adsr_peaks_t *env);

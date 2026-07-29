@@ -169,9 +169,11 @@ static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t
         return 0U;
     }
 
+    const uint8_t shift_down = (button_down(BTN_SHIFT) != 0U) ? 1U : 0U;
     const uint8_t shortcut_active =
         (uint8_t)(((mode == UI_HALL_MODE_SEQ)
-                   || ((mode == UI_HALL_MODE_KEYBOARD) && (button_down(BTN_SHIFT) != 0U)))
+                   || (((mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP))
+                       && (shift_down != 0U)))
                   ? 1U : 0U);
     if (shortcut_active == 0U)
     {
