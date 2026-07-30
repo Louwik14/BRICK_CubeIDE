@@ -156,8 +156,10 @@ This separation is intentional. Do not add a second authority for the same state
 - `TONE/OSC1..OSC3`: `MODEL`, `PARAM1`, `PARAM2`, `PARAM3` per slot, with model-aware labels.
 - `TONE/LVL`: `OSC1 LVL`, `OSC2 LVL`, `OSC3 LVL`, `NOISE`.
 - `TONE 2/2`: `TUNE` exposes `OSC DETUNE`, `TUNE 1`, `TUNE 2`, `TUNE 3`; `PHASE` exposes `RESET`.
-- Stack models: `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`, `TRIFD`.
+- Stack models: `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`, `TRIFD`, `SINMORPH`, `TRIMORPH`.
 - `SINFD` / `TRIFD`: `FOLD`, `SYM`, `SHAPE`; `SOFT` is no longer an active Stack model.
+- `SINMORPH`: `MORPH`, continuous `TARGET` (`FULL RECT`, `HALF RECT`, `TRIANGLE`, `FOLD`), `ASYM`.
+- `TRIMORPH`: `MORPH`, continuous `TARGET` (`PULSE`, `SAW`, `SQUARE`), `SKEW`.
 - The three slots and noise are summed mono into the normal track path: filter, VCA/volume, track inserts and mixer bus.
 
 ### Wave
@@ -197,7 +199,7 @@ Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'imp
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches plus filter `KeyTrk`; retrigger defaults to `ON`/hard.
 - Diagnostic pages and instrumentation are available in low-cost `Debug` (`-Og -g3`) and `Test`. The dedicated performance-representative firmware is built with `cmake --preset Test` then `cmake --build --preset Test`, and flashed with `flash_test.bat`; it keeps Release optimization/LTO. `Release` and `Premium` do not contain the diagnostic menu, runners, strings, buffers, or heavy instrumentation.
-- In that Test firmware, `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, engine-filtered value, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
+- In that Test firmware, `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, the raw value delivered to the low-cost engine at 2.8 ms, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
 - In that Test firmware, `Settings > Test > Audio` runs a 95-case automatic audio bench with temporary deterministic RAM/Wave calibration assets. The 69 engine/oscillator cases use a 300 ms warmup and a 1 s measurement; filters and other simple cases retain 300/500 ms timing. Seven delay/reverb cases record separate `FX_ACTIVE` (2 s) and `FX_TAIL` (3 s) windows after a 1 s warmup. Sum coverage is 1/2/4/8/12 coherent tracks, 12 musical tracks and 12 tracks with delay+reverb; coherent progression failures are reported as `FAIL`. The screen reports progress and `EST 02:45`; `PAGE 1 STOP` or leaving the page safely cancels, silences test voices and restores captured state. Results use the 178-column CSV schema v4 in `/AUDIO_TEST.CSV` (or `/AUDIO_TEST_V4.CSV` when preserving an incompatible file).
 - In `Debug` and `Test`, `Settings > Test > Monkey` exposes MONKEY TEST. `PAGE 1` starts or stops deterministic injection through the normal button, encoder, and keyboard paths; the session may navigate away from Settings and remains active until explicitly stopped.
 - MT-03 adds the seeded deterministic logical stream: weighted button taps/holds/chords, SHIFT combinations, encoder moves and keyboard press/release actions are scheduled from the 1500 Hz engine clock. MT-04 injects that stream through the normal bounded input paths; the page displays seed, action count and last type.
@@ -211,6 +213,9 @@ Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'imp
 - MT-12 adds explicit deterministic replay of the last archived failure: `PAGE 2` regenerates the original seed in the disposable test snapshot at its original logical timing, verifies the archived target breadcrumb exactly, and pauses immediately before it. `PAGE 3` fires that target; Debug breaks first when a debugger is attached. A mismatch stops safely, and no action is blacklisted.
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG`; a missing or invalid Hall calibration opens `CALIBRATION`, and low-cost validates its 24 keyboard keys in two 12-key stages before saving
+- low-cost: `Settings > Calibration` exposes `HALL KBD` and `HALL VEL` through the existing calibration workflows
+- low-cost: `KEYBOARD > VELOCITY` exposes `PROFILE DEFAULT/USER`, default mode `DV/TIME/ENERGY`, the five velocity curves and USER calibration status/access; an unavailable USER profile is shown as `NO CAL`
+- low-cost Hall velocity consumes every valid raw key measurement at about 2.8 ms; Premium keeps its historical digital ASC x4 path
 - voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` (`AMT` + `KEY`), `LINK`, and `SEQ LINK`; `KEY` enables Multi spread keytrack, slaves and standalone tracks keep the historical CFG page only, and `PLAY` data remains non-destructive per member
 
 ### Parameter system
@@ -317,5 +322,10 @@ Each track keeps its held notes, HOLD state, phase, direction, rate, and note-on
 Le banc automatique du firmware de test mesure chaque modele sur C2/C4/C6 et
 ses controles reellement exposes. Il produit dans le CSV les mesures
 ATTACK/SUSTAIN ou ATTACK/STRIKE, trois repetitions des sons aleatoires, et une
-recommandation de gain fixe par modele. Cette recommandation est indicative:
-aucun niveau audio moteur n'est corrige automatiquement.
+recommandation indicative par modele, qui n'est pas appliquee au runtime.
+L'alignement produit utilise uniquement des gains fixes par moteur avant le
+filtre et les traitements de piste: PRISM `0 dB`, DELUGE `-7,1 dB`, WAVE
+`-7,5 dB` et SAMPLER `-5,7 dB`. STACK et DRUM restent sans correction.
+## Prototype compresseur comparatif
+
+`MIX 3/3` permet de comparer sur le bus MAIN les modeles `OFF`, `DELUGE` et `BRICK`, avec controles communs de seuil, ratio, enveloppe, makeup manuel, mix et sidechain HPF. Deluge expose sa saturation; Brick expose le detecteur PEAK/RMS et le soft knee.

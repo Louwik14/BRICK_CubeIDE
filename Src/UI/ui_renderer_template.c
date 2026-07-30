@@ -1076,6 +1076,12 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
             case BRICK6_STACK_MODEL_TRIFD:
                 cache->samples[px] = brick6_stack_waveform_tri_fold(phase, timbre_q15, color_q15, param3_q15);
                 break;
+            case BRICK6_STACK_MODEL_SINMORPH:
+                cache->samples[px] = brick6_stack_waveform_sine_morph(phase, timbre_q15, color_q15, param3_q15);
+                break;
+            case BRICK6_STACK_MODEL_TRIMORPH:
+                cache->samples[px] = brick6_stack_waveform_tri_morph(phase, timbre_q15, color_q15, param3_q15);
+                break;
             default:
                 cache->samples[px] = brick6_stack_waveform_shape(phase, timbre_q15, color_q15);
                 break;
@@ -1134,7 +1140,10 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
     if (!(((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))
-            || (((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD))
+            || (((model == BRICK6_STACK_MODEL_SINFD)
+                    || (model == BRICK6_STACK_MODEL_TRIFD)
+                    || (model == BRICK6_STACK_MODEL_SINMORPH)
+                    || (model == BRICK6_STACK_MODEL_TRIMORPH))
                 && ((id == timbre_param) || (id == color_param) || (id == param3_param)))))
     {
         return 0U;
@@ -1171,7 +1180,8 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
         const int yy = ui_renderer_template_stack_wave_y(y, h, cache->samples[px]);
         if (have_prev != 0U)
         {
-            if (model == BRICK6_STACK_MODEL_SHAPE)
+            if ((model == BRICK6_STACK_MODEL_SHAPE)
+                    || (model == BRICK6_STACK_MODEL_TRIMORPH))
             {
                 const int dy = yy - prev_y;
                 if ((dy > (h / 2)) || (dy < -(h / 2)))
@@ -1227,7 +1237,10 @@ static uint8_t ui_renderer_template_stack_fold_group_is_active(const ui_param_se
     }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    return ((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD)) ? 1U : 0U;
+    return ((model == BRICK6_STACK_MODEL_SINFD)
+            || (model == BRICK6_STACK_MODEL_TRIFD)
+            || (model == BRICK6_STACK_MODEL_SINMORPH)
+            || (model == BRICK6_STACK_MODEL_TRIMORPH)) ? 1U : 0U;
 }
 
 static uint8_t ui_renderer_template_draw_stack_fold_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,

@@ -65,29 +65,15 @@ static inline void fx_filter_make_coeffs(float cutoff_hz,
     const float k = 1.0f / q_safe;
     const float a1 = 1.0f / (1.0f + (g * (g + k)));
     const float r = (q_safe - FX_FILTER_MIN_Q) / (FX_FILTER_MAX_Q - FX_FILTER_MIN_Q);
-    const float r2 = r * r;
 
     out->a1 = a1;
     out->a2 = g * a1;
     out->a3 = g * g * a1;
     out->k = k;
-    /* -0.83 dB at maximum resonance; zero loss at minimum resonance. */
-    out->input_gain = 1.0f - (0.091f * r2);
-    /*
-     * The band-integrator state is the resonance-loop signal. This rational
-     * soft saturation is exactly linear at the origin and only becomes
-     * material in the upper half of the resonance travel.
-     */
-    out->loop_saturation = 0.52f * r2 * r;
     /* Per-mode calibration; BP receives explicit Q-independent normalization. */
     out->lp_gain = 1.0f + (0.035f * r);
     out->hp_gain = 0.98f + (0.055f * r);
     out->bp_gain = 0.92f + (0.08f * r);
-}
-
-static inline float fx_filter_soft_loop(float state, float amount)
-{
-    return state / (1.0f + (amount * fabsf(state)));
 }
 
 static inline float fx_filter_mode_output(fx_biquad_filter_mode_t mode,
@@ -137,12 +123,10 @@ static inline float fx_filter_tpt_sample(float input,
                                          uint8_t via_dry,
                                          uint16_t mode_remaining)
 {
-    const float driven = input * c->input_gain;
-    const float v3 = driven - *ic2eq;
-    const float loop_state = fx_filter_soft_loop(*ic1eq, c->loop_saturation);
-    const float v1 = (c->a1 * loop_state) + (c->a2 * v3);
-    const float v2 = *ic2eq + (c->a2 * loop_state) + (c->a3 * v3);
-    const float high = driven - (c->k * v1) - v2;
+    const float v3 = input - *ic2eq;
+    const float v1 = (c->a1 * *ic1eq) + (c->a2 * v3);
+    const float v2 = *ic2eq + (c->a2 * *ic1eq) + (c->a3 * v3);
+    const float high = input - (c->k * v1) - v2;
     *ic1eq = (2.0f * v1) - *ic1eq;
     *ic2eq = (2.0f * v2) - *ic2eq;
     return fx_filter_transition_output(mode, previous_mode, via_dry,

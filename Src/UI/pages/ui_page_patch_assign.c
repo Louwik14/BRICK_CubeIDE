@@ -881,6 +881,14 @@ void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hal
     ui_page_set(UI_PAGE_PATCH_ASSIGN);
 }
 
+void ui_page_patch_assign_close(void)
+{
+    if (ui_page_patch_assign_is_open() != 0U)
+    {
+        ui_page_set(g_patch_assign.previous_page);
+    }
+}
+
 static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -902,7 +910,7 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
     switch ((button_id_t)ev->id)
     {
         case BTN_PAGE_1:
-            ui_page_set(g_patch_assign.previous_page);
+            ui_page_patch_assign_close();
             break;
 
         case BTN_PAGE_2:

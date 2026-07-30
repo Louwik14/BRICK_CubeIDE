@@ -5,7 +5,7 @@
 #include "audio_float.h"
 #include "Audio/metronome_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "fx_daisy_comp.h"
+#include "fx_comp_lab.h"
 #include "fx_pool.h"
 #include "mixer.h"
 #include "ui_core.h"
@@ -567,49 +567,45 @@ void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
 
 void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
 void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
-void apply_bus_comp_attack_index(float v) { audio_float_set_bus_comp_attack_index((uint8_t)v); }
-void apply_bus_comp_release_index(float v) { audio_float_set_bus_comp_release_index((uint8_t)v); }
+void apply_bus_comp_attack_index(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_attack_s(comp, v);
+}
+void apply_bus_comp_release_index(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_release_s(comp, v);
+}
 void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
 void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
-
-void apply_daisy_threshold(float v)
+void apply_bus_comp_drywet(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_threshold_db(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_mix(comp, v);
 }
-
-void apply_daisy_ratio(float v)
+void apply_bus_comp_hpf(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_ratio(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_sc_hpf_hz(comp, v);
 }
-
-void apply_daisy_attack(float v)
+void apply_comp_model(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_attack_s(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_model(comp, (uint8_t)(v + 0.5f));
 }
-
-void apply_daisy_release(float v)
+void apply_comp_detect(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_release_s(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_detector_rms(comp, (v >= 0.5f) ? 1U : 0U);
 }
-
-void apply_daisy_makeup(float v)
+void apply_comp_knee(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_makeup_db(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_knee_db(comp, v);
 }
-
-void apply_daisy_auto_makeup(float v)
+void apply_comp_deluge_sat(float v)
 {
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_auto_makeup(comp, (v >= 0.5f) ? 1U : 0U);
-}
-
-void apply_daisy_mix(float v)
-{
-    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
-    if (comp != NULL) fx_daisy_comp_set_mix(comp, v);
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_deluge_saturation(comp, (v >= 0.5f) ? 1U : 0U);
 }

@@ -34,6 +34,9 @@
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_lowcost_button_test.h"
+#if defined(BRICK6_VARIANT_LOWCOST)
+#include "pages/ui_page_template_keyboard.h"
+#endif
 #include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
 #include "ui_bootstrap.h"
@@ -563,7 +566,6 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
                                                           g_ui_track_state.shift_down,
                                                           g_ui_track_state.track_select_armed,
                                                           ui_core_mute_is_active(),
-                                                          ui_core_request_undo,
                                                           ui_core_set_feedback);
 }
 
@@ -762,7 +764,12 @@ void ui_core_tick(void)
         }
         else
         {
+#if defined(BRICK6_VARIANT_LOWCOST)
+            if ((ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
+                && (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U))
+#else
             if (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U)
+#endif
             {
                 ui_param_handle_encoder_with_context(&encoder_ctx, encoder, delta);
             }

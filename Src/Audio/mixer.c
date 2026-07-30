@@ -70,16 +70,16 @@ typedef struct {
     fx_dj_eq3_t eq3;
     fx_dj_eq3_mono_t eq3_mono;
     float sample_rate;
-    float cutoff_log2;
-    float cutoff_target_log2;
-    float cutoff_mod_log2;
-    float cutoff_mod_target_log2;
+    float cutoff_hz;
+    float cutoff_target_hz;
+    float cutoff_mod_hz;
+    float cutoff_mod_target_hz;
     float resonance;
     float resonance_target;
-    float eg_octaves;
+    float eg_amount;
     float keytrack;
-    float keytrack_octaves;
-    float keytrack_octaves_target;
+    float keytrack_ratio;
+    float keytrack_ratio_target;
     float eq_low_db;
     float eq_low_target_db;
     float eq_mid_db;
@@ -149,10 +149,10 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float *left,
                                                            float *right,
                                                            uint32_t frames,
-                                                           float cutoff_start_log2,
-                                                           float cutoff_mod_start_log2,
+                                                           float cutoff_start_hz,
+                                                           float cutoff_mod_start_hz,
                                                            float resonance_start,
-                                                           float keytrack_octaves_start);
+                                                           float keytrack_ratio_start);
 static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
                                                      float *mono,
                                                      uint32_t frames);
@@ -176,8 +176,6 @@ enum
 #define MIXER_FILTER_NOTE_REF_MIDI 60U
 #define MIXER_FILTER_UPDATE_PERIOD 8U
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
-#define MIXER_FILTER_CUTOFF_SMOOTH_TAU_SAMPLES 192.0f
-#define MIXER_FILTER_MAX_ENV_OCTAVES 8.0f
 #define MIXER_REVERB_SEND_INDEX 0U
 #define MIXER_DELAY_SEND_INDEX 1U
 #define MIXER_LOOPER_RECORD_CLIENT_ID 0U
@@ -400,17 +398,9 @@ static float mixer_smooth_block(float current, float target, float alpha)
     return current + ((target - current) * alpha);
 }
 
-static float mixer_smooth_cutoff_log2(float current, float target, uint32_t frames)
-{
-    const float elapsed = (frames > 0U) ? (float)frames : 1.0f;
-    const float alpha = elapsed / (MIXER_FILTER_CUTOFF_SMOOTH_TAU_SAMPLES + elapsed);
-    return current + ((target - current) * alpha);
-}
-
 enum
 {
-    MIXER_FILTER_TIME_LUT_SIZE = 512U,
-    MIXER_FILTER_EXP2_LUT_SIZE = 256U
+    MIXER_FILTER_TIME_LUT_SIZE = 512U
 };
 
 #define MIXER_FILTER_LOG2_MIN_TIME (-9.965784284662087f)
@@ -419,7 +409,6 @@ enum
 
 static uint16_t g_mixer_filter_time_lut[MIXER_FILTER_TIME_LUT_SIZE + 1U];
 static float g_mixer_filter_log2_lut[257U];
-static float g_mixer_filter_exp2_lut[MIXER_FILTER_EXP2_LUT_SIZE + 1U];
 static uint8_t g_mixer_filter_time_lut_ready = 0U;
 
 static void mixer_track_filter_init_time_lut(void)
@@ -434,7 +423,6 @@ static void mixer_track_filter_init_time_lut(void)
     {
         const float x = 1.0f + ((float)i * (1.0f / 256.0f));
         g_mixer_filter_log2_lut[i] = logf(x) * MIXER_FILTER_INV_LOG2;
-        g_mixer_filter_exp2_lut[i] = exp2f((float)i * (1.0f / 256.0f));
     }
 
     for(uint32_t i = 0U; i <= MIXER_FILTER_TIME_LUT_SIZE; ++i)
@@ -469,23 +457,6 @@ static float mixer_track_filter_log2_lut(float x)
     const float a = g_mixer_filter_log2_lut[index];
     const float b = g_mixer_filter_log2_lut[index + 1U];
     return (float)exponent + a + ((b - a) * frac);
-}
-
-static float mixer_track_filter_exp2_lut(float x)
-{
-    const float clamped = clampf_local(
-        x,
-        mixer_track_filter_log2_lut(MIXER_FILTER_CUTOFF_MIN_HZ),
-        mixer_track_filter_log2_lut(MIXER_FILTER_CUTOFF_MAX_HZ));
-    const uint32_t integer = (uint32_t)clamped;
-    const float frac = clamped - (float)integer;
-    const float pos = frac * (float)MIXER_FILTER_EXP2_LUT_SIZE;
-    uint32_t index = (uint32_t)pos;
-    if(index >= MIXER_FILTER_EXP2_LUT_SIZE) index = MIXER_FILTER_EXP2_LUT_SIZE - 1U;
-    const float t = pos - (float)index;
-    const float mantissa = g_mixer_filter_exp2_lut[index]
-        + ((g_mixer_filter_exp2_lut[index + 1U] - g_mixer_filter_exp2_lut[index]) * t);
-    return mantissa * (float)(1UL << integer);
 }
 
 static uint16_t mixer_track_filter_time_lut_lookup(float time_s)
@@ -548,27 +519,40 @@ static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
     return (uint16_t)(clamped * 32767.0f + 0.5f);
 }
 
-static float mixer_track_filter_keytrack_octaves(const mixer_track_filter_t *filter)
+static float mixer_track_filter_keytrack_ratio(const mixer_track_filter_t *filter)
 {
     if (filter == NULL)
     {
-        return 0.0f;
+        return 1.0f;
     }
     const float semitones =
         ((float)((int32_t)filter->current_note - (int32_t)MIXER_FILTER_NOTE_REF_MIDI))
         * clampf_local(filter->keytrack, 0.0f, 1.0f);
-    return semitones * (1.0f / 12.0f);
+    return exp2f(semitones * (1.0f / 12.0f));
 }
 
 static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filter_t *filter,
-                                                         float base_log2,
-                                                         float modulation_log2,
-                                                         float keytrack_octaves,
+                                                         float base_hz,
+                                                         float modulation_hz,
+                                                         float keytrack_ratio,
                                                          float env)
 {
-    const float final_log2 = base_log2 + modulation_log2 + keytrack_octaves
-                           + (filter->eg_octaves * clampf_local(env, 0.0f, 1.0f));
-    return clampf_local(mixer_track_filter_exp2_lut(final_log2),
+    float cutoff_hz = (base_hz + modulation_hz) * keytrack_ratio;
+    cutoff_hz = clampf_local(cutoff_hz,
+                             MIXER_FILTER_CUTOFF_MIN_HZ,
+                             MIXER_FILTER_CUTOFF_MAX_HZ);
+    const float env_value = clampf_local(env, 0.0f, 1.0f);
+    if(filter->eg_amount >= 0.0f)
+    {
+        cutoff_hz += (MIXER_FILTER_CUTOFF_MAX_HZ - cutoff_hz)
+                   * filter->eg_amount * env_value;
+    }
+    else
+    {
+        cutoff_hz += (cutoff_hz - MIXER_FILTER_CUTOFF_MIN_HZ)
+                   * filter->eg_amount * env_value;
+    }
+    return clampf_local(cutoff_hz,
                         MIXER_FILTER_CUTOFF_MIN_HZ,
                         MIXER_FILTER_CUTOFF_MAX_HZ);
 }
@@ -578,7 +562,7 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     if(filter == NULL)
         return;
 
-    fx_biquad_filter_set_cutoff(&filter->biquad, exp2f(filter->cutoff_log2));
+    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
     fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
     if(mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U)
     {
@@ -599,7 +583,7 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     fx_dj_eq3_mono_set_bypass(&filter->eq3_mono, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
 
     fx_biquad_filter_mono_set_sample_rate(&filter->biquad_mono, filter->sample_rate);
-    fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, exp2f(filter->cutoff_log2));
+    fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, filter->cutoff_hz);
     fx_biquad_filter_mono_set_q(&filter->biquad_mono, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
     if(mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U)
     {
@@ -646,16 +630,16 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
         return;
 
     filter->sample_rate = (sample_rate > 0.0f) ? sample_rate : MIXER_FILTER_SAMPLE_RATE_DEFAULT;
-    filter->cutoff_log2 = log2f(MIXER_FILTER_CUTOFF_MAX_HZ);
-    filter->cutoff_target_log2 = filter->cutoff_log2;
-    filter->cutoff_mod_log2 = filter->cutoff_log2;
-    filter->cutoff_mod_target_log2 = filter->cutoff_log2;
+    filter->cutoff_hz = MIXER_FILTER_CUTOFF_MAX_HZ;
+    filter->cutoff_target_hz = filter->cutoff_hz;
+    filter->cutoff_mod_hz = filter->cutoff_hz;
+    filter->cutoff_mod_target_hz = filter->cutoff_hz;
     filter->resonance = 0.0f;
     filter->resonance_target = 0.0f;
-    filter->eg_octaves = 0.0f;
+    filter->eg_amount = 0.0f;
     filter->keytrack = 0.0f;
-    filter->keytrack_octaves = 0.0f;
-    filter->keytrack_octaves_target = 0.0f;
+    filter->keytrack_ratio = 1.0f;
+    filter->keytrack_ratio_target = 1.0f;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->eq_low_db = 0.0f;
     filter->eq_low_target_db = 0.0f;
@@ -841,10 +825,10 @@ void mixer_snap_track_runtime_state(uint32_t track_id)
         track->send_level_current[s] = track->send_level[s];
     }
 
-    filter->cutoff_log2 = filter->cutoff_target_log2;
-    filter->cutoff_mod_log2 = filter->cutoff_mod_target_log2;
+    filter->cutoff_hz = filter->cutoff_target_hz;
+    filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = filter->resonance_target;
-    filter->keytrack_octaves = filter->keytrack_octaves_target;
+    filter->keytrack_ratio = filter->keytrack_ratio_target;
     filter->eq_low_db = filter->eq_low_target_db;
     filter->eq_mid_db = filter->eq_mid_target_db;
     filter->eq_high_db = filter->eq_high_target_db;
@@ -866,19 +850,19 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
         return;
     }
 
-    const float cutoff_start_log2 = filter->cutoff_log2;
-    const float cutoff_mod_start_log2 = filter->cutoff_mod_log2;
+    const float cutoff_start_hz = filter->cutoff_hz;
+    const float cutoff_mod_start_hz = filter->cutoff_mod_hz;
     const float resonance_start = filter->resonance;
-    const float keytrack_octaves_start = filter->keytrack_octaves;
+    const float keytrack_ratio_start = filter->keytrack_ratio;
     const float eq_low_start_db = filter->eq_low_db;
     const float eq_mid_start_db = filter->eq_mid_db;
     const float eq_high_start_db = filter->eq_high_db;
-    filter->cutoff_log2 = mixer_smooth_cutoff_log2(cutoff_start_log2,
-                                                   filter->cutoff_target_log2,
-                                                   frames);
-    filter->cutoff_mod_log2 = filter->cutoff_mod_target_log2;
+    filter->cutoff_hz = mixer_smooth_block(cutoff_start_hz,
+                                           filter->cutoff_target_hz,
+                                           MIXER_FILTER_BLOCK_SMOOTH);
+    filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = mixer_smooth_block(resonance_start, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->keytrack_octaves = filter->keytrack_octaves_target;
+    filter->keytrack_ratio = filter->keytrack_ratio_target;
     filter->eq_low_db = mixer_smooth_block(eq_low_start_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     filter->eq_mid_db = mixer_smooth_block(eq_mid_start_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     filter->eq_high_db = mixer_smooth_block(eq_high_start_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
@@ -909,10 +893,10 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
         case MIXER_TRACK_FILTER_BP_BI:
         case MIXER_TRACK_FILTER_OFF:
             mixer_track_filter_process_biquad_stereo_block(filter, left, right, frames,
-                                                           cutoff_start_log2,
-                                                           cutoff_mod_start_log2,
+                                                           cutoff_start_hz,
+                                                           cutoff_mod_start_hz,
                                                            resonance_start,
-                                                           keytrack_octaves_start);
+                                                           keytrack_ratio_start);
             break;
 
         default:
@@ -924,10 +908,10 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float *left,
                                                            float *right,
                                                            uint32_t frames,
-                                                           float cutoff_start_log2,
-                                                           float cutoff_mod_start_log2,
+                                                           float cutoff_start_hz,
+                                                           float cutoff_mod_start_hz,
                                                            float resonance_start,
-                                                           float keytrack_octaves_start)
+                                                           float keytrack_ratio_start)
 {
     uint32_t i = 0U;
     while(i < frames)
@@ -960,13 +944,13 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
         const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
         const float env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
         const float progress = (float)(i + chunk) / (float)frames;
-        const float base_log2 = cutoff_start_log2
-            + ((filter->cutoff_log2 - cutoff_start_log2) * progress);
-        const float mod_absolute_log2 = cutoff_mod_start_log2
-            + ((filter->cutoff_mod_log2 - cutoff_mod_start_log2) * progress);
-        const float modulation_log2 = mod_absolute_log2 - filter->cutoff_target_log2;
-        const float keytrack_octaves = keytrack_octaves_start
-            + ((filter->keytrack_octaves - keytrack_octaves_start) * progress);
+        const float base_hz = cutoff_start_hz
+            + ((filter->cutoff_hz - cutoff_start_hz) * progress);
+        const float mod_absolute_hz = cutoff_mod_start_hz
+            + ((filter->cutoff_mod_hz - cutoff_mod_start_hz) * progress);
+        const float modulation_hz = mod_absolute_hz - filter->cutoff_target_hz;
+        const float keytrack_ratio = keytrack_ratio_start
+            + ((filter->keytrack_ratio - keytrack_ratio_start) * progress);
         const float resonance =
                 resonance_start + ((filter->resonance - resonance_start) * progress);
         if (prepared == 0U)
@@ -975,9 +959,9 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
         }
         fx_biquad_filter_set_params(
                 &filter->biquad,
-                mixer_track_filter_compute_modulated_cutoff(filter, base_log2,
-                                                            modulation_log2,
-                                                            keytrack_octaves, env),
+                mixer_track_filter_compute_modulated_cutoff(filter, base_hz,
+                                                            modulation_hz,
+                                                            keytrack_ratio, env),
                 mixer_track_filter_resonance_to_biquad_q(resonance));
 
         fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
@@ -989,10 +973,10 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
 static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *filter,
                                                          float *mono,
                                                          uint32_t frames,
-                                                         float cutoff_start_log2,
-                                                         float cutoff_mod_start_log2,
+                                                         float cutoff_start_hz,
+                                                         float cutoff_mod_start_hz,
                                                          float resonance_start,
-                                                         float keytrack_octaves_start)
+                                                         float keytrack_ratio_start)
 {
     uint32_t i = 0U;
     while(i < frames)
@@ -1025,13 +1009,13 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
         const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
         const float env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
         const float progress = (float)(i + chunk) / (float)frames;
-        const float base_log2 = cutoff_start_log2
-            + ((filter->cutoff_log2 - cutoff_start_log2) * progress);
-        const float mod_absolute_log2 = cutoff_mod_start_log2
-            + ((filter->cutoff_mod_log2 - cutoff_mod_start_log2) * progress);
-        const float modulation_log2 = mod_absolute_log2 - filter->cutoff_target_log2;
-        const float keytrack_octaves = keytrack_octaves_start
-            + ((filter->keytrack_octaves - keytrack_octaves_start) * progress);
+        const float base_hz = cutoff_start_hz
+            + ((filter->cutoff_hz - cutoff_start_hz) * progress);
+        const float mod_absolute_hz = cutoff_mod_start_hz
+            + ((filter->cutoff_mod_hz - cutoff_mod_start_hz) * progress);
+        const float modulation_hz = mod_absolute_hz - filter->cutoff_target_hz;
+        const float keytrack_ratio = keytrack_ratio_start
+            + ((filter->keytrack_ratio - keytrack_ratio_start) * progress);
         const float resonance =
                 resonance_start + ((filter->resonance - resonance_start) * progress);
         if (prepared == 0U)
@@ -1040,9 +1024,9 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
         }
         fx_biquad_filter_mono_set_params(
                 &filter->biquad_mono,
-                mixer_track_filter_compute_modulated_cutoff(filter, base_log2,
-                                                            modulation_log2,
-                                                            keytrack_octaves, env),
+                mixer_track_filter_compute_modulated_cutoff(filter, base_hz,
+                                                            modulation_hz,
+                                                            keytrack_ratio, env),
                 mixer_track_filter_resonance_to_biquad_q(resonance));
 
         fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
@@ -1406,10 +1390,10 @@ static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filte
         const float eq_low_start_db = filter->eq_low_db;
         const float eq_mid_start_db = filter->eq_mid_db;
         const float eq_high_start_db = filter->eq_high_db;
-        filter->cutoff_log2 = mixer_smooth_cutoff_log2(filter->cutoff_log2,
-                                                       filter->cutoff_target_log2,
-                                                       frames);
-        filter->cutoff_mod_log2 = filter->cutoff_mod_target_log2;
+        filter->cutoff_hz = mixer_smooth_block(filter->cutoff_hz,
+                                               filter->cutoff_target_hz,
+                                               MIXER_FILTER_BLOCK_SMOOTH);
+        filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
         filter->resonance = mixer_smooth_block(filter->resonance, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
         filter->eq_low_db = mixer_smooth_block(eq_low_start_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
         filter->eq_mid_db = mixer_smooth_block(eq_mid_start_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
@@ -1434,24 +1418,24 @@ static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filte
         return 1U;
     }
 
-    const float cutoff_start_log2 = filter->cutoff_log2;
-    const float cutoff_mod_start_log2 = filter->cutoff_mod_log2;
+    const float cutoff_start_hz = filter->cutoff_hz;
+    const float cutoff_mod_start_hz = filter->cutoff_mod_hz;
     const float resonance_start = filter->resonance;
-    const float keytrack_octaves_start = filter->keytrack_octaves;
-    filter->cutoff_log2 = mixer_smooth_cutoff_log2(cutoff_start_log2,
-                                                   filter->cutoff_target_log2,
-                                                   frames);
-    filter->cutoff_mod_log2 = filter->cutoff_mod_target_log2;
+    const float keytrack_ratio_start = filter->keytrack_ratio;
+    filter->cutoff_hz = mixer_smooth_block(cutoff_start_hz,
+                                           filter->cutoff_target_hz,
+                                           MIXER_FILTER_BLOCK_SMOOTH);
+    filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = mixer_smooth_block(resonance_start, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->keytrack_octaves = filter->keytrack_octaves_target;
+    filter->keytrack_ratio = filter->keytrack_ratio_target;
     filter->eq_low_db = mixer_smooth_block(filter->eq_low_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     mixer_track_filter_process_biquad_mono_block(filter, mono, frames,
-                                                cutoff_start_log2,
-                                                cutoff_mod_start_log2,
+                                                cutoff_start_hz,
+                                                cutoff_mod_start_hz,
                                                 resonance_start,
-                                                keytrack_octaves_start);
+                                                keytrack_ratio_start);
     mixer_track_filter_sync_stereo_state_from_mono(filter);
 
     return 1U;
@@ -1974,23 +1958,23 @@ void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    const float target_log2 = log2f(clampf_local(cutoff_hz,
-                                                 MIXER_FILTER_CUTOFF_MIN_HZ,
-                                                 MIXER_FILTER_CUTOFF_MAX_HZ));
-    const float delta = target_log2 - filter->cutoff_target_log2;
-    filter->cutoff_target_log2 = target_log2;
-    filter->cutoff_mod_log2 += delta;
-    filter->cutoff_mod_target_log2 += delta;
+    const float target_hz = clampf_local(cutoff_hz,
+                                         MIXER_FILTER_CUTOFF_MIN_HZ,
+                                         MIXER_FILTER_CUTOFF_MAX_HZ);
+    const float delta = target_hz - filter->cutoff_target_hz;
+    filter->cutoff_target_hz = target_hz;
+    filter->cutoff_mod_hz += delta;
+    filter->cutoff_mod_target_hz += delta;
 }
 
 void mixer_set_track_filter_cutoff_modulated(uint32_t track_id, float cutoff_hz)
 {
     if(track_id >= MIXER_MAX_TRACKS)
         return;
-    g_track_filters[track_id].cutoff_mod_target_log2 =
-        log2f(clampf_local(cutoff_hz,
-                          MIXER_FILTER_CUTOFF_MIN_HZ,
-                          MIXER_FILTER_CUTOFF_MAX_HZ));
+    g_track_filters[track_id].cutoff_mod_target_hz =
+        clampf_local(cutoff_hz,
+                     MIXER_FILTER_CUTOFF_MIN_HZ,
+                     MIXER_FILTER_CUTOFF_MAX_HZ);
 }
 
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
@@ -2007,10 +1991,7 @@ void mixer_set_track_filter_eg_amount(uint32_t track_id, float eg_amount)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    const float amount = clampf_local(eg_amount, -1.0f, 1.0f);
-    g_track_filters[track_id].eg_octaves = copysignf(
-        MIXER_FILTER_MAX_ENV_OCTAVES * fabsf(amount) * sqrtf(fabsf(amount)),
-        amount);
+    g_track_filters[track_id].eg_amount = clampf_local(eg_amount, -1.0f, 1.0f);
 }
 
 void mixer_set_track_filter_attack(uint32_t track_id, float attack_s)
@@ -2056,7 +2037,7 @@ void mixer_set_track_filter_keytrack(uint32_t track_id, float amount)
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
     filter->keytrack = clampf_local(amount, 0.0f, 1.0f);
-    filter->keytrack_octaves_target = mixer_track_filter_keytrack_octaves(filter);
+    filter->keytrack_ratio_target = mixer_track_filter_keytrack_ratio(filter);
 }
 
 void mixer_set_track_filter_env_reset(uint32_t track_id, uint8_t enabled)
@@ -2119,7 +2100,7 @@ void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t ve
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->current_note = midi_note;
-    filter->keytrack_octaves_target = mixer_track_filter_keytrack_octaves(filter);
+    filter->keytrack_ratio_target = mixer_track_filter_keytrack_ratio(filter);
     filter->note_active = 1U;
     env_adsr_retrigger(&filter->filter_env, filter->filter_retrigger_hard != 0U);
 }
@@ -2344,7 +2325,7 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->note_active = 0U;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
-    filter->keytrack_octaves_target = 0.0f;
+    filter->keytrack_ratio_target = 1.0f;
     filter->filter_env_value = 0.0f;
     env_adsr_reset(&filter->filter_env);
 }
@@ -3270,6 +3251,9 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             }
         }
     }
+
+    /* One authoritative master dynamics slot, post returns/Looper crossfade. */
+    fx_chain_process_slot(2U, bus_main_l, bus_main_r, frames);
 
     if(sample_capture_active != 0U)
     {

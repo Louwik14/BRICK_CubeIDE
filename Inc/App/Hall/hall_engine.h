@@ -19,6 +19,14 @@ typedef enum
 
 typedef enum
 {
+    HALL_VEL_PROFILE_DEFAULT = 0,
+    HALL_VEL_PROFILE_USER    = 1,
+
+    HALL_VEL_PROFILE_COUNT
+} hall_velocity_profile_t;
+
+typedef enum
+{
     HALL_VEL_CURVE_LINEAR = 0,
     HALL_VEL_CURVE_SOFT   = 1,
     HALL_VEL_CURVE_HARD   = 2,
@@ -113,8 +121,10 @@ uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture);
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);
 
 void hall_set_velocity_mode(uint8_t mode);
+void hall_set_velocity_profile(uint8_t profile);
 void hall_set_velocity_curve(uint8_t curve);
 uint8_t hall_get_velocity_mode(void);
+uint8_t hall_get_velocity_profile(void);
 uint8_t hall_get_velocity_curve(void);
 
 #endif /* APP_HALL_HALL_ENGINE_H */

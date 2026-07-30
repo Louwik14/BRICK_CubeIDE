@@ -3,11 +3,20 @@
 #include "App/Hall/hall_engine.h"
 #include "Board/board_product.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "pages/ui_page_audio_rec.h"
+#include "pages/ui_page_kit_assign.h"
+#include "pages/ui_page_patch_assign.h"
 #include "ui_core.h"
 #include "ui_core_mute.h"
 
+static uint8_t g_separate_hall_key_injected[HALL_KEY_COUNT];
+
 void hall_keyboard_bridge_init(void)
 {
+    for (uint8_t key = 0U; key < HALL_KEY_COUNT; ++key)
+    {
+        g_separate_hall_key_injected[key] = 0U;
+    }
     keyboard_runtime_init();
 }
 
@@ -41,24 +50,43 @@ void hall_keyboard_bridge_process(void)
             ? ui_core_mute_get_passthrough_hall_mode()
             : raw_mode;
         uint8_t injection_allowed = ui_hall_allows_injection(ui_get_active_track(), input_mode);
-        if ((has_separate_hall_keyboard != 0U) && (input_mode == UI_HALL_MODE_SEQ))
+        if ((has_separate_hall_keyboard != 0U)
+                && ((input_mode == UI_HALL_MODE_SEQ)
+                    || (ui_page_kit_assign_is_open() != 0U)
+                    || (ui_page_patch_assign_is_open() != 0U)
+                    || (ui_page_audio_rec_is_open() != 0U)))
         {
             injection_allowed = 1U;
         }
 
         if (injection_allowed == 0U)
         {
+            if ((has_separate_hall_keyboard != 0U)
+                    && (note_off_pending != 0U)
+                    && (g_separate_hall_key_injected[key] != 0U))
+            {
+                keyboard_runtime_process_hall(key, false, velocity);
+                g_separate_hall_key_injected[key] = 0U;
+            }
             continue;
         }
 
         if (note_on_pending != 0U)
         {
             keyboard_runtime_process_hall(key, true, velocity);
+            if (has_separate_hall_keyboard != 0U)
+            {
+                g_separate_hall_key_injected[key] = 1U;
+            }
         }
 
         if (note_off_pending != 0U)
         {
             keyboard_runtime_process_hall(key, false, velocity);
+            if (has_separate_hall_keyboard != 0U)
+            {
+                g_separate_hall_key_injected[key] = 0U;
+            }
         }
     }
 

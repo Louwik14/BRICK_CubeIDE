@@ -1,3 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:29:36:ui_page_template_keyboard_resolve_family	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:41:13:ui_page_template_keyboard_handle_event	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:46:6:ui_page_template_keyboard_register_families	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:77:16:ui_page_template_keyboard_virtual_slot_text	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:44:36:ui_page_template_keyboard_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:71:13:ui_page_template_keyboard_mark_settings_dirty	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:136:13:ui_page_template_keyboard_tick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:148:13:ui_page_template_keyboard_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:126:13:ui_page_template_keyboard_leave	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:153:6:ui_page_template_keyboard_register_families	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:174:9:ui_page_template_keyboard_handle_encoder	16	static

@@ -23,7 +23,7 @@
 
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
-#include "fx_daisy_comp.h"
+#include "fx_comp_lab.h"
 #include "mixer.h"
 #include "memory_layout.h"
 #include "stm32h7xx.h"
@@ -104,8 +104,8 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
         case FX_GRANULAR:
             return 0;
 
-        case FX_DAISY_COMP:
-            slot->state = fx_daisy_comp_get_instance();
+        case FX_COMP_LAB:
+            slot->state = fx_comp_lab_get_instance();
             break;
 
         default:

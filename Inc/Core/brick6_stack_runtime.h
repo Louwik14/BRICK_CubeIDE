@@ -29,6 +29,8 @@ typedef enum
     BRICK6_STACK_MODEL_TRIPLE_SQUARE,
     BRICK6_STACK_MODEL_SWARM,
     BRICK6_STACK_MODEL_TRIFD,
+    BRICK6_STACK_MODEL_SINMORPH,
+    BRICK6_STACK_MODEL_TRIMORPH,
     BRICK6_STACK_MODEL_COUNT
 } brick6_stack_model_t;
 
@@ -123,7 +125,10 @@ uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune
 uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled);
 void brick6_stack_runtime_process_commands_from_audio(void);
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id);
-void brick6_stack_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
+void brick6_stack_runtime_render_instance(uint8_t instance_id,
+                                          float *out_mono,
+                                          uint32_t frames,
+                                          uint8_t downstream_source_required);
 
 const brick6_stack_runtime_voice_t *brick6_stack_runtime_get_voice(uint8_t instance_id);
 

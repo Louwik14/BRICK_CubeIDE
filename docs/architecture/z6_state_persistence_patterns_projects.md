@@ -1114,3 +1114,30 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
   `-18 dBFS`, gain fixe par modele borne a +/-12 dB et contraint a 3..6 dB de
   marge sur le pire peak. Un signal insuffisant ne recoit aucune proposition
   de gain. Statuts: `VALID`, `INSUFFICIENT_SIGNAL`, `TOO_VARIABLE`, `CLIPPING`.
+
+## Addendum 2026-07-30 - persistence Stack SINMORPH/TRIMORPH
+
+- Les indices `SINMORPH=11` et `TRIMORPH=12` sont ajoutes apres les onze valeurs historiques; aucun index Stack existant n'est renumerote.
+- Pattern/Project continuent de persister `MODEL/TIMBRE/COLOR/PARAM3` via les IDs Stack existants. Patch/Kit continuent de capturer les memes tableaux `track_tone_sound_state.stack`; aucun champ ni format de snapshot n'est ajoute.
+- Les trois valeurs sont restaurees comme `MORPH/TARGET/ASYM` ou `MORPH/TARGET/SKEW` selon le modele, sans migration des sons Stack existants.
+## Addendum 2026-07-30 - apply du snapshot Track en lecture
+
+- Le snapshot Track local ne capture toujours aucun état scheduler, gate, voix ou
+  événement en attente.
+- Son apply encadre désormais la mutation structure/runtime et la restauration de
+  séquence par une suspension Z4 ciblée, avec cleanup avant et après commit.
+- La fermeture des tracks concernées inclut les membres du voice-group susceptibles
+  d'avoir reçu les notes round-robin de la cible; aucune track sans dépendance
+  structurelle au paste n'est neutralisée.
+
+## Addendum 2026-07-30 - settings de velocite Hall low-cost
+
+- Le blob flash de calibration Hall low-cost passe en version 2 et occupe cinq flashwords (160 octets). Il ajoute `velocity_profile`, `velocity_mode` et `velocity_curve` au profil USER et aux bornes Hall deja persistants.
+- Le loader accepte encore le blob structure v1 low-cost: un profil USER valide restaure `USER/DV/LOG`, sinon `DEFAULT/DV/LOG`; la prochaine sauvegarde publie v2.
+- Les edits `KEYBOARD > VELOCITY` sont sauvegardes apres 500 ms d'inactivite ou a la sortie de page. La calibration USER reussie sauvegarde immediatement le profil et la selection USER.
+- Le blob Premium reste strictement en version 1 et a 128 octets. Aucun format Pattern, Project, Patch ou Kit n'est modifie.
+## Addendum 2026-07-30 - persistence compresseur master
+
+- Le snapshot global live, donc Pattern et Project, capture/restaure les controles communs et caracteristiques du compresseur comparatif.
+- Les quatre IDs caracteristiques restent groupes dans le snapshot global.
+- La suppression du modele Daisy et de ses sept IDs ne porte aucune migration de projet prototype; Deluge et Brick conservent leurs parametres globaux.

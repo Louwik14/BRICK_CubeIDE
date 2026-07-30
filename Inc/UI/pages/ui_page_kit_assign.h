@@ -8,6 +8,7 @@
 extern const ui_page_t g_ui_page_kit_assign;
 
 void ui_page_kit_assign_open(void);
+void ui_page_kit_assign_close(void);
 uint8_t ui_page_kit_assign_handle_encoder(uint8_t encoder, int16_t delta);
 uint8_t ui_page_kit_assign_is_open(void);
 

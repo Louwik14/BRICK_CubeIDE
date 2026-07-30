@@ -19,8 +19,6 @@ typedef struct
     float a2;
     float a3;
     float k;
-    float input_gain;
-    float loop_saturation;
     float lp_gain;
     float hp_gain;
     float bp_gain;

@@ -1,5 +1,34 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-30 - raccourcis sequence COPY/PASTE
+
+- En contexte sequence, `SHIFT + COPY` efface le scope sequence courant, y
+  compris la variante avec steps maintenus; `PASTE` et `SHIFT + PASTE` collent.
+- `SHIFT + COPY` ne declenche plus `UNDO`; ce dernier reste sur son raccourci
+  physique dedie.
+
+## Addendum 2026-07-30 - accords STEP low-cost
+
+- Une seconde entree explicite (`COPY`, `PASTE`, `CLEAR`, autre step pour
+  `STEP LENGTH`, encodeur, etc.) promeut immediatement un premier step encore
+  `pending` en step maintenu. Le seuil temporel reste reserve a la distinction
+  tap/hold quand aucune seconde entree n'est recue.
+- Cette promotion se fait sur l'edge de la seconde entree, sans delai ajoute,
+  et conserve l'ordre de priorite des handlers UI existants.
+
+## Addendum 2026-07-30 - overlays KIT/PATCH/SAMPLE/REC low-cost
+
+- Sur la surface low-cost a clavier Hall separe, l'ancien hall multifonction ne
+  conserve plus l'autorite apres l'ouverture d'un overlay: un second appui sur
+  le hall `KIT`, `PATCH`, `SAMPLE` ou `REC`, ou la selection d'un autre
+  ensemble, ferme d'abord l'overlay et restaure sa page et son hall mode de
+  retour.
+- Le bridge du clavier Hall separe autorise explicitement l'injection de notes
+  pendant `KIT`, `PATCH` et `REC`; la projection Premium reste inchangee.
+- La fermeture de `KIT` est synchrone dans le flux direct de navigation. La
+  scene LED est donc liberee avant le rendu suivant, sans remap physique ni
+  seconde autorite LED.
+
 ## Addendum 2026-07-30 - MT-12 commandes de replay
 
 - Dans `MONKEY TEST`, `PAGE 2` lance le replay explicite du dernier crash archive lorsque la session est inactive. `PAGE 1` conserve son role start/stop et permet d'abandonner le replay avec restauration du snapshot.
@@ -1332,3 +1361,31 @@ Points factuels:
 - Chaque note emise par la surface KBD/ARP memorise la track et le moteur (`KBD` ou `ARP`) choisis au note-on; le note-off reutilise ce proprietaire au lieu de relire la track selectionnee ou le mode courant.
 - Un changement de focus ne clear plus les instances ARP. Une transition `ARP -> KBD` sur Y applique le lifecycle uniquement a Y et ne reset plus l'ownership moteur partage utilise par X.
 - Le all-notes-off de la surface draine les proprietaires effectivement retenus note par note; les releases tardifs ne peuvent plus etre reroutes vers la nouvelle track.
+
+## Addendum 2026-07-30 - UI Stack SINMORPH/TRIMORPH
+
+- Le catalogue `MODEL` Stack ajoute `SINMORPH` et `TRIMORPH` apres tous les choix existants.
+- Les deux modeles reutilisent le widget waveform large, son cache par slot, le feedback p-lock et le rafraichissement deja utilises par `SINFD/TRIFD`; la preview appelle exactement les memes helpers DSP que le runtime audio.
+- `SINMORPH` affiche `MORPH`, `TARGET`, `ASYM` et les cibles `FULL RECT`, `HALF RECT`, `TRIANGLE`, `FOLD`. `TRIMORPH` affiche `MORPH`, `TARGET`, `SKEW` et les cibles `PULSE`, `SAW`, `SQUARE`.
+- L'affichage et le groupement waveform de `SINFD/TRIFD` restent inchanges.
+## Addendum 2026-07-30 - Track paste sûr en lecture
+
+- Le clipboard Track continue d'appliquer son snapshot RAM complet par
+  `track_snapshot_apply_ex`.
+- Pendant l'apply, la cible, son ancien/nouveau voice-group possible et la source
+  déplacée éventuelle sont neutralisés via le seam de restauration Z4. Les autres
+  tracks continuent de jouer.
+- Une séquence collée vide ne peut pas réémettre les notes issues du lookahead ou
+  de l'état de note de la configuration remplacée; une séquence remplie reprend
+  uniquement avec des événements créés après la restauration.
+
+## Addendum 2026-07-30 - calibration et VELOCITY clavier low-cost
+
+- En low-cost, la racine `SETTINGS` liste `SAMPLE`, `PROJECT`, puis `CALIBRATION` avant l'eventuel menu diagnostic `TEST`. `CALIBRATION` propose `HALL KBD` et `HALL VEL`.
+- Ces deux entrees ouvrent les pages existantes `UI_PAGE_CALIBRATION` et `UI_PAGE_USER_CALIBRATION`; aucun workflow de calibration parallele n'est introduit. Les pages acceptent seulement une destination de retour explicite.
+- `KEYBOARD` ajoute la sous-page `VELOCITY`: encodeur 1 `PROFILE DEFAULT/USER`, encodeur 2 `MODE DV/TIME/ENERGY`, encodeur 3 `CURVE`, encodeur 4 acces a la calibration USER. Le quatrieme slot affiche `NO CAL` quand USER ne dispose pas d'un profil valide.
+- Une calibration USER reussie selectionne explicitement `USER`, applique le profil au moteur et le sauvegarde avant le retour. Premium conserve ses menus et pages KEYBOARD historiques.
+## Addendum 2026-07-30 - MIX 3/3 compresseur
+
+- Le bouton MIX cycle maintenant `MIX 1/3`, `MIX 2/3`, `MIX 3/3`; les pages et controles historiques des deux premiers ensembles sont inchanges.
+- `MIX 3/3` expose `COMP MAIN`, `COMP ENV` et `COMP CHAR`; `MODEL` vaut `OFF/DELUGE/BRICK` et CHAR est resolue selon le modele (Deluge: SAT, Brick: DETECT/KNEE, OFF: N/A).

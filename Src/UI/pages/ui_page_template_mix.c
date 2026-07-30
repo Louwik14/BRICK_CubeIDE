@@ -8,7 +8,7 @@
 static uint8_t g_ui_template_mix_subset = 0U;
 
 static const ui_template_family_t g_ui_template_mix_family_main = {
-    .family_title = "MIX 1/2",
+    .family_title = "MIX 1/3",
     .nav_labels = { "MIX", "REVB", "REV2", "REV3" },
     .subpages = {
         {
@@ -32,7 +32,7 @@ static const ui_template_family_t g_ui_template_mix_family_main = {
 };
 
 static const ui_template_family_t g_ui_template_mix_family_delay_classic = {
-    .family_title = "MIX 2/2",
+    .family_title = "MIX 2/3",
     .nav_labels = { "DLY1", "DLY2", "-", "-" },
     .subpages = {
         {
@@ -56,7 +56,7 @@ static const ui_template_family_t g_ui_template_mix_family_delay_classic = {
 };
 
 static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
-    .family_title = "MIX 2/2",
+    .family_title = "MIX 2/3",
     .nav_labels = { "DLY1", "DLY2", "DLY3", "DLY4" },
     .subpages = {
         {
@@ -75,6 +75,42 @@ static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
             .title = "DLY4",
             .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_comp_off = {
+    .family_title = "MIX 3/3",
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_comp_deluge = {
+    .family_title = "MIX 3/3",
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DELUGE_SAT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_comp_brick = {
+    .family_title = "MIX 3/3",
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DETECT, PARAM_COMP_KNEE_DB, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -119,9 +155,17 @@ static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
         return &g_ui_template_mix_family_main;
     }
 
-    return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
-            ? &g_ui_template_mix_family_delay_dual
-            : &g_ui_template_mix_family_delay_classic;
+    if (g_ui_template_mix_subset == 1U)
+    {
+        return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
+                ? &g_ui_template_mix_family_delay_dual
+                : &g_ui_template_mix_family_delay_classic;
+    }
+
+    const uint8_t model = (uint8_t)(param_get(PARAM_COMP_MODEL) + 0.5f);
+    if (model == 1U) return &g_ui_template_mix_family_comp_deluge;
+    if (model == 2U) return &g_ui_template_mix_family_comp_brick;
+    return &g_ui_template_mix_family_comp_off;
 }
 
 static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
@@ -129,6 +173,11 @@ static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
     if (g_ui_template_mix_subset == 0U)
     {
         return (subpage_index < 4U) ? 1U : 0U;
+    }
+
+    if (g_ui_template_mix_subset == 2U)
+    {
+        return (subpage_index < 3U) ? 1U : 0U;
     }
 
     const uint8_t delay_is_dual = (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f) ? 1U : 0U;
@@ -154,7 +203,7 @@ void ui_page_template_mix_open_primary(void)
 void ui_page_template_mix_toggle_subset(void)
 {
     const uint8_t previous_subpage = g_ui_template_mix_state.active_subpage;
-    g_ui_template_mix_subset = (g_ui_template_mix_subset == 0U) ? 1U : 0U;
+    g_ui_template_mix_subset = (uint8_t)((g_ui_template_mix_subset + 1U) % 3U);
     g_ui_template_mix_state.resolved_family = ui_page_template_mix_resolve_family();
 
     if (ui_page_template_mix_subpage_enabled(previous_subpage) != 0U)

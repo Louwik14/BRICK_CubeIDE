@@ -247,6 +247,14 @@ void ui_page_kit_assign_open(void)
     ui_page_set(UI_PAGE_KIT_ASSIGN);
 }
 
+void ui_page_kit_assign_close(void)
+{
+    if (ui_page_kit_assign_is_open() != 0U)
+    {
+        ui_page_set(g_kit_assign.previous_page);
+    }
+}
+
 static void ui_page_kit_assign_handle_event(const ui_event_t *ev)
 {
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
@@ -257,7 +265,7 @@ static void ui_page_kit_assign_handle_event(const ui_event_t *ev)
     switch ((button_id_t)ev->id)
     {
         case BTN_PAGE_1:
-            ui_page_set(g_kit_assign.previous_page);
+            ui_page_kit_assign_close();
             break;
 
         case BTN_PAGE_2:

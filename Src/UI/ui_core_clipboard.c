@@ -956,17 +956,17 @@ uint8_t ui_core_clipboard_handle_seq_track_event(const ui_event_t *ev,
 
     if (ev->id == (uint8_t)BTN_COPY)
     {
+        if (shift_down != 0U)
+        {
+            seq_edit_clear_steps(track, steps, step_count);
+            ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP CLEARED" : "SEQ CLEARED");
+            return 1U;
+        }
+
         if (seq_edit_copy_steps(track, steps, step_count) != 0U)
         {
             ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP COPIED" : "SEQ COPIED");
         }
-        return 1U;
-    }
-
-    if (shift_down != 0U)
-    {
-        seq_edit_clear_steps(track, steps, step_count);
-        ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP CLEARED" : "SEQ CLEARED");
         return 1U;
     }
 

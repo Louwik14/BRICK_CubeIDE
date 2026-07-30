@@ -191,3 +191,138 @@ int16_t brick6_stack_waveform_shape(uint32_t phase, uint16_t shape_q15, uint16_t
                                          brick6_stack_waveform_pwm(phase, shape_q15),
                                          morph_q15);
 }
+
+static uint32_t brick6_stack_waveform_skew_phase(uint32_t phase, uint16_t skew_q15)
+{
+    const uint32_t phase_u16 = phase >> 16;
+    const uint32_t bell_u16 = (phase_u16 * (65535U - phase_u16)) >> 16;
+    const int32_t skew = (int32_t)skew_q15 - 16384L;
+    int32_t warped = (int32_t)phase_u16 + (int32_t)(((int64_t)bell_u16 * (int64_t)skew * 3LL) >> 16);
+    if (warped < 0)
+    {
+        warped = 0;
+    }
+    else if (warped > 65535L)
+    {
+        warped = 65535L;
+    }
+    return ((uint32_t)warped << 16) | (phase & 0xFFFFU);
+}
+
+static int16_t brick6_stack_waveform_full_rect(int16_t sample)
+{
+    if (sample == -32768)
+    {
+        return 32767;
+    }
+    return (sample < 0) ? (int16_t)-sample : sample;
+}
+
+static int16_t brick6_stack_waveform_half_rect(int16_t sample)
+{
+    return (sample < 0) ? 0 : sample;
+}
+
+static int16_t brick6_stack_waveform_sine_morph_target(uint8_t target,
+                                                        uint32_t phase,
+                                                        uint16_t asym_q15)
+{
+    const uint32_t warped_phase = brick6_stack_waveform_skew_phase(phase, asym_q15);
+    const int16_t sine = brick6_stack_waveform_sine(warped_phase);
+    switch (target)
+    {
+        case 0U:
+            return brick6_stack_waveform_full_rect(sine);
+        case 1U:
+            return brick6_stack_waveform_half_rect(sine);
+        case 2U:
+            return brick6_stack_waveform_triangle(warped_phase);
+        default:
+            return brick6_stack_waveform_wavefold(brick6_stack_waveform_sine(phase),
+                                                  32767U,
+                                                  asym_q15,
+                                                  16384U);
+    }
+}
+
+int16_t brick6_stack_waveform_sine_morph(uint32_t phase,
+                                         uint16_t morph_q15,
+                                         uint16_t target_q15,
+                                         uint16_t asym_q15)
+{
+    const int16_t base = brick6_stack_waveform_sine(phase);
+    if (morph_q15 == 0U)
+    {
+        return base;
+    }
+
+    if (target_q15 >= 32767U)
+    {
+        const int16_t target = brick6_stack_waveform_sine_morph_target(3U, phase, asym_q15);
+        return brick6_stack_waveform_mix_q15(base, target, morph_q15);
+    }
+
+    const uint32_t target_position = (uint32_t)target_q15 * 3U;
+    const uint8_t target0 = (uint8_t)(target_position >> 15);
+    const uint8_t target1 = (target0 < 3U) ? (uint8_t)(target0 + 1U) : 3U;
+    const uint16_t target_fraction = (uint16_t)(target_position & 0x7FFFU);
+    const int16_t wave0 = brick6_stack_waveform_sine_morph_target(target0, phase, asym_q15);
+    if (target_fraction == 0U)
+    {
+        return brick6_stack_waveform_mix_q15(base, wave0, morph_q15);
+    }
+    const int16_t wave1 = (target1 == target0)
+        ? wave0
+        : brick6_stack_waveform_sine_morph_target(target1, phase, asym_q15);
+    const int16_t target = brick6_stack_waveform_mix_q15(wave0, wave1, target_fraction);
+    return brick6_stack_waveform_mix_q15(base, target, morph_q15);
+}
+
+static int16_t brick6_stack_waveform_tri_morph_target(uint8_t target,
+                                                       uint32_t phase,
+                                                       uint16_t skew_q15)
+{
+    const uint32_t warped_phase = brick6_stack_waveform_skew_phase(phase, skew_q15);
+    switch (target)
+    {
+        case 0U:
+            return brick6_stack_waveform_pwm(phase, skew_q15);
+        case 1U:
+            return brick6_stack_waveform_saw(warped_phase);
+        default:
+            return brick6_stack_waveform_pwm(warped_phase, 16384U);
+    }
+}
+
+int16_t brick6_stack_waveform_tri_morph(uint32_t phase,
+                                        uint16_t morph_q15,
+                                        uint16_t target_q15,
+                                        uint16_t skew_q15)
+{
+    const int16_t base = brick6_stack_waveform_triangle(phase);
+    if (morph_q15 == 0U)
+    {
+        return base;
+    }
+
+    if (target_q15 >= 32767U)
+    {
+        const int16_t target = brick6_stack_waveform_tri_morph_target(2U, phase, skew_q15);
+        return brick6_stack_waveform_mix_q15(base, target, morph_q15);
+    }
+
+    const uint32_t target_position = (uint32_t)target_q15 * 2U;
+    const uint8_t target0 = (uint8_t)(target_position >> 15);
+    const uint8_t target1 = (target0 < 2U) ? (uint8_t)(target0 + 1U) : 2U;
+    const uint16_t target_fraction = (uint16_t)(target_position & 0x7FFFU);
+    const int16_t wave0 = brick6_stack_waveform_tri_morph_target(target0, phase, skew_q15);
+    if (target_fraction == 0U)
+    {
+        return brick6_stack_waveform_mix_q15(base, wave0, morph_q15);
+    }
+    const int16_t wave1 = (target1 == target0)
+        ? wave0
+        : brick6_stack_waveform_tri_morph_target(target1, phase, skew_q15);
+    const int16_t target = brick6_stack_waveform_mix_q15(wave0, wave1, target_fraction);
+    return brick6_stack_waveform_mix_q15(base, target, morph_q15);
+}

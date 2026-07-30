@@ -40,6 +40,10 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#include "pages/ui_page_calibration.h"
+#endif
+
 #if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
@@ -60,6 +64,9 @@ typedef enum
     UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
     UI_SETTINGS_VIEW_PROJECT_MANAGE,
     UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT,
+#if defined(BRICK6_VARIANT_LOWCOST)
+    UI_SETTINGS_VIEW_CALIBRATION,
+#endif
 #if BRICK_TEST_BUILD
     UI_SETTINGS_VIEW_TEST,
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -3015,6 +3022,10 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "PROJECT > MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return "MANAGE > SLOT";
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_CALIBRATION:
+            return "CALIBRATION";
+#endif
 #if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
             return "TEST";
@@ -3039,7 +3050,9 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-#if BRICK_TEST_BUILD
+#if defined(BRICK6_VARIANT_LOWCOST) && BRICK_TEST_BUILD
+            return 4U;
+#elif defined(BRICK6_VARIANT_LOWCOST) || BRICK_TEST_BUILD
             return 3U;
 #else
             return 2U;
@@ -3066,6 +3079,10 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return PROJECT_V1_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_CALIBRATION:
+            return 2U;
+#endif
 #if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -3101,6 +3118,12 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "PROJECT";
             }
+#if defined(BRICK6_VARIANT_LOWCOST)
+            if (index == 2U)
+            {
+                return "CALIBRATION";
+            }
+#endif
 #if BRICK_TEST_BUILD
             return "TEST";
 #else
@@ -3223,6 +3246,10 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "SAVE TO";
             }
             return "DELETE";
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_CALIBRATION:
+            return (index == 0U) ? "HALL KBD" : "HALL VEL";
+#endif
 #if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -3313,6 +3340,14 @@ static void ui_page_settings_close(void)
     ui_page_set(g_ui_settings.return_page_id);
 }
 
+void ui_page_settings_close_to_return_page(void)
+{
+    if (ui_page_settings_is_open() != 0U)
+    {
+        ui_page_settings_close();
+    }
+}
+
 static void ui_page_settings_push(ui_settings_view_t view)
 {
     if (g_ui_settings.depth >= UI_SETTINGS_MAX_LEVELS)
@@ -3372,6 +3407,12 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
+#if defined(BRICK6_VARIANT_LOWCOST)
+            else if (level->selected_index == 2U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_CALIBRATION);
+            }
+#endif
             else
             {
 #if BRICK_TEST_BUILD
@@ -3379,6 +3420,19 @@ static void ui_page_settings_apply_action(void)
 #endif
             }
             break;
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+        case UI_SETTINGS_VIEW_CALIBRATION:
+            if (level->selected_index == 0U)
+            {
+                ui_page_calibration_open(UI_PAGE_SETTINGS);
+            }
+            else
+            {
+                ui_page_user_calibration_open(UI_PAGE_SETTINGS);
+            }
+            break;
+#endif
 
 #if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
@@ -5159,14 +5213,16 @@ static void ui_page_settings_render_test_hall(void)
     drv_display_draw_text(0U, 12U, line);
     (void)snprintf(line,
                    sizeof(line),
-                   "MUX %u",
-                   (unsigned)mux);
-    drv_display_draw_text(76U, 12U, line);
+                   "M%u %lu.%lums",
+                   (unsigned)mux,
+                   (unsigned long)(debug.sample_period_us / 1000U),
+                   (unsigned long)((debug.sample_period_us % 1000U) / 100U));
+    drv_display_draw_text(70U, 12U, line);
 
     drv_display_set_font(&FONT_4X6);
     (void)snprintf(line, sizeof(line), "RAW %u", (unsigned)raw);
     drv_display_draw_text(0U, 22U, line);
-    (void)snprintf(line, sizeof(line), "FILT %u", (unsigned)debug.raw_current);
+    (void)snprintf(line, sizeof(line), "ENG %u", (unsigned)debug.raw_current);
     drv_display_draw_text(64U, 22U, line);
 
     if (calibration_valid != 0U)

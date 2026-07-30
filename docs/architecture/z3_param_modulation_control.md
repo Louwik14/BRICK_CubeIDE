@@ -1,5 +1,13 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-30 - projection temporaire VCA
+
+- Les p-locks `VCA ATTACK/DECAY/SUSTAIN/RELEASE` utilisent le chemin temporaire
+  `param_registry_apply_track_value_runtime_temp`, qui route vers les setters
+  mixer VCA sans ecrire le `track_sound_state` canonique.
+- La restauration reapplique la base track-aware avant de liberer l'overlay;
+  aucun runtime VCA parallele n'est introduit.
+
 ## Addendum 2026-07-29 - projection cutoff/Q vers les chunks TPT
 
 - La Matrix conserve sa cadence bloc de 64 frames et son mapping musical existant.
@@ -923,21 +931,18 @@ Dette explicite post-passe 4:
   Les valeurs permanentes et snapshots restent float; les p-locks encodent
   désormais `0..12700` dans `seq_value16_t`; Matrix, cache runtime et affichage
   ne rabattent plus les centièmes sur `0..127`.
-- La base cutoff est stockée et lissée en `log2(Hz)` avec
-  `alpha = frames/(192+frames)`. Une écriture manuelle ou p-lock déplace
+- La base cutoff est stockée et lissée linéairement en Hz avec le coefficient
+  de bloc historique `0.25`. Une écriture manuelle ou p-lock déplace
   ensemble la base et la référence de modulation afin de ne créer aucun offset.
-- Matrix/LFO écrit une cible cutoff absolue séparée en `log2(Hz)`. Entre deux
+- Matrix/LFO écrit une cible cutoff absolue séparée en Hz. Entre deux
   points de contrôle, cette cible, ENV FLT et le keytrack sont répartis sur les
   chunks cohérents de 8 samples; ils ne repassent pas dans le lissage lent de
   la base. Chaque chunk reconstruit une seule fois le jeu TPT lié.
 - La composition est:
-  `base_log2_lissée + (matrix_log2-base_target_log2) + keytrack_octaves
-  + env_octaves*ENV`, puis une seule conversion LUT vers Hz et clamp final
-  `20..16000 Hz`. Aucune interpolation indépendante des coefficients TPT.
-- `EG AMT` courant reste unipolaire. Sa profondeur exacte est
-  `8 * amount * sqrt(amount)` octaves (`0..+8`). Le helper DSP conserve le
-  signe pour une éventuelle source bipolaire:
-  `sign(amount) * 8 * abs(amount)^1.5`.
+  `(base_hz_lissée + matrix_hz-base_target_hz) * keytrack_ratio`, puis
+  l'enveloppe déplace proportionnellement ce cutoff vers `16000 Hz` pour un
+  montant positif ou vers `20 Hz` pour un montant négatif. Le clamp final reste
+  `20..16000 Hz`; la courbe `sign(amount)*8*abs(amount)^1.5` est retirée.
 - La résonance UI devient linéaire `r=value/127`; le mapping de Q musical est
   porté uniquement par Z1 et atteint exactement 6.5.
 
@@ -967,3 +972,14 @@ Dette explicite post-passe 4:
 - Le keytrack filtre applique `2^((note-60)*amount/12)` une seule fois au cutoff de base, avant ENV FLT et clamp `20 Hz..16 kHz`; son ratio rejoint la cible par les memes chunks que cutoff/Q.
 - Le RATE LFO Matrix conserve `-50 Hz..OFF..16 sync`. Le slew `RND` convertit son coefficient de reference 64 frames selon le nombre reel de frames, y compris segments raccourcis.
 - Les niveaux internes Wave, Prism/Braids, Stack et Deluge evoluent sample par sample. Les increments de phase/lecture evoluent progressivement; `POS/INDEX` gardent leurs lissages locaux. Les selecteurs `MODEL/TABLE/MODE/LOOP` restent discrets. Les destinations Sampler ne changent pas.
+
+## Addendum 2026-07-30 - parametres Stack SINMORPH/TRIMORPH
+
+- Les nouveaux modeles reutilisent sans nouvel ID les trois valeurs continues Stack existantes et persistantes: `TIMBRE=MORPH`, `COLOR=TARGET`, `PARAM3=ASYM` pour `SINMORPH`, `PARAM3=SKEW` pour `TRIMORPH`.
+- Ces trois destinations gardent leurs chemins apply, Matrix/LFO, p-lock et restore existants. `MODEL` reste stepped et les indices historiques `0..10` sont conserves; les nouveaux modeles occupent `11` et `12`.
+- Les labels dynamiques du catalogue de modulation sont `MORPH/TARGET/ASYM` et `MORPH/TARGET/SKEW`.
+## Addendum 2026-07-30 - parametres compresseur master
+
+- Les parametres globaux communs sont `MODEL/THRESH/RATIO/ATTACK/RELEASE/MAKEUP/MIX/SC HPF`; l'auto-makeup reste force OFF.
+- `SAT` ne pilote que Deluge; `DETECT` et `KNEE` ne pilotent que Brick. Les quatre nouveaux IDs caracteristiques sont ajoutes en fin d'enum pour conserver les indices existants.
+- Les sept anciens `PARAM_DAISY_COMP_*` sont supprimes sans tombstone ni migration, conformement au statut prototype.

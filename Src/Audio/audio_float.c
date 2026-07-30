@@ -42,7 +42,7 @@
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "control_events.h"
-#include "fx_daisy_comp.h"
+#include "fx_comp_lab.h"
 #include "Core/audio_test2.h"
 
 /* ============================================================
@@ -95,10 +95,10 @@ static inline fx_saturation_t *fx_pool_sat_state(void)
     return (s != 0) ? (fx_saturation_t *)s->state : 0;
 }
 
-static inline fx_daisy_comp_t *fx_pool_daisy_comp_state(void)
+static inline fx_comp_lab_t *fx_pool_comp_lab_state(void)
 {
     fx_slot_t *s = fx_pool_get_slot(2U);
-    return (s != 0) ? (fx_daisy_comp_t *)s->state : 0;
+    return (s != 0) ? (fx_comp_lab_t *)s->state : 0;
 }
 
 /**
@@ -332,8 +332,8 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
  */
 void audio_float_set_bus_comp_threshold_db(float threshold_db)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_threshold_db(comp, threshold_db);
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_threshold_db(comp, threshold_db);
 }
 
 /**
@@ -349,8 +349,8 @@ void audio_float_set_bus_comp_threshold_db(float threshold_db)
  */
 void audio_float_set_bus_comp_ratio(float ratio)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_ratio(comp, ratio);
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_ratio(comp, ratio);
 }
 
 /**
@@ -366,8 +366,8 @@ void audio_float_set_bus_comp_ratio(float ratio)
  */
 void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_attack_s(comp, bus_comp_attack_index_to_seconds(attack_index));
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_attack_s(comp, bus_comp_attack_index_to_seconds(attack_index));
 }
 
 /**
@@ -383,8 +383,8 @@ void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
  */
 void audio_float_set_bus_comp_release_index(uint8_t release_index)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_release_s(comp, bus_comp_release_index_to_seconds(release_index));
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_release_s(comp, bus_comp_release_index_to_seconds(release_index));
 }
 
 /**
@@ -400,8 +400,8 @@ void audio_float_set_bus_comp_release_index(uint8_t release_index)
  */
 void audio_float_set_bus_comp_makeup_db(float makeup_db)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_makeup_db(comp, makeup_db);
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_makeup_db(comp, makeup_db);
 }
 
 /**
@@ -417,8 +417,7 @@ void audio_float_set_bus_comp_makeup_db(float makeup_db)
  */
 void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
 {
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_set_auto_makeup(comp, enabled);
+    (void)enabled;
 }
 
 /* ============================================================
@@ -465,8 +464,8 @@ void audio_tracks_init(void)
     master_gain_target = 1.0f;
     master_gain_smoothed = 1.0f;
 
-    fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
-    if(comp) fx_daisy_comp_init(comp, 48000.0f);
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_init(comp, 48000.0f);
 }
 
 /** Voir audio_float.h */

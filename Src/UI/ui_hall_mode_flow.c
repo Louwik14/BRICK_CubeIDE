@@ -9,6 +9,7 @@
 #include "Storage/kit_v1.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/patch_v1.h"
+#include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_settings.h"
@@ -54,6 +55,9 @@ typedef struct
 
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
 static ui_hall_mode_flow_kit_pending_t g_kit_pending;
+static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
+static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
+static uint8_t g_lowcost_rec_return_valid;
 
 static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
 {
@@ -75,8 +79,47 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
     ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
 }
 
+static void ui_hall_mode_flow_close_lowcost_rec(void)
+{
+    if (ui_page_audio_rec_is_open() == 0U)
+    {
+        return;
+    }
+
+    const uint8_t return_page = (g_lowcost_rec_return_valid != 0U)
+        ? g_lowcost_rec_return_page
+        : UI_PAGE_TEMPLATE_CFG;
+    const ui_hall_mode_t return_mode = (g_lowcost_rec_return_valid != 0U)
+        ? g_lowcost_rec_return_mode
+        : UI_HALL_MODE_SEQ;
+    g_lowcost_rec_return_valid = 0U;
+    ui_set_hall_mode(return_mode);
+    ui_navigation_request_page_with_availability(return_page);
+}
+
+static void ui_hall_mode_flow_leave_lowcost_special_page(void)
+{
+    if (ui_page_patch_assign_is_open() != 0U)
+    {
+        ui_page_patch_assign_close();
+        return;
+    }
+    if (ui_page_kit_assign_is_open() != 0U)
+    {
+        ui_page_kit_assign_close();
+        return;
+    }
+    if (ui_page_settings_is_open() != 0U)
+    {
+        ui_page_settings_close_to_return_page();
+        return;
+    }
+    ui_hall_mode_flow_close_lowcost_rec();
+}
+
 static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
 {
+    ui_hall_mode_flow_leave_lowcost_special_page();
     const ui_event_t event = {
         .type = UI_EVENT_BUTTON_PRESS,
         .id = (uint8_t)button,
@@ -114,23 +157,51 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             break;
 
         case 2U:
+            if (ui_page_kit_assign_is_open() != 0U)
+            {
+                ui_page_kit_assign_close();
+                return 1U;
+            }
+            ui_hall_mode_flow_leave_lowcost_special_page();
             ui_page_kit_assign_open();
             return 1U;
 
         case 3U:
+            if (ui_page_patch_assign_is_open() != 0U)
+            {
+                ui_page_patch_assign_close();
+                return 1U;
+            }
+            ui_hall_mode_flow_leave_lowcost_special_page();
             if (ui_macro_overlay_is_active() != 0U)
             {
                 ui_macro_overlay_on_hall_mode_changed();
             }
+            const ui_hall_mode_t previous_mode = ui_get_hall_mode();
             ui_set_hall_mode(UI_HALL_MODE_PATCH);
-            ui_page_patch_assign_open(ui_get_active_track(), UI_HALL_MODE_PATCH);
+            ui_page_patch_assign_open(ui_get_active_track(), previous_mode);
             return 1U;
 
         case 4U:
+            if (ui_page_settings_is_open() != 0U)
+            {
+                ui_page_settings_close_to_return_page();
+                return 1U;
+            }
+            ui_hall_mode_flow_leave_lowcost_special_page();
             ui_page_settings_open_sample_browser(ui_page_get_id());
             return 1U;
 
         case 5U:
+            if (ui_page_audio_rec_is_open() != 0U)
+            {
+                ui_hall_mode_flow_close_lowcost_rec();
+                return 1U;
+            }
+            ui_hall_mode_flow_leave_lowcost_special_page();
+            g_lowcost_rec_return_page = ui_page_get_id();
+            g_lowcost_rec_return_mode = ui_get_hall_mode();
+            g_lowcost_rec_return_valid = 1U;
             target_mode = UI_HALL_MODE_AUDIO_REC;
             target_page = UI_PAGE_AUDIO_REC;
             break;
@@ -178,6 +249,11 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
 
         default:
             return 0U;
+    }
+
+    if (target_mode != UI_HALL_MODE_AUDIO_REC)
+    {
+        ui_hall_mode_flow_leave_lowcost_special_page();
     }
 
     const uint32_t last_tap = mode_tap_ms[target_mode];

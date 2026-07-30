@@ -1,5 +1,15 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-30 - alignement fixe des niveaux moteurs
+
+- PRISM reste la reference inchangee a `0 dB`. Les sorties DELUGE, WAVE et
+  SAMPLER sont multipliees respectivement par `0.44157045`, `0.42169650` et
+  `0.51880004` immediatement apres leur renderer et avant le filtre/VCA/inserts
+  de piste. STACK et DRUM restent inchanges.
+- Ces facteurs lineaires precalcules sont fixes par moteur, sans calibration
+  par modele, lecture de `recommended_gain_db`, calcul en dB ou `powf` dans
+  l'IRQ. Le trim commun, le master et les enveloppes ne sont pas modifies.
+
 ## Addendum 2026-07-30 - AUDIO TEST 2
 
 - Dans Debug/Test seulement, `audio_process_block_int32()` peut rendre la
@@ -37,8 +47,8 @@
 ## Addendum 2026-07-29 - modulation chunk-coherente du filtre TPT
 
 - Le cutoff et la resonance lisses entre deux blocs audio de 64 frames sont repartis sur les huit chunks de 8 frames du chemin filtre track.
-- Chaque chunk prepare un jeu TPT complet et coherent (`a1/a2/a3/k`, trim, saturation et gains de mode), conserve sans interpolation pendant ses huit samples; l'interpolation independante des coefficients dans la boucle sample est retiree.
-- L'enveloppe filtre en octaves reste avancee et combinee au cutoff a chaque chunk. Les modes LP/HP/BP, le mapping `20 Hz..16 kHz` et le DJ EQ gardent leurs identites produit.
+- Chaque chunk prepare un jeu TPT complet et coherent (`a1/a2/a3/k` et gains de mode), conserve sans interpolation pendant ses huit samples; l'interpolation independante des coefficients dans la boucle sample est retiree.
+- L'enveloppe filtre proportionnelle aux bornes disponibles reste avancee et combinee au cutoff a chaque chunk. Les modes LP/HP/BP, le mapping `20 Hz..16 kHz` et le DJ EQ gardent leurs identites produit.
 - Les tests deterministes couvrent sine/triangle/saw/square/bruit, `0.1/1/10/40/80 Hz`, profondeurs, Q `0.707/2/4/6.5`, coherence TPT, transitions, mono/stereo, bypass, stabilite longue et valeurs non finies.
 
 ## Addendum 2026-07-29 - diagnostic gain staging AUDIO TEST
@@ -951,7 +961,7 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-05-25 - LFO FILTER/VCA direct bornes
 
 - `mod_lfo_v1` applique maintenant directement `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sur la lane mixer resolue, sans detour par `param_registry_apply_track_value_rt_fast`.
-- Les conversions restent celles de `param_filter`: cutoff logarithmique via LUT `exp2`, resonance lineaire vers la courbe Q Z1, EG en octaves, sustain lineaire 0..1, temps A/D/R via LUT `exp2`.
+- Les conversions restent celles de `param_filter`: cutoff logarithmique via LUT `exp2`, resonance lineaire vers la courbe Q Z1, EG proportionnel aux bornes de cutoff, sustain lineaire 0..1, temps A/D/R via LUT `exp2`.
 - Le chemin direct est une projection runtime temporaire: il ne modifie pas les bases track-aware ni les miroirs UI, et la release LFO restaure la base capturee si aucune autre LFO de la track ne cible la meme destination.
 - Aucune ecriture directe de `*_current`, aucun recalcul filtre/EQ/VCA et aucune nouvelle autorite mixer ne sont introduits.
 
@@ -1144,7 +1154,7 @@ Clarification START/END/LOOP live:
 - Les modes track `LP/HP/BP` utilisent un SVF TPT/ZDF float commun, avec deux etats integrateurs par canal. Le chemin stereo fusionne gauche/droite dans des kernels specialises par mode; le chemin mono-native conserve ses deux seuls etats.
 - La plage DSP effective est `20 Hz..16 kHz` a 48 kHz. `g=tan(pi*fc/Fs)` vient d'une LUT 1024 intervalles preparee a l'initialisation; aucune transcendantale ni conversion Q15 n'entre dans la boucle audio.
 - Cutoff et resonance ne recalculent leur cible que sur changement. Chaque chunk consommateur de 8 samples prepare un jeu complet coherent puis le conserve; les coefficients lies ne sont jamais interpoles independamment. Les changements `LP/HP/BP` sont fondus sur 64 samples.
-- La resonance UI lineaire `0..1` suit `Q=0.707..6.5`, avec trim entrant progressif, saturation douce de la seule boucle de resonance et gains LP/HP/BP distincts. Il n'y a ni clamp de sortie, ni allocation.
+- La resonance UI lineaire `0..1` suit `Q=0.707..6.5`, avec gains LP/HP/BP distincts. Le coeur reste lineaire: aucun trim dependant de la resonance, aucune saturation de boucle, aucun clamp de sortie et aucune allocation.
 - `OFF` est un bypass constant-sum sur 256 samples avec calcul du coeur jusqu'a la fin du fondu et reset des etats. L'ordre mixer est filtre track, VCA/gain/pan, inserts track, SEND et bus.
 - Le DJ EQ conserve ses trois biquads RBJ CMSIS. Ses courbes de coefficients `-80..+12 dB` sont preparees une fois en LUT 128 intervalles au boot; l'IRQ effectue uniquement une interpolation si un des trois gains est dirty, avec un setter groupe pour eviter trois recalculs complets.
 
@@ -1196,9 +1206,8 @@ Clarification START/END/LOOP live:
 
 - Le SVF TPT/ZDF float reste l'unique coeur `LP/HP/BP`. La résonance normalisée
   `r` suit `Q = 0.70710678 + (6.5 - 0.70710678) * r * (0.35 + 0.65*r)`.
-  Le niveau entrant suit `1 - 0.091*r²` (0 à -0.83 dB). La saturation
-  rationnelle `x / (1 + 0.52*r³*abs(x))` ne touche que l'état d'intégrateur
-  de la boucle de résonance; elle est nulle à faible résonance.
+  Le signal entrant et les états d'intégrateur restent linéaires: le trim
+  `1 - 0.091*r²` et la saturation rationnelle de boucle sont retirés.
 - Les gains de sortie sont distincts:
   `LP=1+0.035*r`, `HP=0.98+0.055*r`, `BP=0.92+0.08*r`.
   Le BP n'utilise plus le niveau brut dépendant de Q. Le Q est borné à 6.5,
@@ -1215,3 +1224,22 @@ Clarification START/END/LOOP live:
   480 samples (10 ms à 48 kHz). Un setter n'arme la rampe que si sa cible
   change; le compteur tombe à zéro exactement sur la cible et le chemin stable
   ne fait aucun calcul de lissage.
+
+## Addendum 2026-07-30 - modeles Stack SINMORPH/TRIMORPH
+
+- `SINMORPH` et `TRIMORPH` sont ajoutes apres les onze indices Stack existants; aucun renderer, parametre ou calcul de `SINFD`, `TRIFD` ou `SHAPE` n'est modifie.
+
+## Addendum 2026-07-30 - ownership release VCA Stack
+
+- Le note-off Stack ferme le gate logique du moteur, mais conserve la source oscillateur tant que `mixer_track_vca_requires_source()` indique que l'enveloppe VCA de la lane est encore active.
+- Quand l'enveloppe mixer atteint `IDLE`, Stack libere explicitement cette source de release et reprend son avance de phases `FREE` sans rendu modele complet. `all-notes-off` reste un kill immediat, sans tail.
+- L'enveloppe et le gain d'amplitude restent donc sous l'autorite unique du mixer. Wave conserve deja sa source apres note-off, DELUGE consomme le meme signal `downstream_source_required`, Prism maintient son tail source borne, Drum laisse finir son transient et Sampler/RAM laisse courir sa voix sous le gate VCA.
+- Les deux modeles utilisent la phase Q32 et le renderer de slot bornes existants. `SINMORPH` interpole depuis la sine vers `FULL RECT`, `HALF RECT`, `TRIANGLE` ou `FOLD`; `TRIMORPH` interpole depuis le triangle vers `PULSE`, `SAW` ou `SQUARE`.
+- `TARGET` est un selecteur continu: les positions affichees nomment la cible la plus proche, tandis que le DSP interpole entre deux cibles adjacentes afin que modulation et p-lock ne creent pas de saut de forme.
+- `ASYM`/`SKEW` utilisent un warp polynomial monotone de la phase, sans division, transcendantale, allocation, oversampling ni second oscillateur. `MORPH=0` retourne strictement la sine ou le triangle de base.
+## Addendum 2026-07-30 - compresseur master comparatif
+
+- Le slot FX 2 est l'unique autorite dynamics du bus MAIN et s'execute post-retours/post-XFade, avant publication du bus final.
+- Un seul modele est calcule par bloc: port float du RMS feedback Deluge ou Brick feed-forward stereo-link. Le sidechain HPF est commun; Brick actualise son controle toutes les 8 samples et interpole le gain.
+- L'ancien coeur et wrapper compresseur DaisySP sont supprimes; le slot devient `FX_COMP_LAB` et ne depend plus de DaisySP.
+- Un changement de modele remet a zero le nouvel etat et interpole depuis le gain sortant sur 128 samples, sans allocation ni double calcul de modele.

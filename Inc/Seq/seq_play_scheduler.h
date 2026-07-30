@@ -15,6 +15,8 @@ typedef struct
     uint8_t track;
     uint8_t note;
     uint8_t velocity;
+    uint8_t track_generation;
+    uint8_t reserved;
     uint16_t sample_offset_in_block;
     uint32_t event_token;
 } seq_play_scheduler_audio_event_t;
@@ -32,6 +34,8 @@ typedef struct
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
 void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
+void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count);
+void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.

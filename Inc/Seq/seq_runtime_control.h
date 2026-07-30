@@ -12,6 +12,8 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);
 void seq_runtime_on_track_length_changed(seq_track_id_t track);
 void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
+void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track_count);
+void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_count);
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div);

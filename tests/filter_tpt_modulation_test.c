@@ -55,8 +55,6 @@ static uint8_t test_finite_coeffs(const fx_biquad_filter_coeffs_t *coeffs)
                   && isfinite(coeffs->a2)
                   && isfinite(coeffs->a3)
                   && isfinite(coeffs->k)
-                  && isfinite(coeffs->input_gain)
-                  && isfinite(coeffs->loop_saturation)
                   && isfinite(coeffs->lp_gain)
                   && isfinite(coeffs->hp_gain)
                   && isfinite(coeffs->bp_gain));

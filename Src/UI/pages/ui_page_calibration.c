@@ -33,6 +33,12 @@ static uint32_t g_cal_done_tick = 0U;
 static uint8_t g_user_save_done = 0U;
 static uint32_t g_user_message_tick = 0U;
 #if defined(BRICK6_VARIANT_LOWCOST)
+static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_CFG;
+#else
+static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_COLORS;
+#endif
+static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_COLORS;
+#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_lowcost_cal_prev_done[HALL_KEY_COUNT];
 static uint8_t g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
 static uint32_t g_lowcost_cal_flash_start_tick = 0U;
@@ -123,7 +129,7 @@ static void ui_page_calibration_tick(void)
     if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
     {
 #if defined(BRICK6_VARIANT_LOWCOST)
-        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_CFG);
+        ui_page_set(g_calibration_return_page);
 #else
         ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_COLORS);
 #endif
@@ -373,6 +379,9 @@ static void ui_page_user_calibration_tick(void)
 
         if (hall_user_calibration_was_successful() != 0U)
         {
+#if defined(BRICK6_VARIANT_LOWCOST)
+            hall_set_velocity_profile((uint8_t)HALL_VEL_PROFILE_USER);
+#endif
             hall_calibration_save();
             g_user_save_done = 1U;
         }
@@ -385,7 +394,11 @@ static void ui_page_user_calibration_tick(void)
 
     if (g_user_save_done != 0U)
     {
+#if defined(BRICK6_VARIANT_LOWCOST)
+        ui_page_set(g_user_calibration_return_page);
+#else
         ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_COLORS);
+#endif
     }
     else
     {
@@ -464,3 +477,23 @@ const ui_page_t g_ui_page_user_calibration = {
     .tick = ui_page_user_calibration_tick,
     .render = ui_page_user_calibration_render,
 };
+
+void ui_page_calibration_open(uint8_t return_page_id)
+{
+    g_calibration_return_page = (return_page_id < UI_PAGE_COUNT)
+        ? return_page_id
+#if defined(BRICK6_VARIANT_LOWCOST)
+        : UI_PAGE_TEMPLATE_CFG;
+#else
+        : UI_PAGE_TEMPLATE_COLORS;
+#endif
+    ui_page_set(UI_PAGE_CALIBRATION);
+}
+
+void ui_page_user_calibration_open(uint8_t return_page_id)
+{
+    g_user_calibration_return_page = (return_page_id < UI_PAGE_COUNT)
+        ? return_page_id
+        : UI_PAGE_TEMPLATE_COLORS;
+    ui_page_set(UI_PAGE_USER_CALIBRATION);
+}

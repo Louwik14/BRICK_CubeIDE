@@ -916,6 +916,8 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SINFD:
         case BRICK6_STACK_MODEL_TRIFD: return "FOLD";
+        case BRICK6_STACK_MODEL_SINMORPH:
+        case BRICK6_STACK_MODEL_TRIMORPH: return "MORPH";
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
         case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
         case BRICK6_STACK_MODEL_SUB: return "SHAPE";
@@ -935,6 +937,8 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SINFD:
         case BRICK6_STACK_MODEL_TRIFD: return "SYM";
+        case BRICK6_STACK_MODEL_SINMORPH:
+        case BRICK6_STACK_MODEL_TRIMORPH: return "TARGET";
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
         case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
         case BRICK6_STACK_MODEL_SUB: return "SUB";
@@ -954,13 +958,18 @@ static const char *ui_page_template_tone_stack_param3_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SINFD:
         case BRICK6_STACK_MODEL_TRIFD: return "SHAPE";
+        case BRICK6_STACK_MODEL_SINMORPH: return "ASYM";
+        case BRICK6_STACK_MODEL_TRIMORPH: return "SKEW";
         default: return "PARAM3";
     }
 }
 
 static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
+                                                      float value,
                                                       char *out_name,
-                                                      uint32_t out_name_len)
+                                                      uint32_t out_name_len,
+                                                      char *out_value,
+                                                      uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
     uint8_t stack_slot = 0U;
@@ -1038,6 +1047,33 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
     if ((out_name != NULL) && (out_name_len > 0U))
     {
         (void)snprintf(out_name, out_name_len, "%s", (name != NULL) ? name : "-");
+    }
+    if ((stack_param == 4U) && (out_value != NULL) && (out_value_len > 0U))
+    {
+        float model_value = 0.0f;
+        const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
+        (void)param_registry_get_track_value(model_param, active_track, &model_value);
+        const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
+        if (model == BRICK6_STACK_MODEL_SINMORPH)
+        {
+            static const char *const targets[] = { "FULL RECT", "HALF RECT", "TRIANGLE", "FOLD" };
+            uint8_t target = (uint8_t)(value * 3.0f + 0.5f);
+            if (target > 3U)
+            {
+                target = 3U;
+            }
+            (void)snprintf(out_value, out_value_len, "%s", targets[target]);
+        }
+        else if (model == BRICK6_STACK_MODEL_TRIMORPH)
+        {
+            static const char *const targets[] = { "PULSE", "SAW", "SQUARE" };
+            uint8_t target = (uint8_t)(value * 2.0f + 0.5f);
+            if (target > 2U)
+            {
+                target = 2U;
+            }
+            (void)snprintf(out_value, out_value_len, "%s", targets[target]);
+        }
     }
     return 1U;
 }
@@ -1146,7 +1182,10 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }
-    if (((model == BRICK6_STACK_MODEL_SINFD) || (model == BRICK6_STACK_MODEL_TRIFD))
+    if (((model == BRICK6_STACK_MODEL_SINFD)
+            || (model == BRICK6_STACK_MODEL_TRIFD)
+            || (model == BRICK6_STACK_MODEL_SINMORPH)
+            || (model == BRICK6_STACK_MODEL_TRIMORPH))
             && ((stack_param == 3U) || (stack_param == 4U) || (stack_param == 5U)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
@@ -1722,12 +1761,14 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
-            && (ui_page_template_tone_stack_param_text(id, out_name, out_name_len) != 0U))
+            && (ui_page_template_tone_stack_param_text(id,
+                                                       value,
+                                                       out_name,
+                                                       out_name_len,
+                                                       out_value,
+                                                       out_value_len) != 0U))
     {
         (void)slot;
-        (void)value;
-        (void)out_value;
-        (void)out_value_len;
         return 1U;
     }
 

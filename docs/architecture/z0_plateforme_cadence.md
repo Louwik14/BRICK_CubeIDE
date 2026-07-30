@@ -1,5 +1,12 @@
 # Z0 - Plateforme / Cadence
 
+## Addendum 2026-07-30 - cadence Hall low-cost sans ASC
+
+- Le timer/MUX low-cost publie une mesure valide par touche toutes les 2,8 ms. `hall_loop_process()` transmet chaque entree FIFO brute a `hall_engine_process_sample()` sans moyenne numerique ASC.
+- Le filtre analogique du PCB est l'autorite de lissage low-cost. Les seuils, l'hysteresis, la position, les transitions note-on/off et la calibration restent dans les autorites Hall existantes.
+- Le mode TIME low-cost utilise des bornes comptees a 2,8 ms (`4..56` mesures) afin de conserver sa fenetre temporelle reelle historique. Le debug Hall annonce 2,8 ms et distingue la mesure ADC de la valeur recue par le moteur.
+- Premium conserve `hall_filter_asc` x4, son appel dans `hall_loop` et ses constantes runtime historiques.
+
 ## Addendum 2026-07-30 - MT-12 replay du dernier crash
 
 - `monkey_test_replay` regenere le flux a partir de la seed de l'archive MT-10 et refuse le replay si le breadcrumb de l'index fautif n'est plus disponible dans la fenetre des 16 actions.

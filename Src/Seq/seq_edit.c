@@ -340,7 +340,7 @@ static uint8_t seq_edit_lowcost_step_is_range_end_empty(seq_track_id_t track,
                     && (seq_model_step_has_non_play_plock(track, step) == 0U));
 }
 
-static uint8_t seq_edit_lowcost_source_is_held_or_mature_pending(uint8_t hall)
+static uint8_t seq_edit_lowcost_source_is_held_or_pending(uint8_t hall)
 {
     if (hall >= SEQ_STEPS_PER_PAGE)
     {
@@ -353,11 +353,6 @@ static uint8_t seq_edit_lowcost_source_is_held_or_mature_pending(uint8_t hall)
     }
 
     if (g_seq_hold_state.pending[hall] == 0U)
-    {
-        return 0U;
-    }
-
-    if ((engine_tick_count - g_seq_hold_state.press_tick[hall]) < SEQ_STEP_HOLD_THRESHOLD_TICKS)
     {
         return 0U;
     }
@@ -401,7 +396,7 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
     {
         if ((hall == end_hall)
-                || (seq_edit_lowcost_source_is_held_or_mature_pending(hall) == 0U)
+                || (seq_edit_lowcost_source_is_held_or_pending(hall) == 0U)
                 || (hall_surface_is_pressed(hall) == 0U)
                 || (g_seq_hold_state.track_id[hall] != track)
                 || (g_seq_hold_state.step_id[hall] >= end_step))
@@ -930,13 +925,6 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
         uint8_t selected = g_seq_hold_state.held[hall];
         if ((selected == 0U) && (promote_pending != 0U) && (g_seq_hold_state.pending[hall] != 0U))
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
-            const uint32_t now_tick = engine_tick_count;
-            if ((now_tick - g_seq_hold_state.press_tick[hall]) < SEQ_STEP_HOLD_THRESHOLD_TICKS)
-            {
-                continue;
-            }
-#endif
             g_seq_hold_state.pending[hall] = 0U;
             g_seq_hold_state.held[hall] = 1U;
             selected = 1U;

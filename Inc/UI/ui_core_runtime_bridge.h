@@ -10,7 +10,6 @@
 typedef void (*ui_core_runtime_bridge_feedback_fn)(const char *message);
 typedef void (*ui_core_runtime_bridge_set_hall_mode_fn)(ui_hall_mode_t mode);
 typedef void (*ui_core_runtime_bridge_pattern_enter_fn)(ui_pattern_mode_t mode);
-typedef uint8_t (*ui_core_runtime_bridge_undo_request_fn)(void);
 typedef void (*ui_core_runtime_bridge_suppress_hall_note_fn)(uint8_t hall);
 typedef void (*ui_core_runtime_bridge_post_sync_fn)(uint8_t sync_active_track_ui_context);
 
@@ -76,7 +75,6 @@ uint8_t ui_core_runtime_bridge_handle_global_shortcuts(const ui_event_t *ev,
                                                        uint8_t shift_down,
                                                        uint8_t track_select_armed,
                                                        uint8_t mute_active,
-                                                       ui_core_runtime_bridge_undo_request_fn undo_request,
                                                        ui_core_runtime_bridge_feedback_fn feedback);
 
 uint8_t ui_core_runtime_bridge_handle_seq_mode_event(const ui_event_t *ev,

@@ -23,7 +23,7 @@
 #include "fx_pool.h"
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
-#include "fx_daisy_comp.h"
+#include "fx_comp_lab.h"
 
 /**
  * @brief Traite un bloc stéréo avec un slot FX donné.
@@ -71,8 +71,8 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
             fx_saturation_process_block((fx_saturation_t*)s->state, L, R, frames);
             break;
 
-        case FX_DAISY_COMP:
-            fx_daisy_comp_process_block((fx_daisy_comp_t*)s->state, L, R, frames);
+        case FX_COMP_LAB:
+            fx_comp_lab_process_block((fx_comp_lab_t*)s->state, L, R, frames);
             break;
 
         default:

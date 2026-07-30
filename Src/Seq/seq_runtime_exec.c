@@ -96,6 +96,8 @@ static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_
     out_event->track = scheduler_event->track;
     out_event->note = scheduler_event->note;
     out_event->velocity = scheduler_event->velocity;
+    out_event->track_generation = scheduler_event->track_generation;
+    out_event->reserved = 0U;
     out_event->sample_offset_in_block = scheduler_event->sample_offset_in_block;
     out_event->event_token = scheduler_event->event_token;
 }
@@ -172,6 +174,8 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
         out->track = marker->track;
         out->note = 0U;
         out->velocity = marker->click_type;
+        out->track_generation = 0U;
+        out->reserved = 0U;
         out->sample_offset_in_block = (uint16_t)(marker->due_sample_time - block_start_sample);
         out->event_token = 0U;
     }

@@ -17,6 +17,14 @@ int16_t brick6_stack_waveform_sine_fold(uint32_t phase, uint16_t fold_q15, uint1
 int16_t brick6_stack_waveform_tri_fold(uint32_t phase, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15);
 int16_t brick6_stack_waveform_soft(uint32_t phase, uint16_t morph_q15, uint16_t fold_q15);
 int16_t brick6_stack_waveform_shape(uint32_t phase, uint16_t shape_q15, uint16_t morph_q15);
+int16_t brick6_stack_waveform_sine_morph(uint32_t phase,
+                                         uint16_t morph_q15,
+                                         uint16_t target_q15,
+                                         uint16_t asym_q15);
+int16_t brick6_stack_waveform_tri_morph(uint32_t phase,
+                                        uint16_t morph_q15,
+                                        uint16_t target_q15,
+                                        uint16_t skew_q15);
 
 #ifdef __cplusplus
 }

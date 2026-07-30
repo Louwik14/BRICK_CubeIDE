@@ -1468,7 +1468,6 @@ uint8_t ui_core_runtime_bridge_handle_global_shortcuts(const ui_event_t *ev,
                                                        uint8_t shift_down,
                                                        uint8_t track_select_armed,
                                                        uint8_t mute_active,
-                                                       ui_core_runtime_bridge_undo_request_fn undo_request,
                                                        ui_core_runtime_bridge_feedback_fn feedback)
 {
     if ((ev != 0)
@@ -1486,7 +1485,6 @@ uint8_t ui_core_runtime_bridge_handle_global_shortcuts(const ui_event_t *ev,
                                                  shift_down,
                                                  track_select_armed,
                                                  mute_active,
-                                                 undo_request,
                                                  feedback);
 }
 

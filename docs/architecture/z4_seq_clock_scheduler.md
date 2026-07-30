@@ -1,5 +1,13 @@
 # Z4 - Seq / Clock / Scheduler
 
+## Addendum 2026-07-30 - p-lock enveloppe VCA
+
+- Les quatre parametres `PARAM_VCA_ATTACK/DECAY/SUSTAIN/RELEASE` sont declares
+  dans le set p-lock `MIX`, apres les quatre slots MIX historiques.
+- `seq_param_iface` conserve pour ces slots une base et une valeur runtime
+  temporaire par track; apply et release passent par le backend VCA track-aware
+  existant sans modifier l'etat canonique pendant le playback.
+
 ## 1. Perimetre
 
 Perimetre operationnel de zone (appartient a Z4):
@@ -1320,3 +1328,15 @@ Correction:
 - Les note-on/off ARP passent jusqu'au moteur avec leur track proprietaire. Le pairing live-rec des emissions ARP est indexe par `owner_track + note`, et non plus par note seule.
 - Le clear d'une track ne vide que ses notes, son pairing live-rec et son ownership de voice-group. Le panic global reste le seul chemin autorise a vider toutes les tracks.
 - Les marqueurs de provenance des notes strum differees sont stockes par entree sur toute la capacite de queue; ils ne partagent plus un masque limite aux huit premieres entrees.
+## Addendum 2026-07-30 - restauration Track pendant lecture
+
+- Une restauration locale de track ouvre une fenêtre bornée de suspension scheduler
+  sur la track et les seuls membres de voice-group structurellement concernés.
+- Chaque événement scheduler porte la génération de sa track. Le début, le clear
+  et la fin de restauration avancent cette génération : un événement déjà collecté
+  ou resté en lookahead ne peut donc pas être rejoué après le paste.
+- Le début et la fin restaurent les p-locks actifs, invalident le boundary state et
+  remettent la phase de division de la track à zéro. La fin purge une dernière fois
+  notes, gates, fenêtres ARP et événements avant de réautoriser le scheduling.
+- Les tracks hors fermeture structurelle restent actives et leurs files ne sont pas
+  modifiées.

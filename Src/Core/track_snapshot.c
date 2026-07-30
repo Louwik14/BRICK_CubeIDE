@@ -33,15 +33,95 @@ static uint8_t track_snapshot_track_is_valid(uint8_t track)
     return (track < UI_TRACK_COUNT) ? 1U : 0U;
 }
 
-static void track_snapshot_runtime_quiesce(uint8_t track)
+static void track_snapshot_add_restore_track(uint8_t track,
+                                             seq_track_id_t *tracks,
+                                             uint8_t *track_count)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (tracks == 0) || (track_count == 0))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < *track_count; ++i)
+    {
+        if (tracks[i] == (seq_track_id_t)track)
+        {
+            return;
+        }
+    }
+    if (*track_count < SEQ_TRACK_COUNT)
+    {
+        tracks[*track_count] = (seq_track_id_t)track;
+        (*track_count)++;
+    }
+}
+
+static void track_snapshot_collect_restore_tracks(uint8_t track,
+                                                  uint8_t include_preceding_group,
+                                                  seq_track_id_t *tracks,
+                                                  uint8_t *track_count)
 {
     if (track >= SEQ_TRACK_COUNT)
     {
         return;
     }
 
-    seq_track_id_t seq_track = (seq_track_id_t)track;
-    seq_runtime_clear_tracks(&seq_track, 1U);
+    track_snapshot_add_restore_track(track, tracks, track_count);
+
+    uint8_t master = track;
+    if (track_runtime_get_voice_group_effective_master(track, &master) != 0U)
+    {
+        uint8_t members[SEQ_TRACK_COUNT];
+        uint8_t member_count = 0U;
+        if (track_runtime_collect_voice_group_members(master,
+                                                      members,
+                                                      SEQ_TRACK_COUNT,
+                                                      &member_count) != 0U)
+        {
+            for (uint8_t i = 0U; i < member_count; ++i)
+            {
+                track_snapshot_add_restore_track(members[i], tracks, track_count);
+            }
+        }
+    }
+
+    for (uint8_t member = (uint8_t)(track + 1U); member < SEQ_TRACK_COUNT; ++member)
+    {
+        if (track_state_get_voice_group_role(member) != TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            break;
+        }
+        track_snapshot_add_restore_track(member, tracks, track_count);
+    }
+
+    if ((include_preceding_group != 0U) && (track > 0U))
+    {
+        const uint8_t previous = (uint8_t)(track - 1U);
+        if (track_runtime_get_voice_group_effective_master(previous, &master) != 0U)
+        {
+            uint8_t members[SEQ_TRACK_COUNT];
+            uint8_t member_count = 0U;
+            if (track_runtime_collect_voice_group_members(master,
+                                                          members,
+                                                          SEQ_TRACK_COUNT,
+                                                          &member_count) != 0U)
+            {
+                for (uint8_t i = 0U; i < member_count; ++i)
+                {
+                    track_snapshot_add_restore_track(members[i], tracks, track_count);
+                }
+            }
+        }
+    }
+}
+
+static void track_snapshot_runtime_quiesce_engine(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
     keyboard_engine_all_notes_off_for_track(track);
     brick6_sampler_runtime_reset_track(track);
     brick6_looper_runtime_stop_playback(track);
@@ -351,15 +431,30 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     midi_channel[target_track] = snapshot->midi_channel;
     midi_source[target_track] = (uint8_t)snapshot->midi_source;
 
+    seq_track_id_t restore_tracks[SEQ_TRACK_COUNT];
+    uint8_t restore_track_count = 0U;
+    track_snapshot_collect_restore_tracks(
+        target_track,
+        (snapshot->voice_group_role == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE) ? 1U : 0U,
+        restore_tracks,
+        &restore_track_count);
     if ((options != 0)
             && (options->clear_source_track != 0U)
             && (options->source_track < UI_TRACK_COUNT)
             && (options->source_track != target_track))
     {
-        track_snapshot_runtime_quiesce(options->source_track);
+        track_snapshot_collect_restore_tracks(options->source_track,
+                                              0U,
+                                              restore_tracks,
+                                              &restore_track_count);
     }
-    track_snapshot_runtime_quiesce(target_track);
+    seq_runtime_begin_track_restore(restore_tracks, restore_track_count);
+    for (uint8_t i = 0U; i < restore_track_count; ++i)
+    {
+        track_snapshot_runtime_quiesce_engine((uint8_t)restore_tracks[i]);
+    }
 
+    uint8_t apply_ok = 0U;
     track_snapshot_structure_apply_ctx_t structure_ctx = {
         .family = family,
         .type = type,
@@ -377,21 +472,21 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     };
     if (param_registry_run_track_transition_pipeline_for_track(&pipeline_cmd, target_track) == 0U)
     {
-        return 0U;
+        goto restore_done;
     }
 
     track_sound_state_t *const dst_sound = track_sound_state_get(target_track);
     track_tone_sound_state_t *const dst_tone = track_tone_sound_state_get(target_track);
     if ((dst_sound == 0) || (dst_tone == 0))
     {
-        return 0U;
+        goto restore_done;
     }
     memcpy(dst_sound, &snapshot->sound, sizeof(*dst_sound));
     memcpy(dst_tone, &snapshot->tone, sizeof(*dst_tone));
 
     if (track_snapshot_apply_voice_group(target_track, snapshot) == 0U)
     {
-        return 0U;
+        goto restore_done;
     }
     track_runtime_invalidate_all();
     track_runtime_refresh_all();
@@ -406,7 +501,11 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
 
     ui_active_track_sync_full_after_reconfigure();
-    return 1U;
+    apply_ok = 1U;
+
+restore_done:
+    seq_runtime_end_track_restore(restore_tracks, restore_track_count);
+    return apply_ok;
 }
 
 uint8_t track_snapshot_apply(uint8_t target_track, const track_snapshot_t *snapshot)

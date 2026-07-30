@@ -121,13 +121,13 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
 
         if (ev->id == (uint8_t)BTN_COPY)
         {
-            (void)seq_edit_copy_steps(held_track, held_steps, held_count);
-            return 1U;
-        }
+            if (shift_down != 0U)
+            {
+                seq_edit_clear_steps(held_track, held_steps, held_count);
+                return 1U;
+            }
 
-        if (shift_down != 0U)
-        {
-            seq_edit_clear_steps(held_track, held_steps, held_count);
+            (void)seq_edit_copy_steps(held_track, held_steps, held_count);
             return 1U;
         }
 

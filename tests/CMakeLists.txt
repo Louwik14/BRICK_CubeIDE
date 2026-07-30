@@ -33,8 +33,42 @@ target_include_directories(keyboard_arp_multitrack_test PRIVATE
 )
 add_test(NAME keyboard_arp_multitrack COMMAND keyboard_arp_multitrack_test)
 
+add_executable(hall_engine_lowcost_test
+    hall_engine_lowcost_test.c
+    ../Src/App/Hall/hall_engine.c
+)
+
+target_compile_definitions(hall_engine_lowcost_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
+target_include_directories(hall_engine_lowcost_test PRIVATE
+    stubs
+    ../Inc
+)
+add_test(NAME hall_engine_lowcost COMMAND hall_engine_lowcost_test)
+
+add_executable(stack_vca_release_test
+    stack_vca_release_test.c
+    ../Src/Core/brick6_stack_runtime.c
+    ../Src/Core/brick6_stack_waveform.c
+)
+
+target_include_directories(stack_vca_release_test PRIVATE
+    stubs
+    ../Inc
+)
+target_link_libraries(stack_vca_release_test PRIVATE m)
+add_test(NAME stack_vca_release COMMAND stack_vca_release_test)
+
 if(WIN32)
+    add_test(NAME engine_output_gain
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/engine_output_gain_validation.ps1)
+    add_test(NAME hall_lowcost_integration
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/hall_lowcost_integration_validation.ps1)
     add_test(NAME wave_mipmap_spectral
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/wave_mipmap_spectral_test.ps1)
+    add_test(NAME track_paste_playback
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/track_paste_playback_validation.ps1)
 endif()

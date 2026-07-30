@@ -63,6 +63,7 @@ typedef struct
     uint8_t type;
     uint8_t audio_dispatched;
     uint8_t generation;
+    uint8_t track_generation;
     uint32_t event_token;
 } seq_play_scheduler_evt_t;
 
@@ -110,6 +111,8 @@ static uint8_t g_seq_play_group_rr_cursor[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_group_track_active_count[SEQ_TRACK_COUNT];
 static uint32_t g_seq_play_next_event_token;
 static uint32_t g_seq_play_active_event_token[SEQ_TRACK_COUNT][128U];
+static uint8_t g_seq_play_track_generation[SEQ_TRACK_COUNT];
+static uint8_t g_seq_play_track_suspended[SEQ_TRACK_COUNT];
 static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
     PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
 };
@@ -163,6 +166,20 @@ static void seq_play_scheduler_next_generation(void)
     if (g_seq_play_generation == 0U)
     {
         g_seq_play_generation = 1U;
+    }
+}
+
+static void seq_play_scheduler_next_track_generation(seq_track_id_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_seq_play_track_generation[track]++;
+    if (g_seq_play_track_generation[track] == 0U)
+    {
+        g_seq_play_track_generation[track] = 1U;
     }
 }
 
@@ -306,6 +323,11 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint32_t event_token)
 {
     const uint32_t primask = seq_play_scheduler_enter_critical();
+    if ((track >= SEQ_TRACK_COUNT) || (g_seq_play_track_suspended[track] != 0U))
+    {
+        seq_play_scheduler_exit_critical(primask);
+        return;
+    }
     if (g_seq_play_event_count >= SEQ_PLAY_SCHEDULER_EVENT_CAP)
     {
         g_seq_play_diag.queue_overflow_drop_count++;
@@ -321,6 +343,7 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     evt->velocity = velocity;
     evt->audio_dispatched = 0U;
     evt->generation = g_seq_play_generation;
+    evt->track_generation = g_seq_play_track_generation[track];
     evt->event_token = event_token;
     if (g_seq_play_event_count > g_seq_play_diag.queue_high_water)
     {
@@ -733,6 +756,11 @@ void seq_play_scheduler_init(void)
         g_seq_play_group_track_active_count[track] = 0U;
     }
     memset(g_seq_play_active_event_token, 0, sizeof(g_seq_play_active_event_token));
+    memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        g_seq_play_track_generation[track] = 1U;
+    }
 }
 
 void seq_play_scheduler_clear(void)
@@ -743,6 +771,11 @@ void seq_play_scheduler_clear(void)
     memset(g_seq_play_group_rr_cursor, 0, sizeof(g_seq_play_group_rr_cursor));
     memset(g_seq_play_group_track_active_count, 0, sizeof(g_seq_play_group_track_active_count));
     memset(g_seq_play_active_event_token, 0, sizeof(g_seq_play_active_event_token));
+    memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        seq_play_scheduler_next_track_generation(track);
+    }
     seq_play_scheduler_next_generation();
     seq_play_scheduler_exit_critical(primask);
 }
@@ -764,6 +797,16 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         }
     }
 
+    uint32_t primask = seq_play_scheduler_enter_critical();
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (clear_track[track] != 0U)
+        {
+            seq_play_scheduler_next_track_generation(track);
+        }
+    }
+    seq_play_scheduler_exit_critical(primask);
+
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         if (clear_track[track] == 0U)
@@ -774,7 +817,7 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         for (uint8_t note = 0U; note < 128U; ++note)
         {
             uint32_t token = 0U;
-            uint32_t primask = seq_play_scheduler_enter_critical();
+            primask = seq_play_scheduler_enter_critical();
             token = g_seq_play_active_event_token[track][note];
             g_seq_play_active_event_token[track][note] = 0U;
             seq_play_scheduler_exit_critical(primask);
@@ -789,6 +832,8 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
                 .track = track,
                 .note = note,
                 .velocity = 0U,
+                .track_generation = g_seq_play_track_generation[track],
+                .reserved = 0U,
                 .sample_offset_in_block = 0U,
                 .event_token = token,
             };
@@ -797,7 +842,7 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         }
     }
 
-    const uint32_t primask = seq_play_scheduler_enter_critical();
+    primask = seq_play_scheduler_enter_critical();
     uint16_t write_index = 0U;
     for (uint16_t read_index = 0U; read_index < g_seq_play_event_count; ++read_index)
     {
@@ -824,6 +869,48 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         memset(&g_seq_play_arp_windows[track], 0, sizeof(g_seq_play_arp_windows[track]));
         g_seq_play_group_rr_cursor[track] = 0U;
         g_seq_play_group_track_active_count[track] = 0U;
+    }
+    seq_play_scheduler_exit_critical(primask);
+}
+
+void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count)
+{
+    if ((tracks == NULL) || (track_count == 0U))
+    {
+        return;
+    }
+
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    for (uint8_t i = 0U; i < track_count; ++i)
+    {
+        const seq_track_id_t track = tracks[i];
+        if (track < SEQ_TRACK_COUNT)
+        {
+            g_seq_play_track_suspended[track] = 1U;
+            seq_play_scheduler_next_track_generation(track);
+        }
+    }
+    seq_play_scheduler_exit_critical(primask);
+    seq_play_scheduler_clear_tracks(tracks, track_count);
+}
+
+void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t track_count)
+{
+    if ((tracks == NULL) || (track_count == 0U))
+    {
+        return;
+    }
+
+    seq_play_scheduler_clear_tracks(tracks, track_count);
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    for (uint8_t i = 0U; i < track_count; ++i)
+    {
+        const seq_track_id_t track = tracks[i];
+        if (track < SEQ_TRACK_COUNT)
+        {
+            seq_play_scheduler_next_track_generation(track);
+            g_seq_play_track_suspended[track] = 0U;
+        }
     }
     seq_play_scheduler_exit_critical(primask);
 }
@@ -1391,6 +1478,14 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
                 stale_generation_count++;
                 continue;
             }
+            if ((candidate->track >= SEQ_TRACK_COUNT)
+                    || (candidate->track_generation != g_seq_play_track_generation[candidate->track])
+                    || (g_seq_play_track_suspended[candidate->track] != 0U))
+            {
+                g_seq_play_events[i].audio_dispatched = 1U;
+                stale_generation_count++;
+                continue;
+            }
             if (candidate->due_sample_time >= block_end_sample)
             {
                 continue;
@@ -1418,6 +1513,8 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
         out_evt.track = evt.track;
         out_evt.note = evt.note;
         out_evt.velocity = evt.velocity;
+        out_evt.track_generation = evt.track_generation;
+        out_evt.reserved = 0U;
         out_evt.event_token = evt.event_token;
         if (evt.due_sample_time < block_start_sample)
         {
@@ -1491,6 +1588,13 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 {
     /* Apply seam: dispatch a scheduler event to engines/output only. */
     if (event == NULL)
+    {
+        return;
+    }
+
+    if ((event->track >= SEQ_TRACK_COUNT)
+            || (event->track_generation != g_seq_play_track_generation[event->track])
+            || (g_seq_play_track_suspended[event->track] != 0U))
     {
         return;
     }

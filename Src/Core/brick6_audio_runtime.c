@@ -34,6 +34,30 @@
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
 
+#define BRICK6_DELUGE_OUTPUT_GAIN  (0.44157045f) /* -7.1 dB */
+#define BRICK6_WAVE_OUTPUT_GAIN    (0.42169650f) /* -7.5 dB */
+#define BRICK6_SAMPLER_OUTPUT_GAIN (0.51880004f) /* -5.7 dB */
+
+static void brick6_apply_output_gain_mono(float *buffer, uint32_t frames, float gain)
+{
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        buffer[i] *= gain;
+    }
+}
+
+static void brick6_apply_output_gain_stereo(float *left,
+                                            float *right,
+                                            uint32_t frames,
+                                            float gain)
+{
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        left[i] *= gain;
+        right[i] *= gain;
+    }
+}
+
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
     switch ((track_runtime_type_t)runtime_type)
@@ -114,6 +138,8 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
                 memset(direct_l, 0, frames * sizeof(float));
                 memset(direct_r, 0, frames * sizeof(float));
                 brick6_sampler_runtime_render_ram_track(ctx, direct_l, direct_r, frames);
+                brick6_apply_output_gain_stereo(
+                    direct_l, direct_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN);
                 mixer_commit_external_stereo(ctx->mix_track_id, frames);
                 sampler_tracks++;
                 continue;
@@ -123,6 +149,8 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         memset(sampler_tmp_l, 0, frames * sizeof(float));
         memset(sampler_tmp_r, 0, frames * sizeof(float));
         brick6_sampler_runtime_render_track(ctx, sampler_tmp_l, sampler_tmp_r, frames);
+        brick6_apply_output_gain_stereo(
+            sampler_tmp_l, sampler_tmp_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN);
         mixer_submit_external_stereo(ctx->mix_track_id, sampler_tmp_l, sampler_tmp_r, frames);
         sampler_tracks++;
     }
@@ -225,6 +253,8 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         {
             if (brick6_wave_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
             {
+                brick6_apply_output_gain_mono(
+                    direct_mono, frames, BRICK6_WAVE_OUTPUT_GAIN);
                 mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 wave_tracks++;
             }
@@ -233,6 +263,8 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
 
         if (brick6_wave_runtime_render_instance(ctx->instance_id, wave_tmp, frames) != 0U)
         {
+            brick6_apply_output_gain_mono(
+                wave_tmp, frames, BRICK6_WAVE_OUTPUT_GAIN);
             mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);
             wave_tracks++;
         }
@@ -272,6 +304,8 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
         {
             if (brick6_deluge_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
             {
+                brick6_apply_output_gain_mono(
+                    direct_mono, frames, BRICK6_DELUGE_OUTPUT_GAIN);
                 mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 deluge_tracks++;
             }
@@ -280,6 +314,8 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
 
         if (brick6_deluge_runtime_render_instance(ctx->instance_id, deluge_tmp, frames) != 0U)
         {
+            brick6_apply_output_gain_mono(
+                deluge_tmp, frames, BRICK6_DELUGE_OUTPUT_GAIN);
             mixer_submit_external_mono_native(ctx->mix_track_id, deluge_tmp, frames);
             deluge_tracks++;
         }
@@ -307,7 +343,11 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
             continue;
         }
 
-        brick6_stack_runtime_render_instance(ctx->instance_id, stack_tmp, frames);
+        brick6_stack_runtime_render_instance(
+            ctx->instance_id,
+            stack_tmp,
+            frames,
+            mixer_track_vca_requires_source(ctx->mix_track_id));
         mixer_submit_external_mono_native(ctx->mix_track_id, stack_tmp, frames);
         stack_tracks++;
     }

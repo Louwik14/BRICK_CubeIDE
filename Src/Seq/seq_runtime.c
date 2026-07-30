@@ -105,6 +105,8 @@ static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *sched
     scheduler_event->track = event->track;
     scheduler_event->note = event->note;
     scheduler_event->velocity = event->velocity;
+    scheduler_event->track_generation = event->track_generation;
+    scheduler_event->reserved = 0U;
     scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
     scheduler_event->event_token = event->event_token;
 }
@@ -945,6 +947,36 @@ void seq_runtime_on_seq_link_changed(uint8_t master_track)
 void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count)
 {
     seq_play_scheduler_clear_tracks(tracks, track_count);
+}
+
+void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track_count)
+{
+    seq_play_scheduler_suspend_tracks(tracks, track_count);
+    for (uint8_t i = 0U; i < track_count; ++i)
+    {
+        if (tracks[i] >= SEQ_TRACK_COUNT)
+        {
+            continue;
+        }
+        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
+        seq_boundary_engine_invalidate_track(&g_seq_runtime, tracks[i]);
+        g_seq_runtime.track_div_phase[tracks[i]] = 0U;
+    }
+}
+
+void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_count)
+{
+    for (uint8_t i = 0U; i < track_count; ++i)
+    {
+        if (tracks[i] >= SEQ_TRACK_COUNT)
+        {
+            continue;
+        }
+        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
+        seq_boundary_engine_invalidate_track(&g_seq_runtime, tracks[i]);
+        g_seq_runtime.track_div_phase[tracks[i]] = 0U;
+    }
+    seq_play_scheduler_resume_tracks(tracks, track_count);
 }
 
 void seq_runtime_on_track_pattern_change(uint8_t track)

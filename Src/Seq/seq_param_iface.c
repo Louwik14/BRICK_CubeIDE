@@ -21,22 +21,28 @@ typedef struct
 } seq_param_slot_state_t;
 
 #define SEQ_PARAM_NON_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
-#define SEQ_PARAM_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * 4U)
+#define SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK 8U
+#define SEQ_PARAM_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
 #define SEQ_PARAM_FLAG_BIT_COUNT (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_SLOT_COUNT)
 #define SEQ_PARAM_FLAG_BYTE_COUNT ((SEQ_PARAM_FLAG_BIT_COUNT + 7U) / 8U)
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_MIX][256U];
-SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_mix_state[SEQ_TRACK_COUNT][4U];
+SEQ_STATE_D2 static seq_param_slot_state_t
+    g_seq_param_mix_state[SEQ_TRACK_COUNT][SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK];
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_MIX][PARAM_COUNT];
 SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 
-static const param_id_t g_seq_param_mix_slot_to_id[4U] = {
+static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK] = {
     PARAM_MIX_LEVEL,
     PARAM_MIX_PAN,
     PARAM_MIX_SEND1,
-    PARAM_MIX_SEND2
+    PARAM_MIX_SEND2,
+    PARAM_VCA_ATTACK,
+    PARAM_VCA_DECAY,
+    PARAM_VCA_SUSTAIN,
+    PARAM_VCA_RELEASE
 };
 
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
@@ -49,7 +55,9 @@ static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_i
 {
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
     {
-        return SEQ_PARAM_NON_MIX_SLOT_COUNT + ((uint32_t)track * 4U) + (uint32_t)param_slot;
+        return SEQ_PARAM_NON_MIX_SLOT_COUNT
+            + ((uint32_t)track * SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
+            + (uint32_t)param_slot;
     }
 
     return (((uint32_t)track * (uint32_t)SEQ_PLOCK_SET_MIX + (uint32_t)set_id) * 256U) + (uint32_t)param_slot;
@@ -173,6 +181,10 @@ static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_VCA_ATTACK:
+        case PARAM_VCA_DECAY:
+        case PARAM_VCA_SUSTAIN:
+        case PARAM_VCA_RELEASE:
             return 1U;
         default:
             return 0U;
@@ -186,7 +198,9 @@ static uint8_t seq_param_iface_mix_param_to_slot(param_id_t param, seq_param_slo
         return 0U;
     }
 
-    for (seq_param_slot_t slot = 0U; slot < 4U; ++slot)
+    for (seq_param_slot_t slot = 0U;
+         slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK;
+         ++slot)
     {
         if (g_seq_param_mix_slot_to_id[slot] == param)
         {
@@ -200,7 +214,7 @@ static uint8_t seq_param_iface_mix_param_to_slot(param_id_t param, seq_param_slo
 
 static uint8_t seq_param_iface_mix_slot_to_param(seq_param_slot_t slot, param_id_t *out_param)
 {
-    if ((out_param == 0) || (slot >= 4U))
+    if ((out_param == 0) || (slot >= (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK))
     {
         return 0U;
     }
@@ -218,7 +232,9 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, ui
 
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
     {
-        return (param_slot < 4U) ? &g_seq_param_mix_state[track][param_slot] : 0;
+        return (param_slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
+            ? &g_seq_param_mix_state[track][param_slot]
+            : 0;
     }
 
     if (set_id >= (uint8_t)SEQ_PLOCK_SET_MIX)

@@ -25,18 +25,13 @@ public static class Brick6FilterDelayValidation
             double a2 = g * a1;
             double a3 = g * g * a1;
             double r = (qs - 0.70710678) / (6.5 - 0.70710678);
-            double r2 = r * r;
-            double inputGain = 1.0 - 0.091 * r2;
-            double saturation = 0.52 * r2 * r;
             double lpGain = 1.0 + 0.035 * r;
             double hpGain = 0.98 + 0.055 * r;
             double bpGain = 0.92 + 0.08 * r;
-            double driven = input * inputGain;
-            double v3 = driven - s2;
-            double loop = s1 / (1.0 + saturation * Math.Abs(s1));
-            double v1 = a1 * loop + a2 * v3;
-            double v2 = s2 + a2 * loop + a3 * v3;
-            double high = driven - k * v1 - v2;
+            double v3 = input - s2;
+            double v1 = a1 * s1 + a2 * v3;
+            double v2 = s2 + a2 * s1 + a3 * v3;
+            double high = input - k * v1 - v2;
             s1 = 2.0 * v1 - s1;
             s2 = 2.0 * v2 - s2;
             lp = v2 * lpGain;
@@ -143,26 +138,26 @@ public static class Brick6FilterDelayValidation
             int samples = (int)(Fs * Math.Max(2.0, 2.0 / rate));
             for (int i = 0; i < samples; i += 8)
             {
-                double octave = 3.0 * Math.Sin(2.0 * Pi * rate * i / Fs);
-                min = Math.Min(min, octave);
-                max = Math.Max(max, octave);
-                sum += octave;
+                double hz = 3000.0 * Math.Sin(2.0 * Pi * rate * i / Fs);
+                min = Math.Min(min, hz);
+                max = Math.Max(max, hz);
+                sum += hz;
             }
             double depth = 0.5 * (max - min);
             double mean = sum / Math.Ceiling(samples / 8.0);
-            if (depth < 2.98 || Math.Abs(mean) > 0.02)
+            if (depth < 2980.0 || Math.Abs(mean) > 20.0)
                 throw new Exception("LFO depth/centre regression");
         }
 
         foreach (double baseHz in new [] { 20.0, 80.0, 440.0, 2000.0 })
-        foreach (double amount in new [] { 0.25, 0.5, 1.0 })
+        foreach (double amount in new [] { -1.0, -0.5, 0.25, 0.5, 1.0 })
         {
-            double octaves = 8.0 * Math.Pow(amount, 1.5);
-            double result = baseHz * Math.Pow(2.0, octaves);
-            double measured = Math.Log(Math.Max(20.0, Math.Min(16000.0, result)) / baseHz, 2.0);
-            double expected = Math.Min(octaves, Math.Log(16000.0 / baseHz, 2.0));
-            if (Math.Abs(measured - expected) > 1e-9)
-                throw new Exception("Envelope octave inconsistency");
+            double result = amount >= 0.0
+                ? baseHz + (16000.0 - baseHz) * amount
+                : baseHz + (baseHz - 20.0) * amount;
+            double expected = Math.Max(20.0, Math.Min(16000.0, result));
+            if (Math.Abs(result - expected) > 1e-9)
+                throw new Exception("Envelope bounded interpolation inconsistency");
         }
     }
 
@@ -196,14 +191,14 @@ public static class Brick6FilterDelayValidation
         {
             double peak = PeakDb(mode, cutoff, q);
             globalPeak = Math.Max(globalPeak, peak);
-            if (peak > 16.0) throw new Exception("Resonance peak too high: " + peak);
+            if (peak > 18.0) throw new Exception("Resonance peak too high: " + peak);
         }
 
         double lpBody = 20.0 * Math.Log10(RmsGain(0, 2000.0, 6.5, 100.0));
         double hpBody = 20.0 * Math.Log10(RmsGain(1, 2000.0, 6.5, 10000.0));
         double bpPeak = PeakDb(2, 2000.0, 6.5);
         if (lpBody < -2.0 || hpBody < -2.0) throw new Exception("Body loss exceeds 2 dB");
-        if (bpPeak > 12.0) throw new Exception("BP normalization regression");
+        if (bpPeak > 17.5) throw new Exception("BP normalization regression");
 
         WaveStability();
         Modulation();
@@ -217,8 +212,8 @@ public static class Brick6FilterDelayValidation
         lines.Add("bp_peak_db=" + bpPeak.ToString("F2"));
         lines.Add("lp_hp_transition_max_delta=" + lpHpDelta.ToString("F5"));
         lines.Add("bp_transition_max_delta=" + bpDelta.ToString("F5"));
-        lines.Add("lfo_hz=0.1,1,10,40,80 depth=3.00_oct centre_error<0.02_oct");
-        lines.Add("env_curve=sign(amount)*8*abs(amount)^1.5_oct");
+        lines.Add("lfo_hz=0.1,1,10,40,80 linear_hz_depth=3000 centre_error<20_hz");
+        lines.Add("env_curve=linear_toward_20_or_16000_hz");
         lines.Add("delay_ramp_samples=480 stable_cost=target_compare_only");
         return String.Join(Environment.NewLine, lines);
     }

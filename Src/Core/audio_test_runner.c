@@ -44,10 +44,10 @@
 #define AUDIO_TEST_ENGINE_TRACKS 12U
 #define AUDIO_TEST_NOTE_MAX 12U
 #define AUDIO_TEST_CAL_PRISM_MODELS 39U
-#define AUDIO_TEST_CAL_STACK_MODELS 11U
+#define AUDIO_TEST_CAL_STACK_MODELS 13U
 #define AUDIO_TEST_CAL_DELUGE_MODELS 6U
-#define AUDIO_TEST_CAL_MODEL_COUNT 60U
-#define AUDIO_TEST_CAL_ENGINE_CASES 3576U
+#define AUDIO_TEST_CAL_MODEL_COUNT 62U
+#define AUDIO_TEST_CAL_ENGINE_CASES 3726U
 #define AUDIO_TEST_LEGACY_CASES 26U
 #define AUDIO_TEST_CAL_MAX_OBSERVATIONS 256U
 #define AUDIO_TEST_CAL_TARGET_DBFS (-18.0f)
@@ -376,7 +376,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     {
         out->engine = TEST_ENGINE_DELUGE;
         out->model = (uint8_t)(local / 3U);
-        out->model_key = (uint8_t)(50U + out->model);
+        out->model_key = (uint8_t)(52U + out->model);
         out->notes[0] = notes[local % 3U];
         (void)snprintf(out->name, sizeof(out->name), "DELUGE_%02u_N%u",
                        (unsigned)out->model, (unsigned)out->notes[0]);
@@ -387,7 +387,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     if (local < 9U)
     {
         out->engine = TEST_ENGINE_WAVE;
-        out->model_key = 56U;
+        out->model_key = 58U;
         out->oscillator_mode = (uint8_t)(local / 3U);
         out->source_count =
             (out->oscillator_mode == 0U) ? 1U : 2U;
@@ -406,7 +406,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     if (local < 3U)
     {
         out->engine = TEST_ENGINE_SAMPLER;
-        out->model_key = 57U;
+        out->model_key = 59U;
         out->notes[0] = notes[local];
         out->sound_type = TEST_SOUND_PERCUSSIVE;
         (void)snprintf(out->name, sizeof(out->name), "SAMPLER_N%u",
@@ -418,7 +418,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     out->engine = (local < 3U) ? TEST_ENGINE_DRUM_TRX
                                : TEST_ENGINE_DRUM_ANALOG;
     out->model = (local < 3U) ? 0U : 1U;
-    out->model_key = (uint8_t)(58U + out->model);
+    out->model_key = (uint8_t)(60U + out->model);
     out->notes[0] = notes[local % 3U];
     out->sound_type = TEST_SOUND_PERCUSSIVE;
     (void)snprintf(out->name, sizeof(out->name), "%s_N%u",
@@ -665,6 +665,9 @@ static void configure_engine_params(uint8_t track, const audio_test_case_t *test
             set_track_param(track, PARAM_STACK_OSC2_COLOR, test->color);
             set_track_param(track, PARAM_STACK_OSC3_TIMBRE, test->timbre);
             set_track_param(track, PARAM_STACK_OSC3_COLOR, test->color);
+            set_track_param(track, PARAM_STACK_OSC1_PARAM3, test->color);
+            set_track_param(track, PARAM_STACK_OSC2_PARAM3, test->color);
+            set_track_param(track, PARAM_STACK_OSC3_PARAM3, test->color);
             set_track_param(track, PARAM_STACK_OSC1_TUNE, 0.0f);
             set_track_param(track, PARAM_STACK_OSC2_TUNE, 0.0f);
             set_track_param(track, PARAM_STACK_OSC3_TUNE, 0.0f);
@@ -914,26 +917,26 @@ static void model_identity(uint8_t key, test_engine_t *engine,
             : ((prism_is_random(key) != 0U)
                 ? "NOISY_RANDOM" : "CONTINUOUS");
     }
-    else if (key < 50U)
+    else if (key < 52U)
     {
         *engine = TEST_ENGINE_STACK;
         *model = (uint8_t)(key - 39U);
         *sound_type = (*model == (uint8_t)BRICK6_STACK_MODEL_SWARM)
             ? "NOISY_RANDOM" : "CONTINUOUS";
     }
-    else if (key < 56U)
+    else if (key < 58U)
     {
         *engine = TEST_ENGINE_DELUGE;
-        *model = (uint8_t)(key - 50U);
+        *model = (uint8_t)(key - 52U);
         *sound_type = "CONTINUOUS";
     }
-    else if (key == 56U)
+    else if (key == 58U)
     {
         *engine = TEST_ENGINE_WAVE;
         *model = 0U;
         *sound_type = "CONTINUOUS";
     }
-    else if (key == 57U)
+    else if (key == 59U)
     {
         *engine = TEST_ENGINE_SAMPLER;
         *model = 0U;
@@ -941,9 +944,9 @@ static void model_identity(uint8_t key, test_engine_t *engine,
     }
     else
     {
-        *engine = (key == 58U) ? TEST_ENGINE_DRUM_TRX
+        *engine = (key == 60U) ? TEST_ENGINE_DRUM_TRX
                                : TEST_ENGINE_DRUM_ANALOG;
-        *model = (uint8_t)(key - 58U);
+        *model = (uint8_t)(key - 60U);
         *sound_type = "PERCUSSIVE";
     }
 }

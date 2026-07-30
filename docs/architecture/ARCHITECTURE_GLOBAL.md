@@ -1,5 +1,16 @@
 # ARCHITECTURE_GLOBAL.md
 
+## Addendum 2026-07-30 - prototype comparatif compresseur master
+
+- Z1 porte un slot dynamics master unique, post-retours et post-XFade Looper, avec selection exclusive `OFF/DELUGE/BRICK`.
+- Z3 conserve les parametres communs et caracteristiques sous une autorite globale; Z5 les expose dans `MIX 3/3`; Z6 les capture dans le snapshot global Project/Pattern.
+
+## Addendum 2026-07-30 - Hall low-cost raw et calibration utilisateur
+
+- Z0 transmet desormais chaque mesure Hall low-cost valide directement a `hall_engine` a la cadence par touche de 2,8 ms; Premium conserve son ASC x4 et son chemin historique.
+- Z5 reutilise les pages autoritatives `CALIBRATION` et `USER_CALIBRATION` depuis `Settings > Calibration`, et expose `KEYBOARD > VELOCITY` pour le profil, le mode par defaut et la courbe.
+- Z6 conserve dans le blob flash Hall low-cost v2 le choix `DEFAULT/USER`, le mode `DV/TIME/ENERGY`, la courbe et le profil USER. Le format Hall Premium v1 reste inchange.
+
 ## Addendum 2026-07-30 - MT-12 replay deterministe
 
 - Z0 peut reconstruire explicitement la sequence archivee depuis sa seed et la rejouer dans le meme snapshot jetable MT-05, via le seam d'entree normal MT-04 et avec la cadence logique originale.
@@ -8,9 +19,9 @@
 
 ## Addendum 2026-07-30 - filtre musical et ordre track unifié
 
-- Z3 sépare cutoff de base/p-lock lissé et cible Matrix/LFO en domaine
-  `log2(Hz)`; Z1 compose base, modulation, enveloppe en octaves et keytrack
-  avant une conversion unique vers le coeur TPT.
+- Z3 sépare cutoff de base/p-lock lissé et cible Matrix/LFO en Hz; Z1
+  interpole séparément base, modulation, enveloppe et keytrack par fenêtres
+  de 8 samples avant de composer le cutoff du coeur TPT.
 - Z1 impose le même ordre mono/stéréo
   `moteur -> filtre -> VCA/volume -> inserts track -> bus`. Les sends/returns
   delay et reverb restent sous l'autorité master du mixer.
@@ -302,7 +313,7 @@ Documents conserves pour tracabilite uniquement:
 - Z1 remplace le moteur de test DaisySP par un port GPL-3.0 des oscillateurs basic-wave Deluge, scalarise pour Cortex-M7, a phase/tables fixed-point et comportement fixe non degrade.
 - La reference figee du port est le commit upstream `0d9cbf0440f0555e2544cc1eb019b31675637008` de `SynthstromAudible/DelugeFirmware`.
 - Z2 conserve le point d'ownership mono par track sous les nouvelles identites DELUGE; Z3 porte sept params dedies, Z5 deux pages TONE, Z6 leur snapshot sans migration prototype.
-- L'ancien runtime/math/oscillateur Daisy et les sources `Drivers/Daisy_SP/Source/Synthesis` exclusives sont retires; la Utility DaisySP reste consommee par le compresseur et le Moog ladder, hors moteur DELUGE.
+- L'ancien runtime/math/oscillateur Daisy et les sources `Drivers/Daisy_SP/Source/Synthesis` exclusives sont retires; les autres modules DaisySP encore utilises restent hors de cette suppression ciblee.
 
 ## Addendum 2026-07-26 - MOD operators Matrix
 
@@ -375,3 +386,9 @@ Documents conserves pour tracabilite uniquement:
 
 - Z4 declare a Z3 la valeur p-lock non-PLAY comme base Matrix temporaire; Z3 additionne les slots Matrix sur cette base et restaure la base canonique au release.
 - Z1 consomme les endpoints continus moteur et filtre avec les rampes locales adaptees au DSP; Z3 conserve les bases, mappings et exclusions des parametres discrets.
+## Addendum 2026-07-30 - Track paste sans notes fantômes
+
+- Z5/Z6 encadrent l'apply du snapshot Track par un seam Z4 de restauration ciblée.
+  Z4 suspend uniquement la fermeture voice-group concernée, invalide par génération
+  les événements scheduler périmés, purge notes/gates/lookahead aux deux frontières,
+  puis reprend sans arrêter le transport ni les autres tracks.

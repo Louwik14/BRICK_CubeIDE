@@ -11,10 +11,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:769:13:ui_page_patch_assign_name_done	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:441:17:ui_page_patch_assign_visible_count	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:478:17:ui_page_patch_assign_view_index_for_slot	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:1151:13:ui_page_patch_assign_render	168	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:1159:13:ui_page_patch_assign_render	168	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:591:16:ui_page_patch_assign_selection_is_visible	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:884:13:ui_page_patch_assign_handle_event	120	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:843:6:ui_page_patch_assign_open	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:927:9:ui_page_patch_assign_handle_encoder	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:957:9:ui_page_patch_assign_is_open	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:962:9:ui_page_patch_assign_get_target_hall_led	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:935:9:ui_page_patch_assign_handle_encoder	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:965:9:ui_page_patch_assign_is_open	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:884:6:ui_page_patch_assign_close	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:892:13:ui_page_patch_assign_handle_event	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c:970:9:ui_page_patch_assign_get_target_hall_led	16	static
