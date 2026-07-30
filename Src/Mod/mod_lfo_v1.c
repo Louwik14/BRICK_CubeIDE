@@ -406,7 +406,10 @@ static uint8_t mod_lfo_is_effectively_active(uint8_t track,
     }
 
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
-    if ((s == NULL) || (mod_lfo_phase_inc_from_rate(s->rate) == 0U))
+    const mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    if ((s == NULL)
+            || (mod_lfo_phase_inc_from_rate(
+                    mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_RATE)) == 0U))
     {
         return 0U;
     }
@@ -489,7 +492,8 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             uint8_t filter_track = 0U;
             if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
             {
-                source_values[MOD_MATRIX_SOURCE_ENV_FLT] = mixer_get_track_filter_env_value(filter_track);
+                source_values[MOD_MATRIX_SOURCE_ENV_FLT] =
+                    mixer_prepare_track_filter_env_source(filter_track, elapsed_frames);
                 source_valid[MOD_MATRIX_SOURCE_ENV_FLT] = 1U;
             }
         }
@@ -570,7 +574,15 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
             {
                 const float slew_norm = mod_lfo_clampf(phase / 360.0f, 0.0f, 1.0f);
-                const float coeff = 1.0f - (slew_norm * 0.95f);
+                const float reference_coeff = 1.0f - (slew_norm * 0.95f);
+                float coeff = 1.0f;
+                if (reference_coeff < 1.0f)
+                {
+                    const float time_constant_frames =
+                        64.0f * (1.0f - reference_coeff) / reference_coeff;
+                    coeff = (float)elapsed_frames
+                        / (time_constant_frames + (float)elapsed_frames);
+                }
                 if (rt->slew_valid == 0U)
                 {
                     rt->slew_value = rt->current;

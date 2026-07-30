@@ -20,5 +20,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:577:6:looper_raw_debug_note_raw_relay_done	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:596:6:looper_raw_debug_note_writer_state	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:608:6:looper_raw_debug_get_snapshot	8	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:621:6:looper_raw_debug_dump_uart	3448	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:741:6:looper_raw_debug_service_uart	3312	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:621:6:looper_raw_debug_get_health_snapshot	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:639:6:looper_raw_debug_dump_uart	3448	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/looper_raw_debug.c:759:6:looper_raw_debug_service_uart	3312	static,ignoring_inline_asm

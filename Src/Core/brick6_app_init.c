@@ -54,6 +54,15 @@
 #include "Storage/multi_record_writer.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/wav_loader.h"
+#include "Core/brick_build_config.h"
+#if BRICK_TEST_BUILD
+#include "Storage/audio_test_csv.h"
+#include "Storage/monkey_test_log.h"
+#include "Core/audio_test_runner.h"
+#include "Core/audio_test2.h"
+#include "Core/crash_capsule.h"
+#include "Core/monkey_test.h"
+#endif
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -90,6 +99,9 @@ static void brick6_process_hall_ui_keyboard_chain(void)
  */
 void brick6_app_init(void)
 {
+#if BRICK_TEST_BUILD
+    (void)crash_capsule_init();
+#endif
     SDRAM_Init();
 
     board_usb_device_init();
@@ -106,6 +118,13 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sd_access_gate_init();
+#if BRICK_TEST_BUILD
+    audio_test_csv_init();
+    monkey_test_log_init();
+    audio_test_runner_init();
+    audio_test2_init();
+    monkey_test_init();
+#endif
     waveform_cache_init();
     (void)waveform_cache_ensure_dirs();
     wav_loader_catalog_init_load();
@@ -197,6 +216,13 @@ void brick6_app_process(void)
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(32768U);
     multi_record_writer_service(16384U);
+#if BRICK_TEST_BUILD
+    audio_test_csv_service();
+    monkey_test_log_service();
+    audio_test_runner_tick();
+    audio_test2_service();
+    monkey_test_tick();
+#endif
     if (looper_storage_raw_export_is_active() != 0U)
     {
         looper_storage_raw_export_service(516096U);

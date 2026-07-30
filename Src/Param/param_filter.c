@@ -90,10 +90,7 @@ static float filter_ui127_to_cutoff_hz(float v)
 
 static float filter_ui127_to_resonance(float v)
 {
-    const float t = filter_ui127_to_unit(v);
-    const float shaped = t * t;
-
-    return shaped * 0.75f;
+    return filter_ui127_to_unit(v);
 }
 
 static float filter_ui127_to_eg_amount(float v)

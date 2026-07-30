@@ -1,5 +1,55 @@
 # Z6 - State / Persistence / Patterns / Projects
 
+## Addendum 2026-07-30 - MT-11 journal SD MONKEY TEST
+
+- `monkey_test_log` est un writer Test autonome et ne depend ni de `audio_test_csv` ni de ses buffers, formats ou lifecycle. Il reutilise FatFs, le montage partage et un client dedie `SD_ACCESS_CLIENT_DIAGNOSTIC_LOG`.
+- Le chemin reserve est `0:/BRICK/DIAG/MONKEY.LOG`. Chaque crash porte schema, build/variant, identifiant firmware de compilation, seed, index/tick, compteurs, cause RCC, type fault, frame Cortex-M7, registres SCB, heartbeat et les 16 derniers breadcrumbs dans l'ordre chronologique.
+- Le rapport est valide uniquement apres `f_sync` et `f_close`; alors seulement l'archive Backup SRAM passe de `FAULTED` a `REPORTED` par un nouveau commit double-slot. Si la SD est absente, pleine, occupee ou en erreur, l'archive reste intacte. La recherche du `END id=<hash>` dans les fichiers courant/ancien deduplique un rapport devenu durable juste avant un reset.
+- Le journal n'ouvre jamais la SD depuis un fault handler et n'ecrit pas par action. Les resumes de session sont limites au debut, a dix minutes et a l'arret.
+- A 256 KiB, `MONKEY.LOG` remplace `MONKEY.OLD`; la croissance totale reste donc bornee a environ 512 KiB et favorise les rapports recents. Les suppressions/renommages concernent exclusivement ces deux fichiers diagnostics.
+- Pendant la politique Monkey read-only, seul ce client writer supplementaire est autorise; il reste soumis aux exclusions de streaming critique et aux autres owners du gate.
+
+## Addendum 2026-07-30 - AUDIO TEST 2
+
+- Le writer diagnostic crée `/AUDIO_TEST2`, deux WAV PCM24/48 kHz et les CSV
+  manifeste/run. REFERENCE est calculé hors IRQ; INTERNAL est généré temps réel
+  et drainé sans lecture SD concurrente.
+- En-tête, taille, frames, CRC, `f_sync` et `f_close` sont contrôlés avant
+  d'autoriser LINE. Aucun accès SD propre au test n'existe pendant LINE/HP.
+
+## Addendum 2026-07-30 - MT-05 isolation des donnees Monkey
+
+- Pendant une session Monkey, `sd_access_gate` applique une politique diagnostic read-only centralisee: seuls boot/cache/stream/preview peuvent acquerir la SD; recorder, Pattern, Project, conversion, caches editeur/waveform, Patch, Kit et AUDIO TEST sont refuses avant tout appel FatFs.
+- Z5 neutralise en plus les actions des vues Project/Sample pendant la session, y compris `BLANK PROJECT`, afin de proteger le boot context interne et les pools RAM qui ne sont pas integralement reconstruits par `project_v1_apply_snapshot`.
+- Le snapshot jetable et la politique n'existent que dans `Debug`/`Test`. Un reset efface naturellement le verrou RAM; aucune donnee personnelle n'est renommee, supprimee ou ecrasee par MT-05.
+
+## Addendum 2026-07-30 - frontiere Test du banc AUDIO TEST
+
+- `audio_test_csv` et son buffer de ligne ne sont lies que dans les presets `Debug` et `Test`; le client `SD_ACCESS_CLIENT_AUDIO_TEST` et son label `ATEST` sont absents de `Release` et `Premium`.
+- Cette exclusion ne modifie pas `sd_access_gate` ni FatFs, qui restent des services generiques reutilisables par d'autres diagnostics sans dependance envers `audio_test_csv`.
+
+## Addendum 2026-07-30 - banc automatique AUDIO TEST et CSV v2
+
+- Les assets de calibration Sampler/RAM et Wave occupent seulement des slots libres des pools existants, ne sont jamais persistés et sont libérés avant l'application du snapshot.
+- Le runner capture en SDRAM un `PatternSaveV1` complet avant toute mutation, stoppe le transport et les notes, puis restaure structure, paramètres track/global, séquence, mutes, KBD/ARP/HOLD, Matrix/LFO, mix, effets, master, état transport et playhead par track. L'active track et le hall mode sont restaurés séparément par leurs autorités UI.
+- `audio_test_csv_service()` reste le seul writer FatFs, hors IRQ et sous `SD_ACCESS_CLIENT_AUDIO_TEST`. Chaque mesure est copiée en RAM, les notes sont coupées, puis la ligne est écrite et synchronisée avant `NEXT`; aucune écriture SD ne chevauche `MEASURE`.
+- Le schéma passe à v4. Un `/AUDIO_TEST.CSV` vide reçoit le header v4; un fichier non vide incompatible reste intact et le writer bascule vers `/AUDIO_TEST_V4.CSV`. Un second fichier incompatible provoque `AUTO ERR`.
+- Les six tests FX produisent deux lignes durables après la fin de la queue: `FX_ACTIVE` pour les 2 s avec source et `FX_TAIL` pour les 3 s sans source. Aucune écriture SD ne chevauche ces fenêtres.
+- Les 178 colonnes v4 conservent les mesures track et les 12 taps globaux, les paramètres/détections FX de v3, puis ajoutent `sum_expected_ratio`, `sum_peak_ratio`, `sum_rms_ratio` et `sum_progression_fail`. Les sommes cohérentes 1/2/4/8/12 utilisent même moteur, même note et reset de phase; peak et RMS dry doivent croître à au moins 80 % du rapport linéaire attendu, sinon la ligne est `FAIL`. NaN/Inf, queue brutalement coupée, clamp/saturation réelle, surcharge IRQ, clips filtre/insert et échec de progression sont `FAIL`; soft-clip moteur, queue montante ou marge dry+wet dépassée sont `WARN`.
+
+## Cache WAVE multibande
+- Publication atomique via `<cache>.TMP`, `f_sync`, fermeture puis renommage vers l'unique `.B6WT`; seul un fichier final entierement valide peut etre publie au runtime.
+
+- L'import WAVETABLE prépare par FFT/IFFT neuf versions par frame, de 2048 à 8 samples, avec suppression des bins au-delà du Nyquist de chaque bande.
+- Le cache préparé persiste les payloads S16 band-major avec leur taille, offset, géométrie puissance de deux et `max_phase_increment`; un rechargement valide les réutilise sans FFT.
+- La préparation et les écritures restent hors IRQ; la SDRAM n'est pas rendue globalement cacheable.
+
+
+- Le fichier unique utilise le stem `H<path-hash>_<size>_<fdate><ftime>.B6WT` sous `0:/WAVETABLES/.CACHE`.
+- La FFT radix-2, la troncature harmonique, la reconstruction des huit bandes inferieures et leur conversion S16 sont executees pendant l'import sous l'autorite SD, jamais dans l'IRQ.
+- Le header, la taille totale, le répertoire, chaque offset/longueur/géométrie/seuil, le CRC source, le CRC de la bande de base et le CRC du payload complet sont validés avant publication. Tout cache incomplet ou invalide est supprimé puis régénéré depuis le WAV.
+- Le parsing source reste celui du codec WAV partage: PCM ou PCM extensible, mono/stereo, 16/24/32 bits, chunks RIFF arbitraires, avec longueur decodee non nulle et multiple de 2048 samples.
+
 ## Addendum 2026-07-29 - persistence SKEW/WIDTH Deluge
 
 - Snapshots live, Patterns, Projects, Patch et Kit persistent directement le nouveau domaine manuel `PARAM_DELUGE_WIDTH = 0..1`; le defaut `SQUARE` est `0.5`.
@@ -533,7 +583,7 @@ Plus petite prochaine passe utile:
   - `Sample`, `Mode`, `Start`, `End`, `Gain`, `Tune`, `Loop Start`, `Slice Count`.
 - Compat restore:
   - les payloads pattern/projet gardent les memes champs family/type,
-- La grille Slice n'est jamais persistÃ©e:
+- La grille Slice n'est jamais persistée:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
@@ -876,7 +926,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
 - Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
 - Les entrees `RAM` portent le path WAV complet et restaurent les slots `sampler_ram_pool` par `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` hors IRQ. Aucun audio brut n'est sauvegarde; `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`. Un echec d'ouverture/parse/decode/budget/SLOT_POOL/backend conserve si possible le slot global RAM en `ERROR` avec le path, sans pointeur audio stale.
-- Les entrees `WAVETABLE` portent le path utilisateur WAV ou le path prepare B6WT selon la source du slot courant; aucun audio brut n'est sauvegarde et `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`.
+- Les entrees `WAVETABLE` portent le path utilisateur WAV; aucun audio brut n'est sauvegardé et `cost_bytes` est recalculé au reload depuis les pages réellement allouées.
 - Le bloc sert de source explicite pour la phase boot/autoload UI: la lecture projet, les loads STREAM/RAM/WAVETABLE synchrones et les loads MULTI cooperatifs alimentent la progression. RAM et WAVETABLE valent une unite utilisateur terminee a la fin de leur load synchrone.
 
 ## Addendum 2026-05-23 - Sampler/Multi LOOP
@@ -1032,10 +1082,9 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 
 - `sample_global_pool` expose maintenant le kind logique `SAMPLE_GLOBAL_KIND_WAVETABLE`, partageant les memes slots globaux, budget utilisateur 16 MiB et compteurs memoire que `STREAM`, `MULTI` et `RAM`.
 - `wavetable_pool` est le backend resident: les fichiers `B6WT` sont lus depuis SD hors IRQ via `SD_ACCESS_CLIENT_SAMPLE_CACHE`, valides en `S16_MONO`, puis stockes dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`.
-- Le format `B6WT` courant est volontairement borne: magic `B6WT`, version `1`, header 32 octets, frame de 2048 samples, `frame_count>0`, data mono `S16` little-endian. Les caches `F32` precedents sont invalides/refuses.
+- Le format autoritaire est `B6WT` v2: header 128 octets, neuf entrées de bande de 32 octets et payload S16 band-major 2048→8. Les anciens formats ne sont ni lus ni migrés.
 - Le workflow UI de chargement manuel lit les fichiers WAV depuis `0:/WAVETABLES` via `Settings > Sample > WAVE`; il reutilise le browser Settings/Sample et charge les assets par `wavetable_pool_load_wav()`.
 - `wavetable_pool_load_wav()` accepte les WAV PCM mono/stereo 16/24/32-bit deja couverts par `wav_parser`/`wav_audio_codec`, impose une longueur mono effective non nulle et multiple de 2048 samples, decode les 32-bit WAV comme PCM int32, convertit en `S16_MONO`, sature les samples importes/cache dans le domaine `int16_t`, puis cree une preview et un slot global `WAVETABLE`.
-- Le cache prepare reste `B6WT` version 1 dans `0:/WAVETABLES/.CACHE`. Le nom de cache encode un hash du path source, la taille, la date et l'heure FAT; le header conserve aussi taille source et stamp date/time dans les champs reserves. Un cache valide est prefere au redecodage WAV; un cache absent, invalide ou impossible a ecrire n'empeche pas l'import WAV vers SDRAM.
 - Project autoload capture/restaure les slots `WAVETABLE` comme les slots `RAM`: path + slot backend + slot global, sans audio brut dans le projet et sans scan SD implicite.
 - Etat courant: le browser UI, les parametres `TABLE`, la preview wavetable et le runtime audio `Synth/Wave` sont branches; la persistence reste limitee aux references d'assets, sans audio brut.
 
@@ -1054,3 +1103,14 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Son payload est volontairement plus large qu'un Patch: il inclut sequence/p-locks et reglages runtime sequenceur par track, car son contrat est de restaurer une track live complete.
 - La fabrication du snapshot Track par defaut est pure: elle remplit un payload RAM local et ne modifie l'etat live qu'au moment de l'apply canonique.
 - Patch/Kit conservent leurs contrats de persistence separes: Patch/Kit restent des snapshots sonores et n'absorbent pas ce payload clipboard.
+# Addendum 2026-07-30 - schema CSV calibration AUDIO TEST v5
+
+- `AUDIO_TEST_V5.CSV` ajoute des lignes `CAL_RAW` (ATTACK, SUSTAIN ou STRIKE)
+  et une ligne `CAL_SUMMARY` par modele, sans appliquer de gain au runtime.
+- Les colonnes calibration portent note, velocite, modele, TIMBRE/COLOR,
+  nombre/mode d'oscillateurs, repetition, peak/RMS/K-weighted lineaires et
+  dBFS, facteur de crete, DC, clips, samples et charge IRQ.
+- La synthese utilise medianes, P10/P90 et peak P95, cible commune K-weighted
+  `-18 dBFS`, gain fixe par modele borne a +/-12 dB et contraint a 3..6 dB de
+  marge sur le pire peak. Un signal insuffisant ne recoit aucune proposition
+  de gain. Statuts: `VALID`, `INSUFFICIENT_SIGNAL`, `TOO_VARIABLE`, `CLIPPING`.

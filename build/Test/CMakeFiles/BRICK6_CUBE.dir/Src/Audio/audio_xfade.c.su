@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c:5:6:audio_xfade_set	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c:19:7:audio_xfade_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c:24:7:audio_xfade_smooth_next	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c:47:7:audio_xfade_frame	8	static

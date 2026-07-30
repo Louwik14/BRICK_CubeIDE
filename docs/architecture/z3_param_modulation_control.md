@@ -1,5 +1,15 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-29 - projection cutoff/Q vers les chunks TPT
+
+- La Matrix conserve sa cadence bloc de 64 frames et son mapping musical existant.
+- Z1 interpole uniquement les endpoints de controle cutoff/Q deja lisses vers huit chunks; aucune interpolation des coefficients TPT derives ne remonte dans Z3.
+- Les bornes, profondeurs, formes LFO, autorites parametre et dispatch track-aware restent inchanges.
+
+
+- Plages/defaults: INDEX `0..1/0`; LEVEL `1` puis `0`; TUNE `-96..+96 st/0`; FINE `-100..+100 ct/0`; PHASE WIDTH `-1..+1/0`; RETRIG PHASE `OFF(-1)..360 deg/OFF`; OSC SYNC `Off`. TABLE reste commun aux deux modeles.
+- La table TONE stable rend ces params p-lockables et persistants. La Matrix est dynamique: BRICK garde `POS/LEVEL/TUNE`; DELUGE expose seulement les continus `INDEX/LEVEL/TUNE/FINE/PHASE WIDTH`. MODEL, TABLE, RETRIG PHASE et OSC SYNC restent hors Matrix.
+
 ## Addendum 2026-07-29 - autorite SKEW/WIDTH Deluge
 
 - `PARAM_DELUGE_WIDTH` porte desormais une base manuelle `0..1`, pas l'ancienne course bipolaire `-1..+1`; son defaut persiste est `0.5` pour le modele `SQUARE`.
@@ -8,7 +18,7 @@
 
 ## Addendum 2026-07-29 - avance groupee exacte ENV3
 
-- ENV3 conserve sa cadence Matrix par segment audio et le decalage temporel existant, mais remplace la boucle de `elapsed_frames` appels sample par une avance groupee jusqu'a l'unique valeur terminale consommee.
+- ENV3 conserve sa cadence Matrix par segment audio: la valeur publiee est celle presente au debut du segment, puis l'enveloppe est avancee de `elapsed_frames`. La valeur terminale n'est plus appliquee par anticipation au segment qui vient de commencer.
 - L'avance groupee conserve exactement phase, stage, valeur, gate et transitions PEAK; les retriggers hard/soft restent appliques aux memes frontieres de segments sample-accurate.
 - Aucun lissage, interpolation, etat runtime persistant ou buffer n'est ajoute.
 
@@ -65,7 +75,7 @@
 - Les params track-aware MOD persistants `PARAM_MOD_MULTI_*` configurent `MULT1=M1A*M1B` et `MULT2=M2A*M2B`; les sorties sont clampées `-1..1`.
 - Les params track-aware MOD persistants `PARAM_MOD_SLEW_*` configurent `SLEW1/SLEW2`; `AMT` est borné `0..1` et converti en coefficient linéaire borné au tick Matrix/LFO, jamais par sample audio.
 - Les opérateurs sont évalués dans `mod_lfo_v1_process_block()` juste avant `mod_matrix_process_track()`. Les sources opérateur lues par d'autres opérateurs utilisent l'état opérateur précédent du tick courant/précédent; les cycles directs `SLEW1->SLEW1`, `SLEW2->SLEW2`, `SLEW1<->SLEW2` et les boucles directes `MULT*` sont ignorés.
-- `PARAM_LFO1_RATE`, `PARAM_LFO2_RATE` et `PARAM_LFO3_RATE` sont destinations continues Matrix avec labels `L1Rt/lfo1rate`, `L2Rt/lfo2rate` et `L3Rt/lfo3rate`; l'application RT passe par le temp overlay LFO et la valeur modulee est clampee sans rate negatif cote destination. La Matrix conserve donc le comportement sync/index positif: elle peut moduler `OFF` et les divisions sync, mais ne descend pas dans la plage Hz libre negative.
+- `PARAM_LFO1_RATE`, `PARAM_LFO2_RATE` et `PARAM_LFO3_RATE` sont destinations continues Matrix avec labels `L1Rt/lfo1rate`, `L2Rt/lfo2rate` et `L3Rt/lfo3rate`; l'application RT passe par le temp overlay LFO et conserve tout le domaine `-50 Hz..OFF..16 sync`. Une valeur negative reste libre et continue, une valeur positive seule selectionne la division sync, et un overlay Matrix non nul peut demarrer une base `OFF`.
 
 ## Addendum 2026-07-26 - ENV retrigger hard/soft
 
@@ -330,8 +340,8 @@ Call-sites critiques:
 ## 9. Impact sur cartographie globale
 
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
-- Les edits structurels UI `CFG_TRACK` / `CFG_TRACK_TYPE` empruntent maintenant le corridor complet Z3 (`param_registry_run_track_transition_pipeline` + finalisation lane-bound) au lieu d'une sync allÃ©gÃ©e parallele.
-- Le pipeline structurel est dÃ©sormais isolÃ© dans `param_registry_transition.c`; `param_registry.c` conserve l'orchestration d'apply normal.
+- Les edits structurels UI `CFG_TRACK` / `CFG_TRACK_TYPE` empruntent maintenant le corridor complet Z3 (`param_registry_run_track_transition_pipeline` + finalisation lane-bound) au lieu d'une sync allégée parallele.
+- Le pipeline structurel est désormais isolé dans `param_registry_transition.c`; `param_registry.c` conserve l'orchestration d'apply normal.
 - Frontiere Z3/Z4 (live-rec param):
   - Hors PLAY+REC actif: edition param track-aware -> `param_registry_apply_track_value` (autorite Z3).
   - Sur ce chemin hors PLAY+REC, la sync base Seq post-apply passe par une commande explicite UI->Seq (`seq_param_iface_commit_base_after_authoritative_apply(cmd)`), avec cible/preconditions explicites; `seq_param_iface` ne lit plus `ui_get_active_track()` comme garde implicite.
@@ -499,7 +509,7 @@ Call-sites critiques:
 - La valeur canonique `hybrid_gate` vit dans `track_sound_state.input` comme autorite par track.
 - Les params Sampler track-aware vivent dans `track_tone_sound_state` comme base canonique par track, puis sont projetes vers `brick6_sampler_runtime`.
 - Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input1/2/3 Hybrid` (en plus de `family MIDI`):
-  - `Program`: chemin live existant inchangÃ© (emit conditionnelle via runtime seq),
+  - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
   - `CC`: emission directe `midi_cc`.
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
 
@@ -581,7 +591,7 @@ Call-sites critiques:
 - Contrat miroir UI:
   - le miroir `param_store.active[]` track-scoped actif est synchronise cote Z5 (`ui_param_sync_active_track_mirror_from_runtime`).
   - Z3 conserve l'autorite runtime d'execution; Z5 conserve l'autorite presentation/contexte d'edition.
-- Pour `PLAY`, ce miroir UI reflÃ¨te la base seq canonique exposee par Z3.
+- Pour `PLAY`, ce miroir UI reflète la base seq canonique exposee par Z3.
 
 ## 15. Contrat Passe 1 - Autorite execution MIDI
 - Les chemins d'application MIDI dans `param_registry` lisent le canal via Z2 (`track_runtime_get_midi_channel_zero_based`).
@@ -901,6 +911,36 @@ Dette explicite post-passe 4:
 - Courbe keytrack: facteur lineaire borne `0.5 + note/127 * 0.75`, soit `0.5..1.25`, multiplie par le pan de spread puis clamp `-1..1`.
 - `LINK` reste exclu de `SPREAD` et `KEYTRK`; aucune propagation LINK secondaire, p-lock ou modulation n'est ajoutee.
 
+## Addendum 2026-07-29 - mapping filtre track
+
+- `PARAM_FILTER_CUTOFF` conserve son mapping exponentiel de `0..127` vers `20 Hz..16 kHz`, avec un pas canonique de `0.01`; le coeur DSP consomme la plage entiere sans plafond cache a `Fs/8`.
+- `PARAM_FILTER_RESONANCE` est stocke lineairement `0..1`; le mixer porte seul la courbe musicale vers `Q=0.707..6.5`.
+- ENV FLT, Matrix/LFO et keytrack sont echantillonnes/interpoles aux points consommateurs de 8 samples. Un jeu coherent de coefficients est reconstruit par chunk; aucune fonction transcendante n'est appelee par modulation dans l'IRQ.
+
+## Addendum 2026-07-30 - cutoff musical, résolution et sources rapides
+
+- `PARAM_FILTER_CUTOFF` reste `0..127`, mais son pas canonique est `0.01`.
+  Les valeurs permanentes et snapshots restent float; les p-locks encodent
+  désormais `0..12700` dans `seq_value16_t`; Matrix, cache runtime et affichage
+  ne rabattent plus les centièmes sur `0..127`.
+- La base cutoff est stockée et lissée en `log2(Hz)` avec
+  `alpha = frames/(192+frames)`. Une écriture manuelle ou p-lock déplace
+  ensemble la base et la référence de modulation afin de ne créer aucun offset.
+- Matrix/LFO écrit une cible cutoff absolue séparée en `log2(Hz)`. Entre deux
+  points de contrôle, cette cible, ENV FLT et le keytrack sont répartis sur les
+  chunks cohérents de 8 samples; ils ne repassent pas dans le lissage lent de
+  la base. Chaque chunk reconstruit une seule fois le jeu TPT lié.
+- La composition est:
+  `base_log2_lissée + (matrix_log2-base_target_log2) + keytrack_octaves
+  + env_octaves*ENV`, puis une seule conversion LUT vers Hz et clamp final
+  `20..16000 Hz`. Aucune interpolation indépendante des coefficients TPT.
+- `EG AMT` courant reste unipolaire. Sa profondeur exacte est
+  `8 * amount * sqrt(amount)` octaves (`0..+8`). Le helper DSP conserve le
+  signe pour une éventuelle source bipolaire:
+  `sign(amount) * 8 * abs(amount)^1.5`.
+- La résonance UI devient linéaire `r=value/127`; le mapping de Q musical est
+  porté uniquement par Z1 et atteint exactement 6.5.
+
 ## Addendum 2026-07-28 - PARAM CFG GROUP SEQ LINK
 
 - `PARAM_CFG_GROUP_SEQ_LINK` ajoute le toggle utilisateur `SEQ LINK` de `CFG/GROUP`.
@@ -919,3 +959,11 @@ Dette explicite post-passe 4:
 - `param_registry_clear_track_runtime_state(track)` neutralise les overlays temporaires par parametre puis vide le cache runtime track-scoped.
 - Ce chemin est consomme par `track_snapshot` avant restore/clear d'une track afin d'eviter qu'un parametre ancien non reapplique reste lisible par fallback cache.
 - Les bases canoniques restent `track_sound_state`, `track_tone_sound_state`, FILTER/LFO/Matrix/PLAY; le cache runtime n'est pas une source de persistence.
+
+## Addendum 2026-07-29 - composition et cadences des modulations communes
+
+- Pendant un p-lock, `seq_param_iface` declare sa projection comme base Matrix temporaire. Les slots visant la meme destination s'additionnent sur cette base; un lock consecutif la remplace et le release restaure explicitement la base canonique.
+- ENV3 publie la valeur de debut de segment avant son avance groupee. ENV FLT est avancee et preparee par chunks de 8 des qu'une route Matrix effective la consomme, y compris filtre `OFF` ou `DJ`; le filtre TPT reutilise cette preparation sans double avance.
+- Le keytrack filtre applique `2^((note-60)*amount/12)` une seule fois au cutoff de base, avant ENV FLT et clamp `20 Hz..16 kHz`; son ratio rejoint la cible par les memes chunks que cutoff/Q.
+- Le RATE LFO Matrix conserve `-50 Hz..OFF..16 sync`. Le slew `RND` convertit son coefficient de reference 64 frames selon le nombre reel de frames, y compris segments raccourcis.
+- Les niveaux internes Wave, Prism/Braids, Stack et Deluge evoluent sample par sample. Les increments de phase/lecture evoluent progressivement; `POS/INDEX` gardent leurs lissages locaux. Les selecteurs `MODEL/TABLE/MODE/LOOP` restent discrets. Les destinations Sampler ne changent pas.

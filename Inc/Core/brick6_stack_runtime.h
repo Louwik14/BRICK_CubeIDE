@@ -66,11 +66,13 @@ typedef struct
     uint8_t kernel_id;
     uint8_t kernel_state_size;
     uint16_t level_q15;
+    uint16_t level_current_q15;
     uint16_t timbre_q15;
     uint16_t color_q15;
     uint16_t param3_q15;
     uint32_t phase;
     uint32_t phase_inc;
+    uint32_t phase_inc_current;
     uint32_t phase2;
     uint32_t phase3;
     int16_t feedback_q15;

@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/main.c:96:13:MPU_Config	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/main.c:353:6:Error_Handler	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/main.c:253:6:SystemClock_Config	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/main.c:312:6:PeriphCommonClock_Config	200	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/main.c:130:5:main	16	static,ignoring_inline_asm

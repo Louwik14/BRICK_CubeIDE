@@ -51,6 +51,7 @@ MEMORY
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
   RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
   RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
+  BKPSRAM (xrw)  : ORIGIN = 0x38800000, LENGTH = 4K
   SDRAM (xrw)    : ORIGIN = 0xC0000000, LENGTH = 32M
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
@@ -198,6 +199,14 @@ SECTIONS
     . = ALIGN(32);
   } >DTCMRAM
 
+  .dtcm_fault (NOLOAD) :
+  {
+    . = ALIGN(8);
+    *(.dtcm_fault)
+    *(.dtcm_fault*)
+    . = ALIGN(8);
+  } >DTCMRAM
+
   .ram_d1_audio (NOLOAD) :
   {
     . = ALIGN(32);
@@ -231,6 +240,18 @@ SECTIONS
     *(.ram_d3_ctrl*)
     . = ALIGN(32);
   } >RAM_D3
+
+  .backup_sram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __backup_sram_start__ = .;
+    KEEP(*(.backup_sram))
+    KEEP(*(.backup_sram*))
+    . = ALIGN(32);
+    __backup_sram_end__ = .;
+  } >BKPSRAM
+  ASSERT((__backup_sram_end__ - __backup_sram_start__) <= LENGTH(BKPSRAM),
+         "Backup SRAM overflow")
 
   .multi_load_sdram (NOLOAD) :
   {

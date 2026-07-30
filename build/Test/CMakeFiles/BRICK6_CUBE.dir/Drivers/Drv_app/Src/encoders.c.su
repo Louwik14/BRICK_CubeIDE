@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:133:6:encoders_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:155:6:encoders_update	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:185:9:encoder_get_delta	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:208:9:encoder_consume_delta	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:227:6:encoder_reset_delta	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders.c:238:9:encoder_test_inject_delta	4	static

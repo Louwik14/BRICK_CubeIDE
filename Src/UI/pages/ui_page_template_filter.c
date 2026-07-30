@@ -38,7 +38,7 @@ static const ui_template_family_t g_ui_template_filter_family_retrig = {
     .subpages = {
         {
             .title = "RETRIG",
-            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_FILTER_KEYTRK } },
         },
         {
             .title = "-",

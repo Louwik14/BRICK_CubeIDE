@@ -4,6 +4,8 @@
 #include <stddef.h>
 
 #define TLV_I2C_TIMEOUT_MS 100U
+#define TLV_DEVICE_READY_TIMEOUT_MS 100U
+#define TLV_BLOCK_READY_TIMEOUT_MS 100U
 
 enum
 {
@@ -18,6 +20,8 @@ enum
   TLV_MADC = 19,
   TLV_AOSR = 20,
   TLV_AUDIO_IF_1 = 27,
+  TLV_ADC_FLAG = 36,
+  TLV_DAC_FLAG_1 = 37,
   TLV_DAC_PROCESSING_BLOCK = 60,
   TLV_DAC_DATAPATH = 63,
   TLV_DAC_VOLUME_CTRL = 64,
@@ -176,6 +180,34 @@ static uint8_t tlv_word_length_bits(uint8_t word_bits)
   }
 }
 
+static tlv320aic3204_status_t tlv_wait_mask(I2C_HandleTypeDef *i2c,
+                                            uint8_t address,
+                                            uint8_t page,
+                                            uint8_t reg,
+                                            uint8_t mask,
+                                            uint8_t expected,
+                                            uint32_t timeout_ms)
+{
+  const uint32_t start = HAL_GetTick();
+  do
+  {
+    uint8_t value = 0U;
+    const tlv320aic3204_status_t status =
+        TLV320AIC3204_ReadReg(i2c, address, page, reg, &value);
+    if (status != TLV320AIC3204_STATUS_OK)
+    {
+      return status;
+    }
+    if ((value & mask) == expected)
+    {
+      return TLV320AIC3204_STATUS_OK;
+    }
+    HAL_Delay(1U);
+  } while ((uint32_t)(HAL_GetTick() - start) < timeout_ms);
+
+  return TLV320AIC3204_STATUS_READY_TIMEOUT;
+}
+
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
 {
   if ((config == NULL) ||
@@ -196,12 +228,17 @@ tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
     return TLV320AIC3204_STATUS_CONFIG_ERROR;
   }
 
-  if (HAL_I2C_IsDeviceReady(config->i2c,
-                            (uint16_t)(config->address_7bit << 1),
-                            3U,
-                            TLV_I2C_TIMEOUT_MS) != HAL_OK)
+  const uint32_t ready_start = HAL_GetTick();
+  while (HAL_I2C_IsDeviceReady(config->i2c,
+                               (uint16_t)(config->address_7bit << 1),
+                               1U,
+                               2U) != HAL_OK)
   {
-    return TLV320AIC3204_STATUS_I2C_ERROR;
+    if ((uint32_t)(HAL_GetTick() - ready_start) >= TLV_DEVICE_READY_TIMEOUT_MS)
+    {
+      return TLV320AIC3204_STATUS_I2C_ERROR;
+    }
+    HAL_Delay(1U);
   }
 
   tlv320aic3204_status_t status =
@@ -276,28 +313,57 @@ tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x40U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_ROUTE, 0x08U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_ROUTE, 0x08U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_ROUTE, 0x08U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_ROUTE, 0x08U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HEADPHONE_STARTUP, 0x25U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_OUTPUT_POWER, 0x30U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HEADPHONE_STARTUP, 0x25U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_DAC_DATAPATH, 0xD4U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_DATAPATH, 0xD4U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_DAC_VOLUME_CTRL, 0x00U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_VOLUME_CTRL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_LEFT_DAC_VOL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 0U, TLV_RIGHT_DAC_VOL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
-  HAL_Delay(40U);
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
+  status = tlv_wait_mask(config->i2c,
+                         config->address_7bit,
+                         0U,
+                         TLV_DAC_FLAG_1,
+                         0x88U,
+                         0x88U,
+                         TLV_BLOCK_READY_TIMEOUT_MS);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = TLV320AIC3204_WriteReg(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
+
+  status = tlv_write_checked(config->i2c,
+                             config->address_7bit,
+                             1U,
+                             TLV_P1_OUTPUT_POWER,
+                             0x30U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = tlv_wait_mask(config->i2c,
+                         config->address_7bit,
+                         0U,
+                         TLV_DAC_FLAG_1,
+                         0xAAU,
+                         0xAAU,
+                         TLV_BLOCK_READY_TIMEOUT_MS);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = tlv_wait_mask(config->i2c,
+                         config->address_7bit,
+                         0U,
+                         TLV_ADC_FLAG,
+                         0x44U,
+                         0x44U,
+                         TLV_BLOCK_READY_TIMEOUT_MS);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
   return TLV320AIC3204_STATUS_OK;

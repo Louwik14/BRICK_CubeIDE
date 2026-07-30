@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c:63:17:le16	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c:81:17:le32	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c:28:13:wav_is_pcm_format	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c:89:13:wav_find_chunks	104	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c:210:6:wav_parser_parse_info	64	static

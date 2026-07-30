@@ -22,8 +22,18 @@ typedef enum
     FX_MASTER_MACRO_TYPE_COUNT
 } fx_master_macro_type_t;
 
+#define FX_MASTER_MACRO_DIAG_SLOT_COUNT 4U
+
+typedef struct
+{
+    uint8_t active_mask;
+    uint8_t type[FX_MASTER_MACRO_DIAG_SLOT_COUNT];
+    uint8_t level[FX_MASTER_MACRO_DIAG_SLOT_COUNT];
+} fx_master_macro_diag_state_t;
+
 void fx_master_macro_init(float sample_rate);
 void fx_master_macro_process_block(float *left, float *right, uint32_t frames);
+void fx_master_macro_get_diag_state(fx_master_macro_diag_state_t *out);
 
 #ifdef __cplusplus
 }

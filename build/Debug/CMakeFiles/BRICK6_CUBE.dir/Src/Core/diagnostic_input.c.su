@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_input.c:14:6:diagnostic_input_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_input.c:19:9:diagnostic_input_button	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_input.c:29:9:diagnostic_input_encoder	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_input.c:34:9:diagnostic_input_key	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_input.c:47:6:diagnostic_input_release_all	8	static

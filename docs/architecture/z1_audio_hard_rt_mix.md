@@ -1,5 +1,55 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-30 - AUDIO TEST 2
+
+- Dans Debug/Test seulement, `audio_process_block_int32()` peut rendre la
+  séquence déterministe directement vers `board_audio_pack_output()`, avant la
+  conversion PCM24. DSP, mixer, effets, métronome et master sont contournés.
+- Le producteur IRQ utilise des buffers statiques et pousse INTERNAL dans un
+  ring SDRAM borné. Aucun FatFs, formatage ou appel UI n'est exécuté en IRQ.
+
+## Addendum 2026-07-30 - MT-06 consommation des diagnostics generiques
+
+- Monkey lit hors IRQ, a 10 Hz, les autorites existantes `cpu_load` et les snapshots de sante etroits Sampler/Looper. Ces getters copient seulement trois compteurs chacun; celui du Looper le fait sous une section critique courte au lieu de copier son ring de traces complet. Aucun tap, calcul par sample, reset de compteur ou dependance `audio_test_*` n'est ajoute.
+- Un intervalle contenant `CPU > 90 %` ou un cache miss Looper vaut warning; `CPU > 100 %` et les underruns Sampler/Looper valent erreur recuperable. Les rejets normaux de start/not-ready et le verrou SD MT-05 ne sont pas classes comme faults.
+
+## Addendum 2026-07-30 - instrumentation audio reservee aux builds de diagnostic
+
+- L'implementation `audio_track_diag.c`, ses accumulateurs et ses snapshots sont lies uniquement avec `BRICK_TEST_BUILD=1`, donc dans `Debug` et `Test`.
+- Dans les builds normaux, l'interface commune fournit des stubs constants/no-op compilables: les branches d'activation et appels de taps disparaissent a l'optimisation, sans buffer, symbole ni chaine AUDIO TEST dans le binaire.
+- Les generateurs temporaires `@AUDIO_TEST` des pools RAM et wavetable sont eux aussi compiles uniquement dans le firmware `Test`.
+
+## Addendum 2026-07-29 - initialisation codec verifiee avant IRQ RX
+
+- Premium/CS42448: `PDN1/PDN2` sont maintenus bas des `MX_GPIO_Init()`, puis relaches seulement avec les clocks SAI actives. La sequence suit le datasheet: reset, ACK borne, `PDN=1`, programmation TDM/mute, readback, `PDN=0`, attente des 2000 LRCK (42 ms a 48 kHz), controle des erreurs de ratio MCLK/LRCK, 90 LRCK puis unmute verifie. L'ancien delai fixe 450 ms sans LRCK actif est retire.
+- Low-cost/TLV320AIC3204: reset logiciel systematique apres clocks stables et lockout registres, readback des diviseurs/interface/routage/mute, puis attente bornee des flags ADC, DAC et HPL/HPR avant unmute. Le chemin utilise directement MCLK a 12,288 MHz; la PLL codec reste volontairement eteinte et `CLK_MUX=0` est verifie.
+- Seul le TX DMA zero tourne pendant la montee codec. Le RX DMA et donc les moteurs/IRQ audio ne peuvent plus demarrer avec un codec non pret.
+- Un echec I2C, readback, clock/power-ready ou DMA provoque au plus une nouvelle tentative complete. Le diagnostic persistant du boot courant reste consultable par `board_audio_get_boot_diag()` hors IRQ.
+
+## WAVE multibande natif
+- La mesure opt-in `brick6_wave_runtime_dwt_*` separe les blocs a un et deux oscillateurs; elle accumule cycles, blocs et maximum. Le pourcentage IRQ WAVE vaut `100 * cycles_moyens / (CPU_HZ * frames / 48000)`. Desactivee, elle n'ajoute aucune lecture DWT.
+- Le test spectral deterministe `tests/wave_mipmap_spectral_test.ps1` couvre C2 a C8 sur une table riche; ratio RMS mipmap/ancien WAVE mesure: `0,381059`. L'ancien renderer WAVE Deluge n'est plus une dependance de test.
+
+- Le renderer WAVE reste float et choisit hors boucle sample une bande S16 préparée selon `phase_inc`.
+- La lecture utilise l'interpolation linéaire native; une seconde frame n'est lue que pour un morph réellement intermédiaire. OSC2 est court-circuité à niveau nul.
+- Aucun Q31, sinc, FFT, accès SD ou allocation n'est exécuté dans l'IRQ.
+
+## Addendum 2026-07-29 - modulation chunk-coherente du filtre TPT
+
+- Le cutoff et la resonance lisses entre deux blocs audio de 64 frames sont repartis sur les huit chunks de 8 frames du chemin filtre track.
+- Chaque chunk prepare un jeu TPT complet et coherent (`a1/a2/a3/k`, trim, saturation et gains de mode), conserve sans interpolation pendant ses huit samples; l'interpolation independante des coefficients dans la boucle sample est retiree.
+- L'enveloppe filtre en octaves reste avancee et combinee au cutoff a chaque chunk. Les modes LP/HP/BP, le mapping `20 Hz..16 kHz` et le DJ EQ gardent leurs identites produit.
+- Les tests deterministes couvrent sine/triangle/saw/square/bruit, `0.1/1/10/40/80 Hz`, profondeurs, Q `0.707/2/4/6.5`, coherence TPT, transitions, mono/stereo, bypass, stabilite longue et valeurs non finies.
+
+## Addendum 2026-07-29 - diagnostic gain staging AUDIO TEST
+
+- Les cas Sampler/RAM et Wave utilisent des assets normalisés et déterministes générés temporairement dans les pools existants (`@AUDIO_TEST`); aucun chargement SD ni génération de table n'intervient dans `MEASURE`, puis les slots sont libérés avant restauration.
+- `audio_track_diag` publie par seqlock le snapshot de la track de référence sélectionnée automatiquement par le runner; la fermeture de la page laisse seulement des tests scalaires d'activation aux entrées de bloc mixer/moteur et aucun parcours, RMS ou calcul diagnostic par sample.
+- Les taps fonctionnels sont `ENG` avant le chemin track, `FLT I/O` aux bornes reelles du filtre (donc de part et d'autre des inserts selon l'ordre mono/stereo existant), `DSP` apres filtre/inserts/VCA avant gain-pan-trim, puis `BUS` apres gain, pan et trim nominal vers MAIN. Aucun ordre DSP ni gain n'est modifie.
+- L'IRQ accumule peak stéréo max, énergie, samples, dépassements full-scale et valeurs non finies seulement lorsque le banc est actif. Les 69 cas moteurs/oscillateurs utilisent 300 ms de warmup puis 1 s de mesure pour mieux couvrir soft-clips et crêtes rares; filtres et cas simples restent à 300/500 ms. Les six cas delay/reverb dédiés et la somme 12 tracks avec les deux retours utilisent 1 s de warmup, 2 s de mesure avec source, puis 3 s de queue après note-off; le reset entre `FX_ACTIVE` et `FX_TAIL` touche uniquement les accumulateurs et statistiques IRQ, jamais les buffers ou états delay/reverb. `sqrtf`, dBFS, détection de tendance, formatage, CSV et OLED restent hors IRQ.
+- Le compteur `S` instrumente l'entree dans la zone non lineaire du soft-clip Stack. Le filtre TPT/ZDF float courant ne contient aucun clamp destructif et aucun insert track courant n'expose de saturation attribuable: `F` et `I` sont donc marques non instrumentables (`available=0`, rendu `---`) au lieu de publier un faux zero. Aucun faux clip `fabsf(x)>1` n'est cree.
+
+
 ## Addendum 2026-07-29 - domaine manuel SKEW Deluge
 
 - `SINE`, `TRI`, `SAW`, `A-SAW` et `A-SQUARE` consomment un SKEW manuel unipolaire `0..100 %`: `0 %` est neutre et `100 %` la deformation maximale.
@@ -347,8 +397,8 @@ Flux nominal prouve par code:
 6) Mixage bus / sends / master
 - `mixer_process`:
   - calcule un `lane_plan` local par lane (`source mono-native`, `source stereo`, `promotion stereo requise`, `fallback stereo`)
-  - per-track stereo: inserts -> filter/EQ/VCA -> gains/pan -> sends -> route MAIN/CUE
-  - per-track mono-native: filtre biquad mono ou EQ3 mono -> inserts mono-compatibles -> VCA+gain dans la boucle commune -> projection vers `L/R` seulement au point utile pour taps, sends, routing MAIN/CUE et accumulation bus
+  - per-track stereo: filter/EQ -> VCA+gain/pan -> inserts track -> sends -> route MAIN/CUE
+  - per-track mono-native: filtre biquad mono ou EQ3 mono -> VCA+gain/pan -> projection `L/R` -> mêmes inserts track stereo -> sends, routing MAIN/CUE et accumulation bus
   - `EQ3` mono est un bloc mono reel pris directement par le `lane_plan`; une lane mono-native avec `EQ3` actif ne doit plus etre promue stereo pour appeler `EQ3` stereo avec `L/R` dupliques
   - la projection `mono -> L/R` reste tardive et centralisee: taps `POST_INSERT`, boucle commune `VCA+gain+pan`, puis consommation `POST_FADER`, sends et bus
   - le chemin stereo reste la reference fonctionnelle et ne met plus a jour les etats mono auxiliaires (`biquad_mono`, `eq3_mono`) quand la lane execute deja en stereo
@@ -901,7 +951,7 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-05-25 - LFO FILTER/VCA direct bornes
 
 - `mod_lfo_v1` applique maintenant directement `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sur la lane mixer resolue, sans detour par `param_registry_apply_track_value_rt_fast`.
-- Les conversions restent celles de `param_filter`: cutoff via LUT `exp2`, resonance quadratique, EG/sustain lineaire 0..1, temps A/D/R via LUT `exp2`.
+- Les conversions restent celles de `param_filter`: cutoff logarithmique via LUT `exp2`, resonance lineaire vers la courbe Q Z1, EG en octaves, sustain lineaire 0..1, temps A/D/R via LUT `exp2`.
 - Le chemin direct est une projection runtime temporaire: il ne modifie pas les bases track-aware ni les miroirs UI, et la release LFO restaure la base capturee si aucune autre LFO de la track ne cible la meme destination.
 - Aucune ecriture directe de `*_current`, aucun recalcul filtre/EQ/VCA et aucune nouvelle autorite mixer ne sont introduits.
 
@@ -1089,6 +1139,15 @@ Clarification START/END/LOOP live:
 - `SUB`, `FM`, `FEEDBACK FM`, `RING` et `SHAPE` gardent des formules Stack directes: balance sub lineaire, profondeur FM sans boost de phase, feedback FM borne par multiplication simple du sample precedent, ring en multiplication Q15, square/PWM sans gain Braids.
 - Le mix energie/levels, le soft clip de sortie Stack, la sine interpolee en `int64_t`, `SINFD/TRIFD`, `PARAM3` et la surface UI TONE Stack restent les autorites courantes; Prism/Braids historique reste separe.
 
+## Addendum 2026-07-29 - filtre track TPT/ZDF float
+
+- Les modes track `LP/HP/BP` utilisent un SVF TPT/ZDF float commun, avec deux etats integrateurs par canal. Le chemin stereo fusionne gauche/droite dans des kernels specialises par mode; le chemin mono-native conserve ses deux seuls etats.
+- La plage DSP effective est `20 Hz..16 kHz` a 48 kHz. `g=tan(pi*fc/Fs)` vient d'une LUT 1024 intervalles preparee a l'initialisation; aucune transcendantale ni conversion Q15 n'entre dans la boucle audio.
+- Cutoff et resonance ne recalculent leur cible que sur changement. Chaque chunk consommateur de 8 samples prepare un jeu complet coherent puis le conserve; les coefficients lies ne sont jamais interpoles independamment. Les changements `LP/HP/BP` sont fondus sur 64 samples.
+- La resonance UI lineaire `0..1` suit `Q=0.707..6.5`, avec trim entrant progressif, saturation douce de la seule boucle de resonance et gains LP/HP/BP distincts. Il n'y a ni clamp de sortie, ni allocation.
+- `OFF` est un bypass constant-sum sur 256 samples avec calcul du coeur jusqu'a la fin du fondu et reset des etats. L'ordre mixer est filtre track, VCA/gain/pan, inserts track, SEND et bus.
+- Le DJ EQ conserve ses trois biquads RBJ CMSIS. Ses courbes de coefficients `-80..+12 dB` sont preparees une fois en LUT 128 intervalles au boot; l'IRQ effectue uniquement une interpolation si un des trois gains est dirty, avec un setter groupe pour eviter trois recalculs complets.
+
 ## Addendum 2026-07-27 - identite Wave sans rendu audio
 
 - `TRACK_RUNTIME_ENGINE_WAVE` est reserve au futur moteur wavetable utilisateur.
@@ -1097,7 +1156,7 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-07-27 - asset WAVETABLE resident SDRAM
 
 - `wavetable_pool` ajoute le chargement resident SDRAM pour les futurs assets `Synth/Wave`.
-- Format courant charge: fichier `B6WT` little-endian, header 32 octets, `frame_sample_count=2048`, `frame_count>0`, data mono `S16`; les anciens caches `F32` sont refuses.
+- Format courant chargé: `B6WT` v2 little-endian, header 128 octets, neuf entrées de bande et payload S16 band-major 2048→8; tout autre format est refusé puis régénéré depuis le WAV source.
 - Le pool ne cree pas de streamer concurrent: il reutilise `SAMPLE_PAGE_SLOT_POOL` pour l'audio resident et `sample_global_pool` pour les slots, le budget et l'affichage memoire global.
 - Cette passe asset ne branchait pas encore le chemin audio; l'addendum runtime ci-dessous precise le branchement audio SDRAM-only de `TRACK_RUNTIME_ENGINE_WAVE`.
 
@@ -1115,3 +1174,44 @@ Clarification START/END/LOOP live:
 - Le rendu `Sampler/Multi` peut appliquer un pan par voix uniquement quand `CFG/GROUP SPREAD KEYTRK=ON` sur la master effective du voice group.
 - `KEYTRK=OFF` conserve strictement le chemin existant: le spread reste le pan MIX de track applique hors renderer Multi.
 - `KEYTRK=ON` utilise le facteur borne `0.5 + note/127 * 0.75` (`0.5..1.25`) sur le pan de membre du groupe; les graves sont donc recentres et les notes aigues plus larges, sans lecture SD, allocation ni nouveau moteur.
+
+## Addendum 2026-07-29 - lissages communs et DJ EQ
+
+- Le DJ EQ repartit son endpoint de gain bloc sur les chunks de 8. Chaque chunk charge une seule fois le jeu coherent des trois bandes, partage par les deux canaux stereo; aucun setter par bande ne reconstruit trois fois le meme etat.
+- ENV FLT prepare ses valeurs de debut de chunk lorsqu'elle alimente la Matrix. Le consommateur TPT reutilise exactement ces valeurs et ne fait pas avancer une seconde fois l'ADSR.
+- Les niveaux continus des moteurs internes sont rampes sample par sample. Les increments de phase/lecture sont amenes progressivement a leur cible; les positions/index conservent leurs lissages existants et les selecteurs discrets restent instantanes.
+- `cpu_load.over_100_count` reste l'autorite de validation sur cible pour les depassements IRQ; aucun compteur parallele n'est introduit.
+# Addendum 2026-07-30 - mesure perceptuelle AUDIO TEST
+
+- Le tap diagnostic de la lane selectionnee accumule peak, energie RMS, somme
+  signee et energie K-weighted sans modifier le signal du mixer.
+- Le K-weighting suit ITU-R BS.1770 a 48 kHz: biquad shelf puis RLB high-pass.
+  Dans l'IRQ restent uniquement deux biquads, sommes, maxima et compteurs; dB,
+  facteur de crete, tris, medianes et recommandations restent en superloop.
+- Une mesure attendue sonore avec RMS moteur inferieur a `1e-5` est `FAIL`.
+  Les compteurs de clips internes existants et les metriques IRQ restent les
+  seules autorites de saturation et de charge.
+
+## Addendum 2026-07-30 - caractère unique du filtre et ordre track
+
+- Le SVF TPT/ZDF float reste l'unique coeur `LP/HP/BP`. La résonance normalisée
+  `r` suit `Q = 0.70710678 + (6.5 - 0.70710678) * r * (0.35 + 0.65*r)`.
+  Le niveau entrant suit `1 - 0.091*r²` (0 à -0.83 dB). La saturation
+  rationnelle `x / (1 + 0.52*r³*abs(x))` ne touche que l'état d'intégrateur
+  de la boucle de résonance; elle est nulle à faible résonance.
+- Les gains de sortie sont distincts:
+  `LP=1+0.035*r`, `HP=0.98+0.055*r`, `BP=0.92+0.08*r`.
+  Le BP n'utilise plus le niveau brut dépendant de Q. Le Q est borné à 6.5,
+  sans auto-oscillation, oversampling permanent, clamp ni limiteur de sortie.
+- `OFF <-> TPT` est un crossfade constant-sum de 256 samples. Le coeur continue
+  pendant la sortie puis efface ses intégrateurs; l'entrée repart d'états nuls.
+  `LP <-> HP` passe par dry sur 64 samples; les transitions impliquant BP sont
+  des crossfades directs de 64 samples depuis le même état multimode.
+- Les lanes mono-native et stéréo ont le même ordre fonctionnel:
+  `moteur -> filtre -> VCA/volume/pan -> inserts track -> sends/bus`.
+  Les retours delay/reverb globaux restent traités au niveau master dans
+  `mixer_process()` et ne deviennent pas des inserts track.
+- Le delay global CLASSIC et DUAL lisse feedback, largeur wet et volume sur
+  480 samples (10 ms à 48 kHz). Un setter n'arme la rampe que si sa cible
+  change; le compteur tombe à zéro exactement sur la cible et le chemin stable
+  ne fait aucun calcul de lissage.

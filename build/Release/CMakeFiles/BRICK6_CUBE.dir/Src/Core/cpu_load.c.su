@@ -12,3 +12,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/cpu_load.c:305:10
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/cpu_load.c:322:10:cpu_load_is_valid	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/cpu_load.c:327:6:cpu_load_get_metrics	0	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/cpu_load.c:350:6:cpu_load_reset_peak	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/cpu_load.c:361:6:cpu_load_reset_measurement	0	static,ignoring_inline_asm

@@ -1,5 +1,9 @@
 # Z2 - Track Runtime Authority
 
+
+- `TRACK_RUNTIME_ENGINE_WAVE` conserve `instance_id == track_id` et ne possède plus de modèle de rendu secondaire.
+- Les dispatches note-on/off Keyboard, Seq et panic restent ceux du runtime WAVE existant.
+
 ## Addendum 2026-07-29 - identite et ownership Synth/DELUGE
 
 - `UI_TRACK_TYPE_DELUGE` / `TRACK_RUNTIME_TYPE_DELUGE` / `TRACK_RUNTIME_ENGINE_DELUGE` remplacent l'identite Synth/Daisy au meme point de binding, avec instance stable `instance_id == track_id`.
@@ -47,6 +51,8 @@ Autorités secondaires dans la zone:
 - `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`: autorité du mapping TONE local au `track_runtime_type` effectif.
 
 Il n’existe pas de seconde autorité active in-tree pour ce binding runtime.
+
+Le banc automatique `AUDIO TEST` peut binder simultanément les 12 tracks produit non réservées (`0..11`) sur un même moteur; les deux slots restants restent réservés au master/global. L'ancien `track_count=8` du CSV ne révélait aucune limite runtime: il venait des constantes locales `AUDIO_TEST_ENGINE_TRACKS`/`AUDIO_TEST_NOTE_MAX` et des tables de cas de somme, toutes plafonnées en dur à 8. Le banc valide désormais que les 12 contextes sont effectivement `BOUND`, de même type/moteur et affectés à des lanes mix distinctes avant de lancer la note.
 
 ## 3. API entrantes
 Initialisation / mutation:

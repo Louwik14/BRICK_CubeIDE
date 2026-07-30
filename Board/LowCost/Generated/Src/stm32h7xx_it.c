@@ -102,69 +102,126 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-void HardFault_Handler(void)
+#if BRICK_TEST_BUILD
+__attribute__((naked)) void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
-	__asm volatile
-	  (
-	    "TST lr, #4        \n"
-	    "ITE EQ            \n"
-	    "MRSEQ r0, MSP     \n"
-	    "MRSNE r0, PSP     \n"
-	    "B hardfault_c     \n"
-	  );
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
+  __asm volatile(
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #1\n"
+    "ldr r3, =g_crash_capsule_fault_stack\n"
+    "add.w r3, r3, #1024\n"
+    "msr msp, r3\n"
+    "b crash_capsule_fault_capture_and_reset\n");
 }
+#else
+__attribute__((naked)) void HardFault_Handler(void)
+{
+  __asm volatile(
+    "ldr r0, =0xE000ED0C\n"
+    "ldr r1, =0x05FA0004\n"
+    "dsb\n"
+    "str r1, [r0]\n"
+    "dsb\n"
+    "b .\n");
+}
+#endif
 
 /**
   * @brief This function handles Memory management fault.
   */
-void MemManage_Handler(void)
+#if BRICK_TEST_BUILD
+__attribute__((naked)) void MemManage_Handler(void)
 {
-  /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-	  __BKPT(0);
-  /* USER CODE END MemoryManagement_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
-    /* USER CODE END W1_MemoryManagement_IRQn 0 */
-  }
+  __asm volatile(
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #2\n"
+    "ldr r3, =g_crash_capsule_fault_stack\n"
+    "add.w r3, r3, #1024\n"
+    "msr msp, r3\n"
+    "b crash_capsule_fault_capture_and_reset\n");
 }
+#else
+__attribute__((naked)) void MemManage_Handler(void)
+{
+  __asm volatile(
+    "ldr r0, =0xE000ED0C\n"
+    "ldr r1, =0x05FA0004\n"
+    "dsb\n"
+    "str r1, [r0]\n"
+    "dsb\n"
+    "b .\n");
+}
+#endif
 
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-void BusFault_Handler(void)
+#if BRICK_TEST_BUILD
+__attribute__((naked)) void BusFault_Handler(void)
 {
-  /* USER CODE BEGIN BusFault_IRQn 0 */
-	  __BKPT(0);
-  /* USER CODE END BusFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_BusFault_IRQn 0 */
-    /* USER CODE END W1_BusFault_IRQn 0 */
-  }
+  __asm volatile(
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #3\n"
+    "ldr r3, =g_crash_capsule_fault_stack\n"
+    "add.w r3, r3, #1024\n"
+    "msr msp, r3\n"
+    "b crash_capsule_fault_capture_and_reset\n");
 }
+#else
+__attribute__((naked)) void BusFault_Handler(void)
+{
+  __asm volatile(
+    "ldr r0, =0xE000ED0C\n"
+    "ldr r1, =0x05FA0004\n"
+    "dsb\n"
+    "str r1, [r0]\n"
+    "dsb\n"
+    "b .\n");
+}
+#endif
 
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-void UsageFault_Handler(void)
+#if BRICK_TEST_BUILD
+__attribute__((naked)) void UsageFault_Handler(void)
 {
-  /* USER CODE BEGIN UsageFault_IRQn 0 */
-	  __BKPT(0);
-  /* USER CODE END UsageFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
-    /* USER CODE END W1_UsageFault_IRQn 0 */
-  }
+  __asm volatile(
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #4\n"
+    "ldr r3, =g_crash_capsule_fault_stack\n"
+    "add.w r3, r3, #1024\n"
+    "msr msp, r3\n"
+    "b crash_capsule_fault_capture_and_reset\n");
 }
+#else
+__attribute__((naked)) void UsageFault_Handler(void)
+{
+  __asm volatile(
+    "ldr r0, =0xE000ED0C\n"
+    "ldr r1, =0x05FA0004\n"
+    "dsb\n"
+    "str r1, [r0]\n"
+    "dsb\n"
+    "b .\n");
+}
+#endif
 
 /**
   * @brief This function handles System service call via SWI instruction.
@@ -439,8 +496,8 @@ void hardfault_c(uint32_t *sp)
 {
   __disable_irq();
   rec_live_debug_hardfault(sp);
-
-  while (1);
+  __DSB();
+  NVIC_SystemReset();
 }
 
 /* USER CODE END 1 */

@@ -4065,6 +4065,22 @@ void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapsh
     *out_snapshot = g_brick6_sampler_runtime_diag;
 }
 
+void brick6_sampler_runtime_get_health_snapshot(
+    brick6_sampler_runtime_health_snapshot_t *out_snapshot)
+{
+    if (out_snapshot == NULL)
+    {
+        return;
+    }
+
+    out_snapshot->multi_page_underrun =
+        g_brick6_sampler_runtime_diag.multi_page_underrun;
+    out_snapshot->multi_stop_underrun =
+        g_brick6_sampler_runtime_diag.multi_stop_underrun;
+    out_snapshot->multi_invalid_instrument_id =
+        g_brick6_sampler_runtime_diag.multi_invalid_instrument_id;
+}
+
 static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
                                                         float *out_l,
                                                         float *out_r,

@@ -618,6 +618,24 @@ void looper_raw_debug_get_snapshot(looper_raw_debug_snapshot_t *out_snapshot)
     __set_PRIMASK(primask);
 }
 
+void looper_raw_debug_get_health_snapshot(
+    looper_raw_debug_health_snapshot_t *out_snapshot)
+{
+    if(out_snapshot == 0)
+    {
+        return;
+    }
+
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    out_snapshot->cache_miss_count = g_looper_raw_debug.cache_miss_count;
+    out_snapshot->preroll_underrun_count =
+        g_looper_raw_debug.preroll_underrun_count;
+    out_snapshot->preroll_reused_after_wrap_count =
+        g_looper_raw_debug.preroll_reused_after_wrap_count;
+    __set_PRIMASK(primask);
+}
+
 void looper_raw_debug_dump_uart(void)
 {
     if(__get_IPSR() != 0U)

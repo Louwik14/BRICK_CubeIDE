@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:12:8:fx_delay_shared_pool_left	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:17:8:fx_delay_shared_pool_right	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:22:10:fx_delay_shared_pool_capacity	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:35:25:fx_delay_shared_pool_owner	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:40:6:fx_delay_shared_pool_clear	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c:50:6:fx_delay_shared_pool_acquire	8	static

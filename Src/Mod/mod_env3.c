@@ -308,8 +308,11 @@ float mod_env3_process_track(uint8_t track, uint32_t elapsed_frames)
     }
 
     mod_env3_apply_settings(track);
-    const int16_t value =
-            env_adsr_process_advance(&g_mod_env3_runtime[track].env, elapsed_frames, NULL);
+    const int16_t value = env_adsr_value(&g_mod_env3_runtime[track].env);
+    (void)env_adsr_process_advance(
+        &g_mod_env3_runtime[track].env,
+        elapsed_frames,
+        NULL);
     return (float)value * (1.0f / 32767.0f);
 }
 

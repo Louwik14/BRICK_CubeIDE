@@ -50,6 +50,7 @@ typedef struct
     uint16_t table_wavetable_slot;
     uint32_t table_generation;
     float level;
+    float level_current;
     float tune_semitones;
     float pos;
     float start;
@@ -57,6 +58,9 @@ typedef struct
     float pos_smoothed;
     uint32_t phase;
     uint32_t phase_inc;
+    uint32_t phase_inc_current;
+    uint32_t mipmap_phase_inc;
+    uint8_t mipmap_band;
     uint8_t phase_mode;
     uint8_t flip;
 } brick6_wave_runtime_osc_t;
@@ -77,6 +81,13 @@ typedef struct
     uint8_t pos_smooth_enabled;
     brick6_wave_pos_update_t pos_update;
 } brick6_wave_runtime_quality_t;
+
+typedef struct
+{
+    uint64_t cycles[2];
+    uint32_t blocks[2];
+    uint32_t max_cycles[2];
+} brick6_wave_runtime_dwt_stats_t;
 
 void brick6_wave_runtime_init(void);
 void brick6_wave_runtime_reset_instance(uint8_t instance_id);
@@ -104,6 +115,9 @@ uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono
 const brick6_wave_runtime_voice_t *brick6_wave_runtime_get_voice(uint8_t instance_id);
 const brick6_wave_runtime_osc_t *brick6_wave_runtime_get_osc(uint8_t instance_id, uint8_t osc);
 const brick6_wave_runtime_quality_t *brick6_wave_runtime_get_quality(uint8_t instance_id);
+void brick6_wave_runtime_dwt_enable(uint8_t enabled);
+void brick6_wave_runtime_dwt_reset(void);
+void brick6_wave_runtime_dwt_read(brick6_wave_runtime_dwt_stats_t *out);
 
 #ifdef __cplusplus
 }

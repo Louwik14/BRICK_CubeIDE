@@ -63,6 +63,10 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq);
 void fx_dj_eq3_set_low_db(fx_dj_eq3_t *eq, float gain_db);
 void fx_dj_eq3_set_mid_db(fx_dj_eq3_t *eq, float gain_db);
 void fx_dj_eq3_set_high_db(fx_dj_eq3_t *eq, float gain_db);
+void fx_dj_eq3_set_gains_db(fx_dj_eq3_t *eq,
+                            float low_db,
+                            float mid_db,
+                            float high_db);
 void fx_dj_eq3_set_bypass(fx_dj_eq3_t *eq, uint8_t bypass);
 
 void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
@@ -81,6 +85,10 @@ void fx_dj_eq3_mono_update_coeffs(fx_dj_eq3_mono_t *eq);
 void fx_dj_eq3_mono_set_low_db(fx_dj_eq3_mono_t *eq, float gain_db);
 void fx_dj_eq3_mono_set_mid_db(fx_dj_eq3_mono_t *eq, float gain_db);
 void fx_dj_eq3_mono_set_high_db(fx_dj_eq3_mono_t *eq, float gain_db);
+void fx_dj_eq3_mono_set_gains_db(fx_dj_eq3_mono_t *eq,
+                                 float low_db,
+                                 float mid_db,
+                                 float high_db);
 void fx_dj_eq3_mono_set_bypass(fx_dj_eq3_mono_t *eq, uint8_t bypass);
 void fx_dj_eq3_mono_process_block(fx_dj_eq3_mono_t *eq,
                                   float *inout,

@@ -32,6 +32,17 @@
 /* Nominal per-track trim for dry bus summing headroom. */
 #define MIXER_TRACK_NOMINAL_TRIM 0.125f
 
+typedef struct
+{
+    uint8_t reverb_active;
+    uint8_t delay_active;
+    uint8_t delay_type;
+    uint8_t _pad;
+    float reverb_wet;
+    float delay_volume;
+    float delay_reverb_send;
+} mixer_global_diag_state_t;
+
 typedef enum
 {
     MIXER_TRACK_FILTER_OFF = 0,
@@ -53,6 +64,7 @@ void mixer_init(void);
 void mixer_reset_runtime_state(void);
 void mixer_set_master(float gain);
 float mixer_get_master(void);
+void mixer_get_global_diag_state(mixer_global_diag_state_t *out);
 
 void mixer_set_track_gain(uint32_t track_id, float gain);
 float mixer_get_track_gain(uint32_t track_id);
@@ -86,6 +98,7 @@ void mixer_set_delay_reverb_send(float reverb_send);
 void mixer_set_delay_volume(float volume);
 void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type);
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz);
+void mixer_set_track_filter_cutoff_modulated(uint32_t track_id, float cutoff_hz);
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance);
 void mixer_set_track_filter_eg_amount(uint32_t track_id, float eg_amount);
 void mixer_set_track_filter_attack(uint32_t track_id, float attack_s);
@@ -112,6 +125,7 @@ uint8_t mixer_track_vca_is_running(uint32_t track_id);
 uint8_t mixer_track_vca_requires_source(uint32_t track_id);
 float mixer_get_track_vca_env_value(uint32_t track_id);
 float mixer_get_track_filter_env_value(uint32_t track_id);
+float mixer_prepare_track_filter_env_source(uint32_t track_id, uint32_t frames);
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_filter_all_notes_off(uint32_t track_id);

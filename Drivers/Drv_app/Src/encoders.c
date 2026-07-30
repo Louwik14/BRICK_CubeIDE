@@ -233,3 +233,18 @@ void encoder_reset_delta(uint8_t encoder)
 
     enc_accumulated_delta[encoder] = 0;
 }
+
+#if BRICK_TEST_BUILD
+uint8_t encoder_test_inject_delta(uint8_t encoder, int16_t delta)
+{
+    if (encoder >= (uint8_t)ENC_COUNT)
+    {
+        return 0U;
+    }
+
+    enc_accumulated_delta[encoder] =
+        encoder_accumulate_saturating(enc_accumulated_delta[encoder],
+                                      (int32_t)delta);
+    return 1U;
+}
+#endif

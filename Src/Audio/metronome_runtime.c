@@ -296,3 +296,15 @@ void metronome_runtime_stop(void)
     g_metronome.table_len = 0U;
     g_metronome.table_pos = 0U;
 }
+
+void metronome_runtime_get_diag_state(metronome_runtime_diag_state_t *out)
+{
+    if (out == 0)
+    {
+        return;
+    }
+    out->enabled = (g_metronome.level_u7 != 0U) ? 1U : 0U;
+    out->rendering = ((g_metronome.active != 0U) || (g_metronome.pending != 0U)) ? 1U : 0U;
+    out->level_u7 = g_metronome.level_u7;
+    out->_pad = 0U;
+}

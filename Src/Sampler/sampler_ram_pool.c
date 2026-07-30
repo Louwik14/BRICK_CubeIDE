@@ -706,6 +706,99 @@ sampler_ram_result_t sampler_ram_pool_load_wav_at(uint16_t ram_slot,
     return result;
 }
 
+#if BRICK_TEST_BUILD
+sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
+    uint16_t *out_ram_slot,
+    uint16_t *out_global_slot)
+{
+    const uint32_t frames = 4800U;
+    const uint32_t data_bytes = frames * 2U * sizeof(float);
+    const uint16_t ram_slot = sampler_ram_pool_find_free_slot();
+    sample_page_raw_allocation_t allocation;
+    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+
+    if (out_ram_slot != 0)
+    {
+        *out_ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    }
+    if (out_global_slot != 0)
+    {
+        *out_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    }
+    if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+    {
+        return SAMPLER_RAM_RESULT_POOL_FULL;
+    }
+    const uint32_t page_count =
+        (data_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
+    const uint32_t cost = page_count * SAMPLE_PAGE_BYTES;
+    if ((sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_RAM,
+                                            ram_slot,
+                                            cost) == 0U)
+        || (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+    {
+        return SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL;
+    }
+    memset(&allocation, 0, sizeof(allocation));
+    if (sample_page_cache_alloc_slot_pool_bytes(data_bytes, &allocation) == 0U)
+    {
+        return SAMPLER_RAM_RESULT_RAM_POOL_FULL;
+    }
+
+    sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[ram_slot];
+    memset(slot, 0, sizeof(*slot));
+    slot->state = SAMPLER_RAM_SLOT_LOADING;
+    slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    (void)sampler_ram_copy_path(slot->path, sizeof(slot->path), "@AUDIO_TEST");
+    slot->format = SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED;
+    slot->channels = 2U;
+    slot->sample_rate = 48000U;
+    slot->frames = frames;
+    slot->bytes_per_frame = (uint16_t)(2U * sizeof(float));
+    slot->data_offset = (uint32_t)allocation.first_slot * SAMPLE_PAGE_BYTES;
+    slot->first_page_slot = allocation.first_slot;
+    slot->page_count = allocation.page_count;
+    slot->generation = sampler_ram_next_generation();
+    slot->data_bytes = data_bytes;
+    slot->cost_bytes_aligned = allocation.capacity_bytes;
+    slot->data = (float *)allocation.data;
+    slot->error = SAMPLER_RAM_RESULT_OK;
+
+    for (uint32_t frame = 0U; frame < frames; ++frame)
+    {
+        const uint32_t phase = frame % 192U;
+        const float ramp = (phase < 96U)
+            ? ((float)phase * (1.0f / 96.0f))
+            : ((float)(192U - phase) * (1.0f / 96.0f));
+        const float sample = (ramp * 1.6f) - 0.8f;
+        slot->data[(frame * 2U) + 0U] = sample;
+        slot->data[(frame * 2U) + 1U] = sample;
+    }
+
+    if (sample_global_pool_register_ram(ram_slot,
+                                        slot->path,
+                                        allocation.capacity_bytes,
+                                        &global_slot) == 0U)
+    {
+        sampler_ram_pool_clear(ram_slot);
+        return SAMPLER_RAM_RESULT_REGISTER_FAIL;
+    }
+    slot->state = SAMPLER_RAM_SLOT_READY;
+    slot->global_slot = global_slot;
+    sampler_ram_waveform_begin(slot);
+    sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
+    if (out_ram_slot != 0)
+    {
+        *out_ram_slot = ram_slot;
+    }
+    if (out_global_slot != 0)
+    {
+        *out_global_slot = global_slot;
+    }
+    return SAMPLER_RAM_RESULT_OK;
+}
+#endif
+
 void sampler_ram_pool_clear(uint16_t ram_slot)
 {
     if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)

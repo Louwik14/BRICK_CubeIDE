@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/naive_speech_synth.cc:84:6:void plaits::NaiveSpeechSynth::Init()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:223:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:280:15:void stmlib::Svf::Process(const float*, float*, size_t) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_BAND_PASS]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:312:15:void stmlib::Svf::ProcessAdd(const float*, float*, size_t, float) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_BAND_PASS]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/oscillator.h:89:8:void plaits::Oscillator::Render(float, float, const float*, float*, size_t) [with plaits::OscillatorShape shape = plaits::OSCILLATOR_SHAPE_IMPULSE_TRAIN; bool has_external_fm = false; bool through_zero_fm = false]	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/naive_speech_synth.cc:96:6:void plaits::NaiveSpeechSynth::Render(bool, float, float, float, float*, float*, float*, size_t)	56	static

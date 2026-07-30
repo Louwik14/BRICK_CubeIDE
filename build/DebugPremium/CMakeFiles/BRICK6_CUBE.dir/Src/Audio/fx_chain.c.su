@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c:59:13:fx_chain_process_fx_slot	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c:106:6:fx_chain_process_track0	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c:139:6:fx_chain_process_slot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c:144:6:fx_chain_process_slot_for_track	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c:159:6:fx_chain_process_slot_for_track_mono	16	static

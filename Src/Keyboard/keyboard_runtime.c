@@ -329,18 +329,10 @@ void keyboard_runtime_sync_track_focus_context(void)
      *
      * On purge uniquement l'état local clavier/arp pour éviter que
      * des relâchements tardifs d'anciens halls pilotent la nouvelle track.
-     */
-    ui_keyboard_app_clear_state_silent();
-    if (keyboard_arp_has_hold_activity() == 0U)
-    {
-        keyboard_arp_clear_state_silent();
-        keyboard_engine_clear_state_silent();
-    }
+    */
     keyboard_arp_sync_track(ui_get_active_track());
-    keyboard_runtime_reset_midi_state();
 
-    if ((keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
-            && (keyboard_arp_has_hold_activity() == 0U))
+    if (keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
     {
         keyboard_arp_on_mode_enter_silent();
     }
@@ -353,12 +345,6 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
         keyboard_arp_on_mode_leave();
     }
 
-    if ((previous_mode == UI_HALL_MODE_ARP) && (new_mode != UI_HALL_MODE_ARP))
-    {
-        ui_keyboard_app_clear_state_silent();
-        keyboard_engine_clear_state_silent();
-    }
-
     if ((keyboard_runtime_hall_mode_uses_arp_engine(new_mode) != 0U)
             && (keyboard_runtime_hall_mode_uses_arp_engine(previous_mode) == 0U))
     {
@@ -369,10 +355,7 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
     if ((previous_mode == UI_HALL_MODE_KEYBOARD) && (new_mode != UI_HALL_MODE_KEYBOARD))
     {
         ui_keyboard_app_all_notes_off();
-        keyboard_engine_clear_state_silent();
     }
-
-    keyboard_runtime_reset_midi_state();
 }
 
 uint8_t keyboard_runtime_get_root_index(void) { return keyboard_params_get_root_index(); }

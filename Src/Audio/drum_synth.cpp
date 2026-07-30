@@ -21,6 +21,7 @@ typedef struct
     float midi_note;
     float accent;
     float pitch;
+    float frequency_current;
     float decay;
     float tone;
     float fm;
@@ -54,6 +55,7 @@ static void drum_instance_reset_params(drum_synth_instance_t *instance)
     instance->midi_note = 36.0f;
     instance->accent = 1.0f;
     instance->pitch = kDefaultPitch;
+    instance->frequency_current = plaits::NoteToFrequency(instance->midi_note);
     instance->decay = kDefaultDecay;
     instance->tone = kDefaultTone;
     instance->fm = kDefaultFm;
@@ -143,6 +145,8 @@ void drum_synth_note_on_for_instance(uint8_t instance_id, uint8_t midi_note, uin
     }
 
     instance->midi_note = (float)midi_note;
+    instance->frequency_current =
+        plaits::NoteToFrequency(instance->midi_note + instance->pitch);
     instance->accent = clampf_local((float)velocity / 127.0f, 0.0f, 1.0f);
     instance->triggered = 1U;
     instance->trigger_pending = 1U;
@@ -193,22 +197,35 @@ void drum_synth_process_block_for_instance(uint8_t instance_id, float *mono_out,
     instance->trigger_pending = 0U;
 
     const float note = instance->midi_note + instance->pitch;
-    const float f0 = plaits::NoteToFrequency(note);
+    const float frequency_target = plaits::NoteToFrequency(note);
     const float accent = clampf_local(instance->accent, 0.0f, 1.0f);
     const float tone = clampf_local(instance->tone, 0.0f, 1.0f);
     const float decay = clampf_local(instance->decay * 0.5f, 0.0f, 1.0f);
     const float attack_fm = clampf_local(instance->fm, 0.0f, 1.0f);
 
-    instance->bd.Render(false,
-                        trigger,
-                        accent,
-                        f0,
-                        tone,
-                        decay,
-                        attack_fm,
-                        0.0f,
-                        mono_out,
-                        (size_t)frames);
+    const float frequency_start = instance->frequency_current;
+    for (uint32_t offset = 0U; offset < frames; offset += 8U)
+    {
+        uint32_t chunk = frames - offset;
+        if (chunk > 8U)
+        {
+            chunk = 8U;
+        }
+        const float progress = (float)(offset + chunk) / (float)frames;
+        const float f0 = frequency_start
+            + ((frequency_target - frequency_start) * progress);
+        instance->bd.Render(false,
+                            trigger && (offset == 0U),
+                            accent,
+                            f0,
+                            tone,
+                            decay,
+                            attack_fm,
+                            0.0f,
+                            &mono_out[offset],
+                            (size_t)chunk);
+    }
+    instance->frequency_current = frequency_target;
 }
 
 uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param, float value)

@@ -1,6 +1,6 @@
 /*
  * Module: seq_param_iface
- * Role: Interface de binding entre paramètres globaux et domaines plock séquenceur.
+ * Role: Interface de binding entre paramÃ¨tres globaux et domaines plock sÃ©quenceur.
  * Responsibilities: valider mapping set/param, maintenir base/runtime values,
  * appliquer/restaurer locks par track et exposer une API stable aux autres modules Seq.
  * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
@@ -11,6 +11,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
+#include "Mod/mod_matrix.h"
 #include "param_registry.h"
 
 typedef struct
@@ -757,8 +758,13 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
+    mod_matrix_set_runtime_base_override(track, param, decoded);
     if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
     {
+        mod_matrix_clear_runtime_base_override(
+            track,
+            param,
+            seq_param_iface_decode_param_value(param, state->base_value));
         return 0U;
     }
 
@@ -802,6 +808,7 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     }
 
     param_registry_release_track_value_runtime_temp(param, track);
+    mod_matrix_clear_runtime_base_override(track, param, decoded);
 
     state->base_value = base_value16;
     seq_param_set_base_valid(track, set_id, param_slot, 1U);
@@ -954,4 +961,3 @@ float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16
 
     return value;
 }
-

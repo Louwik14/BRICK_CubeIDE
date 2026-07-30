@@ -1,5 +1,6 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
+#include "Audio/audio_track_diag.h"
 
 #include "i2c.h"
 #include "sai.h"
@@ -9,9 +10,13 @@
 #include "stm32h743xx.h"
 #include <string.h>
 
+#define BOARD_AUDIO_INIT_ATTEMPTS 2U
+
+static board_audio_boot_diag_t g_board_audio_boot_diag;
+
 void board_audio_codec_init(void)
 {
-    (void)TLV320AIC3204_InitDefault();
+    g_board_audio_boot_diag = (board_audio_boot_diag_t){0};
 }
 
 void board_audio_init(void)
@@ -22,20 +27,86 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
 {
     if ((rx_buffer == NULL) || (tx_buffer == NULL) || (word_count == 0U))
     {
+        g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_BAD_ARGUMENT;
+        g_board_audio_boot_diag.failure_count++;
         return 0U;
     }
 
-    if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t *)rx_buffer, word_count) != HAL_OK)
+    g_board_audio_boot_diag.init_count++;
+    g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
+    g_board_audio_boot_diag.codec_ready = 0U;
+    g_board_audio_boot_diag.stream_started = 0U;
+
+    for (uint32_t attempt = 0U; attempt < BOARD_AUDIO_INIT_ATTEMPTS; ++attempt)
     {
-        return 0U;
+        if (attempt != 0U)
+        {
+            g_board_audio_boot_diag.retry_count++;
+        }
+
+        (void)HAL_SAI_DMAStop(&hsai_BlockB1);
+        (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+
+        /*
+         * Run only the zero-filled TX DMA to establish MCLK/BCLK/WCLK while
+         * reset, clock dividers and analog blocks are configured.  RX is the
+         * audio IRQ authority and remains stopped until verification passes.
+         */
+        if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)tx_buffer, word_count) != HAL_OK)
+        {
+            g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_TX_DMA;
+            g_board_audio_boot_diag.failure_count++;
+            continue;
+        }
+        HAL_Delay(1U);
+
+        const tlv320aic3204_status_t codec_status = TLV320AIC3204_InitDefault();
+        if (codec_status != TLV320AIC3204_STATUS_OK)
+        {
+            if (codec_status == TLV320AIC3204_STATUS_VERIFY_ERROR)
+            {
+                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_VERIFY;
+            }
+            else if (codec_status == TLV320AIC3204_STATUS_READY_TIMEOUT)
+            {
+                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_READY_TIMEOUT;
+            }
+            else if (codec_status == TLV320AIC3204_STATUS_CONFIG_ERROR)
+            {
+                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_CODEC_RESET;
+            }
+            else
+            {
+                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_I2C;
+            }
+            g_board_audio_boot_diag.failure_count++;
+            (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+            continue;
+        }
+
+        g_board_audio_boot_diag.codec_ready = 1U;
+        if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t *)rx_buffer, word_count) != HAL_OK)
+        {
+            g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_RX_DMA;
+            g_board_audio_boot_diag.codec_ready = 0U;
+            g_board_audio_boot_diag.failure_count++;
+            (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+            continue;
+        }
+
+        g_board_audio_boot_diag.stream_started = 1U;
+        return 1U;
     }
 
-    if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)tx_buffer, word_count) != HAL_OK)
+    return 0U;
+}
+
+void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag)
+{
+    if (out_diag != NULL)
     {
-        return 0U;
+        *out_diag = g_board_audio_boot_diag;
     }
-
-    return 1U;
 }
 
 uint8_t board_audio_is_rx_callback_handle(void *handle)
@@ -117,6 +188,7 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
     (void)cue_gain_end;
 
     int32_t *AUDIO_RESTRICT ptx = tx;
+    const uint8_t diag_enabled = audio_track_diag_is_enabled();
     for (uint32_t n = 0; n < frames; n++)
     {
 #if defined(USE_F2S24_SSAT)
@@ -126,6 +198,18 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
         ptx[0] = f2s24_fast(main_l[n]);
         ptx[1] = f2s24_fast(main_r[n]);
 #endif
+        if (diag_enabled != 0U)
+        {
+            const float clipped_l = (main_l[n] < -1.0f) ? -1.0f
+                : ((main_l[n] > 0.9999998807907104f) ? 0.9999998807907104f : main_l[n]);
+            const float clipped_r = (main_r[n] < -1.0f) ? -1.0f
+                : ((main_r[n] > 0.9999998807907104f) ? 0.9999998807907104f : main_r[n]);
+            audio_global_diag_report_final_pcm24(main_l[n], clipped_l);
+            audio_global_diag_report_final_pcm24(main_r[n], clipped_r);
+            audio_global_diag_measure_sample(AUDIO_GLOBAL_DIAG_DMA_MAIN,
+                (float)s24_sign_extend(ptx[0]) * (1.0f / 8388607.0f),
+                (float)s24_sign_extend(ptx[1]) * (1.0f / 8388607.0f));
+        }
         ptx += BOARD_AUDIO_TDM_SLOTS;
     }
 }

@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:10:13:rec_live_debug_ensure_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:22:17:rec_live_debug_now	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:27:10:rec_live_debug_path_hash	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:51:6:rec_live_debug_mark	88	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:84:6:rec_live_debug_hardfault	72	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/rec_live_debug.c:117:40:rec_live_debug_get_state	0	static

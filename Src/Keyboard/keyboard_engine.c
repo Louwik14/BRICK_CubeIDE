@@ -40,6 +40,8 @@ static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 #define KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH 8U
 static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
 static uint8_t g_kbd_rec_note_stack_count[128U];
+static uint8_t g_kbd_rec_track_note_channel[UI_TRACK_COUNT][128U];
+static uint8_t g_kbd_rec_track_note_count[UI_TRACK_COUNT][128U];
 static uint8_t g_keyboard_engine_group_note_track[UI_TRACK_COUNT][128U][KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH];
 static uint8_t g_keyboard_engine_group_note_count[UI_TRACK_COUNT][128U];
 static uint8_t g_keyboard_engine_group_track_active_count[UI_TRACK_COUNT];
@@ -593,6 +595,41 @@ static uint8_t keyboard_engine_live_rec_pop_internal_channel(uint8_t note, uint8
     return channel;
 }
 
+static void keyboard_engine_live_rec_push_track_channel(uint8_t owner_track,
+                                                        uint8_t note,
+                                                        uint8_t channel)
+{
+    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U))
+    {
+        return;
+    }
+
+    if (g_kbd_rec_track_note_count[owner_track][note] < 0xFFU)
+    {
+        g_kbd_rec_track_note_count[owner_track][note]++;
+    }
+    g_kbd_rec_track_note_channel[owner_track][note] = channel;
+}
+
+static uint8_t keyboard_engine_live_rec_pop_track_channel(uint8_t owner_track,
+                                                          uint8_t note,
+                                                          uint8_t fallback_channel)
+{
+    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U))
+    {
+        return fallback_channel;
+    }
+
+    const uint8_t count = g_kbd_rec_track_note_count[owner_track][note];
+    if (count == 0U)
+    {
+        return fallback_channel;
+    }
+
+    g_kbd_rec_track_note_count[owner_track][note] = (uint8_t)(count - 1U);
+    return g_kbd_rec_track_note_channel[owner_track][note];
+}
+
 static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
                                              uint8_t channel_zero_based,
                                              uint8_t note,
@@ -746,7 +783,7 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
     }
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
-    keyboard_engine_live_rec_push_internal_channel(note, channel);
+    keyboard_engine_live_rec_push_track_channel(owner_track, note, channel);
     seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, channel, note, velocity);
 
     if (keyboard_engine_track_has_midi_note_path(owner_track))
@@ -778,7 +815,8 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
     }
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
-    const uint8_t note_on_channel = keyboard_engine_live_rec_pop_internal_channel(note, channel);
+    const uint8_t note_on_channel =
+        keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
     seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, note_on_channel, note);
 
     if (keyboard_engine_track_has_midi_note_path(owner_track))
@@ -809,17 +847,37 @@ void keyboard_engine_all_notes_off_for_track(uint8_t track)
         owner_track = track;
     }
 
-    keyboard_engine_mono_clear();
     keyboard_engine_all_notes_off_for_owner(owner_track);
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     if (keyboard_engine_track_has_midi_note_path(owner_track))
     {
         midi_all_notes_off(MIDI_DEST_USB, channel);
     }
-    g_keyboard_engine_sounding_active = false;
-    g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
-    g_keyboard_engine_sounding_drum_instance = 0U;
-    memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
+    memset(g_kbd_rec_track_note_count[owner_track],
+           0,
+           sizeof(g_kbd_rec_track_note_count[owner_track]));
+    memset(g_keyboard_engine_group_note_count[owner_track],
+           0,
+           sizeof(g_keyboard_engine_group_note_count[owner_track]));
+    g_keyboard_engine_group_rr_cursor[owner_track] = 0U;
+    {
+        uint8_t members[UI_TRACK_COUNT];
+        uint8_t member_count = 0U;
+        if (track_runtime_collect_voice_group_members(owner_track,
+                                                      members,
+                                                      (uint8_t)UI_TRACK_COUNT,
+                                                      &member_count) != 0U)
+        {
+            for (uint8_t i = 0U; i < member_count; ++i)
+            {
+                g_keyboard_engine_group_track_active_count[members[i]] = 0U;
+            }
+        }
+        else
+        {
+            g_keyboard_engine_group_track_active_count[owner_track] = 0U;
+        }
+    }
 }
 
 void keyboard_engine_all_notes_off(void)
@@ -841,6 +899,7 @@ void keyboard_engine_all_notes_off(void)
     g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
     g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
+    memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
 }
 
 void keyboard_engine_clear_state_silent(void)
@@ -850,6 +909,7 @@ void keyboard_engine_clear_state_silent(void)
     g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
     g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
+    memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
     memset(g_keyboard_engine_group_note_count, 0, sizeof(g_keyboard_engine_group_note_count));
     memset(g_keyboard_engine_group_track_active_count, 0, sizeof(g_keyboard_engine_group_track_active_count));
 }

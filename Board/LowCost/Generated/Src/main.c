@@ -41,6 +41,10 @@
 #include "engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
+#if BRICK_TEST_BUILD
+#include "Core/crash_capsule.h"
+#include "Core/diagnostic_watchdog.h"
+#endif
 #include "audio.h"
 #include "audio_float.h"
 #include "fatfs.h"
@@ -88,6 +92,7 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
+#define BACKUP_SRAM_MPU_BASE               (0x38800000UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
@@ -113,6 +118,13 @@ static void MPU_Config(void)
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
+#if BRICK_TEST_BUILD
+  MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+  MPU_InitStruct.BaseAddress = BACKUP_SRAM_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4KB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+#endif
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 
@@ -171,6 +183,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+#if BRICK_TEST_BUILD
+  crash_capsule_capture_reset_flags_early();
+#endif
   const uintptr_t dma_start = (uintptr_t)&__ram_d2_dma_start__;
   const uintptr_t dma_end = (uintptr_t)&__ram_d2_dma_end__;
 
@@ -278,6 +293,10 @@ int main(void)
 	         ui_renderer_oled_service_poll();
 	         display_flush_service_poll();
 	     }
+
+#if BRICK_TEST_BUILD
+	     diagnostic_watchdog_main_loop_heartbeat(engine_tick_count);
+#endif
 
   }
   /* USER CODE END 3 */

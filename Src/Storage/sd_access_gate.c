@@ -13,6 +13,9 @@ static volatile uint32_t g_sd_access_owner_acquire_tick;
 static volatile uint32_t g_sd_access_max_hold_ticks;
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
+#if BRICK_TEST_BUILD
+static volatile uint8_t g_sd_access_diagnostic_read_only;
+#endif
 
 void sd_access_gate_init(void)
 {
@@ -28,6 +31,9 @@ void sd_access_gate_init(void)
         g_sd_access_acquire_fail_count[i] = 0U;
     }
     g_sd_fs_mounted = 0U;
+#if BRICK_TEST_BUILD
+    g_sd_access_diagnostic_read_only = 0U;
+#endif
 }
 
 uint8_t sd_access_fs_mount_if_needed(void)
@@ -49,6 +55,11 @@ uint8_t sd_access_fs_mount_if_needed(void)
     return 1U;
 }
 
+void sd_access_fs_invalidate_mount(void)
+{
+    g_sd_fs_mounted = 0U;
+}
+
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 {
     if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_MAX))
@@ -57,6 +68,25 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
 
     __disable_irq();
+#if BRICK_TEST_BUILD
+    if (g_sd_access_diagnostic_read_only != 0U)
+    {
+        const uint8_t allowed =
+            ((client == SD_ACCESS_CLIENT_SAMPLE_BOOT)
+             || (client == SD_ACCESS_CLIENT_SAMPLE_CACHE)
+             || (client == SD_ACCESS_CLIENT_PREVIEW)
+             || (client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
+             || (client == SD_ACCESS_CLIENT_DIAGNOSTIC_LOG))
+                ? 1U
+                : 0U;
+        if (allowed == 0U)
+        {
+            g_sd_access_acquire_fail_count[(uint8_t)client]++;
+            __enable_irq();
+            return 0U;
+        }
+    }
+#endif
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM))
@@ -119,6 +149,24 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     __enable_irq();
     return 1U;
 }
+
+#if BRICK_TEST_BUILD
+void sd_access_gate_set_diagnostic_read_only(uint8_t active)
+{
+    __disable_irq();
+    g_sd_access_diagnostic_read_only = (active != 0U) ? 1U : 0U;
+    __enable_irq();
+}
+
+uint8_t sd_access_gate_diagnostic_read_only_active(void)
+{
+    uint8_t active;
+    __disable_irq();
+    active = g_sd_access_diagnostic_read_only;
+    __enable_irq();
+    return active;
+}
+#endif
 
 void sd_access_gate_release(sd_access_client_t client)
 {
@@ -231,6 +279,12 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "PATCH";
         case SD_ACCESS_CLIENT_KIT:
             return "KIT";
+#if BRICK_TEST_BUILD
+        case SD_ACCESS_CLIENT_AUDIO_TEST:
+            return "ATEST";
+        case SD_ACCESS_CLIENT_DIAGNOSTIC_LOG:
+            return "DLOG";
+#endif
         default:
             return "NONE";
     }

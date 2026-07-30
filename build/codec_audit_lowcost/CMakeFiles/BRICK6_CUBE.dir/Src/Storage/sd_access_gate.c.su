@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:17:6:sd_access_gate_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:33:9:sd_access_fs_mount_if_needed	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:52:9:sd_access_gate_try_acquire	24	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:123:6:sd_access_gate_release	24	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:149:6:sd_access_gate_set_streaming_critical	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:156:9:sd_access_gate_streaming_critical_active	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:165:20:sd_access_gate_current_owner	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:174:20:sd_access_gate_last_owner	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:183:10:sd_access_gate_max_hold_ticks	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:192:10:sd_access_gate_acquire_fail_count	24	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:206:13:sd_access_gate_client_label	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:239:13:sd_access_gate_busy_label	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:255:6:sd_access_trace_begin	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:260:6:sd_access_trace_end	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:267:6:sd_access_trace_timeout	16	static

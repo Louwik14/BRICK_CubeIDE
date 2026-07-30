@@ -1,5 +1,78 @@
 # ARCHITECTURE_GLOBAL.md
 
+## Addendum 2026-07-30 - MT-12 replay deterministe
+
+- Z0 peut reconstruire explicitement la sequence archivee depuis sa seed et la rejouer dans le meme snapshot jetable MT-05, via le seam d'entree normal MT-04 et avec la cadence logique originale.
+- Le replay compare exactement l'action cible regeneree au breadcrumb archive (index, tick, delai, type, cible et valeur). Toute divergence arrete proprement la session avec `REPLAY MISMATCH`; aucune action n'est blacklistee.
+- Le moteur se met en pause juste avant l'injection de l'action fautive. Z5 expose alors une commande physique explicite pour l'executer; en Debug avec sonde attachee, un breakpoint est place avant l'injection. Cette fonction reste exclue de Release/Premium et ne depend d'aucun module `audio_test_*`.
+
+## Addendum 2026-07-30 - filtre musical et ordre track unifié
+
+- Z3 sépare cutoff de base/p-lock lissé et cible Matrix/LFO en domaine
+  `log2(Hz)`; Z1 compose base, modulation, enveloppe en octaves et keytrack
+  avant une conversion unique vers le coeur TPT.
+- Z1 impose le même ordre mono/stéréo
+  `moteur -> filtre -> VCA/volume -> inserts track -> bus`. Les sends/returns
+  delay et reverb restent sous l'autorité master du mixer.
+
+## Addendum 2026-07-30 - AUDIO TEST 2
+
+- Z0 orchestre le lifecycle diagnostic, Z1 substitue la source au dernier seam
+  float avant PCM24, Z5 expose `Settings > Test > Audio 2` et Z6 sérialise les
+  WAV/CSV INTERNAL. Tout le sous-système est exclu avec
+  `BRICK_TEST_BUILD=0`.
+- Les phases analogiques n'appellent aucun service SD. Le pipeline production
+  reste inchangé lorsque le hook test est inactif.
+
+## Addendum 2026-07-30 - MT-11 journal MONKEY TEST
+
+- Z6 ajoute un writer MONKEY autonome, sans dependance envers `audio_test_csv`, cadence par Z0 hors IRQ. Le client generique `SD_ACCESS_CLIENT_DIAGNOSTIC_LOG` est le seul acces FatFs du journal et reste autorise par la politique read-only Monkey uniquement dans le dossier reserve aux diagnostics.
+- Le dernier crash archive est ecrit et synchronise avant d'etre marque `REPORTED` en Backup SRAM. Une absence SD, une contention ou une erreur FatFs conserve l'archive et provoque une nouvelle tentative bornee; un identifiant stable et le marqueur `END` evitent de dupliquer un rapport deja durable apres un reset au mauvais instant.
+- Le journal ajoute aussi `START`, un resume toutes les dix minutes et `STOP`, jamais une ligne par action. `MONKEY.LOG` est borne a 256 KiB et tourne vers un unique `MONKEY.OLD`, soit environ 512 KiB maximum.
+
+## Addendum 2026-07-30 - MT-10 reprise apres reset
+
+- Les builds diagnostic capturent `RCC->RSR` au tout debut de `main()`, avant l'initialisation HAL et peripherique, puis effacent les flags une seule fois. Une capsule `FAULTED` conserve son type de fault; une session `RUNNING` avec `IWDG1RSTF` est classee watchdog. Les autres resets ferment la session interrompue sans faux crash.
+- Le dernier crash est copie dans une banque d'archive Backup SRAM double-slot distincte de la session courante. Seed, index, breadcrumbs, registres et flags RCC restent donc disponibles pour le rapport et le replay explicite pendant qu'une nouvelle session s'execute.
+- Apres la fin du boot applicatif, MONKEY TEST reprend automatiquement avec une nouvelle seed derivee, sans blacklist d'action. L'archive fautive reste accessible; aucune ecriture SD n'est realisee dans cette etape.
+
+## Addendum 2026-07-30 - MT-09 watchdog de diagnostic
+
+- `IWDG1` est arme uniquement au premier demarrage de MONKEY TEST dans les builds `Debug` et `Test`, avec un delai nominal de 12 s. Il reste arme jusqu'au reset, y compris apres un arret manuel du test.
+- Le seul heartbeat est place en fin de boucle principale, apres les services application, USB/MIDI, UI, rendu et flush display, et exige aussi une progression de `engine_tick_count` issue de la cadence audio. Aucun IRQ, DMA, tasklet partiel ni handler de fault ne nourrit l'IWDG.
+- `Debug` fige l'IWDG lors d'un halt debugger; `Test` conserve le comportement cible. La capsule persistante enregistre l'armement et un checkpoint de heartbeat borne a environ 1 Hz.
+- Le reset explicite de MT-08 reste l'autorite primaire apres fault; l'IWDG n'est qu'un filet de secours.
+
+## Addendum 2026-07-30 - MT-08 capture des faults
+
+- Les quatre faults Cortex-M7 selectionnent MSP/PSP depuis `EXC_RETURN`, basculent sur une pile DTCM dediee, finalisent la capsule MT-07 sans FatFs ni affichage, puis demandent toujours un reset systeme explicite.
+- L'IWDG n'est pas requis par ce chemin et restera seulement un filet de secours MT-09. Dans les builds normaux, les handlers ne portent pas la capsule mais remplacent aussi les attentes infinies par un reset explicite.
+
+## Addendum 2026-07-30 - MT-07 capsule persistante
+
+- Z0 reserve initialement 1 KiB de Backup SRAM a une capsule Monkey double-slot, versionnee et protegee par CRC32. MT-10 ajoute une seconde banque double-slot de 1 KiB pour archiver le dernier crash sans qu'une nouvelle session l'ecrase. Chaque action est inscrite avant injection dans un ring compact de 16 breadcrumbs; le commit alterne les slots et publie son marqueur valide en dernier.
+- La zone `0x38800000..0x38800FFF` est NOLOAD et non cachee par MPU dans `Debug`/`Test`. La capsule et son code sont absents de `Release`/`Premium`; les linkers ne font que nommer la ressource physique libre.
+
+## Addendum 2026-07-30 - MT-06 supervision MONKEY TEST
+
+- Z0 echantillonne a 10 Hz les compteurs generiques de charge IRQ, underruns Sampler/Looper et les invariants UI; Z1 reste l'autorite des compteurs audio. Les anomalies recuperables sont classees sans arreter le flux, tandis qu'un invariant UI ou une sentinelle corrompue provoque un arret controle et la restauration MT-05.
+- Cette supervision est compilee uniquement dans `Debug`/`Test`, reste hors IRQ et ne depend d'aucun module `audio_test_*`.
+
+## Addendum 2026-07-30 - MT-05 isolation MONKEY TEST
+
+- Z0 possede le lifecycle de session jetable et son snapshot SDRAM; Z6 centralise le refus des clients SD mutateurs; Z5 neutralise les actions Project/Sample non couvertes par FatFs. Ces seams sont conditionnes par `BRICK_TEST_BUILD` et restent independants de `audio_test_*`.
+
+## Addendum 2026-07-30 - calibration perceptuelle AUDIO TEST
+
+- Z0 orchestre les phases et la synthese hors IRQ, Z1 observe par K-weighting
+  sans toucher au mix, Z6 ecrit `CAL_RAW`/`CAL_SUMMARY`.
+- Aucun gain moteur n'est modifie; le CSV porte seulement une recommandation
+  bornee pour validation humaine.
+
+## Addendum 2026-07-30 - MT-04 injection MONKEY TEST
+
+- Z0 distribue les actions deterministes via `diagnostic_input` vers les autorites existantes Z5: file d'evenements boutons, accumulateurs encodeurs et runtime clavier. La primitive est generique, compilee uniquement dans `Debug`/`Test`, et ne depend d'aucun module `audio_test_*`.
+
 ## 1. Rôle
 
 Ce document est une carte d’orientation.
@@ -193,6 +266,37 @@ Documents conserves pour tracabilite uniquement:
 
 ## 7. Addendum 2026-05-13
 
+
+- Z2 conserve `TRACK_RUNTIME_ENGINE_WAVE` comme autorité unique avec son renderer float natif.
+
+## Addendum 2026-07-29 - seam diagnostic AUDIO TEST
+
+- Z0 cadence le runner automatique hors IRQ; Z5 n'affiche que sa progression et expose `STOP`.
+- Z1 conserve uniquement taps/accumulateurs bornés; Z2/Z3 configurent les cas par leurs autorités existantes; Z6 capture/restaure le snapshot RAM et sérialise le CSV après la mesure.
+- Banc inactif, les taps restent derrière le test scalaire d'activation existant et n'ajoutent aucun parcours diagnostic par sample.
+- Les cas FX longs séparent l'autorité de mesure Z1 (`FX_ACTIVE` puis queue sans reset DSP) de l'autorité d'écriture Z6: les deux lignes CSV sont écrites seulement après les 3 s de tail.
+
+## Addendum 2026-07-30 - firmware Test et decisions stables MONKEY TEST
+
+- Le preset `Test` est un build `Release` low-cost avec `BRICK_TEST_BUILD=1`; `Debug` active egalement cette frontiere tout en conservant `-Og -g3`. `Release` et `Premium` forcent `BRICK_TEST_BUILD=0`: sources, pages, chaines, buffers et hooks couteux propres aux diagnostics en sont exclus.
+- `MONKEY TEST` reste independant des modules `audio_test_*`. Il peut reutiliser `sd_access_gate`, FatFs et une primitive de journalisation generique extraite si necessaire, sans dependance directe envers `audio_test_csv`.
+- Apres crash, la capsule conserve la seed et l'index fautifs pour replay explicite; aucune action n'est blacklistee et la reprise automatique demarre une nouvelle seed.
+- MT-08 doit garantir un reset systeme explicite apres commit de la capsule, que l'IWDG soit actif ou non; l'IWDG reste un filet de secours et aucun handler n'attend indefiniment son expiration. La numerotation MT-01 a MT-12 reste inchangee.
+
+## Addendum 2026-07-30 - MT-02 seam MONKEY TEST
+
+- Z0 porte un lifecycle autonome `monkey_test` compile uniquement dans `Debug` et `Test`; Z5 expose `Settings > Test > Monkey` et ne possede pas l'etat runtime.
+- Aucun moteur d'actions, injection d'input, acces SD, replay, watchdog ou handler de fault n'est introduit par MT-02.
+
+## Addendum 2026-07-30 - MT-03 flux logique MONKEY TEST
+
+- Z0 possede le PRNG, la seed, l'index et l'horloge logique 1500 Hz du flux d'actions. Les gestes press/release composes sont bornes par une file statique de quatre elements et le rattrapage superloop par huit actions.
+- Z5 affiche seed, compteur et dernier type sans devenir une autorite. L'injection dans les chemins d'input reels reste hors MT-03.
+
+## Addendum 2026-07-29 - cache WAVE multibande autoritaire
+
+- Z6 publie atomiquement un unique `B6WT` v2 contenant le répertoire et les payloads 2048→8; Z1 sélectionne une bande hors boucle sample.
+
 ## Addendum 2026-07-29 - remplacement Synth/Daisy par Synth/DELUGE
 
 - Z1 remplace le moteur de test DaisySP par un port GPL-3.0 des oscillateurs basic-wave Deluge, scalarise pour Cortex-M7, a phase/tables fixed-point et comportement fixe non degrade.
@@ -260,4 +364,14 @@ Documents conserves pour tracabilite uniquement:
 - Z2 porte `CFG GROUP SPREAD KEYTRK` comme attribut transient de voice group; Z3 expose `PARAM_CFG_GROUP_SPREAD_KEYTRK` et conserve `LINK` separe.
 - Z1 applique le keytrack uniquement dans le rendu `Sampler/Multi`; `KEYTRK=OFF` garde le spread historique par pan MIX.
 - Z5 affiche `SPREAD` en double-widget `AMT` + `KEY`, avec `LINK` et `SEQ LINK` conserves sur `CFG/GROUP`.
+
+## Addendum 2026-07-29 - coeur filtre track
+
+- Z1 porte maintenant les modes track `LP/HP/BP` sur un SVF TPT/ZDF float stereo/mono, plage effective `20 Hz..16 kHz`, jeux de coefficients coherents tenus par chunks de 8 et bypass OFF reel.
+- Z3 conserve les autorites parametre/modulation existantes et mappe la resonance historique vers le Q TPT; le DJ EQ prepare ses coefficients couteux au boot.
 - Etat courant: le stockage brut `track_state`, le contrat commit unique `param_registry_commit_voice_group_seq_link*()`, la projection `track_runtime_get_voice_group_seq_link()`, l'edition `CFG/GROUP > SEQ LINK`, la persistence Z6, la route logique Z4 pour boundary non-PLAY, les cibles PLAY de groupe et la reconciliation RUNNING post-commit existent.
+
+## Addendum 2026-07-29 - contrat p-lock et Matrix
+
+- Z4 declare a Z3 la valeur p-lock non-PLAY comme base Matrix temporaire; Z3 additionne les slots Matrix sur cette base et restaure la base canonique au release.
+- Z1 consomme les endpoints continus moteur et filtre avec les rampes locales adaptees au DSP; Z3 conserve les bases, mappings et exclusions des parametres discrets.

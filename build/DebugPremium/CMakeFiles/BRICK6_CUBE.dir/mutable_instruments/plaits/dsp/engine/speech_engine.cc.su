@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/speech_engine.h:48:16:virtual void plaits::SpeechEngine::LoadUserData(const uint8_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/speech_engine.cc:38:6:virtual void plaits::SpeechEngine::Init(stmlib::BufferAllocator*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/speech_engine.cc:55:6:virtual void plaits::SpeechEngine::Reset()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/hysteresis_quantizer.h:101:14:int stmlib::HysteresisQuantizer2::Process(int, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/speech_engine.cc:59:6:virtual void plaits::SpeechEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	48	static

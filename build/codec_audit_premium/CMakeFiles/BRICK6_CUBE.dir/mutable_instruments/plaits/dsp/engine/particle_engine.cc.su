@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/particle_engine.h:47:16:virtual void plaits::ParticleEngine::LoadUserData(const uint8_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/particle_engine.cc:38:6:virtual void plaits::ParticleEngine::Init(stmlib::BufferAllocator*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/particle_engine.cc:46:6:virtual void plaits::ParticleEngine::Reset()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/fx/diffuser.h:53:8:void plaits::Diffuser::Process(float, float, float*, size_t)	64	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/noise/particle.h:48:15:void plaits::Particle::Render(bool, float, float, float, float, float, float*, float*, size_t)	44	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/particle_engine.cc:50:6:virtual void plaits::ParticleEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	72	static

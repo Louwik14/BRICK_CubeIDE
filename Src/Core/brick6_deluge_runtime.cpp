@@ -36,6 +36,7 @@ typedef struct
     float phase_degrees;
     uint32_t phase;
     uint32_t phase_increment;
+    uint32_t phase_increment_current;
     uint32_t native_pulse_width;
     int32_t effective_note_cents;
 } brick6_deluge_runtime_instance_t;
@@ -239,6 +240,7 @@ void brick6_deluge_runtime_reset_instance(uint8_t instance_id)
     instance->effective_note_cents = (int32_t)DELUGE_DEFAULT_NOTE * 100L;
     instance->phase_increment =
         note_cents_to_phase_increment(instance->effective_note_cents);
+    instance->phase_increment_current = instance->phase_increment;
     update_native_pulse_width(instance);
     instance->initialized = 1U;
 }
@@ -268,6 +270,8 @@ void brick6_deluge_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t ve
         instance->active_note = note;
         instance->pitch_dirty = 1U;
     }
+    update_phase_increment_if_dirty(instance);
+    instance->phase_increment_current = instance->phase_increment;
     instance->velocity = (float)velocity * (1.0f / 127.0f);
     instance->gate = (velocity != 0U) ? 1U : 0U;
     if ((instance->gate != 0U) && (instance->retrig != 0U))
@@ -437,12 +441,14 @@ uint8_t brick6_deluge_runtime_prepare_block(uint8_t instance_id,
         {
             instance->phase += instance->phase_increment * frames;
         }
+        instance->phase_increment_current = instance->phase_increment;
         return 0U;
     }
 
     if ((instance->level_target <= 0.0f) && (instance->level_current <= 0.0f))
     {
         instance->phase += instance->phase_increment * frames;
+        instance->phase_increment_current = instance->phase_increment;
         return 0U;
     }
 
@@ -450,6 +456,7 @@ uint8_t brick6_deluge_runtime_prepare_block(uint8_t instance_id,
     {
         instance->phase += instance->phase_increment * frames;
         instance->level_current = instance->level_target;
+        instance->phase_increment_current = instance->phase_increment;
         return 0U;
     }
 
@@ -478,21 +485,38 @@ uint8_t brick6_deluge_runtime_render_instance(uint8_t instance_id, float *out_mo
         {
             instance->phase += instance->phase_increment * frames;
         }
+        instance->phase_increment_current = instance->phase_increment;
         return 0U;
     }
 
     if ((instance->level_target <= 0.0f) && (instance->level_current <= 0.0f))
     {
         instance->phase += instance->phase_increment * frames;
+        instance->phase_increment_current = instance->phase_increment;
         return 0U;
     }
 
-    deluge_oscillator_render((deluge_osc_type_t)instance->oscillator_type,
-                              g_deluge_render_q31,
-                              frames,
-                              instance->phase_increment,
-                              instance->native_pulse_width,
-                              &instance->phase);
+    const uint32_t increment_start = instance->phase_increment_current;
+    for (uint32_t offset = 0U; offset < frames; offset += 8U)
+    {
+        uint32_t chunk = frames - offset;
+        if (chunk > 8U)
+        {
+            chunk = 8U;
+        }
+        const uint32_t progress = offset + chunk;
+        const int64_t delta =
+            (int64_t)instance->phase_increment - (int64_t)increment_start;
+        const uint32_t increment = (uint32_t)((int64_t)increment_start
+            + ((delta * (int64_t)progress) / (int64_t)frames));
+        deluge_oscillator_render((deluge_osc_type_t)instance->oscillator_type,
+                                 &g_deluge_render_q31[offset],
+                                 chunk,
+                                 increment,
+                                 instance->native_pulse_width,
+                                 &instance->phase);
+    }
+    instance->phase_increment_current = instance->phase_increment;
 
     float level = instance->level_current;
     const float velocity_level = instance->velocity * DELUGE_OUTPUT_TRIM;

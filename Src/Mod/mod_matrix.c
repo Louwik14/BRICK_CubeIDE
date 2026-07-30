@@ -36,9 +36,18 @@ typedef struct
     uint8_t slew_valid[2];
 } mod_matrix_operator_runtime_t;
 
+typedef struct
+{
+    uint8_t valid;
+    uint16_t destination;
+    float value;
+} mod_matrix_base_override_t;
+
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_route_cache_t g_mod_matrix_route_cache[SEQ_TRACK_COUNT];
 static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
+static mod_matrix_base_override_t
+    g_mod_matrix_base_overrides[SEQ_TRACK_COUNT][MOD_MATRIX_SLOT_COUNT];
 static uint8_t g_mod_matrix_any_route = 0U;
 
 static float mod_matrix_clampf(float v, float lo, float hi)
@@ -289,6 +298,42 @@ static mod_matrix_runtime_destination_t *mod_matrix_alloc_runtime_destination(mo
     return NULL;
 }
 
+static mod_matrix_base_override_t *mod_matrix_find_base_override(uint8_t track,
+                                                                 param_id_t destination)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (destination >= PARAM_COUNT))
+    {
+        return NULL;
+    }
+    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
+    {
+        mod_matrix_base_override_t *const entry =
+            &g_mod_matrix_base_overrides[track][i];
+        if ((entry->valid != 0U)
+                && (entry->destination == (uint16_t)destination))
+        {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static mod_matrix_base_override_t *mod_matrix_alloc_base_override(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return NULL;
+    }
+    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
+    {
+        if (g_mod_matrix_base_overrides[track][i].valid == 0U)
+        {
+            return &g_mod_matrix_base_overrides[track][i];
+        }
+    }
+    return NULL;
+}
+
 static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
                                                       mod_matrix_runtime_track_t *rt,
                                                       param_id_t destination,
@@ -309,7 +354,13 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         }
 
         float base = 0.0f;
-        if (param_registry_get_track_value(destination, track, &base) == 0U)
+        const mod_matrix_base_override_t *const override =
+            mod_matrix_find_base_override(track, destination);
+        if (override != NULL)
+        {
+            base = override->value;
+        }
+        else if (param_registry_get_track_value(destination, track, &base) == 0U)
         {
             return 0U;
         }
@@ -320,9 +371,7 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->base_value = base;
         dst->min_value = (destination == PARAM_DELUGE_WIDTH)
                           ? -1.0f
-                          : ((destination == PARAM_LFO1_RATE)
-                          || (destination == PARAM_LFO2_RATE)
-                          || (destination == PARAM_LFO3_RATE)) ? 0.0f : desc->min;
+                          : desc->min;
         dst->max_value = desc->max;
     }
 
@@ -362,6 +411,7 @@ void mod_matrix_reset_runtime(void)
 {
     memset(g_mod_matrix_runtime, 0, sizeof(g_mod_matrix_runtime));
     memset(g_mod_matrix_operator_runtime, 0, sizeof(g_mod_matrix_operator_runtime));
+    memset(g_mod_matrix_base_overrides, 0, sizeof(g_mod_matrix_base_overrides));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
@@ -1062,9 +1112,82 @@ void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id,
         return;
     }
 
-    mod_matrix_runtime_destination_t *const dst = mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[track], id);
+    mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[track], id);
+    if ((dst != NULL) && (mod_matrix_find_base_override(track, id) == NULL))
+    {
+        dst->base_value = value;
+    }
+}
+
+void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    uint8_t is_matrix_destination = 0U;
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        const track_mod_matrix_slot_t *const configured =
+            mod_matrix_track_slot_const(track, slot);
+        if ((mod_matrix_slot_is_configured(configured) != 0U)
+                && (configured->destination == (uint16_t)id))
+        {
+            is_matrix_destination = 1U;
+            break;
+        }
+    }
+    if (is_matrix_destination == 0U)
+    {
+        return;
+    }
+
+    mod_matrix_base_override_t *entry = mod_matrix_find_base_override(track, id);
+    if (entry == NULL)
+    {
+        entry = mod_matrix_alloc_base_override(track);
+    }
+    if (entry == NULL)
+    {
+        return;
+    }
+
+    entry->valid = 1U;
+    entry->destination = (uint16_t)id;
+    entry->value = value;
+
+    mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[track], id);
     if (dst != NULL)
     {
         dst->base_value = value;
+    }
+}
+
+void mod_matrix_clear_runtime_base_override(uint8_t track,
+                                            param_id_t id,
+                                            float base_value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    mod_matrix_base_override_t *const entry =
+        mod_matrix_find_base_override(track, id);
+    if (entry != NULL)
+    {
+        entry->valid = 0U;
+        entry->destination = (uint16_t)MOD_DESTINATION_NONE;
+        entry->value = 0.0f;
+    }
+
+    mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[track], id);
+    if (dst != NULL)
+    {
+        dst->base_value = base_value;
     }
 }

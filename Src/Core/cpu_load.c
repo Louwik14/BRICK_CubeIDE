@@ -357,3 +357,26 @@ void cpu_load_reset_peak(void)
 
     __set_PRIMASK(primask);
 }
+
+void cpu_load_reset_measurement(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    cpu_last_permille = 0U;
+    cpu_avg_permille_q8 = 0U;
+    cpu_peak_permille = 0U;
+    cpu_peak_recent_permille = 0U;
+    cpu_over_80_count = 0U;
+    cpu_over_90_count = 0U;
+    cpu_over_100_count = 0U;
+    cpu_block_count = 0U;
+    recent_permille_index = 0U;
+    recent_permille_count = 0U;
+    for (uint32_t i = 0U; i < CPU_LOAD_RECENT_WINDOW; ++i)
+    {
+        recent_permille_ring[i] = 0U;
+    }
+
+    __set_PRIMASK(primask);
+}

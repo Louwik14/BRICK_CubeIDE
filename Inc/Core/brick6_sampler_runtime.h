@@ -115,6 +115,13 @@ typedef struct
 
 typedef struct
 {
+    uint32_t multi_page_underrun;
+    uint32_t multi_stop_underrun;
+    uint32_t multi_invalid_instrument_id;
+} brick6_sampler_runtime_health_snapshot_t;
+
+typedef struct
+{
     uint8_t active;
     uint8_t reverse;
     uint16_t sample_id;
@@ -187,6 +194,8 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
+void brick6_sampler_runtime_get_health_snapshot(
+    brick6_sampler_runtime_health_snapshot_t *out_snapshot);
 uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
 uint8_t brick6_sampler_runtime_get_ram_playhead(uint8_t track_id,
                                                 uint16_t sample_id,

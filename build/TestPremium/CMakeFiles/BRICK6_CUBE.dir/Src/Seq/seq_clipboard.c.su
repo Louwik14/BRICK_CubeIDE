@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:132:16:seq_clipboard_lock_append	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:84:16:seq_clipboard_collect_group_members	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:231:13:seq_clipboard_clear_play_locks	296	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:249:13:seq_clipboard_paste_locks	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:278:6:seq_clipboard_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:283:9:seq_clipboard_is_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:288:9:seq_clipboard_copy	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:380:9:seq_clipboard_paste	88	static

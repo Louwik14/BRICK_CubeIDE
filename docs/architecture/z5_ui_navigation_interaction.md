@@ -1,5 +1,55 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-30 - MT-12 commandes de replay
+
+- Dans `MONKEY TEST`, `PAGE 2` lance le replay explicite du dernier crash archive lorsque la session est inactive. `PAGE 1` conserve son role start/stop et permet d'abandonner le replay avec restauration du snapshot.
+- La vue distingue `REPLAY`, `ARMED` et `FIRED`, affiche la progression `index courant/index cible`, puis propose `PAGE 3 FIRE` uniquement au point d'arret juste avant l'action cible.
+- Ces commandes n'acceptent que les evenements physiques. Les actions synthetiques rejouees ne peuvent donc ni lancer le replay, ni confirmer leur propre action cible.
+
+## Addendum 2026-07-30 - AUDIO TEST 2
+
+- `Settings > Test > Audio 2` est une vue indépendante Debug/Test. `PAGE 2`
+  démarre/confirme, `PAGE 1` annule, `PAGE 3/4` rejouent LINE/HEADPHONE et
+  `SETTINGS` quitte après restauration.
+- Les confirmations n'acceptent que des événements boutons physiques; aucun
+  clic encodeur n'est consommé.
+
+## Addendum 2026-07-30 - MT-06 etat de supervision
+
+- La vue Monkey affiche `W/E/C` et la derniere classe courte (`CPU>90`, `SAMP UND`, `LOOP UND`, `UI INV`, etc.). Elle reste une projection read-only de l'autorite Z0.
+- Un invariant track/hall/page hors borne est fatal pour la session de test seulement: Monkey relache les inputs, s'arrete et restaure le snapshot MT-05.
+
+## Addendum 2026-07-30 - MT-05 garde UI
+
+- Monkey peut parcourir Settings, mais toute activation dans les sous-vues Project et Sample est remplacee par `TEST SAFE` tant que la session est active; `SETTINGS` reste disponible pour remonter.
+- Cette garde complete le verrou SD central et couvre les mutations RAM/boot context qui ne passent pas par FatFs.
+
+## Addendum 2026-07-30 - MT-04 entree synthetique
+
+- Les evenements boutons synthetiques empruntent la meme file et les memes handlers que les boutons physiques, avec `UI_EVENT_SOURCE_DIAGNOSTIC` pour que la page de controle ne les confonde pas avec les commandes operateur.
+- Une navigation produite par Monkey peut quitter `Settings` sans arreter la session. Seuls les controles physiques `PAGE 1` et `SETTINGS` de la vue Monkey pilotent explicitement start/stop.
+
+## Addendum 2026-07-30 - MT-03 observabilite du flux Monkey
+
+- La vue `MONKEY TEST` affiche maintenant la seed sur huit chiffres hexadecimaux, le nombre d'actions logiques produites et le dernier type atomique.
+- Cette projection est read-only: Z5 ne genere pas les actions et ne les injecte pas. L'index, les delais et le PRNG restent possedes par `monkey_test`/`monkey_test_action`.
+
+## Addendum 2026-07-30 - MT-02 page MONKEY TEST
+
+- `Settings > Test > Monkey` ouvre une vue autonome `MONKEY TEST` dans `Debug` et `Test`; elle est absente de `Release` et `Premium`.
+- `PAGE 1` demarre ou arrete proprement le lifecycle du socle. Depuis MT-04, seule une commande operateur explicite arrete une session active; la navigation synthetique peut quitter Settings.
+- La vue affiche l'etat, le temps ecoule et le compteur d'actions. A MT-02, ce compteur reste a zero: le moteur deterministe et l'injection appartiennent aux etapes suivantes.
+
+## Addendum 2026-07-30 - diagnostics absents des firmwares normaux
+
+- La sous-categorie `Settings > Test`, `TEST > HALL` et `AUDIO TEST` est enregistree uniquement avec `BRICK_TEST_BUILD=1`, donc dans `Debug` et `Test`.
+- La racine Settings des builds normaux contient seulement `SAMPLE` et `PROJECT`; les enums, handlers, renderers et chaines propres aux diagnostics sont elimines a la compilation.
+
+
+- `Synth/Wave` conserve l'architecture reelle `TONE 1/2` / `TONE 2/2`. `MODEL` est le premier sous-onglet `MODE` de `TONE 2/2`.
+- En `MODEL=BRICK`, `TONE 1/2` conserve les quatre pages O1W/O1V/O2W/O2V historiques; `TONE 2/2` expose `MODE` puis `QUAL`.
+- En `MODEL=DELUGE`, `TONE 1/2` expose O1W=`TABLE, INDEX, WIDTH`, O1V=`LEVEL, TUNE, FINE, PHASE`, O2W=`TABLE, INDEX, WIDTH, SYNC`, O2V=`LEVEL, TUNE, FINE, PHASE`. `PHASE` affiche `OFF` ou l'angle de retrigger; `TONE 2/2` n'expose que `MODE`.
+
 ## Addendum 2026-07-29 - affichage Deluge SKEW/WIDTH
 
 - Sur `TONE/SHAPE`, `SINE`, `TRI`, `SAW`, `A-SAW` et `A-SQUARE` affichent `SKEW 0..100 %`, sans signe ni demi-course negative manuelle.
@@ -45,6 +95,13 @@
 - Le rendu est strictement read-only: RAW vient de `hall_adc`, FILTER du dernier sample filtre effectivement remis a `hall_engine`, et MIN/MAX/pressed/velocity des snapshots du moteur Hall. La derniere ligne affiche aussi les trois raws ADC/MUX avant mapping Hall pour l'adresse MUX selectionnee.
 - Une calibration absente laisse RAW/FILTER visibles, affiche MIN/MAX `---` et n'installe aucune valeur fictive. `PAGE 1` remonte de Hall vers Test, puis de Test vers la racine Settings.
 - En low-cost, la polarite physique Hall est decroissante a l'appui: l'autorite Hall conserve et expose les bornes numeriques `RAW LOW` / `RAW HIGH`, puis normalise position, pressed et velocity dans ce sens sans permuter l'affichage diagnostic.
+
+## Addendum 2026-07-29 - page AUDIO TEST
+
+- `Settings > Test > Audio` est un banc automatique identique en low-cost et Premium. L'entrée démarre immédiatement `PREPARE`; aucun encodeur, sélection de track, RESET, FREEZE, SNAP ou second mode manuel n'existe.
+- Le rendu est limité à `AUDIO TEST`, `AUTO n/total`, nom du cas, barre de progression et état `TURN VOL DOWN`, `AUTO DONE`, `AUTO STOP` ou `AUTO ERR`.
+- La progression compte 95 tests; les deux lignes CSV `FX_ACTIVE`/`FX_TAIL` d'un même cas FX conservent le même index utilisateur. L'écran affiche une estimation `EST 02:45`.
+- `PAGE 1` est le seul contrôle du runner et reste explicitement libellé `STOP`. `SETTINGS`, le retour ou la fermeture de page annulent aussi, coupent toutes les notes de test et restaurent l'état capturé.
 
 ## Addendum 2026-07-28 - calibration Hall low-cost 24 touches
 
@@ -1264,3 +1321,14 @@ Points factuels:
 - Une slave avec `SEQ LINK=ON` garde ses pages accessibles, mais toute edition de sequence est refusee par le garde Z4.
 - Le header template affiche un indicateur inverse `MxSEQ`, ou `x` est la master effective, quand la sequence de la track active est controlee par la Master.
 - Les parametres permanents de sound design restent editables: le verrou ne cible que les donnees de sequence stockees dans le Pattern.
+
+## Addendum 2026-07-29 - exposition keytrack filtre
+
+- `ENV 2/2`, page 1 `RETRIG`, conserve les trois switches `FLT/VCA/MOD` et expose `PARAM_FILTER_KEYTRK` dans le slot 4.
+- Le controle utilise la base track-aware existante `0..127`; l'UI ne calcule pas la note ni le ratio DSP et n'ajoute aucune seconde autorite.
+
+## Addendum 2026-07-29 - proprietaire des touches KBD/ARP
+
+- Chaque note emise par la surface KBD/ARP memorise la track et le moteur (`KBD` ou `ARP`) choisis au note-on; le note-off reutilise ce proprietaire au lieu de relire la track selectionnee ou le mode courant.
+- Un changement de focus ne clear plus les instances ARP. Une transition `ARP -> KBD` sur Y applique le lifecycle uniquement a Y et ne reset plus l'ownership moteur partage utilise par X.
+- Le all-notes-off de la surface draine les proprietaires effectivement retenus note par note; les releases tardifs ne peuvent plus etre reroutes vers la nouvelle track.

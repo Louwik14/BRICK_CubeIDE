@@ -5,6 +5,7 @@
 
 #include "audio_io.h"
 
+#include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
 
@@ -57,15 +58,27 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     static float monitor_main_r[AUDIO_BLOCK_SIZE];
     const float gain_step = (out_gain_end - out_gain_start) / (float)frames;
     float out_gain = out_gain_start;
+    const uint8_t diag_enabled = audio_track_diag_is_enabled();
 
     for (uint32_t n = 0; n < frames; n++)
     {
         monitor_main_l[n] = bus_main_l[n] * out_gain;
         monitor_main_r[n] = bus_main_r[n] * out_gain;
+        if (diag_enabled != 0U)
+        {
+            audio_global_diag_measure_sample(AUDIO_GLOBAL_DIAG_POST_MASTER_GAIN,
+                                             monitor_main_l[n],
+                                             monitor_main_r[n]);
+        }
         out_gain += gain_step;
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
+    if (diag_enabled != 0U)
+    {
+        audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_PRE_PCM24,
+                                         monitor_main_l, monitor_main_r, frames);
+    }
 
     board_audio_pack_output(tx,
                             monitor_main_l,
@@ -75,5 +88,8 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
                             frames,
                             out_gain_start,
                             out_gain_end);
+    if (diag_enabled != 0U)
+    {
+        audio_global_diag_end_block(frames);
+    }
 }
-

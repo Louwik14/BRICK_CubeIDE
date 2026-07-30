@@ -1944,6 +1944,11 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
         return 1.0f / 48.0f;
     }
 
+    if (desc->id == PARAM_FILTER_CUTOFF)
+    {
+        return 1.0f;
+    }
+
     if ((desc->id == PARAM_MIX_DELAY_MOD_RATE) || (ui_param_is_stack_osc_tune(desc->id) != 0U))
     {
         return 1.0f;

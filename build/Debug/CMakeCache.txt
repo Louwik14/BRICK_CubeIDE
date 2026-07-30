@@ -26,6 +26,9 @@ BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 //Firmware product variant
 BRICK6_VARIANT:STRING=lowcost
 
+//Include diagnostic-only firmware features
+BRICK_TEST_BUILD:BOOL=ON
+
 //Path to a program.
 CMAKE_ADDR2LINE:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/arm-none-eabi-addr2line.exe
 

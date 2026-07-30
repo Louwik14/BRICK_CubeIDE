@@ -1306,3 +1306,17 @@ Correction:
 - Les chemins d'edition steps, rolls, p-locks, paste/clear de steps, live-rec PLAY, undo snapshot et parametres runtime de sequence (`LENGTH`, `DIV`, `QUANT`, `SWING`) consultent ce garde avant toute ecriture Pattern.
 - Le verrou ne modifie pas `seq_model`, ne supprime aucune donnee locale et ne participe pas a la persistence; Pattern/Project restore restent des chemins de chargement, pas des edits utilisateur.
 - Le scheduler et la boundary ignoraient deja l'emission autonome des slaves sous `SEQ LINK=ON` via `seq_plock_route`: aucune modification scheduler n'est requise pour cette regle UI.
+
+## Addendum 2026-07-29 - base Matrix temporaire des p-locks
+
+- L'application d'un p-lock non-PLAY installe sa valeur comme base runtime temporaire de la destination Matrix avant la projection parametre.
+- Un lock consecutif remplace cette base sans restaurer intermediairement la valeur canonique. La fin du lock libere d'abord l'overlay parametre puis restaure la base Matrix normale.
+- Le stockage Pattern, l'encodage `value16`, les frontieres scheduler et les destinations Sampler restent inchanges.
+
+## Addendum 2026-07-29 - ownership ARP multi-track
+
+- `keyboard_arp` possede une instance complete par track: notes physiques/latchees, HOLD, pattern source, phase, direction, RNG, timers, notes actives et evenements strum differes.
+- Toute API `*_for_track` restaure le contexte ARP appelant apres operation; une consultation, un clear ou une edition d'une track ne laisse plus le selecteur interne pointe sur une autre instance.
+- Les note-on/off ARP passent jusqu'au moteur avec leur track proprietaire. Le pairing live-rec des emissions ARP est indexe par `owner_track + note`, et non plus par note seule.
+- Le clear d'une track ne vide que ses notes, son pairing live-rec et son ownership de voice-group. Le panic global reste le seul chemin autorise a vider toutes les tracks.
+- Les marqueurs de provenance des notes strum differees sont stockes par entree sur toute la capacite de queue; ils ne partagent plus un masque limite aux huit premieres entrees.

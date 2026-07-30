@@ -29,8 +29,18 @@
 #define FX_DJ_EQ3_MAX_DB    (12.0f)
 #define FX_DJ_EQ3_SHELF_S   (1.0f)
 #define FX_DJ_EQ3_MIN_FREQ  (10.0f)
-#define FX_DJ_EQ3_PARAM_DB_EPS  (0.10f)
+#define FX_DJ_EQ3_PARAM_DB_EPS  (1.0e-5f)
 #define FX_DJ_EQ3_SANITIZE_OUTPUT 0
+#define FX_DJ_EQ3_LUT_INTERVALS 128U
+
+/*
+ * The DJ EQ uses fixed crossover frequencies in the mixer. Its complete RBJ
+ * coefficient curves are therefore prepared once during audio initialization.
+ * IRQ-side parameter changes only interpolate this table.
+ */
+static float g_fx_dj_eq3_coeff_lut[FX_DJ_EQ3_NUM_STAGES]
+                                      [FX_DJ_EQ3_LUT_INTERVALS + 1U][5U];
+static uint8_t g_fx_dj_eq3_coeff_lut_ready = 0U;
 
 /**
  * @brief Point d'entrée fx_clamp.
@@ -273,6 +283,51 @@ static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[4] = fx_safe((-a2) * inv_a0);
 }
 
+static void fx_dj_eq3_prepare_coeff_lut(float sample_rate)
+{
+    if(g_fx_dj_eq3_coeff_lut_ready != 0U)
+    {
+        return;
+    }
+
+    const float fs = (sample_rate > 1000.0f) ? sample_rate : 48000.0f;
+    for(uint32_t i = 0U; i <= FX_DJ_EQ3_LUT_INTERVALS; ++i)
+    {
+        const float t = (float)i * (1.0f / (float)FX_DJ_EQ3_LUT_INTERVALS);
+        const float db = FX_DJ_EQ3_MIN_DB
+                       + ((FX_DJ_EQ3_MAX_DB - FX_DJ_EQ3_MIN_DB) * t);
+        rbj_low_shelf(fs, 300.0f, db, FX_DJ_EQ3_SHELF_S,
+                      g_fx_dj_eq3_coeff_lut[0U][i]);
+        rbj_peaking(fs, 1000.0f, 0.8f, db,
+                    g_fx_dj_eq3_coeff_lut[1U][i]);
+        rbj_high_shelf(fs, 4000.0f, db, FX_DJ_EQ3_SHELF_S,
+                       g_fx_dj_eq3_coeff_lut[2U][i]);
+    }
+    g_fx_dj_eq3_coeff_lut_ready = 1U;
+}
+
+static void fx_dj_eq3_lookup_coeffs(uint32_t stage, float gain_db, float *out)
+{
+    const float db = fx_clamp_db(gain_db);
+    const float pos = (db - FX_DJ_EQ3_MIN_DB)
+                    * ((float)FX_DJ_EQ3_LUT_INTERVALS
+                       / (FX_DJ_EQ3_MAX_DB - FX_DJ_EQ3_MIN_DB));
+    uint32_t index = (uint32_t)pos;
+    if(index >= FX_DJ_EQ3_LUT_INTERVALS)
+    {
+        memcpy(out, g_fx_dj_eq3_coeff_lut[stage][FX_DJ_EQ3_LUT_INTERVALS],
+               5U * sizeof(float));
+        return;
+    }
+
+    const float frac = pos - (float)index;
+    for(uint32_t i = 0U; i < 5U; ++i)
+    {
+        const float a = g_fx_dj_eq3_coeff_lut[stage][index][i];
+        out[i] = a + ((g_fx_dj_eq3_coeff_lut[stage][index + 1U][i] - a) * frac);
+    }
+}
+
 
 /**
  * @brief Point d'entrée fx_dj_eq3_reset.
@@ -321,20 +376,9 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
     eq->high_db = fx_clamp_db(eq->high_db);
     eq->sample_rate = (eq->sample_rate > 1000.0f) ? eq->sample_rate : 48000.0f;
 
-    const float fs = eq->sample_rate;
-    const float low_f = fx_clamp_freq(eq->low_freq, fs);
-    const float mid_f = fx_clamp_freq(eq->mid_freq, fs);
-    const float high_f = fx_clamp_freq(eq->high_freq, fs);
-    const float q = (eq->mid_q > 0.05f) ? eq->mid_q : 1.0f;
-
-    eq->low_freq = low_f;
-    eq->mid_freq = mid_f;
-    eq->high_freq = high_f;
-    eq->mid_q = q;
-
-    rbj_low_shelf(fs, low_f, eq->low_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[0]);
-    rbj_peaking(fs, mid_f, q, eq->mid_db, &coeffs_tmp[5]);
-    rbj_high_shelf(fs, high_f, eq->high_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[10]);
+    fx_dj_eq3_lookup_coeffs(0U, eq->low_db, &coeffs_tmp[0]);
+    fx_dj_eq3_lookup_coeffs(1U, eq->mid_db, &coeffs_tmp[5]);
+    fx_dj_eq3_lookup_coeffs(2U, eq->high_db, &coeffs_tmp[10]);
 
     eq->coeffs_pending_update = 0U;
     __DMB();
@@ -424,6 +468,32 @@ void fx_dj_eq3_set_high_db(fx_dj_eq3_t *eq, float gain_db)
     }
 }
 
+void fx_dj_eq3_set_gains_db(fx_dj_eq3_t *eq,
+                            float low_db,
+                            float mid_db,
+                            float high_db)
+{
+    if(eq == NULL)
+    {
+        return;
+    }
+
+    const float low = fx_clamp_db(low_db);
+    const float mid = fx_clamp_db(mid_db);
+    const float high = fx_clamp_db(high_db);
+    if((fabsf(low - eq->low_db) < FX_DJ_EQ3_PARAM_DB_EPS)
+            && (fabsf(mid - eq->mid_db) < FX_DJ_EQ3_PARAM_DB_EPS)
+            && (fabsf(high - eq->high_db) < FX_DJ_EQ3_PARAM_DB_EPS))
+    {
+        return;
+    }
+
+    eq->low_db = low;
+    eq->mid_db = mid;
+    eq->high_db = high;
+    fx_dj_eq3_update_coeffs(eq);
+}
+
 /**
  * @brief Point d'entrée fx_dj_eq3_set_bypass.
  *
@@ -482,6 +552,7 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     eq->high_freq = 4000.0f;
     eq->mid_q = 0.8f;
 
+    fx_dj_eq3_prepare_coeff_lut(eq->sample_rate);
 
     arm_biquad_cascade_df1_init_f32(&eq->inst_l, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_l);
     arm_biquad_cascade_df1_init_f32(&eq->inst_r, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_r);
@@ -568,20 +639,9 @@ void fx_dj_eq3_mono_update_coeffs(fx_dj_eq3_mono_t *eq)
     eq->high_db = fx_clamp_db(eq->high_db);
     eq->sample_rate = (eq->sample_rate > 1000.0f) ? eq->sample_rate : 48000.0f;
 
-    const float fs = eq->sample_rate;
-    const float low_f = fx_clamp_freq(eq->low_freq, fs);
-    const float mid_f = fx_clamp_freq(eq->mid_freq, fs);
-    const float high_f = fx_clamp_freq(eq->high_freq, fs);
-    const float q = (eq->mid_q > 0.05f) ? eq->mid_q : 1.0f;
-
-    eq->low_freq = low_f;
-    eq->mid_freq = mid_f;
-    eq->high_freq = high_f;
-    eq->mid_q = q;
-
-    rbj_low_shelf(fs, low_f, eq->low_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[0]);
-    rbj_peaking(fs, mid_f, q, eq->mid_db, &coeffs_tmp[5]);
-    rbj_high_shelf(fs, high_f, eq->high_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[10]);
+    fx_dj_eq3_lookup_coeffs(0U, eq->low_db, &coeffs_tmp[0]);
+    fx_dj_eq3_lookup_coeffs(1U, eq->mid_db, &coeffs_tmp[5]);
+    fx_dj_eq3_lookup_coeffs(2U, eq->high_db, &coeffs_tmp[10]);
 
     eq->coeffs_pending_update = 0U;
     __DMB();
@@ -635,6 +695,32 @@ void fx_dj_eq3_mono_set_high_db(fx_dj_eq3_mono_t *eq, float gain_db)
     }
 }
 
+void fx_dj_eq3_mono_set_gains_db(fx_dj_eq3_mono_t *eq,
+                                 float low_db,
+                                 float mid_db,
+                                 float high_db)
+{
+    if(eq == NULL)
+    {
+        return;
+    }
+
+    const float low = fx_clamp_db(low_db);
+    const float mid = fx_clamp_db(mid_db);
+    const float high = fx_clamp_db(high_db);
+    if((fabsf(low - eq->low_db) < FX_DJ_EQ3_PARAM_DB_EPS)
+            && (fabsf(mid - eq->mid_db) < FX_DJ_EQ3_PARAM_DB_EPS)
+            && (fabsf(high - eq->high_db) < FX_DJ_EQ3_PARAM_DB_EPS))
+    {
+        return;
+    }
+
+    eq->low_db = low;
+    eq->mid_db = mid;
+    eq->high_db = high;
+    fx_dj_eq3_mono_update_coeffs(eq);
+}
+
 void fx_dj_eq3_mono_set_bypass(fx_dj_eq3_mono_t *eq, uint8_t bypass)
 {
     if(eq == NULL)
@@ -669,6 +755,7 @@ void fx_dj_eq3_mono_init(fx_dj_eq3_mono_t *eq,
     eq->high_freq = 4000.0f;
     eq->mid_q = 0.8f;
 
+    fx_dj_eq3_prepare_coeff_lut(eq->sample_rate);
     arm_biquad_cascade_df1_init_f32(&eq->inst, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state);
 
     fx_dj_eq3_mono_update_coeffs(eq);

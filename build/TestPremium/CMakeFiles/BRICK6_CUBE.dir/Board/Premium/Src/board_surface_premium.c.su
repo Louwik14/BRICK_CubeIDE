@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:9:6:board_surface_select_hall_mux	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:21:9:board_surface_start_hall_adc_dma	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:37:9:board_surface_start_hall_scan_timer	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:42:9:board_surface_is_hall_adc1_callback	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:48:9:board_surface_is_hall_adc2_callback	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:54:6:board_surface_update_lane	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:66:6:board_surface_snapshot	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_surface_premium.c:76:9:board_surface_read_master_volume_raw	0	static

@@ -80,6 +80,8 @@ typedef struct
     uint8_t pending_offset;
     uint8_t pending_count;
     float osc_level;
+    float osc_level_current;
+    float pitch_current_q7;
     int16_t pending_samples[kBraidsRenderBlockSize];
     braids::MacroOscillator oscillator;
 } brick6_braids_runtime_osc_t;
@@ -204,10 +206,12 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
         osc->phase_reset_enabled = 0U;
         osc->phase_reset_pending = 0U;
         osc->osc_level = (osc_index == 0U) ? 1.0f : 0.0f;
+        osc->osc_level_current = osc->osc_level;
         brick6_braids_runtime_flush_osc_pending(osc);
         osc->oscillator.Init();
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
-        osc->oscillator.set_pitch(brick6_braids_runtime_pitch_to_q7(&osc->voice));
+        osc->pitch_current_q7 = (float)brick6_braids_runtime_pitch_to_q7(&osc->voice);
+        osc->oscillator.set_pitch((int16_t)osc->pitch_current_q7);
         osc->oscillator.set_parameters(
             brick6_braids_runtime_float_to_u15(osc->voice.timbre),
             brick6_braids_runtime_float_to_u15(osc->voice.color));
@@ -387,11 +391,14 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
         instance->osc[osc].voice.has_active_note = 1U;
         instance->osc[osc].voice.gate = 1U;
         instance->osc[osc].voice.trigger = 1U;
+        instance->osc[osc].pitch_current_q7 =
+            (float)brick6_braids_runtime_pitch_to_q7(&instance->osc[osc].voice);
         if (instance->osc[osc].phase_reset_enabled != 0U)
         {
             instance->osc[osc].phase_reset_pending = 1U;
         }
     }
+    brick6_braids_runtime_flush_pending(instance);
     instance->has_note = 1U;
     instance->tail_samples_remaining = 0U;
 }
@@ -479,16 +486,24 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
 
     const float velocity_gain = 0.2f + (brick6_braids_runtime_clamp(instance->velocity, 0.0f, 1.0f) * 0.8f);
     const float gate_target = ((instance->gate != 0U) || (instance->tail_samples_remaining > 0U)) ? velocity_gain : 0.0f;
-    float osc_level_sum = 0.0f;
+    float osc_level_start[kBraidsOscCount];
+    float osc_level_step[kBraidsOscCount];
+    uint8_t any_osc_level = 0U;
     for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
     {
-        const float osc_level = brick6_braids_runtime_clamp(instance->osc[osc_index].osc_level, 0.0f, 1.0f);
-        if (osc_level > kBraidsOscActiveEpsilon)
+        brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
+        osc_level_start[osc_index] =
+            brick6_braids_runtime_clamp(osc->osc_level_current, 0.0f, 1.0f);
+        osc_level_step[osc_index] =
+            (brick6_braids_runtime_clamp(osc->osc_level, 0.0f, 1.0f)
+                - osc_level_start[osc_index]) / (float)frames;
+        if ((osc->osc_level > kBraidsOscActiveEpsilon)
+                || (osc->osc_level_current > kBraidsOscActiveEpsilon))
         {
-            osc_level_sum += osc_level;
+            any_osc_level = 1U;
         }
     }
-    if (osc_level_sum <= kBraidsOscActiveEpsilon)
+    if (any_osc_level == 0U)
     {
         brick6_braids_runtime_flush_pending(instance);
         memset(out_mono, 0, frames * sizeof(float));
@@ -499,8 +514,6 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         }
         return 0U;
     }
-    const float mix_norm = (osc_level_sum > 1.0f) ? (1.0f / osc_level_sum) : 1.0f;
-
     uint32_t offset = 0U;
     uint8_t sync_block[kBraidsRenderBlockSize];
     int16_t sample_block[kBraidsRenderBlockSize];
@@ -512,8 +525,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
         {
             brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-            const float osc_level = brick6_braids_runtime_clamp(osc->osc_level, 0.0f, 1.0f);
-            if (osc_level <= kBraidsOscActiveEpsilon)
+            if ((osc->osc_level <= kBraidsOscActiveEpsilon)
+                    && (osc->osc_level_current <= kBraidsOscActiveEpsilon))
             {
                 brick6_braids_runtime_flush_osc_pending(osc);
                 continue;
@@ -521,6 +534,11 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
 
             if (osc->pending_count == 0U)
             {
+                const uint32_t remaining = frames - offset;
+                const uint8_t generate_count =
+                    (remaining > kBraidsRenderBlockSize)
+                        ? (uint8_t)kBraidsRenderBlockSize
+                        : (uint8_t)remaining;
                 memset(sync_block, 0, sizeof(sync_block));
                 if (osc->phase_reset_pending != 0U)
                 {
@@ -538,14 +556,24 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 osc->voice.gate = instance->gate;
                 osc->voice.trigger = trigger_pending;
                 osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
-                osc->oscillator.set_pitch(brick6_braids_runtime_pitch_to_q7(&osc->voice));
+                const float pitch_target =
+                    (float)brick6_braids_runtime_pitch_to_q7(&osc->voice);
+                const float pitch_progress =
+                    ((uint32_t)generate_count >= remaining)
+                        ? 1.0f
+                        : ((float)generate_count / (float)remaining);
+                osc->pitch_current_q7 +=
+                    (pitch_target - osc->pitch_current_q7) * pitch_progress;
+                osc->oscillator.set_pitch((int16_t)(osc->pitch_current_q7 + 0.5f));
                 osc->oscillator.set_parameters(
                     brick6_braids_runtime_float_to_u15(osc->voice.timbre + ((osc->voice.modulation - 0.5f) * 0.5f)),
                     brick6_braids_runtime_float_to_u15(osc->voice.color));
-                osc->oscillator.Render(sync_block, sample_block, (size_t)kBraidsRenderBlockSize);
-                memcpy(osc->pending_samples, sample_block, sizeof(sample_block));
+                osc->oscillator.Render(sync_block, sample_block, (size_t)generate_count);
+                memcpy(osc->pending_samples,
+                       sample_block,
+                       (size_t)generate_count * sizeof(sample_block[0]));
                 osc->pending_offset = 0U;
-                osc->pending_count = (uint8_t)kBraidsRenderBlockSize;
+                osc->pending_count = generate_count;
                 rendered_block[osc_index] = 1U;
             }
         }
@@ -560,7 +588,9 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
         {
             const brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-            if ((osc->osc_level > kBraidsOscActiveEpsilon) && (osc->pending_count < consume))
+            if (((osc->osc_level > kBraidsOscActiveEpsilon)
+                    || (osc->osc_level_current > kBraidsOscActiveEpsilon))
+                    && (osc->pending_count < consume))
             {
                 consume = osc->pending_count;
             }
@@ -575,17 +605,23 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
             const float coeff = (gate_target > instance->level) ? 0.05f : (1.0f - kBraidsReleaseCoeff);
             instance->level += (gate_target - instance->level) * coeff;
             float mixed = 0.0f;
+            float osc_level_sum = 0.0f;
             for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
             {
-                const brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-                const float osc_level = brick6_braids_runtime_clamp(osc->osc_level, 0.0f, 1.0f);
+                brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
+                osc_level_start[osc_index] += osc_level_step[osc_index];
+                osc->osc_level_current = osc_level_start[osc_index];
+                const float osc_level = osc->osc_level_current;
                 if (osc_level <= kBraidsOscActiveEpsilon)
                 {
                     continue;
                 }
                 const int16_t sample = osc->pending_samples[osc->pending_offset + i];
                 mixed += ((float)sample / 32768.0f) * osc_level;
+                osc_level_sum += osc_level;
             }
+            const float mix_norm =
+                (osc_level_sum > 1.0f) ? (1.0f / osc_level_sum) : 1.0f;
             out_mono[offset + i] = brick6_braids_runtime_clamp(mixed * mix_norm * instance->level, -1.0f, 1.0f) * BRAIDS_OUTPUT_TRIM;
             if ((instance->gate == 0U) && (instance->tail_samples_remaining > 0U))
             {
@@ -596,7 +632,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
         {
             brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-            if (osc->osc_level <= kBraidsOscActiveEpsilon)
+            if ((osc->osc_level <= kBraidsOscActiveEpsilon)
+                    && (osc->osc_level_current <= kBraidsOscActiveEpsilon))
             {
                 continue;
             }
@@ -608,6 +645,15 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
             }
         }
         offset += (uint32_t)consume;
+    }
+    for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
+    {
+        instance->osc[osc_index].osc_level_current =
+            instance->osc[osc_index].osc_level;
+        if (instance->osc[osc_index].osc_level <= kBraidsOscActiveEpsilon)
+        {
+            brick6_braids_runtime_flush_osc_pending(&instance->osc[osc_index]);
+        }
     }
 
     if ((rendered_block[0] == 0U) && (rendered_block[1] == 0U))

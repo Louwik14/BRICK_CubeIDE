@@ -1,5 +1,11 @@
 # Embedded Audio Engine - Product Overview
 
+## Diagnostic AUDIO TEST 2
+
+Les builds Debug/Test exposent `Settings > Test > Audio 2`, un programme
+PCM24/48 kHz déterministe de 4 min 08 s pour comparer référence numérique, tap
+pré-codec et enregistrements externes line/casque. Voir `docs/audio_test2.md`.
+
 ## Synth/DELUGE - SKEW et WIDTH
 
 - `SINE`, `TRI`, `SAW`, `A-SAW`, `A-SQUARE`: SKEW manuel `0..100 %`, neutre a `0 %`.
@@ -121,7 +127,6 @@ This separation is intentional. Do not add a second authority for the same state
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
 - `RAM` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; it plays global `kind=RAM/READY` slots from `sampler_ram_pool`
-- `WAVETABLE` assets share the global audio asset catalogue and SDRAM slot-pool; user WAVs load from `0:/WAVETABLES/*.WAV` into resident mono frame data for `Synth/Wave`, with internal `.B6WT` caches under `0:/WAVETABLES/.CACHE`
 - sample slots expose 256 active global slots backed by a 16 MiB product slot-pool; Stream, RAM and Multi share this catalogue while voice reserve and page-cache margin remain separate
 - RAM slicing is enabled by `Slice Count`: `Off` plays the global `Start`/`End` window normally, while `2..64` slices that same global window in a regular grid selected by `note % slice_count`; `Tune` and `Gain` remain global
 - `Stream` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, `Tune`, and `Sync Len`
@@ -153,12 +158,14 @@ This separation is intentional. Do not add a second authority for the same state
 - `TONE 2/2`: `TUNE` exposes `OSC DETUNE`, `TUNE 1`, `TUNE 2`, `TUNE 3`; `PHASE` exposes `RESET`.
 - Stack models: `SINFD`, `SHAPE`, `WAVETABLE`, `SUB`, `FM`, `FEEDBACK FM`, `RING`, `TRIPLE SAW`, `TRIPLE SQUARE`, `SWARM`, `TRIFD`.
 - `SINFD` / `TRIFD`: `FOLD`, `SYM`, `SHAPE`; `SOFT` is no longer an active Stack model.
-- The three slots and noise are summed mono into the normal track path: filter, inserts, VCA and mixer.
+- The three slots and noise are summed mono into the normal track path: filter, VCA/volume, track inserts and mixer bus.
 
 ### Wave
+
+Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'import (2048 à 8 samples par frame), persistées dans le cache WAVETABLE et sélectionnées hors de la boucle sample selon le pitch. Le rendu conserve l'interpolation linéaire légère, sans chemin Q31 ni sinc.
 - `Synth/Wave` is the user wavetable engine: two mono wavetable oscillators reading resident SDRAM `WAVETABLE` assets.
-- TONE pages: `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
-- Matrix destinations: `OSC1/2 POS`, `OSC1/2 LEVEL`, `OSC1/2 TUNE`; `TABLE`, `START`, `END`, `PHASE`, `FLIP` are not Matrix destinations.
+- BRICK TONE pages remain `OSC1 WAVE` (`TABLE`, `POS`, `START`, `END`), `OSC1 VOICE` (`LEVEL`, `TUNE`, `PHASE`, `FLIP`), `OSC2 WAVE`, `OSC2 VOICE`.
+- Le cache autoritaire unique `B6WT` v2 contient le répertoire des neuf bandes, leurs offsets/tailles/seuils de pitch et le payload S16 contrôlé par CRC.
 - `POS` is smoothed per oscillator inside the Wave runtime after `START/END` remap, so p-locks and Matrix modulation do not jump frames abruptly.
 - `OSC1/2 WAVE` pages show a wide precomputed wavetable preview with `START/END` zone and `POS`; UI rendering never scans the full table.
 - The track identity and runtime engine are separate from `Synth/Prism`.
@@ -188,8 +195,20 @@ This separation is intentional. Do not add a second authority for the same state
 - keyboard / arp / pattern / mute workflows
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
-- `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches; default is `ON`/hard.
-- Low-cost `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, engine-filtered value, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
+- `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches plus filter `KeyTrk`; retrigger defaults to `ON`/hard.
+- Diagnostic pages and instrumentation are available in low-cost `Debug` (`-Og -g3`) and `Test`. The dedicated performance-representative firmware is built with `cmake --preset Test` then `cmake --build --preset Test`, and flashed with `flash_test.bat`; it keeps Release optimization/LTO. `Release` and `Premium` do not contain the diagnostic menu, runners, strings, buffers, or heavy instrumentation.
+- In that Test firmware, `Settings > Test > Hall` provides a read-only live diagnostic for all 24 Hall keyboard keys; encoder 1 selects the key, encoder 2 selects raw MUX address `0..7`, and the page shows acquisition raw, engine-filtered value, calibration bounds, pressed state, velocity, and the three pre-mapping MUX raws.
+- In that Test firmware, `Settings > Test > Audio` runs a 95-case automatic audio bench with temporary deterministic RAM/Wave calibration assets. The 69 engine/oscillator cases use a 300 ms warmup and a 1 s measurement; filters and other simple cases retain 300/500 ms timing. Seven delay/reverb cases record separate `FX_ACTIVE` (2 s) and `FX_TAIL` (3 s) windows after a 1 s warmup. Sum coverage is 1/2/4/8/12 coherent tracks, 12 musical tracks and 12 tracks with delay+reverb; coherent progression failures are reported as `FAIL`. The screen reports progress and `EST 02:45`; `PAGE 1 STOP` or leaving the page safely cancels, silences test voices and restores captured state. Results use the 178-column CSV schema v4 in `/AUDIO_TEST.CSV` (or `/AUDIO_TEST_V4.CSV` when preserving an incompatible file).
+- In `Debug` and `Test`, `Settings > Test > Monkey` exposes MONKEY TEST. `PAGE 1` starts or stops deterministic injection through the normal button, encoder, and keyboard paths; the session may navigate away from Settings and remains active until explicitly stopped.
+- MT-03 adds the seeded deterministic logical stream: weighted button taps/holds/chords, SHIFT combinations, encoder moves and keyboard press/release actions are scheduled from the 1500 Hz engine clock. MT-04 injects that stream through the normal bounded input paths; the page displays seed, action count and last type.
+- MT-05 runs Monkey against a disposable live snapshot, caps unattended master gain, blocks persistent SD writers and protects Project/Sample actions with `TEST SAFE`; stopping restores the pre-test project, UI focus, playheads and transport state.
+- MT-06 adds a bounded 10 Hz health monitor for IRQ load, Sampler/Looper underruns, UI invariants and monitor canaries. The page reports warning/error/crash counters and the latest classified issue; only corrupted invariants stop and restore the disposable session.
+- MT-07 persists the running seed, logical action index, counters and the latest 16 actions in a CRC-protected double-slot capsule occupying 1 KiB of non-cacheable Backup SRAM. Breadcrumbs are committed before input injection; no SD write occurs in this path.
+- MT-08 captures HardFault, MemManage, BusFault and UsageFault on a dedicated 1 KiB DTCM emergency stack, commits the Cortex-M7 frame and fault status registers to the capsule, then explicitly requests a system reset without depending on a watchdog.
+- MT-09 arms a diagnostic-only 12 s IWDG when MONKEY TEST first starts. Only a completed main loop with fresh audio-derived engine progress reloads it; Debug freezes it while the debugger is halted, Test keeps target behavior, and Release/Premium contain no diagnostic watchdog.
+- MT-10 captures RCC reset flags before HAL initialization, classifies fault and watchdog resets, archives the complete last failure in a separate CRC-protected Backup SRAM bank, then automatically resumes after boot with a different seed. The failing seed and action index remain available for explicit replay; no action is blacklisted.
+- MT-11 writes crash reports and sparse session summaries to `0:/BRICK/DIAG/MONKEY.LOG` through an independent diagnostic SD client. Reports are synced before the Backup SRAM archive is marked reported, retry after SD errors, deduplicate completed writes, and rotate at 256 KiB to a single `MONKEY.OLD`.
+- MT-12 adds explicit deterministic replay of the last archived failure: `PAGE 2` regenerates the original seed in the disposable test snapshot at its original logical timing, verifies the archived target breadcrumb exactly, and pauses immediately before it. `PAGE 3` fires that target; Debug breaks first when a debugger is attached. A mismatch stops safely, and no action is blacklisted.
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG`; a missing or invalid Hall calibration opens `CALIBRATION`, and low-cost validates its 24 keyboard keys in two 12-key stages before saving
 - voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` (`AMT` + `KEY`), `LINK`, and `SEQ LINK`; `KEY` enables Multi spread keytrack, slaves and standalone tracks keep the historical CFG page only, and `PLAY` data remains non-destructive per member
@@ -285,3 +304,18 @@ Keep it simple, deterministic, and playable.
 ## Master track status
 
 `Master/FX` is the only exposed Master track type. The former buffer workflow has been removed; Looper XFade remains available on `Sampler/Looper`.
+
+## Track filters
+
+Track `LP`, `HP` and `BP` modes use one stereo/mono float TPT state-variable filter over `20 Hz..16 kHz`. Resonance progresses from clean to a softly saturated, bounded loop with a maximum Q of 6.5; LP, HP and BP have calibrated output levels. Cutoff keeps `0.01` control and p-lock resolution, while base cutoff is smoothed in octaves and Matrix/LFO, filter envelope and keytrack retain their musical depth. `OFF` uses a 256-sample constant-sum transition and clears stale states; LP/HP/BP changes use 64-sample transitions. The track order is identical for mono and stereo: filter, VCA/volume, track inserts, then sends/bus. Delay feedback, volume and stereo width use 10 ms change-triggered ramps.
+
+## Multi-track arpeggiator
+
+Each track keeps its held notes, HOLD state, phase, direction, rate, and note-on/off events. Selecting another track or switching that track between ARP and KBD does not stop or alter an already running HOLD arpeggio.
+# AUDIO TEST - calibration de volume
+
+Le banc automatique du firmware de test mesure chaque modele sur C2/C4/C6 et
+ses controles reellement exposes. Il produit dans le CSV les mesures
+ATTACK/SUSTAIN ou ATTACK/STRIKE, trois repetitions des sons aleatoires, et une
+recommandation de gain fixe par modele. Cette recommandation est indicative:
+aucun niveau audio moteur n'est corrige automatiquement.

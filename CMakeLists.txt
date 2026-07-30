@@ -18,6 +18,9 @@ endif()
 
 message("BRICK6 variant: ${BRICK6_VARIANT}")
 
+option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
+message("BRICK test build: ${BRICK_TEST_BUILD}")
+
 # --------------------------------------------------------------------------
 # Standards
 # --------------------------------------------------------------------------
@@ -365,6 +368,26 @@ set(EXCLUDED_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_recorder_runtime.c"
 )
 
+set(BRICK_TEST_ONLY_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_track_diag.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_test_runner.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_test2.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/crash_capsule.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/diagnostic_input.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/diagnostic_watchdog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_action.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_monitor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_replay.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_safety.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_test_csv.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/monkey_test_log.c"
+)
+
+if(NOT BRICK_TEST_BUILD)
+    list(APPEND EXCLUDED_SOURCES ${BRICK_TEST_ONLY_SOURCES})
+endif()
+
 set(ALL_USER_SOURCES
     ${APP_USB_STACK_SRC}
     ${USB_DEVICE_LIB_SRC}
@@ -449,6 +472,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     USE_PWR_LDO_SUPPLY
     USE_HAL_DRIVER
     STM32H743xx
+    BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

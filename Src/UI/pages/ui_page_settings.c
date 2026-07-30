@@ -15,7 +15,14 @@
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/project_v1.h"
+#include "Core/brick_build_config.h"
+#if BRICK_TEST_BUILD
+#include "Core/audio_test_runner.h"
+#include "Core/audio_test2.h"
+#include "Core/monkey_test.h"
+#endif
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
@@ -33,7 +40,7 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
 #endif
@@ -53,9 +60,14 @@ typedef enum
     UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
     UI_SETTINGS_VIEW_PROJECT_MANAGE,
     UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT,
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
     UI_SETTINGS_VIEW_TEST,
+#if defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_TEST_HALL,
+#endif
+    UI_SETTINGS_VIEW_TEST_AUDIO,
+    UI_SETTINGS_VIEW_TEST_AUDIO2,
+    UI_SETTINGS_VIEW_TEST_MONKEY,
 #endif
 
     UI_SETTINGS_VIEW_COUNT
@@ -195,7 +207,7 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
     uint8_t hall_test_key;
     uint8_t hall_test_mux;
 #endif
@@ -3003,11 +3015,19 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "PROJECT > MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return "MANAGE > SLOT";
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
             return "TEST";
+#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST_HALL:
             return "TEST > HALL";
+#endif
+        case UI_SETTINGS_VIEW_TEST_AUDIO:
+            return "AUDIO TEST";
+        case UI_SETTINGS_VIEW_TEST_AUDIO2:
+            return "AUDIO TEST 2";
+        case UI_SETTINGS_VIEW_TEST_MONKEY:
+            return "MONKEY TEST";
 #endif
         default:
             return "SETTINGS";
@@ -3019,7 +3039,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
             return 3U;
 #else
             return 2U;
@@ -3046,10 +3066,20 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return PROJECT_V1_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
-            return 1U;
+#if defined(BRICK6_VARIANT_LOWCOST)
+            return 4U;
+#else
+            return 3U;
+#endif
+#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST_HALL:
+            return 0U;
+#endif
+        case UI_SETTINGS_VIEW_TEST_AUDIO:
+        case UI_SETTINGS_VIEW_TEST_AUDIO2:
+        case UI_SETTINGS_VIEW_TEST_MONKEY:
             return 0U;
 #endif
         default:
@@ -3067,14 +3097,14 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "SAMPLE";
             }
-#if defined(BRICK6_VARIANT_LOWCOST)
             if (index == 1U)
             {
                 return "PROJECT";
             }
+#if BRICK_TEST_BUILD
             return "TEST";
 #else
-            return "PROJECT";
+            return "-";
 #endif
         case UI_SETTINGS_VIEW_SAMPLE:
             if (index == 0U)
@@ -3193,9 +3223,25 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "SAVE TO";
             }
             return "DELETE";
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
-            return (index == 0U) ? "HALL" : "-";
+#if defined(BRICK6_VARIANT_LOWCOST)
+            if (index == 0U)
+            {
+                return "HALL";
+            }
+            if (index == 1U)
+            {
+                return "AUDIO";
+            }
+            return (index == 2U) ? "AUDIO 2" : "MONKEY";
+#else
+            if (index == 0U)
+            {
+                return "AUDIO";
+            }
+            return (index == 1U) ? "AUDIO 2" : "MONKEY";
+#endif
 #endif
         default:
             return "-";
@@ -3283,6 +3329,16 @@ static void ui_page_settings_back(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+#if BRICK_TEST_BUILD
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_TEST_AUDIO))
+    {
+        audio_test_runner_cancel();
+    }
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_TEST_AUDIO2))
+    {
+        audio_test2_cancel();
+    }
+#endif
     if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
     {
         sd_preview_set_gain(1.0f);
@@ -3312,25 +3368,21 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE);
             }
-#if defined(BRICK6_VARIANT_LOWCOST)
             else if (level->selected_index == 1U)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
             else
             {
+#if BRICK_TEST_BUILD
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST);
-            }
-#else
-            else
-            {
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
-            }
 #endif
+            }
             break;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST:
+#if defined(BRICK6_VARIANT_LOWCOST)
             if (level->selected_index == 0U)
             {
                 g_ui_settings.hall_test_key = 0U;
@@ -3338,6 +3390,33 @@ static void ui_page_settings_apply_action(void)
                 g_ui_settings.encoder_accum[0U] = 0;
                 g_ui_settings.encoder_accum[1U] = 0;
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
+            }
+            else if (level->selected_index == 1U)
+            {
+                memset(g_ui_settings.encoder_accum, 0, sizeof(g_ui_settings.encoder_accum));
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO);
+                (void)audio_test_runner_start();
+            }
+            else if (level->selected_index == 2U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO2);
+            }
+            else
+#else
+            if (level->selected_index == 0U)
+            {
+                memset(g_ui_settings.encoder_accum, 0, sizeof(g_ui_settings.encoder_accum));
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO);
+                (void)audio_test_runner_start();
+            }
+            else if (level->selected_index == 1U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO2);
+            }
+            else
+#endif
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_MONKEY);
             }
             break;
 #endif
@@ -3611,7 +3690,7 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
     g_ui_settings.hall_test_key = 0U;
     g_ui_settings.hall_test_mux = 0U;
 #endif
@@ -3636,6 +3715,10 @@ static void ui_page_settings_enter(void)
 
 static void ui_page_settings_leave(void)
 {
+#if BRICK_TEST_BUILD
+    audio_test_runner_cancel();
+    audio_test2_cancel();
+#endif
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     sd_preview_set_gain(1.0f);
     g_ui_settings.depth = 0U;
@@ -3661,6 +3744,125 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
     }
 
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+#if BRICK_TEST_BUILD
+    if ((monkey_test_is_active() != 0U) && (level != 0)
+        && ((level->view == UI_SETTINGS_VIEW_PROJECT)
+            || (level->view == UI_SETTINGS_VIEW_PROJECT_LOAD)
+            || (level->view == UI_SETTINGS_VIEW_PROJECT_SAVE_AS)
+            || (level->view == UI_SETTINGS_VIEW_PROJECT_MANAGE)
+            || (level->view == UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT)
+            || (level->view == UI_SETTINGS_VIEW_SAMPLE)
+            || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
+            || (level->view == UI_SETTINGS_VIEW_WAVETABLE)
+            || (level->view == UI_SETTINGS_VIEW_SAMPLER)
+            || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+            || (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT)
+            || (level->view == UI_SETTINGS_VIEW_SAMPLER_CATALOG)))
+    {
+        if (ev->id == (uint8_t)BTN_SETTINGS)
+        {
+            ui_page_settings_back();
+        }
+        else
+        {
+            ui_page_settings_status("TEST SAFE");
+        }
+        return;
+    }
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_TEST_AUDIO))
+    {
+        if (ev->id == (uint8_t)BTN_PAGE_1)
+        {
+            audio_test_runner_cancel();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_SETTINGS)
+        {
+            audio_test_runner_cancel();
+            ui_page_settings_back();
+            return;
+        }
+        return;
+    }
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_TEST_AUDIO2)
+        && (ev->source == UI_EVENT_SOURCE_PHYSICAL))
+    {
+        if (ev->id == (uint8_t)BTN_PAGE_1)
+        {
+            audio_test2_cancel();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_PAGE_2)
+        {
+            audio_test2_view_t view;
+            audio_test2_get_view(&view);
+            if ((view.state == AUDIO_TEST2_READY) || (view.state == AUDIO_TEST2_ERROR))
+            {
+                (void)audio_test2_start_internal();
+            }
+            else if (view.state == AUDIO_TEST2_LINE_READY)
+            {
+                (void)audio_test2_start_line();
+            }
+            else if (view.state == AUDIO_TEST2_HEADPHONE_READY)
+            {
+                (void)audio_test2_start_headphone();
+            }
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_PAGE_3)
+        {
+            (void)audio_test2_start_line();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_PAGE_4)
+        {
+            (void)audio_test2_start_headphone();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_SETTINGS)
+        {
+            audio_test2_cancel();
+            ui_page_settings_back();
+            return;
+        }
+        return;
+    }
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_TEST_MONKEY)
+        && (ev->source == UI_EVENT_SOURCE_PHYSICAL))
+    {
+        if (ev->id == (uint8_t)BTN_PAGE_1)
+        {
+            if (monkey_test_is_active() != 0U)
+            {
+                monkey_test_stop();
+            }
+            else
+            {
+                monkey_test_start();
+            }
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_PAGE_2)
+        {
+            (void)monkey_test_replay_last_failure();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_PAGE_3)
+        {
+            (void)monkey_test_replay_fire_target();
+            return;
+        }
+        if (ev->id == (uint8_t)BTN_SETTINGS)
+        {
+            monkey_test_stop();
+            ui_page_settings_back();
+            return;
+        }
+        return;
+    }
+#endif
+
     if ((level != 0)
         && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
             || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
@@ -4934,7 +5136,7 @@ static void ui_page_settings_render_wavetable_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
 static void ui_page_settings_render_test_hall(void)
 {
     char line[24];
@@ -5003,6 +5205,158 @@ static void ui_page_settings_render_test_hall(void)
 }
 #endif
 
+#if BRICK_TEST_BUILD
+static void ui_page_settings_render_test_audio(void)
+{
+    char line[32];
+    audio_test_runner_view_t view;
+    audio_test_runner_get_view(&view);
+
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text(0U, 0U, "AUDIO TEST");
+    drv_display_set_font(&FONT_4X6);
+    (void)snprintf(line, sizeof(line), "AUTO %03u/%03u",
+                   (unsigned)view.test_index, (unsigned)view.test_total);
+    drv_display_draw_text(0U, 14U, line);
+    drv_display_draw_text(0U, 26U,
+        (view.state == AUDIO_TEST_RUNNER_VOLUME_WARNING) ? "TURN VOL DOWN"
+                                                        : view.test_name);
+    drv_display_draw_rect(0, 38, 120, 8);
+    if (view.progress_12 != 0U)
+    {
+        drv_display_fill_rect(2, 40, (int16_t)(view.progress_12 * 9U), 4);
+    }
+    drv_display_draw_text(0U, 50U, view.status);
+    (void)snprintf(line, sizeof(line), "EST %02lu:%02lu",
+                   (unsigned long)(AUDIO_TEST_RUNNER_ESTIMATED_DURATION_MS / 60000U),
+                   (unsigned long)((AUDIO_TEST_RUNNER_ESTIMATED_DURATION_MS / 1000U) % 60U));
+    drv_display_draw_text(0U, 58U, line);
+    drv_display_draw_text(82U, 58U, "P1 STOP");
+}
+
+static void ui_page_settings_render_test_audio2(void)
+{
+    char line[32];
+    audio_test2_view_t view;
+    audio_test2_get_view(&view);
+
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text(0U, 0U, "AUDIO TEST 2");
+    drv_display_set_font(&FONT_4X6);
+
+    if ((view.state == AUDIO_TEST2_REFERENCE)
+        || (view.state == AUDIO_TEST2_INTERNAL)
+        || (view.state == AUDIO_TEST2_VERIFY))
+    {
+        drv_display_draw_text(0U, 11U,
+            (view.state == AUDIO_TEST2_INTERNAL) ? "PHASE 1 INTERNAL"
+                                                : "PHASE 1 PREPARE");
+    }
+    else if ((view.state == AUDIO_TEST2_LINE_READY)
+             || (view.state == AUDIO_TEST2_COUNTDOWN_LINE)
+             || (view.state == AUDIO_TEST2_LINE))
+    {
+        drv_display_draw_text(0U, 11U, "PHASE 2 LINE");
+    }
+    else if ((view.state == AUDIO_TEST2_HEADPHONE_READY)
+             || (view.state == AUDIO_TEST2_COUNTDOWN_HEADPHONE)
+             || (view.state == AUDIO_TEST2_HEADPHONE))
+    {
+        drv_display_draw_text(0U, 11U, "PHASE 3 HEADPHONE");
+    }
+    else
+    {
+        drv_display_draw_text(0U, 11U,
+            (view.state == AUDIO_TEST2_DONE) ? "AUDIO TEST 2 DONE" : "READY");
+    }
+
+    if (view.countdown != 0U)
+    {
+        (void)snprintf(line, sizeof(line), "SILENT START IN %u",
+                       (unsigned)view.countdown);
+        drv_display_draw_text(0U, 21U, line);
+    }
+    else
+    {
+        (void)snprintf(line, sizeof(line), "%03lu / %03lu SEC",
+                       (unsigned long)(view.frame / AUDIO_TEST2_SAMPLE_RATE),
+                       (unsigned long)AUDIO_TEST2_DURATION_SECONDS);
+        drv_display_draw_text(0U, 21U, line);
+    }
+    drv_display_draw_text(0U, 31U, view.section);
+    drv_display_draw_text(0U, 41U, view.status);
+    (void)snprintf(line, sizeof(line), "SD%lu OV%lu CRC %08lX",
+                   (unsigned long)view.sd_errors,
+                   (unsigned long)view.overruns,
+                   (unsigned long)((view.state <= AUDIO_TEST2_REFERENCE)
+                                       ? view.reference_crc : view.internal_crc));
+    drv_display_draw_text(0U, 50U, line);
+    drv_display_draw_text(0U, 58U, "P1 X P2 OK P3 L P4 H");
+}
+
+static void ui_page_settings_render_test_monkey(void)
+{
+    char line[28];
+    monkey_test_view_t view;
+    monkey_test_get_view(&view);
+
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text(0U, 0U, "MONKEY TEST");
+    drv_display_set_font(&FONT_4X6);
+    const char *state_label =
+        (view.state == MONKEY_TEST_STATE_RUNNING) ? "RUN"
+        : (view.state == MONKEY_TEST_STATE_REPLAYING) ? "REPLAY"
+        : (view.state == MONKEY_TEST_STATE_REPLAY_PAUSED) ? "ARMED"
+        : (view.state == MONKEY_TEST_STATE_REPLAY_TARGET_DONE) ? "FIRED"
+        : (view.state == MONKEY_TEST_STATE_STOPPED) ? "STOP" : "READY";
+    (void)snprintf(line, sizeof(line), "%s %02lu:%02lu", state_label,
+                   (unsigned long)(view.elapsed_ms / 60000U),
+                   (unsigned long)((view.elapsed_ms / 1000U) % 60U));
+    drv_display_draw_text(0U, 14U, line);
+    (void)snprintf(line, sizeof(line), "SEED %08lX",
+                   (unsigned long)view.seed);
+    drv_display_draw_text(0U, 26U, line);
+    if ((view.state == MONKEY_TEST_STATE_REPLAYING)
+        || (view.state == MONKEY_TEST_STATE_REPLAY_PAUSED)
+        || (view.state == MONKEY_TEST_STATE_REPLAY_TARGET_DONE))
+    {
+        (void)snprintf(line, sizeof(line), "RP %lu/%lu",
+                       (unsigned long)view.action_count,
+                       (unsigned long)view.replay_target_index);
+    }
+    else
+    {
+        (void)snprintf(line, sizeof(line), "ACT %lu %s",
+                       (unsigned long)view.action_count,
+                       monkey_test_action_type_label(view.last_action_type));
+    }
+    drv_display_draw_text(0U, 38U, line);
+    (void)snprintf(line, sizeof(line), "W%lu E%lu C%lu",
+                   (unsigned long)view.warning_count,
+                   (unsigned long)view.error_count,
+                   (unsigned long)view.crash_count);
+    drv_display_draw_text(0U, 50U, line);
+    drv_display_draw_text(0U, 58U,
+                          monkey_test_issue_label(view.last_issue));
+    if (view.state == MONKEY_TEST_STATE_REPLAY_PAUSED)
+    {
+        drv_display_draw_text(70U, 58U, "P1 X P3 FIRE");
+    }
+    else if (monkey_test_is_active() != 0U)
+    {
+        drv_display_draw_text(88U, 58U, "P1 STOP");
+    }
+    else if (view.recovery_available != 0U)
+    {
+        drv_display_draw_text(62U, 58U, "P1 NEW P2 RPLY");
+    }
+    else
+    {
+        drv_display_draw_text(88U, 58U, "P1 START");
+    }
+}
+#endif
+
 static void ui_page_settings_render(void)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
@@ -5035,10 +5389,27 @@ static void ui_page_settings_render(void)
         ui_page_settings_render_wavetable_browser();
         return;
     }
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
     if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
     {
         ui_page_settings_render_test_hall();
+        return;
+    }
+#endif
+#if BRICK_TEST_BUILD
+    if (level->view == UI_SETTINGS_VIEW_TEST_AUDIO)
+    {
+        ui_page_settings_render_test_audio();
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_TEST_AUDIO2)
+    {
+        ui_page_settings_render_test_audio2();
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_TEST_MONKEY)
+    {
+        ui_page_settings_render_test_monkey();
         return;
     }
 #endif
@@ -5163,7 +5534,22 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
         return;
     }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
+    if (level->view == UI_SETTINGS_VIEW_TEST_AUDIO)
+    {
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_TEST_AUDIO2)
+    {
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_TEST_MONKEY)
+    {
+        return;
+    }
+#endif
+
+#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
     if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
     {
         if (encoder > 1U)

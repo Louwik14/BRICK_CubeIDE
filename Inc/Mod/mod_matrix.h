@@ -84,6 +84,8 @@ void mod_matrix_release_track(uint8_t track,
                               ui_track_type_t type,
                               const track_runtime_ctx_t *ctx);
 void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value);
+void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float value);
+void mod_matrix_clear_runtime_base_override(uint8_t track, param_id_t id, float base_value);
 
 #ifdef __cplusplus
 }

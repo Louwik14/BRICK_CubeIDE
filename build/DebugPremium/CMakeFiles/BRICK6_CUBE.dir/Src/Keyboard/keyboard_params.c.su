@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:40:13:keyboard_params_apply	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:50:6:keyboard_params_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:55:6:keyboard_params_set_root	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:61:6:keyboard_params_set_scale	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:72:6:keyboard_params_set_omnichord	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:78:6:keyboard_params_set_note_order	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:84:6:keyboard_params_set_chord_override	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:90:6:keyboard_params_set_mono_last	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:95:9:keyboard_params_get_root_index	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:100:9:keyboard_params_get_scale_index	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:105:6:keyboard_params_get_omnichord	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:110:14:keyboard_params_get_note_order	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:115:6:keyboard_params_get_chord_override	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_params.c:120:6:keyboard_params_get_mono_last	0	static

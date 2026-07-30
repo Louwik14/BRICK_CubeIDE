@@ -210,6 +210,11 @@ static void ui_core_set_active_track(uint8_t track)
     ui_core_runtime_bridge_sync_active_track_context(1U);
 }
 
+void ui_restore_active_track(uint8_t track)
+{
+    ui_core_set_active_track(track);
+}
+
 uint8_t ui_get_track_midi_channel(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)

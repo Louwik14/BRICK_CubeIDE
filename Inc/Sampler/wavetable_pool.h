@@ -1,8 +1,10 @@
 #pragma once
 
 #include <stdint.h>
+#include "Core/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/wavetable_prepared_format.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,9 +14,6 @@ extern "C" {
 #define WAVETABLE_POOL_PATH_MAX        SAMPLE_GLOBAL_POOL_PATH_MAX
 #define WAVETABLE_POOL_INVALID_SLOT    (0xFFFFU)
 #define WAVETABLE_FRAME_SAMPLE_COUNT   (2048U)
-#define WAVETABLE_POOL_FILE_MAGIC      (0x54573642UL) /* B6WT */
-#define WAVETABLE_POOL_FILE_VERSION    (1U)
-#define WAVETABLE_POOL_HEADER_SIZE     (32U)
 #define WAVETABLE_PREVIEW_COLUMNS      (124U)
 
 _Static_assert(WAVETABLE_POOL_MAX_SLOTS <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
@@ -62,22 +61,9 @@ typedef enum
     WAVETABLE_RESULT_UNSUPPORTED,
     WAVETABLE_RESULT_TOO_LARGE,
     WAVETABLE_RESULT_READ_FAIL,
+    WAVETABLE_RESULT_WRITE_FAIL,
     WAVETABLE_RESULT_REGISTER_FAIL
 } wavetable_result_t;
-
-typedef struct
-{
-    uint32_t magic;
-    uint16_t version;
-    uint16_t header_size;
-    uint32_t frame_sample_count;
-    uint32_t frame_count;
-    uint16_t sample_format;
-    uint16_t reserved0;
-    uint32_t data_offset;
-    uint32_t data_size;
-    uint32_t reserved1;
-} wavetable_file_header_t;
 
 typedef struct
 {
@@ -108,6 +94,7 @@ typedef struct
     wavetable_result_t error;
     uint32_t flags;
     wavetable_preview_t preview;
+    wavetable_mipmap_view_t mipmap;
 } wavetable_slot_t;
 
 void wavetable_pool_init(void);
@@ -126,11 +113,17 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
 wavetable_result_t wavetable_pool_load_file_auto(const char *path,
                                                  uint16_t *out_wavetable_slot,
                                                  uint16_t *out_global_slot);
+#if BRICK_TEST_BUILD
+wavetable_result_t wavetable_pool_create_audio_test_calibration(
+    uint16_t *out_wavetable_slot,
+    uint16_t *out_global_slot);
+#endif
 void wavetable_pool_clear(uint16_t wavetable_slot);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);
 const int16_t *wavetable_pool_get_data(uint16_t wavetable_slot);
+const wavetable_mipmap_view_t *wavetable_pool_get_mipmap_view(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global_slot);
 uint32_t wavetable_pool_get_used_bytes(void);

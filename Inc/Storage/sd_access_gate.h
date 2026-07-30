@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "ff.h"
+#include "Core/brick_build_config.h"
 
 typedef enum
 {
@@ -21,7 +22,13 @@ typedef enum
     SD_ACCESS_CLIENT_SAMPLE_STREAM = 10,
     SD_ACCESS_CLIENT_PATCH = 11,
     SD_ACCESS_CLIENT_KIT = 12,
+#if BRICK_TEST_BUILD
+    SD_ACCESS_CLIENT_AUDIO_TEST = 13,
+    SD_ACCESS_CLIENT_DIAGNOSTIC_LOG = 14,
+    SD_ACCESS_CLIENT_MAX = SD_ACCESS_CLIENT_DIAGNOSTIC_LOG
+#else
     SD_ACCESS_CLIENT_MAX = SD_ACCESS_CLIENT_KIT
+#endif
 } sd_access_client_t;
 
 void sd_access_gate_init(void);
@@ -37,6 +44,12 @@ const char *sd_access_gate_client_label(sd_access_client_t client);
 const char *sd_access_gate_busy_label(void);
 
 uint8_t sd_access_fs_mount_if_needed(void);
+void sd_access_fs_invalidate_mount(void);
+
+#if BRICK_TEST_BUILD
+void sd_access_gate_set_diagnostic_read_only(uint8_t active);
+uint8_t sd_access_gate_diagnostic_read_only_active(void);
+#endif
 
 void sd_access_trace_begin(const char *op);
 void sd_access_trace_end(const char *op, int result, uint32_t elapsed_ms);

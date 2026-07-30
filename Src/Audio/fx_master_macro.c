@@ -5,6 +5,7 @@
 
 #include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
+#include "Audio/audio_track_diag.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "audio_float.h"
@@ -78,6 +79,7 @@ AUDIO_COLD_SDRAM static float g_delay[FX_MASTER_MACRO_SLOT_COUNT][FX_MASTER_MACR
 AUDIO_HISTORY_SDRAM static float g_stutter_history_l[FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES];
 AUDIO_HISTORY_SDRAM static float g_stutter_history_r[FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES];
 static float g_sample_rate = FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT;
+static uint8_t g_fxmm_diag_enabled;
 
 static float fxmm_clampf(float v, float lo, float hi)
 {
@@ -90,6 +92,16 @@ static float fxmm_clampf(float v, float lo, float hi)
         return hi;
     }
     return v;
+}
+
+static float fxmm_audio_clampf(float v, float lo, float hi)
+{
+    const float clipped = fxmm_clampf(v, lo, hi);
+    if (g_fxmm_diag_enabled != 0U)
+    {
+        audio_global_diag_report_master_fx_clamp(v, clipped);
+    }
+    return clipped;
 }
 
 static uint8_t fxmm_u7(float v)
@@ -825,8 +837,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
             float wet_l = left[i];
             float wet_r = right[i];
             fxmm_stutter_process_sample(left[i], right[i], stutter_rate, &wet_l, &wet_r);
-            left[i] = fxmm_clampf(wet_l, -1.20f, 1.20f);
-            right[i] = fxmm_clampf(wet_r, -1.20f, 1.20f);
+            left[i] = fxmm_audio_clampf(wet_l, -1.20f, 1.20f);
+            right[i] = fxmm_audio_clampf(wet_r, -1.20f, 1.20f);
         }
         return;
     }
@@ -891,8 +903,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
                     + (slot->delay_feedback_lp * hold_fb * slot->freeze_gate);
             fxmm_delay_write(slot, slot_index, write);
             const float wet_return = delayed * repeat_gain;
-            left[i] = fxmm_clampf((dry_l * dry_gain) + wet_return, -1.20f, 1.20f);
-            right[i] = fxmm_clampf((dry_r * dry_gain) + wet_return, -1.20f, 1.20f);
+            left[i] = fxmm_audio_clampf((dry_l * dry_gain) + wet_return, -1.20f, 1.20f);
+            right[i] = fxmm_audio_clampf((dry_r * dry_gain) + wet_return, -1.20f, 1.20f);
         }
         return;
     }
@@ -1080,8 +1092,8 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         right[i] = (dry_r * (1.0f - slot->wet)) + (wet_r * slot->wet);
         if (slot->wet > 0.000001f)
         {
-            left[i] = fxmm_clampf(left[i], -1.20f, 1.20f);
-            right[i] = fxmm_clampf(right[i], -1.20f, 1.20f);
+            left[i] = fxmm_audio_clampf(left[i], -1.20f, 1.20f);
+            right[i] = fxmm_audio_clampf(right[i], -1.20f, 1.20f);
         }
     }
 }
@@ -1097,6 +1109,7 @@ void fx_master_macro_init(float sample_rate)
 
 void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
 {
+    g_fxmm_diag_enabled = audio_track_diag_is_enabled();
     uint8_t track = 0U;
     if ((left == NULL) || (right == NULL) || (frames == 0U) || (fxmm_find_master_fx_track(&track) == 0U))
     {
@@ -1149,5 +1162,33 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
                           bpm_milli,
                           stutter_owner_slot,
                           freeze_owner_slot);
+    }
+}
+
+void fx_master_macro_get_diag_state(fx_master_macro_diag_state_t *out)
+{
+    if (out == NULL)
+    {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    uint8_t track = 0U;
+    if (fxmm_find_master_fx_track(&track) == 0U)
+    {
+        return;
+    }
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    if (state == NULL)
+    {
+        return;
+    }
+    for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_DIAG_SLOT_COUNT; ++slot)
+    {
+        out->type[slot] = fxmm_u7(state->master_fx.type[slot]);
+        out->level[slot] = fxmm_u7(state->master_fx.level[slot]);
+        if ((fxmm_type_is_active(out->type[slot]) != 0U) && (out->level[slot] != 0U))
+        {
+            out->active_mask |= (uint8_t)(1U << slot);
+        }
     }
 }

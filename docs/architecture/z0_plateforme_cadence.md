@@ -1,5 +1,127 @@
 # Z0 - Plateforme / Cadence
 
+## Addendum 2026-07-30 - MT-12 replay du dernier crash
+
+- `monkey_test_replay` regenere le flux a partir de la seed de l'archive MT-10 et refuse le replay si le breadcrumb de l'index fautif n'est plus disponible dans la fenetre des 16 actions.
+- Le lifecycle repart du snapshot jetable defini par MT-05, arme la surveillance MT-06/MT-09, puis rejoue chaque prefixe a son tick logique original dans le seam MT-04. Les temporisations de press/release ne sont pas accelerees afin de conserver leur semantique.
+- A l'echeance de l'action cible, l'orchestrateur passe en `REPLAY_PAUSED` avant tout commit/injection. L'injection reste une action operateur explicite; en Debug, `BKPT` n'est execute que si le debugger est attache. Le replay peut toujours etre arrete et restaure sans injecter la cible.
+- Le breadcrumb regenere doit correspondre bit pour bit aux champs structurants archives. Une divergence ou une fin de generateur est un arret controle `REPLAY MISMATCH`, pas une tentative approximative.
+- La seed, l'ordre et les ticks logiques sont reproductibles, mais pas l'ordonnancement fin des IRQ/DMA, les latences SD, l'etat des caches ni les delais materiels. Un fault dependant de ces evenements peut donc ne pas reapparaitre malgre un replay logique valide.
+
+## Addendum 2026-07-30 - AUDIO TEST 2
+
+- `audio_test2_service()` prépare REFERENCE, draine INTERNAL, vérifie les
+  fichiers et cadence les comptes à rebours hors IRQ.
+- Le transport et les playheads sont suspendus/restaurés à chaque lecture. Une
+  annulation ou erreur désarme toujours le seam audio avant restauration.
+
+## Addendum 2026-07-30 - MT-11 orchestration du journal
+
+- `monkey_test_log_service()` est appele dans la superloop, hors IRQ et avant le tick Monkey. Il ne travaille qu'en presence d'un rapport ou evenement RAM pending et ne patiente jamais pour obtenir `sd_access_gate`.
+- Les evenements de session sont bornes a `START`, `PERIODIC` toutes les dix minutes et `STOP`. Les actions continuent d'etre couvertes par les 16 breadcrumbs Backup SRAM; aucune ecriture SD n'est effectuee par action.
+- Apres crash, le service tente d'abord le rapport archive complet. En cas d'echec, il conserve le pending et espace les nouvelles tentatives de 5 s; la reprise automatique MT-10 reste independante.
+
+## Addendum 2026-07-30 - MT-10 classification et reprise boot
+
+- `crash_capsule_capture_reset_flags_early()` lit `RCC->RSR` dans les deux `main()` avant `HAL_Init()`, conserve la valeur en RAM interne puis pose `RCC_RSR_RMVF`. Aucun service applicatif ne peut donc effacer la cause avant sa classification.
+- Au chargement de la Backup SRAM, une capsule deja `FAULTED` est associee au reset en conservant son fault Cortex-M7. Une capsule `RUNNING` accompagnee de `IWDG1RSTF` devient `FAULTED/WATCHDOG` et incremente son compteur de crash. Une session `RUNNING` interrompue par un autre reset est fermee `STOPPED`, ce qui evite de classer plus tard un watchdog sans rapport.
+- La Backup SRAM occupe desormais 2 KiB: 1 KiB double-slot pour la session courante et 1 KiB double-slot pour l'archive du dernier crash. Les deux banques utilisent generation, CRC32 et publication du commit en dernier; la nouvelle session ne peut pas ecraser la seed, l'index, les breadcrumbs ou le contexte fault de l'archive.
+- `monkey_test_init()` importe l'archive pour l'affichage, le futur rapport MT-11 et le replay explicite. Si le crash vient du boot courant, `monkey_test_tick()` attend la fin de `ui_boot_loading`, puis lance une seed differente derivee par ajout de `0x9E3779B9`; aucune action n'est blacklistee.
+- L'etape ne journalise pas sur SD. En cas d'echec de preparation de la session jetable ou d'armement IWDG, la reprise s'arrete proprement au lieu de boucler.
+
+## Addendum 2026-07-30 - MT-09 IWDG et heartbeat de boucle complete
+
+- Aucun module HAL IWDG n'etant present dans le projet, le watchdog diagnostic configure directement `IWDG1` via CMSIS. L'activation LSI et les attentes de mise a jour sont bornees a 100 ms.
+- L'armement intervient apres l'ouverture de la session et de la capsule MONKEY TEST. La configuration LSI `/256`, reload `1499`, donne un timeout nominal de 12 s; une fois demarre, l'IWDG reste actif jusqu'au reset.
+- Le reload est emis uniquement en fin des deux superloops carte, apres application, USB/MIDI, UI, renderer et flush display, et seulement si `engine_tick_count` a progresse. Une panne audio ou un blocage de la boucle complete interdit donc le heartbeat.
+- Aucun chemin IRQ/DMA, tasklet intermediaire ou handler de fault ne reload l'IWDG. MT-08 conserve son reset systeme explicite et ne depend pas du watchdog.
+- Le build `Debug` applique le freeze IWDG1 sous debugger; le build `Test` ne le fait pas. `Release` et `Premium` n'embarquent ni source, ni appel watchdog diagnostic.
+- La capsule MT-07 passe en version 3 et conserve l'etat d'armement, le compteur de heartbeats et le dernier tick moteur confirme, avec checkpoint au plus une fois par seconde. La qualification du reset IWDG au boot reste reservee a MT-10.
+
+## Addendum 2026-07-30 - MT-08 handlers de fault bornes
+
+- `HardFault`, `MemManage`, `BusFault` et `UsageFault` utilisent des trampolines nus: bit 2 de `EXC_RETURN` choisit MSP ou PSP, bit 4 localise la frame Cortex-M7 apres une eventuelle frame FP et une pile DTCM diagnostic de 1 KiB accueille le code C de capture.
+- La capsule enregistre fault type, registres empiles `R0..R3/R12/LR/PC/xPSR`, SP, `EXC_RETURN`, `CFSR/HFSR/DFSR/AFSR/BFAR/MMFAR/ICSR/SHCSR`, puis publie le slot CRC avant `NVIC_SystemReset()`. Une adresse de frame hors des SRAM internes connues n'est jamais dereferencee.
+- Les faults configurables sont actives a l'init diagnostic afin de conserver leur classe au lieu d'une escalade systematique en HardFault. Aucun handler n'appelle FatFs, HAL peripherique, UI, allocation ou watchdog.
+- Le reset explicite est inconditionnel, y compris si aucune session/capsule n'est active ou si l'IWDG MT-09 n'existe pas encore. Dans les builds normaux, les quatre trampolines ecrivent directement `SYSRESETREQ` sans pile ni trace diagnostic et n'attendent plus indefiniment.
+- En `Debug` avec un probe effectivement attache, un BKPT est emis apres commit et avant le reset; continuer l'execution declenche ensuite le reset explicite. Sans probe, et dans `Test`, aucun break n'est execute.
+
+## Addendum 2026-07-30 - MT-07 Backup SRAM et breadcrumbs
+
+- Les deux linkers actifs declarent les 4 KiB de Backup SRAM a `0x38800000` et une section `.backup_sram` `NOLOAD`. La capsule utilise deux slots alignes de 512 octets; un assert linker interdit tout depassement.
+- En build diagnostic, la region MPU 2 couvre les 4 KiB en shareable, non cache, non bufferable et XN avant activation du D-cache. L'init active l'acces backup, l'horloge BKPRAM et le regulateur de retention; un echec interdit le lancement Monkey.
+- Le format v2 contient seed, index et tick logique, compteurs, contexte processeur/reset/fault et un ring de 16 actions compactes. CRC32, generation monotone, double slot et marqueur ecrit en dernier preservent l'ancien slot si un reset interrompt un commit.
+- Le breadcrumb de l'action due est committe avant son injection. Un arret manuel committe `STOPPED`; aucun acces FatFs, allocation ou maintenance D-cache n'intervient.
+- Le depot ne contient aucun schema produit etablissant le cablage de `VBAT`: la retention est garantie a travers un reset sous VDD, mais sa conservation apres retrait complet de l'alimentation reste une validation carte obligatoire.
+
+## Addendum 2026-07-30 - MT-06 supervision bornee
+
+- `monkey_test_monitor` sonde toutes les 150 periodes moteur (10 Hz), sans allocation ni rattrapage de polls, les compteurs CPU, Sampler et Looper ainsi que les bornes track/hall/page UI.
+- Chaque famille ne produit au plus qu'un warning ou une erreur par poll. Les depassements CPU et underruns sont recuperables; une borne UI invalide ou la corruption des sentinelles du moniteur arrete proprement la session et declenche la restauration jetable.
+- Les compteurs ne sont jamais remis a zero par Monkey: le moniteur capture des baselines de session et ignore une regression de compteur afin de ne pas transformer un reset externe en faux delta.
+
+## Addendum 2026-07-30 - MT-05 session jetable
+
+- Le lancement Monkey capture un `ProjectSaveV1` en SDRAM diagnostic, le focus UI, le hall mode, le transport, les playheads et le gain master, puis applique le snapshot de boot comme etat live jetable.
+- L'undo est suspendu pendant la session. L'arret coupe transport et notes, restaure le snapshot RAM et les autorites UI, puis reprend le transport seulement s'il etait actif avant le test.
+- Le demarrage est refuse si la SD ou un writer/converter est deja actif. Le gain master est borne a `0.25` pendant la session laissee sans surveillance.
+- Le snapshot ajoute `0x53F0C` octets (environ 336 KiB) de SDRAM uniquement dans `Debug`/`Test`; il n'ajoute aucune RAM aux firmwares normaux.
+
+## Addendum 2026-07-30 - AUDIO TEST calibration de volume percu
+
+- La phase moteurs contient 3576 scenarios automatiques: C2/C4/C6, matrice
+  TIMBRE/COLOR uniquement pour PRISM et STACK, combinaisons multi-oscillateurs
+  reelles et trois frappes/declenchements pour les modeles aleatoires.
+- Un scenario continu capture 100 ms `ATTACK`, attend 300 ms depuis le note-on,
+  puis capture 1 s `SUSTAIN`. Un scenario percussif conserve la meme attaque et
+  accumule `STRIKE` jusqu'a trois fenetres silencieuses de 50 ms, avec timeout
+  borne a 3 s.
+- Les 26 scenarios FILTER/SUM/MASTER/FX historiques restent a la suite. La
+  progression porte donc 3602 scenarios, puis 60 lignes de synthese sont
+  serialisees avant restauration du snapshot. Duree estimee: environ 103 min.
+
+## Addendum 2026-07-30 - MT-04 injection bornee
+
+- Les actions Monkey dues sont injectees hors IRQ par une primitive generique `diagnostic_input`, independante de `audio_test_*`.
+- Les boutons rejoignent la file `ui_event` avec une origine diagnostic explicite et un etat maintenu compatible avec les combos; les encodeurs alimentent l'accumulateur borne du driver; les touches passent par `keyboard_runtime_process_hall`.
+- L'arret libere tous les boutons et toutes les touches synthetiques encore maintenus. Une cible invalide incremente le compteur d'avertissements sans bloquer la superloop.
+
+## Addendum 2026-07-30 - MT-03 generateur deterministe
+
+- `monkey_test_action` porte un PRNG xorshift32 sans allocation, initialise par une seed non nulle enregistree dans la vue. `monkey_test_start_seed()` permet deja de reconstruire exactement le flux depuis une seed explicite; `monkey_test_start()` fabrique seulement la seed d'une nouvelle session.
+- Chaque action atomique contient `index`, `type`, `target`, `value`, `delay_ticks` et `logical_tick`. La base logique est `engine_tick_count` a 1500 Hz; `HAL_GetTick()` reste limite au temps d'affichage et ne decide pas l'ordre des actions.
+- Les familles ponderees produisent taps, maintiens, combos SHIFT, accords de boutons, encodeurs usuels/extremes et notes avec velocite. Les gestes composes sont developpes dans une file statique de quatre press/release au plus.
+- Le service consomme au maximum huit actions dues par passage de superloop. A MT-03, elles alimentent uniquement les compteurs et le dernier type affiche: aucune action synthetique n'est encore injectee dans l'UI ou le clavier.
+
+## Addendum 2026-07-30 - MT-02 socle autonome MONKEY TEST
+
+- `monkey_test` est un module de diagnostic autonome, initialise et servi par la superloop uniquement avec `BRICK_TEST_BUILD=1`; sa source est exclue de `Release` et `Premium`.
+- Cette etape porte seulement le lifecycle `IDLE/RUNNING/STOPPED`, le temps d'affichage et les compteurs reserves. Elle n'injecte encore aucune action et ne diagnostique aucun fault.
+- Le module ne depend ni de `audio_test_runner`, ni de `audio_test_csv`, ni de leurs donnees. Les appels d'orchestration juxtaposes dans `brick6_app_init` ne creent aucune autorite commune.
+
+## Addendum 2026-07-30 - frontiere firmware Test
+
+- Le preset CMake `Test` utilise `CMAKE_BUILD_TYPE=Release` et la variante low-cost: il conserve donc les optimisations, le LTO et les contraintes temps reel de `Release`.
+- L'etape stable `MT-01.5` active aussi `BRICK_TEST_BUILD=1` dans le preset `Debug`, qui conserve ses options `-Og -g3` et embarque les memes pages et sources de diagnostic que `Test` pour le debogage sur cible.
+- `BRICK_TEST_BUILD` est une option CMake numerique centralisee, forcee a `1` par `Debug` et `Test`, et a `0` par `Release` et `Premium`. Les sources `audio_test_runner`, `audio_test_csv` et `audio_track_diag` sont exclues de ces deux derniers.
+- `brick6_app_init` n'initialise et ne sert les modules de diagnostic que dans `Debug` et `Test`. Le workflow explicite du firmware representatif est `cmake --preset Test`, `cmake --build --preset Test`, puis `flash_test.bat`.
+- Verification low-cost du 2026-07-30: `Release` et `Test` compilent et lient avec les memes flags Release. Le surcout diagnostic mesure est de 25 280 octets Flash, 12 768 octets RAM_D1 et 194 944 octets SDRAM; DTCM/RAM_D2/RAM_D3/ITCM sont inchanges.
+
+## Addendum 2026-07-30 - cadence AUDIO TEST automatique
+
+- Le runner est servi par la superloop hors IRQ, y compris après une sortie de page, afin qu'une annulation attende l'écriture éventuellement engagée puis restaure le snapshot sans dépendre du tick UI.
+- `audio_test_runner_tick()` est cadencé par la superloop hors IRQ. La machine conserve le chemin simple `PREPARE -> CONFIGURE -> NOTE_ON -> WARMUP -> MEASURE -> CAPTURE -> NOTE_OFF -> WRITE -> NEXT -> RESTORE`; les cas FX insèrent après `NOTE_OFF` deux fenêtres `FX_TAIL_EARLY/FX_TAIL_LATE`, sans écriture SD, avant les deux écritures `FX_ACTIVE` puis `FX_TAIL`.
+- Le writer FatFs reste un service superloop séparé; le runner attend son acquittement durable pendant le silence avant de configurer le cas suivant.
+- Catalogue déterministe: 69 cas moteurs, 8 filtres, 7 sommes de tracks, 5 cas master simples et 6 cas FX dédiés, soit 95 tests et 102 lignes CSV. Les 69 cas moteurs gardent 300 ms de warmup et mesurent 1 s; les 19 cas simples filtres/somme/master gardent 300/500 ms. Les six cas FX dédiés et la somme 12 tracks avec delay+reverb font chacun 1 s de warmup + 2 s `FX_ACTIVE` + 3 s `FX_TAIL`. Minimum temporel: 149,9 s avec l'avertissement initial; estimation affichée: 2 min 45 s, avec une plage pratique d'environ 155 à 180 s selon les reconfigurations et `f_sync` SD.
+
+## Addendum 2026-07-29 - boot codec borne et identique cold/warm/GDB
+
+- `board_audio_codec_init()` initialise uniquement le diagnostic de boot; la configuration physique est maintenant faite dans `board_audio_start_stream()` apres zero/clean du buffer TX.
+- Pour les deux variantes, le TX DMA zero est lance seul afin d'etablir MCLK/BCLK/LRCK. Le codec est ensuite explicitement reset, configure et verifie; le RX DMA, autorite des callbacks IRQ audio, ne demarre qu'apres validation complete.
+- Chaque tentative est bornee (ACK I2C, lectures de retour et flags de power-ready) et un echec declenche une seconde tentative complete apres arret SAI/DMA et nouveau reset codec.
+- Cette remise a zero explicite supprime la difference de principe entre cold boot, reset MCU et flash/reset GDB: aucun etat conserve du codec externe n'est accepte comme prerequis.
+- `board_audio_get_boot_diag()` expose hors IRQ `last_error`, `init_count`, `failure_count`, `retry_count`, `codec_ready` et `stream_started`.
+
 ## Addendum 2026-07-29 - copie ITCM au reset
 
 - Les linker scripts Flash low-cost et premium exposent `.itcm_text` en execution ITCM `0x00000000` avec image de chargement en Flash, symboles `__itcm_text_load__`, `__itcm_text_start__`, `__itcm_text_end__`, et entree `.itcm_text` / `.itcm_text.*`.

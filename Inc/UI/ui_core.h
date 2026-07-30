@@ -148,6 +148,7 @@ void ui_core_tick(void);
 void ui_core_service_track_selection_inputs(void);
 
 uint8_t ui_get_active_track(void);
+void ui_restore_active_track(uint8_t track);
 bool ui_resolve_filter_target_track(uint8_t *out_track_id);
 ui_track_config_t ui_get_track_config(uint8_t track);
 ui_track_family_t ui_get_track_family(uint8_t track);

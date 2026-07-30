@@ -32,14 +32,64 @@
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_template_cfg.h"
 
+#include <string.h>
+
 #define LOWCOST_KEY_COUNT HALL_KEY_COUNT
+#define KEYBOARD_INPUT_OWNER_STACK_DEPTH 8U
+
+typedef struct
+{
+    uint8_t track;
+    uint8_t uses_arp;
+} keyboard_input_note_owner_t;
 
 static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_down[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_consumed[LOWCOST_KEY_COUNT];
+static keyboard_input_note_owner_t
+    g_keyboard_input_note_owner[128U][KEYBOARD_INPUT_OWNER_STACK_DEPTH];
+static uint8_t g_keyboard_input_note_owner_count[128U];
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
+
+static void keyboard_input_note_owner_push(uint8_t note, uint8_t track, uint8_t uses_arp)
+{
+    if (note >= 128U)
+    {
+        return;
+    }
+
+    uint8_t count = g_keyboard_input_note_owner_count[note];
+    if (count >= KEYBOARD_INPUT_OWNER_STACK_DEPTH)
+    {
+        for (uint8_t i = 1U; i < KEYBOARD_INPUT_OWNER_STACK_DEPTH; ++i)
+        {
+            g_keyboard_input_note_owner[note][i - 1U] =
+                g_keyboard_input_note_owner[note][i];
+        }
+        count = (uint8_t)(KEYBOARD_INPUT_OWNER_STACK_DEPTH - 1U);
+    }
+
+    g_keyboard_input_note_owner[note][count].track = track;
+    g_keyboard_input_note_owner[note][count].uses_arp = uses_arp;
+    g_keyboard_input_note_owner_count[note] = (uint8_t)(count + 1U);
+}
+
+static uint8_t keyboard_input_note_owner_pop(uint8_t note,
+                                             keyboard_input_note_owner_t *out_owner)
+{
+    if ((note >= 128U) || (out_owner == NULL)
+            || (g_keyboard_input_note_owner_count[note] == 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t index = (uint8_t)(g_keyboard_input_note_owner_count[note] - 1U);
+    *out_owner = g_keyboard_input_note_owner[note][index];
+    g_keyboard_input_note_owner_count[note] = index;
+    return 1U;
+}
 
 static uint8_t keyboard_input_has_separate_hall_keyboard(void)
 {
@@ -314,6 +364,7 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 
     if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
     {
+        keyboard_input_note_owner_push(note, active_track, 1U);
         keyboard_arp_note_on_for_track(active_track, note, velocity);
         return;
     }
@@ -323,41 +374,49 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
         return;
     }
 
-    keyboard_engine_note_on(note, velocity);
+    keyboard_input_note_owner_push(note, active_track, 0U);
+    keyboard_engine_note_on_for_track(active_track, note, velocity);
 }
 
 static void keyboard_input_note_off_sink(uint8_t note)
 {
-    const uint8_t active_track = ui_get_active_track();
-    const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
-    const ui_hall_mode_effective_view_t effective_view =
-        ui_hall_mode_resolve_effective_view(active_track, hall_mode);
-
-    if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
-    {
-        keyboard_arp_note_off_for_track(active_track, note);
-        return;
-    }
-
-    if (effective_view == UI_HALL_MODE_VIEW_ROUT)
+    keyboard_input_note_owner_t owner;
+    if (keyboard_input_note_owner_pop(note, &owner) == 0U)
     {
         return;
     }
 
-    keyboard_engine_note_off(note);
+    if (owner.uses_arp != 0U)
+    {
+        keyboard_arp_note_off_for_track(owner.track, note);
+        return;
+    }
+
+    keyboard_engine_note_off_for_track(owner.track, note);
 }
 
 static void keyboard_input_all_notes_off_sink(void)
 {
-    if (ui_hall_mode_resolve_effective_view(ui_get_active_track(),
-                                            keyboard_input_effective_input_mode()) != UI_HALL_MODE_VIEW_ROUT)
+    for (uint8_t note = 0U; note < 128U; ++note)
     {
-        keyboard_arp_all_notes_off_track(ui_get_active_track());
+        keyboard_input_note_owner_t owner;
+        while (keyboard_input_note_owner_pop(note, &owner) != 0U)
+        {
+            if (owner.uses_arp != 0U)
+            {
+                keyboard_arp_note_off_for_track(owner.track, note);
+            }
+            else
+            {
+                keyboard_engine_note_off_for_track(owner.track, note);
+            }
+        }
     }
 }
 
 void keyboard_input_init(void)
 {
+    memset(g_keyboard_input_note_owner_count, 0, sizeof(g_keyboard_input_note_owner_count));
     const ui_keyboard_note_sink_t sink = {
         .note_on = keyboard_input_note_on_sink,
         .note_off = keyboard_input_note_off_sink,

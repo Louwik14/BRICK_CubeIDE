@@ -149,6 +149,13 @@ typedef struct
     looper_raw_debug_event_t events[LOOPER_RAW_DEBUG_RING_CAP];
 } looper_raw_debug_snapshot_t;
 
+typedef struct
+{
+    uint32_t cache_miss_count;
+    uint32_t preroll_underrun_count;
+    uint32_t preroll_reused_after_wrap_count;
+} looper_raw_debug_health_snapshot_t;
+
 void looper_raw_debug_reset(void);
 void looper_raw_debug_note_boundary(uint8_t logical_track,
                                     uint8_t step,
@@ -211,6 +218,8 @@ void looper_raw_debug_note_raw_relay_done(uint8_t logical_track,
                                           uint32_t page_index);
 void looper_raw_debug_note_writer_state(uint8_t writer_state);
 void looper_raw_debug_get_snapshot(looper_raw_debug_snapshot_t *out_snapshot);
+void looper_raw_debug_get_health_snapshot(
+    looper_raw_debug_health_snapshot_t *out_snapshot);
 void looper_raw_debug_dump_uart(void);
 void looper_raw_debug_service_uart(void);
 

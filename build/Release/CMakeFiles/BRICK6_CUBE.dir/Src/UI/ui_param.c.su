@@ -1,7 +1,7 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:117:16:ui_param_is_stack_osc_tune	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:285:16:ui_param_value_is_same	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:291:13:ui_param_reset_stepped_encoder_accum	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2040:16:ui_param_is_lfo_rate	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2045:16:ui_param_is_lfo_rate	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1127:16:ui_param_is_track_scoped	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:347:16:ui_param_seq_runtime_track_is_valid	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:352:16:ui_param_get_seq_runtime_track_value	24	static
@@ -15,11 +15,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1615:16:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1248:16:ui_param_resolve_edit_bounds	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1235:13:ui_param_ensure_undo_transaction	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1147:16:ui_param_track_accepts_relative_param	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2081:14:ui_param_apply_delta_value	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2086:14:ui_param_apply_delta_value	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:821:16:ui_param_master_fx_quantize_edit	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1699:16:ui_param_set_track_value	96	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1531:16:ui_param_apply_group_link_delta	120	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2101:16:ui_param_apply_relative_delta_to_other_tracks	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2106:16:ui_param_apply_relative_delta_to_other_tracks	80	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:179:6:ui_param_clear_value_flash	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:192:6:ui_param_note_user_value_flash	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:211:9:ui_param_get_slot_value_flash	16	static
@@ -33,7 +33,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1042:6:u
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1051:9:ui_param_get_active_bank_param	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1096:6:ui_param_seq_plock_feedback_frame_begin	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1336:7:ui_param_get_active_track_display_value	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2405:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2454:9:ui_param_try_get_seq_plock_feedback	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2480:9:ui_param_handle_encoder_with_context	376	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2473:6:ui_param_handle_encoder	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2410:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2459:9:ui_param_try_get_seq_plock_feedback	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2485:9:ui_param_handle_encoder_with_context	376	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2478:6:ui_param_handle_encoder	32	static

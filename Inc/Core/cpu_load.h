@@ -46,6 +46,7 @@ uint32_t cpu_load_is_valid(void);
 
 void cpu_load_get_metrics(cpu_load_metrics_t *metrics);
 void cpu_load_reset_peak(void);
+void cpu_load_reset_measurement(void);
 
 #ifdef __cplusplus
 }

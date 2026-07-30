@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:328:13:fxmm_stutter_history_write	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:363:13:fxmm_stutter_read_abs	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:286:13:fxmm_delay_write	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:619:16:fxmm_find_master_fx_track.constprop	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:254:14:fxmm_delay_read	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:1101:6:fx_master_macro_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:1110:6:fx_master_macro_process_block	208	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:1168:6:fx_master_macro_get_diag_state	24	static

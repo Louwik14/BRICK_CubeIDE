@@ -14,6 +14,7 @@ constexpr uint32_t kDelayBufferSize = FX_DELAY_SHARED_CAPACITY;
 constexpr float kMinDelaySamples = 1.0f;
 constexpr float kFeedbackMax = 0.95f;
 constexpr float kTimeSmooth = 0.0025f;
+constexpr uint32_t kParamSmoothSamples = 480U;
 constexpr float kLpfMinAlpha = 0.01f;
 constexpr float kLpfMaxAlpha = 0.85f;
 
@@ -24,12 +25,18 @@ typedef struct
     float time_current_samples_l;
     float time_current_samples_r;
     float feedback;
+    float feedback_target;
     float hpf;
     float lpf;
     uint8_t pingpong;
     float width;
+    float width_target;
     float reverb_send;
     float volume;
+    float volume_target;
+    uint16_t feedback_smooth_remaining;
+    uint16_t width_smooth_remaining;
+    uint16_t volume_smooth_remaining;
     float feedback_hpf_l;
     float feedback_hpf_r;
     float feedback_hpf_prev_l;
@@ -40,27 +47,7 @@ typedef struct
     uint8_t initialized;
 } fx_delay_stereo_global_state_t;
 
-static fx_delay_stereo_global_state_t g_delay = {
-    kDefaultSampleRate,
-    0.25f,
-    0.25f * kDefaultSampleRate,
-    0.25f * kDefaultSampleRate,
-    0.0f,
-    0.0f,
-    0.0f,
-    0U,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0.0f,
-    0U,
-    0U,
-};
+static fx_delay_stereo_global_state_t g_delay = {};
 
 static inline float clampf_local(float v, float lo, float hi)
 {
@@ -69,6 +56,16 @@ static inline float clampf_local(float v, float lo, float hi)
     if(v > hi)
         return hi;
     return v;
+}
+
+static inline float smooth_changed_parameter(float current,
+                                             float target,
+                                             uint16_t *remaining)
+{
+    if(*remaining == 0U) return current;
+    current += (target - current) / (float)*remaining;
+    --(*remaining);
+    return (*remaining == 0U) ? target : current;
 }
 
 static inline float target_delay_samples(float time_s, float sample_rate)
@@ -129,12 +126,18 @@ extern "C" void fx_delay_stereo_global_init(float sample_rate)
     g_delay.time_current_samples_l = target_delay_samples(g_delay.time_target_s, g_delay.sample_rate);
     g_delay.time_current_samples_r = g_delay.time_current_samples_l;
     g_delay.feedback = 0.0f;
+    g_delay.feedback_target = 0.0f;
     g_delay.hpf = 0.0f;
     g_delay.lpf = 0.0f;
     g_delay.pingpong = 0U;
     g_delay.width = 0.0f;
+    g_delay.width_target = 0.0f;
     g_delay.reverb_send = 0.0f;
     g_delay.volume = 0.0f;
+    g_delay.volume_target = 0.0f;
+    g_delay.feedback_smooth_remaining = 0U;
+    g_delay.width_smooth_remaining = 0U;
+    g_delay.volume_smooth_remaining = 0U;
     g_delay.feedback_hpf_l = 0.0f;
     g_delay.feedback_hpf_r = 0.0f;
     g_delay.feedback_hpf_prev_l = 0.0f;
@@ -167,7 +170,10 @@ extern "C" void fx_delay_stereo_global_set_time(float time_s)
 
 extern "C" void fx_delay_stereo_global_set_feedback(float feedback)
 {
-    g_delay.feedback = clampf_local(feedback, 0.0f, kFeedbackMax);
+    const float target = clampf_local(feedback, 0.0f, kFeedbackMax);
+    if(fabsf(target - g_delay.feedback_target) <= 1.0e-7f) return;
+    g_delay.feedback_target = target;
+    g_delay.feedback_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
 extern "C" void fx_delay_stereo_global_set_hpf(float hpf)
@@ -187,7 +193,10 @@ extern "C" void fx_delay_stereo_global_set_pingpong(uint8_t enabled)
 
 extern "C" void fx_delay_stereo_global_set_width(float width)
 {
-    g_delay.width = clampf_local(width, -1.0f, 1.0f);
+    const float target = clampf_local(width, -1.0f, 1.0f);
+    if(fabsf(target - g_delay.width_target) <= 1.0e-7f) return;
+    g_delay.width_target = target;
+    g_delay.width_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
 extern "C" void fx_delay_stereo_global_set_reverb_send(float reverb_send)
@@ -197,12 +206,17 @@ extern "C" void fx_delay_stereo_global_set_reverb_send(float reverb_send)
 
 extern "C" void fx_delay_stereo_global_set_volume(float volume)
 {
-    g_delay.volume = clampf_local(volume, 0.0f, 1.0f);
+    const float target = clampf_local(volume, 0.0f, 1.0f);
+    if(fabsf(target - g_delay.volume_target) <= 1.0e-7f) return;
+    g_delay.volume_target = target;
+    g_delay.volume_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
 extern "C" uint8_t fx_delay_stereo_global_is_active(void)
 {
-    return ((g_delay.volume > 0.0f) || (g_delay.reverb_send > 0.0f)) ? 1U : 0U;
+    return ((g_delay.volume_target > 0.0f)
+         || (g_delay.volume > 0.0f)
+         || (g_delay.reverb_send > 0.0f)) ? 1U : 0U;
 }
 
 extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
@@ -223,20 +237,29 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
 
     const float target_l = target_delay_samples(g_delay.time_target_s, g_delay.sample_rate);
     const float target_r = target_l;
-    const float fb = g_delay.feedback;
     const uint8_t hpf_active = (g_delay.hpf > 0.001f) ? 1U : 0U;
     const uint8_t lpf_active = (g_delay.lpf > 0.001f) ? 1U : 0U;
     const float hpf_a = (hpf_active != 0U) ? hpf_alpha(g_delay.hpf) : 0.0f;
     const float lpf_a = (lpf_active != 0U) ? lpf_alpha(g_delay.lpf) : 0.0f;
-    const float vol = g_delay.volume;
     const float rev = g_delay.reverb_send;
-    const float width = g_delay.width;
     const uint8_t has_rev = ((rev_l != 0) && (rev_r != 0)) ? 1U : 0U;
     float *const delay_buffer_l = fx_delay_shared_pool_left();
     float *const delay_buffer_r = fx_delay_shared_pool_right();
 
     for(uint32_t i = 0U; i < frames; ++i)
     {
+        g_delay.feedback = smooth_changed_parameter(g_delay.feedback,
+                                                    g_delay.feedback_target,
+                                                    &g_delay.feedback_smooth_remaining);
+        g_delay.width = smooth_changed_parameter(g_delay.width,
+                                                 g_delay.width_target,
+                                                 &g_delay.width_smooth_remaining);
+        g_delay.volume = smooth_changed_parameter(g_delay.volume,
+                                                  g_delay.volume_target,
+                                                  &g_delay.volume_smooth_remaining);
+        const float fb = g_delay.feedback;
+        const float width = g_delay.width;
+        const float vol = g_delay.volume;
         g_delay.time_current_samples_l += (target_l - g_delay.time_current_samples_l) * kTimeSmooth;
         g_delay.time_current_samples_r += (target_r - g_delay.time_current_samples_r) * kTimeSmooth;
 

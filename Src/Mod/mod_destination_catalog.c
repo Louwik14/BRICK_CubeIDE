@@ -318,7 +318,8 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_FILTER_CUTOFF:
-            mixer_set_track_filter_cutoff(ctx->mix_track_id, param_filter_ui127_to_cutoff_hz(value));
+            mixer_set_track_filter_cutoff_modulated(ctx->mix_track_id,
+                                                    param_filter_ui127_to_cutoff_hz(value));
             return 1U;
         case PARAM_FILTER_RESONANCE:
             mixer_set_track_filter_resonance(ctx->mix_track_id, param_filter_ui127_to_resonance(value));

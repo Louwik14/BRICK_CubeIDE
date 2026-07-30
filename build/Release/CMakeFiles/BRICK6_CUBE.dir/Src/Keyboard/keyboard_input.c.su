@@ -1,7 +1,9 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:187:23:keyboard_input_effective_input_mode	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:350:13:keyboard_input_all_notes_off_sink	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:329:13:keyboard_input_note_off_sink	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:308:13:keyboard_input_note_on_sink	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:102:13:keyboard_input_lowcost_nav_button	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:359:6:keyboard_input_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:372:6:keyboard_input_process_hall	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:56:13:keyboard_input_note_owner_push	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:79:16:keyboard_input_note_owner_pop	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:398:13:keyboard_input_all_notes_off_sink	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:381:13:keyboard_input_note_off_sink	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:237:23:keyboard_input_effective_input_mode	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:358:13:keyboard_input_note_on_sink	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:152:13:keyboard_input_lowcost_nav_button	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:417:6:keyboard_input_init	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_input.c:431:6:keyboard_input_process_hall	40	static

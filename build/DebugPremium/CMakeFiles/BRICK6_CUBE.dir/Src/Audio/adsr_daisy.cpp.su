@@ -1,0 +1,25 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:164:14:float adsr_daisy_c_clampf(float, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:195:14:float adsr_daisy_c_log2_lut(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:216:14:float adsr_daisy_c_time_lut_lookup(const float*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:169:13:void adsr_daisy_c_init_luts()	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:232:13:void adsr_daisy_c_set_time_constant(float, float, float*, float*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:26:6:void daisysp::Adsr::Retrigger(bool)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:52:6:void daisysp::Adsr::SetAttackTime(float, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:80:6:void daisysp::Adsr::SetTimeConstant(float, float&, float&)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:33:6:void daisysp::Adsr::SetTime(int, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:8:6:void daisysp::Adsr::Init(float, int)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:70:6:void daisysp::Adsr::SetDecayTime(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:74:6:void daisysp::Adsr::SetReleaseTime(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:96:7:float daisysp::Adsr::Process(bool)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:316:6:void adsr_daisy_c_reset(adsr_daisy_c_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:326:6:void adsr_daisy_c_set_attack(adsr_daisy_c_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:356:6:void adsr_daisy_c_set_decay(adsr_daisy_c_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:364:6:void adsr_daisy_c_set_sustain(adsr_daisy_c_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:373:6:void adsr_daisy_c_set_release(adsr_daisy_c_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:290:6:void adsr_daisy_c_init(adsr_daisy_c_t*, float, uint32_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:258:13:void adsr_daisy_c_recover_state_if_needed(adsr_daisy_c_t*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:381:6:void adsr_daisy_c_retrigger(adsr_daisy_c_t*, uint8_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:394:7:float adsr_daisy_c_process(adsr_daisy_c_t*, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:467:9:uint8_t adsr_daisy_c_is_running(const adsr_daisy_c_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:475:9:uint8_t adsr_daisy_c_is_sustaining(const adsr_daisy_c_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/adsr_daisy.cpp:483:7:float adsr_daisy_c_current_level(const adsr_daisy_c_t*)	0	static
