@@ -19,10 +19,22 @@ typedef struct
 {
     uint16_t lock_head;
     uint8_t lock_count;
-    uint8_t trig;
-    uint8_t lock_set_mask;
-    uint8_t roll;
-    uint8_t reserved[2];
+    union
+    {
+        struct
+        {
+            uint8_t trig;
+            uint8_t lock_set_mask;
+            uint8_t roll;
+            uint8_t reserved[2];
+        };
+        struct
+        {
+            uint8_t action;
+            uint8_t special_lock_set_mask;
+            uint8_t special_reserved[3];
+        };
+    };
 } seq_step_t;
 
 typedef enum
@@ -45,14 +57,6 @@ typedef struct
     uint8_t ui_page;
     uint8_t reserved[2];
 } seq_track_data_t;
-
-typedef struct
-{
-    seq_track_data_t tracks[SEQ_TRACK_COUNT];
-    seq_plock_entry_t pool[SEQ_TRACK_COUNT][SEQ_PLOCK_POOL_CAP_PER_TRACK];
-    uint16_t free_head[SEQ_TRACK_COUNT];
-    uint16_t free_count[SEQ_TRACK_COUNT];
-} seq_project_data_t;
 
 typedef enum
 {
@@ -89,10 +93,14 @@ typedef enum
     SEQ_STEP_VISUAL_BLUE
 } seq_step_visual_t;
 
-void seq_model_init_defaults(void);
-const seq_project_data_t *seq_model_get_project(void);
-uint8_t seq_model_load_project(const seq_project_data_t *project);
+typedef enum
+{
+    SEQ_SPECIAL_ACTION_NONE = 0,
+    SEQ_SPECIAL_ACTION_TRIGGER,
+    SEQ_SPECIAL_ACTION_COUNT
+} seq_special_action_t;
 
+void seq_model_init_defaults(void);
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig);
@@ -117,6 +125,11 @@ uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
+uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
+uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step);
+void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action);
+void seq_model_toggle_special_action(seq_track_id_t track, seq_step_id_t step);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,

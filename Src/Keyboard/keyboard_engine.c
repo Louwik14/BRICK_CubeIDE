@@ -26,7 +26,7 @@
 #include "Core/synth_polyphony.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
-#include "Core/track_state.h"
+#include "Core/track_mute.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -38,15 +38,10 @@ static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
 #define KEYBOARD_ENGINE_MONO_HELD_MAX 8U
-#define KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH 8U
 static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
 static uint8_t g_kbd_rec_note_stack_count[128U];
-static uint8_t g_kbd_rec_track_note_channel[UI_TRACK_COUNT][128U];
-static uint8_t g_kbd_rec_track_note_count[UI_TRACK_COUNT][128U];
-static uint8_t g_keyboard_engine_group_note_track[UI_TRACK_COUNT][128U][KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH];
-static uint8_t g_keyboard_engine_group_note_count[UI_TRACK_COUNT][128U];
-static uint8_t g_keyboard_engine_group_track_active_count[UI_TRACK_COUNT];
-static uint8_t g_keyboard_engine_group_rr_cursor[UI_TRACK_COUNT];
+static uint8_t g_kbd_rec_track_note_channel[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
+static uint8_t g_kbd_rec_track_note_count[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
 
 typedef struct
 {
@@ -95,20 +90,13 @@ static void keyboard_engine_mono_clear(void)
 
 static uint8_t keyboard_engine_get_play_owner_track(void)
 {
-    const uint8_t active_track = ui_get_active_track();
-    uint8_t owner_track = active_track;
-    if (track_runtime_get_voice_group_effective_master(active_track, &owner_track) == 0U)
-    {
-        return active_track;
-    }
-    return owner_track;
+    return ui_get_active_track();
 }
 
 static bool keyboard_engine_active_track_has_midi_note_path(void)
 {
     const uint8_t owner_track = keyboard_engine_get_play_owner_track();
-    const ui_track_config_t config = ui_get_track_config(owner_track);
-    return (ui_track_family_is_engine(config.family) != 0) || (config.type == UI_TRACK_TYPE_HYBRID);
+    return track_runtime_has_capability(owner_track, TRACK_CAPABILITY_MIDI) != 0U;
 }
 
 static bool keyboard_engine_track_has_midi_note_path(uint8_t track)
@@ -118,8 +106,7 @@ static bool keyboard_engine_track_has_midi_note_path(uint8_t track)
         return false;
     }
 
-    const ui_track_config_t config = ui_get_track_config(track);
-    return (ui_track_family_is_engine(config.family) != 0) || (config.type == UI_TRACK_TYPE_HYBRID);
+    return track_runtime_has_capability(track, TRACK_CAPABILITY_MIDI) != 0U;
 }
 
 static bool keyboard_engine_active_track_accepts_internal_source(void)
@@ -143,47 +130,6 @@ static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
 {
     const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
     return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
-}
-
-static void keyboard_engine_group_note_push(uint8_t owner_track, uint8_t note, uint8_t track)
-{
-    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U) || (track >= UI_TRACK_COUNT))
-    {
-        return;
-    }
-
-    uint8_t count = g_keyboard_engine_group_note_count[owner_track][note];
-    if (count >= KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH)
-    {
-        for (uint8_t i = 1U; i < KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH; ++i)
-        {
-            g_keyboard_engine_group_note_track[owner_track][note][i - 1U] =
-                g_keyboard_engine_group_note_track[owner_track][note][i];
-        }
-        count = (uint8_t)(KEYBOARD_ENGINE_GROUP_NOTE_STACK_DEPTH - 1U);
-    }
-
-    g_keyboard_engine_group_note_track[owner_track][note][count] = track;
-    g_keyboard_engine_group_note_count[owner_track][note] = (uint8_t)(count + 1U);
-}
-
-static uint8_t keyboard_engine_group_note_pop(uint8_t owner_track, uint8_t note, uint8_t fallback_track)
-{
-    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U))
-    {
-        return fallback_track;
-    }
-
-    const uint8_t count = g_keyboard_engine_group_note_count[owner_track][note];
-    if (count == 0U)
-    {
-        return fallback_track;
-    }
-
-    const uint8_t index = (uint8_t)(count - 1U);
-    const uint8_t track = g_keyboard_engine_group_note_track[owner_track][note][index];
-    g_keyboard_engine_group_note_count[owner_track][note] = index;
-    return (track < UI_TRACK_COUNT) ? track : fallback_track;
 }
 
 static void keyboard_engine_all_notes_off_local_track(uint8_t track)
@@ -261,27 +207,16 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
 
 static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
 {
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(owner_track, &role_u8);
-    uint8_t members[UI_TRACK_COUNT];
-    uint8_t member_count = 0U;
-    if ((role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-            && (track_runtime_collect_voice_group_members(owner_track, members, (uint8_t)UI_TRACK_COUNT, &member_count) != 0U)
-            && (member_count > 0U))
-    {
-        for (uint8_t i = 0U; i < member_count; ++i)
-        {
-            keyboard_engine_all_notes_off_local_track(members[i]);
-        }
-        return;
-    }
-
     keyboard_engine_all_notes_off_local_track(owner_track);
 }
 
 static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
+    {
+        return;
+    }
+    if ((is_note_on != 0U) && (track_mute_should_suppress_note_on(track) != 0U))
     {
         return;
     }
@@ -442,59 +377,7 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
                                                       uint8_t velocity,
                                                       uint8_t is_note_on)
 {
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(owner_track, &role_u8);
-
-    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-    {
-        keyboard_engine_emit_note_for_track(owner_track, note, velocity, is_note_on);
-        return;
-    }
-
-    uint8_t members[UI_TRACK_COUNT];
-    uint8_t member_count = 0U;
-    if ((track_runtime_collect_voice_group_members(owner_track, members, (uint8_t)UI_TRACK_COUNT, &member_count) == 0U)
-            || (member_count == 0U))
-    {
-        keyboard_engine_emit_note_for_track(owner_track, note, velocity, is_note_on);
-        return;
-    }
-
-    if (is_note_on != 0U)
-    {
-        const uint8_t start = (uint8_t)(g_keyboard_engine_group_rr_cursor[owner_track] % member_count);
-        uint8_t target_track = members[start];
-        uint8_t found_free = 0U;
-        for (uint8_t i = 0U; i < member_count; ++i)
-        {
-            const uint8_t candidate = members[(uint8_t)((start + i) % member_count)];
-            if (g_keyboard_engine_group_track_active_count[candidate] == 0U)
-            {
-                target_track = candidate;
-                found_free = 1U;
-                break;
-            }
-        }
-        if (found_free == 0U)
-        {
-            target_track = members[start];
-        }
-        g_keyboard_engine_group_rr_cursor[owner_track] = (uint8_t)((start + 1U) % member_count);
-        keyboard_engine_group_note_push(owner_track, note, target_track);
-        if (g_keyboard_engine_group_track_active_count[target_track] < 255U)
-        {
-            g_keyboard_engine_group_track_active_count[target_track]++;
-        }
-        keyboard_engine_emit_note_for_track(target_track, note, velocity, 1U);
-        return;
-    }
-
-    uint8_t target_track = keyboard_engine_group_note_pop(owner_track, note, owner_track);
-    if ((target_track < UI_TRACK_COUNT) && (g_keyboard_engine_group_track_active_count[target_track] > 0U))
-    {
-        g_keyboard_engine_group_track_active_count[target_track]--;
-    }
-    keyboard_engine_emit_note_for_track(target_track, note, velocity, 0U);
+    keyboard_engine_emit_note_for_track(owner_track, note, velocity, is_note_on);
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -503,13 +386,12 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                                                              uint8_t source_internal,
                                                              uint8_t is_note_on)
 {
-    uint8_t owner_handled[UI_TRACK_COUNT] = {0U};
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
         if ((ui_track_family_is_engine(cfg.family) == 0)
-                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
+                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
@@ -535,34 +417,18 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
-        uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-        (void)track_runtime_get_voice_group_role(track, &role_u8);
-        if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            continue;
-        }
-
-        uint8_t owner_track = track;
-        (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-        if ((owner_track >= UI_TRACK_COUNT) || (owner_handled[owner_track] != 0U))
-        {
-            continue;
-        }
-        owner_handled[owner_track] = 1U;
-
-        keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, is_note_on);
+        keyboard_engine_send_note_for_owner_track(track, note, velocity, is_note_on);
     }
 }
 
 static void keyboard_engine_all_notes_off_matching_tracks(uint8_t channel, uint8_t source_internal)
 {
-    uint8_t owner_handled[UI_TRACK_COUNT] = {0U};
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
         if ((ui_track_family_is_engine(cfg.family) == 0)
-                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
+                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
@@ -588,22 +454,7 @@ static void keyboard_engine_all_notes_off_matching_tracks(uint8_t channel, uint8
             continue;
         }
 
-        uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-        (void)track_runtime_get_voice_group_role(track, &role_u8);
-        if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            continue;
-        }
-
-        uint8_t owner_track = track;
-        (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-        if ((owner_track >= UI_TRACK_COUNT) || (owner_handled[owner_track] != 0U))
-        {
-            continue;
-        }
-        owner_handled[owner_track] = 1U;
-
-        keyboard_engine_all_notes_off_for_owner(owner_track);
+        keyboard_engine_all_notes_off_for_owner(track);
     }
 }
 
@@ -651,7 +502,7 @@ static void keyboard_engine_live_rec_push_track_channel(uint8_t owner_track,
                                                         uint8_t note,
                                                         uint8_t channel)
 {
-    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U))
+    if ((owner_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
     {
         return;
     }
@@ -667,7 +518,7 @@ static uint8_t keyboard_engine_live_rec_pop_track_channel(uint8_t owner_track,
                                                           uint8_t note,
                                                           uint8_t fallback_channel)
 {
-    if ((owner_track >= UI_TRACK_COUNT) || (note >= 128U))
+    if ((owner_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
     {
         return fallback_channel;
     }
@@ -822,16 +673,15 @@ void keyboard_engine_note_off(uint8_t note)
 
 void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
     {
         return;
     }
 
-    uint8_t owner_track = track;
-    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-    if (owner_track >= UI_TRACK_COUNT)
+    const uint8_t owner_track = track;
+    if (track_mute_should_suppress_note_on(owner_track) != 0U)
     {
-        owner_track = track;
+        return;
     }
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
@@ -854,17 +704,12 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
 
 void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
     {
         return;
     }
 
-    uint8_t owner_track = track;
-    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-    if (owner_track >= UI_TRACK_COUNT)
-    {
-        owner_track = track;
-    }
+    const uint8_t owner_track = track;
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     const uint8_t note_on_channel =
@@ -887,57 +732,38 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
 
 void keyboard_engine_all_notes_off_for_track(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
     {
         return;
     }
 
-    uint8_t owner_track = track;
-    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-    if (owner_track >= UI_TRACK_COUNT)
-    {
-        owner_track = track;
-    }
+    const uint8_t owner_track = track;
 
     keyboard_engine_all_notes_off_for_owner(owner_track);
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     if (keyboard_engine_track_has_midi_note_path(owner_track))
     {
+        for (uint16_t note = 0U; note < 128U; ++note)
+        {
+            if (g_kbd_rec_track_note_count[owner_track][note] != 0U)
+            {
+                midi_note_off(MIDI_DEST_USB,
+                              g_kbd_rec_track_note_channel[owner_track][note],
+                              (uint8_t)note,
+                              0U);
+            }
+        }
         midi_all_notes_off(MIDI_DEST_USB, channel);
     }
     memset(g_kbd_rec_track_note_count[owner_track],
            0,
            sizeof(g_kbd_rec_track_note_count[owner_track]));
-    memset(g_keyboard_engine_group_note_count[owner_track],
-           0,
-           sizeof(g_keyboard_engine_group_note_count[owner_track]));
-    g_keyboard_engine_group_rr_cursor[owner_track] = 0U;
-    {
-        uint8_t members[UI_TRACK_COUNT];
-        uint8_t member_count = 0U;
-        if (track_runtime_collect_voice_group_members(owner_track,
-                                                      members,
-                                                      (uint8_t)UI_TRACK_COUNT,
-                                                      &member_count) != 0U)
-        {
-            for (uint8_t i = 0U; i < member_count; ++i)
-            {
-                g_keyboard_engine_group_track_active_count[members[i]] = 0U;
-            }
-        }
-        else
-        {
-            g_keyboard_engine_group_track_active_count[owner_track] = 0U;
-        }
-    }
 }
 
 void keyboard_engine_all_notes_off(void)
 {
     keyboard_engine_mono_clear();
     drum_synth_all_notes_off_all();
-    memset(g_keyboard_engine_group_note_count, 0, sizeof(g_keyboard_engine_group_note_count));
-    memset(g_keyboard_engine_group_track_active_count, 0, sizeof(g_keyboard_engine_group_track_active_count));
 
     const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track());
     keyboard_engine_all_notes_off_matching_tracks(active_channel, 1U);
@@ -962,8 +788,6 @@ void keyboard_engine_clear_state_silent(void)
     g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
     memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
-    memset(g_keyboard_engine_group_note_count, 0, sizeof(g_keyboard_engine_group_note_count));
-    memset(g_keyboard_engine_group_track_active_count, 0, sizeof(g_keyboard_engine_group_track_active_count));
 }
 
 void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
@@ -1002,13 +826,12 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note);
     }
 
-    uint8_t owner_handled[UI_TRACK_COUNT] = {0U};
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
         if ((ui_track_family_is_engine(cfg.family) == 0)
-                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
+                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
@@ -1022,35 +845,20 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             continue;
         }
 
-        uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-        (void)track_runtime_get_voice_group_role(track, &role_u8);
-        if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            continue;
-        }
-
-        uint8_t owner_track = track;
-        (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
-        if ((owner_track >= UI_TRACK_COUNT) || (owner_handled[owner_track] != 0U))
-        {
-            continue;
-        }
-        owner_handled[owner_track] = 1U;
-
         if (is_note_on != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, 1U);
+            keyboard_engine_send_note_for_owner_track(track, note, velocity, 1U);
             continue;
         }
         if (is_note_off != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(owner_track, note, 0U, 0U);
+            keyboard_engine_send_note_for_owner_track(track, note, 0U, 0U);
             continue;
         }
 
         if (is_all_notes_off != 0U)
         {
-            keyboard_engine_all_notes_off_for_owner(owner_track);
+            keyboard_engine_all_notes_off_for_owner(track);
         }
     }
 

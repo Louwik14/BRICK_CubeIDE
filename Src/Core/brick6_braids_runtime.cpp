@@ -104,9 +104,7 @@ typedef struct
 AUDIO_HOT static brick6_braids_runtime_instance_t
     g_braids_runtime[BRICK6_BRAIDS_MAX_INSTANCES];
 SEQ_STATE_D2 static brick6_braids_runtime_instance_t
-    g_braids_poly_d2[28U];
-AUDIO_WARM static brick6_braids_runtime_instance_t
-    g_braids_poly_d1[28U];
+    g_braids_poly_d2[BRICK6_BRAIDS_VOICE_INSTANCE_COUNT - BRICK6_BRAIDS_MAX_INSTANCES];
 
 static float brick6_braids_runtime_clamp(float value, float lo, float hi)
 {
@@ -186,8 +184,7 @@ static brick6_braids_runtime_instance_t *brick6_braids_runtime_get_instance_mut(
         return &g_braids_runtime[instance_id];
     }
     const uint8_t extra = (uint8_t)(instance_id - BRICK6_BRAIDS_MAX_INSTANCES);
-    return (extra < 28U) ? &g_braids_poly_d2[extra]
-                         : &g_braids_poly_d1[(uint8_t)(extra - 28U)];
+    return &g_braids_poly_d2[extra];
 }
 
 static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t *instance)

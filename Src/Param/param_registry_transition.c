@@ -104,16 +104,14 @@ static uint8_t param_registry_capture_runtime_mix_target(uint8_t track)
         return FILTER_RUNTIME_REBIND_NONE;
     }
 
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+    uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
+    if ((track_runtime_get_mix_target_track(track, &mix_track) == 0U)
+            || (mix_track >= MIXER_MAX_TRACKS))
     {
         return FILTER_RUNTIME_REBIND_NONE;
     }
 
-    return ctx->mix_track_id;
+    return mix_track;
 }
 
 static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
@@ -128,15 +126,14 @@ static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
     {
         out_mix_tracks[track] = FILTER_RUNTIME_REBIND_NONE;
 
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+        uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
+        if ((track_runtime_get_mix_target_track(track, &mix_track) == 0U)
+                || (mix_track >= MIXER_MAX_TRACKS))
         {
             continue;
         }
 
-        out_mix_tracks[track] = ctx->mix_track_id;
+        out_mix_tracks[track] = mix_track;
     }
 }
 
@@ -164,7 +161,6 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
         PARAM_MIX_SEND1,
         PARAM_MIX_SEND2,
         PARAM_MIX_MUTE,
-        PARAM_HYBRID_GATE,
         PARAM_VCA_ATTACK,
         PARAM_VCA_DECAY,
         PARAM_VCA_SUSTAIN,
@@ -381,8 +377,7 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
                     && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
                     && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
                 || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-                || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))))
+                || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)))
     {
         return;
     }

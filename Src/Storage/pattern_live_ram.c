@@ -8,7 +8,9 @@
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
+#include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
+#include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_runtime_bridge.h"
@@ -45,6 +47,45 @@ UI_SDRAM static PatternSaveV1 g_current_pattern;
 UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
 UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
+static uint8_t g_pattern_voice_limited;
+
+uint8_t pattern_live_last_voice_limited(void) { return g_pattern_voice_limited; }
+
+static uint8_t pattern_live_resolve_voice_budget(const PatternSaveV1 *pattern,
+                                                 uint8_t assigned[SEQ_TRACK_COUNT],
+                                                 uint8_t *out_limited)
+{
+    if ((pattern == 0) || (assigned == 0) || (out_limited == 0)) return 0U;
+    memset(assigned, 0, SEQ_TRACK_COUNT);
+    uint8_t remaining = SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET;
+    uint8_t limited = 0U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t family = pattern->track_cfg.family[track];
+        if ((family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+                || (family == (uint8_t)UI_TRACK_FAMILY_DRUM))
+        {
+            if (remaining == 0U) return 0U;
+            assigned[track] = 1U;
+            remaining--;
+        }
+    }
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (pattern->track_cfg.family[track] != (uint8_t)UI_TRACK_FAMILY_SYNTH) continue;
+        float raw = 1.0f;
+        if (pattern->sound.track_valid[track][PARAM_CFG_POLY_VOICES] != 0U)
+            raw = pattern->sound.track_values[track][PARAM_CFG_POLY_VOICES];
+        else if (pattern->mix.track_valid[track][PARAM_CFG_POLY_VOICES] != 0U)
+            raw = pattern->mix.track_values[track][PARAM_CFG_POLY_VOICES];
+        uint8_t requested = (uint8_t)((raw < 1.0f) ? 1U : ((raw > 8.0f) ? 8U : (uint8_t)raw));
+        while ((assigned[track] < requested) && (remaining > 0U))
+        { assigned[track]++; remaining--; }
+        if (assigned[track] < requested) limited = 1U;
+    }
+    *out_limited = limited;
+    return 1U;
+}
 STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
 static uint8_t g_active_bank;
@@ -71,8 +112,8 @@ static uint8_t g_pattern_load_last_error;
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
-static uint8_t pattern_live_voice_roles_are_valid(const uint8_t role[SEQ_TRACK_COUNT]);
-static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step);
+static uint8_t pattern_live_play_step_required_lock_count(const pattern_v1_play_step_t *step);
+static uint8_t pattern_live_special_step_required_lock_count(const pattern_v1_special_step_t *step);
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
                                                             uint16_t *out_required);
@@ -89,40 +130,31 @@ static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
 }
 
-static uint8_t pattern_live_voice_roles_are_valid(const uint8_t role[SEQ_TRACK_COUNT])
+static pattern_v1_special_track_seq_t *pattern_live_special_seq_mut(pattern_v1_seq_block_t *seq,
+                                                                    uint8_t track)
 {
-    if (role == 0)
+    if ((seq == 0) || (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            || (track >= TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY))
     {
-        return 0U;
+        return 0;
     }
+    return &seq->special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+}
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        const uint8_t current = role[track];
-        if (current >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
-        {
-            return 0U;
-        }
+static const pattern_v1_special_track_seq_t *pattern_live_special_seq(
+    const pattern_v1_seq_block_t *seq, uint8_t track)
+{
+    return pattern_live_special_seq_mut((pattern_v1_seq_block_t *)seq, track);
+}
 
-        if (current != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            continue;
-        }
-
-        if (track == 0U)
-        {
-            return 0U;
-        }
-
-        const uint8_t left = role[(uint8_t)(track - 1U)];
-        if ((left != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-                && (left != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE))
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
+static uint8_t pattern_live_identity_matches_track(const track_topology_identity_t *identity,
+                                                   uint8_t track)
+{
+    track_topology_identity_t current;
+    return (uint8_t)((identity != 0)
+            && (track_topology_get_identity(track, &current) != 0U)
+            && (identity->role == current.role)
+            && (identity->ordinal == current.ordinal));
 }
 
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg)
@@ -132,17 +164,11 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         return 0U;
     }
 
-    uint8_t role_sanitized[SEQ_TRACK_COUNT];
-    memcpy(role_sanitized, track_cfg->voice_group_role, sizeof(role_sanitized));
-    if (pattern_live_voice_roles_are_valid(role_sanitized) == 0U)
-    {
-        memset(role_sanitized, (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO, sizeof(role_sanitized));
-    }
-
-    if (ui_apply_track_config_bulk_mutation(track_cfg->family,
-                                            track_cfg->type,
-                                            track_cfg->midi_channel,
-                                            track_cfg->midi_source) == false)
+    if (ui_apply_track_config_bulk_mutation_with_inputs(track_cfg->family,
+                                                        track_cfg->type,
+                                                        track_cfg->midi_channel,
+                                                        track_cfg->midi_source,
+                                                        track_cfg->external_input) == false)
     {
         return 0U;
     }
@@ -158,18 +184,7 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         }
     }
 
-    if (track_state_apply_voice_group_roles_bulk(role_sanitized) == false)
-    {
-        return 0U;
-    }
-
-    if (track_state_apply_voice_group_config_bulk(track_cfg->voice_group_spread,
-                                                  track_cfg->voice_group_link) == false)
-    {
-        return 0U;
-    }
-
-    return param_registry_commit_voice_group_seq_link_bulk(track_cfg->voice_group_seq_link);
+    return 1U;
 }
 
 static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
@@ -210,6 +225,14 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
     return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX);
 }
 
+static uint8_t pattern_live_param_is_storable_for_track(uint8_t track, param_id_t id)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    return (uint8_t)((track_topology_is_active(track) != 0U)
+            && ((track_topology_is_play(track) != 0U)
+                || (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)));
+}
+
 static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -230,10 +253,7 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 
     if ((id == PARAM_MASTER_GAIN) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
         || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
-        || (id == PARAM_CFG_GROUP_SPREAD)
-        || (id == PARAM_CFG_GROUP_LINK)
-        || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-        || (id == PARAM_CFG_GROUP_SEQ_LINK))
+        )
     {
         return 0U;
     }
@@ -309,26 +329,23 @@ static uint8_t pattern_live_is_reverb_global_tombstone(param_id_t id)
             || (id == PARAM_MIX_REVERB_DIGITAL_LPF));
 }
 
-static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step)
+static uint8_t pattern_live_locks_required(const pattern_v1_plock_t *locks,
+                                           uint8_t lock_count)
 {
-    if (step == 0)
+    if (locks == 0)
     {
         return 0U;
     }
-
-    const uint8_t lock_count = (step->lock_count > SEQ_STEP_MAX_LOCKS)
-        ? SEQ_STEP_MAX_LOCKS
-        : step->lock_count;
     uint8_t unique_count = 0U;
 
     for (uint8_t i = 0U; i < lock_count; ++i)
     {
-        const pattern_v1_plock_t *const current = &step->locks[i];
+        const pattern_v1_plock_t *const current = &locks[i];
         uint8_t seen = 0U;
 
         for (uint8_t j = 0U; j < i; ++j)
         {
-            const pattern_v1_plock_t *const prior = &step->locks[j];
+            const pattern_v1_plock_t *const prior = &locks[j];
             if ((prior->set_id == current->set_id) && (prior->param_slot == current->param_slot))
             {
                 seen = 1U;
@@ -345,6 +362,22 @@ static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *st
     return unique_count;
 }
 
+static uint8_t pattern_live_play_step_required_lock_count(const pattern_v1_play_step_t *step)
+{
+    if (step == 0) return 0U;
+    const uint8_t count = (step->lock_count > SEQ_PLAY_STEP_MAX_LOCKS)
+        ? SEQ_PLAY_STEP_MAX_LOCKS : step->lock_count;
+    return pattern_live_locks_required(step->locks, count);
+}
+
+static uint8_t pattern_live_special_step_required_lock_count(const pattern_v1_special_step_t *step)
+{
+    if (step == 0) return 0U;
+    const uint8_t count = (step->lock_count > SEQ_SPECIAL_STEP_MAX_LOCKS)
+        ? SEQ_SPECIAL_STEP_MAX_LOCKS : step->lock_count;
+    return pattern_live_locks_required(step->locks, count);
+}
+
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
                                                             uint16_t *out_required)
@@ -354,14 +387,71 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
     {
         uint16_t required = 0U;
+        const uint16_t track_capacity = seq_model_get_track_plock_capacity(track);
+        const uint8_t step_limit = seq_model_get_step_lock_limit(track);
+
+        if (track_topology_is_play(track) != 0U)
+        {
+            if (pattern_live_identity_matches_track(&seq->play[track].identity, track) == 0U)
+            {
+                return 0U;
+            }
+        }
+        else
+        {
+            const pattern_v1_special_track_seq_t *const special = pattern_live_special_seq(seq, track);
+            if ((special == 0)
+                    || (pattern_live_identity_matches_track(&special->identity, track) == 0U))
+            {
+                return 0U;
+            }
+        }
 
         for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
         {
-            required = (uint16_t)(required + pattern_live_step_required_lock_count(&seq->tracks[track].steps[step]));
-            if (required > (uint16_t)SEQ_PLOCK_BUDGET_PER_TRACK)
+            uint8_t step_required;
+            if (track_topology_is_play(track) != 0U)
+            {
+                if (seq->play[track].steps[step].lock_count > SEQ_PLAY_STEP_MAX_LOCKS)
+                {
+                    return 0U;
+                }
+                step_required = pattern_live_play_step_required_lock_count(
+                    &seq->play[track].steps[step]);
+            }
+            else
+            {
+                const pattern_v1_special_step_t *const special_step =
+                    &pattern_live_special_seq(seq, track)->steps[step];
+                if ((special_step->lock_count > SEQ_SPECIAL_STEP_MAX_LOCKS)
+                        || (special_step->action >= (uint8_t)SEQ_SPECIAL_ACTION_COUNT))
+                {
+                    return 0U;
+                }
+                const uint8_t raw_count = (special_step->lock_count > SEQ_SPECIAL_STEP_MAX_LOCKS)
+                    ? SEQ_SPECIAL_STEP_MAX_LOCKS : special_step->lock_count;
+                for (uint8_t lock = 0U; lock < raw_count; ++lock)
+                {
+                    if (special_step->locks[lock].set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+                    {
+                        if (out_track != 0) *out_track = track;
+                        if (out_required != 0) *out_required = raw_count;
+                        return 0U;
+                    }
+                }
+                step_required = pattern_live_special_step_required_lock_count(special_step);
+            }
+            if (step_required > step_limit)
+            {
+                if (out_track != 0) *out_track = track;
+                if (out_required != 0) *out_required = step_required;
+                return 0U;
+            }
+            required = (uint16_t)(required + step_required);
+            if (required > track_capacity)
             {
                 if (out_track != 0)
                 {
@@ -435,55 +525,75 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     out_pattern->globals.linked_kit_valid = g_current_pattern.globals.linked_kit_valid;
     out_pattern->globals.linked_kit_slot = g_current_pattern.globals.linked_kit_slot;
 
-    const seq_project_data_t *const project = seq_model_get_project();
-    if (project == 0)
+    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
     {
-        return 0U;
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
+        if (track_topology_get_identity(track, &out_pattern->track_cfg.identity[track]) == 0U)
+        {
+            return 0U;
+        }
         out_pattern->track_cfg.family[track] = (uint8_t)ui_get_track_family(track);
         out_pattern->track_cfg.type[track] = (uint8_t)ui_get_track_type(track);
+        out_pattern->track_cfg.external_input[track] = ui_get_track_external_input(track);
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
-        out_pattern->track_cfg.voice_group_role[track] = (uint8_t)track_state_get_voice_group_role(track);
-        out_pattern->track_cfg.voice_group_spread[track] = track_state_get_voice_group_spread(track);
-        out_pattern->track_cfg.voice_group_link[track] = track_state_get_voice_group_link(track);
-        out_pattern->track_cfg.voice_group_seq_link[track] = track_state_get_voice_group_seq_link(track);
         for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
         {
             out_pattern->track_cfg.looper_route_enabled[track][source_track] =
                 ui_core_runtime_bridge_get_looper_route_enabled(track, source_track);
         }
 
-        out_pattern->seq.tracks[track].length_steps = project->tracks[track].length_steps;
-        out_pattern->seq.tracks[track].ui_page = project->tracks[track].ui_page;
-
-        for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
+        if (track_topology_is_play(track) != 0U)
         {
-            pattern_v1_step_t *const out_step = &out_pattern->seq.tracks[track].steps[step];
-            out_step->trig = seq_model_get_trig(track, step);
-            out_step->roll = seq_model_get_step_roll(track, step);
-
-            const uint8_t lock_count = seq_model_step_plock_count(track, step);
-            out_step->lock_count = (lock_count > SEQ_STEP_MAX_LOCKS) ? SEQ_STEP_MAX_LOCKS : lock_count;
-
-            for (uint8_t i = 0U; i < out_step->lock_count; ++i)
+            pattern_v1_play_track_seq_t *const saved = &out_pattern->seq.play[track];
+            saved->identity = out_pattern->track_cfg.identity[track];
+            saved->length_steps = seq_model_get_track_length(track);
+            saved->ui_page = seq_model_get_track_page(track);
+            for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
             {
-                seq_plock_entry_t entry;
-                if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U)
+                pattern_v1_play_step_t *const out_step = &saved->steps[step];
+                out_step->trig = seq_model_get_trig(track, step);
+                out_step->roll = seq_model_get_step_roll(track, step);
+                const uint8_t count = seq_model_step_plock_count(track, step);
+                out_step->lock_count = (count > SEQ_PLAY_STEP_MAX_LOCKS)
+                    ? SEQ_PLAY_STEP_MAX_LOCKS : count;
+                for (uint8_t i = 0U; i < out_step->lock_count; ++i)
                 {
-                    continue;
+                    seq_plock_entry_t entry;
+                    if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U) return 0U;
+                    out_step->locks[i].set_id = entry.set_id;
+                    out_step->locks[i].param_slot = entry.param_slot;
+                    pattern_live_plock_set_value16(&out_step->locks[i], entry.value16);
+                    out_step->locks[i].flags = entry.flags;
                 }
-
-                out_step->locks[i].set_id = entry.set_id;
-                out_step->locks[i].param_slot = entry.param_slot;
-                pattern_live_plock_set_value16(&out_step->locks[i], entry.value16);
-                out_step->locks[i].flags = entry.flags;
             }
         }
-
+        else
+        {
+            pattern_v1_special_track_seq_t *const saved =
+                pattern_live_special_seq_mut(&out_pattern->seq, track);
+            if (saved == 0) return 0U;
+            saved->identity = out_pattern->track_cfg.identity[track];
+            saved->length_steps = seq_model_get_track_length(track);
+            saved->ui_page = seq_model_get_track_page(track);
+            for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
+            {
+                pattern_v1_special_step_t *const out_step = &saved->steps[step];
+                out_step->action = seq_model_get_special_action(track, step);
+                const uint8_t count = seq_model_step_plock_count(track, step);
+                out_step->lock_count = (count > SEQ_SPECIAL_STEP_MAX_LOCKS)
+                    ? SEQ_SPECIAL_STEP_MAX_LOCKS : count;
+                for (uint8_t i = 0U; i < out_step->lock_count; ++i)
+                {
+                    seq_plock_entry_t entry;
+                    if ((seq_model_step_plock_get_at(track, step, i, &entry) == 0U)
+                            || (entry.set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)) return 0U;
+                    out_step->locks[i].set_id = entry.set_id;
+                    out_step->locks[i].param_slot = entry.param_slot;
+                    pattern_live_plock_set_value16(&out_step->locks[i], entry.value16);
+                    out_step->locks[i].flags = entry.flags;
+                }
+            }
+        }
     }
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
@@ -498,6 +608,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
 
         for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
         {
+            if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
             const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, id);
             if (status == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
             {
@@ -520,6 +631,16 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
                 out_pattern->mix.track_values[track][id] = value;
                 out_pattern->mix.track_valid[track][id] = 1U;
             }
+        }
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (out_pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+        {
+            out_pattern->sound.track_values[track][PARAM_CFG_POLY_VOICES] =
+                (float)synth_polyphony_get_voice_count(track);
+            out_pattern->sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 1U;
         }
     }
 
@@ -559,25 +680,38 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
 
     seq_model_init_defaults();
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
     {
-        seq_model_set_track_length(track, seq->tracks[track].length_steps);
-        seq_model_set_track_page(track, seq->tracks[track].ui_page);
+        const uint8_t is_play = track_topology_is_play(track);
+        const pattern_v1_play_track_seq_t *const play = is_play ? &seq->play[track] : 0;
+        const pattern_v1_special_track_seq_t *const special = is_play ? 0 : pattern_live_special_seq(seq, track);
+        if ((is_play == 0U) && (special == 0)) return 0U;
+        seq_model_set_track_length(track, is_play ? play->length_steps : special->length_steps);
+        seq_model_set_track_page(track, is_play ? play->ui_page : special->ui_page);
 
         for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
         {
-            const pattern_v1_step_t *const in_step = &seq->tracks[track].steps[step];
-            seq_model_set_trig(track, step, in_step->trig);
-            seq_model_set_step_roll(track, step, in_step->roll);
+            const pattern_v1_play_step_t *const play_step = is_play ? &play->steps[step] : 0;
+            const pattern_v1_special_step_t *const special_step = is_play ? 0 : &special->steps[step];
+            if (is_play != 0U)
+            {
+                seq_model_set_trig(track, step, play_step->trig);
+                seq_model_set_step_roll(track, step, play_step->roll);
+            }
+            else
+            {
+                seq_model_set_special_action(track, step, special_step->action);
+            }
             seq_model_step_plock_clear(track, step);
 
-            const uint8_t lock_count = (in_step->lock_count > SEQ_STEP_MAX_LOCKS)
-                ? SEQ_STEP_MAX_LOCKS
-                : in_step->lock_count;
+            const uint8_t step_limit = seq_model_get_step_lock_limit(track);
+            const uint8_t raw_count = is_play ? play_step->lock_count : special_step->lock_count;
+            const uint8_t lock_count = (raw_count > step_limit) ? step_limit : raw_count;
 
             for (uint8_t i = 0U; i < lock_count; ++i)
             {
-                const pattern_v1_plock_t *const pl = &in_step->locks[i];
+                const pattern_v1_plock_t *const pl = is_play
+                    ? &play_step->locks[i] : &special_step->locks[i];
                 const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
                                                                                  step,
                                                                                  pl->set_id,
@@ -597,6 +731,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
 typedef struct
 {
     const PatternSaveV1 *pattern;
+    uint8_t voice_count[SEQ_TRACK_COUNT];
     uint8_t resume_transport;
     uint8_t was_running;
 } pattern_live_transition_ctx_t;
@@ -644,8 +779,14 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     {
         const param_id_t id = (param_id_t)id_raw;
 
+        if (id == PARAM_CFG_POLY_VOICES)
+        {
+            continue;
+        }
+
         for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
         {
+            if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
             if (ctx->pattern->sound.track_valid[track][id] != 0U)
             {
                 (void)param_registry_apply_track_value(id, track, ctx->pattern->sound.track_values[track][id]);
@@ -675,11 +816,12 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        if (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER)
+        if (ctx->voice_count[track] != 0U)
         {
-            (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
-                                                   track,
-                                                   track_state_get_voice_group_spread(track));
+            if (synth_polyphony_set_voice_count(track, ctx->voice_count[track]) == 0U)
+            {
+                return 0U;
+            }
         }
     }
 
@@ -749,6 +891,34 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         return 0U;
     }
 
+    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    {
+        if (pattern_live_identity_matches_track(&pattern->track_cfg.identity[track], track) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    ui_track_config_t ownership_configs[SEQ_TRACK_COUNT];
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        ownership_configs[track].family = (ui_track_family_t)pattern->track_cfg.family[track];
+        ownership_configs[track].type = (ui_track_type_t)pattern->track_cfg.type[track];
+    }
+    if (track_input_ownership_validate_bulk(
+            ownership_configs, pattern->track_cfg.external_input) == 0U)
+    {
+        return 0U;
+    }
+
+    g_pattern_voice_limited = 0U;
+    uint8_t resolved_voice_count[SEQ_TRACK_COUNT];
+    if (pattern_live_resolve_voice_budget(pattern,
+                                          resolved_voice_count,
+                                          &g_pattern_voice_limited) == 0U)
+    {
+        return 0U;
+    }
     g_apply_in_progress = 1U;
 
     pattern_live_transition_ctx_t transition_ctx = {
@@ -756,6 +926,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         .resume_transport = resume_transport,
         .was_running = 0U
     };
+    memcpy(transition_ctx.voice_count, resolved_voice_count, sizeof(transition_ctx.voice_count));
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
         .prepare_fn = pattern_live_transition_prepare,
         .mutate_fn = pattern_live_transition_mutate,
@@ -774,6 +945,16 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
 
     memcpy(&g_current_pattern, pattern, sizeof(g_current_pattern));
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+        {
+            g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_VOICES] =
+                (float)resolved_voice_count[track];
+            g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 1U;
+            g_current_pattern.mix.track_valid[track][PARAM_CFG_POLY_VOICES] = 0U;
+        }
+    }
     pattern_live_apply_linked_kit_for_snapshot(pattern);
     g_apply_in_progress = 0U;
     return 1U;
@@ -786,7 +967,7 @@ static void pattern_live_apply_linked_kit_for_snapshot(const PatternSaveV1 *patt
             && (pattern->globals.linked_kit_slot < KIT_V1_SLOT_COUNT))
     {
         const kit_v1_result_t result = kit_v1_apply_slot(pattern->globals.linked_kit_slot);
-        if (result != KIT_V1_RESULT_OK)
+        if ((result != KIT_V1_RESULT_OK) && (result != KIT_V1_RESULT_VOICE_LIMITED))
         {
             kit_v1_set_current_slot(KIT_V1_INVALID_SLOT);
             kit_v1_clear_dirty();
@@ -805,8 +986,7 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
         return 0U;
     }
 
-    memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
-    memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+    memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
     g_active_bank = 0U;
     g_active_pattern = 0U;
     g_queued_valid = 0U;
@@ -1045,7 +1225,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         {
             return 0U;
         }
-        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
@@ -1120,7 +1299,6 @@ static uint8_t pattern_live_try_take_pending_ready(void)
             return 0U;
         }
 
-        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
         g_active_bank = ready_bank;
         g_active_pattern = ready_pattern;
         g_queued_valid = 0U;
@@ -1167,7 +1345,6 @@ void pattern_live_service(void)
 
     if (pattern_live_apply_snapshot(&g_next_pattern, 1U) != 0U)
     {
-        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
         g_queued_valid = 0U;

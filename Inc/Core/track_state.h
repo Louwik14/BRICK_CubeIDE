@@ -10,14 +10,6 @@
 extern "C" {
 #endif
 
-typedef enum
-{
-    TRACK_VOICE_GROUP_ROLE_SOLO = 0,
-    TRACK_VOICE_GROUP_ROLE_MASTER,
-    TRACK_VOICE_GROUP_ROLE_SLAVE,
-    TRACK_VOICE_GROUP_ROLE_COUNT
-} track_voice_group_role_t;
-
 void track_state_init(void);
 
 const ui_track_config_t *track_state_get_configs(void);
@@ -26,30 +18,22 @@ ui_track_family_t track_state_get_family(uint8_t track);
 ui_track_type_t track_state_get_type(uint8_t track);
 uint8_t track_state_get_midi_channel(uint8_t track);
 ui_track_midi_source_t track_state_get_midi_source(uint8_t track);
-track_voice_group_role_t track_state_get_voice_group_role(uint8_t track);
-float track_state_get_voice_group_spread(uint8_t master_track);
-uint8_t track_state_get_voice_group_spread_keytrack(uint8_t master_track);
-uint8_t track_state_get_voice_group_link(uint8_t master_track);
-uint8_t track_state_get_voice_group_seq_link(uint8_t master_track);
-bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t role);
-bool track_state_set_voice_group_spread(uint8_t master_track, float spread);
-bool track_state_set_voice_group_spread_keytrack(uint8_t master_track, uint8_t enabled);
-bool track_state_set_voice_group_link(uint8_t master_track, uint8_t link);
-bool track_state_is_voice_group_role_solo(uint8_t track);
-bool track_state_is_voice_group_role_master(uint8_t track);
-bool track_state_is_voice_group_role_slave(uint8_t track);
 
 bool track_state_set_track_family(uint8_t track, ui_track_family_t family);
 bool track_state_set_track_type(uint8_t track, ui_track_type_t type);
 bool track_state_set_track_midi_channel(uint8_t track, uint8_t channel_1_16);
 bool track_state_set_track_midi_source(uint8_t track, ui_track_midi_source_t source);
+uint8_t track_state_get_external_input(uint8_t track);
+bool track_state_set_external_input(uint8_t track, uint8_t input);
 bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
                             const uint8_t type[UI_TRACK_COUNT],
                             const uint8_t midi_channel[UI_TRACK_COUNT],
                             const uint8_t midi_source[UI_TRACK_COUNT]);
-bool track_state_apply_voice_group_roles_bulk(const uint8_t role[UI_TRACK_COUNT]);
-bool track_state_apply_voice_group_config_bulk(const float spread[UI_TRACK_COUNT],
-                                               const uint8_t link[UI_TRACK_COUNT]);
+bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
+                                        const uint8_t type[UI_TRACK_COUNT],
+                                        const uint8_t midi_channel[UI_TRACK_COUNT],
+                                        const uint8_t midi_source[UI_TRACK_COUNT],
+                                        const uint8_t external_input[UI_TRACK_COUNT]);
 
 uint8_t track_state_count_tracks_with_family(ui_track_family_t family);
 uint32_t track_state_get_revision(uint8_t track);

@@ -25,12 +25,14 @@ add_test(NAME common_modulation COMMAND common_modulation_test)
 add_executable(keyboard_arp_multitrack_test
     keyboard_arp_multitrack_test.c
     ../Src/Keyboard/keyboard_arp.c
+    ../Src/Core/track_topology.c
 )
 
 target_include_directories(keyboard_arp_multitrack_test PRIVATE
     stubs
     ../Inc
 )
+target_compile_definitions(keyboard_arp_multitrack_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
 add_test(NAME keyboard_arp_multitrack COMMAND keyboard_arp_multitrack_test)
 
 add_executable(hall_engine_lowcost_test

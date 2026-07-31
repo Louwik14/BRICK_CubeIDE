@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
-#include "Core/track_state.h"
+#include "Core/track_input_ownership.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_cfg_family = {
@@ -31,6 +31,22 @@ static const ui_template_family_t g_ui_template_cfg_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_cfg_special_family = {
+    .family_title = "CFG",
+    .nav_labels = { "IDENT", "-", "-", "-" },
+    .subpages = {
+        { .title = "IDENTITY", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_cfg_synth_family = {
     .family_title = "CFG",
     .nav_labels = { "MAIN", "MIDI", "-", "-" },
@@ -47,50 +63,18 @@ static const ui_template_family_t g_ui_template_cfg_synth_family = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_cfg_slave_proxy_family = {
+static const ui_template_family_t g_ui_template_cfg_external_family = {
     .family_title = "CFG",
-    .nav_labels = { "MAIN", "-", "-", "-" },
+    .nav_labels = { "MAIN", "MIDI", "-", "-" },
     .subpages = {
-        {
-            .title = "TRACK",
-            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
-    },
-    .default_subpage = 0U,
-};
-
-static const ui_template_family_t g_ui_template_cfg_group_master_family = {
-    .family_title = "CFG",
-    .nav_labels = { "MAIN", "MIDI", "GROUP", "-" },
-    .subpages = {
-        {
-            .title = "TRACK",
-            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "MIDI",
-            .param_bank = { .params = { PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "GROUP",
-            .param_bank = { .params = { PARAM_CFG_GROUP_SPREAD, PARAM_CFG_GROUP_SPREAD_KEYTRK, PARAM_CFG_GROUP_LINK, PARAM_CFG_GROUP_SEQ_LINK } },
-        },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
+        { .title = "TRACK", .param_bank = { .params = {
+            PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_EXTERNAL_INPUT, PARAM_COUNT } } },
+        { .title = "MIDI", .param_bank = { .params = {
+            PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -168,15 +152,6 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
                                                                                 const ui_template_subpage_t *subpage,
                                                                                 param_id_t id)
 {
-    if ((subpage != NULL)
-            && (subpage->param_bank.params[0] == PARAM_CFG_GROUP_SPREAD)
-            && (subpage->param_bank.params[1] == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            && (slot < 2U)
-            && ((id == PARAM_CFG_GROUP_SPREAD) || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP;
-    }
-
     if ((subpage == NULL)
             || (subpage->param_bank.params[0] != PARAM_CFG_TRACK)
             || (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF))
@@ -211,50 +186,12 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
     }
 }
 
-static uint8_t ui_page_template_cfg_param_text(uint8_t slot,
-                                               param_id_t id,
-                                               float value,
-                                               char *out_name,
-                                               uint32_t out_name_len,
-                                               char *out_value,
-                                               uint32_t out_value_len)
-{
-    (void)value;
-    (void)out_value;
-    (void)out_value_len;
-
-    if ((slot == 0U) && (id == PARAM_CFG_GROUP_SPREAD) && (out_name != NULL) && (out_name_len > 0U))
-    {
-        (void)snprintf(out_name, out_name_len, "AMT");
-        return 1U;
-    }
-    if ((slot == 1U) && (id == PARAM_CFG_GROUP_SPREAD_KEYTRK) && (out_name != NULL) && (out_name_len > 0U))
-    {
-        (void)snprintf(out_name, out_name_len, "KEY");
-        return 1U;
-    }
-    return 0U;
-}
-
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
-    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    if (track_topology_is_special(active_track) != 0U)
     {
-        return &g_ui_template_cfg_slave_proxy_family;
-    }
-
-    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-    {
-        uint8_t member_count = 0U;
-        if ((track_runtime_collect_voice_group_members(active_track, NULL, 0U, &member_count) != 0U)
-                && (member_count > 1U)
-                && (member_count <= 8U))
-        {
-            return &g_ui_template_cfg_group_master_family;
-        }
+        return &g_ui_template_cfg_special_family;
     }
 
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
@@ -267,6 +204,11 @@ static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
         return &g_ui_template_cfg_synth_family;
     }
 
+    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_EXTERNAL)
+    {
+        return &g_ui_template_cfg_external_family;
+    }
+
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_CFG);
 }
 
@@ -276,34 +218,49 @@ static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
                                                        char *out_value,
                                                        uint32_t out_value_len)
 {
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
     const uint8_t active_track = ui_get_active_track();
-    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
-    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    track_topology_descriptor_t topology;
+    if ((slot == 0U)
+            && (track_topology_get_descriptor(active_track, &topology) != 0U)
+            && (topology.category == (uint8_t)TRACK_TOPOLOGY_CATEGORY_SPECIAL))
     {
-        return 0U;
+        const char *role = "SPECIAL";
+        switch ((track_topology_role_t)topology.role)
+        {
+            case TRACK_TOPOLOGY_ROLE_MASTER: role = "MASTER"; break;
+            case TRACK_TOPOLOGY_ROLE_LOOPER: role = "LOOPER"; break;
+            case TRACK_TOPOLOGY_ROLE_INPUT: role = "INPUT"; break;
+            case TRACK_TOPOLOGY_ROLE_FX: role = "FX"; break;
+            default: break;
+        }
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "ROLE");
+        }
+        if ((out_value != NULL) && (out_value_len > 0U))
+        {
+            if (topology.role == (uint8_t)TRACK_TOPOLOGY_ROLE_INPUT)
+            {
+                uint8_t owner = TRACK_INPUT_OWNER_NONE;
+                if (track_input_ownership_get_external_owner(topology.physical_input_index, &owner) != 0U)
+                {
+                    (void)snprintf(out_value, out_value_len, "USED P%u", (unsigned int)(owner + 1U));
+                }
+                else
+                {
+                    (void)snprintf(out_value, out_value_len, "INPUT %u",
+                                   (unsigned int)(topology.physical_input_index + 1U));
+                }
+            }
+            else
+            {
+                (void)snprintf(out_value, out_value_len, "%s", role);
+            }
+        }
+        return 1U;
     }
 
-    if ((slot != 2U) && (slot != 3U))
-    {
-        return 0U;
-    }
-
-    uint8_t master_track = active_track;
-    if (track_runtime_get_voice_group_effective_master(active_track, &master_track) == 0U)
-    {
-        return 0U;
-    }
-
-    if ((out_name != NULL) && (out_name_len > 0U))
-    {
-        (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? "Midi CH" : "Midi Src");
-    }
-    if ((out_value != NULL) && (out_value_len > 0U))
-    {
-        (void)snprintf(out_value, out_value_len, "M%u", (unsigned int)(master_track + 1U));
-    }
-    return 1U;
+    return 0U;
 }
 
 static ui_template_page_state_t g_ui_template_cfg_state = {
@@ -312,7 +269,6 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
     .widget_picker = ui_page_template_cfg_pick_widget,
     .custom_widget_picker = ui_page_template_cfg_pick_custom_widget,
     .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
-    .param_text = ui_page_template_cfg_param_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

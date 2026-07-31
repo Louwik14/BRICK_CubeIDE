@@ -23,7 +23,7 @@
 
 typedef struct
 {
-    uint8_t note_counts[SEQ_TRACK_COUNT][128U];
+    uint8_t note_counts[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
 } seq_output_guard_state_t;
 
 static seq_output_guard_state_t g_seq_output_guard;
@@ -40,7 +40,7 @@ void seq_output_guard_reset(void)
 
 void seq_output_guard_note_on_seen(seq_track_id_t track, uint8_t note)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
     {
         return;
     }
@@ -53,7 +53,7 @@ void seq_output_guard_note_on_seen(seq_track_id_t track, uint8_t note)
 
 void seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
     {
         return;
     }
@@ -66,7 +66,7 @@ void seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note)
 
 uint8_t seq_output_guard_is_note_active_on_track(seq_track_id_t track, uint8_t note)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
     {
         return 0U;
     }
@@ -81,7 +81,7 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
         return 0U;
     }
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
@@ -100,7 +100,8 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 
 void seq_output_guard_panic(uint8_t send_transport_stop)
 {
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    synth_polyphony_panic();
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
 

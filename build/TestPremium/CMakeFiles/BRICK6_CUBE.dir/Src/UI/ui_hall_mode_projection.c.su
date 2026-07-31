@@ -3,9 +3,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projec
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:39:6:ui_hall_kit_feedback_begin	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:44:6:ui_hall_kit_feedback_end	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:49:24:ui_hall_mode_resolve_rout_context	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:77:31:ui_hall_mode_resolve_effective_view	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:112:9:ui_hall_allows_injection	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:118:9:ui_hall_uses_arp_engine	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:123:9:ui_hall_is_seq_context	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:141:13:ui_get_hall_mode_short_label	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:186:13:ui_get_hall_mode_suffix_label	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:72:31:ui_hall_mode_resolve_effective_view	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:113:9:ui_hall_allows_injection	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:123:9:ui_hall_uses_arp_engine	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:129:9:ui_hall_is_seq_context	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:147:13:ui_get_hall_mode_short_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:192:13:ui_get_hall_mode_suffix_label	16	static

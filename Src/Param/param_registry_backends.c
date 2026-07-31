@@ -12,6 +12,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
+#include "Core/track_mute.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -402,7 +403,7 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->instance_id >= BRICK6_STACK_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -555,7 +556,7 @@ uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->instance_id >= BRICK6_STACK_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -603,7 +604,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->instance_id >= BRICK6_WAVE_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -750,7 +751,7 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->instance_id >= BRICK6_WAVE_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -781,7 +782,7 @@ uint8_t param_backend_apply_tone_deluge(uint8_t track, param_id_t id, float valu
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            || (ctx->instance_id >= BRICK6_DELUGE_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_DELUGE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -872,7 +873,7 @@ uint8_t param_backend_reapply_tone_deluge_runtime(uint8_t track)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            || (ctx->instance_id >= BRICK6_DELUGE_MAX_INSTANCES))
+            || (ctx->instance_id >= BRICK6_DELUGE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -922,8 +923,13 @@ uint8_t param_backend_track_supports_midi_tone_ctx(const track_runtime_ctx_t *ct
         return 1U;
     }
 
-    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL))
+    {
+        return 1U;
+    }
+
+    return 0U;
 }
 
 uint8_t param_backend_track_supports_midi_tone_descriptor(const track_runtime_descriptor_t *descriptor)
@@ -934,8 +940,8 @@ uint8_t param_backend_track_supports_midi_tone_descriptor(const track_runtime_de
     }
 
     return ((descriptor->family == TRACK_RUNTIME_FAMILY_MIDI)
-            || ((descriptor->family == TRACK_RUNTIME_FAMILY_INPUT)
-                && (descriptor->type == TRACK_RUNTIME_TYPE_HYBRID))) ? 1U : 0U;
+            || ((descriptor->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+                && (descriptor->type == TRACK_RUNTIME_TYPE_EXTERNAL))) ? 1U : 0U;
 }
 
 uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
@@ -1382,8 +1388,9 @@ uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
     if ((ctx == NULL)
             || (state == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
+            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX)
             || (id < PARAM_MASTER_FX1_TYPE)
             || (id > PARAM_MASTER_FX4_B)
             || (slot >= 4U))
@@ -1481,35 +1488,9 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         }
 
         case PARAM_MIX_MUTE:
-        {
-            track_sound_state_t *state = track_sound_state_get(track);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->mix_mute = (value >= 0.5f) ? 1.0f : 0.0f;
-            }
-            mixer_set_track_mute(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
-            return 1U;
-        }
-
-        case PARAM_HYBRID_GATE:
-            if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-                    || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))
-            {
-                return 0U;
-            }
-            {
-                track_sound_state_t *state = track_sound_state_get(track);
-                if ((update_base_state != 0U) && (state != NULL))
-                {
-                    state->input.hybrid_gate = (value >= 0.5f) ? 1.0f : 0.0f;
-                }
-            }
-            mixer_set_track_vca_enabled(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
-            if (value < 0.5f)
-            {
-                mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
-            }
-            return 1U;
+            return track_mute_apply(track,
+                                    (value >= 0.5f) ? 1U : 0U,
+                                    update_base_state);
 
         case PARAM_ENV_RETRIG_FILTER:
         {

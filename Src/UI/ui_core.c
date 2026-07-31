@@ -39,6 +39,7 @@
 #endif
 #include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
+#include "Core/track_input_ownership.h"
 #include "ui_bootstrap.h"
 #include "ui_event.h"
 #include "ui_core_navigation_bridge.h"
@@ -55,6 +56,7 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "Core/track_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_surface.h"
 
@@ -96,6 +98,7 @@ static ui_track_state_t g_ui_track_state = {
 };
 
 static void ui_core_set_active_track(uint8_t track);
+static void ui_core_set_feedback(const char *message);
 
 
 static void ui_core_mute_suppress_hall_note(uint8_t hall)
@@ -187,7 +190,7 @@ static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t f
 
 static uint8_t ui_core_select_active_track(uint8_t track)
 {
-    if ((track >= UI_TRACK_COUNT) || (g_ui_track_state.active_track == track))
+    if ((track_topology_is_active(track) == 0U) || (g_ui_track_state.active_track == track))
     {
         return 0U;
     }
@@ -198,7 +201,7 @@ static uint8_t ui_core_select_active_track(uint8_t track)
 
 static void ui_core_set_active_track(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track_topology_is_active(track) == 0U)
     {
         return;
     }
@@ -257,6 +260,54 @@ ui_track_midi_source_t ui_get_track_midi_source(uint8_t track)
     return track_state_get_midi_source(track);
 }
 
+uint8_t ui_get_track_external_input(uint8_t track)
+{
+    return track_state_get_external_input(track);
+}
+
+bool ui_set_track_external_input(uint8_t track, uint8_t input)
+{
+    if ((track >= UI_TRACK_COUNT)
+            || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+            || (ui_get_track_family(track) != UI_TRACK_FAMILY_EXTERNAL)
+            || (ui_get_track_type(track) != UI_TRACK_TYPE_EXTERNAL))
+    {
+        return false;
+    }
+    if (track_state_get_external_input(track) == input)
+    {
+        return true;
+    }
+    if (track_input_ownership_can_claim(track, input) == 0U)
+    {
+        uint8_t owner = TRACK_INPUT_OWNER_NONE;
+        if ((track == g_ui_track_state.active_track)
+                && (track_input_ownership_get_external_owner(input, &owner) != 0U))
+        {
+            char feedback[16];
+            (void)snprintf(feedback, sizeof(feedback), "USED P%u", (unsigned int)(owner + 1U));
+            ui_core_set_feedback(feedback);
+        }
+        return false;
+    }
+    const uint8_t active = (track == g_ui_track_state.active_track) ? 1U : 0U;
+    if (ui_core_runtime_bridge_apply_track_external_input_change(
+            track, input, active, ui_core_runtime_bridge_post_track_structure_change) == false)
+    {
+        uint8_t owner = TRACK_INPUT_OWNER_NONE;
+        if ((active != 0U)
+                && (track_input_ownership_get_external_owner(input, &owner) != 0U))
+        {
+            char feedback[16];
+            (void)snprintf(feedback, sizeof(feedback), "USED P%u", (unsigned int)(owner + 1U));
+            ui_core_set_feedback(feedback);
+        }
+        return false;
+    }
+    kit_v1_mark_dirty();
+    return true;
+}
+
 bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
@@ -295,6 +346,22 @@ bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
                                          const uint8_t midi_source[UI_TRACK_COUNT])
 {
     return ui_apply_track_config_bulk_mutation_internal(family, type, midi_channel, midi_source);
+}
+
+bool ui_apply_track_config_bulk_mutation_with_inputs(
+    const uint8_t family[UI_TRACK_COUNT],
+    const uint8_t type[UI_TRACK_COUNT],
+    const uint8_t midi_channel[UI_TRACK_COUNT],
+    const uint8_t midi_source[UI_TRACK_COUNT],
+    const uint8_t external_input[UI_TRACK_COUNT])
+{
+    if ((family == 0) || (type == 0) || (midi_channel == 0)
+            || (midi_source == 0) || (external_input == 0))
+    {
+        return false;
+    }
+    return track_state_apply_bulk_with_inputs(
+        family, type, midi_channel, midi_source, external_input);
 }
 
 bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
@@ -879,6 +946,20 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
+    if (track_topology_is_play(track) == 0U)
+    {
+        return false;
+    }
+
+    const ui_track_config_t config = track_state_get_config(track);
+    if ((family == UI_TRACK_FAMILY_SYNTH)
+            && (config.family != UI_TRACK_FAMILY_SYNTH)
+            && (synth_polyphony_get_available_for_track(track) == 0U))
+    {
+        if (track == g_ui_track_state.active_track) ui_core_set_feedback("FAMILY : MAX");
+        return false;
+    }
+
     if (!ui_core_track_family_is_available(track, family))
     {
         if (track == g_ui_track_state.active_track)
@@ -888,9 +969,26 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    const ui_track_config_t config = track_state_get_config(track);
     const uint8_t creates_track_from_off =
         (uint8_t)((config.family == UI_TRACK_FAMILY_OFF) && (family != UI_TRACK_FAMILY_OFF));
+
+    if ((family == UI_TRACK_FAMILY_EXTERNAL)
+            && (track_input_ownership_can_claim(
+                    track, track_input_ownership_get_external_input(track)) == 0U))
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            uint8_t owner = TRACK_INPUT_OWNER_NONE;
+            const uint8_t input = track_input_ownership_get_external_input(track);
+            if (track_input_ownership_get_external_owner(input, &owner) != 0U)
+            {
+                char feedback[16];
+                (void)snprintf(feedback, sizeof(feedback), "USED P%u", (unsigned int)(owner + 1U));
+                ui_core_set_feedback(feedback);
+            }
+        }
+        return false;
+    }
 
     if (config.family == family)
     {
@@ -935,6 +1033,17 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
                                                           active_track_touched,
                                                           post_sync) == false)
     {
+        if ((active_track_touched != 0U) && (family == UI_TRACK_FAMILY_EXTERNAL))
+        {
+            const uint8_t input = track_input_ownership_get_external_input(track);
+            uint8_t owner = TRACK_INPUT_OWNER_NONE;
+            if (track_input_ownership_get_external_owner(input, &owner) != 0U)
+            {
+                char feedback[16];
+                (void)snprintf(feedback, sizeof(feedback), "USED P%u", (unsigned int)(owner + 1U));
+                ui_core_set_feedback(feedback);
+            }
+        }
         return false;
     }
 
@@ -945,6 +1054,11 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    {
+        return false;
+    }
+
+    if (track_topology_is_play(track) == 0U)
     {
         return false;
     }
@@ -961,6 +1075,12 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
     if (!ui_track_type_is_available(track, config.family, type))
     {
+#if defined(BRICK6_VARIANT_LOWCOST)
+        if (type == UI_TRACK_TYPE_LOOPER)
+        {
+            ui_core_set_feedback("LOOPER LIMIT");
+        }
+#endif
         if (track == g_ui_track_state.active_track)
         {
             ui_core_runtime_bridge_sync_active_track_context(0U);
@@ -1036,6 +1156,40 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         return;
     }
 
+    track_topology_descriptor_t topology;
+    if ((track_topology_get_descriptor(track, &topology) != 0U)
+            && (topology.category == (uint8_t)TRACK_TOPOLOGY_CATEGORY_SPECIAL))
+    {
+        switch ((track_topology_role_t)topology.role)
+        {
+            case TRACK_TOPOLOGY_ROLE_MASTER:
+                (void)snprintf(out, out_len, "Master");
+                return;
+            case TRACK_TOPOLOGY_ROLE_LOOPER:
+                (void)snprintf(out, out_len, "Looper");
+                return;
+            case TRACK_TOPOLOGY_ROLE_INPUT:
+            {
+                uint8_t owner = TRACK_INPUT_OWNER_NONE;
+                if (track_input_ownership_get_external_owner(topology.physical_input_index, &owner) != 0U)
+                {
+                    (void)snprintf(out, out_len, "USED P%u", (unsigned int)(owner + 1U));
+                }
+                else
+                {
+                    (void)snprintf(out, out_len, "Input %u",
+                                   (unsigned int)(topology.physical_input_index + 1U));
+                }
+                return;
+            }
+            case TRACK_TOPOLOGY_ROLE_FX:
+                (void)snprintf(out, out_len, "FX");
+                return;
+            default:
+                break;
+        }
+    }
+
     const ui_track_config_t config = ui_get_track_config(track);
 
     if (config.family == UI_TRACK_FAMILY_OFF)
@@ -1047,14 +1201,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
     if (ui_track_family_is_engine(config.family))
     {
         (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(config.family, config.type));
-        return;
-    }
-
-    if (config.type == UI_TRACK_TYPE_HYBRID)
-    {
-        (void)snprintf(out, out_len, "%s %s",
-                       ui_get_track_family_short_name(config.family),
-                       ui_get_track_type_short_name(config.family, config.type));
         return;
     }
 

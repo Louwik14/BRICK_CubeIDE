@@ -12,42 +12,6 @@
 #include "ui_core.h"
 #endif
 
-static uint8_t ui_hall_input_service_find_held_master_candidate(uint8_t hall,
-                                                                const uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT],
-                                                                uint8_t *out_track)
-{
-    if ((hall_prev_pressed == 0) || (out_track == 0))
-    {
-        return 0U;
-    }
-
-    uint8_t candidate = 0U;
-    uint8_t found = 0U;
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if ((track == hall) || (hall_prev_pressed[track] == 0U))
-        {
-            continue;
-        }
-
-        if (found != 0U)
-        {
-            return 0U;
-        }
-
-        candidate = track;
-        found = 1U;
-    }
-
-    if (found == 0U)
-    {
-        return 0U;
-    }
-
-    *out_track = candidate;
-    return 1U;
-}
-
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
                                        uint8_t was_pressed,
@@ -62,7 +26,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        ui_hall_input_service_set_active_track_fn set_active_track,
                                        ui_hall_input_service_feedback_fn feedback)
 {
-    if ((mute_active != 0U) && (hall < UI_TRACK_COUNT))
+    if ((mute_active != 0U) && (hall < UI_ACTIVE_TRACK_COUNT))
     {
         if ((was_pressed == 0U) && (pressed != 0U))
         {
@@ -114,7 +78,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         && (track_select_armed == 0U)
         && (was_pressed == 0U)
         && (pressed != 0U)
-        && (hall < UI_TRACK_COUNT))
+        && (hall < UI_ACTIVE_TRACK_COUNT))
     {
         hall_note_suppressed[hall] = 1U;
     }
@@ -143,17 +107,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    if ((hall < HALL_UI_LANE_COUNT) && (hall < UI_TRACK_COUNT))
+    if ((hall < HALL_UI_LANE_COUNT) && (hall < UI_ACTIVE_TRACK_COUNT))
     {
-        uint8_t held_master_candidate = 0U;
-        const uint8_t has_held_master_candidate =
-            ui_hall_input_service_find_held_master_candidate(hall,
-                                                             hall_prev_pressed,
-                                                             &held_master_candidate);
         ui_hall_mode_flow_handle_track_hall_action(hall,
                                                    now_ms,
-                                                   held_master_candidate,
-                                                   has_held_master_candidate,
+                                                   0U,
+                                                   0U,
                                                    cfg_tap_ms,
                                                    hall_note_suppressed,
                                                    set_active_track,

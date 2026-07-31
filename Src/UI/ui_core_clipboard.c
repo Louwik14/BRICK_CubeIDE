@@ -184,10 +184,7 @@ static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_s
         const param_id_t id = subpage->param_bank.params[i];
         if ((id >= PARAM_COUNT) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
                 || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
-                || (id == PARAM_CFG_GROUP_SPREAD)
-                || (id == PARAM_CFG_GROUP_LINK)
-                || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-                || (id == PARAM_CFG_GROUP_SEQ_LINK))
+                )
         {
             continue;
         }
@@ -418,7 +415,7 @@ static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboa
 
 static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
 {
-    for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT4; ++family)
+    for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT3; ++family)
     {
         if (ui_track_family_is_input(family)
                 && (ui_count_tracks_with_family(family) == 0U))
@@ -735,11 +732,13 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
     const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(2U, track, 0U);
     if (ui_core_clipboard_paste_track(track) != 0U)
     {
-        ui_core_clipboard_feedback(feedback, "TRACK PASTED");
+        ui_core_clipboard_feedback(feedback,
+            (track_snapshot_last_voice_limited() != 0U) ? "VOICE LIMITED" : "TRACK PASTED");
     }
     else
     {
-        ui_core_clipboard_feedback(feedback, "TRACK INCOMP");
+        ui_core_clipboard_feedback(feedback,
+            (track_snapshot_last_voice_max() != 0U) ? "VOICE MAX" : "TRACK INCOMP");
     }
     ui_core_clipboard_finish_snapshot_undo(undo_started);
     return 1U;

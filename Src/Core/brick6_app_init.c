@@ -42,6 +42,7 @@
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/track_mute.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
@@ -161,6 +162,7 @@ void brick6_app_init(void)
     param_store_init();
     brick6_boot_apply_param_defaults();
     seq_runtime_init();
+    track_mute_init();
     ui_core_init();
     pattern_live_init();
     patch_v1_init();

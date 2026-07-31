@@ -3,15 +3,12 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "Core/track_topology.h"
 
-#define UI_TRACK_COUNT 14U
-#if defined(BRICK6_VARIANT_LOWCOST)
-#define UI_AUDIO_INPUT_RESOURCE_COUNT 1U
-#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT 1U
-#else
-#define UI_AUDIO_INPUT_RESOURCE_COUNT 4U
-#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT 3U
-#endif
+#define UI_TRACK_COUNT TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY
+#define UI_ACTIVE_TRACK_COUNT TRACK_TOPOLOGY_LOGICAL_TRACK_COUNT
+#define UI_AUDIO_INPUT_RESOURCE_COUNT TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT
+#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT
 
 typedef enum
 {
@@ -19,31 +16,29 @@ typedef enum
     UI_TRACK_FAMILY_INPUT1,
     UI_TRACK_FAMILY_INPUT2,
     UI_TRACK_FAMILY_INPUT3,
-    UI_TRACK_FAMILY_INPUT4,
     UI_TRACK_FAMILY_SYNTH,
     UI_TRACK_FAMILY_DRUM,
-    UI_TRACK_FAMILY_MASTER,
     UI_TRACK_FAMILY_MIDI,
     UI_TRACK_FAMILY_SAMPLER,
+    UI_TRACK_FAMILY_EXTERNAL,
     UI_TRACK_FAMILY_COUNT
 } ui_track_family_t;
 
 typedef enum
 {
     UI_TRACK_TYPE_AUDIO = 0,
-    UI_TRACK_TYPE_HYBRID,
     UI_TRACK_TYPE_RAM,
     UI_TRACK_TYPE_PRISM,
     UI_TRACK_TYPE_DRUM_MD,
     UI_TRACK_TYPE_MIDI,
     UI_TRACK_TYPE_STREAM,
-    UI_TRACK_TYPE_MASTER_FX,
     UI_TRACK_TYPE_DRUM_BD_ANALOG,
     UI_TRACK_TYPE_LOOPER,
     UI_TRACK_TYPE_MULTI,
     UI_TRACK_TYPE_STACK,
     UI_TRACK_TYPE_WAVE,
     UI_TRACK_TYPE_DELUGE,
+    UI_TRACK_TYPE_EXTERNAL,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 
@@ -172,10 +167,18 @@ uint8_t ui_get_track_midi_channel(uint8_t track);
 bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16);
 ui_track_midi_source_t ui_get_track_midi_source(uint8_t track);
 bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source);
+uint8_t ui_get_track_external_input(uint8_t track);
+bool ui_set_track_external_input(uint8_t track, uint8_t input);
 bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
                                          const uint8_t type[UI_TRACK_COUNT],
                                          const uint8_t midi_channel[UI_TRACK_COUNT],
                                          const uint8_t midi_source[UI_TRACK_COUNT]);
+bool ui_apply_track_config_bulk_mutation_with_inputs(
+    const uint8_t family[UI_TRACK_COUNT],
+    const uint8_t type[UI_TRACK_COUNT],
+    const uint8_t midi_channel[UI_TRACK_COUNT],
+    const uint8_t midi_source[UI_TRACK_COUNT],
+    const uint8_t external_input[UI_TRACK_COUNT]);
 bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                   const uint8_t type[UI_TRACK_COUNT],
                                   const uint8_t midi_channel[UI_TRACK_COUNT],

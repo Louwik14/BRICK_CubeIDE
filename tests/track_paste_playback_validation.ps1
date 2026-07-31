@@ -22,14 +22,12 @@ foreach ($contract in @(
 
 foreach ($contract in @(
     'track_snapshot_collect_restore_tracks',
-    'track_runtime_get_voice_group_effective_master',
-    'track_runtime_collect_voice_group_members',
     'keyboard_arp_clear_track',
     'mod_lfo_v1_all_notes_off',
     'track_snapshot_runtime_neutralize_note_state',
     'mixer_track_filter_all_notes_off',
     'mixer_track_vca_all_notes_off',
-    'brick6_stack_runtime_cancel_note_state',
+    'synth_polyphony_reset_track',
     'seq_runtime_restore_track_div',
     'seq_runtime_begin_track_restore',
     'seq_runtime_end_track_restore'
@@ -152,4 +150,4 @@ foreach ($engine in $engines) {
     Invoke-PasteDuringPlay $engine $true @(1, 2, 3)
 }
 
-'track_paste_playback_validation=PASS engines=6 simple=12 voice_group=12 pre_boundary_note_on=0 pre_boundary_gate=0 pre_boundary_voice=0 unrelated_tracks_preserved=1'
+'track_paste_playback_validation=PASS engines=6 simple=12 mono_track=12 pre_boundary_note_on=0 pre_boundary_gate=0 pre_boundary_voice=0 unrelated_tracks_preserved=1'

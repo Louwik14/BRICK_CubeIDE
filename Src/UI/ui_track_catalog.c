@@ -2,7 +2,7 @@
 
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
-    static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
+    static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO };
     static const ui_track_type_t k_synth_types[] = {
         UI_TRACK_TYPE_PRISM,
         UI_TRACK_TYPE_WAVE,
@@ -12,11 +12,10 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     static const ui_track_type_t k_sampler_types[] = {
         UI_TRACK_TYPE_RAM,
         UI_TRACK_TYPE_STREAM,
-        UI_TRACK_TYPE_LOOPER,
         UI_TRACK_TYPE_MULTI
     };
-    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_MASTER_FX };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
+    static const ui_track_type_t k_external_types[] = { UI_TRACK_TYPE_EXTERNAL };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_MD,
         UI_TRACK_TYPE_DRUM_BD_ANALOG
@@ -51,15 +50,6 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
             return k_input_types;
 #endif
 
-        case UI_TRACK_FAMILY_INPUT4:
-#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 3U
-            *out_count = 0U;
-            return 0;
-#else
-            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
-            return k_input_types;
-#endif
-
         case UI_TRACK_FAMILY_SYNTH:
             *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
             return k_synth_types;
@@ -72,13 +62,13 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
             *out_count = (uint8_t)(sizeof(k_drum_types) / sizeof(k_drum_types[0]));
             return k_drum_types;
 
-        case UI_TRACK_FAMILY_MASTER:
-            *out_count = (uint8_t)(sizeof(k_master_types) / sizeof(k_master_types[0]));
-            return k_master_types;
-
         case UI_TRACK_FAMILY_MIDI:
             *out_count = (uint8_t)(sizeof(k_midi_types) / sizeof(k_midi_types[0]));
             return k_midi_types;
+
+        case UI_TRACK_FAMILY_EXTERNAL:
+            *out_count = (uint8_t)(sizeof(k_external_types) / sizeof(k_external_types[0]));
+            return k_external_types;
 
         case UI_TRACK_FAMILY_OFF:
         default:
@@ -106,9 +96,6 @@ static uint8_t ui_track_catalog_input_family_index(ui_track_family_t family, uin
             break;
         case UI_TRACK_FAMILY_INPUT3:
             index = 2U;
-            break;
-        case UI_TRACK_FAMILY_INPUT4:
-            index = 3U;
             break;
         default:
             return 0U;
@@ -186,6 +173,12 @@ bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_trac
         return false;
     }
 
+    if (((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
+            || (ui_track_catalog_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO)))
+    {
+        return true;
+    }
+
     uint8_t type_count = 0U;
     const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &type_count);
     if ((catalog == 0) || (type_count == 0U))
@@ -216,7 +209,19 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return false;
     }
 
-    if (family != UI_TRACK_FAMILY_MASTER)
+    if (track_topology_is_play(track) == 0U)
+    {
+        return (track_configs[track].family == family)
+                && (track_configs[track].type == type);
+    }
+
+    if (((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
+            || ui_track_catalog_family_is_input(family))
+    {
+        return false;
+    }
+
+    if (family != UI_TRACK_FAMILY_OFF)
     {
         if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_STREAM))
         {
@@ -231,21 +236,7 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return true;
     }
 
-    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
-    {
-        if (other_track == track)
-        {
-            continue;
-        }
-
-        if ((family == UI_TRACK_FAMILY_MASTER)
-                && (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_MASTER, type, track_configs) != 0U))
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return false;
 }
 
 bool ui_track_catalog_family_is_available(uint8_t track,
@@ -257,44 +248,20 @@ bool ui_track_catalog_family_is_available(uint8_t track,
         return false;
     }
 
+    if (track_topology_is_play(track) == 0U)
+    {
+        return (track_topology_is_special(track) != 0U)
+                && (track_configs[track].family == family);
+    }
+
     if (family == UI_TRACK_FAMILY_OFF)
     {
         return true;
     }
 
-    if (family == UI_TRACK_FAMILY_MASTER)
+    if (ui_track_catalog_family_is_input(family))
     {
-        for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
-        {
-            if (other_track == track)
-            {
-                continue;
-            }
-
-            if (track_configs[other_track].family == UI_TRACK_FAMILY_MASTER)
-            {
-                return false;
-            }
-        }
-        return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
-    }
-
-    if (!ui_track_catalog_family_is_input(family))
-    {
-        return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
-    }
-
-    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
-    {
-        if (other_track == track)
-        {
-            continue;
-        }
-
-        if (track_configs[other_track].family == family)
-        {
-            return false;
-        }
+        return false;
     }
 
     return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
@@ -479,23 +446,16 @@ const char *ui_track_catalog_family_display_name(ui_track_family_t family)
             return "Input3";
 #endif
 
-        case UI_TRACK_FAMILY_INPUT4:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "Track";
-#else
-            return "Input4";
-#endif
-
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
         case UI_TRACK_FAMILY_SAMPLER:
             return "Sampler";
         case UI_TRACK_FAMILY_DRUM:
             return "Drum";
-        case UI_TRACK_FAMILY_MASTER:
-            return "Master";
         case UI_TRACK_FAMILY_MIDI:
             return "MIDI";
+        case UI_TRACK_FAMILY_EXTERNAL:
+            return "External";
 
         default:
             return "Track";
@@ -526,23 +486,16 @@ const char *ui_track_catalog_family_short_name(ui_track_family_t family)
             return "In3";
 #endif
 
-        case UI_TRACK_FAMILY_INPUT4:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "---";
-#else
-            return "In4";
-#endif
-
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";
         case UI_TRACK_FAMILY_SAMPLER:
             return "Smp";
         case UI_TRACK_FAMILY_DRUM:
             return "Drm";
-        case UI_TRACK_FAMILY_MASTER:
-            return "Mst";
         case UI_TRACK_FAMILY_MIDI:
             return "MID";
+        case UI_TRACK_FAMILY_EXTERNAL:
+            return "EXT";
 
         default:
             return "---";
@@ -561,9 +514,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
         case UI_TRACK_TYPE_AUDIO:
             return "Audio";
 
-        case UI_TRACK_TYPE_HYBRID:
-            return "Hybrid";
-
         case UI_TRACK_TYPE_RAM:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Sampler";
         case UI_TRACK_TYPE_STREAM:
@@ -581,8 +531,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
         case UI_TRACK_TYPE_DELUGE:
             return "DELUGE";
 
-        case UI_TRACK_TYPE_MASTER_FX:
-            return "FX";
 
         case UI_TRACK_TYPE_DRUM_MD:
             return "MD";
@@ -590,6 +538,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "BD Analog";
         case UI_TRACK_TYPE_MIDI:
             return "MIDI";
+        case UI_TRACK_TYPE_EXTERNAL:
+            return "External";
 
         default:
             return "-";
@@ -608,9 +558,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
         case UI_TRACK_TYPE_AUDIO:
             return "Aud";
 
-        case UI_TRACK_TYPE_HYBRID:
-            return "Hyb";
-
         case UI_TRACK_TYPE_RAM:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Smp";
         case UI_TRACK_TYPE_STREAM:
@@ -628,8 +575,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
         case UI_TRACK_TYPE_DELUGE:
             return "DLUG";
 
-        case UI_TRACK_TYPE_MASTER_FX:
-            return "FX";
 
         case UI_TRACK_TYPE_DRUM_MD:
             return "MD";
@@ -637,6 +582,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "BDA";
         case UI_TRACK_TYPE_MIDI:
             return "MID";
+        case UI_TRACK_TYPE_EXTERNAL:
+            return "EXT";
 
         default:
             return "---";

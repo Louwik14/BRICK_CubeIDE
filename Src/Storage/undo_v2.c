@@ -502,15 +502,22 @@ static uint8_t undo_v2_locked_sequence_snapshot_matches_current(const PatternSav
         return 0U;
     }
 
-    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U;
+         track < (seq_track_id_t)track_topology_get_logical_track_count();
+         ++track)
     {
         if (seq_edit_track_sequence_is_locked(track) == 0U)
         {
             continue;
         }
 
-        const pattern_v1_track_seq_t *const snap_track = &snapshot->seq.tracks[track];
-        if (snap_track->length_steps != seq_model_get_track_length(track))
+        const uint8_t is_play = track_topology_is_play(track);
+        const pattern_v1_play_track_seq_t *const play = is_play
+            ? &snapshot->seq.play[track] : 0;
+        const pattern_v1_special_track_seq_t *const special = is_play ? 0
+            : &snapshot->seq.special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+        const uint8_t saved_length = is_play ? play->length_steps : special->length_steps;
+        if (saved_length != seq_model_get_track_length(track))
         {
             return 0U;
         }
@@ -528,28 +535,34 @@ static uint8_t undo_v2_locked_sequence_snapshot_matches_current(const PatternSav
 
         for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
         {
-            const pattern_v1_step_t *const snap_step = &snap_track->steps[step];
-            if ((snap_step->trig != seq_model_get_trig(track, step))
-                    || (snap_step->roll != seq_model_get_step_roll(track, step)))
+            const pattern_v1_play_step_t *const play_step = is_play ? &play->steps[step] : 0;
+            const pattern_v1_special_step_t *const special_step = is_play ? 0 : &special->steps[step];
+            if (((is_play != 0U)
+                    && ((play_step->trig != seq_model_get_trig(track, step))
+                        || (play_step->roll != seq_model_get_step_roll(track, step))))
+                    || ((is_play == 0U)
+                        && (special_step->action != seq_model_get_special_action(track, step))))
             {
                 return 0U;
             }
 
             seq_plock_entry_t current_locks[SEQ_STEP_MAX_LOCKS];
             uint8_t current_count = 0U;
+            const uint8_t saved_count = is_play ? play_step->lock_count : special_step->lock_count;
             if ((seq_model_step_plock_collect(track,
                                               step,
                                               current_locks,
-                                              SEQ_STEP_MAX_LOCKS,
+                                              seq_model_get_step_lock_limit(track),
                                               &current_count) == 0U)
-                    || (snap_step->lock_count != current_count))
+                    || (saved_count != current_count))
             {
                 return 0U;
             }
 
             for (uint8_t i = 0U; i < current_count; ++i)
             {
-                const pattern_v1_plock_t *const snap_lock = &snap_step->locks[i];
+                const pattern_v1_plock_t *const snap_lock = is_play
+                    ? &play_step->locks[i] : &special_step->locks[i];
                 const seq_plock_entry_t *const current_lock = &current_locks[i];
                 if ((snap_lock->set_id != current_lock->set_id)
                         || (snap_lock->param_slot != current_lock->param_slot)
@@ -699,10 +712,6 @@ uint8_t undo_v2_param_is_undoable(param_id_t param_id)
         case PARAM_CFG_MIDI_SRC:
         case PARAM_CFG_POLY_VOICES:
         case PARAM_CFG_POLY_SPREAD:
-        case PARAM_CFG_GROUP_SPREAD:
-        case PARAM_CFG_GROUP_LINK:
-        case PARAM_CFG_GROUP_SPREAD_KEYTRK:
-        case PARAM_CFG_GROUP_SEQ_LINK:
             return 0U;
 
         default:

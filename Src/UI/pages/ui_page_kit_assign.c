@@ -378,14 +378,13 @@ static void ui_page_kit_assign_apply_action(void)
     }
 
     const kit_v1_result_t result = kit_v1_apply_slot(g_kit_assign.selected_slot);
-    if (result == KIT_V1_RESULT_OK)
+    if ((result == KIT_V1_RESULT_OK) || (result == KIT_V1_RESULT_VOICE_LIMITED))
     {
         (void)pattern_live_link_active_kit(g_kit_assign.selected_slot);
     }
     ui_page_kit_assign_ensure_visible_selection();
     ui_page_kit_assign_set_status((result == KIT_V1_RESULT_OK)
-                                  ? "KIT APPLIED"
-                                  : kit_v1_result_label(result));
+                                  ? "KIT APPLIED" : kit_v1_result_label(result));
 }
 
 static void ui_page_kit_assign_delete_action(void)

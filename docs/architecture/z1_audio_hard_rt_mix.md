@@ -475,7 +475,7 @@ Flux nominal prouve par code:
   - returns reverb/send FX
   - ecrit resultat dans `tracks[0]` (MAIN) et `tracks[1]` (CUE)
 
-- post-mix: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]`, puis preview SD.
+- post-mix: `fx_master_macro_process_block` trouve la Special FX fixe via `track_topology`, applique ses quatre slots MacroFX legers sur `tracks[0]`, puis preview SD.
 - La preview SD est un chemin d'audition UI temporaire: `sd_preview_render_main()` lit `g_sd_preview_ring` place en `AUDIO_COLD_SDRAM`; le cout SDRAM en IRQ n'existe que pendant une preview active et ne concerne pas le playback principal ni le streaming Sampler.
 
 8) Pack / sortie
@@ -555,8 +555,8 @@ Granular / fx_pool:
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Les delays MacroFX restent monophoniques par slot pour `COMB`, `WOBBLE` et `FREEZE`, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `FREEZE` garde son historique vivant tant que `TYPE=FREEZE`: `LVL=0` ecrit seulement l'historique et laisse passer le live dry, `LVL>0` engage le freeze de boucle et dose le retour wet par la valeur `LVL`. Le mix FREEZE morphe vers un repeater: le dry est ducke par `LVL` jusqu'a etre coupe a `LVL=127`, le retour freeze monte avec gain borne, et l'input send vers la boucle passe de normal en OFF a nul au niveau maximum. Fallback dry tant que l'historique demande n'est pas encore pret. `B=HOLD` est quantifie en 4 modes DSP distincts (`SHORT/MID/LONG/INF`) qui pilotent le feedback de boucle, avec `INF` regle en quasi-maintien borne. `ECHO` est retire de `Master/FX`; les delays globaux `CLASSIC`/`DUAL` restent portes par le pool SDRAM partage du mixer.
 - `DRIVE` est une saturation master legere inspiree tanh mais volontairement plus extreme: `LVL` reste le dry/wet du slot, `A=DRIVE` pilote un pre-gain fort, un etage principal de saturation polynomial sans division et un clip final leger sans division, `B=TONE` pilote une pre-emphase et une coloration sombre/brillant par filtre simple. L'algo n'utilise pas `tanhf`, pas de table et pas d'oversampling; un mode fast retire la pre-emphase et le clip final quand `A` reste bas/moyen. Le gain staging applique un post-gain dependant de `A` et un limiteur final sans division pour garder `LVL` exploitable a fort drive sans neutraliser la saturation.
-- `FREEZE` est une ressource Master/FX unique dans les 4 slots: le premier slot `TYPE=FREEZE` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Il reutilise le `g_delay[4][48000]` existant et ne partage pas l'historique stereo global de `STUTTER`.
-- `STUTTER` est une ressource Master/FX globale unique: le premier slot `TYPE=STUTTER` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Son historique stereo circulaire unique fait 24000 frames a 48 kHz, soit environ 192 KiB en float stereo, place dans `.audio_history_sdram` via `AUDIO_HISTORY_SDRAM`. `LVL` est volontairement on/off pour STUTTER: `LVL=0` coupe la sortie audible et remplit seulement l'historique L/R, `LVL>0` rend STUTTER full wet sans mix dry/wet progressif. Au passage `LVL` OFF -> ON, la lecture latch immediatement la fenetre historique `SIZE` deja remplie, mais place la tete a la fin de cette fenetre moins le micro-fade de boucle pour entendre la portion la plus recente sans phase recording audible. En lecture, `RATE` est lu en continu et `SIZE` relatch immediatement vers la portion recente avec crossfade court.
+- `FREEZE` est une ressource FX unique dans les 4 slots: le premier slot `TYPE=FREEZE` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Il reutilise le `g_delay[4][48000]` existant et ne partage pas l'historique stereo global de `STUTTER`.
+- `STUTTER` est une ressource FX globale unique: le premier slot `TYPE=STUTTER` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Son historique stereo circulaire unique fait 24000 frames a 48 kHz, soit environ 192 KiB en float stereo, place dans `.audio_history_sdram` via `AUDIO_HISTORY_SDRAM`. `LVL` est volontairement on/off pour STUTTER: `LVL=0` coupe la sortie audible et remplit seulement l'historique L/R, `LVL>0` rend STUTTER full wet sans mix dry/wet progressif. Au passage `LVL` OFF -> ON, la lecture latch immediatement la fenetre historique `SIZE` deja remplie, mais place la tete a la fin de cette fenetre moins le micro-fade de boucle pour entendre la portion la plus recente sans phase recording audible. En lecture, `RATE` est lu en continu et `SIZE` relatch immediatement vers la portion recente avec crossfade court.
 - Integration courante `Sampler/Stream`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
 - `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
 - Le runtime lourd `Sampler/Stream` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Stream` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
@@ -1245,7 +1245,6 @@ Clarification START/END/LOOP live:
 
 ## Addendum 2026-07-28 - Multi spread keytrack
 
-- Le rendu `Sampler/Multi` peut appliquer un pan par voix uniquement quand `CFG/GROUP SPREAD KEYTRK=ON` sur la master effective du voice group.
 - `KEYTRK=OFF` conserve strictement le chemin existant: le spread reste le pan MIX de track applique hors renderer Multi.
 - `KEYTRK=ON` utilise le facteur borne `0.5 + note/127 * 0.75` (`0.5..1.25`) sur le pan de membre du groupe; les graves sont donc recentres et les notes aigues plus larges, sans lecture SD, allocation ni nouveau moteur.
 
@@ -1345,3 +1344,15 @@ Clarification START/END/LOOP live:
 - L'etat `IDLE` de cette enveloppe est l'unique acquittement audio qui rend la
   voix a l'allocateur; un all-notes-off poly declenche une release et ne reset
   plus brutalement l'enveloppe.
+# Addendum 2026-07-31 - entrée physique External sans double monitoring
+
+- Les échantillons d'entrée continuent d'entrer une seule fois dans leur lane mixer physique fixe.
+- Z2 publie un unique owner logique audible par entrée: la Special Input quand elle est libre, ou la Play `External` qui l'a réservée. Les maps inverses et rebind MIX/FILTER ignorent l'adaptateur non owner.
+- Aucun buffer, mix additionnel, scan non borné ni allocation n'est ajouté au chemin IRQ.
+# Addendum 2026-07-31 - fades mute
+
+- Le mixer conserve un gain de mute par lane et le rampe sur 5 ms; une lane n'est retiree du plan qu'apres extinction complete.
+- Input et Looper restent executes en amont: seul leur monitoring/sortie est fondu, donc la position Looper continue.
+- Le mute FX interpole la sortie Macro FX vers le dry original. Il coupe uniquement la contribution FX et ne coupe jamais le signal direct.
+
+- Les buffers temporaires et le refresh runtime dedies a cette projection sont supprimes, sans modifier le moteur Multi ni ses voix internes.

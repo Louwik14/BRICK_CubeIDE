@@ -61,8 +61,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
         }
 
         /* Command surface: pattern-rec arm is an explicit runtime command with target track preselection. */
-        uint8_t rec_target_track = ui_get_active_track();
-        (void)track_runtime_get_voice_group_effective_master(rec_target_track, &rec_target_track);
+        const uint8_t rec_target_track = ui_get_active_track();
         seq_runtime_set_pattern_rec_target_track(rec_target_track);
         seq_runtime_rec_toggle_arm();
         return 1U;

@@ -143,7 +143,6 @@ void brick6_sampler_runtime_set_multi_gain(uint8_t track_id, float gain);
 float brick6_sampler_runtime_get_multi_gain(uint8_t track_id);
 void brick6_sampler_runtime_set_multi_loop(uint8_t track_id, uint8_t enabled);
 uint8_t brick6_sampler_runtime_multi_instrument_is_ready(uint8_t track_id);
-void brick6_sampler_runtime_refresh_multi_group_spread(uint8_t track_id);
 void brick6_sampler_runtime_set_start(uint8_t track_id, float start);
 void brick6_sampler_runtime_set_end(uint8_t track_id, float end);
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode);

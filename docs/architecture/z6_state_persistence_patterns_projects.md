@@ -966,14 +966,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Preview, rollback, reload asset Sampler complet, filtres avances et Kit restent hors perimetre V1.
 - Le niveau produit `Set` est supprime du contrat: l'extension future se limite au `Kit` comme groupe de patches/tracks.
 
-## Addendum 2026-05-29 - Patch Poly v2
 
 - Le format Patch `B6PT` passe en version `2`; les anciens payloads version `1` sont refuses proprement par validation stricte d'en-tete/version/payload.
-- Un Patch porte maintenant `width=1..PATCH_POLY_TRACK_MAX`, avec `PATCH_POLY_TRACK_MAX=4`. `P1` correspond au snapshot mono-track historique; `P2/P3/P4` representent un seul preset sonore compose de tracks liees.
-- Le payload Patch v2 contient `members[4]`. Chaque membre stocke role `SOLO/MASTER/SLAVE`, index relatif, family/type, `track_sound_state_t`, `track_tone_sound_state_t` et une reference asset Sampler optionnelle issue de `sample_global_pool`.
 - Le header/cache metadata ajoute la largeur et le summary primaire Family/Type/Width pour le browser Patch Assign. Rename recharge le payload v2, modifie `meta.name`, puis reecrit header/payload avec checksum recalcule; delete reste un unlink de slot.
-- La capture Patch Poly s'appuie uniquement sur `voice_group_role`: focus `SOLO` -> `P1`; focus `MASTER` -> master + slaves contigus; focus `SLAVE` -> remontee au master effectif puis capture du groupe. Les groupes incoherents ou plus larges que 4 sont refuses.
-- L'apply `P1` conserve l'application mono-track vers une ou plusieurs targets. L'apply `P2/P3/P4` exige une seule target role `MASTER` dont le groupe contigu declare a exactement la largeur du Patch.
 - Avant mutation, l'apply valide header/checksum/version, largeur, roles membres, family/type et refs asset Sampler deja `READY`; un asset manquant refuse `ASSET MISS` sans reload SD/page-cache/reader.
 - L'apply ne capture ni ne restaure sequence, pattern, p-lock, playhead, transport, voices, readers SD, page-cache, buffers audio, etat IRQ ni etat UI temporaire. Aucun apply partiel, Set, preview, rollback ou creation automatique de slaves n'est introduit.
 
@@ -992,7 +987,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Avant toute mutation, les refs asset Sampler `RAM/STREAM/MULTI` sont resolues uniquement contre un slot `sample_global_pool` deja `READY`, de meme kind/path; aucun reload SD, reader, page-cache ou streamer n'est cree. Refus: `ASSET MISS`.
 - Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, puis reprojette les domaines `COLORS`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
 - Le transport, playhead, sequence, pattern et p-locks ne sont ni captures ni restaures. Si une erreur arrive apres mutation structurelle/reapply partiel, le refus final est `ERROR`; aucun rollback complet n'est garanti en V1.
-- Apply partiel, target mask, preview, rollback, reload asset Sampler complet, tags/filtres avances et Patch polyX restent hors perimetre.
 ## Addendum 2026-05-29 - Pattern linked Kit
 
 - `PatternSaveV1.globals` porte maintenant `linked_kit_valid` et `linked_kit_slot`. Le pattern stocke uniquement une reference de slot Kit `B6KT`, jamais le payload Kit.
@@ -1059,9 +1053,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le layout courant garde seulement `PARAM_STACK_OSC_DETUNE` et `PARAM_STACK_PHASE_RESET`; `track_tone_sound_state_t` porte `osc_detune` et `phase_reset`.
 - Defaults: `OSC DETUNE=0`, `RESET=FREE`, ce qui conserve son et cout Stack historiques.
 
-## Addendum 2026-07-25 - persistence TRACK CFG group SPREAD/LINK
 
-- Le bloc track config Pattern/Project capture maintenant `voice_group_spread[]` et `voice_group_link[]` en plus des roles voice group.
 
 ## Addendum 2026-07-26 - persistence Stack PARAM3 / Fold
 
@@ -1069,7 +1061,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `track_tone_sound_state_t.stack` ajoute `param3[3]`, donc Patch et Kit capturent aussi cette surface TONE Stack.
 - `SOFT` n'est plus un modele Stack actif: l'ancien index 0 devient `SINFD`; `TRIFD` est ajoute a la liste modele fold dediee. Aucune migration prototype des anciennes valeurs `SOFT` n'est conservee.
 Addendum 2026-07-26 - Step ROLL:
-- `pattern_v1_step_t` ajoute `roll` pour persister le retrig par step, separe de `trig`, `LEN` et des p-locks.
+- `pattern_v1_play_step_t` persiste `trig` et `roll`; le payload Special distinct ne contient ni l'un ni l'autre.
 
 Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Le load pattern SD ecrit directement dans `pattern_live_ram.c::g_pattern_load_ready`; l'ancien snapshot intermediaire `g_pattern_load_work` est retire.
@@ -1093,13 +1085,9 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Project autoload capture/restaure les slots `WAVETABLE` comme les slots `RAM`: path + slot backend + slot global, sans audio brut dans le projet et sans scan SD implicite.
 - Etat courant: le browser UI, les parametres `TABLE`, la preview wavetable et le runtime audio `Synth/Wave` sont branches; la persistence reste limitee aux references d'assets, sans audio brut.
 
-## Addendum 2026-07-28 - decision persistence SEQ LINK
 
-- `SEQ LINK` est persiste comme attribut structurel de voice group dans le meme bloc logique que les roles `SOLO/MASTER/SLAVE` et les attributs `SPREAD/LINK`.
-- Pattern/Project capturent `voice_group_seq_link[]` depuis `track_state` et le restaurent via le contrat commit bulk `param_registry_commit_voice_group_seq_link_bulk()`, apres validation/restauration des roles puis de la config `SPREAD/LINK`.
-- Kit capture `voice_group_seq_link` par payload track et le restaure par le meme contrat commit bulk, avec les autres attributs structurels de groupe.
-- Patch Poly capture `group_seq_link` uniquement sur le membre master et le reapplique via `param_registry_commit_voice_group_seq_link()` uniquement quand le patch cible un groupe `P2..P4`; les patchs mono ne materialisent pas d'etat de groupe.
-- Aucun p-lock, playhead, lock actif runtime ou donnees PLAY derivees ne sont captures pour `SEQ LINK`.
+
+
 - Aucune migration prototype n'est requise: les formats courants `PatternSaveV1`, `KitSaveV1` et `PatchSaveV1` sont etendus directement.
 
 ## Addendum 2026-07-28 - Track snapshot local non-SD
@@ -1131,14 +1119,12 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
   événement en attente.
 - Son apply encadre désormais la mutation structure/runtime et la restauration de
   séquence par une suspension Z4 ciblée, avec cleanup avant et après commit.
-- La fermeture des tracks concernées inclut les membres du voice-group susceptibles
   d'avoir reçu les notes round-robin de la cible; aucune track sans dépendance
   structurelle au paste n'est neutralisée.
 
 ### Correction séparation persistant / temporaire
 
 - Le payload Track reste limité aux données éditables: configuration, sound/tone,
-  voice-group et séquence. Playhead, phase DIV, boundary courant, notes ARP,
   commandes moteur, gates filtre/VCA et voix audio ne sont ni capturés ni restaurés.
 - La réapplication post-snapshot est limitée aux domaines persistants réellement
   capturés (`COLORS`, `TONE`, `MOD`, `MIX`); les bases `PLAY` et l'action
@@ -1168,7 +1154,6 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 ## Addendum 2026-07-30 - capacite banque Patch
 
 - La banque Patch indexee couvre 192 slots, de `P0000.B6P` a `P0191.B6P`.
-  Le format `B6PT`, les payloads P1/P2/P3/P4 et le checksum ne changent pas;
   seul le domaine de slots accepte par `patch_v1` et `patch_sd_bank` est elargi.
 # Addendum 2026-07-30 - persistance MD etape 2
 
@@ -1178,3 +1163,31 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
   de refuser sans ambiguite les payloads anterieurs dont la structure TONE
   n'inclut pas l'etat MD.
 - `PARAM_COUNT` reste inchange grace a la reutilisation de tombstones legacy.
+# Addendum 2026-07-31 - normalisation Looper LowCost
+
+- Tout restore Project/Pattern/Kit/Snapshot passe par la mutation bulk canonique. Sur LowCost, le premier `Sampler/Looper` par index de track est conserve; chaque Looper suivant devient explicitement `Sampler/RAM`. Le commit reste atomique et ne publie jamais plusieurs owners.
+- LowCost expose un seul reservoir RAW (`LPR00.RAW`); Premium conserve quatre slots.
+# Addendum 2026-07-31 - snapshots et etat polyphonique courant
+
+Les snapshots de track et Pattern capturent explicitement la cardinalite synthetique. Undo, Redo et restore recalculent avant mutation un etat borne: une voix de base par track Synth/Drum, puis les voix Synth restantes dans l'ordre des tracks jusqu'aux cardinalites capturees ou au budget 16. Une reduction ne change que VOICES et produit `VOICE LIMITED`; l'etat applique devient la nouvelle reference en RAM. Cette passe prototype n'ajoute volontairement aucune migration de formats projet historiques.
+
+Le payload Patch porte desormais la cardinalite reservee de chaque membre et son format SD passe a v3; les anciens fichiers Patch prototypes sont refuses par la validation de version/taille, sans migration.
+
+Le payload Kit porte egalement la cardinalite synthetique par track et son format SD passe a v3. Son apply normalise avant toute mutation selon la meme passe deterministe (une voix par track Synth/Drum, puis extras dans l'ordre des tracks), reapplique les reservations via `synth_polyphony` et retourne `VOICE LIMITED` si necessaire.
+# Addendum 2026-07-31 - persistence ownership External
+
+- `track_snapshot_t` et `PatternSaveV1.track_cfg` portent explicitement `external_input`; le clipboard Track, clear, Undo et Redo empruntent donc la même autorité bulk.
+- L'unicité des réservations et la plage physique de la variante sont validées avant quiesce ou mutation. Un conflit de paste/load est refusé sans modification de la structure existante et sans substitution automatique.
+- Les formats SD Pattern et Project passent de v2 à v3; les payloads prototypes antérieurs sont refusés par version/taille, sans migration.
+# Addendum 2026-07-31 - modele sequence Play/Special final
+
+- `PatternSaveV1.seq` contient huit tracks Play `64 x 32` et six emplacements Special `64 x 16`; le format binaire v3 reste commun Low-Cost/Premium et sa taille courante invalide directement les anciens fichiers.
+- Chaque track capturee porte l'identite `role + ordinal` issue de `track_topology`. Restore Pattern/Project, snapshot Track, Kit et Patch valident la compatibilite avant mutation; Patch reste exclusivement Play.
+- Les captures/restores Special ne transportent que longueur/page, action et locks non-PLAY. Notes, velocite, duree, microtiming et ARP n'ont aucun champ Special.
+- Pattern/Project, snapshot Track, clipboard de steps/Track et snapshots Undo/Redo conservent les actions Special. Clear remet l'action a `NONE` et vide les locks.
+- L'ancien `seq_project_data_t`, son scratch SDRAM et `seq_persistence` ont ete retires; Pattern/Project sont l'unique chemin de persistence sequence.
+- Les numeros de formats Pattern/Project/Kit/Patch restent a 3 conformement au contrat sans retrocompatibilite; aucune conversion de fichier n'est ajoutee.
+# Addendum 2026-07-31 - capacite p-lock Special
+
+- Pattern/Project, snapshots Track et Undo/Redo valident desormais jusqu'a 512 p-locks par Special Track via la capacite canonique du modele.
+- Les structures persistantes restent a 64 steps et 16 locks par step; les formats courants et le stockage separe des actions Special ne changent pas.

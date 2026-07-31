@@ -61,12 +61,7 @@ ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_
         return UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER;
     }
 
-    if (family != UI_TRACK_FAMILY_MASTER)
-    {
-        return UI_HALL_ROUT_CONTEXT_NONE;
-    }
-
-    if (type == UI_TRACK_TYPE_MASTER_FX)
+    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
     {
         return UI_HALL_ROUT_CONTEXT_MASTER_FX;
     }
@@ -82,12 +77,18 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
             return UI_HALL_MODE_VIEW_SEQ;
 
         case UI_HALL_MODE_KEYBOARD:
-            return UI_HALL_MODE_VIEW_KEYBOARD;
+            return (track_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) != 0U)
+                    ? UI_HALL_MODE_VIEW_KEYBOARD
+                    : UI_HALL_MODE_VIEW_SEQ;
 
         case UI_HALL_MODE_ARP:
-            return (ui_hall_mode_resolve_rout_context(track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
-                    ? UI_HALL_MODE_VIEW_ROUT
-                    : UI_HALL_MODE_VIEW_ARP;
+            if (ui_hall_mode_resolve_rout_context(track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
+            {
+                return UI_HALL_MODE_VIEW_ROUT;
+            }
+            return (track_topology_has_capability(track, TRACK_CAPABILITY_ARPEGGIATOR) != 0U)
+                    ? UI_HALL_MODE_VIEW_ARP
+                    : UI_HALL_MODE_VIEW_SEQ;
 
         case UI_HALL_MODE_MACRO:
             return UI_HALL_MODE_VIEW_MACRO;
@@ -111,13 +112,18 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
 
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
 {
+    if (track_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) == 0U)
+    {
+        return 0U;
+    }
     const ui_hall_mode_effective_view_t view = ui_hall_mode_resolve_effective_view(track, raw_mode);
     return (uint8_t)((view == UI_HALL_MODE_VIEW_KEYBOARD) || (view == UI_HALL_MODE_VIEW_ARP));
 }
 
 uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode)
 {
-    return (uint8_t)(ui_hall_mode_resolve_effective_view(track, raw_mode) == UI_HALL_MODE_VIEW_ARP);
+    return (uint8_t)((track_topology_has_capability(track, TRACK_CAPABILITY_ARPEGGIATOR) != 0U)
+            && (ui_hall_mode_resolve_effective_view(track, raw_mode) == UI_HALL_MODE_VIEW_ARP));
 }
 
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)

@@ -5,6 +5,7 @@
 
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_deluge_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_engine.h"
@@ -76,9 +77,6 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
                 default:
                     return KIT_V1_LABEL_UNKNOWN;
             }
-
-        case UI_TRACK_FAMILY_MASTER:
-            return (type == UI_TRACK_TYPE_MASTER_FX) ? KIT_V1_LABEL_FX : KIT_V1_LABEL_UNKNOWN;
 
         default:
             return KIT_V1_LABEL_UNKNOWN;
@@ -345,17 +343,47 @@ static kit_v1_result_t kit_v1_restore_loaded_kit_state(const KitSaveV1 *kit)
         }
     }
 
+    return KIT_V1_RESULT_OK;
+}
+
+static uint8_t kit_v1_resolve_voice_budget(KitSaveV1 *kit)
+{
+    uint8_t remaining = SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET;
+    uint8_t limited = 0U;
+    uint8_t requested[UI_TRACK_COUNT];
+
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER)
+        kit_v1_track_payload_t *const payload = &kit->tracks[track];
+        requested[track] = payload->synth_voice_count;
+        if ((payload->family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+                || (payload->family == (uint8_t)UI_TRACK_FAMILY_DRUM))
         {
-            (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
-                                                   track,
-                                                   track_state_get_voice_group_spread(track));
+            if (remaining == 0U) return 0U;
+            payload->synth_voice_count = 1U;
+            remaining--;
+        }
+        else
+        {
+            payload->synth_voice_count = 0U;
         }
     }
 
-    return KIT_V1_RESULT_OK;
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        kit_v1_track_payload_t *const payload = &kit->tracks[track];
+        if (payload->family != (uint8_t)UI_TRACK_FAMILY_SYNTH) continue;
+        uint8_t target = requested[track];
+        if (target < 1U) target = 1U;
+        if (target > SYNTH_POLYPHONY_MAX_VOICES) target = SYNTH_POLYPHONY_MAX_VOICES;
+        while ((payload->synth_voice_count < target) && (remaining > 0U))
+        {
+            payload->synth_voice_count++;
+            remaining--;
+        }
+        if (payload->synth_voice_count < target) limited = 1U;
+    }
+    return (uint8_t)(limited + 1U);
 }
 
 static kit_v1_result_t kit_v1_validate_loaded_kit(KitSaveV1 *kit)
@@ -372,10 +400,22 @@ static kit_v1_result_t kit_v1_validate_loaded_kit(KitSaveV1 *kit)
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         kit_v1_track_payload_t *const payload = &kit->tracks[track];
+        if (track_topology_is_active(track) != 0U)
+        {
+            const track_topology_identity_t identity = {
+                .role = payload->topology_role,
+                .ordinal = payload->topology_ordinal
+            };
+            if (track_topology_identity_is_compatible(track, &identity) == 0U)
+            {
+                return KIT_V1_RESULT_BAD_KIT;
+            }
+        }
         if ((payload->family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
                 || (payload->type >= (uint8_t)UI_TRACK_TYPE_COUNT)
-                || (ui_track_type_is_valid_for_family((ui_track_family_t)payload->family,
-                                                      (ui_track_type_t)payload->type) == false))
+                || ((track_topology_is_play(track) != 0U)
+                    && (ui_track_type_is_valid_for_family((ui_track_family_t)payload->family,
+                                                          (ui_track_type_t)payload->type) == false)))
         {
             return KIT_V1_RESULT_BAD_KIT;
         }
@@ -414,10 +454,6 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
     uint8_t type[UI_TRACK_COUNT];
     uint8_t midi_channel[UI_TRACK_COUNT];
     uint8_t midi_source[UI_TRACK_COUNT];
-    uint8_t role[UI_TRACK_COUNT];
-    float group_spread[UI_TRACK_COUNT];
-    uint8_t group_link[UI_TRACK_COUNT];
-    uint8_t group_seq_link[UI_TRACK_COUNT];
 
     if (kit == 0)
     {
@@ -430,29 +466,12 @@ static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
         type[track] = kit->tracks[track].type;
         midi_channel[track] = ui_get_track_midi_channel(track);
         midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
-        role[track] = kit->tracks[track].voice_group_role;
-        group_spread[track] = kit->tracks[track].voice_group_spread;
-        group_link[track] = kit->tracks[track].voice_group_link;
-        group_seq_link[track] = kit->tracks[track].voice_group_seq_link;
     }
 
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
     {
         return 0U;
     }
-    if (track_state_apply_voice_group_roles_bulk(role) == false)
-    {
-        return 0U;
-    }
-    if (track_state_apply_voice_group_config_bulk(group_spread, group_link) == false)
-    {
-        return 0U;
-    }
-    if (param_registry_commit_voice_group_seq_link_bulk(group_seq_link) == 0U)
-    {
-        return 0U;
-    }
-
     track_runtime_invalidate_all();
     return 1U;
 }
@@ -466,6 +485,17 @@ static uint8_t kit_v1_transition_mutate(void *ctx_ptr)
 static uint8_t kit_v1_transition_reapply(void *ctx_ptr)
 {
     const KitSaveV1 *const kit = (const KitSaveV1 *)ctx_ptr;
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (kit->tracks[track].family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+        {
+            if (synth_polyphony_set_voice_count(track,
+                                                kit->tracks[track].synth_voice_count) == 0U)
+            {
+                return 0U;
+            }
+        }
+    }
     return (kit_v1_restore_loaded_kit_state(kit) == KIT_V1_RESULT_OK) ? 1U : 0U;
 }
 
@@ -512,10 +542,15 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
 
         dst->family = (uint8_t)family;
         dst->type = (uint8_t)type;
-        dst->voice_group_role = (uint8_t)track_state_get_voice_group_role(track);
-        dst->voice_group_spread = track_state_get_voice_group_spread(track);
-        dst->voice_group_link = track_state_get_voice_group_link(track);
-        dst->voice_group_seq_link = track_state_get_voice_group_seq_link(track);
+        dst->synth_voice_count = (family == UI_TRACK_FAMILY_SYNTH)
+            ? synth_polyphony_get_voice_count(track) : 0U;
+        track_topology_identity_t identity = {
+            .role = (uint8_t)TRACK_TOPOLOGY_ROLE_UNUSED,
+            .ordinal = 0U
+        };
+        (void)track_topology_get_identity(track, &identity);
+        dst->topology_role = identity.role;
+        dst->topology_ordinal = identity.ordinal;
         memcpy(&dst->sound, sound, sizeof(dst->sound));
         memcpy(&dst->tone, tone, sizeof(dst->tone));
         if (kit_v1_track_uses_sampler_asset(family, type) != 0U)
@@ -604,12 +639,14 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
         return result;
     }
 
+    const uint8_t voice_resolution = kit_v1_resolve_voice_budget(&g_kit_v1_work);
+    if (voice_resolution == 0U) return KIT_V1_RESULT_APPLY_FAIL;
+
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         keyboard_engine_all_notes_off_for_track(track);
         brick6_sampler_runtime_reset_track(track);
-        brick6_deluge_runtime_all_notes_off(track);
-        brick6_deluge_runtime_reset_instance(track);
+        synth_polyphony_reset_track(track);
     }
 
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
@@ -633,7 +670,7 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
     track_runtime_refresh_all();
     g_kit_v1_current_slot = slot;
     g_kit_v1_dirty = 0U;
-    return KIT_V1_RESULT_OK;
+    return (voice_resolution > 1U) ? KIT_V1_RESULT_VOICE_LIMITED : KIT_V1_RESULT_OK;
 }
 
 
@@ -769,6 +806,7 @@ const char *kit_v1_result_label(kit_v1_result_t result)
         case KIT_V1_RESULT_BAD_KIT: return "BAD KIT";
         case KIT_V1_RESULT_ASSET_MISS: return "ASSET MISS";
         case KIT_V1_RESULT_APPLY_FAIL: return "ERROR";
+        case KIT_V1_RESULT_VOICE_LIMITED: return "VOICE LIMITED";
         case KIT_V1_RESULT_APPLY_TODO: return "APPLY TODO";
         case KIT_V1_RESULT_RENAME_TODO: return "REN TODO";
         case KIT_V1_RESULT_DELETE_TODO: return "DEL TODO";

@@ -1,10 +1,18 @@
 # Z2 - Track Runtime Authority
 
+## Addendum 2026-07-31 - topologie et capacites centrales
+
+- `track_topology` decrit une seule cible produit compile-time : 8 Play Tracks sur les deux variantes; Master, Looper, Input et FX comme identites Special fixes; 12 tracks Low-Cost et 14 Premium.
+- Low-Cost porte une entree physique, Premium exactement trois. Aucun descriptor ne publie Input4.
+- Les capacites structurelles sont `NOTES`, `AUDIO`, `MIDI`, `KEYBOARD`, `ARPEGGIATOR`, `AUTOMATION`, `MUTE` et `INPUT_RESERVATION`.
+- `UI_TRACK_COUNT` et `SEQ_TRACK_COUNT` utilisent la capacite commune Low-Cost/Premium de 14 slots. `UI_ACTIVE_TRACK_COUNT` porte la cardinalite selectionnable, soit 12 Low-Cost et 14 Premium.
+- Le descriptor runtime publie le role et les capacites issus de `track_topology`; `track_runtime_has_capability()` est la garde effective. Le scheduler note, le clavier et l'ARP n'executent aucune note sur Special.
+- Le role topologique discrimine directement les ownerships: Master expose les effets globaux, FX les MacroFX; aucun adaptateur Master/FX ni chemin convertible Master ne subsiste.
+
 ## Autorité de polyphonie synth
 
 `synth_polyphony` porte seul le nombre de voix, le spread et les slots
 note/held/release/âge. Allocation bornée: libre, plus ancienne release, puis plus
-ancienne voix tenue. Voice groups et SEQ LINK restent inchangés.
 
 
 - `TRACK_RUNTIME_ENGINE_WAVE` conserve `instance_id == track_id` et ne possède plus de modèle de rendu secondaire.
@@ -27,6 +35,8 @@ ancienne voix tenue. Voice groups et SEQ LINK restent inchangés.
 
 ## 1. Périmètre
 Zone opérationnelle:
+- Inc/Core/track_topology.h
+- Src/Core/track_topology.c
 - Inc/Core/track_state.h
 - Src/Core/track_state.c
 - Src/Core/track_runtime.c
@@ -41,9 +51,6 @@ Zone élargie pour preuve de contrats:
 - Src/Core/brick6_audio_runtime.c
 - Src/Mod/mod_lfo_v1.c
 - Src/Storage/pattern_live_ram.c
-
-Exclusions:
-- Inc/Core/runtime_target.h: shim legacy inline, non consommé par le code in-tree Src/*.
 
 ## 2. Autorité(s) de vérité
 Autorité principale:
@@ -68,6 +75,10 @@ Initialisation / mutation:
 - track_runtime_refresh_all()
 
 Lecture / résolution:
+- track_topology_get_descriptor()
+- track_topology_has_capability()
+- track_topology_find_special()
+- track_runtime_has_capability()
 - track_runtime_get_ctx()
 - track_runtime_get_descriptor()
 - track_runtime_resolve_track()
@@ -171,7 +182,7 @@ Sorties de Z2:
 ## 9. Dette technique observée
 - Couplage direct a UI en voie de retrait: `track_state` porte la verite family/type/midi.
 - Discipline refresh: explicite côté call sites (refresh_track/refresh_all), sans auto-refresh dans les getters/helpers.
-- Présence d’un shim legacy runtime_target potentiellement confus en doc, bien que hors chemin opérationnel.
+- Le shim legacy `runtime_target` a ete supprime.
 
 ## 10. Impact éventuel sur la cartographie globale
 - Z2 confirme comme noyau d'autorite transversal.
@@ -286,10 +297,11 @@ Sorties de Z2:
 - Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
 - Les anciens params `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine COLORS effectif et ne doivent plus recevoir de rule p-lock/macro.
 
-## 20. Contrat Master/FX MacroFX
-- Nouvelle identite structurelle: `TRACK_RUNTIME_FAMILY_MASTER` + `TRACK_RUNTIME_TYPE_MASTER_FX`.
-- Binding runtime: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; Z2 reste l'autorite d'identite, tandis que l'insert DSP master est execute en Z1 via les params TONE stockes.
-- Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
+## 20. Contrat Master et FX
+- Master et FX sont deux roles Special fixes traduits en identites runtime distinctes `SPECIAL_MASTER` et `SPECIAL_FX`; aucun couple UI partage ne les represente.
+- Leur binding reste `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; le role `MASTER` expose `CFG/SEQ/TONE`, le role `FX` expose `CFG/SEQ/TONE/MOD`.
+- Les params globaux reverb/delay/compresseur restent hors état track et sont visibles sur Master. Les `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` ne sont effectifs que sur FX; Z1 trouve cette Special par `track_topology` avant de lire son état TONE.
+- Aucun des deux roles n'expose `MIX`, `COLORS`, `VCA`, `PLAY`, `KEYBOARD` ou l'ARP musical. Le contexte `ROUT` UI-only reste disponible pour FX uniquement.
 
 ## 21. Contrat refresh local de track
 - `track_runtime_invalidate_track(track)` invalide uniquement la track cible; `track_runtime_invalidate_all()` reste reserve aux restore/load/init globaux.
@@ -325,7 +337,7 @@ Sorties de Z2:
 
 ## 24. Contrat retrait buffer master
 
-- La family `Master` ne conserve plus que le type produit `Master/FX`.
+- L'ancienne family convertible `Master` et son type `Master/FX` sont supprimes.
 - Le type runtime buffer master, son engine dedie et sa ressource param dediee sont retires.
 - Le XFade Looper est maintenant `PARAM_LOOPER_XFADE`, mappe dans les slots TONE de `Sampler/Looper`; son etat DSP reste `audio_xfade`.
 
@@ -340,26 +352,20 @@ Sorties de Z2:
 - L'apply Kit complet passe par une mutation bulk `track_state` puis par le pipeline structurel `param_registry`, qui invalide et rafraichit explicitement `track_runtime`.
 - Z2 reste l'unique autorite de binding apres apply; aucune autorite Kit parallele ne conserve family/type, mix target ou capacites runtime.
 
-## 27. Contrat voice group / Patch Poly
 
-- `track_state` porte l'autorite des roles `TRACK_VOICE_GROUP_ROLE_SOLO`, `TRACK_VOICE_GROUP_ROLE_MASTER`, `TRACK_VOICE_GROUP_ROLE_SLAVE`.
-- Un groupe valide est contigu: un `MASTER` suivi de `SLAVE` a droite; un `SLAVE` ne peut exister que si sa gauche est `MASTER` ou `SLAVE`.
-- Z2 expose seulement les queries/projections `track_runtime_get_voice_group_role`, `track_runtime_get_voice_group_effective_master`, `track_runtime_collect_voice_group_members` et `track_runtime_get_voice_group_seq_link`; ces getters ne creent pas de groupe et ne rafraichissent pas implicitement le runtime.
-- Patch Poly v2 consomme ce modele comme source structurelle: capture depuis master/slaves officiels et apply polyX uniquement vers un groupe cible deja declare de meme largeur.
 - Z2 ne stocke aucune reference a un Patch et ne devient pas une autorite de persistence Patch.
-- Projection UI: une track `SLAVE` ne publie pas l'ensemble `PLAY`; le `MASTER` reste le seul point d'edition PLAY du groupe.
 
 ## Addendum 2026-07-17 - lot 4B catalogue input low-cost
 
-- Le catalogue produit est variant-aware a la compilation: premium conserve `Input1..Input4` comme families produit, tandis que low-cost expose uniquement `Input1`.
-- En low-cost, `track_runtime_input_family_mix_track()` ne mappe que `Input1 -> mix lane 0`; `Input2..4` restent des valeurs enum historiques mais ne sont plus des families input disponibles ni des ressources routables.
-- La reservation de lanes fixes d'entree suit `UI_AUDIO_INPUT_PROTO_WIRED_COUNT`: low-cost reserve uniquement la lane 0, premium garde les lanes proto 0..2.
+- Le catalogue produit est variant-aware a la compilation: Premium expose `Input1..3`, Low-Cost uniquement `Input1`.
+- `track_runtime_input_family_mix_track()` ne mappe que les trois entrees maximales publiees par `TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT`.
+- La reservation de lanes fixes d'entree suit la meme autorite: Low-Cost reserve uniquement la lane 0, Premium les lanes 0..2.
 
 ## Addendum 2026-07-23 - fermeture des sources input low-cost
 
-- Le catalogue low-cost n'expose que `Input1`; les valeurs historiques `Input2`, `Input3` et `Input4` restent reservees pour la compatibilite des donnees partagees mais ne sont ni selectionnables ni routables.
-- Le shim `runtime_target` et la recherche de ressource libre du clipboard appliquent la cardinalite physique de la variante; ils ne peuvent donc pas reintroduire une source input absente.
-- La variante premium conserve ses quatre familles input et tous ses mappings existants.
+- Le catalogue Low-Cost n'expose que `Input1`; Premium expose exactement `Input1..3`.
+- La recherche de ressource libre du clipboard applique la cardinalite physique de la variante; elle ne peut donc pas reintroduire une source input absente.
+- Input4 n'appartient a aucune variante produit et n'existe plus dans les enums de configuration.
 
 ## Addendum 2026-07-25 - identite Synth/Stack
 
@@ -387,11 +393,7 @@ Sorties de Z2:
 - Cette table alimente l'autorisation track-aware, les p-locks TONE et la validation des destinations de modulation continues; elle ne modifie pas `track_runtime_tone_slots_prism[]`.
 - Les resets d'ownership Stack reappliquent les bases TONE Stack via `param_backend_reapply_tone_stack_runtime()` apres reset runtime, separement du chemin Prism.
 
-## Addendum 2026-07-25 - config voice group SPREAD/LINK
 
-- `track_state` porte maintenant deux champs de configuration par master de voice group: `voice_group_spread` (`0..1`, defaut `0`) et `voice_group_link` (`OFF/ON`, defaut `OFF`).
-- Ces champs appartiennent au modele master/slaves existant: les membres sont resolus par `track_runtime_collect_voice_group_members()` dans l'ordre stable master puis slaves contigus, plafonne a 8 par les consommateurs UI/param.
-- Z2 ne cree aucune nouvelle autorite de groupe: les roles `SOLO/MASTER/SLAVE` restent la structure, et SPREAD/LINK/SEQ LINK sont seulement des attributs de la master effective.
 
 ## Addendum 2026-07-27 - identite Synth/Wave wavetable
 
@@ -402,39 +404,21 @@ Sorties de Z2:
 - Depuis la passe TONE Wave, le mapping local `TRACK_RUNTIME_TYPE_WAVE -> params TONE` expose les 16 slots `OSC1/OSC2 TABLE/POS/START/END/LEVEL/TUNE/PHASE/FLIP`, et Z2 reapplique `brick6_wave_runtime` apres reset d'ownership.
 - Depuis la passe Matrix Wave, seules les destinations continues `POS/LEVEL/TUNE` par oscillo sont validables par le catalogue MOD; les autres params TONE Wave restent des parametres statiques ou discrets.
 
-## Addendum 2026-07-28 - decision d'autorite SEQ LINK
 
-- `SEQ LINK` est un attribut structurel du voice group, distinct de `CFG GROUP LINK`.
-- Le stockage canonique cible vit dans `track_state`, sous forme d'un flag par track logique, significatif uniquement sur une master effective de voice group.
-- Valeur par defaut: `OFF`. Un flag stocke sur une track `SOLO` ou `SLAVE` est ignore par les queries master-effective.
 - Proprietaire: `track_state` possede le champ brut, sa normalisation et les mutations bulk. Z2 expose seulement des projections track-aware/master-effective.
-- Les roles `SOLO/MASTER/SLAVE` restent l'autorite structurelle du groupe; `SEQ LINK` ne cree pas une seconde autorite de membership.
 - Droits de mutation cibles:
   - init/defaults: `track_state_init`;
-  - edit utilisateur: commande parametre `PARAM_CFG_GROUP_SEQ_LINK` routee par Z5 vers Z3/`param_registry`, puis commit dans `track_state` sur la master effective;
   - restore/capture live: Z6 via les flux bulk track-config, apres validation du payload courant;
   - aucun consumer Z4, UI feedback, clipboard ou scheduler ne modifie ce flag directement.
 - Droits de consultation cibles:
   - Z4 consulte la projection pour choisir une source de lecture p-lock playback;
   - Z5 consulte la projection pour visibilite/affichage et ne decide pas localement la verite du flag;
-  - Z6 consulte/capture la valeur canonique dans le meme bloc structurel que les roles voice group;
   - Z3 consulte seulement pour appliquer la commande utilisateur et ne devient pas proprietaire du flag.
-- Semantique master-effective: une lecture depuis une slave remonte a la master effective; si le groupe est invalide, orphelin ou sans slave effective, le resultat operationnel est `OFF`.
-- `SEQ LINK` ne modifie ni le stockage des p-locks, ni les roles du groupe, ni les donnees PLAY des slaves. Il selectionne seulement la source de lecture playback qui sera definie en Z4.
 
-## Addendum 2026-07-28 - CFG GROUP spread keytrack
 
-- `track_state` porte maintenant l'attribut transient `voice_group_spread_keytrack` par master effective de voice group, distinct de `voice_group_spread` et de `voice_group_link`.
 - Valeur par defaut: `OFF`. `OFF` conserve le spread historique applique par pan MIX de groupe. `ON` active seulement la projection keytrack du spread pour les voix `Sampler/Multi`.
-- Cette option ne cree pas de nouvelle autorite de membership: les roles `MASTER/SLAVE` et la collecte des membres restent portes par Z2.
 
-## Addendum 2026-07-28 - stockage/projection SEQ LINK
 
-- `track_state` porte maintenant le champ brut `voice_group_seq_link[]`, initialise a `OFF`.
-- Mutations brutes cote Z2: `track_state_set_voice_group_seq_link_raw()` et `track_state_apply_voice_group_seq_link_bulk_raw()` restent reservees au contrat commit `param_registry_commit_voice_group_seq_link*()`.
-- Lecture brute autorisee pour capture/persistence future: `track_state_get_voice_group_seq_link()`.
-- Projection runtime master-effective: `track_runtime_get_voice_group_seq_link(track, out)` retourne `ON` uniquement si la master effective est une vraie master avec au moins une slave collectable et si son flag brut est `ON`.
-- Une track `SOLO`, une master sans slave effective, une slave orpheline ou un groupe invalide donnent operationnellement `OFF`.
 - L'edition UI et le parametre catalogue sont branches par l'etape Z3/Z5 suivante; la persistence et la consommation Z4 effective restent separees.
 # Addendum 2026-07-30 - identite runtime `DRUM / MD`
 
@@ -450,3 +434,28 @@ Sorties de Z2:
   restent rendues jusqu'a leur completion audio.
 - Les transitions destructrices conservent le chemin all-notes-off explicite,
   tandis que STOP ne libere que les voix possedees par le sequenceur.
+# Addendum 2026-07-31 - Looper global LowCost
+
+- LowCost autorise exactement une configuration `Sampler/Looper` globale. Le catalogue refuse atomiquement un second Looper; le binding Z2 garde une seconde garde de quota et utilise l'instance runtime globale `0` sans supposer `instance_id == track_id`.
+- Les restores bulk conservent de facon stable le premier Looper dans l'ordre des tracks et normalisent les suivants en `Sampler/RAM` avant validation/commit. Premium conserve son contrat existant.
+- La sortie du type Looper reset la prise, le reader, le cache et le Shifter de l'ancien owner avant toute reutilisation.
+# Addendum 2026-07-31 - autorite globale de reservation synth
+
+`synth_polyphony` est l'unique autorite du budget de 16 voix reservees. Elle maintient, en tableaux fixes et parcours bornes, l'activation par track, la cardinalite 1..8, les 16 owners physiques et les 16 etats de note/allocation globaux; aucune matrice de 64 etats par track ne subsiste. `track_runtime` active/libere la reservation lors des transitions de family/type et publie le slot de base resolu, jamais l'index logique de track; les changements Synth vers Synth conservent la cardinalite et les slots. Prism, Stack, Wave et Deluge consomment le mapping publie; DRUM/MD et BD Analog reservent une voix mono. Sampler, Multi, Clip, Looper, Input, MIDI et Master/FX restent hors budget.
+
+La liberation et la reutilisation passent par la meme autorite: note-off, reset moteur, reset filtre et purge de l'etat d'allocation precedent avant publication du slot libre. Panic purge les notes et releases de chaque slot reserve sans modifier les owners ni les cardinalites, afin que les tracks restent immediatement jouables.
+# Addendum 2026-07-31 - autorité de réservation External
+
+- `track_input_ownership` maintient par tableaux fixes la sélection de chaque Play et l'owner unique de chaque entrée physique produit.
+- `MIDI/MIDI` conserve les capacités notes/MIDI sans cible audio. `External/External` ajoute réservation d'entrée, MIX/FILTER/VCA et gate par notes sur la lane exacte sélectionnée.
+- Toute mutation simple ou bulk valide l'unicité avant commit. Sortir de `External`, clear ou suppression libère immédiatement la ressource; aucun appelant ne recherche une autre entrée libre.
+- La sélection dormante initiale est déterministe (`play_index modulo input_count`) et n'est jamais remplacée lors d'un conflit; le choix explicite courant reste attaché à la track.
+- Une Special Input réservée reste identifiée mais n'est plus audio-routable; `track_runtime` publie uniquement la Play owner dans la map `mix lane -> track logique`.
+# Addendum 2026-07-31 - politique mute track-aware
+
+- `track_mute` classe explicitement Play audio, MIDI, External, Looper, Input et FX depuis le descriptor runtime et la topologie.
+- Audio/Input/Looper/External exigent une cible mixer effective; MIDI et FX ont leurs chemins propres. Une Input reservee non proprietaire n'est pas mutable.
+- Master et Off n'ont pas de mute ordinaire. `track_sound_state.mix_mute` reste la base parametre; l'etat effectif est applique par l'autorite centrale.
+
+- Les projections runtime traitent chaque track comme `SOLO`: le role projete est `SOLO`, la master effective est la track demandee et la collecte contient uniquement cette track.
+- Cette neutralisation ne modifie ni la topologie des huit Play Tracks, ni les Special Tracks, ni la polyphonie interne des moteurs.

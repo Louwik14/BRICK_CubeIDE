@@ -149,31 +149,34 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 ## 5. Modèle tracks actuel
 
 ### Cardinalités
-- 14 tracks logiques côté UI / runtime / séquenceur / logique mixer
+- topologie produit autoritative : 12 tracks Low-Cost (`8 Play + 4 Special`) et 14 tracks Premium (`8 Play + 6 Special`)
+- le stockage commun Low-Cost/Premium conserve une capacité de 14 slots; la sélection/navigation expose 12 tracks Low-Cost et 14 Premium
 - `MAX_TRACKS` côté DSP ingress physique reste distinct
 - les concepts “track logique” et “lane physique audio” sont distincts
 
 ### Layout logique actuel
-- 8 tracks musicales flexibles
-- 4 tracks orientées input
-- 2 slots réservés master/global
+- 8 Play Tracks
+- Special Tracks fixes : Master, Looper, Input et FX
+- Low-Cost : Master + Looper + Input1 + FX
+- Premium : Master + Looper + Input1 + Input2 + Input3 + FX
+- les Special affichent une identité CFG fixe et ne sont jamais proposées comme families/types convertibles; Master et FX sont dérivés directement du rôle topologique, sans adaptateur family/type UI partagé
+- Master porte les effets globaux reverb, delay et compresseur via `TONE`; FX porte exclusivement les quatre slots MacroFX; `MIX` reste limité au mix par track
 
-### Families actuelles
+### Families configurables des Play Tracks
 - `Off`
-- `Input1`
-- `Input2`
-- `Input3`
-- `Input4`
 - `Synth`
 - `Sampler`
 - `Drum`
-- `Master`
+- `MIDI`
+- `External`
 
 ### Types actuels
 
-#### Pour `InputX`
-- `Audio`
-- `Hybrid`
+#### Pour `MIDI`
+- `MIDI`
+
+#### Pour `External`
+- `External`
 
 #### Pour `Synth`
 - `Prism`
@@ -185,24 +188,19 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `RAM`
 - `Stream`
 - `Multi`
-- `Looper`
 
 #### Pour `Drum`
 - `TRX BD`
 - `BD Analog`
 
-#### Pour `Master`
-- `Buffer`
-
 ### Notes
 - `Off` = vraie désactivation runtime.
-- `Input1..4` = ressources physiques exclusives produit.
-- modèle produit : 4 entrées stéréo physiques visées (`Input1..4`)
-- proto actuelle : 3 entrées stéréo effectivement câblées côté front-end DSP
-- `Input4` reste une ressource valide côté modèle produit
-- `Hybrid` = track audio + chemin note/midi amené à évoluer
-- une vraie family `MIDI` viendra plus tard
-- `runtime_target` est un shim legacy de compat, hors chemin opérationnel in-tree
+- le produit possède au maximum trois entrées physiques : Input1 en Low-Cost, Input1..3 en Premium
+- `Input4` n'existe ni dans la topologie ni dans les enums de configuration.
+- `MIDI` est une Play Track de notes sans chemin audio local.
+- `External` est une Play Track MIDI + audio qui réserve exactement une entrée physique; `track_input_ownership` est l'unique autorité de cette réservation.
+- une entrée réservée par `External` reste visible sur sa Special fixe avec `USED Pn`, sans second monitoring ni choix automatique d'une autre entrée.
+- le type historique `Input/Hybrid` et le shim `runtime_target` sont supprimés.
 - `Master` est une family spéciale non standard
 
 ---
@@ -224,7 +222,7 @@ Raccourcis utiles :
 - save/load / patterns / projects / restore -> Z6
 
 Cas transverses fréquents :
-- `Input Audio vs Hybrid` -> Z2 + Z3 + Z5
+- `Input Special vs External Play` -> Z2 + Z3 + Z5
 - bug track-aware transversal -> commencer par Z2
 - bug après load/restore -> Z6 puis zones impactées
 
@@ -234,8 +232,10 @@ Cas transverses fréquents :
 
 ## 7. Master
 
-- La family `Master` expose uniquement `Master/FX`.
+- Master et FX ne sont pas des families convertibles; leur identité vient exclusivement de `track_topology`.
 - Ne pas recréer de type, backend, page ou chemin runtime buffer pour `Master`.
+- Master est l'owner UI des effets globaux reverb, delay et compresseur; leurs autorités DSP/param restent globales.
+- Les quatre slots MacroFX appartiennent à la Special FX, jamais à Master malgré l'adaptateur de configuration partagé.
 - Le XFade produit restant appartient à `Sampler/Looper` via `PARAM_LOOPER_XFADE` et `audio_xfade`.
 
 ---
@@ -247,7 +247,7 @@ Cas transverses fréquents :
 - paramètres moteur sonore / oscillateurs : `TONE`
 - jeu clavier : `KEYBOARD`
 - arpégiateur : `ARP`
-- routage des sources buffer : contexte `ROUT` via réemploi de `ARP`
+- routage Looper et routage UI-only MacroFX : contexte `ROUT` via réemploi de `ARP`
 
 Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
 
@@ -309,7 +309,7 @@ Toujours penser :
 - `BTN_PARAM_3` -> `MOD`
 - `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` uniquement pour families moteur `Synth`, `Sampler` ou `Drum`
-- `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth`, `Sampler`, `Drum` ou `Hybrid`
+- `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth`, `Sampler`, `Drum` ou `External`
 - `BTN_TRACK` -> bouton spécial `TRACK`
 
 ### Règle générale
@@ -345,8 +345,8 @@ toujours utiliser des tables explicites.
 
 ### Ressources exclusives
 - `Sampler/RAM` : paste direct (non exclusif)
-- `Input1..4` : priorité à un input libre, sinon move-on-paste
-- après move réussi, le clipboard reste chaînable
+- `External` : conserve l'entrée physique exacte du snapshot; si elle est déjà réservée, le paste est refusé atomiquement
+- aucun paste ou changement de type ne choisit automatiquement une autre entrée
 
 ---
 
@@ -433,3 +433,27 @@ Principe directeur :
 
 - Ne pas recreer de backend buffer master dedie.
 - `audio_xfade` appartient au flux `Sampler/Looper` courant via `PARAM_LOOPER_XFADE`.
+
+## Autorite mute
+
+- `track_mute` est l'autorite comportementale unique; la UI et les backends parametres lui deleguent l'application.
+- Toute nouvelle family muteable doit declarer sa capacite et une politique explicite audio, MIDI ou contribution FX.
+- Master ne recoit pas de mute ordinaire; aucun mute ne doit permettre un replay tardif ou une note bloquee.
+
+## Modeles sequence
+
+- Play: 64 steps, 32 p-locks maximum par step, pool 1024, donnees PLAY et ARP autorisees.
+- Special: 64 steps, 16 p-locks maximum par step, pool 256, automatisation non-PLAY et action bornee uniquement.
+- Ne jamais allouer d'etat note ou ARP par Special Track; ne pas utiliser le champ action pour introduire Brain ou MIDI FX sans chantier explicite.
+- Les formats persistants et les clipboards identifient les tracks par `role + ordinal`; tout paste entre roles incompatibles est refuse avant mutation.
+- Une sequence Special persiste uniquement longueur/page, action et automatisation non-PLAY. Aucun adaptateur homogene ne doit etre recree.
+
+## Play Tracks independantes
+
+- Les huit Play Tracks sont des autorites musicales independantes pour clavier, MIDI, ARP, scheduler, live record, mute, parametres, p-locks, sequence, snapshots et persistence.
+- Chaque Play Track conserve quatre voix PLAY; la polyphonie et le spread sont exclusivement ceux du moteur via `PARAM_CFG_POLY_VOICES` et `PARAM_CFG_POLY_SPREAD`.
+- Patch stocke exactement une piste et peut etre applique independamment a plusieurs pistes selectionnees.
+
+
+- Clavier, MIDI, ARP, live record, scheduler PLAY et mute adressent exclusivement leur Play Track; aucune distribution ou pile de notes inter-tracks ne doit etre recreee.
+- Conserver strictement `PARAM_CFG_POLY_VOICES`, `PARAM_CFG_POLY_SPREAD` et les spreads internes des moteurs.

@@ -181,7 +181,6 @@ Familles d'autorite:
 - `track_sound_state.*`:
   - premiere base canonique par track pour les blocs sonores extraits du runtime,
   - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,
-  - contient aussi un bloc `input` track-aware pour les Input1/2/3 hybrides, avec `hybrid_gate` comme premiere autorite canonique,
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
@@ -308,7 +307,6 @@ Call-sites critiques:
   - lu directement par les wrappers CFG quand la valeur effective doit etre reflchee apres mutation.
 - `track_sound_state`:
   - source autoritative par track pour les sous-ensembles communs MIX, MOD, FILTER et VCA actuellement extraits du runtime,
-  - porte aussi l'autorite canonique `input.hybrid_gate` pour Input1/2/3 hybrides,
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
@@ -372,7 +370,7 @@ Call-sites critiques:
 
 - Les edits locaux `CFG_TRACK` / `CFG_TRACK_TYPE` passent par `param_registry_run_track_transition_pipeline_for_track(cmd, track)`.
 - Le pipeline local capture uniquement le mix target de la track cible, refresh uniquement cette track, rebind uniquement sa lane mixer et re-apply uniquement les params runtime de cette track.
-- La re-application locale couvre les params communs lane-bound (`COLORS/FILTER`, `MIX`, `VCA`, `HYBRID_GATE`) puis les params `TONE` du type runtime courant, sans toucher les autres tracks et sans repasser par `refresh_all()`.
+- La re-application locale couvre les params communs lane-bound (`COLORS/FILTER`, `MIX`, `VCA`) puis les params `TONE` du type runtime courant, sans toucher les autres tracks et sans repasser par `refresh_all()`.
 - Apres re-application locale, le mixer snap les valeurs lissees de la lane cible vers les targets reappliquees pour eviter qu'un rebind neuf joue un bloc avec les defaults internes du mixer alors que l'UI/base track-aware garde les bonnes valeurs.
 - Le pipeline global `param_registry_run_track_transition_pipeline(cmd)` reste le chemin restore/load/init et conserve le refresh/rebind global.
 - Le rebind mixer local ne reset pas les lanes des autres tracks; les lanes inchangees sont no-op.
@@ -416,7 +414,7 @@ Call-sites critiques:
 
 ## 11. Contrat MIDI simple Tone
 
-- Params track-aware exposes pour `UI_TRACK_TYPE_MIDI` et `UI_TRACK_TYPE_INPUT/HYBRID`:
+- Params track-aware exposés pour `UI_TRACK_TYPE_MIDI` et `UI_TRACK_TYPE_EXTERNAL`:
   - `PARAM_MIDI_PROGRAM`,
   - `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4`.
 - Autorite:
@@ -425,7 +423,7 @@ Call-sites critiques:
   - l'emission runtime reste dans les chemins existants (`seq_runtime_on_midi_program_live_change`, `midi_cc`).
 - Invariants:
   - Program et CC restent des valeurs track-aware stables,
-  - aucune logique Drum/Hybrid/routage audio n'entre dans ce bloc,
+  - aucune logique Drum ou routage audio n'entre dans ce bloc,
   - aucune seconde autorite runtime n'est introduite.
 
 ## 12. Contrat Drum Tone final
@@ -465,7 +463,7 @@ Call-sites critiques:
   - emission MIDI live delegatee au runtime Z4 (`seq_runtime_on_midi_program_live_change`) pour Program,
   - emission MIDI live directe `midi_cc` pour CC.
 - Garde runtime:
-  - ces params sont acceptes uniquement si la track effective est `TRACK_RUNTIME_FAMILY_MIDI`,
+  - ces params sont acceptés si la track effective est `TRACK_RUNTIME_FAMILY_MIDI` ou `TRACK_RUNTIME_FAMILY_EXTERNAL`,
   - aucun backend audio n'est active par ces params.
 - Cache/runtime:
   - base track-aware stockee dans le cache runtime Z3 pour support plock/restore sans seconde autorite.
@@ -503,7 +501,7 @@ Call-sites critiques:
 - `PARAM_FILTER_TYPE` est exclu du catalogue LFO: changement enum de structure DSP, meme si le setter mixer est idempotent sur type identique.
 - `PARAM_FILTER_ENVRST` est exclu du catalogue LFO: flag/reset d'enveloppe, pas une modulation continue.
 - `PARAM_FILTER_ENVDLY` est exclu du catalogue LFO: pas de setter runtime effectif dans le mixer courant.
-- Les destinations MIDI directes sont `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` pour tracks `MIDI` et `Input/Hybrid`; `PARAM_MIDI_PROGRAM` reste exclu des destinations LFO.
+- Les destinations MIDI directes sont `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` pour tracks `MIDI` et `External`. `PARAM_MIDI_PROGRAM` reste exclu des destinations LFO.
 - Application modulation runtime:
   - FILTER direct appelle les setters mixer sur la cible runtime resolue, avec conversions `param_filter`,
   - MIDI CC direct appelle l'emission CC existante sans ecrire la base, et n'emet que si la valeur CC 7-bit arrondie change,
@@ -514,19 +512,6 @@ Call-sites critiques:
   - `PARAM_MASTER_FX1_TYPE..PARAM_MASTER_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_master_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
   - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_MD`: le type MD est silencieux et `drum_synth` ne rend aucun DSP MD a cette etape.
 
-## 24. Contrat Hybrid v1 (param/runtime borne)
-- `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input1/2/3` en mode `Hybrid` uniquement.
-- `PARAM_HYBRID_GATE` pilote le gate VCA runtime du mix-track Hybrid:
-  - `OFF`: bypass gate (audio input libre),
-  - `ON`: gate actif pilote par activite note.
-- Les params MIX track-aware (`LEVEL`, `PAN`, `SEND1`, `SEND2`, `MUTE`) vivent eux aussi dans `track_sound_state` comme base canonique par track, puis sont projetes vers le mixer runtime.
-- La valeur canonique `hybrid_gate` vit dans `track_sound_state.input` comme autorite par track.
-- Les params Sampler track-aware vivent dans `track_tone_sound_state` comme base canonique par track, puis sont projetes vers `brick6_sampler_runtime`.
-- Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input1/2/3 Hybrid` (en plus de `family MIDI`):
-  - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
-  - `CC`: emission directe `midi_cc`.
-- Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
-
 ## 25. Contrat LFO COLORS + rebind MIX (runtime)
 - `mod_lfo_v1` applique directement les destinations LFO FILTER continues exposees (`CUTOFF`, `RESONANCE`, `EQ_LOW`, `EQ_MID`, `EQ_HIGH`, `EG_AMT`, `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`) sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
 - `param_registry_apply_track_value_rt_fast` reste fallback de securite pour destination future non specialisee; il n'est plus le chemin volontaire des destinations LFO FILTER effectives.
@@ -535,7 +520,7 @@ Call-sites critiques:
 - Le bloc MIX suit le meme principe: la base track-aware est portee par `track_sound_state`, la lane mixer n'est qu'une projection temporaire.
 - Le bloc MOD suit le meme principe: la config LFO canonique par track est portee par `track_sound_state`, `mod_lfo_v1` n'en fait que l'execution/runtime et le cache de destination.
 - Le bloc TONE Sampler suit le meme principe: la base canonique par track est portee par `track_tone_sound_state`, `brick6_sampler_runtime` n'en fait que l'execution/runtime.
-- Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/hybrid_gate/vca`) pour recoller le runtime a l'autorite logique.
+- Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/vca`) pour recoller le runtime a l'autorite logique.
 - Le corridor local suppose que Z2 ne donne jamais a une track non-Input une lane reservee `Input1..3`; ainsi un scroll de family qui traverse les familles Input ne peut plus reset la lane MIX/FILTER d'une autre track.
 
 ## 26. Contrat corridor structurel Off -> On
@@ -677,6 +662,8 @@ Dette explicite post-passe 4:
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
 
 ## 29. Contrat Master/FX MacroFX
+- L'owner topologique de ce bloc est exclusivement la Special FX. La Special Master partage encore le couple family/type d'adaptation, mais les normalisations, applies et statuts effectifs MacroFX exigent `TRACK_TOPOLOGY_ROLE_FX`.
+- Les reverb, delay et compresseur visibles sur la Special Master gardent leur autorite globale `param_store` et leurs setters mixer existants; ils ne sont pas copies dans un état par track.
 - `track_tone_sound_state` porte un bloc `master_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
 - Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
 - Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants.
@@ -857,7 +844,6 @@ Dette explicite post-passe 4:
 
 - La surface MOD expose `MATRIX`, `LFO 1`, `LFO 2`, `LFO 3`; les champs `DEST/DEPTH` ne sont plus edites dans les pages LFO et passent uniquement par `mod_matrix`.
 - Les params `PARAM_MOD_MATRIX_SLOT/SOURCE/DEST/DEPTH` sont des params track-aware MOD qui adressent le slot selectionne par track. `SLOT` est un selecteur d'edition, pas un slot de modulation actif.
-- Pour LINK de voice group, `PARAM_MOD_MATRIX_DEPTH` est la seule valeur Matrix compatible; la propagation conserve explicitement l'index de slot source. `SLOT`, `SOURCE` et `DEST` restent des selecteurs/structure et ne sont pas propages.
 - Les anciens ids `PARAM_LFO1_DEST/DEPTH` et `PARAM_LFO2_DEST/DEPTH` sont retires du layout courant; aucun tombstone n'est conserve pour Matrix/ENV3.
 - Les params `PARAM_ENV3_ATTACK/DECAY/SUSTAIN/RELEASE` ecrivent la config canonique `track_sound_state.mod_env3`; en p-lock playback, `mod_env3` applique une copie runtime temporaire puis revient a la base courante sans modifier la valeur sauvegardee/affichee.
 - Les params Matrix a adressage par slot selectionne restent exclus des p-locks MOD tant qu'il n'existe pas d'IDs slot-addressed stables; cela evite de rendre une automation dependante du slot actuellement affiche.
@@ -884,12 +870,9 @@ Dette explicite post-passe 4:
 - `PARAM_STACK_PHASE_RESET` stocke `FREE`/`RESET`, reste exclu des destinations continues et conserve `FREE` par defaut.
 - En `FREE`, les phases Stack restent free-running pendant le silence avec les increments propres de chaque slot; en `RESET`, le note-on garde le reset deterministe local au runtime Stack.
 
-## Addendum 2026-07-25 - TRACK CFG group SPREAD/LINK
 
-- `PARAM_CFG_GROUP_SPREAD`, `PARAM_CFG_GROUP_LINK` et `PARAM_CFG_GROUP_SEQ_LINK` sont des commandes CFG speciales resolues par `param_registry` vers la master effective du voice group; elles ne passent pas par les domaines TONE/COLORS/MIX/PLAY.
 - SPREAD reutilise `PARAM_MIX_PAN` comme point d'application: pour `n=2..8`, la position du membre `i` est `spread * (((i / (n - 1)) * 2) - 1)`, donc centree autour de zero, avec `i=0` master puis slaves dans l'ordre logique.
 - LINK est intercepte en un seul point UI, apres l'edition manuelle de base et avant toute propagation secondaire: le delta propage est `valeur_apres_source - valeur_avant_source`, donc le delta reellement accepte apres clamp.
-- LINK inclut les edits manuels de base sur `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, et sur domaines compatibles `TONE`, `COLORS`, `MIX` et `MOD` pour params continus/int non enum/bool. Il exclut strictement `PLAY`, p-locks, live-rec p-locks, scheduler, modulation, automation, commandes, navigation, `SPREAD`, `LINK` et `SEQ LINK`.
 - La recursion est bloquee par un garde local de propagation; une ecriture propagee ne redevient jamais source LINK.
 
 ## Addendum 2026-07-26 - resolution fine TONE Stack
@@ -908,8 +891,6 @@ Dette explicite post-passe 4:
 
 ## Addendum 2026-07-26 - LINK choix structurels et filtre
 
-- LINK voice group propage maintenant les choix discrets `PARAM_FILTER_TYPE`, `PARAM_CFG_TRACK` et `PARAM_CFG_TRACK_TYPE` par valeur absolue source apres clamp, pas par delta relatif.
-- Les autres params LINK existants restent sur leur propagation relative bornee; les exclusions `PLAY`, p-locks, scheduler, automation, `SPREAD`/`LINK`/`SEQ LINK` et selecteurs Matrix restent inchangees.
 
 ## Addendum 2026-07-27 - identite Synth/Wave avant TONE
 
@@ -917,9 +898,7 @@ Dette explicite post-passe 4:
 - Avant cette passe TONE, aucun slot TONE, apply backend, p-lock TONE ou destination Matrix Wave n'etait branche.
 - Les destinations Prism existantes restent attachees a `TRACK_RUNTIME_ENGINE_PRISM` et ne s'appliquent pas a `TRACK_RUNTIME_ENGINE_WAVE`.
 
-## Addendum 2026-07-28 - PARAM CFG GROUP SPREAD KEYTRK
 
-- `PARAM_CFG_GROUP_SPREAD_KEYTRK` ajoute le toggle `KEYTRK` de `CFG/GROUP`, resolu par `param_registry` vers la master effective du voice group comme `SPREAD` et `LINK`.
 - `KEYTRK=OFF` garde le comportement `SPREAD` existant: pan MIX des membres `spread * (((i / (n - 1)) * 2) - 1)`.
 - `KEYTRK=ON` neutralise le pan MIX seulement pour les membres `Sampler/Multi` et laisse `brick6_sampler_runtime` appliquer un pan par voix Multi.
 - Courbe keytrack: facteur lineaire borne `0.5 + note/127 * 0.75`, soit `0.5..1.25`, multiplie par le pan de spread puis clamp `-1..1`.
@@ -952,18 +931,9 @@ Dette explicite post-passe 4:
 - La résonance UI devient linéaire `r=value/127`; le mapping de Q musical est
   porté uniquement par Z1 et atteint exactement 6.5.
 
-## Addendum 2026-07-28 - PARAM CFG GROUP SEQ LINK
 
-- `PARAM_CFG_GROUP_SEQ_LINK` ajoute le toggle utilisateur `SEQ LINK` de `CFG/GROUP`.
-- L'apply est centralise dans `param_registry`: la track active est resolue vers la master effective du voice group, puis le flag est commite via `param_registry_commit_voice_group_seq_link()`.
-- La lecture valeur passe par la projection master-effective `track_runtime_get_voice_group_seq_link()` afin qu'une track hors groupe operationnel reste affichee `OFF`.
 
-## Addendum 2026-07-28 - contrat commit SEQ LINK
 
-- `SEQ LINK` se modifie maintenant par `param_registry_commit_voice_group_seq_link()` ou `param_registry_commit_voice_group_seq_link_bulk()`, quelle que soit l'origine: UI, Pattern/Project, Kit, Patch Poly ou snapshot track.
-- Ces APIs sont le point unique qui ecrit le stockage brut Z2 puis emet la notification post-commit Z4 `seq_runtime_on_seq_link_changed()` quand la valeur brute change.
-- Les mutations brutes `track_state_*_seq_link_raw()` sont reservees a ce contrat interne et ne constituent pas une surface d'appel produit.
-- `SEQ LINK` reste une commande de structure CFG: pas de p-lock, pas de modulation, pas de live-rec, pas de propagation par `CFG GROUP LINK`.
 
 ## Addendum 2026-07-28 - reset runtime cache par Track snapshot
 
@@ -1018,3 +988,15 @@ Dette explicite post-passe 4:
   controles historiques `BD_ANALOG` restent sur leurs IDs existants.
 - `MODEL` est p-lockable mais jamais modulable. Seuls les slots actifs du
   profil courant sont proposes comme destinations MOD.
+# Addendum 2026-07-31 - parametre VOICES borne globalement
+
+`PARAM_CFG_POLY_VOICES` reste 1..8 par track mais son apply est borne par `voix possedees + slots libres`. La diminution coupe les notes, retire les etats d'allocation et rend les slots immediatement disponibles. Ce parametre reste exclu du group-link, de la modulation et des p-locks.
+
+L'editeur CFG calcule sa borne effective a chaque mouvement (`16 - voix reservees par les autres tracks`), s'arrete sur cette valeur sans depassement visuel et affiche `VOICE MAX` sur une tentative positive supplementaire. Le chemin parametre rapide refuse explicitement `VOICES`; aucune modulation ni restauration de p-lock ne peut donc contourner l'autorite.
+# Addendum 2026-07-31 - paramètre External Input
+
+- `PARAM_EXTERNAL_INPUT` est un enum track-aware borné à la cible (`Input1` Low-Cost, `Input1..3` Premium). Son apply délègue à Z2; il ne possède ni réservation ni fallback.
+- `External` réutilise les params TONE MIDI Program/CC et les destinations modulation valides MIDI, FILTER, MIX et VCA de sa cible audio effective.
+- Le changement d'entrée suit la transition globale de rebind et reste hors RT fast; un conflit retourne un échec sans modifier la base ni le runtime.
+
+- L'apply historique de ces commandes est neutralise et la propagation manuelle `LINK` entre tracks est desactivee. `PARAM_CFG_POLY_VOICES`, `PARAM_CFG_POLY_SPREAD` et les spreads moteur restent inchanges.

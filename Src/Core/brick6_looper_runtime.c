@@ -1,4 +1,5 @@
 #include "Core/brick6_looper_runtime.h"
+#include "Core/brick_build_config.h"
 
 #include "Audio/audio_float.h"
 #include "Core/brick6_clip_shifter.h"
@@ -13,7 +14,7 @@
 #include <string.h>
 
 #define BRICK6_LOOPER_TRACK_CAP SEQ_TRACK_COUNT
-#define BRICK6_LOOPER_SHIFTER_CAP 4U
+#define BRICK6_LOOPER_SHIFTER_CAP BRICK6_LOOPER_SHIFTER_SLOT_CAP
 #define BRICK6_LOOPER_SHIFTER_SLOT_NONE 0xFFU
 #define BRICK6_LOOPER_CACHE_ID_BASE SAMPLE_PAGE_CACHE_LOOPER_ID_BASE
 #define BRICK6_LOOPER_PREFETCH_PAGES 12U

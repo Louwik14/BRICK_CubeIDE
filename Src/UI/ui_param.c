@@ -33,6 +33,8 @@
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/synth_polyphony.h"
+#include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
@@ -72,7 +74,6 @@ static uint8_t g_ui_param_encoder_edit_group_active = 0U;
 static uint32_t g_ui_param_encoder_edit_group_key = 0U;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
-static uint8_t g_ui_param_group_link_propagating = 0U;
 
 typedef struct
 {
@@ -116,6 +117,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
 
 static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
 {
+    if (param == PARAM_CFG_POLY_VOICES) return 0U;
     return ((param == PARAM_STACK_OSC1_TUNE)
             || (param == PARAM_STACK_OSC2_TUNE)
             || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
@@ -346,7 +348,9 @@ static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param)
 
 static uint8_t ui_param_seq_runtime_track_is_valid(uint8_t track)
 {
-    return ((track < SEQ_TRACK_COUNT) && (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)) ? 1U : 0U;
+    return (uint8_t)((track < SEQ_TRACK_COUNT)
+            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) == 0U)
+            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U));
 }
 
 static uint8_t ui_param_get_seq_runtime_track_value(param_id_t param, uint8_t track, float *out_value)
@@ -450,7 +454,9 @@ static uint8_t ui_param_is_arp_track_param(param_id_t param)
 
 static uint8_t ui_param_arp_track_is_valid(uint8_t track)
 {
-    return ((track < SEQ_TRACK_COUNT) && (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)) ? 1U : 0U;
+    return (uint8_t)((track < SEQ_TRACK_COUNT)
+            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) == 0U)
+            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U));
 }
 
 static uint8_t ui_param_get_arp_track_value(param_id_t param, uint8_t track, float *out_value)
@@ -691,8 +697,8 @@ static uint8_t ui_param_master_fx_step_type(uint8_t track,
     uint8_t slot = 0U;
     if ((out_value == 0)
             || (delta == 0)
-            || (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
-            || (ui_get_track_type(track) != UI_TRACK_TYPE_MASTER_FX)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (ui_param_master_fx_type_slot_from_param(param, &slot) == 0U))
     {
         return 0U;
@@ -828,8 +834,8 @@ static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
     uint8_t macro = 0U;
     if ((out_value == 0)
             || (delta == 0)
-            || (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
-            || (ui_get_track_type(track) != UI_TRACK_TYPE_MASTER_FX)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (ui_param_master_fx_slot_from_param(param, &slot, &macro) == 0U))
     {
         return 0U;
@@ -1126,14 +1132,6 @@ void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t
 
 static uint8_t ui_param_is_track_scoped(param_id_t param)
 {
-    if ((param == PARAM_CFG_GROUP_SPREAD)
-            || (param == PARAM_CFG_GROUP_LINK)
-            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            || (param == PARAM_CFG_GROUP_SEQ_LINK))
-    {
-        return 1U;
-    }
-
     if ((ui_param_is_seq_runtime_track_param(param) != 0U) || (ui_param_is_arp_track_param(param) != 0U))
     {
         return 1U;
@@ -1146,19 +1144,12 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
 
 static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT) || (ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER))
+    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
     {
         return 0U;
     }
-
-    if ((param == PARAM_CFG_GROUP_SPREAD)
-            || (param == PARAM_CFG_GROUP_LINK)
-            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            || (param == PARAM_CFG_GROUP_SEQ_LINK))
-    {
-        return 0U;
-    }
-
     if (ui_param_is_seq_runtime_track_param(param) != 0U)
     {
         return ui_param_seq_runtime_track_is_valid(track);
@@ -1245,6 +1236,25 @@ static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, 
                                     UNDO_V2_TX_MODE_DELTA);
 }
 
+static uint8_t ui_param_begin_structural_undo(uint8_t encoder, param_id_t param, uint8_t track)
+{
+    if ((param != PARAM_CFG_TRACK) && (param != PARAM_CFG_TRACK_TYPE)
+            && (param != PARAM_CFG_POLY_VOICES)) return 0U;
+    if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_ENCODER,
+            ui_param_make_gesture_key(encoder, param, track)) != UNDO_V2_STATUS_OK) return 0U;
+    if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
+    { undo_v2_cancel_transaction(); return 0U; }
+    return 1U;
+}
+
+static void ui_param_finish_structural_undo(uint8_t started, uint8_t applied)
+{
+    if (started == 0U) return;
+    if ((applied == 0U) || (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK))
+    { undo_v2_cancel_transaction(); return; }
+    (void)undo_v2_commit_transaction();
+}
+
 static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, float *out_min, float *out_max)
 {
     if ((param >= PARAM_COUNT) || (out_min == 0) || (out_max == 0))
@@ -1265,6 +1275,10 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         const ui_track_family_t active_family = ui_get_track_family(track);
         const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
         *out_max = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
+    }
+    else if (param == PARAM_CFG_POLY_VOICES)
+    {
+        *out_max = (float)synth_polyphony_get_available_for_track(track);
     }
     else if (param == PARAM_MOD_MATRIX_DEST)
     {
@@ -1370,7 +1384,8 @@ static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint
     if ((param >= PARAM_COUNT)
             || (active_track >= SEQ_TRACK_COUNT)
             || (ui_param_is_track_scoped(param) == 0U)
-            || (ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER))
+            || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+            || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
     {
         return 0U;
     }
@@ -1388,230 +1403,6 @@ static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint
     }
 
     return ui_param_track_accepts_relative_param(active_track, param);
-}
-
-static uint8_t ui_param_group_link_param_is_allowed(param_id_t param, const param_desc_t *desc)
-{
-    if ((param >= PARAM_COUNT) || (desc == 0))
-    {
-        return 0U;
-    }
-
-    if ((param == PARAM_CFG_GROUP_SPREAD)
-            || (param == PARAM_CFG_GROUP_LINK)
-            || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            || (param == PARAM_CFG_GROUP_SEQ_LINK)
-            || (param == PARAM_CFG_MIDI_CH)
-            || (param == PARAM_CFG_MIDI_SRC)
-            || (param == PARAM_CFG_POLY_VOICES)
-            || (param == PARAM_CFG_POLY_SPREAD))
-    {
-        return 0U;
-    }
-
-    if ((param == PARAM_CFG_TRACK) || (param == PARAM_CFG_TRACK_TYPE))
-    {
-        return 1U;
-    }
-
-    if (param == PARAM_FILTER_TYPE)
-    {
-        return 1U;
-    }
-
-    if ((param == PARAM_MOD_MATRIX_SLOT)
-            || (param == PARAM_MOD_MATRIX_SOURCE)
-            || (param == PARAM_MOD_MATRIX_DEST))
-    {
-        return 0U;
-    }
-
-    if ((desc->type == PARAM_TYPE_ENUM)
-            || (desc->type == PARAM_TYPE_BOOL)
-            || (desc->display_type == PARAM_DISPLAY_ENUM)
-            || (desc->display_type == PARAM_DISPLAY_BOOL))
-    {
-        return 0U;
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
-    {
-        return 0U;
-    }
-
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD))
-    {
-        return 1U;
-    }
-
-    return 0U;
-}
-
-static uint8_t ui_param_group_link_param_uses_absolute_value(param_id_t param)
-{
-    return (uint8_t)(((param == PARAM_CFG_TRACK)
-                      || (param == PARAM_CFG_TRACK_TYPE)
-                      || (param == PARAM_FILTER_TYPE)) ? 1U : 0U);
-}
-
-static uint8_t ui_param_apply_group_link_matrix_depth(uint8_t encoder,
-                                                      uint8_t source_track,
-                                                      uint8_t target_track,
-                                                      float applied_delta)
-{
-    float source_slot_value = 0.0f;
-    float target_slot_value = 0.0f;
-    float current_value = 0.0f;
-    float min_value = 0.0f;
-    float max_value = 0.0f;
-
-    if ((mod_matrix_get_selected_slot(source_track, &source_slot_value) == 0U)
-            || (mod_matrix_get_selected_slot(target_track, &target_slot_value) == 0U))
-    {
-        return 0U;
-    }
-
-    const uint8_t source_slot = (uint8_t)source_slot_value;
-    const uint8_t target_slot = (uint8_t)target_slot_value;
-    const uint8_t restore_target_slot = (target_slot != source_slot) ? 1U : 0U;
-
-    if ((restore_target_slot != 0U)
-            && (param_registry_apply_track_value(PARAM_MOD_MATRIX_SLOT, target_track, (float)source_slot) == 0U))
-    {
-        return 0U;
-    }
-
-    uint8_t applied = 0U;
-    if ((ui_param_get_track_edit_value(PARAM_MOD_MATRIX_DEPTH, target_track, &current_value) != 0U)
-            && (ui_param_resolve_edit_bounds(PARAM_MOD_MATRIX_DEPTH, target_track, &min_value, &max_value) != 0U))
-    {
-        const float next_value = ui_param_clamp(current_value + applied_delta, min_value, max_value);
-        if ((ui_param_value_is_same(next_value, current_value) == 0U)
-                && (ui_param_set_track_value(encoder, PARAM_MOD_MATRIX_DEPTH, next_value, target_track, 0U) != 0U))
-        {
-            applied = 1U;
-        }
-    }
-
-    if (restore_target_slot != 0U)
-    {
-        (void)param_registry_apply_track_value(PARAM_MOD_MATRIX_SLOT, target_track, (float)target_slot);
-    }
-
-    return applied;
-}
-
-static uint8_t ui_param_group_link_target_accepts_param(uint8_t track, param_id_t param)
-{
-    if ((track >= SEQ_TRACK_COUNT)
-            || (param >= PARAM_COUNT)
-            || (ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER))
-    {
-        return 0U;
-    }
-
-    if ((param == PARAM_CFG_TRACK) || (param == PARAM_CFG_TRACK_TYPE))
-    {
-        return 1U;
-    }
-
-    track_runtime_refresh_track(track);
-    if (track_runtime_get_effective_param_status(track, param) != TRACK_RUNTIME_PARAM_ALLOWED)
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t ui_param_apply_group_link_delta(uint8_t encoder,
-                                               param_id_t param,
-                                               const param_desc_t *desc,
-                                               uint8_t source_track,
-                                               float source_value,
-                                               float applied_delta)
-{
-    if ((g_ui_param_group_link_propagating != 0U)
-            || (source_track >= SEQ_TRACK_COUNT)
-            || (ui_param_value_is_same(applied_delta, 0.0f) != 0U)
-            || (ui_param_group_link_param_is_allowed(param, desc) == 0U))
-    {
-        return 0U;
-    }
-
-    uint8_t master_track = source_track;
-    if (track_runtime_get_voice_group_effective_master(source_track, &master_track) == 0U)
-    {
-        return 0U;
-    }
-    if (track_state_get_voice_group_link(master_track) == 0U)
-    {
-        return 0U;
-    }
-
-    uint8_t members[8U] = { 0U };
-    uint8_t member_count = 0U;
-    if ((track_runtime_collect_voice_group_members(master_track, members, 8U, &member_count) == 0U)
-            || (member_count < 2U)
-            || (member_count > 8U))
-    {
-        return 0U;
-    }
-
-    g_ui_param_group_link_propagating = 1U;
-    uint8_t applied = 0U;
-    for (uint8_t i = 0U; i < member_count; ++i)
-    {
-        const uint8_t target_track = members[i];
-        if (target_track == source_track)
-        {
-            continue;
-        }
-        if (ui_param_group_link_target_accepts_param(target_track, param) == 0U)
-        {
-            continue;
-        }
-
-        if (param == PARAM_MOD_MATRIX_DEPTH)
-        {
-            if (ui_param_apply_group_link_matrix_depth(encoder, source_track, target_track, applied_delta) != 0U)
-            {
-                applied = 1U;
-            }
-            continue;
-        }
-
-        float current_value = 0.0f;
-        float min_value = 0.0f;
-        float max_value = 0.0f;
-        if ((ui_param_get_track_edit_value(param, target_track, &current_value) == 0U)
-                || (ui_param_resolve_edit_bounds(param, target_track, &min_value, &max_value) == 0U))
-        {
-            continue;
-        }
-
-        const float next_value = (ui_param_group_link_param_uses_absolute_value(param) != 0U)
-            ? ui_param_clamp(source_value, min_value, max_value)
-            : ui_param_clamp(current_value + applied_delta, min_value, max_value);
-        if (ui_param_value_is_same(next_value, current_value) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_param_set_track_value(encoder, param, next_value, target_track, 0U) != 0U)
-        {
-            applied = 1U;
-        }
-    }
-    g_ui_param_group_link_propagating = 0U;
-
-    return applied;
 }
 
 static uint8_t ui_param_resolve_seq_slot(uint8_t track,
@@ -2123,7 +1914,9 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        if ((track == active_track) || (ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER))
+        if ((track == active_track)
+                || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+                || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
         {
             continue;
         }
@@ -2526,21 +2319,22 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     if (param == PARAM_CFG_TRACK)
     {
-        const float source_current_value = value;
         value = ui_param_step_cfg_track(value, ui_param_signum(delta), edit_track);
         if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
         {
             return 0U;
         }
-        if (ui_param_set_active_track_value(encoder, param, value, edit_track) != 0U)
+        const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
+        const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
+        if (structural_applied != 0U)
         {
             ui_param_note_user_value_flash(encoder,
                                            param,
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
         }
+        ui_param_finish_structural_undo(structural_undo, structural_applied);
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
             (void)undo_v2_commit_transaction();
@@ -2550,21 +2344,22 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     if (param == PARAM_CFG_TRACK_TYPE)
     {
-        const float source_current_value = value;
         value = ui_param_step_cfg_track_type(value, ui_param_signum(delta), edit_track);
         if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
         {
             return 0U;
         }
-        if (ui_param_set_active_track_value(encoder, param, value, edit_track) != 0U)
+        const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
+        const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
+        if (structural_applied != 0U)
         {
             ui_param_note_user_value_flash(encoder,
                                            param,
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-            (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
         }
+        ui_param_finish_structural_undo(structural_undo, structural_applied);
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
             (void)undo_v2_commit_transaction();
@@ -2591,6 +2386,8 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
         if (ui_param_value_is_same(value, source_current_value) != 0U)
         {
+            if ((param == PARAM_CFG_POLY_VOICES) && (delta > 0))
+                ui_core_feedback_set("VOICE MAX", HAL_GetTick());
             const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
             if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
             {
@@ -2600,7 +2397,9 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         }
     }
 
+    const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
     uint8_t source_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
+    ui_param_finish_structural_undo(structural_undo, source_applied);
     if (source_applied != 0U)
     {
         ui_param_note_user_value_flash(encoder,
@@ -2608,7 +2407,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        edit_track,
                                        value,
                                        UI_PARAM_VALUE_FLASH_DIRECT);
-        (void)ui_param_apply_group_link_delta(encoder, param, desc, edit_track, value, value - source_current_value);
     }
     (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
     if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))

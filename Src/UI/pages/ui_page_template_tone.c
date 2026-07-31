@@ -29,6 +29,90 @@ static const ui_template_family_t g_ui_template_tone_family_master_fx = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_master_reverb_mutable = {
+    .family_title = "MASTER 1/3",
+    .nav_labels = { "REVERB 1", "REVERB 2", "REVERB 3", "-" },
+    .subpages = {
+        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF } } },
+        { .title = "REVERB 3", .param_bank = { .params = { PARAM_MIX_REVERB_SMEAR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_reverb_digital = {
+    .family_title = "MASTER 1/3",
+    .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
+    .subpages = {
+        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DIGITAL_DECAY, PARAM_MIX_REVERB_PRED } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DIGITAL_DAMP, PARAM_MIX_REVERB_DIGITAL_HPF, PARAM_MIX_REVERB_DIGITAL_LPF, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_delay_classic = {
+    .family_title = "MASTER 2/3",
+    .nav_labels = { "DELAY 1", "DELAY 2", "-", "-" },
+    .subpages = {
+        { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_VOL } } },
+        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_delay_dual = {
+    .family_title = "MASTER 2/3",
+    .nav_labels = { "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4" },
+    .subpages = {
+        { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_VOL } } },
+        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
+        { .title = "DELAY 3", .param_bank = { .params = { PARAM_MIX_DELAY_TIME_R, PARAM_MIX_DELAY_WIDTH, PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_MOD } } },
+        { .title = "DELAY 4", .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_comp_off = {
+    .family_title = "MASTER 3/3",
+    .nav_labels = { "COMP MAIN", "COMP ENV", "-", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_comp_deluge = {
+    .family_title = "MASTER 3/3",
+    .nav_labels = { "COMP MAIN", "COMP ENV", "COMP CHAR", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DELUGE_SAT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_comp_brick = {
+    .family_title = "MASTER 3/3",
+    .nav_labels = { "COMP MAIN", "COMP ENV", "COMP CHAR", "-" },
+    .subpages = {
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DETECT, PARAM_COMP_KNEE_DB, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
     .nav_labels = { "PLAY", "LOOP", "-", "-" },
@@ -190,18 +274,6 @@ static const ui_template_family_t g_ui_template_tone_family_midi = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_hybrid = {
-    .family_title = "TONE",
-    .nav_labels = { "PROG", "CC1", "CC2", "CC3" },
-    .subpages = {
-        { .title = "PROG", .param_bank = { .params = { PARAM_HYBRID_GATE, PARAM_MIDI_PROGRAM, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "CC1", .param_bank = { .params = { PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3, PARAM_MIDI_CC1_4 } } },
-        { .title = "CC2", .param_bank = { .params = { PARAM_MIDI_CC2_1, PARAM_MIDI_CC2_2, PARAM_MIDI_CC2_3, PARAM_MIDI_CC2_4 } } },
-        { .title = "CC3", .param_bank = { .params = { PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4 } } },
-    },
-    .default_subpage = 0U,
-};
-
 
 static ui_template_family_t g_ui_template_tone_family_drum = {
     .family_title = "TONE",
@@ -218,6 +290,30 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
 static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+    {
+        if (g_ui_template_tone_subset == 0U)
+        {
+            return (param_get(PARAM_MIX_REVERB_MODEL) >= 0.5f)
+                    ? &g_ui_template_tone_family_master_reverb_digital
+                    : &g_ui_template_tone_family_master_reverb_mutable;
+        }
+        if (g_ui_template_tone_subset == 1U)
+        {
+            return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
+                    ? &g_ui_template_tone_family_master_delay_dual
+                    : &g_ui_template_tone_family_master_delay_classic;
+        }
+
+        const uint8_t model = (uint8_t)(param_get(PARAM_COMP_MODEL) + 0.5f);
+        if (model == 1U) return &g_ui_template_tone_family_master_comp_deluge;
+        if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
+        return &g_ui_template_tone_family_master_comp_off;
+    }
+    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
+    {
+        return &g_ui_template_tone_family_master_fx;
+    }
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DELUGE))
     {
@@ -1088,6 +1184,16 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
     ui_prism_value_kind_t kind = UI_PRISM_VALUE_PERCENT;
 
     (void)slot;
+
+    if ((id == PARAM_MIX_REVERB_HPF)
+            || (id == PARAM_MIX_REVERB_LPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_LPF)
+            || (id == PARAM_MIX_DELAY_HPF)
+            || (id == PARAM_MIX_DELAY_LPF))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP;
+    }
     (void)value_label;
 
     if ((id == PARAM_STACK_OSC1_MODEL)
@@ -1200,8 +1306,7 @@ static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uin
     if ((out_fx_type == NULL)
             || (id < PARAM_MASTER_FX1_TYPE)
             || (id > PARAM_MASTER_FX4_B)
-            || (ui_get_track_family(active_track) != UI_TRACK_FAMILY_MASTER)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_MASTER_FX))
+            || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) == 0U))
     {
         return 0U;
     }
@@ -1838,8 +1943,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
-    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_MASTER)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_MASTER_FX)
+    if ((track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (slot < 1U)
             || (slot > 3U)
             || (g_ui_template_tone_state.active_subpage >= 4U))
@@ -1993,11 +2097,7 @@ void ui_page_template_tone_register_families(void)
             }
 
             const ui_template_family_t *family_template = NULL;
-            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_MASTER_FX))
-            {
-                family_template = &g_ui_template_tone_family_master_fx;
-            }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
+            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
             {
                 family_template = &g_ui_template_tone_family_prism;
             }
@@ -2034,9 +2134,9 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_midi;
             }
-            else if ((ui_track_family_is_input(track_family) != 0U) && (track_type == UI_TRACK_TYPE_HYBRID))
+            else if ((track_family == UI_TRACK_FAMILY_EXTERNAL) && (track_type == UI_TRACK_TYPE_EXTERNAL))
             {
-                family_template = &g_ui_template_tone_family_hybrid;
+                family_template = &g_ui_template_tone_family_midi;
             }
             else if (track_family == UI_TRACK_FAMILY_DRUM)
             {
@@ -2058,6 +2158,13 @@ void ui_page_template_tone_open_primary(void)
 void ui_page_template_tone_toggle_subset(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+    {
+        g_ui_template_tone_subset = (uint8_t)((g_ui_template_tone_subset + 1U) % 3U);
+        g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
+        ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
+        return;
+    }
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
             || ((ui_get_track_type(active_track) != UI_TRACK_TYPE_STACK)
                 && (ui_get_track_type(active_track) != UI_TRACK_TYPE_WAVE)))

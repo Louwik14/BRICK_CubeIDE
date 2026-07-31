@@ -34,7 +34,8 @@ typedef struct
     uint32_t samples_per_step_q16;
     uint64_t audio_block_start_sample;
     uint64_t audio_timeline_sample;
-    seq_runtime_active_lock_t active_locks[SEQ_TRACK_COUNT][SEQ_STEP_MAX_LOCKS];
+    seq_runtime_active_lock_t active_locks_play[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_PLAY_STEP_MAX_LOCKS];
+    seq_runtime_active_lock_t active_locks_special[TRACK_TOPOLOGY_SPECIAL_TRACK_COUNT][SEQ_SPECIAL_STEP_MAX_LOCKS];
 } seq_runtime_state_t;
 
 typedef enum
@@ -127,7 +128,6 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
-void seq_runtime_on_seq_link_changed(uint8_t master_track);
 
 /* Queries / diagnostics. */
 uint8_t seq_runtime_is_running(void);

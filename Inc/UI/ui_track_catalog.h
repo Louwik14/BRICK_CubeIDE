@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "ui_core.h"
+#include "Core/brick_build_config.h"
 
 #define BRICK6_MAX_CLIP_TRACKS 4U
 

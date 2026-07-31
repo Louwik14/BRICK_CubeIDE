@@ -279,7 +279,7 @@ void ui_page_template_vca_register_families(void)
 
             const ui_template_family_t *family_template = &g_ui_template_vca_family;
             if ((ui_track_family_is_engine(track_family) == 0U)
-                    && !((ui_track_family_is_input(track_family) != 0U) && (track_type == UI_TRACK_TYPE_HYBRID)))
+                    && (track_family != UI_TRACK_FAMILY_EXTERNAL))
             {
                 family_template = NULL;
             }

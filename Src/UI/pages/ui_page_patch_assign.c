@@ -52,7 +52,6 @@ typedef enum
     PATCH_ASSIGN_FAMILY_SAMPLER,
     PATCH_ASSIGN_FAMILY_DRUM,
     PATCH_ASSIGN_FAMILY_INPUT,
-    PATCH_ASSIGN_FAMILY_MASTER,
     PATCH_ASSIGN_FAMILY_COUNT
 } patch_assign_family_filter_t;
 
@@ -61,13 +60,13 @@ typedef enum
     PATCH_ASSIGN_TYPE_ALL = 0,
     PATCH_ASSIGN_TYPE_PRISM,
     PATCH_ASSIGN_TYPE_WAVE,
+    PATCH_ASSIGN_TYPE_STACK,
+    PATCH_ASSIGN_TYPE_DELUGE,
     PATCH_ASSIGN_TYPE_RAM,
     PATCH_ASSIGN_TYPE_STREAM,
     PATCH_ASSIGN_TYPE_MULTI,
     PATCH_ASSIGN_TYPE_LOOPER,
     PATCH_ASSIGN_TYPE_AUDIO,
-    PATCH_ASSIGN_TYPE_HYBRID,
-    PATCH_ASSIGN_TYPE_FX,
     PATCH_ASSIGN_TYPE_DRUM_MD,
     PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG,
     PATCH_ASSIGN_TYPE_COUNT
@@ -160,7 +159,6 @@ static const char *ui_page_patch_assign_family_filter_label(patch_assign_family_
         case PATCH_ASSIGN_FAMILY_SYNTH: return "SYNTH";
         case PATCH_ASSIGN_FAMILY_SAMPLER: return "SAMPLER";
         case PATCH_ASSIGN_FAMILY_DRUM: return "DRUM";
-        case PATCH_ASSIGN_FAMILY_MASTER: return "MASTER";
         default: return "ALL";
     }
 }
@@ -172,13 +170,13 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_ALL: return "ALL";
         case PATCH_ASSIGN_TYPE_PRISM: return "PRISM";
         case PATCH_ASSIGN_TYPE_WAVE: return "WAVE";
+        case PATCH_ASSIGN_TYPE_STACK: return "STACK";
+        case PATCH_ASSIGN_TYPE_DELUGE: return "DELUGE";
         case PATCH_ASSIGN_TYPE_RAM: return "RAM";
         case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
         case PATCH_ASSIGN_TYPE_MULTI: return "MULTI";
         case PATCH_ASSIGN_TYPE_LOOPER: return "LOOPER";
         case PATCH_ASSIGN_TYPE_AUDIO: return "AUDIO";
-        case PATCH_ASSIGN_TYPE_HYBRID: return "HYBRID";
-        case PATCH_ASSIGN_TYPE_FX: return "FX";
         case PATCH_ASSIGN_TYPE_DRUM_MD: return "DRUM MD";
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG: return "BD ANA";
         default: return "ALL";
@@ -202,7 +200,6 @@ static patch_assign_family_filter_t ui_page_patch_assign_family_filter_from_trac
         case UI_TRACK_FAMILY_SYNTH: return PATCH_ASSIGN_FAMILY_SYNTH;
         case UI_TRACK_FAMILY_SAMPLER: return PATCH_ASSIGN_FAMILY_SAMPLER;
         case UI_TRACK_FAMILY_DRUM: return PATCH_ASSIGN_FAMILY_DRUM;
-        case UI_TRACK_FAMILY_MASTER: return PATCH_ASSIGN_FAMILY_MASTER;
         default: return PATCH_ASSIGN_FAMILY_ALL;
     }
 }
@@ -217,6 +214,8 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
             {
                 case UI_TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
                 case UI_TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
+                case UI_TRACK_TYPE_STACK: return PATCH_ASSIGN_TYPE_STACK;
+                case UI_TRACK_TYPE_DELUGE: return PATCH_ASSIGN_TYPE_DELUGE;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
@@ -234,12 +233,8 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
             switch (type)
             {
                 case UI_TRACK_TYPE_AUDIO: return PATCH_ASSIGN_TYPE_AUDIO;
-                case UI_TRACK_TYPE_HYBRID: return PATCH_ASSIGN_TYPE_HYBRID;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
-
-        case PATCH_ASSIGN_FAMILY_MASTER:
-            return (type == UI_TRACK_TYPE_MASTER_FX) ? PATCH_ASSIGN_TYPE_FX : PATCH_ASSIGN_TYPE_ALL;
 
         case PATCH_ASSIGN_FAMILY_DRUM:
             switch (type)
@@ -267,7 +262,9 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
     {
         case PATCH_ASSIGN_FAMILY_SYNTH:
             return ((type == PATCH_ASSIGN_TYPE_PRISM)
-                    || (type == PATCH_ASSIGN_TYPE_WAVE)) ? 1U : 0U;
+                    || (type == PATCH_ASSIGN_TYPE_WAVE)
+                    || (type == PATCH_ASSIGN_TYPE_STACK)
+                    || (type == PATCH_ASSIGN_TYPE_DELUGE)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             return ((type == PATCH_ASSIGN_TYPE_RAM)
@@ -280,11 +277,7 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
                     || (type == PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_INPUT:
-            return ((type == PATCH_ASSIGN_TYPE_AUDIO)
-                    || (type == PATCH_ASSIGN_TYPE_HYBRID)) ? 1U : 0U;
-
-        case PATCH_ASSIGN_FAMILY_MASTER:
-            return (type == PATCH_ASSIGN_TYPE_FX) ? 1U : 0U;
+            return (type == PATCH_ASSIGN_TYPE_AUDIO) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_ALL:
         default:
@@ -344,8 +337,6 @@ static uint8_t ui_page_patch_assign_family_matches(ui_track_family_t family)
             return (family == UI_TRACK_FAMILY_SAMPLER) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_DRUM:
             return (family == UI_TRACK_FAMILY_DRUM) ? 1U : 0U;
-        case PATCH_ASSIGN_FAMILY_MASTER:
-            return (family == UI_TRACK_FAMILY_MASTER) ? 1U : 0U;
         default:
             return 1U;
     }
@@ -364,6 +355,10 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
             return (type == UI_TRACK_TYPE_PRISM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_WAVE:
             return (type == UI_TRACK_TYPE_WAVE) ? 1U : 0U;
+        case PATCH_ASSIGN_TYPE_STACK:
+            return (type == UI_TRACK_TYPE_STACK) ? 1U : 0U;
+        case PATCH_ASSIGN_TYPE_DELUGE:
+            return (type == UI_TRACK_TYPE_DELUGE) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_RAM:
             return (type == UI_TRACK_TYPE_RAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STREAM:
@@ -374,10 +369,6 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
             return (type == UI_TRACK_TYPE_LOOPER) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_AUDIO:
             return (type == UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_HYBRID:
-            return (type == UI_TRACK_TYPE_HYBRID) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_FX:
-            return (type == UI_TRACK_TYPE_MASTER_FX) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_MD:
             return (type == UI_TRACK_TYPE_DRUM_MD) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG:
@@ -616,7 +607,7 @@ static uint8_t ui_page_patch_assign_target_count(void)
 
 static void ui_page_patch_assign_toggle_target(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_ACTIVE_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
     {
         return;
     }
@@ -661,23 +652,16 @@ static void ui_page_patch_assign_apply_selected(void)
         ui_page_patch_assign_set_status("NO PATCH");
         return;
     }
-    if ((patch_sd_bank_get_slot_metadata(g_patch_assign.selected_slot, &meta) == 0U)
-            || (meta.width == 0U)
-            || (meta.width > PATCH_POLY_TRACK_MAX))
+    if (patch_sd_bank_get_slot_metadata(g_patch_assign.selected_slot, &meta) == 0U)
     {
         ui_page_patch_assign_set_status("BAD PATCH");
         return;
     }
-    if ((meta.width > 1U) && (target_count != 1U))
-    {
-        ui_page_patch_assign_set_status(patch_v1_result_label(PATCH_V1_RESULT_NEED_ONE_TARGET));
-        return;
-    }
-
     patch_v1_set_current_slot(g_patch_assign.selected_slot);
     uint8_t applied = 0U;
     uint8_t requested = 0U;
     patch_v1_result_t first_error = PATCH_V1_RESULT_OK;
+    uint8_t voice_limited = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -689,9 +673,10 @@ static void ui_page_patch_assign_apply_selected(void)
         ++requested;
         const patch_v1_result_t result =
             patch_v1_apply_slot_to_track(g_patch_assign.selected_slot, track);
-        if (result == PATCH_V1_RESULT_OK)
+        if ((result == PATCH_V1_RESULT_OK) || (result == PATCH_V1_RESULT_VOICE_LIMITED))
         {
             ++applied;
+            if (result == PATCH_V1_RESULT_VOICE_LIMITED) voice_limited = 1U;
         }
         else if (first_error == PATCH_V1_RESULT_OK)
         {
@@ -701,7 +686,8 @@ static void ui_page_patch_assign_apply_selected(void)
 
     if ((requested != 0U) && (applied == requested))
     {
-        ui_page_patch_assign_set_status((applied > 1U) ? "PATCHES APPLIED" : "PATCH APPLIED");
+        ui_page_patch_assign_set_status((voice_limited != 0U)
+            ? "VOICE LIMITED" : ((applied > 1U) ? "PATCHES APPLIED" : "PATCH APPLIED"));
     }
     else if (applied != 0U)
     {
@@ -842,9 +828,13 @@ static void ui_page_patch_assign_leave(void)
 
 void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hall_mode)
 {
-    if (target_track >= UI_TRACK_COUNT)
+    if (track_topology_is_play(target_track) == 0U)
     {
         target_track = ui_get_active_track();
+    }
+    if (track_topology_is_play(target_track) == 0U)
+    {
+        return;
     }
 
     const uint8_t current_page = ui_page_get_id();
@@ -975,7 +965,7 @@ uint8_t ui_page_patch_assign_get_target_hall_led(uint8_t hall, uint8_t *out_on)
     }
 
     *out_on = 0U;
-    if (hall < UI_TRACK_COUNT)
+    if (hall < UI_ACTIVE_TRACK_COUNT)
     {
         *out_on = ((g_patch_assign.target_mask & (uint16_t)(1UL << hall)) != 0U) ? 1U : 0U;
     }
@@ -1009,25 +999,12 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
                 break;
             }
         }
-        if (meta.width > 1U)
-        {
-            (void)snprintf(line,
-                           sizeof(line),
-                           "%-11s P%u %s/%s",
-                           short_name,
-                           (unsigned)meta.width,
-                           family,
-                           type);
-        }
-        else
-        {
-            (void)snprintf(line,
-                           sizeof(line),
-                           "%-14s %s/%s",
-                           short_name,
-                           family,
-                           type);
-        }
+        (void)snprintf(line,
+                       sizeof(line),
+                       "%-14s %s/%s",
+                       short_name,
+                       family,
+                       type);
     }
     else if (state == PATCH_SD_SLOT_INVALID)
     {
@@ -1080,7 +1057,6 @@ static void ui_page_patch_assign_draw_family_band(void)
         { PATCH_ASSIGN_FAMILY_SAMPLER, "SMP", 25U, 29U },
         { PATCH_ASSIGN_FAMILY_DRUM, "DRM", 55U, 25U },
         { PATCH_ASSIGN_FAMILY_INPUT, "IN", 81U, 20U },
-        { PATCH_ASSIGN_FAMILY_MASTER, "MST", 102U, 26U },
     };
 
     drv_display_set_font(&FONT_4X6);

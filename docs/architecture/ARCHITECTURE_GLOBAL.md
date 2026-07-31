@@ -1,5 +1,30 @@
 # ARCHITECTURE_GLOBAL.md
 
+## Addendum 2026-07-31 - Play MIDI et External
+
+- Z2 distingue `MIDI/MIDI`, sans cible audio, de `External/External`, qui combine le chemin MIDI et une cible audio sur une entrée physique sélectionnée.
+- `track_input_ownership` est l'autorité unique, statique et bornée de réservation des entrées. Une entrée appartient soit à sa Special Input fixe, soit à une seule Play External; Z1 ne la traite qu'une fois.
+- Z5 affiche `USED Pn` sur la Special réservée et refuse tout conflit sans fallback. Z6 persiste la sélection dans snapshot Track et `PatternSaveV1`; Pattern/Project passent en version 3 et les restores/Undo valident avant mutation.
+
+## Addendum 2026-07-31 - autorite centrale de topologie des tracks
+
+- Z2 porte `track_topology` comme description unique de la cible produit : 8 Play Tracks, 4 Special Low-Cost ou 6 Special Premium, avec identites fixes Master/Looper/Input/FX.
+- Les capacites notes, audio, MIDI, clavier, arpege, automation, mute et reservation d'entree sont explicites. Premium declare exactement trois entrees et aucune ressource Input4.
+- Les formats Pattern/Project restent communs aux deux cibles mais identifient chaque enregistrement par role/ordinal; les sequences Play et Special y ont des payloads distincts.
+- Les Special ont une identite immuable dans Z2 et leurs acces note/clavier/ARP ainsi que les navigateurs PATCH/KIT sont bloques par capacite. Master et FX reutilisent encore l'adaptateur de configuration `Master/FX`, mais Z2/Z3/Z5 discriminent leur role topologique: Master porte les effets globaux, FX les quatre MacroFX.
+
+## Addendum 2026-07-31 - ownership des Special audio
+
+- Z2 expose Master uniquement avec `CFG/SEQ/TONE` et FX avec `CFG/SEQ/TONE/MOD`; les MacroFX ne sont applicables que sur la role FX fixe. Looper et chaque Input conservent leur adaptateur fixe et leur backend existant.
+- Z5 limite `MIX` a `Level/Pan/Send1/Send2` pour les tracks disposant d'une lane mixer. La Special Master expose en `TONE` les surfaces globales reverb, delay et compresseur; la Special FX expose les quatre slots MacroFX et son contexte ROUT UI-only.
+- Z1 conserve les autorites DSP globales du mixer et execute l'insert MacroFX post-mix depuis l'etat de la Special FX trouvee par `track_topology`; aucun nouvel etat sonore ni changement de chemin audio n'est introduit.
+
+## Addendum 2026-07-31 - budget global des voix synthetiques
+
+- Z2 porte l'autorite unique d'un budget borne de 16 slots reserves, commun LowCost/Premium, pour huit tracks moteur au maximum; un slot conserve un owner track et moteur explicite.
+- Z1 adresse les moteurs, filtres et etats de note/allocation poly par slot publie par cette autorite, sans formule `track + voice * 8`; les pools et matrices historiques de 64 moteurs/etats et 56 filtres sont retires.
+- Z5/Z6 appliquent le meme plafond aux changements structurels, au clipboard et aux restaurations; une destination reutilise d'abord ses propres reservations.
+
 ## Addendum 2026-07-31 - premier modele sonore MD `TRX-BD`
 
 - Z1 publie `TRX-BD` dans le moteur unique MD avec un renderer natif specialise;
@@ -52,7 +77,7 @@
 ## Addendum 2026-07-30 - prototype comparatif compresseur master
 
 - Z1 porte un slot dynamics master unique, post-retours et post-XFade Looper, avec selection exclusive `OFF/DELUGE/BRICK`.
-- Z3 conserve les parametres communs et caracteristiques sous une autorite globale; Z5 les expose dans `MIX 3/3`; Z6 les capture dans le snapshot global Project/Pattern.
+- Z3 conserve les parametres communs et caracteristiques sous une autorite globale; Z5 les expose sur la Special Master dans `TONE 3/3`; Z6 les capture dans le snapshot global Project/Pattern.
 
 ## Addendum 2026-07-30 - Hall low-cost raw et calibration utilisateur
 
@@ -210,7 +235,7 @@ Lit ce document si le sujet touche :
 - modulation LFO
 - coexistence global / track-aware / legacy
 - modèle paramétrique par track
-- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + DELUGE + MIDI simple + DRUM / MD silencieux + BD Analog)
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Sampler + Wave + Stack + DELUGE + MIDI simple + DRUM / MD silencieux + BD Analog)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
@@ -262,6 +287,7 @@ Doc :
 - Z1 consomme surtout Z2, Z3 et Z4
 - En clock interne/externe sequencer, Z1 fournit la consommation finale d'avance step de Z4 (domaine audio bloc)
 - Z2 fournit la vérité runtime aux autres zones
+- Z2 fournit aussi la topologie produit et ses capacites; les autres zones ne doivent pas reconstruire les roles depuis des index magiques
 - Z3 applique des valeurs en s’appuyant sur Z2
 - En PLAY+REC actif, les edits param track-aware sont redirigés vers Z4 (écriture p-lock live), sans write runtime direct Z3 en parallèle
 - Z4 produit les événements temporels consommés par Z1
@@ -289,7 +315,7 @@ Règle de lecture transversale :
 - **save/load / patterns / projects / restore** ? Z6
 
 ### Cas transverses fréquents
-- **Input Audio vs Hybrid** ? Z2 + Z3 + Z5
+- **Input Special vs External Play** ? Z2 + Z3 + Z5
 - **Master/FX MacroFX** ? Z1 + Z2 + Z3 + Z5
 - **bug track-aware transversal** ? commencer par Z2
 - **bug après load/restore** ? Z6 puis Z2/Z3/Z4/Z5 selon symptôme
@@ -383,10 +409,7 @@ Documents conserves pour tracabilite uniquement:
 - Kit V1 etend le seam Z5/Z6 avec `PAGE2 APPLY`: le Kit charge un payload complet, pre-valide les assets Sampler deja presents, neutralise les notes/voix, applique la structure tracks en bloc via les autorites track_state/runtime, puis restaure sound/tone/LFO et reprojette les params track-aware.
 - Le contrat reste sans apply partiel, target mask, preview, rollback, Set, sequence, pattern, p-lock, playhead ni transport.
 
-## Addendum 2026-05-29 - Patch Poly v2
 
-- Patch v2 etend le seam Z5/Z6 de mono-track vers `P1..P4`, en consommant uniquement l'autorite `voice_group_role` de Z2 pour les groupes master/slaves contigus.
-- `P1` conserve l'apply multi-target Patch Assign; `P2/P3/P4` s'appliquent uniquement vers une target master dont le groupe declare a la meme largeur.
 - Set reste supprime; Kit reste le snapshot sonore complet machine.
 
 
@@ -401,35 +424,24 @@ Documents conserves pour tracabilite uniquement:
 - Z5 expose ce lien dans le header principal (`Kit: nom`, dirty `*`, Pattern dessous) et le browser Kit lie le slot applique au pattern actif.
 - Set reste retire; Kit reste full-machine sonore, Patch reste separe.
 
-## Addendum 2026-07-25 - TRACK CFG voice group
 
-- Z2 porte les attributs de groupe master/slaves `SPREAD` et `LINK` dans `track_state`; Z5 les expose uniquement en `CFG 2/2` sur une master avec slaves.
 - Z3 applique SPREAD via le pan MIX existant et intercepte LINK au point unique d'edition manuelle UI; `PLAY`, p-locks et scheduler restent exclus.
-- Z6 persiste ces attributs dans Pattern/Project et les payloads Patch Poly/Kit selon leurs autorites respectives.
 
-## Addendum 2026-07-28 - decision SEQ LINK
 
-- `SEQ LINK` est un attribut structurel de voice group distinct de `CFG GROUP LINK`.
 - Autorite cible: `track_state` en Z2, avec lecture master-effective exposee aux consumers. Z4 peut consulter cette projection pour les p-locks non-PLAY, mais le pipeline PLAY conserve son adressage historique par track cible.
-- Z5 route l'edition utilisateur vers `PARAM_CFG_GROUP_SEQ_LINK`, Z3 commit dans `track_state`, Z6 persiste l'attribut avec la configuration de groupe. Aucun stockage p-lock PLAY n'est modifie par cette decision.
 
 ## Addendum 2026-07-28 - correction pipeline PLAY master group
 
-- `SEQ LINK` ne modifie pas l'ensemble PLAY d'une master de voice group: ON et OFF gardent le meme comportement PLAY.
-- En PLAY, une master de groupe schedule les membres, mais chaque membre lit ses propres p-locks/base PLAY `V1` comme avant; la source master ne remplace jamais les notes PLAY des cibles.
 - La route commune Z4 peut rester consommee pour la liste bornee des cibles, mais la provenance des p-locks PLAY reste locale a la track cible.
 
 ## Addendum 2026-07-28 - Multi Spread Keytrack
 
-- Z2 porte `CFG GROUP SPREAD KEYTRK` comme attribut transient de voice group; Z3 expose `PARAM_CFG_GROUP_SPREAD_KEYTRK` et conserve `LINK` separe.
 - Z1 applique le keytrack uniquement dans le rendu `Sampler/Multi`; `KEYTRK=OFF` garde le spread historique par pan MIX.
-- Z5 affiche `SPREAD` en double-widget `AMT` + `KEY`, avec `LINK` et `SEQ LINK` conserves sur `CFG/GROUP`.
 
 ## Addendum 2026-07-29 - coeur filtre track
 
 - Z1 porte maintenant les modes track `LP/HP/BP` sur un SVF TPT/ZDF float stereo/mono, plage effective `20 Hz..16 kHz`, jeux de coefficients coherents tenus par chunks de 8 et bypass OFF reel.
 - Z3 conserve les autorites parametre/modulation existantes et mappe la resonance historique vers le Q TPT; le DJ EQ prepare ses coefficients couteux au boot.
-- Etat courant: le stockage brut `track_state`, le contrat commit unique `param_registry_commit_voice_group_seq_link*()`, la projection `track_runtime_get_voice_group_seq_link()`, l'edition `CFG/GROUP > SEQ LINK`, la persistence Z6, la route logique Z4 pour boundary non-PLAY, les cibles PLAY de groupe et la reconciliation RUNNING post-commit existent.
 
 ## Addendum 2026-07-29 - contrat p-lock et Matrix
 
@@ -438,7 +450,6 @@ Documents conserves pour tracabilite uniquement:
 ## Addendum 2026-07-30 - Track paste sans notes fantômes
 
 - Z5/Z6 encadrent l'apply du snapshot Track par un seam Z4 de restauration ciblée.
-  Z4 suspend uniquement la fermeture voice-group concernée, invalide par génération
   les événements scheduler périmés, purge notes/gates/lookahead aux deux frontières,
   puis reprend sans arrêter le transport ni les autres tracks.
 
@@ -446,7 +457,6 @@ Documents conserves pour tracabilite uniquement:
   DIV pendant l'apply; Z1 ne migre plus de gate actif lors du rebind mono-track;
   Z2/Z3 ne réappliquent que les domaines persistants capturés; les états ARP et les
   commandes note moteur en attente sont annulés uniquement pour la fermeture
-  voice-group concernée.
 # Addendum 2026-07-31 - ownership des voix polyphoniques
 
 - Z2 porte l'origine `MANUAL/SEQUENCER` dans l'autorite d'allocation des voix;
@@ -455,3 +465,45 @@ Documents conserves pour tracabilite uniquement:
   les releases; aucun panic global ne coupe les notes manuelles encore tenues.
 - Z1 porte obligatoirement une enveloppe VCA par lane polyphonique; son passage
   a `IDLE` acquitte la fin de release a Z2, sans dependre du VCA mono de track.
+# Addendum 2026-07-31 - Looper unique LowCost
+
+- Z2 impose sur LowCost une ressource Looper globale unique, refuse une seconde configuration et bind l'unique instance `0`; Z6 normalise les anciens contenus en conservant le premier Looper puis en convertissant les suivants en `Sampler/RAM`.
+- Z1/Z6 dimensionnent LowCost a un slot Shifter et un slot RAW. Premium reste inchange.
+# Addendum 2026-07-31 - autorite mute centrale
+
+- `track_mute` est l'autorite comportementale unique du mute par track et derive sa politique des capacites runtime.
+- Z2 classe la cible; Z4 suspend et purge les notes; Z1 realise les fades audio et la contribution FX; Z5 ne porte plus de politique audio.
+- Master n'expose pas de mute ordinaire. Les evenements manques pendant mute ne sont jamais rejoues au demute.
+
+# Addendum 2026-07-31 - modeles sequence Play et Special
+
+- Z4 conserve huit modeles Play complets `64 steps / 32 locks par step / pool 1024` et alloue aux Special un pool distinct `64 / 16 / 512`.
+- Les Special refusent le set PLAY, ne portent ni notes ni roll, et disposent d'un champ action extensible. Aucun Brain ni MIDI FX n'est introduit.
+- L'etat et la configuration ARP ne sont alloues et persistes que pour les huit Play Tracks. Z6 stocke les actions et automatisations Special dans un payload leger sans donnee PLAY.
+- Les tokens scheduler, compteurs de notes exactes et overlays PLAY ne sont plus alloues aux Special; leur runtime ne conserve que les 16 locks d'automatisation actifs possibles.
+
+# Addendum 2026-07-31 - persistence Play/Special
+
+- Z2 fournit l'identite persistante `role + ordinal`; Pattern, snapshots Track et Kit la valident avant mutation, tandis que Patch reste strictement Play.
+- Z6 conserve directement les formats courants v3 communs Low-Cost/Premium, sans migration legacy: huit payloads sequence Play et six emplacements Special legers.
+- Les actions Special traversent Pattern/Project, snapshot, clipboard et Undo/Redo. Les collages incompatibles sont refuses avant mutation et aucun etat note/ARP n'est stocke sur Special.
+
+- Les anciens champs et APIs restent des adaptateurs de compilation jusqu'aux etapes de migration et de suppression definitives.
+# Addendum 2026-07-31 - execution musicale mono-track
+
+- Z4 schedule PLAY/ARP et live record uniquement sur la Play Track source; Z5 route clavier, MIDI et mute directement par track.
+- Les piles de notes, compteurs d'occupation et distributions tournantes inter-tracks sont retires; Stop/Panic conserve sa fermeture exhaustive par track.
+
+
+# Addendum 2026-07-31 - edition sequence mono-track
+
+- Z6 retirera le champ historique persistant a l'etape de persistence suivante; il est deja sans effet runtime.
+
+# Addendum 2026-07-31 - persistence mono-track
+
+- Patch est desormais un contenu mono-track unique, applicable independamment aux pistes selectionnees par la UI.
+
+# Addendum 2026-07-31 - Play Tracks independantes
+
+- Z2 ne porte plus aucune autorite de regroupement entre Play Tracks. Chaque identite logique possede directement son runtime, ses quatre voix PLAY et ses parametres moteur.
+- Z3 a Z6 operent strictement par track pour controle, sequence, UI et persistence. Patch reste mono-track; la Special Track Master et le master audio sont inchanges.

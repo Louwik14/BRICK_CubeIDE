@@ -2,17 +2,12 @@
 
 #include <string.h>
 
-#include "Core/track_state_internal.h"
+#include "Core/track_input_ownership.h"
 #include "UI/ui_track_catalog.h"
 
 static ui_track_config_t g_track_configs[UI_TRACK_COUNT];
 static uint8_t g_track_midi_channel[UI_TRACK_COUNT];
 static ui_track_midi_source_t g_track_midi_source[UI_TRACK_COUNT];
-static track_voice_group_role_t g_track_voice_group_role[UI_TRACK_COUNT];
-static float g_track_voice_group_spread[UI_TRACK_COUNT];
-static uint8_t g_track_voice_group_spread_keytrack[UI_TRACK_COUNT];
-static uint8_t g_track_voice_group_link[UI_TRACK_COUNT];
-static uint8_t g_track_voice_group_seq_link[UI_TRACK_COUNT];
 static uint32_t g_track_revision[UI_TRACK_COUNT];
 static uint32_t g_track_state_global_revision = 0U;
 
@@ -24,6 +19,62 @@ static ui_track_config_t track_state_default_config(void)
     };
 
     return config;
+}
+
+static ui_track_config_t track_state_topology_config(uint8_t track)
+{
+    ui_track_config_t config = track_state_default_config();
+    track_topology_descriptor_t descriptor;
+    if (track_topology_get_descriptor(track, &descriptor) == 0U)
+    {
+        return config;
+    }
+
+    switch ((track_topology_role_t)descriptor.role)
+    {
+        case TRACK_TOPOLOGY_ROLE_MASTER:
+        case TRACK_TOPOLOGY_ROLE_FX:
+            break;
+
+        case TRACK_TOPOLOGY_ROLE_LOOPER:
+            config.family = UI_TRACK_FAMILY_SAMPLER;
+            config.type = UI_TRACK_TYPE_LOOPER;
+            break;
+
+        case TRACK_TOPOLOGY_ROLE_INPUT:
+            config.family = (ui_track_family_t)((uint8_t)UI_TRACK_FAMILY_INPUT1
+                    + descriptor.physical_input_index);
+            config.type = UI_TRACK_TYPE_AUDIO;
+            break;
+
+        case TRACK_TOPOLOGY_ROLE_PLAY:
+        case TRACK_TOPOLOGY_ROLE_UNUSED:
+        default:
+            break;
+    }
+
+    return config;
+}
+
+static void track_state_normalize_play_config(ui_track_config_t *config)
+{
+    if (config == NULL)
+    {
+        return;
+    }
+
+    if (((config->family >= UI_TRACK_FAMILY_INPUT1)
+                && (config->family <= UI_TRACK_FAMILY_INPUT3)))
+    {
+        *config = track_state_default_config();
+        return;
+    }
+
+    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
+            && (config->type == UI_TRACK_TYPE_LOOPER))
+    {
+        config->type = UI_TRACK_TYPE_RAM;
+    }
 }
 
 static void track_state_normalize_config(ui_track_config_t *config)
@@ -46,7 +97,7 @@ static void track_state_normalize_config(ui_track_config_t *config)
 
 static uint8_t track_state_family_is_unavailable_input(ui_track_family_t family)
 {
-    return (uint8_t)(((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT4))
+    return (uint8_t)(((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT3))
                      && (ui_track_catalog_family_is_input(family) == false));
 }
 
@@ -59,41 +110,6 @@ static void track_state_bump_revision(uint8_t track)
 
     ++g_track_state_global_revision;
     ++g_track_revision[track];
-}
-
-static uint8_t track_state_voice_group_roles_are_valid(const track_voice_group_role_t roles[UI_TRACK_COUNT])
-{
-    if (roles == NULL)
-    {
-        return 0U;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const track_voice_group_role_t role = roles[track];
-        if ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
-        {
-            return 0U;
-        }
-
-        if (role != TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            continue;
-        }
-
-        if (track == 0U)
-        {
-            return 0U;
-        }
-
-        const track_voice_group_role_t left = roles[(uint8_t)(track - 1U)];
-        if ((left != TRACK_VOICE_GROUP_ROLE_MASTER) && (left != TRACK_VOICE_GROUP_ROLE_SLAVE))
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
 }
 
 static void track_state_commit_entry(uint8_t track,
@@ -122,18 +138,14 @@ void track_state_init(void)
 {
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        g_track_configs[track] = track_state_default_config();
+        g_track_configs[track] = track_state_topology_config(track);
         g_track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
         g_track_midi_source[track] = UI_TRACK_MIDI_SRC_ALL;
-        g_track_voice_group_role[track] = TRACK_VOICE_GROUP_ROLE_SOLO;
-        g_track_voice_group_spread[track] = 0.0f;
-        g_track_voice_group_spread_keytrack[track] = 0U;
-        g_track_voice_group_link[track] = 0U;
-        g_track_voice_group_seq_link[track] = 0U;
         g_track_revision[track] = 0U;
     }
 
     g_track_state_global_revision = 1U;
+    track_input_ownership_init(g_track_configs);
 }
 
 const ui_track_config_t *track_state_get_configs(void)
@@ -188,183 +200,14 @@ ui_track_midi_source_t track_state_get_midi_source(uint8_t track)
     return (ui_track_midi_source_t)source;
 }
 
-track_voice_group_role_t track_state_get_voice_group_role(uint8_t track)
-{
-    if (track >= UI_TRACK_COUNT)
-    {
-        return TRACK_VOICE_GROUP_ROLE_SOLO;
-    }
-
-    const track_voice_group_role_t role = g_track_voice_group_role[track];
-    if ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
-    {
-        return TRACK_VOICE_GROUP_ROLE_SOLO;
-    }
-
-    return role;
-}
-
-float track_state_get_voice_group_spread(uint8_t master_track)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return 0.0f;
-    }
-
-    const float spread = g_track_voice_group_spread[master_track];
-    if (spread < 0.0f)
-    {
-        return 0.0f;
-    }
-    if (spread > 1.0f)
-    {
-        return 1.0f;
-    }
-    return spread;
-}
-
-uint8_t track_state_get_voice_group_link(uint8_t master_track)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-    return (g_track_voice_group_link[master_track] != 0U) ? 1U : 0U;
-}
-
-uint8_t track_state_get_voice_group_spread_keytrack(uint8_t master_track)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-    return (g_track_voice_group_spread_keytrack[master_track] != 0U) ? 1U : 0U;
-}
-
-uint8_t track_state_get_voice_group_seq_link(uint8_t master_track)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-    return (g_track_voice_group_seq_link[master_track] != 0U) ? 1U : 0U;
-}
-
-bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t role)
-{
-    if ((track >= UI_TRACK_COUNT) || ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT))
-    {
-        return false;
-    }
-
-    if (g_track_voice_group_role[track] == role)
-    {
-        return true;
-    }
-
-    track_voice_group_role_t next_roles[UI_TRACK_COUNT];
-    memcpy(next_roles, g_track_voice_group_role, sizeof(next_roles));
-    next_roles[track] = role;
-
-    if (track_state_voice_group_roles_are_valid(next_roles) == 0U)
-    {
-        return false;
-    }
-
-    g_track_voice_group_role[track] = role;
-    track_state_bump_revision(track);
-    return true;
-}
-
-bool track_state_set_voice_group_spread(uint8_t master_track, float spread)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return false;
-    }
-    if (spread < 0.0f)
-    {
-        spread = 0.0f;
-    }
-    if (spread > 1.0f)
-    {
-        spread = 1.0f;
-    }
-    if (g_track_voice_group_spread[master_track] == spread)
-    {
-        return true;
-    }
-    g_track_voice_group_spread[master_track] = spread;
-    track_state_bump_revision(master_track);
-    return true;
-}
-
-bool track_state_set_voice_group_link(uint8_t master_track, uint8_t link)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return false;
-    }
-    link = (link != 0U) ? 1U : 0U;
-    if (g_track_voice_group_link[master_track] == link)
-    {
-        return true;
-    }
-    g_track_voice_group_link[master_track] = link;
-    track_state_bump_revision(master_track);
-    return true;
-}
-
-bool track_state_set_voice_group_spread_keytrack(uint8_t master_track, uint8_t enabled)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return false;
-    }
-    enabled = (enabled != 0U) ? 1U : 0U;
-    if (g_track_voice_group_spread_keytrack[master_track] == enabled)
-    {
-        return true;
-    }
-    g_track_voice_group_spread_keytrack[master_track] = enabled;
-    track_state_bump_revision(master_track);
-    return true;
-}
-
-bool track_state_set_voice_group_seq_link_raw(uint8_t master_track, uint8_t seq_link)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return false;
-    }
-    seq_link = (seq_link != 0U) ? 1U : 0U;
-    if (g_track_voice_group_seq_link[master_track] == seq_link)
-    {
-        return true;
-    }
-    g_track_voice_group_seq_link[master_track] = seq_link;
-    track_state_bump_revision(master_track);
-    return true;
-}
-
-bool track_state_is_voice_group_role_solo(uint8_t track)
-{
-    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_SOLO);
-}
-
-bool track_state_is_voice_group_role_master(uint8_t track)
-{
-    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER);
-}
-
-bool track_state_is_voice_group_role_slave(uint8_t track)
-{
-    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_SLAVE);
-}
-
 bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    {
+        return false;
+    }
+
+    if (track_topology_is_play(track) == 0U)
     {
         return false;
     }
@@ -398,6 +241,11 @@ bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
+    if (track_input_ownership_apply_configs(next_configs) == 0U)
+    {
+        return false;
+    }
+
     track_state_commit_entry(track,
                              &next_config,
                              track_state_get_midi_channel(track),
@@ -408,6 +256,12 @@ bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
 bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
 {
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    {
+        return false;
+    }
+
+
+    if (track_topology_is_play(track) == 0U)
     {
         return false;
     }
@@ -432,6 +286,12 @@ bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
     if (family == UI_TRACK_FAMILY_OFF)
     {
         next_config.type = UI_TRACK_TYPE_AUDIO;
+    }
+
+    next_configs[track] = next_config;
+    if (track_input_ownership_apply_configs(next_configs) == 0U)
+    {
+        return false;
     }
 
     track_state_commit_entry(track,
@@ -475,12 +335,46 @@ bool track_state_set_track_midi_source(uint8_t track, ui_track_midi_source_t sou
     return true;
 }
 
-bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
-                           const uint8_t type[UI_TRACK_COUNT],
-                           const uint8_t midi_channel[UI_TRACK_COUNT],
-                           const uint8_t midi_source[UI_TRACK_COUNT])
+uint8_t track_state_get_external_input(uint8_t track)
 {
-    if ((family == NULL) || (type == NULL) || (midi_channel == NULL) || (midi_source == NULL))
+    return track_input_ownership_get_external_input(track);
+}
+
+bool track_state_set_external_input(uint8_t track, uint8_t input)
+{
+    if ((track >= UI_TRACK_COUNT)
+            || (track_topology_is_play(track) == 0U)
+            || (track_input_ownership_set_external_input(
+                    track, input, g_track_configs) == 0U))
+    {
+        return false;
+    }
+    track_state_bump_revision(track);
+    return true;
+}
+
+bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
+                            const uint8_t type[UI_TRACK_COUNT],
+                            const uint8_t midi_channel[UI_TRACK_COUNT],
+                            const uint8_t midi_source[UI_TRACK_COUNT])
+{
+    uint8_t external_input[UI_TRACK_COUNT];
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        external_input[track] = track_state_get_external_input(track);
+    }
+    return track_state_apply_bulk_with_inputs(
+        family, type, midi_channel, midi_source, external_input);
+}
+
+bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
+                                        const uint8_t type[UI_TRACK_COUNT],
+                                        const uint8_t midi_channel[UI_TRACK_COUNT],
+                                        const uint8_t midi_source[UI_TRACK_COUNT],
+                                        const uint8_t external_input[UI_TRACK_COUNT])
+{
+    if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
+            || (midi_source == NULL) || (external_input == NULL))
     {
         return false;
     }
@@ -498,6 +392,12 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
+        if (track_topology_is_play(track) == 0U)
+        {
+            next_configs[track] = track_state_topology_config(track);
+            continue;
+        }
+
         const ui_track_family_t fam = (ui_track_family_t)family[track];
         ui_track_type_t typ = (ui_track_type_t)type[track];
         const ui_track_midi_source_t src = (ui_track_midi_source_t)midi_source[track];
@@ -520,7 +420,9 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
                 .type = typ
             };
             track_state_normalize_config(&normalized);
-            if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
+            track_state_normalize_play_config(&normalized);
+            if ((normalized.family != UI_TRACK_FAMILY_OFF)
+                    && !ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
             {
                 normalized.type = ui_track_catalog_default_type_for_family(normalized.family);
                 if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
@@ -539,10 +441,13 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
     }
 
     uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
-    uint8_t master_family_count = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
+        if (track_topology_is_play(track) == 0U)
+        {
+            continue;
+        }
         const ui_track_family_t fam = next_configs[track].family;
         if (ui_track_catalog_family_is_input(fam))
         {
@@ -552,19 +457,14 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
                 return false;
             }
         }
-
-        if (fam == UI_TRACK_FAMILY_MASTER)
-        {
-            master_family_count++;
-            if (master_family_count > 1U)
-            {
-                return false;
-            }
-        }
     }
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
+        if (track_topology_is_play(track) == 0U)
+        {
+            continue;
+        }
         const ui_track_family_t fam = next_configs[track].family;
         const ui_track_type_t typ = next_configs[track].type;
 
@@ -581,97 +481,14 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
         }
     }
 
+    if (track_input_ownership_apply_bulk(next_configs, external_input) == 0U)
+    {
+        return false;
+    }
+
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         track_state_commit_entry(track, &next_configs[track], next_channels[track], next_sources[track]);
-    }
-
-    return true;
-}
-
-bool track_state_apply_voice_group_roles_bulk(const uint8_t role[UI_TRACK_COUNT])
-{
-    if (role == NULL)
-    {
-        return false;
-    }
-
-    track_voice_group_role_t next_roles[UI_TRACK_COUNT];
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const uint8_t role_u8 = role[track];
-        if (role_u8 >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
-        {
-            return false;
-        }
-        next_roles[track] = (track_voice_group_role_t)role_u8;
-    }
-
-    if (track_state_voice_group_roles_are_valid(next_roles) == 0U)
-    {
-        return false;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if (g_track_voice_group_role[track] != next_roles[track])
-        {
-            g_track_voice_group_role[track] = next_roles[track];
-            track_state_bump_revision(track);
-        }
-    }
-
-    return true;
-}
-
-bool track_state_apply_voice_group_config_bulk(const float spread[UI_TRACK_COUNT],
-                                               const uint8_t link[UI_TRACK_COUNT])
-{
-    if ((spread == NULL) || (link == NULL))
-    {
-        return false;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        float next_spread = spread[track];
-        if (next_spread < 0.0f)
-        {
-            next_spread = 0.0f;
-        }
-        if (next_spread > 1.0f)
-        {
-            next_spread = 1.0f;
-        }
-        const uint8_t next_link = (link[track] != 0U) ? 1U : 0U;
-
-        if ((g_track_voice_group_spread[track] != next_spread)
-                || (g_track_voice_group_link[track] != next_link))
-        {
-            g_track_voice_group_spread[track] = next_spread;
-            g_track_voice_group_link[track] = next_link;
-            track_state_bump_revision(track);
-        }
-    }
-
-    return true;
-}
-
-bool track_state_apply_voice_group_seq_link_bulk_raw(const uint8_t seq_link[UI_TRACK_COUNT])
-{
-    if (seq_link == NULL)
-    {
-        return false;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const uint8_t next_seq_link = (seq_link[track] != 0U) ? 1U : 0U;
-        if (g_track_voice_group_seq_link[track] != next_seq_link)
-        {
-            g_track_voice_group_seq_link[track] = next_seq_link;
-            track_state_bump_revision(track);
-        }
     }
 
     return true;

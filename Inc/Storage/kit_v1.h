@@ -34,6 +34,7 @@ typedef enum
     KIT_V1_RESULT_BAD_KIT,
     KIT_V1_RESULT_ASSET_MISS,
     KIT_V1_RESULT_APPLY_FAIL,
+    KIT_V1_RESULT_VOICE_LIMITED,
     KIT_V1_RESULT_APPLY_TODO,
     KIT_V1_RESULT_RENAME_TODO,
     KIT_V1_RESULT_DELETE_TODO,
@@ -81,11 +82,9 @@ typedef struct
 {
     uint8_t family;
     uint8_t type;
-    uint8_t voice_group_role;
-    uint8_t voice_group_link;
-    uint8_t voice_group_seq_link;
-    uint8_t reserved[3];
-    float voice_group_spread;
+    uint8_t synth_voice_count;
+    uint8_t topology_role;
+    uint8_t topology_ordinal;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     kit_v1_asset_ref_t asset;

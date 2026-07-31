@@ -16,7 +16,6 @@ extern "C" {
 #define PATCH_V1_NAME_MAX   32U
 #define PATCH_V1_ASSET_PATH_MAX SAMPLE_GLOBAL_POOL_PATH_MAX
 #define PATCH_V1_INVALID_SLOT 0xFFFFU
-#define PATCH_POLY_TRACK_MAX 4U
 
 typedef enum
 {
@@ -32,11 +31,8 @@ typedef enum
     PATCH_V1_RESULT_APPLY_FAIL,
     PATCH_V1_RESULT_RENAME_FAIL,
     PATCH_V1_RESULT_DELETE_FAIL,
-    PATCH_V1_RESULT_TOO_WIDE,
-    PATCH_V1_RESULT_NEED_ONE_TARGET,
-    PATCH_V1_RESULT_NEED_TRACKS,
-    PATCH_V1_RESULT_NO_MASTER,
-    PATCH_V1_RESULT_NO_SLAVES
+    PATCH_V1_RESULT_VOICE_LIMITED,
+    PATCH_V1_RESULT_VOICE_MAX
 } patch_v1_result_t;
 
 typedef struct
@@ -54,32 +50,26 @@ typedef struct
     uint8_t family;
     uint8_t type;
     uint8_t source_track;
-    uint8_t width;
     uint8_t summary_family;
     uint8_t summary_type;
-    uint8_t summary_width;
-    uint8_t reserved;
+    uint8_t topology_role;
 } patch_v1_metadata_t;
 
 typedef struct
 {
-    uint8_t role;
-    uint8_t relative_index;
     uint8_t family;
     uint8_t type;
-    float group_spread;
-    uint8_t group_link;
-    uint8_t group_seq_link;
-    uint8_t reserved[2];
+    uint8_t synth_voice_count;
+    uint8_t reserved;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     patch_v1_asset_ref_t asset;
-} patch_v1_member_t;
+} patch_v1_track_t;
 
 typedef struct
 {
     patch_v1_metadata_t meta;
-    patch_v1_member_t members[PATCH_POLY_TRACK_MAX];
+    patch_v1_track_t track;
 } PatchSaveV1;
 
 void patch_v1_init(void);

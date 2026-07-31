@@ -51,8 +51,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:876:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:883:6:seq_runtime_live_rec_note_on	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:902:6:seq_runtime_live_rec_note_off	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:913:6:seq_runtime_on_midi_program_live_change	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:924:6:seq_runtime_on_seq_link_changed	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:957:6:seq_runtime_clear_tracks	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:962:6:seq_runtime_begin_track_restore	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:975:6:seq_runtime_end_track_restore	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:988:6:seq_runtime_on_track_pattern_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:924:6:seq_runtime_clear_tracks	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:929:6:seq_runtime_begin_track_restore	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:942:6:seq_runtime_end_track_restore	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c:955:6:seq_runtime_on_track_pattern_change	8	static

@@ -20,7 +20,6 @@
 #include "Core/track_state.h"
 #include "Storage/kit_v1.h"
 #include "Storage/project_v1.h"
-#include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Core/track_sound_state.h"
@@ -52,8 +51,6 @@
 #define UI_TEMPLATE_FILTER_GROUP_SLOT_COUNT 2U
 #define UI_TEMPLATE_LFO_GROUP_SLOT_FIRST 1U
 #define UI_TEMPLATE_LFO_GROUP_SLOT_COUNT 2U
-#define UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST 0U
-#define UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_COUNT 2U
 #define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
 #define UI_TEMPLATE_HEADER_TITLE_X   43
 #define UI_TEMPLATE_HEADER_TITLE_W   42
@@ -1855,9 +1852,9 @@ static void ui_renderer_template_draw_cfg_input_icon(int x, int y, int w, int h)
     }
 }
 
-static void ui_renderer_template_draw_cfg_hybrid_icon(int x, int y, int w, int h)
+static void ui_renderer_template_draw_cfg_external_icon(int x, int y, int w, int h)
 {
-    static const char *const hybrid[29] = {
+    static const char *const external[29] = {
         "WWWWBBBWWWWWWWWWWWWWWWWWWWWWWW",
         "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
         "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
@@ -1897,7 +1894,7 @@ static void ui_renderer_template_draw_cfg_hybrid_icon(int x, int y, int w, int h
     {
         for (uint8_t col = 0U; col < 30U; ++col)
         {
-            if (hybrid[row][col] == 'B')
+            if (external[row][col] == 'B')
             {
                 drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
             }
@@ -2318,7 +2315,7 @@ static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_
 
 static uint8_t ui_renderer_template_cfg_input_index(ui_track_family_t family)
 {
-    if ((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT4))
+    if ((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT3))
     {
         return (uint8_t)((uint8_t)family - (uint8_t)UI_TRACK_FAMILY_INPUT1 + 1U);
     }
@@ -2394,6 +2391,10 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
         {
             return ui_renderer_template_draw_cfg_midi_text(x, y, w, h);
         }
+        if (family == UI_TRACK_FAMILY_EXTERNAL)
+        {
+            return ui_renderer_template_draw_filter_big_text(x, y, w, h, "EXT", &FONT_OFF_COMPACT);
+        }
         if (family == UI_TRACK_FAMILY_DRUM)
         {
             ui_renderer_template_draw_cfg_drum_icon(x, y, w, h);
@@ -2429,6 +2430,10 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
                 ui_renderer_template_draw_cfg_midi_icon(x, y, w, h);
                 return 1U;
 
+            case UI_TRACK_TYPE_EXTERNAL:
+                ui_renderer_template_draw_cfg_external_icon(x, y, w, h);
+                return 1U;
+
             case UI_TRACK_TYPE_AUDIO:
             {
                 const uint8_t input_index = ui_renderer_template_cfg_input_index(family);
@@ -2439,10 +2444,6 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
                 }
                 break;
             }
-
-            case UI_TRACK_TYPE_HYBRID:
-                ui_renderer_template_draw_cfg_hybrid_icon(x, y, w, h);
-                return 1U;
 
             case UI_TRACK_TYPE_RAM:
                 ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);
@@ -2462,7 +2463,6 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
             case UI_TRACK_TYPE_DRUM_BD_ANALOG:
                 return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "BD", "Ana");
 
-            case UI_TRACK_TYPE_MASTER_FX:
                 return ui_renderer_template_draw_filter_big_text(x, y, w, h, "FX", &FONT_OFF_COMPACT);
 
             default:
@@ -3148,78 +3148,6 @@ static uint8_t ui_renderer_template_draw_lfo_shape_phase_group(const ui_param_se
                                                              y,
                                                              w,
                                                              h);
-}
-
-static uint8_t ui_renderer_template_cfg_spread_keytrack_group_is_active(const ui_template_page_state_t *state,
-                                                                        const ui_template_subpage_t *subpage)
-{
-    if ((subpage == 0)
-            || (subpage->param_bank.params[UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST] != PARAM_CFG_GROUP_SPREAD)
-            || (subpage->param_bank.params[UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST + 1U] != PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            || (ui_renderer_template_resolve_custom_widget(state,
-                                                           subpage,
-                                                           UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST,
-                                                           PARAM_CFG_GROUP_SPREAD) != UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP)
-            || (ui_renderer_template_resolve_custom_widget(state,
-                                                           subpage,
-                                                           UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST + 1U,
-                                                           PARAM_CFG_GROUP_SPREAD_KEYTRK) != UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t ui_renderer_template_draw_cfg_spread_keytrack_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
-{
-    float amount = 0.0f;
-    float keytrack = 0.0f;
-    if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_GROUP_SPREAD, &amount, 0) == 0U)
-            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_GROUP_SPREAD_KEYTRK, &keytrack, 0) == 0U))
-    {
-        return 0U;
-    }
-
-    const int x = g_ui_template_frame_x[UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST];
-    const int y = UI_TEMPLATE_FRAME_Y;
-    const int w = UI_TEMPLATE_FRAME_W * UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_COUNT;
-    const int widget_y = y + UI_TEMPLATE_CARD_WIDGET_Y;
-    const int left_x = x + UI_TEMPLATE_CARD_WIDGET_X_PAD;
-    const int right_x = g_ui_template_frame_x[UI_TEMPLATE_CFG_SPREAD_GROUP_SLOT_FIRST + 1U] + UI_TEMPLATE_CARD_WIDGET_X_PAD;
-    char amount_txt[20];
-    char key_txt[8];
-
-    ui_renderer_template_format_value(PARAM_CFG_GROUP_SPREAD, amount, amount_txt, (uint32_t)sizeof(amount_txt));
-    ui_renderer_template_format_value(PARAM_CFG_GROUP_SPREAD_KEYTRK, keytrack, key_txt, (uint32_t)sizeof(key_txt));
-
-    drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, w, "SPREAD"),
-                          (uint8_t)(widget_y),
-                          "SPREAD");
-    uiw_draw_value_bar(left_x,
-                       widget_y,
-                       UI_TEMPLATE_CARD_WIDGET_W,
-                       UI_TEMPLATE_CARD_WIDGET_H,
-                       amount,
-                       param_registry[PARAM_CFG_GROUP_SPREAD].min,
-                       param_registry[PARAM_CFG_GROUP_SPREAD].max);
-    ui_renderer_template_draw_bar_value_text(left_x,
-                                             widget_y,
-                                             UI_TEMPLATE_CARD_WIDGET_W,
-                                             UI_TEMPLATE_CARD_WIDGET_H,
-                                             amount_txt);
-    uiw_draw_switch(right_x,
-                    widget_y,
-                    UI_TEMPLATE_CARD_WIDGET_W,
-                    UI_TEMPLATE_CARD_WIDGET_H,
-                    (keytrack >= 0.5f) ? 1U : 0U);
-    ui_renderer_template_draw_bar_value_text(right_x,
-                                             widget_y,
-                                             UI_TEMPLATE_CARD_WIDGET_W,
-                                             UI_TEMPLATE_CARD_WIDGET_H,
-                                             key_txt);
-    return 1U;
 }
 
 static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
@@ -4436,27 +4364,8 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     char cpu_avg_label[40];
     char bpm_label[12];
 
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
     const uint8_t track_display_id = (uint8_t)(active_track + 1U);
-    uint8_t member_count = 0U;
-    const uint8_t has_group = (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-            ? track_runtime_collect_voice_group_members(active_track, NULL, 0U, &member_count)
-            : 0U;
-    if ((role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-            && (has_group != 0U)
-            && (member_count > 1U))
-    {
-        (void)snprintf(track_label, sizeof(track_label), "M%u", (unsigned int)track_display_id);
-    }
-    else if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-    {
-        (void)snprintf(track_label, sizeof(track_label), "S%u", (unsigned int)track_display_id);
-    }
-    else
-    {
-        (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)track_display_id);
-    }
+    (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)track_display_id);
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
     ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
     uint8_t draw_bpm = 0U;
@@ -4550,16 +4459,6 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    char seq_lock_label[8];
-    uint8_t draw_seq_lock = 0U;
-    if (seq_edit_track_sequence_is_locked(active_track) != 0U)
-    {
-        uint8_t master_track = active_track;
-        (void)track_runtime_get_voice_group_effective_master(active_track, &master_track);
-        (void)snprintf(seq_lock_label, sizeof(seq_lock_label), "M%uSEQ", (unsigned int)(master_track + 1U));
-        draw_seq_lock = 1U;
-    }
-
     char kit_label[44];
     ui_renderer_template_format_active_kit_label(kit_label, sizeof(kit_label));
     drv_display_set_font(&FONT_4X6);
@@ -4575,17 +4474,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
     ui_renderer_template_fit_text(kit_label, 42U);
     drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(kit_label)), 8U, kit_label);
-    if (draw_seq_lock != 0U)
-    {
-        ui_renderer_template_draw_inverted_label(ui_renderer_template_right_x(0U, drv_display_text_width(seq_lock_label)),
-                                                 14U,
-                                                 seq_lock_label,
-                                                 &FONT_4X6);
-    }
-    else
-    {
-        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
-    }
+    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
@@ -4771,12 +4660,6 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
                 grouped_widget_drawn = 1U;
             }
-            if (ui_renderer_template_cfg_spread_keytrack_group_is_active(state, subpage) != 0U)
-            {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP;
-                grouped_widget_drawn = 1U;
-            }
-
             for (uint8_t i = 0U; i < 4U; i++)
             {
                 ui_renderer_template_draw_param_slot(state,
@@ -4804,10 +4687,6 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM)
                 {
                     (void)ui_renderer_template_draw_stack_fold_group(&plock_frame_ctx, subpage);
-                }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP)
-                {
-                    (void)ui_renderer_template_draw_cfg_spread_keytrack_group(&plock_frame_ctx);
                 }
                 else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP)
                 {

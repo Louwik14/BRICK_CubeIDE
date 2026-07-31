@@ -714,7 +714,12 @@ static uint8_t configure_current(void)
     uint8_t midi_source[UI_TRACK_COUNT];
     ui_track_family_t engine_family;
     ui_track_type_t engine_type;
+    uint8_t fx_track = 0U;
     if (engine_family_type(g_runner.current.engine, &engine_family, &engine_type) == 0U)
+    {
+        return 0U;
+    }
+    if (track_topology_find_special(TRACK_TOPOLOGY_ROLE_FX, 0U, &fx_track) == 0U)
     {
         return 0U;
     }
@@ -733,8 +738,6 @@ static uint8_t configure_current(void)
         family[track] = (uint8_t)engine_family;
         type[track] = (uint8_t)engine_type;
     }
-    family[UI_TRACK_COUNT - 1U] = (uint8_t)UI_TRACK_FAMILY_MASTER;
-    type[UI_TRACK_COUNT - 1U] = (uint8_t)UI_TRACK_TYPE_MASTER_FX;
     if (!ui_restore_track_config_bulk(family, type, midi_channel, midi_source))
     {
         return 0U;
@@ -767,13 +770,13 @@ static uint8_t configure_current(void)
     param_set(PARAM_MIX_REVERB_DECAY, g_runner.current.reverb_decay);
     param_set(PARAM_MIX_REVERB_DAMP, g_runner.current.reverb_damping);
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
-    set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX1_TYPE,
+    set_track_param(fx_track, PARAM_MASTER_FX1_TYPE,
                     g_runner.current.master_fx ? 1.0f : 0.0f);
-    set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX1_LEVEL,
+    set_track_param(fx_track, PARAM_MASTER_FX1_LEVEL,
                     g_runner.current.master_fx ? 127.0f : 0.0f);
-    set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX2_LEVEL, 0.0f);
-    set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX3_LEVEL, 0.0f);
-    set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX4_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MASTER_FX2_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MASTER_FX3_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MASTER_FX4_LEVEL, 0.0f);
     param_registry_batch_end();
 
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(0U);

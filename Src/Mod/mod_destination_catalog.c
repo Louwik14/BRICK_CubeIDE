@@ -281,7 +281,9 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+            || (track_runtime_is_audio_routable(track) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
     {
         return 0U;
@@ -311,12 +313,12 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
                                                const track_runtime_ctx_t *ctx,
                                                float value)
 {
-    (void)track;
-
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (track_runtime_is_audio_routable(track) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS)
             || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+                && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
@@ -370,10 +372,9 @@ static uint8_t mod_destination_apply_vca_rt(uint8_t track,
                                             const track_runtime_ctx_t *ctx,
                                             float value)
 {
-    (void)track;
-
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (track_runtime_is_audio_routable(track) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS)
             || (track_runtime_supports_vca_gate(ctx) == 0U))
     {
@@ -875,15 +876,10 @@ static uint8_t mod_destination_apply_midi_cc_rt(uint8_t track,
                                                 float value)
 {
     const uint8_t midi_track = ((ctx != NULL) && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)) ? 1U : 0U;
-    const uint8_t hybrid_input_track =
-        ((ctx != NULL)
-         && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-         && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
-
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || ((midi_track == 0U) && (hybrid_input_track == 0U))
+            || (midi_track == 0U)
             || (mod_destination_is_direct_midi_cc(dest) == 0U))
     {
         return 0U;
@@ -1081,7 +1077,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
 
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
-        if ((family == UI_TRACK_FAMILY_MASTER) || (ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
         {
             return 0U;
         }
@@ -1114,7 +1110,8 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_FILTER:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF))
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
+                    || (track_runtime_is_audio_routable(ctx->track_id) == 0U))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1131,12 +1128,15 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
             return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI))
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+                    || (track_runtime_is_audio_routable(ctx->track_id) == 0U)
                     || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

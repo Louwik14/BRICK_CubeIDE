@@ -77,12 +77,13 @@ static const char *const g_deluge_model_labels[] = {
 };
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
-static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "-", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
+static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
+static const char *const g_external_input_labels[] = {"Input 1", NULL};
 #else
-static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
+static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
+static const char *const g_external_input_labels[] = {"Input 1", "Input 2", "Input 3", NULL};
 #endif
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
-static const char *const g_cfg_group_link_labels[] = {"OFF", "ON", NULL};
 static const char *const g_cfg_start_labels[] = {"DEFAULT", "TRIG", "ROLL 1/4", "ROLL 1/2", "ROLL 1", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
 static const char *const g_cfg_rec_len_labels[] = {"Overdub", "Pattern", NULL};
@@ -204,8 +205,6 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
-    PARAM_DESC_EX(PARAM_CFG_GROUP_SPREAD, "SPREAD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_CFG_GROUP_LINK, "LINK", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_cfg_group_link_labels, NULL),
     PARAM_DESC_EX(PARAM_CFG_START, "START", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_start_labels, apply_cfg_start),
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
@@ -421,10 +420,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_DELUGE_WIDTH, "WIDTH", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.02f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_DELUGE_PHASE, "PHASE", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "deg", NULL, NULL),
     PARAM_DESC_EX(PARAM_DELUGE_RETRIG, "RETRIG", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_CFG_GROUP_SPREAD_KEYTRK, "KEYTRK", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_cfg_group_link_labels, NULL),
-    PARAM_DESC_EX(PARAM_CFG_GROUP_SEQ_LINK, "SEQ LINK", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_cfg_group_link_labels, NULL),
 
-    PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),
     PARAM_DESC_EX(PARAM_MIDI_CC1_1, "CC16", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_1),
     PARAM_DESC_EX(PARAM_MIDI_CC1_2, "CC17", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_2),
@@ -442,4 +438,5 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_COMP_DETECT, "DETECT", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_comp_detect_labels, apply_comp_detect),
     PARAM_DESC_EX(PARAM_COMP_KNEE_DB, "KNEE", PARAM_TYPE_FLOAT, 0.0f, 12.0f, 0.5f, 6.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_comp_knee),
     PARAM_DESC_EX(PARAM_COMP_DELUGE_SAT, "SAT", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_comp_deluge_sat),
+    PARAM_DESC_EX(PARAM_EXTERNAL_INPUT, "INPUT", PARAM_TYPE_ENUM, 0.0f, (float)(TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_external_input_labels, NULL),
 };

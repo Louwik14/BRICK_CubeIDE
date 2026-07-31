@@ -42,9 +42,11 @@ static uint64_t g_looper_storage_raw_last_observed_size = 0ULL;
 
 static const char *const g_looper_storage_raw_paths[LOOPER_STORAGE_RAW_SLOT_COUNT] = {
     "0:/SYSTEM/LOOPER/LPR00.RAW",
+#if LOOPER_STORAGE_RAW_SLOT_COUNT > 1U
     "0:/SYSTEM/LOOPER/LPR01.RAW",
     "0:/SYSTEM/LOOPER/LPR02.RAW",
     "0:/SYSTEM/LOOPER/LPR03.RAW",
+#endif
 };
 
 typedef struct

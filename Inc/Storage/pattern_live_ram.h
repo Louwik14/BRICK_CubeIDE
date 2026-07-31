@@ -14,38 +14,55 @@ typedef struct __attribute__((packed))
     uint8_t flags;
 } pattern_v1_plock_t;
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint8_t trig;
     uint8_t lock_count;
     uint8_t roll;
     uint8_t reserved;
-    pattern_v1_plock_t locks[SEQ_STEP_MAX_LOCKS];
-} pattern_v1_step_t;
+    pattern_v1_plock_t locks[SEQ_PLAY_STEP_MAX_LOCKS];
+} pattern_v1_play_step_t;
 
 typedef struct
 {
+    track_topology_identity_t identity;
     uint8_t length_steps;
     uint8_t ui_page;
-    pattern_v1_step_t steps[SEQ_MAX_STEPS];
-} pattern_v1_track_seq_t;
+    pattern_v1_play_step_t steps[SEQ_MAX_STEPS];
+} pattern_v1_play_track_seq_t;
+
+typedef struct __attribute__((packed))
+{
+    uint8_t action;
+    uint8_t lock_count;
+    uint8_t reserved[2];
+    pattern_v1_plock_t locks[SEQ_SPECIAL_STEP_MAX_LOCKS];
+} pattern_v1_special_step_t;
 
 typedef struct
 {
+    track_topology_identity_t identity;
+    uint8_t length_steps;
+    uint8_t ui_page;
+    pattern_v1_special_step_t steps[SEQ_MAX_STEPS];
+} pattern_v1_special_track_seq_t;
+
+typedef struct
+{
+    track_topology_identity_t identity[SEQ_TRACK_COUNT];
     uint8_t family[SEQ_TRACK_COUNT];
     uint8_t type[SEQ_TRACK_COUNT];
+    uint8_t external_input[SEQ_TRACK_COUNT];
     uint8_t midi_channel[SEQ_TRACK_COUNT];
     uint8_t midi_source[SEQ_TRACK_COUNT];
-    uint8_t voice_group_role[SEQ_TRACK_COUNT];
-    float voice_group_spread[SEQ_TRACK_COUNT];
-    uint8_t voice_group_link[SEQ_TRACK_COUNT];
-    uint8_t voice_group_seq_link[SEQ_TRACK_COUNT];
     uint8_t looper_route_enabled[SEQ_TRACK_COUNT][SEQ_TRACK_COUNT];
 } pattern_v1_track_cfg_block_t;
 
 typedef struct
 {
-    pattern_v1_track_seq_t tracks[SEQ_TRACK_COUNT];
+    pattern_v1_play_track_seq_t play[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+    pattern_v1_special_track_seq_t special[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY
+                                           - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 } pattern_v1_seq_block_t;
 
 typedef struct
@@ -101,6 +118,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern);
 uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport);
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
 uint8_t pattern_live_is_apply_in_progress(void);
+uint8_t pattern_live_last_voice_limited(void);
 uint8_t pattern_live_get_active_linked_kit(uint16_t *out_slot);
 uint8_t pattern_live_link_active_kit(uint16_t slot);
 void pattern_live_clear_active_kit_link_if_slot(uint16_t slot);

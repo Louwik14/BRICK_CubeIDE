@@ -21,6 +21,7 @@
 #define FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES 24000U
 #define FX_MASTER_MACRO_STUTTER_HISTORY_F ((float)(FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES - 2U))
 #define FX_MASTER_MACRO_STUTTER_OWNER_NONE 0xFFU
+#define FX_MASTER_MACRO_MUTE_FADE_SECONDS 0.005f
 
 typedef struct
 {
@@ -80,6 +81,10 @@ AUDIO_HISTORY_SDRAM static float g_stutter_history_l[FX_MASTER_MACRO_STUTTER_HIS
 AUDIO_HISTORY_SDRAM static float g_stutter_history_r[FX_MASTER_MACRO_STUTTER_HISTORY_SAMPLES];
 static float g_sample_rate = FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT;
 static uint8_t g_fxmm_diag_enabled;
+static uint8_t g_fxmm_muted;
+static float g_fxmm_mute_gain = 1.0f;
+static float g_fxmm_dry_l[AUDIO_BLOCK_SIZE];
+static float g_fxmm_dry_r[AUDIO_BLOCK_SIZE];
 
 static float fxmm_clampf(float v, float lo, float hi)
 {
@@ -618,22 +623,25 @@ static uint32_t fxmm_get_bpm_milli(void)
 
 static uint8_t fxmm_find_master_fx_track(uint8_t *out_track)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    uint8_t track = 0U;
+    if (track_topology_find_special(TRACK_TOPOLOGY_ROLE_FX, 0U, &track) == 0U)
     {
-        const track_runtime_ctx_t *ctx = track_runtime_get_ctx(track);
-        if ((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX))
-        {
-            if (out_track != NULL)
-            {
-                *out_track = track;
-            }
-            return 1U;
-        }
+        return 0U;
     }
-    return 0U;
+
+    const track_runtime_ctx_t *ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
+    {
+        return 0U;
+    }
+    if (out_track != NULL)
+    {
+        *out_track = track;
+    }
+    return 1U;
 }
 
 static float fxmm_drive_sat(float x)
@@ -1105,6 +1113,13 @@ void fx_master_macro_init(float sample_rate)
     memset(g_stutter_history_r, 0, sizeof(g_stutter_history_r));
     fxmm_reset_stutter_state();
     g_sample_rate = (sample_rate > 1000.0f) ? sample_rate : FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT;
+    g_fxmm_muted = 0U;
+    g_fxmm_mute_gain = 1.0f;
+}
+
+void fx_master_macro_set_mute(uint8_t muted)
+{
+    g_fxmm_muted = (muted != 0U) ? 1U : 0U;
 }
 
 void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
@@ -1119,6 +1134,9 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     {
         frames = AUDIO_BLOCK_SIZE;
     }
+
+    memcpy(g_fxmm_dry_l, left, frames * sizeof(float));
+    memcpy(g_fxmm_dry_r, right, frames * sizeof(float));
 
     const track_tone_sound_state_t *state = track_tone_sound_state_get_const(track);
     if (state == NULL)
@@ -1162,6 +1180,25 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
                           bpm_milli,
                           stutter_owner_slot,
                           freeze_owner_slot);
+    }
+
+    const float target = (g_fxmm_muted != 0U) ? 0.0f : 1.0f;
+    const float fade_samples = g_sample_rate * FX_MASTER_MACRO_MUTE_FADE_SECONDS;
+    const float step = (fade_samples > 1.0f) ? (1.0f / fade_samples) : 1.0f;
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        if (g_fxmm_mute_gain < target)
+        {
+            g_fxmm_mute_gain += step;
+            if (g_fxmm_mute_gain > target) g_fxmm_mute_gain = target;
+        }
+        else if (g_fxmm_mute_gain > target)
+        {
+            g_fxmm_mute_gain -= step;
+            if (g_fxmm_mute_gain < target) g_fxmm_mute_gain = target;
+        }
+        left[i] = g_fxmm_dry_l[i] + ((left[i] - g_fxmm_dry_l[i]) * g_fxmm_mute_gain);
+        right[i] = g_fxmm_dry_r[i] + ((right[i] - g_fxmm_dry_r[i]) * g_fxmm_mute_gain);
     }
 }
 

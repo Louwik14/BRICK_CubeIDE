@@ -2,13 +2,14 @@
 #define LOOPER_STORAGE_H
 
 #include <stdint.h>
+#include "Core/brick_build_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define LOOPER_STORAGE_SAVE_PATH_TRIES 10000U
-#define LOOPER_STORAGE_RAW_SLOT_COUNT 4U
+#define LOOPER_STORAGE_RAW_SLOT_COUNT BRICK6_LOOPER_RAW_SLOT_CAP
 #define LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ 48000U
 #define LOOPER_STORAGE_RAW_CHANNELS 2U
 #define LOOPER_STORAGE_RAW_BITS_PER_SAMPLE 24U

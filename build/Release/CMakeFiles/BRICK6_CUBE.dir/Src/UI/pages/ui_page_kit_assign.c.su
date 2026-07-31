@@ -6,10 +6,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_a
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:153:17:ui_page_kit_assign_view_index_for_slot	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:47:13:ui_page_kit_assign_set_status	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:101:13:ui_page_kit_assign_draw_centered_label	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:565:13:ui_page_kit_assign_render	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:564:13:ui_page_kit_assign_render	240	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:348:13:ui_page_kit_assign_name_done	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:227:6:ui_page_kit_assign_open	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:290:9:ui_page_kit_assign_handle_encoder	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:431:9:ui_page_kit_assign_is_open	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:430:9:ui_page_kit_assign_is_open	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:250:6:ui_page_kit_assign_close	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_kit_assign.c:258:13:ui_page_kit_assign_handle_event	160	static

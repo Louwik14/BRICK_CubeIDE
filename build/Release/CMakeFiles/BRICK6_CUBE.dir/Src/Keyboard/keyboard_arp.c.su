@@ -1,5 +1,4 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:179:13:keyboard_arp_ensure_config_initialized	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:199:13:keyboard_arp_select_track	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:224:16:keyboard_arp_state_is_hold_owned	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:248:13:keyboard_arp_load_config	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:296:17:keyboard_arp_rng	0	static
@@ -12,11 +11,12 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:698:16:keyboard_arp_next_base_index	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:733:16:keyboard_arp_compute_octave	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:789:13:keyboard_arp_try_start	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:199:13:keyboard_arp_select_track	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:666:16:keyboard_arp_apply_step_accent	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:577:13:keyboard_arp_release_owned_notes	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:652:13:keyboard_arp_reset_phrase	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:282:13:keyboard_arp_bump_config_revision	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:271:13:keyboard_arp_update_active_config	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:282:13:keyboard_arp_bump_config_revision	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1238:6:keyboard_arp_init	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1254:6:keyboard_arp_sync_track	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1267:6:keyboard_arp_tick	120	static
@@ -26,7 +26,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1468:6:keyboard_arp_clear_seq_step_source	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1478:6:keyboard_arp_note_on_for_track	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1493:6:keyboard_arp_note_off_for_track	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1506:6:keyboard_arp_all_notes_off_track	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1506:6:keyboard_arp_all_notes_off_track	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1525:6:keyboard_arp_all_notes_off	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1534:9:keyboard_arp_has_hold_activity	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Keyboard/keyboard_arp.c:1548:6:keyboard_arp_set_hold	24	static

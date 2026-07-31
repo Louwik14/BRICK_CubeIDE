@@ -13,30 +13,33 @@
 #include "Core/track_runtime.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
-#include "Seq/seq_plock_route.h"
 #include "Seq/seq_runtime_control.h"
 
 typedef struct
 {
-    seq_track_id_t source_track;
-    seq_step_id_t source_step;
     uint8_t set_id;
-    uint8_t status;
-    seq_param_slot_t source_slot;
     seq_param_slot_t target_slot;
     seq_value16_t value16;
     seq_value16_t base_value16;
 } seq_boundary_engine_step_lock_t;
 
-typedef enum
-{
-    SEQ_BOUNDARY_LOCK_LOCAL = 0,
-    SEQ_BOUNDARY_LOCK_LINKED = 1
-} seq_boundary_engine_lock_status_t;
-
 static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
 {
     return seq_model_get_track_playback_length(track);
+}
+
+static seq_runtime_active_lock_t *seq_boundary_engine_active_locks(seq_runtime_state_t *state,
+                                                                   seq_track_id_t track)
+{
+    if ((state == NULL) || (track_topology_is_active(track) == 0U))
+    {
+        return NULL;
+    }
+    if (track_topology_is_play(track) != 0U)
+    {
+        return state->active_locks_play[track];
+    }
+    return state->active_locks_special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 }
 
 static uint8_t seq_boundary_engine_lock_equals(const seq_runtime_active_lock_t *active,
@@ -67,14 +70,6 @@ static uint8_t seq_boundary_engine_find_next_lock(const seq_boundary_engine_step
     return 0U;
 }
 
-static uint8_t seq_boundary_engine_set_is_seq_linked(uint8_t set_id)
-{
-    return (uint8_t)((set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
-                     || (set_id == (uint8_t)SEQ_PLOCK_SET_COLORS)
-                     || (set_id == (uint8_t)SEQ_PLOCK_SET_MOD)
-                     || (set_id == (uint8_t)SEQ_PLOCK_SET_MIX));
-}
-
 static void seq_boundary_engine_prioritize_md_model(seq_track_id_t target_track,
                                                     seq_boundary_engine_step_lock_t *locks,
                                                     uint8_t count)
@@ -102,35 +97,30 @@ static void seq_boundary_engine_prioritize_md_model(seq_track_id_t target_track,
     }
 }
 
-static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t target_track,
-                                                          seq_track_id_t source_track,
-                                                          seq_step_id_t source_step,
-                                                          uint8_t linked,
+static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
+                                                          seq_step_id_t step,
                                                           seq_boundary_engine_step_lock_t *out_locks,
                                                           uint8_t *out_count)
 {
     if ((out_locks == 0)
         || (out_count == 0)
-        || (target_track >= SEQ_TRACK_COUNT)
-        || (source_track >= SEQ_TRACK_COUNT)
-        || (seq_model_is_step_editable_index(source_step) == 0U))
+        || (track >= SEQ_TRACK_COUNT)
+        || (seq_model_is_step_editable_index(step) == 0U))
     {
         return 0U;
     }
 
     *out_count = 0U;
-    track_runtime_refresh_track(target_track);
+    track_runtime_refresh_track(track);
 
-    if ((source_track >= SEQ_TRACK_COUNT)
-        || (seq_model_is_step_editable_index(source_step) == 0U)
-        || (seq_model_step_is_active(source_track, source_step) == 0U))
+    if (seq_model_step_is_active(track, step) == 0U)
     {
         return 1U;
     }
 
     seq_plock_entry_t entries[SEQ_STEP_MAX_LOCKS];
     uint8_t entry_count = 0U;
-    if (seq_model_step_plock_collect(source_track, source_step, entries, SEQ_STEP_MAX_LOCKS, &entry_count) == 0U)
+    if (seq_model_step_plock_collect(track, step, entries, SEQ_STEP_MAX_LOCKS, &entry_count) == 0U)
     {
         return 0U;
     }
@@ -139,52 +129,29 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t target_
     for (uint8_t i = 0U; i < entry_count; ++i)
     {
         const seq_plock_entry_t *const entry = &entries[i];
-        if (seq_boundary_engine_set_is_seq_linked(entry->set_id) == 0U)
+        if (entry->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
         {
             continue;
         }
 
-        seq_param_slot_t target_slot = entry->param_slot;
-        if (linked != 0U)
-        {
-            param_id_t source_param = PARAM_COUNT;
-            if ((seq_param_iface_slot_to_param(source_track,
-                                               entry->set_id,
-                                               entry->param_slot,
-                                               &source_param) == 0U)
-                    || (seq_param_iface_param_to_slot(target_track,
-                                                     entry->set_id,
-                                                     source_param,
-                                                     &target_slot) == 0U))
-            {
-                continue;
-            }
-        }
-
-        if (seq_param_iface_slot_is_supported(target_track, entry->set_id, target_slot) == 0U)
+        if (seq_param_iface_slot_is_supported(track, entry->set_id, entry->param_slot) == 0U)
         {
             continue;
         }
 
-        if (count >= SEQ_STEP_MAX_LOCKS)
+        if (count >= seq_model_get_step_lock_limit(track))
         {
             break;
         }
 
-        out_locks[count].source_track = source_track;
-        out_locks[count].source_step = source_step;
         out_locks[count].set_id = entry->set_id;
-        out_locks[count].status = (linked != 0U)
-            ? (uint8_t)SEQ_BOUNDARY_LOCK_LINKED
-            : (uint8_t)SEQ_BOUNDARY_LOCK_LOCAL;
-        out_locks[count].source_slot = entry->param_slot;
-        out_locks[count].target_slot = target_slot;
+        out_locks[count].target_slot = entry->param_slot;
         out_locks[count].value16 = entry->value16;
         out_locks[count].base_value16 = 0U;
         count++;
     }
 
-    seq_boundary_engine_prioritize_md_model(target_track, out_locks, count);
+    seq_boundary_engine_prioritize_md_model(track, out_locks, count);
     *out_count = count;
     return 1U;
 }
@@ -197,7 +164,11 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
         return;
     }
 
-    seq_runtime_active_lock_t *const active = state->active_locks[track];
+    seq_runtime_active_lock_t *const active = seq_boundary_engine_active_locks(state, track);
+    if (active == NULL)
+    {
+        return;
+    }
     const uint8_t active_count = state->active_lock_count[track];
 
     for (uint8_t i = 0U; i < active_count; ++i)
@@ -213,7 +184,9 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
                                      active[i].base_value16);
     }
 
-    memset(active, 0, sizeof(state->active_locks[track]));
+    memset(active,
+           0,
+           (size_t)seq_model_get_step_lock_limit(track) * sizeof(seq_runtime_active_lock_t));
     state->active_lock_count[track] = 0U;
 }
 
@@ -231,24 +204,24 @@ void seq_boundary_engine_invalidate_track(seq_runtime_state_t *state,
 static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                                    seq_track_id_t track,
                                                    uint8_t has_prev,
-                                                   seq_track_id_t source_track,
-                                                   seq_step_id_t source_step,
-                                                   uint8_t linked)
+                                                   seq_step_id_t step)
 {
     seq_boundary_engine_step_lock_t next_locks[SEQ_STEP_MAX_LOCKS];
     uint8_t next_count = 0U;
     if ((state == 0)
         || (seq_boundary_engine_collect_non_play_locks(track,
-                                                       source_track,
-                                                       source_step,
-                                                       linked,
+                                                       step,
                                                        next_locks,
                                                        &next_count) == 0U))
     {
         return;
     }
 
-    seq_runtime_active_lock_t *const active = state->active_locks[track];
+    seq_runtime_active_lock_t *const active = seq_boundary_engine_active_locks(state, track);
+    if (active == NULL)
+    {
+        return;
+    }
     uint8_t active_count = state->active_lock_count[track];
 
     if (has_prev != 0U)
@@ -302,7 +275,9 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                    next_locks[i].value16);
     }
 
-    memset(active, 0, sizeof(state->active_locks[track]));
+    memset(active,
+           0,
+           (size_t)seq_model_get_step_lock_limit(track) * sizeof(seq_runtime_active_lock_t));
     state->active_lock_count[track] = 0U;
 
     for (uint8_t i = 0U; i < next_count; ++i)
@@ -344,45 +319,12 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
         if ((state->prev_step_valid[track] == 0U)
             || (state->prev_step[track] != current_step))
         {
-            if (seq_plock_route_target_is_seq_link_slave(track) != 0U)
-            {
-                continue;
-            }
-
-            seq_plock_route_t route;
-            if (seq_plock_route_resolve(track, current_step, &route) == 0U)
-            {
-                continue;
-            }
-
-            if ((route.group_master != 0U) && (route.linked != 0U))
-            {
-                for (uint8_t i = 0U; i < route.target_count; ++i)
-                {
-                    const seq_track_id_t target = route.targets[i];
-                    seq_boundary_engine_step_apply_restore(state,
-                                                           target,
-                                                           state->prev_step_valid[target],
-                                                           route.source_track,
-                                                           route.source_step,
-                                                           route.linked);
-
-                    state->prev_step[target] = route.source_step;
-                    state->prev_step_valid[target] = 1U;
-                }
-            }
-            else
-            {
-                seq_boundary_engine_step_apply_restore(state,
-                                                       track,
-                                                       state->prev_step_valid[track],
-                                                       track,
-                                                       current_step,
-                                                       0U);
-
-                state->prev_step[track] = current_step;
-                state->prev_step_valid[track] = 1U;
-            }
+            seq_boundary_engine_step_apply_restore(state,
+                                                   track,
+                                                   state->prev_step_valid[track],
+                                                   current_step);
+            state->prev_step[track] = current_step;
+            state->prev_step_valid[track] = 1U;
 
             if (hit_count < max_hits)
             {

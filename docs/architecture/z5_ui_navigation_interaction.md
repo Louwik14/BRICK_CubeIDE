@@ -1,5 +1,11 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-31 - selection 8 Play + Special fixes
+
+- `TRACK + HALL 0..11` selectionne les 12 tracks Low-Cost; Premium conserve `TRACK + HALL 0..13`. Aucun nouveau geste PAGE n'est introduit et les halls Low-Cost 12/13 restent eteints et inactifs.
+- Les indices 0..7 sont les seules Play Tracks. Les Special affichent les titres fixes `Master`, `Looper`, `Input 1..3` et `FX`; leur page CFG affiche seulement l'identite non editable.
+- Les halls SEQ restent utilisables comme timeline homogene temporaire, mais le scheduler bloque les notes ordinaires et vide toute fenetre ARP sur Special. Le format Special allege reste du ressort de l'etape 6.
+
 ## TRACK CFG synth
 
 Page 1: `VOICES` et `SPREAD`; page 2: `MIDI`. Pour un master Multi, `GROUP` est en
@@ -495,9 +501,6 @@ Flux nominal prouve:
   - `TRACK` + simple tap ne demande jamais `CFG`; l'ouverture `CFG` sous `TRACK` reste reservee au double tap explicite sur la track deja focus.
   - la mutation de chaine de voix ne s'arme que si une autre hall track est deja maintenue au moment du nouvel appui:
     `TRACK` maintenu + master candidate maintenue + target press.
-  - sans seconde hall maintenue, aucun role `Solo/Master/Slave` ne change.
-  - le geste groupe conserve les validations locales existantes: ajout contigu a droite, retrait uniquement sur la derniere slave, refus sans auto-fill ni mutation.
-  - ajout special sur target `Off`: avant de devenir `Slave`, la target recoit une copie ponctuelle de l'etat instrument/per-track de la master candidate (family/type, config MIDI et params track-aware hors domaine `PLAY`), sans copie de sequence/trigs/steps/plocks `PLAY`.
 - Contrat specifique `MACRO`: l'ancien `SHIFT+HALL15` ne cible plus de mode; l'acces utilisateur passe par l'overlay `SHIFT+TRACK`.
 - Grammaire visuelle halls en overlay `MACRO`:
   - les 16 halls adressent les 16 scenes et chaque scene a une couleur stable dediee,
@@ -528,7 +531,7 @@ Flux nominal prouve:
   - visible dans une famille/template ne signifie pas selectionnable si la subpage est vide ou desactivee,
   - les boutons de page ne peuvent pas selectionner une subpage vide,
   - l'entree/reload d'ecran, le tick template, la sync active-track et les changements de famille/resolver normalisent le focus vers une subpage selectionnable,
-  - les contextes dynamiques (`COLORS` EQ3/ADSR, `MIX 2/2` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
+  - les contextes dynamiques (`COLORS` EQ3/ADSR, Master `TONE` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
   - aucun template Buffer ni sous-page TONE Buffer ne reste actif.
@@ -611,9 +614,10 @@ Points factuels:
 - Z5 est confirmee comme zone d'orchestration interactionnelle centrale, avec sous-composants internes: event queue, page manager, template resolver.
 - `ui_page_manager` et `ui_event` doivent etre rattaches explicitement a Z5 dans la carte globale (pas des utilitaires neutres).
 
-## 17. Contrat UI Master/FX
-- `Master/FX` est un type de la family `Master` expose en `CFG`.
-- `TONE` expose 4 pages de 4 slots:
+## 17. Contrat UI Master et FX
+- Master et FX sont des identites Special fixes; `CFG` affiche leur role sans selecteur family/type. La resolution UI utilise exclusivement leur role topologique, sans adaptateur Master/FX.
+- Sur Master, `TONE` cycle trois sous-ensembles globaux: `MASTER 1/3` reverb Mutable/Digital, `MASTER 2/3` delay Classic/Dual et `MASTER 3/3` compresseur Off/Deluge/Brick. Master n'expose ni MIX, ni MacroFX, ni ROUT.
+- Sur FX, `TONE` expose 4 pages de 4 slots:
   - `FX1`: `FX1`, `LVL`, macro A, macro B
   - `FX2`: `FX2`, `LVL`, macro A, macro B
   - `FX3`: `FX3`, `LVL`, macro A, macro B
@@ -623,12 +627,12 @@ Points factuels:
 - Les valeurs visibles de `LVL` et des macros A/B sont formatees par la page TONE selon le type FX courant et le mapping DSP reel, sans modifier le stockage `0..127` ni les plages DSP.
 - Pour `STUTTER`, `LVL` est un controle UI on/off: `OFF` si la valeur brute vaut `0`, `ON` si elle vaut `>0`, avec edition encodeur quantifiee en `0/127`. Pour `FREEZE`, `LVL` reste un controle continu: `OFF` si la valeur brute vaut `0`, puis affichage progressif en pourcentage pour `1..127`; le DSP utilise `>0` comme seuil d'engagement du freeze et la valeur comme niveau de retour wet/freeze + duck dry, avec dry coupe au maximum.
 - Pour `FREEZE`, `B=HOLD` affiche les 4 choix discrets `SHORT/MID/LONG/INF`; ces choix restent envoyes comme raw `0..127` et sont re-quantifies cote DSP en modes de feedback clairement distincts.
-- Le selecteur `TYPE` Master/FX saute `STUTTER` ou `FREEZE` si un autre slot Master/FX utilise deja le meme type; ces types restent selectionnables uniquement par leur slot owner courant ou par le premier slot libre de cette ressource unique.
-- Les macros Master/FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
+- Le selecteur `TYPE` FX saute `STUTTER` ou `FREEZE` si un autre slot FX utilise deja le meme type; ces types restent selectionnables uniquement par leur slot owner courant ou par le premier slot libre de cette ressource unique.
+- Les macros FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
 - `LVL` garde le rendu parametre standard du template pour les autres MacroFX. Exception locale: `STUTTER LVL` remplace le potard par un switch et quantifie l'edition encodeur en OFF/ON; `FREEZE LVL` garde le potard continu avec texte `OFF` a zero puis pourcentage. Les macros A/B gardent leur rendu contextuel existant.
-- `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
-- Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
-- Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR`. Les labels UI existants restent l'autorite visible de mapping A/B; `ECHO`, `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
+- `ARP` brut est projete en `ROUT` pour FX. L'etat ROUT FX est UI-only local et ne modifie pas le routing audio.
+- Le hall de la track FX active est affiche en vert fonce comme destination courante et son toggle est ignore.
+- Les series DSP FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR`. Les labels UI existants restent l'autorite visible de mapping A/B; `ECHO`, `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
 
 
 ## 12. Contrat MIDI UI v1 (canonique)
@@ -646,8 +650,7 @@ Points factuels:
   - Z5 reste source family/type; Z2 reste autorite unique du bind runtime.
 - Contrat KBD/canal partage:
   - le KBD interne emet sur le canal MIDI de la track focus/play-owner,
-  - le routage note interne est canal-aware: toutes les tracks moteur ou `Input/Hybrid` en source `INT`/`ALL` qui partagent ce canal recoivent note-on/note-off,
-  - ce routage reutilise le meme dispatch track-aware que l'entree MIDI externe, avec dedoublonnage par owner de voice group pour eviter un double trigger de la source.
+  - le routage note interne est canal-aware: toutes les tracks moteur ou `External` en source `INT`/`ALL` qui partagent ce canal reçoivent note-on/note-off,
 - Contrat Omnichord:
   - le mapping physique des 8 boutons d'accord est Orchid-compatible: `Dim`, `Min`, `Maj`, `Sus`, puis `6`, `m7`, `M7`, `9`;
   - les Secret Chords Orchid sont resolus dans le dictionnaire clavier avant la fusion additive generique;
@@ -657,15 +660,6 @@ Points factuels:
   - en accord Omnichord, la root active est la derniere touche root pressee encore maintenue; si elle est relachee, le clavier revient a la root maintenue precedente.
   - relacher une extension revient a l'accord restant si une base `Dim/Min/Maj/Sus` et une root restent maintenues; les extensions seules restent silencieuses.
   - la sortie de `KEYBOARD` envoie les note-off locaux du clavier avant de nettoyer l'etat interne; les clears silencieux restent reserves aux sync de focus ou resets deja proprietaires du contexte.
-
-## 13. Contrat Hybrid UI v1 (borne)
-- `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.
-- Exposition UI pour `Input/Hybrid`:
-  - exposes: `PLAY`, `MOD`, `TONE`, `VCA`, `COLORS`, `MIX`, `CFG`.
-- `TONE` Hybrid utilise une famille template dediee (pas fallback Synth):
-  - page `PROG`: `Gate` + `Program`,
-  - pages suivantes: `CC1`, `CC2`, `CC3`.
-- `PLAY` est explicitement navigable pour `Input/Hybrid`.
 
 ## 13.b Contrat COLORS UI
 - L'ensemble `COLORS` conserve uniquement les pages filtre utiles:
@@ -738,19 +732,11 @@ Points factuels:
 
 ## 14.c Contrat MIX send2 delay
 - La page template `MIX` conserve la page track-aware `MIX`: `Level`, `Pan`, `Send1`, `Send2`.
-- L'ensemble `MIX` est scinde en deux sous-ensembles locaux UI-only:
-  - appui `MIX` depuis un autre ensemble: ouvre `MIX 1/2`, subpage `MIX`,
-  - appui `MIX` depuis `MIX`: alterne `MIX 1/2` / `MIX 2/2`,
-  - le changement de sous-ensemble conserve la subpage active si elle reste disponible, sinon revient a `0`.
-- `MIX 1/2` expose:
-  - `MIX`: `Level`, `Pan`, `Send1`, `Send2`,
-  - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
-  - `REV2`: reservee/vide,
-  - `REV3`: `HPF`, `LPF`.
-- La page active MIX expose `MODEL=MUTABLE/DIGITAL` dans l'unique reverb SEND runtime RevB.
-- Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
+- L'ensemble `MIX` n'a qu'une sous-page et n'est disponible que si la track possede une cible mixer effective. Il ne contient aucun parametre global.
+- La Special Master expose l'unique reverb SEND runtime dans `TONE > MASTER 1/3`; `MODEL=MUTABLE/DIGITAL` resout dynamiquement les pages utiles.
+- Les params delay globaux sont exposes sur Master dans `TONE > MASTER 2/3`.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
-- Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:
+- Le delay global expose une surface Master contextuelle selon `TYPE`:
   - CLASSIC `DLY1`: `TYPE`, `TIME`, `X`, `VOL`,
   - CLASSIC `DLY2`: `HPF`, `LPF`, `REV`, `FDBK`,
   - DUAL `DLY1`: `TYPE`, `TIME`, `MODE`, `VOL`,
@@ -899,7 +885,7 @@ Points factuels:
 
 ## 19. Contrat UI Sampler/Looper skeleton
 
-- Le catalogue `CFG` expose `Looper` comme type de la family existante `Sampler`.
+- Looper est une identite Special fixe; le catalogue `CFG` des Play Tracks n'expose plus le type `Sampler/Looper`.
 - `VCA` n'est pas expose pour `Sampler/Looper`; le niveau utilisateur passe par `MIX/Level`.
 - Pour `Sampler/Looper`, le hall mode brut `ARP` est projete visuellement en `ROUT`.
 - `ROUT` toggle une selection de tracks logiques sources par looper track dans `ui_core_runtime_bridge`; la source peut etre focus UI ou non.
@@ -910,7 +896,7 @@ Points factuels:
 - Apres demarrage writer reussi, `ARM=Rec` est consomme et repasse `Off` pour eviter tout redemarrage automatique sans nouveau geste utilisateur.
 - Le demarrage `ARM=Rec` applique le contrat replace: l'ancien playback Looper de la track cible est arrete/detache et ses pages transient sont invalidees avant que le writer passe en `RECORDING`; l'ancienne loop ne reste pas audible pendant la nouvelle prise.
 - Le focus UI n'est pas une condition d'eligibilite Looper.
-- Politique multi-looper temporaire: si plusieurs tracks `Sampler/Looper` sont eligibles, aucun writer Looper n'est demarre; le controle utilisateur explicite devra reduire l'eligibilite a une seule track.
+- Une seule Special Looper existe dans la topologie; les anciennes configurations Play `Sampler/Looper` sont normalisees en `Sampler/RAM` au restore.
 - `ARM=Overd` reste visible mais non fonctionnel pour l'audio overdub: la track est ignoree par le demarrage writer tant que l'overdub audio n'est pas implemente.
 - `PLAY=Off/Auto` pilote maintenant le playback transient apres capture:
   - `Off`: la prise finalisee est chargee en runtime mais reste muette,
@@ -940,9 +926,9 @@ Points factuels:
 
 ## 20. Contrat UI apres retrait buffer master
 
-- Le catalogue `Master` expose seulement `FX`.
+- Le catalogue ne contient aucune family Master ou FX convertible.
 - Les shortcuts `TRACK+REC`, `TRACK+PLAY` et `TRACK+SHIFT+REC` ne ciblent plus de backend buffer dedie; ils reviennent au transport/REC existant.
-- `ROUT` reste une projection de `ARP` pour `Master/FX` et `Sampler/Looper`; `Sampler/Looper` expose `ARM`, `LEN`, `PLAY`, `XFade` via `PARAM_LOOPER_XFADE`.
+- `ROUT` reste une projection de `ARP` pour la Special FX et `Sampler/Looper`; `Sampler/Looper` expose `ARM`, `LEN`, `PLAY`, `XFade` via `PARAM_LOOPER_XFADE`.
 - `XFade` Looper suit le contrat TONE normal de capture: il peut etre p-locke et assigne a une scene MACRO depuis la page `TONE/LOOP`.
 
 ## 21. Contrat UI Looper STRETCH
@@ -1067,15 +1053,9 @@ Points factuels:
 - Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
 - `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
 
-## 30b. Contrat UI Patch Poly v2
 
 - Patch reste une categorie de preset sonore assignable; `polyX` designe la largeur en tracks liees, pas la polyphonie audio interne.
-- La seule source autorisee pour creer un Patch Poly est le modele officiel `voice_group_role` de Z2/Z5: `SOLO`, `MASTER`, `SLAVE`, avec groupe contigu master puis slaves a droite.
-- `PATCH_POLY_TRACK_MAX=4`: Save Patch sur `SOLO` capture `P1`; Save Patch sur `MASTER` capture master + slaves contigus jusqu'a `P4`; Save Patch sur `SLAVE` remonte au master effectif et capture le groupe complet.
-- Un groupe incoherent ou plus large que 4 est refuse proprement; aucune selection libre de tracks, aucun target mask Patch Assign et aucun Set partiel ne peuvent creer un Patch Poly.
-- Le browser Patch Assign affiche la largeur `P2/P3/P4` dans la liste; les filtres Family/Type restent inchanges et aucun filtre Width n'est ajoute en v2.
 - Apply `P1` conserve le contrat multi-target existant: le meme patch mono est applique sequentiellement a toutes les targets cochees.
-- Apply `P2/P3/P4` exige une seule target cochee, target role `MASTER`, et un groupe cible deja declare avec exactement la meme largeur; sinon refus court (`NEED 1 TRK`, `NO MASTER`, `NO SLAVES`, `NEED X TRK`).
 - Aucun apply partiel, creation automatique de slaves, preview, rollback ni reload asset Sampler complet n'est ajoute.
 - Rename/delete restent des operations de slot Patch et ne changent pas la largeur.
 
@@ -1140,7 +1120,7 @@ Points factuels:
 
 ## Addendum 2026-07-17 - lot 4B ressources produit low-cost
 
-- La resolution de families track est maintenant bornee par les ressources compilees: low-cost ne propose plus `Input2`, `Input3` ni `Input4` dans les choix CFG; premium garde le catalogue complet.
+- Le catalogue CFG des Play Tracks ne propose aucune family Input, Master ni aucun type Looper; les identites Special sont fixes par la topologie.
 - La sync audio runtime low-cost active uniquement la track physique `Input1` pour les entrees audio. Les lanes d'entree 1/2 sont forcees inactives, et la lane interne moteur reste separee pour les tracks Synth/Sampler/Drum.
 - Les routes CUE/BOTH ne sont plus exposables en low-cost via les descripteurs route; premium conserve la grammaire de routing existante.
 
@@ -1192,7 +1172,6 @@ Points factuels:
 - Le candidat LENGTH exige un source hall deja promu en maintien, ou un pending dont le seuil de maintien est deja atteint, avant B; il doit etre distinct de B et encore physiquement presse dans `hall_surface`. Un simple pending sous seuil ou le premier `HALL_PRESS` d'un step ne peut pas se qualifier.
 - Quand A est vide ou seulement porteur de p-locks, le succes LENGTH cree A; B ne sert jamais de trig de creation.
 - La borne B est acceptee si son trig est inactif et qu'elle ne porte pas de p-lock non-PLAY; les restes PLAY d'un ancien trig supprime ne bloquent donc pas le geste.
-- Pour une master de voice group, cette vacuite de B est verifiee sur chaque membre PLAY du groupe, plafonne a 8; le geste ecrit seulement `LEN` sur le step A de chaque membre et ne materialise jamais B.
 - Le second `STEP` sert uniquement de borne de fin: il n'est pas enregistre comme maintien, ne cree aucun trig, ne copie rien et reste vide au release.
 - Apres succes, `seq_led` affiche sur la page courante uniquement les steps visibles compris dans l'intervalle absolu `A..B`; l'overlay clignote deux fois en jaune via la cadence `engine_tick_count`, puis retombe sur le rendu normal.
 - Premium garde le chemin press/release historique: le helper de flash retourne toujours inactif hors `BRICK6_VARIANT_LOWCOST`.
@@ -1232,13 +1211,10 @@ Points factuels:
 - Les params discrets enum/bool/int consomment environ 4 crans encodeur par pas uniquement si leur catalogue expose moins de 20 valeurs; les longs enums/ints conservent leur delta existant.
 - Le reliquat est remis a zero au changement de bank/page ou de track via `ui_param_set_bank()` / `ui_param_invalidate_bank()`.
 
-## Addendum 2026-07-25 - PLAY voice group master/slaves
 
-- Quand la track active est `MASTER` d'un voice group, l'ensemble `PLAY` projette une page par membre du groupe, dans l'ordre stable master puis slaves contigus, avec plafond UI explicite a 8 membres.
 - Jusqu'a 4 membres, le titre reste `PLAY`; au-dela, le bouton `PLAY` alterne les sous-ensembles `PLAY 1/2` et `PLAY 2/2`.
 - Chaque page groupe expose le layout historique de la voix 1 (`NOTE`, `VEL`, `LEN`, `MicTim`) pour la track membre correspondante; `ui_param` resout un contexte explicite `owner_track/member_index/target_track/base_param` via la page courante au lieu de supposer la track active master.
 - Les edits directs et p-locks PLAY utilisent ce meme contexte: la valeur est stockee sur la track membre cible avec l'ID PLAY historique, jamais dans un slot commun de la master.
-- Une track `SLAVE` ne publie pas son propre ensemble `PLAY`; l'edition PLAY du groupe passe par la track `MASTER`.
 - Les pages excedentaires sont neutralisees par `PARAM_COUNT` et le resolver `subpage_enabled`, afin d'eviter les pages fantomes lors de l'ajout ou retrait de slaves.
 
 ## Addendum 2026-07-25 - page VOICE Stack
@@ -1248,19 +1224,14 @@ Points factuels:
 - La page `VOICE` expose uniquement `OSC DETUNE` et `RESET`, avec deux emplacements vides conserves par le style template existant. Aucune page `OSC1+`, `OSC2+`, `OSC3+`, aucun `SPREAD` Stack et aucun parametre de nombre de voix ne sont exposes.
 - Prism conserve ses pages `EDIT` et `TONE` historiques.
 
-## Addendum 2026-07-25 - TRACK CFG 2/2 voice group
 
-- `CFG` reste mono-page pour une track seule, une slave et une master sans slave.
-- Quand la track active est `MASTER` d'un voice group avec au moins une slave, `CFG` expose une deuxieme page `GROUP` avec `SPREAD` (`AMT` + `KEY`), `LINK` et `SEQ LINK`.
 - Le cycle par reapppui sur le raccourci CFG utilise la selection de subpage template existante; les pages non disponibles restent neutralisees par `PARAM_COUNT`.
-- LINK propage aussi les edits manuels `CFG/TRACK` et `CFG/TYPE` aux membres compatibles du voice group, via le meme delta apres clamp que les autres valeurs de base.
 - `PLAY` conserve son contrat totalement independant par membre: LINK ne s'execute jamais dans le domaine PLAY, ne propage pas NOTE/VEL/LEN/MicTim, ne touche aucun p-lock PLAY et ne change pas la lecture scheduler par membre.
 - Pour `MOD`, LINK propage seulement les valeurs numeriques compatibles: LFO `RATE/PHASE`, ENV3 `ATTACK/DECAY/SUSTAIN/RELEASE` et Matrix `DEPTH`.
 - Matrix `SLOT`, `SOURCE` et `DEST` restent exclus comme selecteurs/structure. La propagation de `DEPTH` cible le meme slot Matrix que la source, puis restaure le slot selectionne de la track cible.
 
 ## Addendum 2026-07-25 - clipboard step master PLAY
 
-- Le copy/paste de step depuis une master de voice group conserve la selection UI historique, mais le backend `seq_clipboard` capture aussi les donnees PLAY des membres du groupe dans l'ordre des pages PLAY groupe.
 - Chaque page/membre reste independant: le paste cible le meme index de membre dans le groupe destination et ne duplique pas les IDs PLAY sans contexte de membre.
 - Les slaves ne deviennent pas navigables en PLAY; seules leurs donnees PLAY internes sont restaurees par le paste de la master.
 
@@ -1284,12 +1255,10 @@ Points factuels:
 - `COLORS/ENV` page `FILTER` expose `CUTOFF/RES/EG AMT/F TYPE`; en mode DJ/EQ3, elle expose `LOW/MID/HIGH/F TYPE`.
 - `Synth/Prism` page `TONE` expose maintenant `VOICE` (`PARAM1/PARAM2/A MOD/MODEL`) puis `EDIT` (`TUNE/FM AMT/PHASE`).
 - Le controle Prism `TUNE` utilise l'ID UI `PARAM_PRISM_COARSE` comme controle unifie: sans `SHIFT` le pas est `1 st`, avec `SHIFT` le pas est `0.01 st`; l'edition directe neutralise `PARAM_PRISM_FINE` a `0.5` et encode la valeur finale dans `PARAM_PRISM_COARSE`.
-- Le badge de track affiche `M#` uniquement pour une master ayant au moins une slave effective; une master orpheline revient au label simple `#`.
 
 ## Addendum 2026-07-26 - LINK choix discrets
 
 - Le point d'insertion UI de LINK garde le delta pour les params continus existants, mais applique les choix `CFG/TRACK`, `CFG/TYPE` et `COLORS/F Type` par valeur absolue de la master.
-- La selection d'une slave relit ensuite les valeurs via les sources autoritaires par-track (`track_state` et `track_sound_state`), donc l'affichage slave suit sans miroir UI parallele.
 ## Addendum 2026-07-26 - edition ROLL par step
 
 - En contexte STEP sequenceur, `STEP occupe maintenu + +` augmente le roll du step et `STEP occupe maintenu + -` le diminue jusqu'a `OFF`.
@@ -1303,10 +1272,7 @@ Points factuels:
 - Quand `TRACK` est maintenu hors overlay MACRO, le renderer LED Hall affiche les lanes tracks `0..UI_TRACK_COUNT-1` en bleu et la track active en blanc prioritaire; les lanes hors tracks restent eteintes.
 - Ce rendu reste strictement borne au maintien `TRACK` et ne modifie pas les rendus normaux SEQ/MUTE/PATTERN/KEYBOARD ni le blink jaune quick length.
 
-## Addendum 2026-07-28 - LEDs relations master/slave
 
-- En maintien `TRACK`, les tracks presentes non-slaves restent en bleu sombre, une track `SLAVE` de voice group est rendue en bleu clair; la track active reste blanche prioritaire, y compris si elle est slave.
-- En mode `MUTE`, le rendu mute reste prioritaire sur le maintien `TRACK`: une slave non mutee est vert clair, une slave mutee est rouge clair, et les tracks non-slaves conservent le vert/rouge mute existant.
 - Le scale Q8 low-cost conserve visible toute composante couleur non nulle sans devoir saturer le bleu sombre des tracks normales.
 
 ## Addendum 2026-07-28 - ownership LEDs step pendant MUTE
@@ -1334,30 +1300,19 @@ Points factuels:
 - En low-cost, les raccourcis des touches noires `SHIFT + Hall` reutilisent la meme autorite que le mode `KEYBOARD` aussi lorsque le mode effectif est `ARP`.
 - Le press consomme la touche avant routage musical vers l'arp et le release correspondant reste consomme; sans `SHIFT`, le jeu ARP reste inchange.
 
-## Addendum 2026-07-28 - decision UI SEQ LINK
 
-- Z5 ne possede pas `SEQ LINK`: l'UI expose une commande utilisateur et lit une projection master-effective.
-- L'edition cible toujours la master effective du voice group via `PARAM_CFG_GROUP_SEQ_LINK`; une slave ne devient pas proprietaire local du flag.
-- `SEQ LINK` est expose sur `CFG/GROUP` apres `LINK`, comme commande separee de `CFG GROUP LINK`.
-- Les pages et feedback p-lock restent non destructifs: activer/desactiver `SEQ LINK` ne doit ni clear, ni copier, ni masquer durablement les p-locks stockes sur les slaves.
 
-## Addendum 2026-07-28 - CFG GROUP SPREAD double-widget
 
-- `CFG/GROUP` d'une master avec slaves expose maintenant `SPREAD` sur deux slots: `AMT` en barre a gauche et `KEY` en switch a droite, avec titre commun `SPREAD`.
-- `LINK` et `SEQ LINK` restent visibles sur la meme page, apres le double-widget.
 - Le switch commun ON/OFF affiche sa valeur au-dessus et descend de l'offset des widgets barre pour aligner verticalement les surfaces de controle.
 
 ## Addendum 2026-07-28 - clipboard Track snapshot canonique
 
 - `TRACK + COPY`, `TRACK + PASTE` et `TRACK + SHIFT + PASTE` passent maintenant par `track_snapshot`.
-- Le snapshot Track capture/restaure la config structurelle, MIDI, attributs voice-group, bases `track_sound_state`, bases `track_tone_sound_state`, sequence de track, rolls, p-locks et reglages runtime sequenceur par track.
 - Le clipboard Track ne reconstruit plus une track depuis la liste des params actuellement exposables par le runtime; cette liste reste reservee aux scopes ensemble/page.
-- `CLEAR Track` applique un snapshot par defaut identique au modele de creation neuve: `Off/Audio`, MIDI par index de track, voice-group neutralise, sequence vide et bases sound/tone par defaut.
-- Les exceptions de ressources exclusives `Input1..4` sont passees comme options d'apply au snapshot; Z5 ne porte plus de mutation structurelle Track parallele.
+- Les exceptions de ressources exclusives `Input1..3` sont passees comme options d'apply au snapshot; Z5 ne porte plus de mutation structurelle Track parallele.
 
 ## Addendum 2026-07-28 - indicateur sequence controlee par Master
 
-- Une slave avec `SEQ LINK=ON` garde ses pages accessibles, mais toute edition de sequence est refusee par le garde Z4.
 - Le header template affiche un indicateur inverse `MxSEQ`, ou `x` est la master effective, quand la sequence de la track active est controlee par la Master.
 - Les parametres permanents de sound design restent editables: le verrou ne cible que les donnees de sequence stockees dans le Pattern.
 
@@ -1382,7 +1337,6 @@ Points factuels:
 
 - Le clipboard Track continue d'appliquer son snapshot RAM complet par
   `track_snapshot_apply_ex`.
-- Pendant l'apply, la cible, son ancien/nouveau voice-group possible et la source
   déplacée éventuelle sont neutralisés via le seam de restauration Z4. Les autres
   tracks continuent de jouer.
 - Une séquence collée vide ne peut pas réémettre les notes issues du lookahead ou
@@ -1403,20 +1357,19 @@ Points factuels:
 - Ces deux entrees ouvrent les pages existantes `UI_PAGE_CALIBRATION` et `UI_PAGE_USER_CALIBRATION`; aucun workflow de calibration parallele n'est introduit. Les pages acceptent seulement une destination de retour explicite.
 - `KEYBOARD` ajoute la sous-page `VELOCITY`: encodeur 1 `PROFILE DEFAULT/USER`, encodeur 2 `MODE DV/TIME/ENERGY`, encodeur 3 `CURVE`, encodeur 4 acces a la calibration USER. Le quatrieme slot affiche `NO CAL` quand USER ne dispose pas d'un profil valide.
 - Une calibration USER reussie selectionne explicitement `USER`, applique le profil au moteur et le sauvegarde avant le retour. Premium conserve ses menus et pages KEYBOARD historiques.
-## Addendum 2026-07-30 - MIX 3/3 compresseur
+## Addendum 2026-07-30 - compresseur master
 
-- Le bouton MIX cycle maintenant `MIX 1/3`, `MIX 2/3`, `MIX 3/3`; les pages et controles historiques des deux premiers ensembles sont inchanges.
-- `MIX 3/3` expose `COMP MAIN`, `COMP ENV` et `COMP CHAR`; `MODEL` vaut `OFF/DELUGE/BRICK` et CHAR est resolue selon le modele (Deluge: SAT, Brick: DETECT/KNEE, OFF: N/A).
+- Depuis la separation des Special, Master `TONE 3/3` expose `COMP MAIN`, `COMP ENV` et `COMP CHAR`; `MODEL` vaut `OFF/DELUGE/BRICK` et CHAR est resolue selon le modele (Deluge: SAT, Brick: DETECT/KNEE, OFF: N/A).
 ## Addendum 2026-07-30 - pages reverb
 
-- `MIX 1/3` resout les pages reverb selon `MODEL`; aucun controle sans effet n'est affiche.
+- Master `TONE 1/3` resout les pages reverb selon `MODEL`; aucun controle sans effet n'est affiche.
 ## Addendum 2026-07-30 - UI reverb dynamique
 
 - Mutable: `MODEL/LVL/DECAY/PRE-D`, puis `SIZE/DAMP/HPF/LPF`, puis `SMEAR`.
 - Digital: `MODEL/LVL/DECAY/PRE-D`, puis `DAMP/HPF/LPF/-`. SIZE/SMEAR et PAN ne sont pas exposes sur Digital.
 ## Addendum 2026-07-30 - navigation modele et widget HPF/LPF
 
-- `ui_template_page` peut explicitement conserver une sous-page encore valide lors d'un changement de famille resolue; MIX active ce contrat afin que MODEL remplace Mutable/Digital sans retour a la page MIX.
+- `ui_template_page` peut explicitement conserver une sous-page encore valide lors d'un changement de famille resolue; la surface Master TONE active ce contrat afin que MODEL remplace Mutable/Digital sans quitter le sous-ensemble courant.
 - Sur les pages delay et reverb, les deux cellules HPF/LPF gardent leurs labels, focus et edition independants, mais leur zone widget est remplacee par une courbe de reponse commune couvrant exactement les deux cellules.
 # Addendum 2026-07-30 - type visible `DRUM / MD`
 
@@ -1430,3 +1383,23 @@ Points factuels:
   sous-pages. Les labels viennent du profil courant (`PTCH`, `DEC`, `GAP`,
   `MFRQ`, etc.) et les slots absents ne sont pas affiches.
 - `BD Analog` conserve sa page TONE et ses quatre controles historiques.
+# Addendum 2026-07-31 - feedback budget voix
+
+Le collage de track et l'application de Patch preflightent le budget avant toute mutation: zero slot produit `VOICE MAX`; une disponibilite partielle applique toute la structure et tous les parametres avec le seul champ VOICES limite, puis produit une seule fois `VOICE LIMITED`; sinon la copie est fidele. La destination reutilise ses propres slots dans le calcul. La family Synth et tous ses moteurs restent visibles lorsque le budget est plein; une conversion non-Synth vers Synth est alors refusee sans mutation avec l'etat temporaire `FAMILY : MAX`, jamais persiste.
+# Addendum 2026-07-31 - surface Play External
+
+- CFG distingue `MIDI` et `External`; External expose le sélecteur d'entrée exacte avec la cardinalité de la variante, puis la page MIDI.
+- TONE réutilise Program/CC, PLAY/KEYBOARD/ARP émettent les notes MIDI et pilotent le gate audio; COLORS, MIX et VCA ciblent uniquement la lane dont la Play est owner.
+- La Special Input réservée affiche `USED Pn` dans son header et son CFG fixe. Un changement, paste ou restore conflictuel est refusé avec feedback, sans choisir une autre entrée.
+- Le snapshot Track inclut `external_input`; copy/paste, move, clear et changement de family libèrent ou revendiquent atomiquement via Z2.
+# Addendum 2026-07-31 - UI mute sans autorite audio
+
+- `ui_core_mute` conserve Quick/Prepare, groupes et LEDs, mais delegue lecture et application a `track_mute`.
+- La UI ne mappe plus directement les families Input vers des lanes physiques et n'applique plus directement `PARAM_MIX_MUTE`.
+
+- Les huit Play Tracks et les Special Tracks conservent leur selection directe et leur double-tap CFG normal.
+# Addendum 2026-07-31 - clavier, MIDI et mutes independants
+
+- Note-off et all-notes-off ferment uniquement les notes de la track adressee; le panic global continue de parcourir toutes les Play Tracks.
+
+- Chaque Play Track expose directement CFG, MIDI, ARP et ses quatre pages PLAY selon ses capacites propres; l'armement live-rec cible la track active.

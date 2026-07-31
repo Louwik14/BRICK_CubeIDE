@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "param_registry.h"
+#include "Core/track_topology.h"
 #include "Seq/seq_types.h"
 
 #ifdef __cplusplus
@@ -65,27 +66,30 @@ typedef enum
     TRACK_RUNTIME_FAMILY_SYNTH,
     TRACK_RUNTIME_FAMILY_SAMPLER,
     TRACK_RUNTIME_FAMILY_DRUM,
-    TRACK_RUNTIME_FAMILY_MASTER,
+    TRACK_RUNTIME_FAMILY_SPECIAL_MASTER,
+    TRACK_RUNTIME_FAMILY_SPECIAL_FX,
     TRACK_RUNTIME_FAMILY_MIDI,
+    TRACK_RUNTIME_FAMILY_EXTERNAL,
     TRACK_RUNTIME_FAMILY_OTHER
 } track_runtime_family_t;
 
 typedef enum
 {
     TRACK_RUNTIME_TYPE_AUDIO = 0,
-    TRACK_RUNTIME_TYPE_HYBRID,
     TRACK_RUNTIME_TYPE_RAM,
     TRACK_RUNTIME_TYPE_PRISM,
     TRACK_RUNTIME_TYPE_DRUM_MD,
     TRACK_RUNTIME_TYPE_MIDI,
     TRACK_RUNTIME_TYPE_STREAM,
-    TRACK_RUNTIME_TYPE_MASTER_FX,
+    TRACK_RUNTIME_TYPE_SPECIAL_MASTER,
+    TRACK_RUNTIME_TYPE_SPECIAL_FX,
     TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG,
     TRACK_RUNTIME_TYPE_LOOPER,
     TRACK_RUNTIME_TYPE_MULTI,
     TRACK_RUNTIME_TYPE_STACK,
     TRACK_RUNTIME_TYPE_WAVE,
     TRACK_RUNTIME_TYPE_DELUGE,
+    TRACK_RUNTIME_TYPE_EXTERNAL,
     TRACK_RUNTIME_TYPE_OTHER
 } track_runtime_type_t;
 
@@ -162,6 +166,8 @@ typedef struct
     uint8_t flags;
     uint8_t midi_channel_1_16;
     uint16_t ui_ensemble_mask;
+    track_topology_role_t topology_role;
+    uint16_t topology_capabilities;
 } track_runtime_descriptor_t;
 
 typedef enum
@@ -207,6 +213,7 @@ uint32_t track_runtime_get_track_revision(uint8_t track);
  */
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
+uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capability);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
 uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t *out_track);
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);
@@ -229,13 +236,6 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
-uint8_t track_runtime_get_voice_group_role(uint8_t track, uint8_t *out_role);
-uint8_t track_runtime_get_voice_group_effective_master(uint8_t track, uint8_t *out_master_track);
-uint8_t track_runtime_get_voice_group_seq_link(uint8_t track, uint8_t *out_seq_link);
-uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,
-                                                  uint8_t *out_members,
-                                                  uint8_t out_members_capacity,
-                                                  uint8_t *out_count);
 
 #ifdef __cplusplus
 }

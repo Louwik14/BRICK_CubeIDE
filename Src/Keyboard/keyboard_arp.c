@@ -147,11 +147,11 @@ typedef struct
     uint32_t arp_random_seed;
 } keyboard_arp_runtime_state_t;
 
-CTRL_STATE static keyboard_arp_runtime_state_t g_keyboard_arp_state[SEQ_TRACK_COUNT];
+CTRL_STATE static keyboard_arp_runtime_state_t g_keyboard_arp_state[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static keyboard_arp_runtime_state_t *g_keyboard_arp_current = &g_keyboard_arp_state[0];
 #define g_keyboard_arp (*g_keyboard_arp_current)
-static keyboard_arp_config_t g_keyboard_arp_config[SEQ_TRACK_COUNT];
-static uint8_t g_keyboard_arp_config_revision[SEQ_TRACK_COUNT];
+static keyboard_arp_config_t g_keyboard_arp_config[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+static uint8_t g_keyboard_arp_config_revision[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static uint8_t g_keyboard_arp_config_initialized = 0U;
 static uint8_t g_keyboard_arp_active_track = 0U;
 static uint8_t g_keyboard_arp_current_track = 0U;
@@ -184,7 +184,7 @@ static void keyboard_arp_ensure_config_initialized(void)
     }
 
     const keyboard_arp_config_t cfg = keyboard_arp_default_config();
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         g_keyboard_arp_config[track] = cfg;
     }
@@ -193,7 +193,7 @@ static void keyboard_arp_ensure_config_initialized(void)
 
 static uint8_t keyboard_arp_track_is_valid(uint8_t track)
 {
-    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+    return track_topology_is_play(track);
 }
 
 static void keyboard_arp_select_track(uint8_t track)
@@ -1240,7 +1240,7 @@ void keyboard_arp_init(void)
     keyboard_arp_ensure_config_initialized();
     g_keyboard_arp_active_track = 0U;
     const uint32_t now = HAL_GetTick();
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         keyboard_arp_select_track(track);
         keyboard_arp_load_config(&g_keyboard_arp_config[track]);
@@ -1267,7 +1267,7 @@ void keyboard_arp_sync_track(uint8_t track)
 void keyboard_arp_tick(void)
 {
     const uint32_t now = HAL_GetTick();
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         keyboard_arp_select_track(track);
 
@@ -1467,7 +1467,7 @@ uint8_t keyboard_arp_seq_step_render_for_track(uint8_t track,
 
 void keyboard_arp_clear_seq_step_source(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         keyboard_arp_select_track(track);
         keyboard_arp_release_seq_step_notes();
@@ -1524,7 +1524,7 @@ void keyboard_arp_all_notes_off_track(uint8_t track)
 
 void keyboard_arp_all_notes_off(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         keyboard_arp_all_notes_off_track(track);
     }
@@ -1533,7 +1533,7 @@ void keyboard_arp_all_notes_off(void)
 
 uint8_t keyboard_arp_has_hold_activity(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         if (keyboard_arp_track_has_hold_activity(track) != 0U)
         {
@@ -1854,7 +1854,7 @@ void keyboard_arp_clear_track(uint8_t track)
 
 void keyboard_arp_clear_state_silent(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         keyboard_arp_clear_track(track);
     }

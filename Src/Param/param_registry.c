@@ -24,7 +24,6 @@
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry_runtime_state.h"
-#include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -35,7 +34,6 @@
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
-#include "Core/track_state_internal.h"
 #include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
@@ -54,57 +52,6 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
 static uint8_t param_registry_track_is_sampler_multi(uint8_t track);
 static float clamp_value(float v, float lo, float hi);
-
-uint8_t param_registry_commit_voice_group_seq_link(uint8_t master_track, uint8_t seq_link)
-{
-    if (master_track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    const uint8_t before = track_state_get_voice_group_seq_link(master_track);
-    const uint8_t next = (seq_link != 0U) ? 1U : 0U;
-    if (track_state_set_voice_group_seq_link_raw(master_track, next) == false)
-    {
-        return 0U;
-    }
-
-    if (before != next)
-    {
-        seq_runtime_on_seq_link_changed(master_track);
-    }
-    return 1U;
-}
-
-uint8_t param_registry_commit_voice_group_seq_link_bulk(const uint8_t seq_link[UI_TRACK_COUNT])
-{
-    if (seq_link == NULL)
-    {
-        return 0U;
-    }
-
-    uint8_t before[UI_TRACK_COUNT];
-    uint8_t next[UI_TRACK_COUNT];
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        before[track] = track_state_get_voice_group_seq_link(track);
-        next[track] = (seq_link[track] != 0U) ? 1U : 0U;
-    }
-
-    if (track_state_apply_voice_group_seq_link_bulk_raw(next) == false)
-    {
-        return 0U;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if (before[track] != next[track])
-        {
-            seq_runtime_on_seq_link_changed(track);
-        }
-    }
-    return 1U;
-}
 
 static uint8_t param_registry_prism_param_slot(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
 {
@@ -194,113 +141,6 @@ static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float c
 
         param_registry_sync_active_cfg_mirror_for_track(track);
         return 1U;
-    }
-
-    return 0U;
-}
-
-static uint8_t param_registry_collect_active_group(uint8_t track,
-                                                   uint8_t members[8U],
-                                                   uint8_t *out_count,
-                                                   uint8_t *out_master)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (members == NULL) || (out_count == NULL) || (out_master == NULL))
-    {
-        return 0U;
-    }
-
-    uint8_t master = track;
-    if (track_runtime_get_voice_group_effective_master(track, &master) == 0U)
-    {
-        return 0U;
-    }
-
-    uint8_t count = 0U;
-    if (track_runtime_collect_voice_group_members(master, members, 8U, &count) == 0U)
-    {
-        return 0U;
-    }
-    if ((count < 2U) || (count > 8U))
-    {
-        return 0U;
-    }
-
-    *out_count = count;
-    *out_master = master;
-    return 1U;
-}
-
-static uint8_t param_registry_apply_voice_group_spread(uint8_t master_track, float spread)
-{
-    uint8_t members[8U] = { 0U };
-    uint8_t member_count = 0U;
-    uint8_t master = master_track;
-    if (param_registry_collect_active_group(master_track, members, &member_count, &master) == 0U)
-    {
-        return 1U;
-    }
-
-    if (member_count <= 1U)
-    {
-        return 1U;
-    }
-
-    const uint8_t keytrack = track_state_get_voice_group_spread_keytrack(master);
-    const float denom = (float)(member_count - 1U);
-    for (uint8_t i = 0U; i < member_count; ++i)
-    {
-        const float normalized = ((denom > 0.0f) ? (((float)i / denom) * 2.0f) : 0.0f) - 1.0f;
-        if ((keytrack != 0U) && (param_registry_track_is_sampler_multi(members[i]) != 0U))
-        {
-            (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], 0.0f);
-            brick6_sampler_runtime_refresh_multi_group_spread(members[i]);
-        }
-        else
-        {
-            (void)param_registry_apply_track_value(PARAM_MIX_PAN, members[i], normalized * spread);
-            brick6_sampler_runtime_refresh_multi_group_spread(members[i]);
-        }
-    }
-
-    return 1U;
-}
-
-static uint8_t param_apply_cfg_group_value(param_id_t id, uint8_t track, float clamped)
-{
-    uint8_t members[8U] = { 0U };
-    uint8_t member_count = 0U;
-    uint8_t master = track;
-    if (param_registry_collect_active_group(track, members, &member_count, &master) == 0U)
-    {
-        return 0U;
-    }
-
-    if (id == PARAM_CFG_GROUP_SPREAD)
-    {
-        if (track_state_set_voice_group_spread(master, clamped) == false)
-        {
-            return 0U;
-        }
-        return param_registry_apply_voice_group_spread(master, track_state_get_voice_group_spread(master));
-    }
-
-    if (id == PARAM_CFG_GROUP_LINK)
-    {
-        return (track_state_set_voice_group_link(master, (clamped >= 0.5f) ? 1U : 0U) != false) ? 1U : 0U;
-    }
-
-    if (id == PARAM_CFG_GROUP_SEQ_LINK)
-    {
-        return param_registry_commit_voice_group_seq_link(master, (clamped >= 0.5f) ? 1U : 0U);
-    }
-
-    if (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-    {
-        if (track_state_set_voice_group_spread_keytrack(master, (clamped >= 0.5f) ? 1U : 0U) == false)
-        {
-            return 0U;
-        }
-        return param_registry_apply_voice_group_spread(master, track_state_get_voice_group_spread(master));
     }
 
     return 0U;
@@ -589,9 +429,6 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
             return 1U;
         case PARAM_MIX_MUTE:
             *out_value = state->mix_mute;
-            return 1U;
-        case PARAM_HYBRID_GATE:
-            *out_value = state->input.hybrid_gate;
             return 1U;
         case PARAM_VCA_ATTACK:
             *out_value = state->vca_attack;
@@ -1455,6 +1292,17 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        float clamped,
                                                        uint8_t rt_fast)
 {
+    if (id == PARAM_EXTERNAL_INPUT)
+    {
+        if (rt_fast != 0U)
+        {
+            return 0U;
+        }
+        return ui_set_track_external_input(
+            track, (uint8_t)(clamp_value(clamped, 0.0f,
+                (float)(TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U)) + 0.5f)) ? 1U : 0U;
+    }
+
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
 
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
@@ -1544,39 +1392,9 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 *out_value = (float)track_state_get_midi_source(track);
                 return 1U;
 
-            case PARAM_CFG_GROUP_SPREAD:
-            case PARAM_CFG_GROUP_LINK:
-            case PARAM_CFG_GROUP_SPREAD_KEYTRK:
-            case PARAM_CFG_GROUP_SEQ_LINK:
-            {
-                uint8_t master = track;
-                if (track_runtime_get_voice_group_effective_master(track, &master) == 0U)
-                {
-                    return 0U;
-                }
-                if (id == PARAM_CFG_GROUP_SPREAD)
-                {
-                    *out_value = track_state_get_voice_group_spread(master);
-                }
-                else if (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-                {
-                    *out_value = (float)track_state_get_voice_group_spread_keytrack(master);
-                }
-                else if (id == PARAM_CFG_GROUP_SEQ_LINK)
-                {
-                    uint8_t seq_link = 0U;
-                    if (track_runtime_get_voice_group_seq_link(track, &seq_link) == 0U)
-                    {
-                        return 0U;
-                    }
-                    *out_value = (float)seq_link;
-                }
-                else
-                {
-                    *out_value = (float)track_state_get_voice_group_link(master);
-                }
+            case PARAM_EXTERNAL_INPUT:
+                *out_value = (float)track_state_get_external_input(track);
                 return 1U;
-            }
 
             default:
                 break;
@@ -1688,9 +1506,7 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 
     if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
     {
-        keyboard_engine_all_notes_off_for_track(track);
-        synth_polyphony_set_voice_count(track, (uint8_t)clamped);
-        return 1U;
+        return 0U;
     }
     if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_SPREAD))
     {
@@ -1809,14 +1625,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             kit_v1_mark_dirty();
         }
         return ok;
-    }
-
-    if ((id == PARAM_CFG_GROUP_SPREAD)
-            || (id == PARAM_CFG_GROUP_LINK)
-            || (id == PARAM_CFG_GROUP_SPREAD_KEYTRK)
-            || (id == PARAM_CFG_GROUP_SEQ_LINK))
-    {
-        return param_apply_cfg_group_value(id, track, clamped);
     }
 
     {

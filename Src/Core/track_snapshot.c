@@ -11,22 +11,32 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
+#include "Core/synth_polyphony.h"
 #include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
 #include "UI/ui_active_track_sync.h"
 
 #define TRACK_SNAPSHOT_LOCK_NONE 0xFFFFU
 
+static uint8_t g_track_snapshot_voice_limited;
+static uint8_t g_track_snapshot_voice_max;
+
+uint8_t track_snapshot_last_voice_limited(void) { return g_track_snapshot_voice_limited; }
+uint8_t track_snapshot_last_voice_max(void) { return g_track_snapshot_voice_max; }
+
 typedef struct
 {
     const uint8_t *family;
     const uint8_t *type;
+    const uint8_t *external_input;
     const uint8_t *midi_channel;
     const uint8_t *midi_source;
 } track_snapshot_structure_apply_ctx_t;
@@ -70,52 +80,7 @@ static void track_snapshot_collect_restore_tracks(uint8_t track,
     }
 
     track_snapshot_add_restore_track(track, tracks, track_count);
-
-    uint8_t master = track;
-    if (track_runtime_get_voice_group_effective_master(track, &master) != 0U)
-    {
-        uint8_t members[SEQ_TRACK_COUNT];
-        uint8_t member_count = 0U;
-        if (track_runtime_collect_voice_group_members(master,
-                                                      members,
-                                                      SEQ_TRACK_COUNT,
-                                                      &member_count) != 0U)
-        {
-            for (uint8_t i = 0U; i < member_count; ++i)
-            {
-                track_snapshot_add_restore_track(members[i], tracks, track_count);
-            }
-        }
-    }
-
-    for (uint8_t member = (uint8_t)(track + 1U); member < SEQ_TRACK_COUNT; ++member)
-    {
-        if (track_state_get_voice_group_role(member) != TRACK_VOICE_GROUP_ROLE_SLAVE)
-        {
-            break;
-        }
-        track_snapshot_add_restore_track(member, tracks, track_count);
-    }
-
-    if ((include_preceding_group != 0U) && (track > 0U))
-    {
-        const uint8_t previous = (uint8_t)(track - 1U);
-        if (track_runtime_get_voice_group_effective_master(previous, &master) != 0U)
-        {
-            uint8_t members[SEQ_TRACK_COUNT];
-            uint8_t member_count = 0U;
-            if (track_runtime_collect_voice_group_members(master,
-                                                          members,
-                                                          SEQ_TRACK_COUNT,
-                                                          &member_count) != 0U)
-            {
-                for (uint8_t i = 0U; i < member_count; ++i)
-                {
-                    track_snapshot_add_restore_track(members[i], tracks, track_count);
-                }
-            }
-        }
-    }
+    (void)include_preceding_group;
 }
 
 static void track_snapshot_runtime_quiesce_engine(uint8_t track)
@@ -132,13 +97,7 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
     brick6_sampler_runtime_reset_track(track);
     brick6_looper_runtime_stop_playback(track);
     brick6_looper_runtime_prepare_replace(track);
-    brick6_braids_runtime_all_notes_off(track);
-    brick6_braids_runtime_reset_instance(track);
-    brick6_stack_runtime_cancel_note_state(track);
-    brick6_wave_runtime_all_notes_off(track);
-    brick6_wave_runtime_reset_instance(track);
-    brick6_deluge_runtime_all_notes_off(track);
-    brick6_deluge_runtime_reset_instance(track);
+    synth_polyphony_reset_track(track);
     drum_synth_all_notes_off_for_instance(track);
     param_registry_clear_track_runtime_state(track);
 }
@@ -159,10 +118,7 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
     mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);
     brick6_looper_runtime_stop_playback(track);
-    brick6_braids_runtime_all_notes_off(track);
-    brick6_stack_runtime_cancel_note_state(track);
-    brick6_wave_runtime_all_notes_off(track);
-    brick6_deluge_runtime_all_notes_off(track);
+    synth_polyphony_reset_track(track);
     drum_synth_all_notes_off_for_instance(track);
 
     track_runtime_refresh_track(track);
@@ -187,10 +143,11 @@ static uint8_t track_snapshot_apply_structure_mutation(void *ctx_ptr)
         return 0U;
     }
 
-    if (ui_apply_track_config_bulk_mutation(ctx->family,
-                                            ctx->type,
-                                            ctx->midi_channel,
-                                            ctx->midi_source) == false)
+    if (ui_apply_track_config_bulk_mutation_with_inputs(ctx->family,
+                                                        ctx->type,
+                                                        ctx->midi_channel,
+                                                        ctx->midi_source,
+                                                        ctx->external_input) == false)
     {
         return 0U;
     }
@@ -206,27 +163,46 @@ static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *
         return 0U;
     }
 
-    memset(&out_snapshot->seq_track, 0, sizeof(out_snapshot->seq_track));
-    out_snapshot->seq_track.length_steps = seq_model_get_track_length((seq_track_id_t)track);
-    out_snapshot->seq_track.ui_page = seq_model_get_track_page((seq_track_id_t)track);
-
-    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    memset(&out_snapshot->sequence, 0, sizeof(out_snapshot->sequence));
+    if (track_topology_is_play(track) != 0U)
     {
-        seq_step_t *const dst_step = &out_snapshot->seq_track.steps[step];
-        dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
-        dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
-        dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
-
-        uint8_t lock_count = 0U;
-        if (seq_model_step_plock_collect((seq_track_id_t)track,
-                                         step,
-                                         out_snapshot->step_locks[step].locks,
-                                         SEQ_STEP_MAX_LOCKS,
-                                         &lock_count) == 0U)
+        track_snapshot_play_sequence_t *const saved = &out_snapshot->sequence.play_sequence;
+        saved->track.length_steps = seq_model_get_track_length((seq_track_id_t)track);
+        saved->track.ui_page = seq_model_get_track_page((seq_track_id_t)track);
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
         {
-            return 0U;
+            seq_step_t *const dst_step = &saved->track.steps[step];
+            dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
+            dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
+            dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
+            uint8_t lock_count = 0U;
+            if (seq_model_step_plock_collect((seq_track_id_t)track,
+                                             step,
+                                             saved->step_locks[step].locks,
+                                             SEQ_PLAY_STEP_MAX_LOCKS,
+                                             &lock_count) == 0U) return 0U;
+            saved->step_locks[step].count = lock_count;
         }
-        out_snapshot->step_locks[step].count = lock_count;
+    }
+    else
+    {
+        track_snapshot_special_sequence_t *const saved = &out_snapshot->sequence.special_sequence;
+        saved->length_steps = seq_model_get_track_length((seq_track_id_t)track);
+        saved->ui_page = seq_model_get_track_page((seq_track_id_t)track);
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+        {
+            track_snapshot_special_step_t *const dst_step = &saved->steps[step];
+            dst_step->action = seq_model_get_special_action((seq_track_id_t)track, step);
+            if (seq_model_step_plock_collect((seq_track_id_t)track,
+                                             step,
+                                             dst_step->locks,
+                                             SEQ_SPECIAL_STEP_MAX_LOCKS,
+                                             &dst_step->lock_count) == 0U) return 0U;
+            for (uint8_t lock = 0U; lock < dst_step->lock_count; ++lock)
+            {
+                if (dst_step->locks[lock].set_id == (uint8_t)SEQ_PLOCK_SET_PLAY) return 0U;
+            }
+        }
     }
 
     (void)seq_runtime_get_track_div((seq_track_id_t)track, &out_snapshot->seq_div);
@@ -246,27 +222,44 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
         return;
     }
 
-    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    if (track_topology_is_play(track) != 0U)
     {
-        seq_model_set_trig((seq_track_id_t)track, step, snapshot->seq_track.steps[step].trig);
-        seq_model_set_step_roll((seq_track_id_t)track, step, snapshot->seq_track.steps[step].roll);
-        seq_model_step_plock_clear((seq_track_id_t)track, step);
-
-        const uint8_t lock_count = snapshot->step_locks[step].count;
-        for (uint8_t lock = 0U; lock < lock_count; ++lock)
+        const track_snapshot_play_sequence_t *const saved = &snapshot->sequence.play_sequence;
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
         {
-            const seq_plock_entry_t *const entry = &snapshot->step_locks[step].locks[lock];
-            (void)seq_model_step_plock_upsert((seq_track_id_t)track,
-                                              step,
-                                              entry->set_id,
-                                              entry->param_slot,
-                                              entry->value16,
-                                              entry->flags);
+            seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
+            seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
+            seq_model_step_plock_clear((seq_track_id_t)track, step);
+            const uint8_t count = saved->step_locks[step].count;
+            for (uint8_t lock = 0U; lock < count; ++lock)
+            {
+                const seq_plock_entry_t *const entry = &saved->step_locks[step].locks[lock];
+                (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
+                                                  entry->param_slot, entry->value16, entry->flags);
+            }
         }
+        seq_model_set_track_length((seq_track_id_t)track, saved->track.length_steps);
+        seq_model_set_track_page((seq_track_id_t)track, saved->track.ui_page);
     }
-
-    seq_model_set_track_length((seq_track_id_t)track, snapshot->seq_track.length_steps);
-    seq_model_set_track_page((seq_track_id_t)track, snapshot->seq_track.ui_page);
+    else
+    {
+        const track_snapshot_special_sequence_t *const saved = &snapshot->sequence.special_sequence;
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+        {
+            const track_snapshot_special_step_t *const saved_step = &saved->steps[step];
+            seq_model_set_special_action((seq_track_id_t)track, step, saved_step->action);
+            seq_model_step_plock_clear((seq_track_id_t)track, step);
+            for (uint8_t lock = 0U; lock < saved_step->lock_count; ++lock)
+            {
+                const seq_plock_entry_t *const entry = &saved_step->locks[lock];
+                if (entry->set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
+                    (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
+                                                      entry->param_slot, entry->value16, entry->flags);
+            }
+        }
+        seq_model_set_track_length((seq_track_id_t)track, saved->length_steps);
+        seq_model_set_track_page((seq_track_id_t)track, saved->ui_page);
+    }
     seq_runtime_restore_track_div((seq_track_id_t)track, snapshot->seq_div);
     seq_runtime_set_track_quant((seq_track_id_t)track, snapshot->seq_quant);
     seq_runtime_set_track_swing((seq_track_id_t)track, snapshot->seq_swing);
@@ -307,71 +300,6 @@ static void track_snapshot_reapply_track_params(uint8_t track)
     param_registry_batch_end();
 }
 
-static uint8_t track_snapshot_apply_voice_group(uint8_t target_track, const track_snapshot_t *snapshot)
-{
-    uint8_t roles[UI_TRACK_COUNT];
-
-    if ((target_track >= UI_TRACK_COUNT) || (snapshot == 0))
-    {
-        return 0U;
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        roles[track] = (uint8_t)track_state_get_voice_group_role(track);
-    }
-
-    track_voice_group_role_t target_role = (track_voice_group_role_t)snapshot->voice_group_role;
-    if ((uint8_t)target_role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
-    {
-        target_role = TRACK_VOICE_GROUP_ROLE_SOLO;
-    }
-    if (target_role == TRACK_VOICE_GROUP_ROLE_SLAVE)
-    {
-        if ((target_track == 0U)
-                || ((roles[(uint8_t)(target_track - 1U)] != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-                    && (roles[(uint8_t)(target_track - 1U)] != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)))
-        {
-            target_role = TRACK_VOICE_GROUP_ROLE_SOLO;
-        }
-    }
-
-    roles[target_track] = (uint8_t)target_role;
-    if (target_role == TRACK_VOICE_GROUP_ROLE_SOLO)
-    {
-        for (uint8_t track = (uint8_t)(target_track + 1U); track < UI_TRACK_COUNT; ++track)
-        {
-            if (roles[track] != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-            {
-                break;
-            }
-            roles[track] = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-        }
-    }
-
-    if (track_state_apply_voice_group_roles_bulk(roles) == false)
-    {
-        return 0U;
-    }
-
-    if (track_state_get_voice_group_role(target_track) == TRACK_VOICE_GROUP_ROLE_MASTER)
-    {
-        (void)track_state_set_voice_group_spread(target_track, snapshot->voice_group_spread);
-        (void)track_state_set_voice_group_spread_keytrack(target_track, snapshot->voice_group_spread_keytrack);
-        (void)track_state_set_voice_group_link(target_track, snapshot->voice_group_link);
-        (void)param_registry_commit_voice_group_seq_link(target_track, snapshot->voice_group_seq_link);
-    }
-    else
-    {
-        (void)track_state_set_voice_group_spread(target_track, 0.0f);
-        (void)track_state_set_voice_group_spread_keytrack(target_track, 0U);
-        (void)track_state_set_voice_group_link(target_track, 0U);
-        (void)param_registry_commit_voice_group_seq_link(target_track, 0U);
-    }
-
-    return 1U;
-}
-
 uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
 {
     if ((track_snapshot_track_is_valid(track) == 0U) || (out_snapshot == 0))
@@ -387,14 +315,12 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
+    if (track_topology_get_identity(track, &out_snapshot->identity) == 0U) return 0U;
     out_snapshot->config = ui_get_track_config(track);
+    out_snapshot->external_input = ui_get_track_external_input(track);
     out_snapshot->midi_channel = ui_get_track_midi_channel(track);
     out_snapshot->midi_source = ui_get_track_midi_source(track);
-    out_snapshot->voice_group_role = (uint8_t)track_state_get_voice_group_role(track);
-    out_snapshot->voice_group_spread = track_state_get_voice_group_spread(track);
-    out_snapshot->voice_group_spread_keytrack = track_state_get_voice_group_spread_keytrack(track);
-    out_snapshot->voice_group_link = track_state_get_voice_group_link(track);
-    out_snapshot->voice_group_seq_link = track_state_get_voice_group_seq_link(track);
+    out_snapshot->synth_voice_count = synth_polyphony_get_voice_count(track);
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
 
@@ -415,21 +341,33 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
+    if (track_topology_get_identity(track, &out_snapshot->identity) == 0U) return 0U;
     out_snapshot->config.family = UI_TRACK_FAMILY_OFF;
     out_snapshot->config.type = UI_TRACK_TYPE_AUDIO;
+    out_snapshot->external_input = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
-    out_snapshot->voice_group_role = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    out_snapshot->synth_voice_count = 1U;
+    if (track_topology_is_special(track) != 0U)
+    {
+        out_snapshot->config = ui_get_track_config(track);
+        out_snapshot->external_input = ui_get_track_external_input(track);
+        out_snapshot->midi_channel = ui_get_track_midi_channel(track);
+        out_snapshot->midi_source = ui_get_track_midi_source(track);
+        out_snapshot->synth_voice_count = 0U;
+    }
 
     track_sound_state_make_default(&out_snapshot->sound);
     track_tone_sound_state_make_default(&out_snapshot->tone);
 
-    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    if (track_topology_is_play(track) != 0U)
     {
-        out_snapshot->seq_track.steps[step].lock_head = TRACK_SNAPSHOT_LOCK_NONE;
+        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+            out_snapshot->sequence.play_sequence.track.steps[step].lock_head = TRACK_SNAPSHOT_LOCK_NONE;
+        out_snapshot->sequence.play_sequence.track.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
+        out_snapshot->sequence.play_sequence.track.ui_page = 0U;
     }
-    out_snapshot->seq_track.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
-    out_snapshot->seq_track.ui_page = 0U;
+    else out_snapshot->sequence.special_sequence.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
     out_snapshot->seq_div = 1U;
     out_snapshot->seq_quant = 0U;
     out_snapshot->seq_swing = 0U;
@@ -441,15 +379,19 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
                                 const track_snapshot_t *snapshot,
                                 const track_snapshot_apply_options_t *options)
 {
+    g_track_snapshot_voice_limited = 0U;
+    g_track_snapshot_voice_max = 0U;
     if ((track_snapshot_track_is_valid(target_track) == 0U)
             || (snapshot == 0)
-            || (snapshot->valid == 0U))
+            || (snapshot->valid == 0U)
+            || (track_topology_identity_is_compatible(target_track, &snapshot->identity) == 0U))
     {
         return 0U;
     }
 
     uint8_t family[UI_TRACK_COUNT];
     uint8_t type[UI_TRACK_COUNT];
+    uint8_t external_input[UI_TRACK_COUNT];
     uint8_t midi_channel[UI_TRACK_COUNT];
     uint8_t midi_source[UI_TRACK_COUNT];
 
@@ -458,6 +400,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         const ui_track_config_t cfg = ui_get_track_config(track);
         family[track] = (uint8_t)cfg.family;
         type[track] = (uint8_t)cfg.type;
+        external_input[track] = ui_get_track_external_input(track);
         midi_channel[track] = ui_get_track_midi_channel(track);
         midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
     }
@@ -476,16 +419,46 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
             ? options->family_override
             : snapshot->config.family;
 
+    uint8_t applied_voice_count = snapshot->synth_voice_count;
+    if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM))
+    {
+        const uint8_t maximum = synth_polyphony_get_available_for_track(target_track);
+        if (maximum == 0U)
+        {
+            g_track_snapshot_voice_max = 1U;
+            return 0U;
+        }
+        if (applied_voice_count < 1U) applied_voice_count = 1U;
+        if (target_family == UI_TRACK_FAMILY_DRUM) applied_voice_count = 1U;
+        if (applied_voice_count > maximum)
+        {
+            applied_voice_count = maximum;
+            g_track_snapshot_voice_limited = 1U;
+        }
+    }
+
     family[target_track] = (uint8_t)target_family;
     type[target_track] = (uint8_t)snapshot->config.type;
+    external_input[target_track] = snapshot->external_input;
     midi_channel[target_track] = snapshot->midi_channel;
     midi_source[target_track] = (uint8_t)snapshot->midi_source;
+
+    ui_track_config_t ownership_configs[UI_TRACK_COUNT];
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        ownership_configs[track].family = (ui_track_family_t)family[track];
+        ownership_configs[track].type = (ui_track_type_t)type[track];
+    }
+    if (track_input_ownership_validate_bulk(ownership_configs, external_input) == 0U)
+    {
+        return 0U;
+    }
 
     seq_track_id_t restore_tracks[SEQ_TRACK_COUNT];
     uint8_t restore_track_count = 0U;
     track_snapshot_collect_restore_tracks(
         target_track,
-        (snapshot->voice_group_role == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE) ? 1U : 0U,
+        0U,
         restore_tracks,
         &restore_track_count);
     if ((options != 0)
@@ -508,6 +481,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     track_snapshot_structure_apply_ctx_t structure_ctx = {
         .family = family,
         .type = type,
+        .external_input = external_input,
         .midi_channel = midi_channel,
         .midi_source = midi_source
     };
@@ -534,22 +508,16 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     memcpy(dst_sound, &snapshot->sound, sizeof(*dst_sound));
     memcpy(dst_tone, &snapshot->tone, sizeof(*dst_tone));
 
-    if (track_snapshot_apply_voice_group(target_track, snapshot) == 0U)
-    {
-        goto restore_done;
-    }
     track_runtime_invalidate_all();
     track_runtime_refresh_all();
 
-    track_snapshot_apply_sequence(target_track, snapshot);
-    track_snapshot_reapply_track_params(target_track);
-    if (track_state_get_voice_group_role(target_track) == TRACK_VOICE_GROUP_ROLE_MASTER)
+    if (target_family == UI_TRACK_FAMILY_SYNTH)
     {
-        (void)param_registry_apply_track_value(PARAM_CFG_GROUP_SPREAD,
-                                               target_track,
-                                               track_state_get_voice_group_spread(target_track));
+        (void)synth_polyphony_set_voice_count(target_track, applied_voice_count);
     }
 
+    track_snapshot_apply_sequence(target_track, snapshot);
+    track_snapshot_reapply_track_params(target_track);
     ui_active_track_sync_full_after_reconfigure();
     apply_ok = 1U;
 

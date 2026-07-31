@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:103:16:ui_page_template_arp_subpage_enabled	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:128:16:ui_page_template_arp_virtual_slot_text	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:77:36:ui_page_template_arp_resolve_family	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:190:13:ui_page_template_arp_handle_event	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:195:6:ui_page_template_arp_register_families	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:87:16:ui_page_template_arp_virtual_slot_text	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:69:16:ui_page_template_arp_subpage_enabled	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:50:36:ui_page_template_arp_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:106:13:ui_page_template_arp_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_arp.c:111:6:ui_page_template_arp_register_families	24	static

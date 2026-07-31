@@ -30,8 +30,7 @@ typedef struct
 } brick6_braids_runtime_voice_t;
 
 #define BRICK6_BRAIDS_MAX_INSTANCES 8U
-#define BRICK6_BRAIDS_VOICE_INSTANCE_COUNT \
-    (BRICK6_BRAIDS_MAX_INSTANCES * 8U)
+#define BRICK6_BRAIDS_VOICE_INSTANCE_COUNT 16U
 
 void brick6_braids_runtime_init(void);
 void brick6_braids_runtime_reset_instance(uint8_t instance_id);

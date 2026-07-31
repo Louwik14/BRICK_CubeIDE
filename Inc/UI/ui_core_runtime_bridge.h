@@ -35,6 +35,11 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
                                                      ui_track_type_t type,
                                                      uint8_t active_track_touched,
                                                      ui_core_runtime_bridge_post_sync_fn post_sync);
+bool ui_core_runtime_bridge_apply_track_external_input_change(
+    uint8_t track,
+    uint8_t input,
+    uint8_t active_track_touched,
+    ui_core_runtime_bridge_post_sync_fn post_sync);
 
 bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                                       const uint8_t type[UI_TRACK_COUNT],

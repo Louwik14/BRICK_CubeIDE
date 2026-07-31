@@ -40,8 +40,8 @@ Core use:
 This repository targets a playable, deterministic instrument firmware. It is not a generic DSP sandbox and it does not rely on ambiguous central nodes.
 
 Variant audio resources:
-- Premium exposes the four stereo input sources `Input1..4`.
-- Low-cost exposes one stereo line input, `Input1`; `Input2..4` are absent from its catalogs and UI.
+- Premium declares exactly three stereo input resources, `Input1..3`.
+- Low-cost declares one stereo line input, `Input1`; no `Input4` resource exists.
 - On the low-cost revision without the volume potentiometer fitted, master volume uses a temporary fixed gain; PB1 is absent from the ADC sequence and runtime processing.
 
 ## 2. Product priorities
@@ -81,14 +81,17 @@ These constraints are structural, not optional.
 The product is track-aware.
 
 Current model:
-- 14 logical tracks in UI / runtime / sequencer / logical mixer space
+- central product topology: 12 logical tracks on Low-Cost and 14 on Premium
+- Pattern/Project use one common role-identified format with separate Play and lightweight Special sequence payloads; track selection exposes 12 tracks on Low-Cost and 14 on Premium
 - physical DSP ingress remains distinct from logical tracks
 - logical track identity and physical audio lane must not be conflated
 
 Current logical layout:
-- 8 flexible musical tracks
-- 4 input-oriented tracks
-- 2 reserved master/global slots
+- 8 Play Tracks
+- fixed Special Tracks: Master, Looper, physical Inputs and FX
+- Low-Cost: `8 Play + Master + Looper + Input1 + FX`
+- Premium: `8 Play + Master + Looper + Input1 + Input2 + Input3 + FX`
+- only Play Tracks can change family/type, open instrument browsers, play notes, or use Keyboard/ARP; Special Tracks expose a fixed identity
 
 ### Families
 Current families:
@@ -96,18 +99,27 @@ Current families:
 - `Input1`
 - `Input2`
 - `Input3`
-- `Input4`
 - `Synth`
 - `Drum`
 - `Master`
 - `Sampler`
+- `MIDI`
+- `External`
 
 ### Notable types
-- `InputX`: `Audio`, `Hybrid`
+- Special `InputX`: `Audio` fixed
+- `MIDI`: `MIDI`
+- `External`: `External`
 - `Synth`: `Prism`, `Wave`, `Stack`, `DELUGE`
 - `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
+
+An `External` Play Track reserves one exact physical input (`Input1` on Low-Cost,
+`Input1..3` on Premium) while retaining MIDI note, Program and CC behavior. A
+reserved Input Special displays `USED Pn` and is not monitored a second time.
+Conflicting edits, paste and restore are rejected atomically; no alternate input
+is selected silently.
 
 ### Ownership model
 
@@ -131,8 +143,8 @@ This separation is intentional. Do not add a second authority for the same state
 - sends and returns
 - insert-style processing
 - master-oriented performance processing
-- `Master/FX` expose 4 slots MacroFX DSP: `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`; `STUTTER` and `FREEZE` are single Master/FX resources. `STUTTER LVL` remains `OFF/ON` full wet. `FREEZE LVL=0` is audible off/history fill, while `FREEZE LVL=1..127` engages freeze, raises the wet/freeze return, and ducks dry until `LVL=127` behaves as repeater-dominant dry-off. `FREEZE B=HOLD` selects `SHORT/MID/LONG/INF` feedback modes; `INF` is a bounded quasi-hold. `FREEZE` reuses the existing per-slot MacroFX delay history and does not share STUTTER history.
-- `Master/FX DRIVE` uses `LVL` as slot wet/depth, `A=DRIVE` as overdrive-to-fuzz amount, and `B=TONE` as dark/bright guitar-style color.
+- The fixed `FX` track exposes 4 MacroFX DSP slots: `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`; `STUTTER` and `FREEZE` are single FX resources. `STUTTER LVL` remains `OFF/ON` full wet. `FREEZE LVL=0` is audible off/history fill, while `FREEZE LVL=1..127` engages freeze, raises the wet/freeze return, and ducks dry until `LVL=127` behaves as repeater-dominant dry-off. `FREEZE B=HOLD` selects `SHORT/MID/LONG/INF` feedback modes; `INF` is a bounded quasi-hold. `FREEZE` reuses the existing per-slot MacroFX delay history and does not share STUTTER history.
+- `FX DRIVE` uses `LVL` as slot wet/depth, `A=DRIVE` as overdrive-to-fuzz amount, and `B=TONE` as dark/bright guitar-style color.
 
 ### Sampler
 - stereo runtime playback through the normal track-aware mixer path
@@ -228,7 +240,6 @@ Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'imp
 - low-cost: `Settings > Calibration` exposes `HALL KBD` and `HALL VEL` through the existing calibration workflows
 - low-cost: `KEYBOARD > VELOCITY` exposes `PROFILE DEFAULT/USER`, default mode `DV/TIME/ENERGY`, the five velocity curves and USER calibration status/access; an unavailable USER profile is shown as `NO CAL`
 - low-cost Hall velocity consumes every valid raw key measurement at about 2.8 ms; Premium keeps its historical digital ASC x4 path
-- voice-group masters with slaves expose `CFG/GROUP` with `SPREAD` (`AMT` + `KEY`), `LINK`, and `SEQ LINK`; `KEY` enables Multi spread keytrack, slaves and standalone tracks keep the historical CFG page only, and `PLAY` data remains non-destructive per member
 
 ### Parameter system
 - UI-side parameter control
@@ -304,7 +315,7 @@ It is not the authoritative architecture document.
 ## 10. Current status
 
 The codebase already contains:
-- 14 logical tracks
+- one applied target topology (`8+4` Low-Cost, `8+6` Premium) with role-identified common storage
 - track-aware runtime binding
 - contextual UI families
 - sequencer / clock / scheduler foundations
@@ -320,7 +331,7 @@ Keep it simple, deterministic, and playable.
 
 ## Master track status
 
-`Master/FX` is the only exposed Master track type. The former buffer workflow has been removed; Looper XFade remains available on `Sampler/Looper`.
+Master and FX are fixed Special tracks. Master exposes the global reverb, delay and compressor under `TONE`; FX owns the four MacroFX slots. `MIX` contains only per-track level, pan and sends. The former buffer workflow has been removed; Looper XFade remains available on `Sampler/Looper`.
 
 ## Track filters
 
@@ -341,7 +352,7 @@ filtre et les traitements de piste: PRISM `0 dB`, DELUGE `-7,1 dB`, WAVE
 sans correction.
 ## Prototype compresseur comparatif
 
-`MIX 3/3` permet de comparer sur le bus MAIN les modeles `OFF`, `DELUGE` et
+Master `TONE 3/3` permet de comparer sur le bus MAIN les modeles `OFF`, `DELUGE` et
 `BRICK`, avec controles communs de seuil, ratio, enveloppe, makeup manuel, mix
 et sidechain HPF. Deluge expose sa saturation; Brick expose le detecteur
 PEAK/RMS et le soft knee.
@@ -361,3 +372,26 @@ PEAK/RMS et le soft knee.
 - Le modele `DRUM / MD > TRX-BD` produit maintenant un kick natif controle par
   `PTCH DEC RAMP RDEC STRT NOIS HARM CLIP`. Les autres modeles MD restent
   silencieux jusqu'aux etapes suivantes; `BD Analog` reste inchange.
+# Looper LowCost
+
+La cible LowCost fournit un seul Looper utilisable dans tout le produit. Une seconde conversion est refusee; au chargement d'un ancien contenu, le premier Looper par ordre de track est conserve et les suivants sont convertis en `Sampler/RAM`.
+# Budget des voix synthetiques
+
+LowCost et Premium partagent un maximum global de 16 voix synthetiques reservees sur au plus 8 tracks. Chaque track Synth reserve de 1 a 8 voix; changer de moteur Synth conserve cette valeur. `VOICES` s'arrete au budget disponible et n'est ni modulable ni p-lockable. La famille Synth reste visible a saturation (`FAMILY : MAX`). Un collage de track ou une application de Patch trop polyphonique applique tout sauf la cardinalite, limitee avec `VOICE LIMITED`; sans slot disponible l'operation est refusee sans mutation avec `VOICE MAX`.
+
+# Mute par type de track
+
+Le mute coupe progressivement la sortie audio sans clic. Il stoppe les notes internes/MIDI des tracks Play, MIDI et External, fond le retour External/Input, laisse avancer le Looper en silence et retire seulement la contribution de la track FX. Master n'a pas de mute ordinaire; rien de manque pendant le mute n'est rejoue au demute.
+
+# Sequences Play et Special
+
+Les huit Play Tracks conservent 64 steps, jusqu'a 32 p-locks par step et 1024 p-locks par piste avec notes, velocite, duree et microtiming. Les Special Tracks utilisent 64 steps d'automatisation, 16 p-locks par step et un pool de 256, sans notes ni ARP; leur champ d'action leger est reserve aux commandes propres a leur role.
+
+Pattern, Project, Undo/Redo et Clipboard conservent ces deux modeles sans convertir une Special en Play. Un collage entre roles incompatibles est refuse; clear efface aussi l'action Special.
+
+# Play Tracks independantes
+
+Clavier, MIDI, arp, sequenceur et mute agissent directement sur chaque Play Track. Chaque piste conserve ses quatre voix PLAY et la polyphonie reste celle de son moteur; Stop/Panic ferme toujours toutes les notes actives.
+
+
+Les p-locks, l'edition LENGTH et le copier/coller de steps agissent uniquement sur la track editee. Le clipboard conserve trig, roll et p-locks vers une track compatible, sans copie implicite d'autres pistes.

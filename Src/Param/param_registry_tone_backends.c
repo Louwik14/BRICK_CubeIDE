@@ -102,8 +102,9 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     }
 
     float effective_value = value;
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX))
+    if ((track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
+            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
     {
         effective_value = param_backend_normalize_master_fx_type(track, id, value);
     }
@@ -114,8 +115,9 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     {
         applied = param_backend_apply_mix_track(ctx, track, id, effective_value, update_base_state);
     }
-    else if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX))
+    else if ((track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
+            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
     {
         applied = param_backend_apply_master_fx_track(ctx, track, id, effective_value, update_base_state);
     }

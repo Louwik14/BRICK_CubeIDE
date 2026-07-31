@@ -71,15 +71,6 @@
 #define LED_FIXED_RED_R           LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_RED_G           0U
 #define LED_FIXED_RED_B           0U
-#define LED_TRACK_SLAVE_LIGHT_BLUE_R 64U
-#define LED_TRACK_SLAVE_LIGHT_BLUE_G 192U
-#define LED_TRACK_SLAVE_LIGHT_BLUE_B 255U
-#define LED_MUTE_SLAVE_LIGHT_GREEN_R 0U
-#define LED_MUTE_SLAVE_LIGHT_GREEN_G 255U
-#define LED_MUTE_SLAVE_LIGHT_GREEN_B 0U
-#define LED_MUTE_SLAVE_LIGHT_RED_R 255U
-#define LED_MUTE_SLAVE_LIGHT_RED_G 0U
-#define LED_MUTE_SLAVE_LIGHT_RED_B 0U
 #define LED_MACRO_PRESSURE_RAW_NOISE_FLOOR 400U
 #define LED_MACRO_PRESSURE_LED_MARGIN 75U
 
@@ -403,7 +394,7 @@ static void led_apply_route_destination_hall_scene(led_id_t led)
 static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= UI_ACTIVE_TRACK_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;
@@ -427,7 +418,7 @@ static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destina
 static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= UI_ACTIVE_TRACK_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;
@@ -451,7 +442,7 @@ static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t de
 static void led_apply_audio_rec_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= UI_ACTIVE_TRACK_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;
@@ -540,24 +531,13 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
     uint8_t g = 0U;
     uint8_t b = 0U;
 
-    if (hall < UI_TRACK_COUNT)
+    if (hall < UI_ACTIVE_TRACK_COUNT)
     {
         if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
         {
-            uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-            (void)track_runtime_get_voice_group_role(hall, &role_u8);
-            if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-            {
-                r = LED_TRACK_SLAVE_LIGHT_BLUE_R;
-                g = LED_TRACK_SLAVE_LIGHT_BLUE_G;
-                b = LED_TRACK_SLAVE_LIGHT_BLUE_B;
-            }
-            else
-            {
-                r = LED_FIXED_DARK_BLUE_R;
-                g = LED_FIXED_DARK_BLUE_G;
-                b = LED_FIXED_DARK_BLUE_B;
-            }
+            r = LED_FIXED_DARK_BLUE_R;
+            g = LED_FIXED_DARK_BLUE_G;
+            b = LED_FIXED_DARK_BLUE_B;
 
             if (hall == ui_get_active_track())
             {
@@ -592,43 +572,17 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
         led_on = (((HAL_GetTick() / 200U) & 0x1U) != 0U) ? 1U : 0U;
     }
 
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(hall, &role_u8);
-    const uint8_t is_slave = (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE) ? 1U : 0U;
-
     if (led_on == 0U)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
     }
     else if (mute_led.muted != 0U)
     {
-        if (is_slave != 0U)
-        {
-            led_layer_set(LED_LAYER_UI,
-                          led,
-                          LED_MUTE_SLAVE_LIGHT_RED_R,
-                          LED_MUTE_SLAVE_LIGHT_RED_G,
-                          LED_MUTE_SLAVE_LIGHT_RED_B);
-        }
-        else
-        {
-            led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
-        }
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
     }
     else
     {
-        if (is_slave != 0U)
-        {
-            led_layer_set(LED_LAYER_UI,
-                          led,
-                          LED_MUTE_SLAVE_LIGHT_GREEN_R,
-                          LED_MUTE_SLAVE_LIGHT_GREEN_G,
-                          LED_MUTE_SLAVE_LIGHT_GREEN_B);
-        }
-        else
-        {
-            led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
-        }
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
     }
 
     return 1U;

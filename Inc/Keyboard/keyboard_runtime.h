@@ -58,7 +58,6 @@ void keyboard_runtime_clear_arp_seq_step_source(void);
 void keyboard_runtime_sync_track_focus_context(void);
 void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode);
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void);
-uint8_t keyboard_runtime_active_track_is_input_hybrid(void);
 uint8_t keyboard_runtime_get_root_index(void);
 uint8_t keyboard_runtime_get_scale_index(void);
 bool keyboard_runtime_get_omnichord(void);

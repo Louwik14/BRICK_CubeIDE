@@ -16,7 +16,6 @@
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_surface.h"
 #include "Core/track_runtime.h"
-#include "Core/track_state.h"
 #include "param_registry.h"
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
@@ -79,15 +78,7 @@ uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
         return 1U;
     }
 
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(track, &role_u8);
-    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-    {
-        return 0U;
-    }
-
-    uint8_t seq_link = 0U;
-    return ((track_runtime_get_voice_group_seq_link(track, &seq_link) != 0U) && (seq_link != 0U)) ? 1U : 0U;
+    return 0U;
 }
 
 static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
@@ -273,66 +264,6 @@ static uint8_t seq_edit_lowcost_voice_is_present(seq_track_id_t track,
                     || (seq_edit_lowcost_step_has_play_param(track, step, seq_edit_lowcost_length_param_for_voice(voice)) != 0U));
 }
 
-static uint8_t seq_edit_lowcost_collect_length_targets(seq_track_id_t track,
-                                                       uint8_t *out_members,
-                                                       uint8_t out_capacity,
-                                                       uint8_t *out_count,
-                                                       uint8_t *out_group_master)
-{
-    if ((out_count == 0) || (out_group_master == 0))
-    {
-        return 0U;
-    }
-
-    *out_count = 0U;
-    *out_group_master = 0U;
-
-    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
-    (void)track_runtime_get_voice_group_role(track, &role_u8);
-    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
-    {
-        return 0U;
-    }
-
-    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
-    {
-        if ((out_members != 0) && (out_capacity > 0U))
-        {
-            out_members[0] = track;
-        }
-        *out_count = 1U;
-        return 1U;
-    }
-
-    uint8_t collected_members[SEQ_TRACK_COUNT];
-    uint8_t member_count = 0U;
-    if ((track_runtime_collect_voice_group_members(track,
-                                                   collected_members,
-                                                   (uint8_t)(sizeof(collected_members) / sizeof(collected_members[0])),
-                                                   &member_count) == 0U)
-            || (member_count == 0U))
-    {
-        return 0U;
-    }
-
-    if (member_count > 8U)
-    {
-        member_count = 8U;
-    }
-    if ((out_members != 0) && (out_capacity < member_count))
-    {
-        return 0U;
-    }
-    for (uint8_t i = 0U; (out_members != 0) && (i < member_count); ++i)
-    {
-        out_members[i] = collected_members[i];
-    }
-
-    *out_count = member_count;
-    *out_group_master = (member_count > 1U) ? 1U : 0U;
-    return 1U;
-}
-
 static uint8_t seq_edit_lowcost_step_is_range_end_empty(seq_track_id_t track,
                                                         seq_step_id_t step)
 {
@@ -372,25 +303,9 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
         return 0U;
     }
 
-    uint8_t members[8U];
-    uint8_t member_count = 0U;
-    uint8_t unused_group_master = 0U;
-    if (seq_edit_lowcost_collect_length_targets(track,
-                                                members,
-                                                (uint8_t)(sizeof(members) / sizeof(members[0])),
-                                                &member_count,
-                                                &unused_group_master) == 0U)
+    if (seq_edit_lowcost_step_is_range_end_empty(track, end_step) == 0U)
     {
         return 0U;
-    }
-    (void)unused_group_master;
-
-    for (uint8_t i = 0U; i < member_count; ++i)
-    {
-        if (seq_edit_lowcost_step_is_range_end_empty(members[i], end_step) == 0U)
-        {
-            return 0U;
-        }
     }
 
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
@@ -488,52 +403,22 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
 
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(8U, track, start_step, (uint8_t)(end_step - start_step));
     uint8_t applied = 0U;
-    uint8_t members[8U];
-    uint8_t member_count = 0U;
-    uint8_t group_master = 0U;
-    if (seq_edit_lowcost_collect_length_targets(track,
-                                                members,
-                                                (uint8_t)(sizeof(members) / sizeof(members[0])),
-                                                &member_count,
-                                                &group_master) == 0U)
+    for (uint8_t voice = 0U; voice < 4U; ++voice)
     {
-        seq_edit_finish_snapshot_undo(0U);
-        if (undo_started != 0U)
+        if (seq_edit_lowcost_voice_is_present(track, start_step, voice) == 0U)
         {
-            undo_v2_cancel_transaction();
+            continue;
         }
-        return 0U;
+
+        if (seq_edit_lowcost_apply_length_to_voice(track, start_step, voice, (uint8_t)length_steps) != 0U)
+        {
+            applied = 1U;
+        }
     }
 
-    if (group_master != 0U)
+    if (applied == 0U)
     {
-        for (uint8_t i = 0U; i < member_count; ++i)
-        {
-            if (seq_edit_lowcost_apply_length_to_voice(members[i], start_step, 0U, (uint8_t)length_steps) != 0U)
-            {
-                applied = 1U;
-            }
-        }
-    }
-    else
-    {
-        for (uint8_t voice = 0U; voice < 4U; ++voice)
-        {
-            if (seq_edit_lowcost_voice_is_present(track, start_step, voice) == 0U)
-            {
-                continue;
-            }
-
-            if (seq_edit_lowcost_apply_length_to_voice(track, start_step, voice, (uint8_t)length_steps) != 0U)
-            {
-                applied = 1U;
-            }
-        }
-
-        if (applied == 0U)
-        {
-            applied = seq_edit_lowcost_apply_length_to_voice(track, start_step, 0U, (uint8_t)length_steps);
-        }
+        applied = seq_edit_lowcost_apply_length_to_voice(track, start_step, 0U, (uint8_t)length_steps);
     }
 
     if (applied == 0U)
@@ -595,6 +480,12 @@ static void seq_edit_apply_short_action(uint8_t hall)
     }
 
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, step, hall);
+    if (track_topology_is_play(track) == 0U)
+    {
+        seq_model_toggle_special_action(track, step);
+        seq_edit_finish_snapshot_undo(undo_started);
+        return;
+    }
     if ((g_seq_hold_state.pressed_active[hall] == 0U)
             && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
             && (g_seq_hold_state.auto_note_pending[hall] != 0U)
@@ -679,7 +570,14 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
     }
 
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(1U, track, step, hall_index);
-    seq_model_toggle_trig(track, step);
+    if (track_topology_is_play(track) != 0U)
+    {
+        seq_model_toggle_trig(track, step);
+    }
+    else
+    {
+        seq_model_toggle_special_action(track, step);
+    }
     seq_edit_finish_snapshot_undo(undo_started);
     return 1U;
 }
@@ -858,6 +756,10 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
                                                            (uint8_t)SEQ_STEPS_PER_PAGE,
                                                            1U);
     if (seq_edit_track_sequence_is_locked(held_track) != 0U)
+    {
+        return 0U;
+    }
+    if (track_topology_is_play(held_track) == 0U)
     {
         return 0U;
     }
@@ -1197,7 +1099,10 @@ void seq_edit_clear_steps(seq_track_id_t track,
             continue;
         }
 
-        seq_model_set_trig(track, step, 0U);
+        if (track_topology_is_play(track) != 0U)
+            seq_model_set_trig(track, step, 0U);
+        else
+            seq_model_set_special_action(track, step, (uint8_t)SEQ_SPECIAL_ACTION_NONE);
         seq_model_step_plock_clear(track, step);
     }
     seq_edit_finish_snapshot_undo(undo_started);

@@ -32,6 +32,7 @@ typedef struct
 } fx_master_macro_diag_state_t;
 
 void fx_master_macro_init(float sample_rate);
+void fx_master_macro_set_mute(uint8_t muted);
 void fx_master_macro_process_block(float *left, float *right, uint32_t frames);
 void fx_master_macro_get_diag_state(fx_master_macro_diag_state_t *out);
 
