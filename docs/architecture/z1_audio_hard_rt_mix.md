@@ -1,18 +1,5 @@
 # Z1 - Audio Hard-RT et Mix
 
-## Addendum 2026-07-31 - sidechain et profils master fixes
-
-- L'ordre track devient `moteur -> filtre/VCA/volume -> inserts -> tap sidechain
-  -> pan -> sends/bus`. Une track mutee produit un tap nul; le tap existe meme
-  sans route MAIN, ce qui autorise un ghost sidechain.
-- `MIX` utilise un HPF detecteur fixe 90 Hz. Deluge y mesure le bloc de sortie
-  compressee precedent; Brick reste feed-forward. `T1..T12` utilisent le tap
-  courant feed-forward et un anti-DC 20 Hz.
-- `AMT=0` retourne avant tout calcul DSP. Sinon AMT prepare seuil et makeup
-  borne selon le profil fixe; ratio, attack, release, knee et wet restent fixes.
-- Brick PEAK prend le maximum des huit samples de controle et son enveloppe
-  demarre a 1. La saturation Deluge est normalisee par `tanh(3x)/3`.
-
 ## Addendum 2026-07-31 - renderer natif `TRX-BD`
 
 - `DRUM/MD` rend maintenant `TRX-BD` par une fonction specialisee: sinus

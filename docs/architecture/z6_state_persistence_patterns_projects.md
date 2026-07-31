@@ -1,11 +1,5 @@
 # Z6 - State / Persistence / Patterns / Projects
 
-## Addendum 2026-07-31 - persistence COMP LAB finale
-
-- Le snapshot global Project/Pattern capture `MODEL`, `SIDECHAIN`, `AMT`,
-  `DELUGE SAT` et `BRICK PEAK/RMS`.
-- Les anciens IDs prototype de controle libre sont retires sans migration.
-
 ## Compatibilité polyphonie
 
 `VOICES` et `SPREAD` réemploient deux tombstones legacy: `PARAM_COUNT`, les payloads

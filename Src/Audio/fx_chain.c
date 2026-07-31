@@ -72,24 +72,12 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
             break;
 
         case FX_COMP_LAB:
-            /* Master-only: processed exclusively by fx_chain_process_master_comp(). */
+            fx_comp_lab_process_block((fx_comp_lab_t*)s->state, L, R, frames);
             break;
 
         default:
             break;
     }
-}
-
-void fx_chain_process_master_comp(float* L,
-                                  float* R,
-                                  const float* key_l,
-                                  const float* key_r,
-                                  uint32_t frames)
-{
-    fx_slot_t* s = fx_pool_get_slot(2U);
-    if (!s || !s->active || !s->state || (s->type != FX_COMP_LAB))
-        return;
-    fx_comp_lab_process_block((fx_comp_lab_t*)s->state, L, R, key_l, key_r, frames);
 }
 
 /**

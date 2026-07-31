@@ -145,6 +145,13 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_a
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:573:6:apply_output_comp	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:575:6:apply_comp_model	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:580:6:apply_comp_detect	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:585:6:apply_comp_sidechain	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:590:6:apply_comp_amount	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:595:6:apply_comp_deluge_sat	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:585:6:apply_comp_knee	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:590:6:apply_comp_deluge_sat	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:596:6:apply_bus_comp_threshold	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:597:6:apply_bus_comp_ratio	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:598:6:apply_bus_comp_attack_index	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:603:6:apply_bus_comp_release_index	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:608:6:apply_bus_comp_makeup	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:609:6:apply_bus_comp_auto_makeup	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:610:6:apply_bus_comp_drywet	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_apply_wrappers.c:615:6:apply_bus_comp_hpf	16	static

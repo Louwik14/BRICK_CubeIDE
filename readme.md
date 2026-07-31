@@ -341,10 +341,10 @@ filtre et les traitements de piste: PRISM `0 dB`, DELUGE `-7,1 dB`, WAVE
 sans correction.
 ## Prototype compresseur comparatif
 
-`MIX 3/3` expose le compresseur master final: `MODEL OFF/DELUGE/BRICK`,
-`SIDECHAIN MIX/T1..T12`, `AMT 0..100` et `CHAR`. Deluge memorise SAT
-OFF/ON; Brick memorise PEAK/RMS. Les profils dynamiques sont fixes et AMT
-pilote seulement leur seuil et un makeup leger borne.
+`MIX 3/3` permet de comparer sur le bus MAIN les modeles `OFF`, `DELUGE` et
+`BRICK`, avec controles communs de seuil, ratio, enveloppe, makeup manuel, mix
+et sidechain HPF. Deluge expose sa saturation; Brick expose le detecteur
+PEAK/RMS et le soft knee.
 # Addendum 2026-07-30 - DRUM / MD
 
 - La famille Drum propose maintenant `MD` et `BD Analog`. `MD` est integre au

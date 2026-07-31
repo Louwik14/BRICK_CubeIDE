@@ -1,14 +1,5 @@
 # ARCHITECTURE_GLOBAL.md
 
-## Addendum 2026-07-31 - compresseur master finalise
-
-- Z1 conserve une unique autorite `COMP LAB` sur MAIN et ajoute un tap sidechain
-  logique `MIX/T1..T12`; le tap track est post-traitements/post-volume/post-mute
-  mais pre-pan et reste independant du routing MAIN.
-- Z3 reduit la surface globale a `MODEL/SIDECHAIN/AMT` plus deux memoires CHAR
-  distinctes Deluge/Brick; Z5 projette la CHAR du modele courant et Z6 persiste
-  les deux choix sans les ecraser lors d'un changement de modele.
-
 ## Addendum 2026-07-31 - premier modele sonore MD `TRX-BD`
 
 - Z1 publie `TRX-BD` dans le moteur unique MD avec un renderer natif specialise;

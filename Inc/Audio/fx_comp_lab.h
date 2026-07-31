@@ -8,15 +8,15 @@ struct fx_comp_lab_t {
     float attack_s;
     float release_s;
     float manual_makeup_db;
+    float mix;
     float threshold_db;
     float ratio;
     float knee_db;
+    float sc_hpf_hz;
     float hpf_l;
     float hpf_r;
     float hpf_x_l;
     float hpf_x_r;
-    float feedback_l[64];
-    float feedback_r[64];
     float deluge_mean;
     float deluge_rms_log;
     float deluge_env;
@@ -26,8 +26,6 @@ struct fx_comp_lab_t {
     float transition;
     float transition_old_gain;
     uint8_t model;
-    uint8_t sidechain;
-    uint8_t amount;
     uint8_t detector_rms;
     uint8_t deluge_saturation;
 };
@@ -39,18 +37,21 @@ typedef struct fx_comp_lab_t fx_comp_lab_t;
 
 fx_comp_lab_t *fx_comp_lab_get_instance(void);
 void fx_comp_lab_init(fx_comp_lab_t *comp, float sample_rate);
+void fx_comp_lab_set_threshold_db(fx_comp_lab_t *comp, float threshold_db);
+void fx_comp_lab_set_ratio(fx_comp_lab_t *comp, float ratio);
+void fx_comp_lab_set_attack_s(fx_comp_lab_t *comp, float attack_s);
+void fx_comp_lab_set_release_s(fx_comp_lab_t *comp, float release_s);
+void fx_comp_lab_set_makeup_db(fx_comp_lab_t *comp, float makeup_db);
+void fx_comp_lab_set_mix(fx_comp_lab_t *comp, float mix);
 void fx_comp_lab_set_model(fx_comp_lab_t *comp, uint8_t model);
-void fx_comp_lab_set_sidechain(fx_comp_lab_t *comp, uint8_t sidechain);
-uint8_t fx_comp_lab_get_sidechain(const fx_comp_lab_t *comp);
-void fx_comp_lab_set_amount(fx_comp_lab_t *comp, uint8_t amount);
+void fx_comp_lab_set_sc_hpf_hz(fx_comp_lab_t *comp, float hz);
 void fx_comp_lab_set_detector_rms(fx_comp_lab_t *comp, uint8_t rms);
+void fx_comp_lab_set_knee_db(fx_comp_lab_t *comp, float db);
 void fx_comp_lab_set_deluge_saturation(fx_comp_lab_t *comp, uint8_t enabled);
 
 void fx_comp_lab_process_block(fx_comp_lab_t *comp,
                                  float *left,
                                  float *right,
-                                 const float *key_left,
-                                 const float *key_right,
                                  uint32_t frames);
 
 #ifdef __cplusplus

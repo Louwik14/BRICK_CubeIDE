@@ -1,12 +1,5 @@
 # Z5 - UI / Navigation / Interaction
 
-## Addendum 2026-07-31 - surface MIX 3/3 finale
-
-- `MIX 3/3` contient une seule page `COMP`:
-  `MODEL / SIDECHAIN / AMT / CHAR`.
-- CHAR resout `SAT OFF/ON` pour Deluge, `PEAK/RMS` pour Brick et N/A pour OFF,
-  tout en conservant separement les deux valeurs.
-
 ## TRACK CFG synth
 
 Page 1: `VOICES` et `SPREAD`; page 2: `MIDI`. Pour un master Multi, `GROUP` est en

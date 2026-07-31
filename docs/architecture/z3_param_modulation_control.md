@@ -1,14 +1,5 @@
 # Z3 - Param / Modulation / Control
 
-## Addendum 2026-07-31 - autorite COMP LAB finale
-
-- Les seuls controles publics sont `MODEL OFF/DELUGE/BRICK`,
-  `SIDECHAIN MIX/T1..T12`, `AMT 0..100` et `CHAR`.
-- Deux valeurs globales distinctes portent `SAT` Deluge et `PEAK/RMS` Brick.
-  Les changements de modele ne recopient ni ne remappent ces valeurs.
-- Les anciens controles libres threshold/ratio/attack/release/makeup/mix/knee
-  sont supprimes; les profils et courbes AMT vivent uniquement dans le DSP.
-
 ## Paramètres vocaux
 
 `VOICES` et `SPREAD` sont track-wide. Matrix/LFO et TONE/MOD/MIX restent communs;

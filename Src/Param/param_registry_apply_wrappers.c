@@ -582,18 +582,38 @@ void apply_comp_detect(float v)
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
     if (comp != NULL) fx_comp_lab_set_detector_rms(comp, (v >= 0.5f) ? 1U : 0U);
 }
-void apply_comp_sidechain(float v)
+void apply_comp_knee(float v)
 {
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_sidechain(comp, (uint8_t)(v + 0.5f));
-}
-void apply_comp_amount(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_amount(comp, (uint8_t)(v + 0.5f));
+    if (comp != NULL) fx_comp_lab_set_knee_db(comp, v);
 }
 void apply_comp_deluge_sat(float v)
 {
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
     if (comp != NULL) fx_comp_lab_set_deluge_saturation(comp, (v >= 0.5f) ? 1U : 0U);
+}
+
+void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
+void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
+void apply_bus_comp_attack_index(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_attack_s(comp, v);
+}
+void apply_bus_comp_release_index(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_release_s(comp, v);
+}
+void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
+void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
+void apply_bus_comp_drywet(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_mix(comp, v);
+}
+void apply_bus_comp_hpf(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_sc_hpf_hz(comp, v);
 }

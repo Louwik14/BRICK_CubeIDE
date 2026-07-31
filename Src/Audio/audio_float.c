@@ -77,6 +77,12 @@ static volatile uint8_t track0_eq_ui_high = 64U;
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+static float bus_comp_attack_index_to_seconds(uint8_t attack_index)
+{
+    static const float attack_s[6] = {0.0001f, 0.0003f, 0.001f, 0.003f, 0.01f, 0.03f};
+    if(attack_index > 5U) attack_index = 5U;
+    return attack_s[attack_index];
+}
 static inline uint8_t eq_is_neutral(void)
 {
     return (track0_eq_ui_low == 64U) && (track0_eq_ui_mid == 64U) && (track0_eq_ui_high == 64U);
@@ -114,6 +120,12 @@ static inline fx_comp_lab_t *fx_pool_comp_lab_state(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+static float bus_comp_release_index_to_seconds(uint8_t release_index)
+{
+    static const float release_s[5] = {0.1f, 0.3f, 0.6f, 1.2f, 1.2f};
+    if(release_index > 4U) release_index = 4U;
+    return release_s[release_index];
+}
 
 /**
  * @brief Point d'entrée bus_comp_release_index_to_seconds.
@@ -128,6 +140,11 @@ static inline fx_comp_lab_t *fx_pool_comp_lab_state(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_threshold_db(float threshold_db)
+{
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_threshold_db(comp, threshold_db);
+}
 
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
@@ -159,6 +176,11 @@ void audio_float_set_output_compensation(float comp)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_ratio(float ratio)
+{
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_ratio(comp, ratio);
+}
 void audio_float_set_dj_eq_low_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
@@ -176,6 +198,11 @@ void audio_float_set_dj_eq_low_db(float db)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
+{
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_attack_s(comp, bus_comp_attack_index_to_seconds(attack_index));
+}
 void audio_float_set_dj_eq_mid_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
@@ -193,6 +220,11 @@ void audio_float_set_dj_eq_mid_db(float db)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_release_index(uint8_t release_index)
+{
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_release_s(comp, bus_comp_release_index_to_seconds(release_index));
+}
 void audio_float_set_dj_eq_high_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
@@ -212,6 +244,11 @@ void audio_float_set_dj_eq_high_db(float db)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_makeup_db(float makeup_db)
+{
+    fx_comp_lab_t *comp = fx_pool_comp_lab_state();
+    if(comp) fx_comp_lab_set_makeup_db(comp, makeup_db);
+}
 void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
 {
     track0_eq_ui_low = low;
@@ -231,6 +268,10 @@ void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
+{
+    (void)enabled;
+}
 uint8_t audio_float_is_dj_eq_ui_neutral(void)
 {
     return eq_is_neutral() ? 1U : 0U;

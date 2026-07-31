@@ -123,11 +123,11 @@ static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_off = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "COMP", "-", "-", "-" },
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
     .subpages = {
-        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -135,11 +135,11 @@ static const ui_template_family_t g_ui_template_mix_family_comp_off = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_deluge = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "COMP", "-", "-", "-" },
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
     .subpages = {
-        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COMP_DELUGE_SAT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DELUGE_SAT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -147,11 +147,11 @@ static const ui_template_family_t g_ui_template_mix_family_comp_deluge = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_brick = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "COMP", "-", "-", "-" },
+    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
     .subpages = {
-        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COMP_DETECT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
+        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
+        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DETECT, PARAM_COMP_KNEE_DB, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,

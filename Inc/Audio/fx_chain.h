@@ -27,14 +27,6 @@ void fx_chain_process_slot(
     uint32_t frames
 );
 
-void fx_chain_process_master_comp(
-    float* in_l,
-    float* in_r,
-    const float* key_l,
-    const float* key_r,
-    uint32_t frames
-);
-
 void fx_chain_process_slot_for_track(
     uint32_t track,
     uint32_t slot,

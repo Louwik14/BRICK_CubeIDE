@@ -44,7 +44,6 @@
 #include <string.h>
 
 #include "fx_chain.h"
-#include "fx_comp_lab.h"
 #include "fx_pool.h"
 #include "memory_layout.h"
 
@@ -2680,8 +2679,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float looper_record_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float compressor_key_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float compressor_key_r[AUDIO_BLOCK_SIZE];
 #if MIXER_HAS_CUE_BUS
     AUDIO_HOT ALIGN32 static float looper_bus_cue_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_cue_r[AUDIO_BLOCK_SIZE];
@@ -2732,16 +2729,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memset(send_r, 0, sizeof(send_r));
     }
     memset(looper_output_active, 0, sizeof(looper_output_active));
-    memset(compressor_key_l, 0, sizeof(compressor_key_l));
-    memset(compressor_key_r, 0, sizeof(compressor_key_r));
-    uint8_t compressor_key_mix_track = 0xFFU;
-    const uint8_t compressor_sidechain =
-        fx_comp_lab_get_sidechain(fx_comp_lab_get_instance());
-    if((compressor_sidechain > 0U) && (compressor_sidechain <= 12U))
-    {
-        (void)track_runtime_get_mix_target_track(
-            (uint8_t)(compressor_sidechain - 1U), &compressor_key_mix_track);
-    }
 
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
     const float looper_xfade_target = audio_xfade_get();
@@ -2854,7 +2841,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         const uint8_t diag_lane = ((diag_enabled != 0U)
             && (audio_track_diag_is_selected_mix_track((uint8_t)t) != 0U)) ? 1U : 0U;
         const uint8_t is_mono_native_lane = (lane_plan.exec_kind == MIXER_LANE_EXEC_MONO_NATIVE) ? 1U : 0U;
-        const float lane_pan_start = mt->pan_current;
 
         if (is_mono_native_lane != 0U)
         {
@@ -2900,13 +2886,20 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         {
             float gain_cur = mt->gain_current;
+            float pan_cur = mt->pan_current;
             const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
             const float gain_step = (mt->gain - gain_cur) * inv_frames;
+            const float pan_step = (mt->pan - pan_cur) * inv_frames;
 
             if (diag_lane != 0U)
             {
                 for(uint32_t i = 0; i < frames; i++)
                 {
+                    const float pan_for_mix = -pan_cur;
+                    const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                    const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                    const float gain_l = gain_cur * pan_l;
+                    const float gain_r = gain_cur * pan_r;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
@@ -2922,19 +2915,20 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                                        mono[i] * vca_gain,
                                                        mono[i] * vca_gain);
                         mono[i] *= (gain_cur * vca_gain);
-                        ext_mono_l[i] = mono[i];
-                        ext_mono_r[i] = mono[i];
+                        ext_mono_l[i] = mono[i] * pan_l;
+                        ext_mono_r[i] = mono[i] * pan_r;
                     }
                     else
                     {
                         audio_track_diag_measure_sample(AUDIO_TRACK_DIAG_DSP,
                                                        L[i] * vca_gain,
                                                        R[i] * vca_gain);
-                        L[i] *= (gain_cur * vca_gain);
-                        R[i] *= (gain_cur * vca_gain);
+                        L[i] *= (gain_l * vca_gain);
+                        R[i] *= (gain_r * vca_gain);
                     }
 
                     gain_cur += gain_step;
+                    pan_cur += pan_step;
                 }
             }
             else
@@ -2943,6 +2937,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 {
                     /* Standard user convention: pan<0 => left, pan>0 => right.
                      * Runtime output stage wiring is mirrored, so mixer pan is compensated here. */
+                    const float pan_for_mix = -pan_cur;
+                    const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                    const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                    const float gain_l = gain_cur * pan_l;
+                    const float gain_r = gain_cur * pan_r;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
@@ -2955,19 +2954,21 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     if (is_mono_native_lane != 0U)
                     {
                         mono[i] *= (gain_cur * vca_gain);
-                        ext_mono_l[i] = mono[i];
-                        ext_mono_r[i] = mono[i];
+                        ext_mono_l[i] = mono[i] * pan_l;
+                        ext_mono_r[i] = mono[i] * pan_r;
                     }
                     else
                     {
-                        L[i] *= (gain_cur * vca_gain);
-                        R[i] *= (gain_cur * vca_gain);
+                        L[i] *= (gain_l * vca_gain);
+                        R[i] *= (gain_r * vca_gain);
                     }
                     gain_cur += gain_step;
+                    pan_cur += pan_step;
                 }
             }
 
             mt->gain_current = mt->gain;
+            mt->pan_current = mt->pan;
         }
 
         if (is_mono_native_lane != 0U)
@@ -2988,26 +2989,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             {
                 fx_chain_process_slot_for_track(t, (uint32_t)slot, L, R, frames);
             }
-        }
-        if((uint8_t)t == compressor_key_mix_track)
-        {
-            memcpy(compressor_key_l, L, sizeof(float) * frames);
-            memcpy(compressor_key_r, R, sizeof(float) * frames);
-        }
-        {
-            float pan_cur = lane_pan_start;
-            const float pan_step = (mt->pan - pan_cur)
-                * ((frames > 0U) ? (1.0f / (float)frames) : 0.0f);
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                const float pan_for_mix = -pan_cur;
-                const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
-                const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-                L[i] *= pan_l;
-                R[i] *= pan_r;
-                pan_cur += pan_step;
-            }
-            mt->pan_current = mt->pan;
         }
         if(diag_lane != 0U)
         {
@@ -3404,11 +3385,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     }
 
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
-    fx_chain_process_master_comp(bus_main_l,
-                                 bus_main_r,
-                                 (compressor_sidechain == 0U) ? NULL : compressor_key_l,
-                                 (compressor_sidechain == 0U) ? NULL : compressor_key_r,
-                                 frames);
+    fx_chain_process_slot(2U, bus_main_l, bus_main_r, frames);
 
     if(sample_capture_active != 0U)
     {

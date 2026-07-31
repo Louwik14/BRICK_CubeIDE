@@ -283,9 +283,15 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_MIX_REVERB_DAMP:
         case PARAM_MIX_REVERB_SMEAR:
         case PARAM_COMP_MODEL:
-        case PARAM_COMP_SIDECHAIN:
-        case PARAM_COMP_AMOUNT:
+        case PARAM_BUS_COMP_THRESHOLD_DB:
+        case PARAM_BUS_COMP_RATIO:
+        case PARAM_BUS_COMP_ATTACK_INDEX:
+        case PARAM_BUS_COMP_RELEASE_INDEX:
+        case PARAM_BUS_COMP_MAKEUP_DB:
+        case PARAM_BUS_COMP_DRYWET:
+        case PARAM_BUS_COMP_HPF_HZ:
         case PARAM_COMP_DETECT:
+        case PARAM_COMP_KNEE_DB:
         case PARAM_COMP_DELUGE_SAT:
             return 1U;
 
