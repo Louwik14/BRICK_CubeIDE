@@ -4,6 +4,8 @@ $repo = Split-Path -Parent $PSScriptRoot
 $scheduler = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_play_scheduler.c')
 $snapshot = Get-Content -Raw (Join-Path $repo 'Src\Core\track_snapshot.c')
 $runtime = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_runtime.c')
+$mixer = Get-Content -Raw (Join-Path $repo 'Src\Audio\mixer.c')
+$stack = Get-Content -Raw (Join-Path $repo 'Src\Core\brick6_stack_runtime.c')
 
 foreach ($contract in @(
     'g_seq_play_track_generation',
@@ -22,6 +24,13 @@ foreach ($contract in @(
     'track_snapshot_collect_restore_tracks',
     'track_runtime_get_voice_group_effective_master',
     'track_runtime_collect_voice_group_members',
+    'keyboard_arp_clear_track',
+    'mod_lfo_v1_all_notes_off',
+    'track_snapshot_runtime_neutralize_note_state',
+    'mixer_track_filter_all_notes_off',
+    'mixer_track_vca_all_notes_off',
+    'brick6_stack_runtime_cancel_note_state',
+    'seq_runtime_restore_track_div',
     'seq_runtime_begin_track_restore',
     'seq_runtime_end_track_restore'
 )) {
@@ -30,68 +39,117 @@ foreach ($contract in @(
     }
 }
 
-foreach ($contract in @(
-    'seq_boundary_engine_restore_all_active_locks',
-    'seq_boundary_engine_invalidate_track',
-    'seq_play_scheduler_suspend_tracks',
-    'seq_play_scheduler_resume_tracks'
-)) {
-    if (-not $runtime.Contains($contract)) {
-        throw "Missing runtime restore contract: $contract"
-    }
+if ($snapshot.Contains('seq_runtime_set_playhead_step((seq_track_id_t)track, 0U)')) {
+    throw 'Track paste still restores transient playhead state'
+}
+if ($runtime -match '(?s)seq_runtime_begin_track_restore.*?seq_boundary_engine_invalidate_track') {
+    throw 'Track paste still invalidates the current boundary and can replay it'
+}
+if ($runtime -match '(?s)seq_runtime_begin_track_restore.*?track_div_phase.*?seq_runtime_end_track_restore') {
+    throw 'Track paste still rewinds transient division phase'
+}
+if (-not $mixer.Contains('mixer_track_vca_all_notes_off(next_mix_track)')) {
+    throw 'Single-track mixer rebind still migrates an active VCA gate'
+}
+if (-not $stack.Contains('g_stack_note_cancel_pending')) {
+    throw 'Stack pending note commands are not cancelled at the audio boundary'
 }
 
-function Test-PasteScenario([string]$engine, [bool]$filled) {
-    $generation = @(1, 1, 1, 1)
-    $suspended = @($false, $false, $false, $false)
+function Invoke-PasteDuringPlay([string]$engine, [bool]$filled, [int[]]$affectedTracks) {
+    $pasteSample = 120
+    $nextBoundarySample = 200
+    $generation = @(1, 1, 1, 1, 1, 1)
+    $suspended = @($false, $false, $false, $false, $false, $false)
+    $gate = @($false, $false, $false, $false, $true, $false)
+    $voice = @($false, $false, $false, $false, $true, $false)
+    $noteOnCount = @(0, 0, 0, 0, 1, 0)
     $events = [System.Collections.Generic.List[object]]::new()
-    $events.Add([pscustomobject]@{ Track = 1; Generation = 1; Note = 61; Engine = $engine })
-    $events.Add([pscustomobject]@{ Track = 3; Generation = 1; Note = 73; Engine = 'OTHER' })
 
-    $generation[1]++
-    $suspended[1] = $true
-    $events = [System.Collections.Generic.List[object]]@(
-        $events | Where-Object { $_.Track -ne 1 }
-    )
-
-    if (-not $suspended[1]) {
-        $events.Add([pscustomobject]@{ Track = 1; Generation = $generation[1]; Note = 62; Engine = $engine })
-    }
-
-    $generation[1]++
-    $suspended[1] = $false
-    if ($filled) {
-        $events.Add([pscustomobject]@{ Track = 1; Generation = $generation[1]; Note = 64; Engine = $engine })
-    }
-
-    $accepted = @($events | Where-Object {
-        (-not $suspended[$_.Track]) -and ($_.Generation -eq $generation[$_.Track])
+    # PLAY is active. Track 4 has a legitimate sounding note and must survive.
+    # A stale lookahead note for the pasted target exists beyond the paste point.
+    $events.Add([pscustomobject]@{
+        Track = $affectedTracks[0]
+        Generation = 1
+        Due = 150
+        Type = 'note_on'
+        Engine = $engine
     })
-    $target = @($accepted | Where-Object Track -eq 1)
-    $other = @($accepted | Where-Object Track -eq 3)
-    if ($target.Count -ne ([int]$filled)) {
-        throw "Unexpected target notes after $engine paste, filled=$filled"
+
+    foreach ($track in $affectedTracks) {
+        $suspended[$track] = $true
+        $generation[$track]++
+        $events = [System.Collections.Generic.List[object]]@(
+            $events | Where-Object Track -ne $track
+        )
+        $gate[$track] = $false
+        $voice[$track] = $false
     }
-    if ($other.Count -ne 1) {
-        throw "Unrelated track was cut by $engine paste"
+
+    # Persistent sequence data is installed while playhead/boundary phase stay put.
+    # Resuming must not synthesize an event at the paste sample.
+    foreach ($track in $affectedTracks) {
+        $generation[$track]++
+        $suspended[$track] = $false
+    }
+
+    foreach ($sample in ($pasteSample..($nextBoundarySample - 1))) {
+        foreach ($event in @($events | Where-Object Due -eq $sample)) {
+            if ((-not $suspended[$event.Track]) -and
+                    ($event.Generation -eq $generation[$event.Track]) -and
+                    ($event.Type -eq 'note_on')) {
+                $noteOnCount[$event.Track]++
+                $gate[$event.Track] = $true
+                $voice[$event.Track] = $true
+            }
+        }
+    }
+
+    foreach ($track in $affectedTracks) {
+        if (($noteOnCount[$track] -ne 0) -or $gate[$track] -or $voice[$track]) {
+            throw "Ghost audio before next boundary: engine=$engine track=$track filled=$filled"
+        }
+    }
+    if (($noteOnCount[4] -ne 1) -or (-not $gate[4]) -or (-not $voice[4])) {
+        throw "Unrelated active track was cut: engine=$engine filled=$filled"
+    }
+
+    if ($filled) {
+        $target = $affectedTracks[0]
+        $events.Add([pscustomobject]@{
+            Track = $target
+            Generation = $generation[$target]
+            Due = $nextBoundarySample
+            Type = 'note_on'
+            Engine = $engine
+        })
+    }
+
+    foreach ($event in @($events | Where-Object Due -eq $nextBoundarySample)) {
+        if ((-not $suspended[$event.Track]) -and
+                ($event.Generation -eq $generation[$event.Track]) -and
+                ($event.Type -eq 'note_on')) {
+            $noteOnCount[$event.Track]++
+            $gate[$event.Track] = $true
+            $voice[$event.Track] = $true
+        }
+    }
+
+    $target = $affectedTracks[0]
+    if ($filled) {
+        if (($noteOnCount[$target] -ne 1) -or (-not $gate[$target]) -or (-not $voice[$target])) {
+            throw "Next planned trigger was lost: engine=$engine"
+        }
+    } elseif (($noteOnCount[$target] -ne 0) -or $gate[$target] -or $voice[$target]) {
+        throw "Empty sequence generated audio: engine=$engine"
     }
 }
 
-foreach ($engine in @('PRISM', 'STACK', 'WAVE', 'DELUGE', 'DRUM', 'SAMPLER')) {
-    Test-PasteScenario $engine $false
-    Test-PasteScenario $engine $true
+$engines = @('PRISM', 'STACK', 'WAVE', 'DELUGE', 'DRUM', 'SAMPLER')
+foreach ($engine in $engines) {
+    Invoke-PasteDuringPlay $engine $false @(1)
+    Invoke-PasteDuringPlay $engine $true @(1)
+    Invoke-PasteDuringPlay $engine $false @(1, 2, 3)
+    Invoke-PasteDuringPlay $engine $true @(1, 2, 3)
 }
 
-$groupEvents = @(
-    [pscustomobject]@{ Track = 1; Note = 60 },
-    [pscustomobject]@{ Track = 2; Note = 64 },
-    [pscustomobject]@{ Track = 3; Note = 67 },
-    [pscustomobject]@{ Track = 4; Note = 72 }
-)
-$affected = @(1, 2, 3)
-$remaining = @($groupEvents | Where-Object { $affected -notcontains $_.Track })
-if (($remaining.Count -ne 1) -or ($remaining[0].Track -ne 4)) {
-    throw 'Voice-group cleanup leaked or cut an unrelated track'
-}
-
-'track_paste_playback_validation=PASS empty=6 filled=6 group_cleanup=1 unrelated_tracks_preserved=1'
+'track_paste_playback_validation=PASS engines=6 simple=12 voice_group=12 pre_boundary_note_on=0 pre_boundary_gate=0 pre_boundary_voice=0 unrelated_tracks_preserved=1'

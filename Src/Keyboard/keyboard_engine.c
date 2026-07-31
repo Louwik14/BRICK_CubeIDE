@@ -23,6 +23,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -204,6 +205,33 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     {
         mixer_track_vca_all_notes_off(mix_track);
     }
+    if ((synth_polyphony_get_voice_count(track) > 1U)
+            && ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)))
+    {
+        synth_poly_release_t released[SYNTH_POLYPHONY_MAX_VOICES];
+        const uint8_t released_count =
+            synth_polyphony_release_all(track, released, SYNTH_POLYPHONY_MAX_VOICES);
+        for (uint8_t i = 0U; i < released_count; ++i)
+        {
+            const uint8_t voice = released[i].voice;
+            const uint8_t note = released[i].note;
+            const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+            mixer_track_poly_note_off(ctx->mix_track_id, voice, note);
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                brick6_braids_runtime_note_off(instance, note);
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                (void)brick6_stack_runtime_submit_note_off(instance, note);
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+                brick6_wave_runtime_note_off(instance, note);
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
+                brick6_deluge_runtime_note_off(instance, note);
+        }
+        mod_lfo_v1_all_notes_off(track);
+        return;
+    }
     if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         brick6_sampler_runtime_stop(track);
@@ -274,9 +302,29 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         mod_lfo_v1_note_release(track);
     }
 
+    const uint8_t poly_count = synth_polyphony_get_voice_count(track);
+    const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
+        && ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)));
+    const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
+        : ((is_note_on != 0U) ? synth_polyphony_note_on(track, note)
+                              : synth_polyphony_note_off(track, note));
+    const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
+        ? ctx->instance_id : SYNTH_POLYPHONY_INSTANCE(track, voice);
+
     uint8_t filter_track = 0U;
     uint8_t mix_track = 0U;
-    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    const uint8_t has_mix = track_runtime_get_mix_target_track(track, &mix_track);
+    if ((is_poly_synth != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE) && (has_mix != 0U))
+    {
+        if (is_note_on != 0U)
+            mixer_track_poly_note_on(mix_track, voice, note, velocity);
+        else
+            mixer_track_poly_note_off(mix_track, voice, note);
+    }
+    else if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
     {
         if (is_note_on != 0U)
         {
@@ -288,7 +336,7 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         }
     }
     if ((track_runtime_supports_vca_gate(ctx) != 0U)
-            && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
+            && (has_mix != 0U) && (is_poly_synth == 0U))
     {
         if (is_note_on != 0U)
         {
@@ -343,44 +391,48 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
     {
         if (is_note_on != 0U)
         {
-            brick6_braids_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            brick6_braids_runtime_sync_voice(ctx->instance_id, instance);
+            brick6_braids_runtime_note_on(instance, (float)note, (float)velocity / 127.0f);
         }
         else
         {
-            brick6_braids_runtime_note_off(ctx->instance_id, note);
+            brick6_braids_runtime_note_off(instance, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
     {
         if (is_note_on != 0U)
         {
-            (void)brick6_stack_runtime_submit_note_on(ctx->instance_id, note, velocity);
+            brick6_stack_runtime_sync_voice(ctx->instance_id, instance);
+            (void)brick6_stack_runtime_submit_note_on(instance, note, velocity);
         }
         else
         {
-            (void)brick6_stack_runtime_submit_note_off(ctx->instance_id, note);
+            (void)brick6_stack_runtime_submit_note_off(instance, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
     {
         if (is_note_on != 0U)
         {
-            brick6_wave_runtime_note_on(ctx->instance_id, note, velocity);
+            brick6_wave_runtime_sync_voice(ctx->instance_id, instance);
+            brick6_wave_runtime_note_on(instance, note, velocity);
         }
         else
         {
-            brick6_wave_runtime_note_off(ctx->instance_id, note);
+            brick6_wave_runtime_note_off(instance, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
     {
         if (is_note_on != 0U)
         {
-            brick6_deluge_runtime_note_on(ctx->instance_id, note, velocity);
+            brick6_deluge_runtime_sync_voice(ctx->instance_id, instance);
+            brick6_deluge_runtime_note_on(instance, note, velocity);
         }
         else
         {
-            brick6_deluge_runtime_note_off(ctx->instance_id, note);
+            brick6_deluge_runtime_note_off(instance, note);
         }
     }
 }

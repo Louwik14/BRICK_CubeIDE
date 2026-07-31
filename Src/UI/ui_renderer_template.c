@@ -2456,8 +2456,8 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
                 ui_renderer_template_draw_cfg_loop_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_DRUM_TRX_BD:
-                return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "TRX", "BD");
+            case UI_TRACK_TYPE_DRUM_MD:
+                return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "DRUM", "MD");
 
             case UI_TRACK_TYPE_DRUM_BD_ANALOG:
                 return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "BD", "Ana");
@@ -3002,6 +3002,76 @@ static uint8_t ui_renderer_template_filter_curve_group_is_active(const ui_templa
         return 0U;
     }
     return 1U;
+}
+
+static uint8_t ui_renderer_template_hpf_lpf_group_is_active(const ui_template_page_state_t *state,
+                                                            const ui_template_subpage_t *subpage,
+                                                            uint8_t *out_first_slot,
+                                                            param_id_t *out_hpf,
+                                                            param_id_t *out_lpf)
+{
+    if ((subpage == NULL) || (out_first_slot == NULL) || (out_hpf == NULL) || (out_lpf == NULL))
+    {
+        return 0U;
+    }
+
+    for(uint8_t slot = 0U; slot < 3U; ++slot)
+    {
+        const param_id_t hpf = subpage->param_bank.params[slot];
+        const param_id_t lpf = subpage->param_bank.params[slot + 1U];
+        const uint8_t recognized = (uint8_t)(((hpf == PARAM_MIX_REVERB_HPF) && (lpf == PARAM_MIX_REVERB_LPF))
+                || ((hpf == PARAM_MIX_REVERB_DIGITAL_HPF) && (lpf == PARAM_MIX_REVERB_DIGITAL_LPF))
+                || ((hpf == PARAM_MIX_DELAY_HPF) && (lpf == PARAM_MIX_DELAY_LPF)));
+        if((recognized != 0U)
+                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot, hpf)
+                        == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP)
+                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot + 1U, lpf)
+                        == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP))
+        {
+            *out_first_slot = slot;
+            *out_hpf = hpf;
+            *out_lpf = lpf;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static void ui_renderer_template_draw_hpf_lpf_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                    uint8_t first_slot,
+                                                    param_id_t hpf_id,
+                                                    param_id_t lpf_id)
+{
+    float hpf = 0.0f;
+    float lpf = 0.0f;
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, hpf_id, &hpf, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, lpf_id, &lpf, 0);
+    if(hpf < 0.0f) hpf = 0.0f;
+    if(hpf > 1.0f) hpf = 1.0f;
+    if(lpf < 0.0f) lpf = 0.0f;
+    if(lpf > 1.0f) lpf = 1.0f;
+
+    const int x = g_ui_template_frame_x[first_slot] + UI_TEMPLATE_CARD_WIDGET_X_PAD;
+    const int y = UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y;
+    const int w = (UI_TEMPLATE_FRAME_W * 2) - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD);
+    const int h = UI_TEMPLATE_CARD_WIDGET_H;
+    const float hp_edge = 0.02f + (0.32f * hpf);
+    const float lp_edge = (lpf <= 0.0f) ? 1.0f : (1.0f - (0.88f * lpf));
+    int prev_y = y + h - 2;
+
+    for(int col = 0; col < w; ++col)
+    {
+        const float f = (float)col / (float)(w - 1);
+        float hp_gain = (f >= hp_edge) ? 1.0f : (f / hp_edge);
+        float lp_gain = (f <= lp_edge) ? 1.0f : ((1.0f - f) / (1.0f - lp_edge));
+        if(hp_gain < 0.0f) hp_gain = 0.0f;
+        if(lp_gain < 0.0f) lp_gain = 0.0f;
+        const float gain = hp_gain * lp_gain;
+        const int yy = y + h - 2 - (int)(gain * (float)(h - 4));
+        if(col > 0)
+            drv_display_draw_line(x + col - 1, prev_y, x + col, yy);
+        prev_y = yy;
+    }
 }
 
 static uint8_t ui_renderer_template_draw_filter_curve_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
@@ -4674,6 +4744,18 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
                 grouped_widget_drawn = 1U;
             }
+            uint8_t grouped_filter_first_slot = 0U;
+            param_id_t grouped_filter_hpf = PARAM_COUNT;
+            param_id_t grouped_filter_lpf = PARAM_COUNT;
+            if (ui_renderer_template_hpf_lpf_group_is_active(state,
+                                                             subpage,
+                                                             &grouped_filter_first_slot,
+                                                             &grouped_filter_hpf,
+                                                             &grouped_filter_lpf) != 0U)
+            {
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP;
+                grouped_widget_drawn = 1U;
+            }
             param_id_t grouped_lfo_shape_id = PARAM_COUNT;
             param_id_t grouped_lfo_phase_id = PARAM_COUNT;
             if (ui_renderer_template_lfo_shape_phase_group_is_active(state,
@@ -4726,6 +4808,13 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_CFG_SPREAD_KEYTRACK_GROUP)
                 {
                     (void)ui_renderer_template_draw_cfg_spread_keytrack_group(&plock_frame_ctx);
+                }
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP)
+                {
+                    ui_renderer_template_draw_hpf_lpf_group(&plock_frame_ctx,
+                                                            grouped_filter_first_slot,
+                                                            grouped_filter_hpf,
+                                                            grouped_filter_lpf);
                 }
                 else
                 {

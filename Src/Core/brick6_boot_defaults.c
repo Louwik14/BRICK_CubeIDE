@@ -27,4 +27,11 @@ void brick6_boot_apply_param_defaults(void)
     param_reset(PARAM_MIX_REVERB_PRED);
     param_reset(PARAM_MIX_REVERB_HPF);
     param_reset(PARAM_MIX_REVERB_LPF);
+    param_reset(PARAM_MIX_REVERB_DAMP);
+    param_reset(PARAM_MIX_REVERB_SMEAR);
+    param_reset(PARAM_MIX_REVERB_MODEL);
+    param_reset(PARAM_MIX_REVERB_DIGITAL_DECAY);
+    param_reset(PARAM_MIX_REVERB_DIGITAL_DAMP);
+    param_reset(PARAM_MIX_REVERB_DIGITAL_HPF);
+    param_reset(PARAM_MIX_REVERB_DIGITAL_LPF);
 }

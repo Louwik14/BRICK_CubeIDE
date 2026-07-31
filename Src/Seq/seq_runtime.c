@@ -713,6 +713,16 @@ void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
     g_seq_runtime.track_div_phase[track] = 0U;
 }
 
+void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_seq_runtime_control.track_div[track] = seq_runtime_clamp_track_div(div);
+}
+
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
 {
     if ((out_div == NULL) || (track >= SEQ_TRACK_COUNT))
@@ -959,8 +969,6 @@ void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track
             continue;
         }
         seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
-        seq_boundary_engine_invalidate_track(&g_seq_runtime, tracks[i]);
-        g_seq_runtime.track_div_phase[tracks[i]] = 0U;
     }
 }
 
@@ -973,8 +981,6 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
             continue;
         }
         seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
-        seq_boundary_engine_invalidate_track(&g_seq_runtime, tracks[i]);
-        g_seq_runtime.track_div_phase[tracks[i]] = 0U;
     }
     seq_play_scheduler_resume_tracks(tracks, track_count);
 }

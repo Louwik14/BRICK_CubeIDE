@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Audio/drum_synth.h"
+#include "Audio/mixer.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
@@ -11,7 +12,9 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
@@ -122,19 +125,55 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
         return;
     }
 
+    keyboard_arp_all_notes_off_track(track);
+    keyboard_arp_clear_track(track);
     keyboard_engine_all_notes_off_for_track(track);
+    mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);
     brick6_looper_runtime_stop_playback(track);
     brick6_looper_runtime_prepare_replace(track);
     brick6_braids_runtime_all_notes_off(track);
     brick6_braids_runtime_reset_instance(track);
-    (void)brick6_stack_runtime_submit_all_notes_off(track);
-    (void)brick6_stack_runtime_submit_reset_instance(track);
+    brick6_stack_runtime_cancel_note_state(track);
     brick6_wave_runtime_all_notes_off(track);
     brick6_wave_runtime_reset_instance(track);
     brick6_deluge_runtime_all_notes_off(track);
     brick6_deluge_runtime_reset_instance(track);
     drum_synth_all_notes_off_for_instance(track);
+    param_registry_clear_track_runtime_state(track);
+}
+
+static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
+{
+    uint8_t filter_track = 0U;
+    uint8_t mix_track = 0U;
+
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    keyboard_arp_all_notes_off_track(track);
+    keyboard_arp_clear_track(track);
+    keyboard_engine_all_notes_off_for_track(track);
+    mod_lfo_v1_all_notes_off(track);
+    brick6_sampler_runtime_reset_track(track);
+    brick6_looper_runtime_stop_playback(track);
+    brick6_braids_runtime_all_notes_off(track);
+    brick6_stack_runtime_cancel_note_state(track);
+    brick6_wave_runtime_all_notes_off(track);
+    brick6_deluge_runtime_all_notes_off(track);
+    drum_synth_all_notes_off_for_instance(track);
+
+    track_runtime_refresh_track(track);
+    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    {
+        mixer_track_filter_all_notes_off(filter_track);
+    }
+    if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+    {
+        mixer_track_vca_all_notes_off(mix_track);
+    }
     param_registry_clear_track_runtime_state(track);
 }
 
@@ -228,10 +267,9 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
 
     seq_model_set_track_length((seq_track_id_t)track, snapshot->seq_track.length_steps);
     seq_model_set_track_page((seq_track_id_t)track, snapshot->seq_track.ui_page);
-    seq_runtime_set_track_div((seq_track_id_t)track, snapshot->seq_div);
+    seq_runtime_restore_track_div((seq_track_id_t)track, snapshot->seq_div);
     seq_runtime_set_track_quant((seq_track_id_t)track, snapshot->seq_quant);
     seq_runtime_set_track_swing((seq_track_id_t)track, snapshot->seq_swing);
-    (void)seq_runtime_set_playhead_step((seq_track_id_t)track, 0U);
 }
 
 static void track_snapshot_reapply_track_params(uint8_t track)
@@ -243,6 +281,18 @@ static void track_snapshot_reapply_track_params(uint8_t track)
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
     {
         const param_id_t id = (param_id_t)raw_id;
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+        {
+            continue;
+        }
+        if (id == PARAM_LOOPER_PLAY)
+        {
+            continue;
+        }
         if (track_runtime_get_effective_param_status(track, id) != TRACK_RUNTIME_PARAM_ALLOWED)
         {
             continue;
@@ -504,6 +554,10 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     apply_ok = 1U;
 
 restore_done:
+    for (uint8_t i = 0U; i < restore_track_count; ++i)
+    {
+        track_snapshot_runtime_neutralize_note_state((uint8_t)restore_tracks[i]);
+    }
     seq_runtime_end_track_restore(restore_tracks, restore_track_count);
     return apply_ok;
 }

@@ -62,6 +62,15 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        ui_hall_input_service_set_active_track_fn set_active_track,
                                        ui_hall_input_service_feedback_fn feedback)
 {
+    if ((mute_active != 0U) && (hall < UI_TRACK_COUNT))
+    {
+        if ((was_pressed == 0U) && (pressed != 0U))
+        {
+            hall_note_suppressed[hall] = 1U;
+        }
+        return;
+    }
+
     const ui_hall_direct_action_t action =
         ui_hall_mode_flow_resolve_direct_action(shift_down,
                                                 track_select_armed,

@@ -111,11 +111,18 @@ void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_s
 void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
 void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_model(float v) { mixer_set_reverb_model((v >= 0.5f) ? 1U : 0U); }
 void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_damp(float v) { mixer_set_reverb_damp(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_smear(float v) { mixer_set_reverb_smear(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_digital_decay(float v) { mixer_set_reverb_digital_decay(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_digital_damp(float v) { mixer_set_reverb_digital_damp(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_digital_hpf(float v) { mixer_set_reverb_digital_hpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_digital_lpf(float v) { mixer_set_reverb_digital_lpf(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
 void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
 void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }
@@ -565,30 +572,6 @@ void apply_master_gain(float v) { (void)v; }
 void apply_post_gain(float v) { audio_float_set_postgain(v); }
 void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
 
-void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
-void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
-void apply_bus_comp_attack_index(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_attack_s(comp, v);
-}
-void apply_bus_comp_release_index(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_release_s(comp, v);
-}
-void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
-void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
-void apply_bus_comp_drywet(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_mix(comp, v);
-}
-void apply_bus_comp_hpf(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_sc_hpf_hz(comp, v);
-}
 void apply_comp_model(float v)
 {
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
@@ -599,10 +582,15 @@ void apply_comp_detect(float v)
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
     if (comp != NULL) fx_comp_lab_set_detector_rms(comp, (v >= 0.5f) ? 1U : 0U);
 }
-void apply_comp_knee(float v)
+void apply_comp_sidechain(float v)
 {
     fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_knee_db(comp, v);
+    if (comp != NULL) fx_comp_lab_set_sidechain(comp, (uint8_t)(v + 0.5f));
+}
+void apply_comp_amount(float v)
+{
+    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
+    if (comp != NULL) fx_comp_lab_set_amount(comp, (uint8_t)(v + 0.5f));
 }
 void apply_comp_deluge_sat(float v)
 {

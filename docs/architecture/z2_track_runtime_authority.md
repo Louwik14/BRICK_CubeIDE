@@ -1,5 +1,11 @@
 # Z2 - Track Runtime Authority
 
+## Autorité de polyphonie synth
+
+`synth_polyphony` porte seul le nombre de voix, le spread et les slots
+note/held/release/âge. Allocation bornée: libre, plus ancienne release, puis plus
+ancienne voix tenue. Voice groups et SEQ LINK restent inchangés.
+
 
 - `TRACK_RUNTIME_ENGINE_WAVE` conserve `instance_id == track_id` et ne possède plus de modèle de rendu secondaire.
 - Les dispatches note-on/off Keyboard, Seq et panic restent ceux du runtime WAVE existant.
@@ -296,9 +302,9 @@ Sorties de Z2:
 ## 21. Contrat Drum Plaits direct
 
 - La family/type UI `Drum` reste bindee par Z2 pour les types produit actuels.
-- Types Drum valides: `TRACK_RUNTIME_TYPE_DRUM_TRX_BD` comme slot reserve/futur silencieux, et `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` comme moteur actif.
+- Types Drum valides: `TRACK_RUNTIME_TYPE_DRUM_MD` comme slot reserve/futur silencieux, et `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` comme moteur actif.
 - `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` est le premier type Drum propre; il reste resolu par `track_runtime`, expose `TRACK_RUNTIME_ENGINE_DRUM`, et mappe en Z1 vers `DRUM_MODEL_ID_BD_ANALOG`.
-- `TRACK_RUNTIME_TYPE_DRUM_TRX_BD` peut etre resolu et audio-routable, mais l'execution Z1 le force vers `DRUM_MODEL_ID_NONE` et produit zero.
+- `TRACK_RUNTIME_TYPE_DRUM_MD` peut etre resolu et audio-routable, mais l'execution Z1 le force vers `DRUM_MODEL_ID_NONE` et produit zero.
 - Le mapping TONE de `BD_ANALOG` est local au `track_runtime_type` effectif via `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
 - Les anciens IDs/types Drum ne sont plus conserves; un type numerique inconnu passe par la validation catalogue generique.
 - Les anciens IDs/types `TB3` et `DX7` ne sont plus conserves dans les enums UI/runtime et ne sont pas remappes au restore.
@@ -430,3 +436,17 @@ Sorties de Z2:
 - Projection runtime master-effective: `track_runtime_get_voice_group_seq_link(track, out)` retourne `ON` uniquement si la master effective est une vraie master avec au moins une slave collectable et si son flag brut est `ON`.
 - Une track `SOLO`, une master sans slave effective, une slave orpheline ou un groupe invalide donnent operationnellement `OFF`.
 - L'edition UI et le parametre catalogue sont branches par l'etape Z3/Z5 suivante; la persistence et la consommation Z4 effective restent separees.
+# Addendum 2026-07-30 - identite runtime `DRUM / MD`
+
+- La famille `Drum` expose `MD` et `BD Analog`.
+- `UI_TRACK_TYPE_DRUM_MD` se projette uniquement vers
+  `TRACK_RUNTIME_TYPE_DRUM_MD`, avec l'instance stable par track et la cible
+  mixer existantes. L'ordinal de l'ancien placeholder est conserve pour la
+  compatibilite des snapshots prototypes.
+# Addendum 2026-07-31 - ownership des voix polyphoniques
+
+- L'allocateur polyphonique porte l'origine `MANUAL/SEQUENCER` de chaque voix.
+- Un note-off ne peut liberer qu'une voix de la meme origine; les releases
+  restent rendues jusqu'a leur completion audio.
+- Les transitions destructrices conservent le chemin all-notes-off explicite,
+  tandis que STOP ne libere que les voix possedees par le sequenceur.

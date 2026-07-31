@@ -70,7 +70,7 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
         case UI_TRACK_FAMILY_DRUM:
             switch (type)
             {
-                case UI_TRACK_TYPE_DRUM_TRX_BD:
+                case UI_TRACK_TYPE_DRUM_MD:
                 case UI_TRACK_TYPE_DRUM_BD_ANALOG:
                     return KIT_V1_LABEL_BD;
                 default:

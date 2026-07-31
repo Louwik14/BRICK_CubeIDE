@@ -16,6 +16,7 @@ void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track
 void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_count);
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
+void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div);
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div);
 void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant);
 uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant);

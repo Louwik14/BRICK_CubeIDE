@@ -10,6 +10,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_tone_sound_state.h"
+#include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
@@ -1306,8 +1307,31 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
     {
         track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
         if ((state != NULL)
-                && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
-                    || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
+                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD)
+                && (id >= PARAM_DRUM_MD_MODEL)
+                && (id <= PARAM_DRUM_MD_P8))
+        {
+            if (id == PARAM_DRUM_MD_MODEL)
+            {
+                const uint8_t model = md_model_validate(value);
+                if ((uint8_t)state->md.model != model)
+                {
+                    const md_model_profile_t *const profile = md_model_profile_get(model);
+                    state->md.model = model;
+                    for (uint8_t slot = 0U; slot < 8U; ++slot)
+                    {
+                        state->md.slot[slot] = profile->defaults[slot];
+                    }
+                }
+            }
+            else
+            {
+                state->md.slot[(uint8_t)(id - PARAM_DRUM_MD_P1)] =
+                    (uint8_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f);
+            }
+        }
+        if ((state != NULL)
+                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
                 && (id >= PARAM_DRUM_TRX_BD_PITCH)
                 && (id <= PARAM_DRUM_TRX_BD_DRIVE))
         {

@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "Audio/md_model.h"
 #include "Param/param_registry.h"
 #include "Storage/memory_layout.h"
 #include "Seq/seq_types.h"
@@ -154,6 +155,14 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->trx_bd.noise = param_registry[PARAM_DRUM_TRX_BD_NOISE].default_value;
     state->trx_bd.harmonics = param_registry[PARAM_DRUM_TRX_BD_HARMONICS].default_value;
     state->trx_bd.drive = param_registry[PARAM_DRUM_TRX_BD_DRIVE].default_value;
+    state->md.model = md_model_validate(param_registry[PARAM_DRUM_MD_MODEL].default_value);
+    {
+        const md_model_profile_t *const profile = md_model_profile_get((uint8_t)state->md.model);
+        for (uint8_t slot = 0U; slot < 8U; ++slot)
+        {
+            state->md.slot[slot] = profile->defaults[slot];
+        }
+    }
 }
 
 void track_tone_sound_state_init(void)

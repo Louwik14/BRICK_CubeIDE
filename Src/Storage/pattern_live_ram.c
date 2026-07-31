@@ -219,6 +219,15 @@ static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
 
 static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 {
+    if ((id == PARAM_MIX_REVERB_MODEL)
+            || (id == PARAM_MIX_REVERB_DIGITAL_DECAY)
+            || (id == PARAM_MIX_REVERB_DIGITAL_DAMP)
+            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_LPF))
+    {
+        return 1U;
+    }
+
     if ((id == PARAM_MASTER_GAIN) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
         || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
         || (id == PARAM_CFG_GROUP_SPREAD)
@@ -271,22 +280,27 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_MIX_DELAY_VOL:
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
-        case PARAM_BUS_COMP_THRESHOLD_DB:
-        case PARAM_BUS_COMP_RATIO:
-        case PARAM_BUS_COMP_ATTACK_INDEX:
-        case PARAM_BUS_COMP_RELEASE_INDEX:
-        case PARAM_BUS_COMP_MAKEUP_DB:
-        case PARAM_BUS_COMP_DRYWET:
-        case PARAM_BUS_COMP_HPF_HZ:
+        case PARAM_MIX_REVERB_DAMP:
+        case PARAM_MIX_REVERB_SMEAR:
         case PARAM_COMP_MODEL:
+        case PARAM_COMP_SIDECHAIN:
+        case PARAM_COMP_AMOUNT:
         case PARAM_COMP_DETECT:
-        case PARAM_COMP_KNEE_DB:
         case PARAM_COMP_DELUGE_SAT:
             return 1U;
 
         default:
             return 0U;
     }
+}
+
+static uint8_t pattern_live_is_reverb_global_tombstone(param_id_t id)
+{
+    return (uint8_t)((id == PARAM_MIX_REVERB_MODEL)
+            || (id == PARAM_MIX_REVERB_DIGITAL_DECAY)
+            || (id == PARAM_MIX_REVERB_DIGITAL_DAMP)
+            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_LPF));
 }
 
 static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step)
@@ -640,7 +654,8 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
         if (ctx->pattern->globals.global_valid[id] != 0U)
         {
             if ((((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
-                    && (id != PARAM_MIX_MUTE))
+                    && (id != PARAM_MIX_MUTE)
+                    && (pattern_live_is_reverb_global_tombstone(id) == 0U))
                     || (pattern_live_is_track_scoped_param(id) != 0U))
             {
                 continue;

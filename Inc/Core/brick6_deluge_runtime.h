@@ -10,7 +10,8 @@ extern "C" {
 #endif
 
 #define BRICK6_DELUGE_SAMPLE_RATE 48000.0f
-#define BRICK6_DELUGE_MAX_INSTANCES SEQ_TRACK_COUNT
+#define BRICK6_DELUGE_MAX_INSTANCES 8U
+#define BRICK6_DELUGE_VOICE_INSTANCE_COUNT (BRICK6_DELUGE_MAX_INSTANCES * 8U)
 
 typedef enum
 {
@@ -40,6 +41,7 @@ uint8_t brick6_deluge_runtime_prepare_block(uint8_t instance_id,
                                             uint32_t frames,
                                             uint8_t downstream_source_required);
 uint8_t brick6_deluge_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
+void brick6_deluge_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance);
 
 #ifdef __cplusplus
 }

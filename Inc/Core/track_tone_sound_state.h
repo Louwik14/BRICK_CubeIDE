@@ -112,6 +112,11 @@ typedef struct
         float harmonics;
         float drive;
     } trx_bd;
+    struct
+    {
+        uint8_t model;
+        uint8_t slot[8];
+    } md;
 } track_tone_sound_state_t;
 
 void track_tone_sound_state_init(void);

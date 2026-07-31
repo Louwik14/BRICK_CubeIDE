@@ -40,6 +40,10 @@
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_comp_model_labels[] = {"OFF", "DELUGE", "BRICK", NULL};
 static const char *const g_comp_detect_labels[] = {"PEAK", "RMS", NULL};
+static const char *const g_comp_sidechain_labels[] = {
+    "MIX", "T1", "T2", "T3", "T4", "T5", "T6",
+    "T7", "T8", "T9", "T10", "T11", "T12", NULL
+};
 static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
 static const char *const g_wave_phase_labels[] = {"0", "90", "180", "270", NULL};
 static const char *const g_wave_flip_labels[] = {"OFF", "X", "Y", "XY", NULL};
@@ -55,6 +59,7 @@ static const char *const g_master_fx_type_labels[] = {"OFF", "DRIVE", "CRUSH", "
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
 static const char *const g_delay_type_labels[] = {"CLASSIC", "DUAL", NULL};
+static const char *const g_reverb_model_labels[] = {"MUTABLE", "DIGITAL", NULL};
 static const char *const g_delay_mode_labels[] = {"Normal", "PingPong", "Tap", "ClassicPP", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "PingPong", NULL};
 static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8", "16", "32", "64", NULL};
@@ -74,6 +79,7 @@ static const char *const g_stack_model_labels[] = {"SINFD", "SHAPE", "WAVETABLE"
 static const char *const g_deluge_model_labels[] = {
     "SINE", "TRI", "SQUARE", "A-SQUARE", "SAW", "A-SAW", NULL
 };
+static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "-", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 #else
@@ -113,33 +119,33 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_STEREO, "Gran Stereo", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_stereo),
 
     PARAM_DESC(PARAM_MIX_TRACK0_GAIN, "T0 Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK1_GAIN, "T1 Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK2_GAIN, "T2 Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK3_GAIN, "T3 Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", NULL),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_decay),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_DAMP, "Damp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_damp),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_HPF, "HPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_hpf),
 
-    PARAM_DESC(PARAM_MIX_TRACK0_PAN, "T0 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_LPF, "LPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_lpf),
     PARAM_DESC(PARAM_MIX_TRACK1_PAN, "T1 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_TRACK2_PAN, "T2 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_TRACK3_PAN, "T3 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
 
     PARAM_DESC_EX(PARAM_MIX_TRACK0_MUTE, "Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK1_MUTE, "T1 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK2_MUTE, "T2 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK3_MUTE, "T3 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_model_labels, apply_mix_reverb_model),
+    PARAM_DESC_EX(PARAM_MIX_TRACK2_MUTE, "VOICES", PARAM_TYPE_INT, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK3_MUTE, "SPREAD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_MIX_TRACK0_ROUTE, "T0 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK1_ROUTE, "T1 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK2_ROUTE, "T2 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_TRACK3_ROUTE, "T3 Route", PARAM_TYPE_ENUM, 0.0f, PARAM_MIX_ROUTE_MAX, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_route_labels, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_MODEL, "MODEL", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_md_model_labels, NULL),
 
-    PARAM_DESC(PARAM_MIX_TRACK0_INSERT0, "T0 Insert0", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK0_INSERT1, "T0 Insert1", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK1_INSERT0, "T1 Insert0", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK1_INSERT1, "T1 Insert1", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK2_INSERT0, "T2 Insert0", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK2_INSERT1, "T2 Insert1", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK3_INSERT0, "T3 Insert0", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
-    PARAM_DESC(PARAM_MIX_TRACK3_INSERT1, "T3 Insert1", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P1, "P1", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P2, "P2", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P3, "P3", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 32.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P4, "P4", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 48.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P5, "P5", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 48.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P6, "P6", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P7, "P7", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 48.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_DRUM_MD_P8, "P8", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
 
     PARAM_DESC(PARAM_MIX_TRACK0_SEND0, "T0 Send0", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_TRACK0_SEND1, "T0 Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
@@ -156,15 +162,6 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC(PARAM_MIX_PAN, "Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_SEND1, "Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_SEND2, "Send2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
-
-    PARAM_DESC_EX(PARAM_BUS_COMP_THRESHOLD_DB, "THRESH", PARAM_TYPE_FLOAT, -48.0f, 0.0f, 0.5f, -18.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_bus_comp_threshold),
-    PARAM_DESC_EX(PARAM_BUS_COMP_RATIO, "RATIO", PARAM_TYPE_FLOAT, 1.0f, 20.0f, 0.1f, 2.0f, PARAM_DISPLAY_RATIO, "", NULL, apply_bus_comp_ratio),
-    PARAM_DESC_EX(PARAM_BUS_COMP_ATTACK_INDEX, "ATTACK", PARAM_TYPE_FLOAT, 0.0001f, 0.1f, 0.0001f, 0.01f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_bus_comp_attack_index),
-    PARAM_DESC_EX(PARAM_BUS_COMP_RELEASE_INDEX, "RELEASE", PARAM_TYPE_FLOAT, 0.02f, 1.0f, 0.01f, 0.1f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_bus_comp_release_index),
-    PARAM_DESC_EX(PARAM_BUS_COMP_MAKEUP_DB, "MAKEUP", PARAM_TYPE_FLOAT, 0.0f, 18.0f, 0.5f, 0.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_bus_comp_makeup),
-    PARAM_DESC_EX(PARAM_BUS_COMP_AUTO_MAKEUP, "BusComp AutoMakeup", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_bus_comp_auto_makeup),
-    PARAM_DESC_EX(PARAM_BUS_COMP_DRYWET, "MIX", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_bus_comp_drywet),
-    PARAM_DESC_EX(PARAM_BUS_COMP_HPF_HZ, "SC HPF", PARAM_TYPE_FLOAT, 0.0f, 200.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "Hz", NULL, apply_bus_comp_hpf),
 
     PARAM_DESC_EX(PARAM_EQ_LOW_DB, "EQ Low", PARAM_TYPE_FLOAT, -24.0f, 24.0f, 0.5f, 0.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_eq_low_db),
     PARAM_DESC_EX(PARAM_EQ_MID_DB, "EQ Mid", PARAM_TYPE_FLOAT, -24.0f, 24.0f, 0.5f, 0.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_eq_mid_db),
@@ -304,8 +301,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_DELAY_HPF, "HPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_hpf),
     PARAM_DESC_EX(PARAM_MIX_DELAY_LPF, "LPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_lpf),
     PARAM_DESC_EX(PARAM_MIX_DELAY_FBW, "FBW", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_mix_delay_feedback_width),
-    PARAM_DESC_EX(PARAM_MIX_DELAY_SWING, "RSV", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MIX_DELAY_ACCENT, "RSV", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DAMP, "Damp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_damp),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_SMEAR, "Smear", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_smear),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD, "MOD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_mod),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD_RATE, "M.RATE", PARAM_TYPE_FLOAT, 0.01f, 12.0f, 0.01f, 0.25f, PARAM_DISPLAY_FLOAT, "Hz", NULL, apply_mix_delay_mod_rate),
     PARAM_DESC_EX(PARAM_MIX_DELAY_REV, "REV", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_rev),
@@ -437,7 +434,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIDI_CC3_3, "CC26", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_3),
     PARAM_DESC_EX(PARAM_MIDI_CC3_4, "CC27", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_4),
     PARAM_DESC_EX(PARAM_COMP_MODEL, "MODEL", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_comp_model_labels, apply_comp_model),
-    PARAM_DESC_EX(PARAM_COMP_DETECT, "DETECT", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_comp_detect_labels, apply_comp_detect),
-    PARAM_DESC_EX(PARAM_COMP_KNEE_DB, "KNEE", PARAM_TYPE_FLOAT, 0.0f, 12.0f, 0.5f, 6.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_comp_knee),
-    PARAM_DESC_EX(PARAM_COMP_DELUGE_SAT, "SAT", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_comp_deluge_sat),
+    PARAM_DESC_EX(PARAM_COMP_SIDECHAIN, "SIDECHAIN", PARAM_TYPE_ENUM, 0.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_comp_sidechain_labels, apply_comp_sidechain),
+    PARAM_DESC_EX(PARAM_COMP_AMOUNT, "AMT", PARAM_TYPE_FLOAT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_comp_amount),
+    PARAM_DESC_EX(PARAM_COMP_DETECT, "CHAR", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_comp_detect_labels, apply_comp_detect),
+    PARAM_DESC_EX(PARAM_COMP_DELUGE_SAT, "CHAR", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_comp_deluge_sat),
 };

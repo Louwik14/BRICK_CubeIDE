@@ -77,11 +77,18 @@ void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t 
 void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level);
 void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot);
 void mixer_set_reverb_wet(float wet);
+void mixer_set_reverb_model(uint8_t model);
 void mixer_set_reverb_size(float size);
 void mixer_set_reverb_decay(float decay);
+void mixer_set_reverb_damp(float damp);
 void mixer_set_reverb_pre_delay(float pre_delay);
 void mixer_set_reverb_hpf(float hpf);
 void mixer_set_reverb_lpf(float lpf);
+void mixer_set_reverb_smear(float smear);
+void mixer_set_reverb_digital_decay(float decay);
+void mixer_set_reverb_digital_damp(float damp);
+void mixer_set_reverb_digital_hpf(float hpf);
+void mixer_set_reverb_digital_lpf(float lpf);
 void mixer_set_delay_type(uint8_t type);
 void mixer_set_delay_mode(uint8_t mode);
 void mixer_set_delay_time(float time_s);
@@ -142,6 +149,16 @@ uint8_t mixer_begin_external_mono_native(uint32_t track_id,
                                          uint32_t frames,
                                          float **out_mono);
 void mixer_commit_external_mono_native(uint32_t track_id, uint32_t frames);
+uint8_t mixer_begin_external_poly(uint32_t track_id, uint32_t frames);
+uint8_t mixer_process_external_poly_voice(uint32_t track_id,
+                                          uint8_t voice,
+                                          float *mono,
+                                          uint32_t frames,
+                                          float voice_pan);
+void mixer_commit_external_poly(uint32_t track_id, uint32_t frames);
+void mixer_track_poly_note_on(uint32_t track_id, uint8_t voice, uint8_t note, uint8_t velocity);
+void mixer_track_poly_note_off(uint32_t track_id, uint8_t voice, uint8_t note);
+void mixer_track_poly_all_notes_off(uint32_t track_id);
 uint8_t mixer_begin_external_stereo(uint32_t track_id,
                                     uint32_t frames,
                                     float **out_left,

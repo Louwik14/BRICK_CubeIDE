@@ -29,7 +29,9 @@ typedef struct
     uint8_t trigger;
 } brick6_braids_runtime_voice_t;
 
-#define BRICK6_BRAIDS_MAX_INSTANCES SEQ_TRACK_COUNT
+#define BRICK6_BRAIDS_MAX_INSTANCES 8U
+#define BRICK6_BRAIDS_VOICE_INSTANCE_COUNT \
+    (BRICK6_BRAIDS_MAX_INSTANCES * 8U)
 
 void brick6_braids_runtime_init(void);
 void brick6_braids_runtime_reset_instance(uint8_t instance_id);
@@ -59,6 +61,7 @@ void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_braids_runtime_all_notes_off(uint8_t instance_id);
 void brick6_braids_runtime_clear_trigger(uint8_t instance_id);
 uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
+void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance);
 
 const brick6_braids_runtime_voice_t *brick6_braids_runtime_get_voice(uint8_t instance_id);
 

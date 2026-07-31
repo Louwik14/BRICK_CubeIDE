@@ -3,6 +3,7 @@
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/fx_master_macro.h"
+#include "Audio/md_model.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -1773,6 +1774,33 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     }
 
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_MD)
+            && (id >= PARAM_DRUM_MD_MODEL)
+            && (id <= PARAM_DRUM_MD_P8))
+    {
+        float model_value = 0.0f;
+        (void)param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value);
+        const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(model_value));
+        if (id == PARAM_DRUM_MD_MODEL)
+        {
+            (void)snprintf(out_name, out_name_len, "MODEL");
+            (void)snprintf(out_value, out_value_len, "%s", profile->name);
+        }
+        else
+        {
+            const uint8_t md_slot = (uint8_t)(id - PARAM_DRUM_MD_P1);
+            if (md_slot >= profile->slot_count)
+            {
+                return 0U;
+            }
+            (void)snprintf(out_name, out_name_len, "%s", profile->slot_labels[md_slot]);
+            (void)snprintf(out_value, out_value_len, "%u", (unsigned)(value + 0.5f));
+        }
+        (void)slot;
+        return 1U;
+    }
+
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
     {
         const char *name = NULL;
@@ -1896,6 +1924,32 @@ static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, pa
 static void ui_page_template_tone_sync_drum_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_MD))
+    {
+        float model_value = 0.0f;
+        (void)param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value);
+        const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(model_value));
+        const param_id_t p6 = (profile->slot_count >= 6U) ? PARAM_DRUM_MD_P6 : PARAM_COUNT;
+        const param_id_t p7 = (profile->slot_count >= 7U) ? PARAM_DRUM_MD_P7 : PARAM_COUNT;
+        const param_id_t p8 = (profile->slot_count >= 8U) ? PARAM_DRUM_MD_P8 : PARAM_COUNT;
+
+        g_ui_template_tone_family_drum.nav_labels[0] = "MD1";
+        g_ui_template_tone_family_drum.nav_labels[1] = "MD2";
+        g_ui_template_tone_family_drum.nav_labels[2] = (profile->slot_count >= 8U) ? "MD3" : "-";
+        g_ui_template_tone_family_drum.nav_labels[3] = "-";
+        ui_page_template_tone_set_subpage(0U, profile->name,
+                                          PARAM_DRUM_MD_MODEL, PARAM_DRUM_MD_P1,
+                                          PARAM_DRUM_MD_P2, PARAM_DRUM_MD_P3);
+        ui_page_template_tone_set_subpage(1U, profile->name,
+                                          PARAM_DRUM_MD_P4, PARAM_DRUM_MD_P5,
+                                          p6, p7);
+        ui_page_template_tone_set_subpage(2U, profile->name,
+                                          p8, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+        ui_page_template_tone_set_subpage(3U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+        return;
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
     {

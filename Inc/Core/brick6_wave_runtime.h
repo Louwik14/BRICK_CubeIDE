@@ -14,7 +14,8 @@
 extern "C" {
 #endif
 
-#define BRICK6_WAVE_MAX_INSTANCES SEQ_TRACK_COUNT
+#define BRICK6_WAVE_MAX_INSTANCES 8U
+#define BRICK6_WAVE_VOICE_INSTANCE_COUNT (BRICK6_WAVE_MAX_INSTANCES * 8U)
 #define BRICK6_WAVE_OSC_COUNT     2U
 
 typedef enum
@@ -110,9 +111,13 @@ void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velo
 void brick6_wave_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_wave_runtime_all_notes_off(uint8_t instance_id);
 void brick6_wave_runtime_clear_trigger(uint8_t instance_id);
+uint8_t brick6_wave_runtime_prepare_block(uint8_t instance_id,
+                                          uint32_t frames,
+                                          uint8_t downstream_source_required);
 uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
 
 const brick6_wave_runtime_voice_t *brick6_wave_runtime_get_voice(uint8_t instance_id);
+void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance);
 const brick6_wave_runtime_osc_t *brick6_wave_runtime_get_osc(uint8_t instance_id, uint8_t osc);
 const brick6_wave_runtime_quality_t *brick6_wave_runtime_get_quality(uint8_t instance_id);
 void brick6_wave_runtime_dwt_enable(uint8_t enabled);

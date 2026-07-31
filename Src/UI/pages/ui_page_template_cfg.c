@@ -9,11 +9,15 @@
 
 static const ui_template_family_t g_ui_template_cfg_family = {
     .family_title = "CFG",
-    .nav_labels = { "MAIN", "-", "-", "-" },
+    .nav_labels = { "MAIN", "MIDI", "-", "-" },
     .subpages = {
         {
             .title = "TRACK",
-            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
+            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "MIDI",
+            .param_bank = { .params = { PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -23,10 +27,22 @@ static const ui_template_family_t g_ui_template_cfg_family = {
             .title = "-",
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_cfg_synth_family = {
+    .family_title = "CFG",
+    .nav_labels = { "MAIN", "MIDI", "-", "-" },
+    .subpages = {
+        { .title = "TRACK", .param_bank = { .params = {
+            PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_POLY_VOICES, PARAM_CFG_POLY_SPREAD } } },
+        { .title = "MIDI", .param_bank = { .params = {
+            PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -57,19 +73,19 @@ static const ui_template_family_t g_ui_template_cfg_slave_proxy_family = {
 
 static const ui_template_family_t g_ui_template_cfg_group_master_family = {
     .family_title = "CFG",
-    .nav_labels = { "MAIN", "GROUP", "-", "-" },
+    .nav_labels = { "MAIN", "MIDI", "GROUP", "-" },
     .subpages = {
         {
             .title = "TRACK",
-            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
+            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "MIDI",
+            .param_bank = { .params = { PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "GROUP",
             .param_bank = { .params = { PARAM_CFG_GROUP_SPREAD, PARAM_CFG_GROUP_SPREAD_KEYTRK, PARAM_CFG_GROUP_LINK, PARAM_CFG_GROUP_SEQ_LINK } },
-        },
-        {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -244,6 +260,11 @@ static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;
+    }
+
+    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+    {
+        return &g_ui_template_cfg_synth_family;
     }
 
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_CFG);

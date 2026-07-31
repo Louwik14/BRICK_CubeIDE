@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:31:6:synth_polyphony_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:56:9:synth_polyphony_get_render_voice_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:62:9:synth_polyphony_get_voice_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:68:6:synth_polyphony_set_spread	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:77:7:synth_polyphony_get_spread	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:82:7:synth_polyphony_get_voice_pan	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:98:9:synth_polyphony_note_on_from	20	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:93:9:synth_polyphony_note_on	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:152:9:synth_polyphony_note_off_from	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:147:9:synth_polyphony_note_off	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:180:9:synth_polyphony_release_source	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:206:9:synth_polyphony_release_all	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:230:6:synth_polyphony_all_notes_off	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:41:6:synth_polyphony_set_voice_count	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:245:9:synth_polyphony_voice_is_renderable	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/synth_polyphony.c:252:6:synth_polyphony_voice_release_complete	4	static

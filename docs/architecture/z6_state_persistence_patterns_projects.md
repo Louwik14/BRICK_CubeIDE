@@ -1,5 +1,16 @@
 # Z6 - State / Persistence / Patterns / Projects
 
+## Addendum 2026-07-31 - persistence COMP LAB finale
+
+- Le snapshot global Project/Pattern capture `MODEL`, `SIDECHAIN`, `AMT`,
+  `DELUGE SAT` et `BRICK PEAK/RMS`.
+- Les anciens IDs prototype de controle libre sont retires sans migration.
+
+## Compatibilité polyphonie
+
+`VOICES` et `SPREAD` réemploient deux tombstones legacy: `PARAM_COUNT`, les payloads
+et les versions projet/pattern restent inchangés.
+
 ## Addendum 2026-07-30 - MT-11 journal SD MONKEY TEST
 
 - `monkey_test_log` est un writer Test autonome et ne depend ni de `audio_test_csv` ni de ses buffers, formats ou lifecycle. Il reutilise FatFs, le montage partage et un client dedie `SD_ACCESS_CLIENT_DIAGNOSTIC_LOG`.
@@ -1130,6 +1141,15 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
   d'avoir reçu les notes round-robin de la cible; aucune track sans dépendance
   structurelle au paste n'est neutralisée.
 
+### Correction séparation persistant / temporaire
+
+- Le payload Track reste limité aux données éditables: configuration, sound/tone,
+  voice-group et séquence. Playhead, phase DIV, boundary courant, notes ARP,
+  commandes moteur, gates filtre/VCA et voix audio ne sont ni capturés ni restaurés.
+- La réapplication post-snapshot est limitée aux domaines persistants réellement
+  capturés (`COLORS`, `TONE`, `MOD`, `MIX`); les bases `PLAY` et l'action
+  `LOOPER PLAY` ne sont pas rejouées pendant le paste.
+
 ## Addendum 2026-07-30 - settings de velocite Hall low-cost
 
 - Le blob flash de calibration Hall low-cost passe en version 2 et occupe cinq flashwords (160 octets). Il ajoute `velocity_profile`, `velocity_mode` et `velocity_curve` au profil USER et aux bornes Hall deja persistants.
@@ -1141,3 +1161,26 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Le snapshot global live, donc Pattern et Project, capture/restaure les controles communs et caracteristiques du compresseur comparatif.
 - Les quatre IDs caracteristiques restent groupes dans le snapshot global.
 - La suppression du modele Daisy et de ses sept IDs ne porte aucune migration de projet prototype; Deluge et Brick conservent leurs parametres globaux.
+## Addendum 2026-07-30 - persistence reverb
+
+- Pattern/Project capturent `DAMP` et `SMEAR` comme globals via deux IDs tombstones existants. La cardinalite `PARAM_COUNT`, les IDs historiques et la taille des snapshots restent identiques.
+## Addendum 2026-07-30 - persistence des deux reverbs
+
+- Project/Pattern sauvegardent `MODEL` et les banques Mutable/Digital comme globals. Les IDs reposent sur des tombstones existants: format, cardinalite et taille des snapshots restent inchanges.
+## Addendum 2026-07-30 - retrait PAN Digital
+
+- PAN Digital n'est plus capture ni restaure; son ID tombstone redevient libre. MODEL et toutes les valeurs sonores Mutable/Digital restantes restent globales et persistantes sans changement de format.
+
+## Addendum 2026-07-30 - capacite banque Patch
+
+- La banque Patch indexee couvre 192 slots, de `P0000.B6P` a `P0191.B6P`.
+  Le format `B6PT`, les payloads P1/P2/P3/P4 et le checksum ne changent pas;
+  seul le domaine de slots accepte par `patch_v1` et `patch_sd_bank` est elargi.
+# Addendum 2026-07-30 - persistance MD etape 2
+
+- `track_tone_sound_state` capture `MODEL + P1..P8`; Pattern live, snapshots,
+  Patch, Kit, Project et Undo les transportent par leurs parcours existants.
+- Les versions SD prototype Pattern, Patch, Kit et Project passent a v2 afin
+  de refuser sans ambiguite les payloads anterieurs dont la structure TONE
+  n'inclut pas l'etat MD.
+- `PARAM_COUNT` reste inchange grace a la reutilisation de tombstones legacy.

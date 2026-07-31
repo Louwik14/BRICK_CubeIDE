@@ -25,6 +25,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
@@ -34,34 +35,12 @@
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
 
-#define BRICK6_DELUGE_OUTPUT_GAIN  (0.44157045f) /* -7.1 dB */
-#define BRICK6_WAVE_OUTPUT_GAIN    (0.42169650f) /* -7.5 dB */
-#define BRICK6_SAMPLER_OUTPUT_GAIN (0.51880004f) /* -5.7 dB */
-
-static void brick6_apply_output_gain_mono(float *buffer, uint32_t frames, float gain)
-{
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        buffer[i] *= gain;
-    }
-}
-
-static void brick6_apply_output_gain_stereo(float *left,
-                                            float *right,
-                                            uint32_t frames,
-                                            float gain)
-{
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        left[i] *= gain;
-        right[i] *= gain;
-    }
-}
-
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
     switch ((track_runtime_type_t)runtime_type)
     {
+        case TRACK_RUNTIME_TYPE_DRUM_MD:
+            return DRUM_MODEL_ID_MD;
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
             return DRUM_MODEL_ID_BD_ANALOG;
         default:
@@ -138,8 +117,6 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
                 memset(direct_l, 0, frames * sizeof(float));
                 memset(direct_r, 0, frames * sizeof(float));
                 brick6_sampler_runtime_render_ram_track(ctx, direct_l, direct_r, frames);
-                brick6_apply_output_gain_stereo(
-                    direct_l, direct_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN);
                 mixer_commit_external_stereo(ctx->mix_track_id, frames);
                 sampler_tracks++;
                 continue;
@@ -149,8 +126,6 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         memset(sampler_tmp_l, 0, frames * sizeof(float));
         memset(sampler_tmp_r, 0, frames * sizeof(float));
         brick6_sampler_runtime_render_track(ctx, sampler_tmp_l, sampler_tmp_r, frames);
-        brick6_apply_output_gain_stereo(
-            sampler_tmp_l, sampler_tmp_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN);
         mixer_submit_external_stereo(ctx->mix_track_id, sampler_tmp_l, sampler_tmp_r, frames);
         sampler_tracks++;
     }
@@ -208,6 +183,35 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             continue;
         }
 
+        const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count > 1U)
+        {
+            uint8_t published = 0U;
+            if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
+                continue;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            {
+                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
+                    continue;
+                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                brick6_braids_runtime_sync_voice(ctx->instance_id, instance);
+                if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
+                    memset(prism_tmp, 0, frames * sizeof(float));
+                const uint8_t running = mixer_process_external_poly_voice(
+                    ctx->mix_track_id, voice, prism_tmp, frames,
+                    synth_polyphony_get_voice_pan(track, voice));
+                published = 1U;
+                if (running == 0U)
+                    synth_polyphony_voice_release_complete(track, voice);
+            }
+            if (published != 0U)
+            {
+                mixer_commit_external_poly(ctx->mix_track_id, frames);
+                prism_tracks++;
+            }
+            continue;
+        }
+
         float *direct_mono = NULL;
         if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
         {
@@ -248,13 +252,50 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
             continue;
         }
 
+        const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count > 1U)
+        {
+            uint8_t published = 0U;
+            if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
+                continue;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            {
+                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
+                    continue;
+                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                brick6_wave_runtime_sync_voice(ctx->instance_id, instance);
+                if ((brick6_wave_runtime_prepare_block(instance, frames, 1U) != 0U)
+                        && (brick6_wave_runtime_render_instance(instance, wave_tmp, frames) != 0U))
+                {
+                    const uint8_t running = mixer_process_external_poly_voice(
+                        ctx->mix_track_id, voice, wave_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
+                    published = 1U;
+                    if (running == 0U)
+                        synth_polyphony_voice_release_complete(track, voice);
+                }
+            }
+            if (published != 0U)
+            {
+                mixer_commit_external_poly(ctx->mix_track_id, frames);
+                wave_tracks++;
+            }
+            continue;
+        }
+
+        if (brick6_wave_runtime_prepare_block(
+                ctx->instance_id,
+                frames,
+                mixer_track_vca_requires_source(ctx->mix_track_id)) == 0U)
+        {
+            continue;
+        }
+
         float *direct_mono = NULL;
         if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
         {
             if (brick6_wave_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
             {
-                brick6_apply_output_gain_mono(
-                    direct_mono, frames, BRICK6_WAVE_OUTPUT_GAIN);
                 mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 wave_tracks++;
             }
@@ -263,8 +304,6 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
 
         if (brick6_wave_runtime_render_instance(ctx->instance_id, wave_tmp, frames) != 0U)
         {
-            brick6_apply_output_gain_mono(
-                wave_tmp, frames, BRICK6_WAVE_OUTPUT_GAIN);
             mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);
             wave_tracks++;
         }
@@ -291,6 +330,37 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
             continue;
         }
 
+        const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count > 1U)
+        {
+            uint8_t published = 0U;
+            if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
+                continue;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            {
+                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
+                    continue;
+                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                brick6_deluge_runtime_sync_voice(ctx->instance_id, instance);
+                if ((brick6_deluge_runtime_prepare_block(instance, frames, 1U) != 0U)
+                        && (brick6_deluge_runtime_render_instance(instance, deluge_tmp, frames) != 0U))
+                {
+                    const uint8_t running = mixer_process_external_poly_voice(
+                        ctx->mix_track_id, voice, deluge_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
+                    published = 1U;
+                    if (running == 0U)
+                        synth_polyphony_voice_release_complete(track, voice);
+                }
+            }
+            if (published != 0U)
+            {
+                mixer_commit_external_poly(ctx->mix_track_id, frames);
+                deluge_tracks++;
+            }
+            continue;
+        }
+
         if (brick6_deluge_runtime_prepare_block(
                 ctx->instance_id,
                 frames,
@@ -304,8 +374,6 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
         {
             if (brick6_deluge_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
             {
-                brick6_apply_output_gain_mono(
-                    direct_mono, frames, BRICK6_DELUGE_OUTPUT_GAIN);
                 mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 deluge_tracks++;
             }
@@ -314,8 +382,6 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
 
         if (brick6_deluge_runtime_render_instance(ctx->instance_id, deluge_tmp, frames) != 0U)
         {
-            brick6_apply_output_gain_mono(
-                deluge_tmp, frames, BRICK6_DELUGE_OUTPUT_GAIN);
             mixer_submit_external_mono_native(ctx->mix_track_id, deluge_tmp, frames);
             deluge_tracks++;
         }
@@ -343,13 +409,62 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
             continue;
         }
 
-        brick6_stack_runtime_render_instance(
-            ctx->instance_id,
-            stack_tmp,
-            frames,
-            mixer_track_vca_requires_source(ctx->mix_track_id));
-        mixer_submit_external_mono_native(ctx->mix_track_id, stack_tmp, frames);
-        stack_tracks++;
+        const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count > 1U)
+        {
+            uint8_t published = 0U;
+            if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
+                continue;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            {
+                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
+                    continue;
+                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                brick6_stack_runtime_sync_voice(ctx->instance_id, instance);
+                if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) != 0U)
+                {
+                    const uint8_t running = mixer_process_external_poly_voice(
+                        ctx->mix_track_id, voice, stack_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
+                    published = 1U;
+                    if (running == 0U)
+                        synth_polyphony_voice_release_complete(track, voice);
+                }
+            }
+            if (published != 0U)
+            {
+                mixer_commit_external_poly(ctx->mix_track_id, frames);
+                stack_tracks++;
+            }
+            continue;
+        }
+
+        const uint8_t downstream_source_required =
+            mixer_track_vca_requires_source(ctx->mix_track_id);
+        float *direct_mono = NULL;
+        if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
+        {
+            if (brick6_stack_runtime_render_instance(
+                    ctx->instance_id,
+                    direct_mono,
+                    frames,
+                    downstream_source_required) != 0U)
+            {
+                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                stack_tracks++;
+            }
+            continue;
+        }
+
+        if (brick6_stack_runtime_render_instance(
+                ctx->instance_id,
+                stack_tmp,
+                frames,
+                downstream_source_required) != 0U)
+        {
+            mixer_submit_external_mono_native(ctx->mix_track_id, stack_tmp, frames);
+            stack_tracks++;
+        }
     }
 
     if (out_stack_tracks != NULL)
@@ -361,6 +476,7 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
 void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
+    synth_polyphony_init();
     fx_master_macro_init(48000.0f);
     metronome_runtime_init();
 }
@@ -381,7 +497,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
     g_runtime_track_enabled = synth_runtime_enabled;
 
-    mixer_external_inputs_clear();
     mod_lfo_v1_process_block(frames);
 
     if (synth_runtime_enabled != 0U)

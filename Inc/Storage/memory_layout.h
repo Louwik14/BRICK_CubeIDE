@@ -53,6 +53,8 @@
 
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")
+/* Bounded polyphonic DSP state; CPU-owned and directly accessed by audio IRQ. */
+#define AUDIO_STATE_D3 SEC_ATTR(".ram_d3_ctrl")
 
 /* UI / non real-time bulk buffers */
 #define UI_SDRAM SEC_ATTR(".sdram_ui") ALIGN32

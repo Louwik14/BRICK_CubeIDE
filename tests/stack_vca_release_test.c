@@ -52,20 +52,45 @@ int main(void)
         return 2;
     }
 
-    brick6_stack_runtime_render_instance(0U, block, FRAMES, 0U);
-    if (block_energy(block, FRAMES) != 0.0f)
+    if (brick6_stack_runtime_render_instance(0U, block, FRAMES, 0U) != 0U)
     {
         return 3;
     }
 
     brick6_stack_runtime_note_on(0U, 64U, 127U);
     brick6_stack_runtime_all_notes_off(0U);
-    brick6_stack_runtime_render_instance(0U, block, FRAMES, 1U);
-    if (block_energy(block, FRAMES) != 0.0f)
+    if (brick6_stack_runtime_render_instance(0U, block, FRAMES, 1U) != 0U)
     {
         return 4;
     }
 
-    puts("stack VCA release source lifetime: ok");
+    if (brick6_stack_runtime_submit_note_on(0U, 67U, 127U) == 0U)
+    {
+        return 5;
+    }
+    brick6_stack_runtime_cancel_note_state(0U);
+    brick6_stack_runtime_process_commands_from_audio();
+    if ((brick6_stack_runtime_get_voice(0U)->gate != 0U)
+            || (brick6_stack_runtime_get_voice(0U)->has_active_note != 0U))
+    {
+        return 6;
+    }
+    if (brick6_stack_runtime_render_instance(0U, block, FRAMES, 1U) != 0U)
+    {
+        return 7;
+    }
+
+    if (brick6_stack_runtime_submit_note_on(0U, 69U, 127U) == 0U)
+    {
+        return 8;
+    }
+    brick6_stack_runtime_process_commands_from_audio();
+    if ((brick6_stack_runtime_get_voice(0U)->gate == 0U)
+            || (brick6_stack_runtime_get_voice(0U)->has_active_note == 0U))
+    {
+        return 9;
+    }
+
+    puts("stack VCA release and paste note cancellation: ok");
     return 0;
 }

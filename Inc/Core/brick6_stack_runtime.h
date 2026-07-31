@@ -12,7 +12,8 @@
 extern "C" {
 #endif
 
-#define BRICK6_STACK_MAX_INSTANCES SEQ_TRACK_COUNT
+#define BRICK6_STACK_MAX_INSTANCES 8U
+#define BRICK6_STACK_VOICE_INSTANCE_COUNT (BRICK6_STACK_MAX_INSTANCES * 8U)
 #define BRICK6_STACK_SLOT_COUNT 3U
 #define BRICK6_STACK_RENDER_BLOCK_SIZE 24U
 
@@ -114,6 +115,7 @@ uint8_t brick6_stack_runtime_submit_note_on(uint8_t instance_id, uint8_t note, u
 uint8_t brick6_stack_runtime_submit_note_off(uint8_t instance_id, uint8_t note);
 uint8_t brick6_stack_runtime_submit_all_notes_off(uint8_t instance_id);
 uint8_t brick6_stack_runtime_submit_reset_instance(uint8_t instance_id);
+void brick6_stack_runtime_cancel_note_state(uint8_t instance_id);
 uint8_t brick6_stack_runtime_submit_slot_model(uint8_t instance_id, uint8_t slot, brick6_stack_model_t model);
 uint8_t brick6_stack_runtime_submit_slot_level(uint8_t instance_id, uint8_t slot, float level);
 uint8_t brick6_stack_runtime_submit_slot_tune(uint8_t instance_id, uint8_t slot, float semitones);
@@ -125,12 +127,13 @@ uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune
 uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled);
 void brick6_stack_runtime_process_commands_from_audio(void);
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id);
-void brick6_stack_runtime_render_instance(uint8_t instance_id,
-                                          float *out_mono,
-                                          uint32_t frames,
-                                          uint8_t downstream_source_required);
+uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
+                                             float *out_mono,
+                                             uint32_t frames,
+                                             uint8_t downstream_source_required);
 
 const brick6_stack_runtime_voice_t *brick6_stack_runtime_get_voice(uint8_t instance_id);
+void brick6_stack_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,63 @@
 # ARCHITECTURE_GLOBAL.md
 
+## Addendum 2026-07-31 - compresseur master finalise
+
+- Z1 conserve une unique autorite `COMP LAB` sur MAIN et ajoute un tap sidechain
+  logique `MIX/T1..T12`; le tap track est post-traitements/post-volume/post-mute
+  mais pre-pan et reste independant du routing MAIN.
+- Z3 reduit la surface globale a `MODEL/SIDECHAIN/AMT` plus deux memoires CHAR
+  distinctes Deluge/Brick; Z5 projette la CHAR du modele courant et Z6 persiste
+  les deux choix sans les ecraser lors d'un changement de modele.
+
+## Addendum 2026-07-31 - premier modele sonore MD `TRX-BD`
+
+- Z1 publie `TRX-BD` dans le moteur unique MD avec un renderer natif specialise;
+  les cinq autres modeles MD restent silencieux.
+- L'etat DSP MD partage un stockage union avec `BD_ANALOG`, sans execution ni
+  primitive Plaits dans le chemin MD.
+
+## Addendum 2026-07-31 - primitives DSP communes `DRUM / MD`
+
+- Z1 fournit des primitives MD autonomes et non publiees: phase Q32, sinus LUT
+  native, enveloppe decay, bruit par voix, HPF/LPF, clipping, mix et fondu de
+  retrigger.
+- Elles ne sont encore reliees a aucun modele, ne produisent aucun son et
+  n'introduisent aucune dependance Plaits, allocation ou acces SD.
+
+## Addendum 2026-07-30 - surface dynamique `DRUM / MD`
+
+- Z3 porte une autorite canonique par track `MODEL + P1..P8`, avec profils
+  `TRX-BD/TRX-SD/TRX-CH/EFM-BD/EFM-SD/EFM-CB`; les slots utilisent neuf
+  tombstones legacy contigus et ne changent pas `PARAM_COUNT`.
+- Z4 applique toujours le p-lock `MODEL` avant les slots MD du meme step.
+- Z5 resout labels et cardinalite depuis le profil courant; `MODEL` est
+  p-lockable mais exclu des destinations de modulation.
+- Z6 persiste cette surface dans les snapshots existants et invalide les
+  fichiers prototypes anterieurs par bump de version.
+
+## Addendum 2026-07-30 - integration du type `DRUM / MD`
+
+- Z2 remplace l'ancien type reserve `TRX BD` par l'identite unique `DRUM / MD`
+  sans changer son ordinal persiste ni creer une nouvelle autorite runtime.
+- Z1 route ce type vers un modele MD explicitement silencieux et conserve
+  `BD_ANALOG` et son rendu Plaits historique inchanges.
+- La surface `MODEL + P1..P8` reste reservee a l'etape 2 du plan MD.
+
+## Addendum 2026-07-30 - correction controles reverb et visualisation filtres
+
+- Z1 corrige la courbe DAMP Deluge et conserve les phases LFO lors des mises a jour block-rate; Z5 preserve la sous-page lors d'un changement de famille dynamique Mutable/Digital.
+- Z5 centralise aussi un widget de reponse HPF+LPF sur deux cellules pour les reverbs et delays, sans changer leurs deux autorites parametres.
+
+## Addendum 2026-07-30 - second modele reverb Digital
+
+- Z1 conserve une seule reverb SEND et un seul buffer de 32 768 samples, avec selection exclusive `MUTABLE/DIGITAL`; Digital porte fidelement la topologie Dattorro/Lexicon du Deluge transposee a 48 kHz.
+- Z3 memorise les banques specifiques par modele sans changer `PARAM_COUNT`; Z5 resout dynamiquement deux ou trois pages reverb; Z6 persiste modele, banques et pan Digital.
+
+## Addendum 2026-07-30 - reverb Mutable 48 kHz
+
+- Z1 conserve l'unique reverb SEND Mutable/RevB, avec damping tank separe des filtres wet et bypass CPU reel du smear AP1.
+- Z3 porte huit controles globaux persistants; Z5 les expose sur `REVERB 1/2`. Aucun autre effet ni autorite master n'est modifie.
+
 ## Addendum 2026-07-30 - prototype comparatif compresseur master
 
 - Z1 porte un slot dynamics master unique, post-retours et post-XFade Looper, avec selection exclusive `OFF/DELUGE/BRICK`.
@@ -161,7 +219,7 @@ Lit ce document si le sujet touche :
 - modulation LFO
 - coexistence global / track-aware / legacy
 - modèle paramétrique par track
-- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + DELUGE + MIDI simple + TRX BD reserve + BD Analog)
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Wave + Stack + DELUGE + MIDI simple + DRUM / MD silencieux + BD Analog)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
@@ -392,3 +450,17 @@ Documents conserves pour tracabilite uniquement:
   Z4 suspend uniquement la fermeture voice-group concernée, invalide par génération
   les événements scheduler périmés, purge notes/gates/lookahead aux deux frontières,
   puis reprend sans arrêter le transport ni les autres tracks.
+
+- Correction cause racine: Z4 conserve le playhead, le boundary courant et la phase
+  DIV pendant l'apply; Z1 ne migre plus de gate actif lors du rebind mono-track;
+  Z2/Z3 ne réappliquent que les domaines persistants capturés; les états ARP et les
+  commandes note moteur en attente sont annulés uniquement pour la fermeture
+  voice-group concernée.
+# Addendum 2026-07-31 - ownership des voix polyphoniques
+
+- Z2 porte l'origine `MANUAL/SEQUENCER` dans l'autorite d'allocation des voix;
+  Z4 libere au STOP uniquement les voix du sequenceur.
+- Les note-off de transition ciblent chaque instance et laissent Z1 terminer
+  les releases; aucun panic global ne coupe les notes manuelles encore tenues.
+- Z1 porte obligatoirement une enveloppe VCA par lane polyphonique; son passage
+  a `IDLE` acquitte la fin de release a Z2, sans dependre du VCA mono de track.

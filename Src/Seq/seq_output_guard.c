@@ -15,6 +15,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
@@ -120,12 +121,6 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         }
     }
 
-    for (uint8_t ch = 0U; ch < 16U; ++ch)
-    {
-        midi_all_sound_off(MIDI_DEST_BOTH, ch);
-        midi_all_notes_off(MIDI_DEST_BOTH, ch);
-    }
-
     if (send_transport_stop != 0U)
     {
         midi_stop(MIDI_DEST_BOTH);
@@ -145,6 +140,49 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
         if (resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
         {
+            continue;
+        }
+
+        const uint8_t poly_count = synth_polyphony_get_voice_count(track);
+        const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
+            && ((resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
+                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
+                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DELUGE)));
+        if (is_poly_synth != 0U)
+        {
+            synth_poly_release_t released[SYNTH_POLYPHONY_MAX_VOICES];
+            const uint8_t released_count =
+                synth_polyphony_release_source(track,
+                                               SYNTH_POLY_SOURCE_SEQUENCER,
+                                               released,
+                                               SYNTH_POLYPHONY_MAX_VOICES);
+            for (uint8_t i = 0U; i < released_count; ++i)
+            {
+                const uint8_t voice = released[i].voice;
+                const uint8_t note = released[i].note;
+                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                if (resolved.has_mix_target != 0U)
+                {
+                    mixer_track_poly_note_off(resolved.mix_track_id, voice, note);
+                }
+                if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
+                {
+                    brick6_braids_runtime_note_off(instance, note);
+                }
+                else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
+                {
+                    brick6_stack_runtime_note_off(instance, note);
+                }
+                else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+                {
+                    brick6_wave_runtime_note_off(instance, note);
+                }
+                else
+                {
+                    brick6_deluge_runtime_note_off(instance, note);
+                }
+            }
             continue;
         }
 

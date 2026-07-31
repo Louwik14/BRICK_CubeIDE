@@ -697,6 +697,8 @@ uint8_t undo_v2_param_is_undoable(param_id_t param_id)
         case PARAM_CFG_TRACK_TYPE:
         case PARAM_CFG_MIDI_CH:
         case PARAM_CFG_MIDI_SRC:
+        case PARAM_CFG_POLY_VOICES:
+        case PARAM_CFG_POLY_SPREAD:
         case PARAM_CFG_GROUP_SPREAD:
         case PARAM_CFG_GROUP_LINK:
         case PARAM_CFG_GROUP_SPREAD_KEYTRK:

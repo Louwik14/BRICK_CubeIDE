@@ -144,8 +144,13 @@ static void ui_template_page_sync_resolved_family(ui_template_page_state_t *stat
 
     if (state->resolved_family != family)
     {
+        const uint8_t previous_subpage = state->active_subpage;
         state->resolved_family = family;
-        state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
+        state->active_subpage = ((state->preserve_subpage_on_family_change != 0U)
+                && (previous_subpage < 4U)
+                && (ui_template_page_is_subpage_selectable(state, previous_subpage) != 0U))
+                ? previous_subpage
+                : ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
         ui_template_page_remember_if_active(state);
     }
 }

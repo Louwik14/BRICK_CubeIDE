@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PATCH_SD_FILE_MAGIC   0x54503642UL /* B6PT */
-#define PATCH_SD_FILE_VERSION 1U
+#define PATCH_SD_FILE_VERSION 2U
 
 typedef enum
 {

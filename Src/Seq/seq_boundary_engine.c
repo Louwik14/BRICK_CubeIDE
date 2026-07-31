@@ -67,6 +67,41 @@ static uint8_t seq_boundary_engine_find_next_lock(const seq_boundary_engine_step
     return 0U;
 }
 
+static uint8_t seq_boundary_engine_set_is_seq_linked(uint8_t set_id)
+{
+    return (uint8_t)((set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+                     || (set_id == (uint8_t)SEQ_PLOCK_SET_COLORS)
+                     || (set_id == (uint8_t)SEQ_PLOCK_SET_MOD)
+                     || (set_id == (uint8_t)SEQ_PLOCK_SET_MIX));
+}
+
+static void seq_boundary_engine_prioritize_md_model(seq_track_id_t target_track,
+                                                    seq_boundary_engine_step_lock_t *locks,
+                                                    uint8_t count)
+{
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        param_id_t param = PARAM_COUNT;
+        if ((locks[i].set_id != (uint8_t)SEQ_PLOCK_SET_TONE)
+                || (seq_param_iface_slot_to_param(target_track,
+                                                  locks[i].set_id,
+                                                  locks[i].target_slot,
+                                                  &param) == 0U)
+                || (param != PARAM_DRUM_MD_MODEL))
+        {
+            continue;
+        }
+
+        const seq_boundary_engine_step_lock_t model_lock = locks[i];
+        for (uint8_t move = i; move > 0U; --move)
+        {
+            locks[move] = locks[move - 1U];
+        }
+        locks[0] = model_lock;
+        return;
+    }
+}
+
 static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t target_track,
                                                           seq_track_id_t source_track,
                                                           seq_step_id_t source_step,
@@ -104,12 +139,28 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t target_
     for (uint8_t i = 0U; i < entry_count; ++i)
     {
         const seq_plock_entry_t *const entry = &entries[i];
-        if (entry->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+        if (seq_boundary_engine_set_is_seq_linked(entry->set_id) == 0U)
         {
             continue;
         }
 
-        const seq_param_slot_t target_slot = entry->param_slot;
+        seq_param_slot_t target_slot = entry->param_slot;
+        if (linked != 0U)
+        {
+            param_id_t source_param = PARAM_COUNT;
+            if ((seq_param_iface_slot_to_param(source_track,
+                                               entry->set_id,
+                                               entry->param_slot,
+                                               &source_param) == 0U)
+                    || (seq_param_iface_param_to_slot(target_track,
+                                                     entry->set_id,
+                                                     source_param,
+                                                     &target_slot) == 0U))
+            {
+                continue;
+            }
+        }
+
         if (seq_param_iface_slot_is_supported(target_track, entry->set_id, target_slot) == 0U)
         {
             continue;
@@ -133,6 +184,7 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t target_
         count++;
     }
 
+    seq_boundary_engine_prioritize_md_model(target_track, out_locks, count);
     *out_count = count;
     return 1U;
 }

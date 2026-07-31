@@ -47,6 +47,7 @@ typedef enum
     UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF,
     UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE,
     UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP,
+    UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP,
     UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK,
     UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE,
     UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE,
@@ -100,6 +101,7 @@ typedef struct
     const ui_template_family_t *resolved_family;
     uint8_t active_subpage;
     uint8_t has_visited;
+    uint8_t preserve_subpage_on_family_change;
 } ui_template_page_state_t;
 
 void ui_template_page_enter(void);

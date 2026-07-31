@@ -18,7 +18,7 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_MASTER_FX };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
-        UI_TRACK_TYPE_DRUM_TRX_BD,
+        UI_TRACK_TYPE_DRUM_MD,
         UI_TRACK_TYPE_DRUM_BD_ANALOG
     };
 
@@ -584,8 +584,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
 
-        case UI_TRACK_TYPE_DRUM_TRX_BD:
-            return "TRX BD";
+        case UI_TRACK_TYPE_DRUM_MD:
+            return "MD";
         case UI_TRACK_TYPE_DRUM_BD_ANALOG:
             return "BD Analog";
         case UI_TRACK_TYPE_MIDI:
@@ -631,8 +631,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
 
-        case UI_TRACK_TYPE_DRUM_TRX_BD:
-            return "TBD";
+        case UI_TRACK_TYPE_DRUM_MD:
+            return "MD";
         case UI_TRACK_TYPE_DRUM_BD_ANALOG:
             return "BDA";
         case UI_TRACK_TYPE_MIDI:

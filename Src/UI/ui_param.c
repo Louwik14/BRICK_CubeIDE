@@ -1402,7 +1402,9 @@ static uint8_t ui_param_group_link_param_is_allowed(param_id_t param, const para
             || (param == PARAM_CFG_GROUP_SPREAD_KEYTRK)
             || (param == PARAM_CFG_GROUP_SEQ_LINK)
             || (param == PARAM_CFG_MIDI_CH)
-            || (param == PARAM_CFG_MIDI_SRC))
+            || (param == PARAM_CFG_MIDI_SRC)
+            || (param == PARAM_CFG_POLY_VOICES)
+            || (param == PARAM_CFG_POLY_SPREAD))
     {
         return 0U;
     }

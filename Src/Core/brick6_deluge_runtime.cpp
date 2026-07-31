@@ -16,6 +16,7 @@
 #define DELUGE_BASE_C4_INC        23409859UL
 #define DELUGE_OUTPUT_SCALE       (1.0f / 2147483648.0f)
 #define DELUGE_OUTPUT_TRIM        0.45f
+#define BRICK6_DELUGE_OUTPUT_GAIN  0.44157045f
 
 typedef struct
 {
@@ -43,6 +44,8 @@ typedef struct
 
 static AUDIO_HOT brick6_deluge_runtime_instance_t
     g_deluge_instances[BRICK6_DELUGE_MAX_INSTANCES];
+static SEQ_STATE_D2 brick6_deluge_runtime_instance_t
+    g_deluge_poly_instances[BRICK6_DELUGE_VOICE_INSTANCE_COUNT - BRICK6_DELUGE_MAX_INSTANCES];
 static AUDIO_HOT int32_t g_deluge_render_q31[AUDIO_BLOCK_SIZE];
 
 static const uint16_t k_semitone_ratio_q15[12] = {
@@ -52,7 +55,18 @@ static const uint16_t k_semitone_ratio_q15[12] = {
 
 static uint8_t instance_valid(uint8_t instance_id)
 {
-    return (instance_id < (uint8_t)BRICK6_DELUGE_MAX_INSTANCES) ? 1U : 0U;
+    return (instance_id < (uint8_t)BRICK6_DELUGE_VOICE_INSTANCE_COUNT) ? 1U : 0U;
+}
+
+static brick6_deluge_runtime_instance_t *instance_mut(uint8_t instance_id)
+{
+    if (instance_valid(instance_id) == 0U)
+    {
+        return NULL;
+    }
+    return (instance_id < BRICK6_DELUGE_MAX_INSTANCES)
+        ? &g_deluge_instances[instance_id]
+        : &g_deluge_poly_instances[instance_id - BRICK6_DELUGE_MAX_INSTANCES];
 }
 
 static float clampf(float value, float lo, float hi)
@@ -228,7 +242,7 @@ void brick6_deluge_runtime_reset_instance(uint8_t instance_id)
         return;
     }
 
-    brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+    brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
     memset(instance, 0, sizeof(*instance));
     instance->active_note = DELUGE_DEFAULT_NOTE;
     instance->model = (uint8_t)BRICK6_DELUGE_MODEL_SQUARE;
@@ -247,10 +261,31 @@ void brick6_deluge_runtime_reset_instance(uint8_t instance_id)
 
 void brick6_deluge_runtime_init(void)
 {
-    for (uint8_t i = 0U; i < (uint8_t)BRICK6_DELUGE_MAX_INSTANCES; ++i)
+    for (uint8_t i = 0U; i < (uint8_t)BRICK6_DELUGE_VOICE_INSTANCE_COUNT; ++i)
     {
         brick6_deluge_runtime_reset_instance(i);
     }
+}
+
+void brick6_deluge_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance)
+{
+    brick6_deluge_runtime_instance_t *const src = instance_mut(track_instance);
+    brick6_deluge_runtime_instance_t *const dst = instance_mut(voice_instance);
+    if ((src == NULL) || (dst == NULL) || (src == dst))
+    {
+        return;
+    }
+    dst->retrig = src->retrig;
+    dst->model = src->model;
+    dst->oscillator_type = src->oscillator_type;
+    dst->level_target = src->level_target;
+    dst->tune_semitones = src->tune_semitones;
+    dst->fine_cents = src->fine_cents;
+    dst->width_value = src->width_value;
+    dst->width_is_manual = src->width_is_manual;
+    dst->phase_degrees = src->phase_degrees;
+    dst->pitch_dirty = 1U;
+    update_native_pulse_width(dst);
 }
 
 void brick6_deluge_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity)
@@ -260,7 +295,7 @@ void brick6_deluge_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t ve
         return;
     }
 
-    brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+    brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
     if (instance->initialized == 0U)
     {
         brick6_deluge_runtime_reset_instance(instance_id);
@@ -283,9 +318,9 @@ void brick6_deluge_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t ve
 void brick6_deluge_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
     if ((instance_valid(instance_id) != 0U)
-            && (g_deluge_instances[instance_id].active_note == note))
+            && (instance_mut(instance_id)->active_note == note))
     {
-        g_deluge_instances[instance_id].gate = 0U;
+        instance_mut(instance_id)->gate = 0U;
     }
 }
 
@@ -293,8 +328,8 @@ void brick6_deluge_runtime_all_notes_off(uint8_t instance_id)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        g_deluge_instances[instance_id].gate = 0U;
-        g_deluge_instances[instance_id].velocity = 0.0f;
+        instance_mut(instance_id)->gate = 0U;
+        instance_mut(instance_id)->velocity = 0.0f;
     }
 }
 
@@ -308,7 +343,7 @@ void brick6_deluge_runtime_set_model(uint8_t instance_id, brick6_deluge_model_t 
     {
         model = BRICK6_DELUGE_MODEL_SQUARE;
     }
-    brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+    brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
     if (instance->model != (uint8_t)model)
     {
         const uint8_t was_square =
@@ -334,7 +369,7 @@ void brick6_deluge_runtime_set_level(uint8_t instance_id, float level)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
         instance->level_target = clampf(level, 0.0f, 1.0f);
         if (instance->velocity <= 0.0f)
         {
@@ -347,7 +382,7 @@ void brick6_deluge_runtime_set_tune(uint8_t instance_id, float semitones)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
         const float clamped = clampf(semitones, -48.0f, 48.0f);
         if (instance->tune_semitones != clamped)
         {
@@ -361,7 +396,7 @@ void brick6_deluge_runtime_set_fine(uint8_t instance_id, float cents)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
         const float clamped = clampf(cents, -100.0f, 100.0f);
         if (instance->fine_cents != clamped)
         {
@@ -375,7 +410,7 @@ void brick6_deluge_runtime_set_width(uint8_t instance_id, float value)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
         const float clamped = (instance->model == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE)
             ? clampf(value, 0.0f, 1.0f)
             : clampf(value, -1.0f, 1.0f);
@@ -392,7 +427,7 @@ void brick6_deluge_runtime_set_width_modulated(uint8_t instance_id, float value)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
         instance->width_value = (instance->model == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE)
             ? clampf(value, 0.0f, 1.0f)
             : clampf(value, -1.0f, 1.0f);
@@ -405,7 +440,7 @@ void brick6_deluge_runtime_set_phase(uint8_t instance_id, float degrees)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        g_deluge_instances[instance_id].phase_degrees = clampf(degrees, 0.0f, 360.0f);
+        instance_mut(instance_id)->phase_degrees = clampf(degrees, 0.0f, 360.0f);
     }
 }
 
@@ -413,7 +448,7 @@ void brick6_deluge_runtime_set_retrig(uint8_t instance_id, uint8_t enabled)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        g_deluge_instances[instance_id].retrig = (enabled != 0U) ? 1U : 0U;
+        instance_mut(instance_id)->retrig = (enabled != 0U) ? 1U : 0U;
     }
 }
 
@@ -427,7 +462,7 @@ uint8_t brick6_deluge_runtime_prepare_block(uint8_t instance_id,
         return 0U;
     }
 
-    brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+    brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
     if (instance->initialized == 0U)
     {
         return 0U;
@@ -471,7 +506,7 @@ uint8_t brick6_deluge_runtime_render_instance(uint8_t instance_id, float *out_mo
         return 0U;
     }
 
-    brick6_deluge_runtime_instance_t *const instance = &g_deluge_instances[instance_id];
+    brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
     if (instance->initialized == 0U)
     {
         return 0U;
@@ -524,8 +559,9 @@ uint8_t brick6_deluge_runtime_render_instance(uint8_t instance_id, float *out_mo
     {
         for (uint32_t i = 0U; i < frames; ++i)
         {
-            out_mono[i] = (float)g_deluge_render_q31[i] * DELUGE_OUTPUT_SCALE
+            const float rendered = (float)g_deluge_render_q31[i] * DELUGE_OUTPUT_SCALE
                 * level * velocity_level;
+            out_mono[i] = rendered * BRICK6_DELUGE_OUTPUT_GAIN;
         }
     }
     else
@@ -534,8 +570,9 @@ uint8_t brick6_deluge_runtime_render_instance(uint8_t instance_id, float *out_mo
         for (uint32_t i = 0U; i < frames; ++i)
         {
             level += level_increment;
-            out_mono[i] = (float)g_deluge_render_q31[i] * DELUGE_OUTPUT_SCALE
+            const float rendered = (float)g_deluge_render_q31[i] * DELUGE_OUTPUT_SCALE
                 * level * velocity_level;
+            out_mono[i] = rendered * BRICK6_DELUGE_OUTPUT_GAIN;
         }
     }
     instance->level_current = instance->level_target;

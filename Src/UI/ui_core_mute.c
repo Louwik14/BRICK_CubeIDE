@@ -564,13 +564,6 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if (((ev->type == UI_EVENT_HALL_PRESS) || (ev->type == UI_EVENT_HALL_RELEASE))
-        && (ev->id < HALL_UI_LANE_COUNT)
-        && (*io_shift_down != 0U))
-    {
-        return 0U;
-    }
-
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_TRACK_COUNT))
     {
         if (suppress_hall_note != 0)

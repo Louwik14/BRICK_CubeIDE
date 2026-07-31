@@ -15,6 +15,7 @@
 #include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -529,7 +530,28 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         mod_lfo_v1_note_release(track);
     }
 
-    if (resolved.has_filter_target != 0U)
+    const uint8_t poly_count = synth_polyphony_get_voice_count(track);
+    const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
+        && ((resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
+            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
+            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DELUGE)));
+    const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
+        : ((is_note_on != 0U)
+               ? synth_polyphony_note_on_from(track, note, SYNTH_POLY_SOURCE_SEQUENCER)
+               : synth_polyphony_note_off_from(track, note, SYNTH_POLY_SOURCE_SEQUENCER));
+    const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
+        ? resolved.descriptor.instance_id : SYNTH_POLYPHONY_INSTANCE(track, voice);
+
+    if ((is_poly_synth != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE)
+            && (resolved.has_mix_target != 0U))
+    {
+        if (is_note_on != 0U)
+            mixer_track_poly_note_on(resolved.mix_track_id, voice, note, velocity);
+        else
+            mixer_track_poly_note_off(resolved.mix_track_id, voice, note);
+    }
+    else if (resolved.has_filter_target != 0U)
     {
         if (is_note_on != 0U)
         {
@@ -540,7 +562,8 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             mixer_track_filter_note_off(resolved.filter_track_id, note);
         }
     }
-    if ((resolved.supports_vca_gate != 0U) && (resolved.has_mix_target != 0U))
+    if ((is_poly_synth == 0U) && (resolved.supports_vca_gate != 0U)
+            && (resolved.has_mix_target != 0U))
     {
         if (is_note_on != 0U)
         {
@@ -567,44 +590,48 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     {
         if (is_note_on != 0U)
         {
-            brick6_braids_runtime_note_on(resolved.descriptor.instance_id, (float)note, (float)velocity / 127.0f);
+            brick6_braids_runtime_sync_voice(resolved.descriptor.instance_id, instance);
+            brick6_braids_runtime_note_on(instance, (float)note, (float)velocity / 127.0f);
         }
         else
         {
-            brick6_braids_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_braids_runtime_note_off(instance, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
     {
         if (is_note_on != 0U)
         {
-            brick6_stack_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+            brick6_stack_runtime_sync_voice(resolved.descriptor.instance_id, instance);
+            brick6_stack_runtime_note_on(instance, note, velocity);
         }
         else
         {
-            brick6_stack_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_stack_runtime_note_off(instance, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
     {
         if (is_note_on != 0U)
         {
-            brick6_wave_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+            brick6_wave_runtime_sync_voice(resolved.descriptor.instance_id, instance);
+            brick6_wave_runtime_note_on(instance, note, velocity);
         }
         else
         {
-            brick6_wave_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_wave_runtime_note_off(instance, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DELUGE)
     {
         if (is_note_on != 0U)
         {
-            brick6_deluge_runtime_note_on(resolved.descriptor.instance_id, note, velocity);
+            brick6_deluge_runtime_sync_voice(resolved.descriptor.instance_id, instance);
+            brick6_deluge_runtime_note_on(instance, note, velocity);
         }
         else
         {
-            brick6_deluge_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_deluge_runtime_note_off(instance, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)

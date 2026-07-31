@@ -2,6 +2,7 @@
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
+#include "Audio/md_model.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -237,6 +238,14 @@ static uint8_t mod_destination_is_direct_drum(param_id_t dest)
         case PARAM_DRUM_TRX_BD_DECAY:
         case PARAM_DRUM_TRX_BD_HARMONICS:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
+        case PARAM_DRUM_MD_P1:
+        case PARAM_DRUM_MD_P2:
+        case PARAM_DRUM_MD_P3:
+        case PARAM_DRUM_MD_P4:
+        case PARAM_DRUM_MD_P5:
+        case PARAM_DRUM_MD_P6:
+        case PARAM_DRUM_MD_P7:
+        case PARAM_DRUM_MD_P8:
             return 1U;
         default:
             return 0U;
@@ -823,13 +832,25 @@ static uint8_t mod_destination_apply_drum_rt(uint8_t track,
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
+            || ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
+                && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD)))
     {
         return 0U;
     }
 
     switch (dest)
     {
+        case PARAM_DRUM_MD_P1:
+        case PARAM_DRUM_MD_P2:
+        case PARAM_DRUM_MD_P3:
+        case PARAM_DRUM_MD_P4:
+        case PARAM_DRUM_MD_P5:
+        case PARAM_DRUM_MD_P6:
+        case PARAM_DRUM_MD_P7:
+        case PARAM_DRUM_MD_P8:
+            return drum_synth_set_param_for_instance(ctx->instance_id,
+                                                     dest,
+                                                     mod_destination_clampf(value, 0.0f, 127.0f));
         case PARAM_DRUM_TRX_BD_PITCH:
             return drum_synth_set_param_for_instance(ctx->instance_id,
                                                      dest,
@@ -996,11 +1017,24 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 || (dest == PARAM_SAMPLER_SAMPLE)
                 || (dest == PARAM_SAMPLER_CLIP_SEARCH)
                 || ((dest >= PARAM_MASTER_FX1_TYPE) && (dest <= PARAM_MASTER_FX4_B))
-                || (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
+                || (dest == PARAM_DRUM_MD_MODEL)
+                || (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_MD)
                     && (dest >= PARAM_DRUM_TRX_BD_PITCH)
                     && (dest <= PARAM_DRUM_TRX_BD_DRIVE)))
         {
             return 0U;
+        }
+        if (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_MD)
+                && (dest >= PARAM_DRUM_MD_P1)
+                && (dest <= PARAM_DRUM_MD_P8))
+        {
+            const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
+            if (tone == NULL)
+            {
+                return 0U;
+            }
+            const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(tone->md.model));
+            return (uint8_t)((uint8_t)(dest - PARAM_DRUM_MD_P1) < profile->slot_count);
         }
         if ((dest == PARAM_PRISM_EDIT)
                 || (dest == PARAM_PRISM_FINE)

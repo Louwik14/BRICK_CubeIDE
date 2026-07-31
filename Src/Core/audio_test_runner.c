@@ -59,7 +59,7 @@ typedef enum
     TEST_ENGINE_DELUGE,
     TEST_ENGINE_WAVE,
     TEST_ENGINE_SAMPLER,
-    TEST_ENGINE_DRUM_TRX,
+    TEST_ENGINE_DRUM_MD,
     TEST_ENGINE_DRUM_ANALOG
 } test_engine_t;
 
@@ -415,14 +415,14 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
         return;
     }
     local = (uint16_t)(local - 3U);
-    out->engine = (local < 3U) ? TEST_ENGINE_DRUM_TRX
+    out->engine = (local < 3U) ? TEST_ENGINE_DRUM_MD
                                : TEST_ENGINE_DRUM_ANALOG;
     out->model = (local < 3U) ? 0U : 1U;
     out->model_key = (uint8_t)(60U + out->model);
     out->notes[0] = notes[local % 3U];
     out->sound_type = TEST_SOUND_PERCUSSIVE;
     (void)snprintf(out->name, sizeof(out->name), "%s_N%u",
-                   (local < 3U) ? "DRUM_TRX" : "DRUM_ANALOG",
+                   (local < 3U) ? "DRUM_MD" : "DRUM_ANALOG",
                    (unsigned)out->notes[0]);
     (void)snprintf(out->sources, sizeof(out->sources), "STRIKE");
 }
@@ -593,9 +593,9 @@ static uint8_t engine_family_type(test_engine_t engine,
             *family = UI_TRACK_FAMILY_SAMPLER;
             *type = UI_TRACK_TYPE_RAM;
             break;
-        case TEST_ENGINE_DRUM_TRX:
+        case TEST_ENGINE_DRUM_MD:
             *family = UI_TRACK_FAMILY_DRUM;
-            *type = UI_TRACK_TYPE_DRUM_TRX_BD;
+            *type = UI_TRACK_TYPE_DRUM_MD;
             break;
         case TEST_ENGINE_DRUM_ANALOG:
             *family = UI_TRACK_FAMILY_DRUM;
@@ -765,7 +765,7 @@ static uint8_t configure_current(void)
     param_set(PARAM_MIX_REVERB_WET, g_runner.current.reverb_mix);
     param_set(PARAM_MIX_REVERB_SIZE, g_runner.current.reverb_size);
     param_set(PARAM_MIX_REVERB_DECAY, g_runner.current.reverb_decay);
-    param_set(PARAM_MIX_REVERB_LPF, g_runner.current.reverb_damping);
+    param_set(PARAM_MIX_REVERB_DAMP, g_runner.current.reverb_damping);
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
     set_track_param(UI_TRACK_COUNT - 1U, PARAM_MASTER_FX1_TYPE,
                     g_runner.current.master_fx ? 1.0f : 0.0f);
@@ -898,7 +898,7 @@ static const char *test_engine_name(test_engine_t engine)
         case TEST_ENGINE_DELUGE: return "DELUGE";
         case TEST_ENGINE_WAVE: return "WAVE";
         case TEST_ENGINE_SAMPLER: return "SAMPLER";
-        case TEST_ENGINE_DRUM_TRX: return "DRUM";
+        case TEST_ENGINE_DRUM_MD: return "DRUM";
         case TEST_ENGINE_DRUM_ANALOG: return "DRUM";
         default: return "UNKNOWN";
     }
@@ -944,7 +944,7 @@ static void model_identity(uint8_t key, test_engine_t *engine,
     }
     else
     {
-        *engine = (key == 60U) ? TEST_ENGINE_DRUM_TRX
+        *engine = (key == 60U) ? TEST_ENGINE_DRUM_MD
                                : TEST_ENGINE_DRUM_ANALOG;
         *model = (uint8_t)(key - 60U);
         *sound_type = "PERCUSSIVE";

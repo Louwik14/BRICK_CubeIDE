@@ -1,5 +1,17 @@
 # Embedded Audio Engine - Product Overview
 
+Les tracks synth Prism, Stack, Wave et DELUGE proposent 1 à 8 voix internes avec
+moteur, filtre/keytrack, enveloppes VCA/filtre et pan indépendants par voix.
+
+## Banque Patch
+
+La banque SD Patch accepte 192 fichiers indexes, de
+`BRICK/PATCH/P0000.B6P` a `BRICK/PATCH/P0191.B6P`.
+
+## Reverb SEND
+
+La reverb globale propose deux modeles exclusifs `MUTABLE` et `DIGITAL`. Les pages affichent uniquement les controles effectifs du modele; `LVL=0` reste un hard-off DSP. Les couples HPF/LPF des reverbs et delays partagent une courbe de reponse large tout en restant editables separement.
+
 ## Diagnostic AUDIO TEST 2
 
 Les builds Debug/Test exposent `Settings > Test > Audio 2`, un programme
@@ -194,7 +206,7 @@ Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'imp
 - contextual UI based on active track family/type/runtime
 - track-aware page exposure
 - hall-based interaction model
-- keyboard / arp / pattern / mute workflows
+- keyboard / arp / pattern / mute workflows; in QUICK MUTE, track keys mute/unmute directly even while SHIFT remains held
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches plus filter `KeyTrk`; retrigger defaults to `ON`/hard.
@@ -325,7 +337,27 @@ ATTACK/SUSTAIN ou ATTACK/STRIKE, trois repetitions des sons aleatoires, et une
 recommandation indicative par modele, qui n'est pas appliquee au runtime.
 L'alignement produit utilise uniquement des gains fixes par moteur avant le
 filtre et les traitements de piste: PRISM `0 dB`, DELUGE `-7,1 dB`, WAVE
-`-7,5 dB` et SAMPLER `-5,7 dB`. STACK et DRUM restent sans correction.
+`-7,5 dB`. SAMPLER (RAM, streaming et slicing/looping), STACK et DRUM restent
+sans correction.
 ## Prototype compresseur comparatif
 
-`MIX 3/3` permet de comparer sur le bus MAIN les modeles `OFF`, `DELUGE` et `BRICK`, avec controles communs de seuil, ratio, enveloppe, makeup manuel, mix et sidechain HPF. Deluge expose sa saturation; Brick expose le detecteur PEAK/RMS et le soft knee.
+`MIX 3/3` expose le compresseur master final: `MODEL OFF/DELUGE/BRICK`,
+`SIDECHAIN MIX/T1..T12`, `AMT 0..100` et `CHAR`. Deluge memorise SAT
+OFF/ON; Brick memorise PEAK/RMS. Les profils dynamiques sont fixes et AMT
+pilote seulement leur seuil et un makeup leger borne.
+# Addendum 2026-07-30 - DRUM / MD
+
+- La famille Drum propose maintenant `MD` et `BD Analog`. `MD` est integre au
+  routage mais reste volontairement silencieux avant les etapes DSP suivantes;
+  `BD Analog` conserve son comportement actuel.
+# Addendum 2026-07-30 - selection des modeles DRUM / MD
+
+- `DRUM / MD` propose maintenant `TRX-BD`, `TRX-SD`, `TRX-CH`, `EFM-BD`,
+  `EFM-SD` et `EFM-CB` via `MODEL`, avec des controles TONE nommes
+  dynamiquement. Cette etape reste volontairement silencieuse.
+
+## Addendum 2026-07-31 - TRX-BD jouable
+
+- Le modele `DRUM / MD > TRX-BD` produit maintenant un kick natif controle par
+  `PTCH DEC RAMP RDEC STRT NOIS HARM CLIP`. Les autres modeles MD restent
+  silencieux jusqu'aux etapes suivantes; `BD Analog` reste inchange.

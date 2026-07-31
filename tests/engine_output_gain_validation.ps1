@@ -1,18 +1,28 @@
 $ErrorActionPreference = 'Stop'
 
-$runtimePath = Join-Path $PSScriptRoot '..\Src\Core\brick6_audio_runtime.c'
-$source = Get-Content -LiteralPath $runtimePath -Raw
-
 $expected = [ordered]@{
-    BRICK6_DELUGE_OUTPUT_GAIN  = @{ Gain = 0.44157045; Db = -7.1 }
-    BRICK6_WAVE_OUTPUT_GAIN    = @{ Gain = 0.42169650; Db = -7.5 }
-    BRICK6_SAMPLER_OUTPUT_GAIN = @{ Gain = 0.51880004; Db = -5.7 }
+    BRICK6_DELUGE_OUTPUT_GAIN  = @{
+        Gain = 0.44157045
+        Db = -7.1
+        Path = '..\Src\Core\brick6_deluge_runtime.cpp'
+        Application = 'out_mono[i] = rendered * BRICK6_DELUGE_OUTPUT_GAIN'
+        UseCount = 3
+    }
+    BRICK6_WAVE_OUTPUT_GAIN    = @{
+        Gain = 0.42169650
+        Db = -7.5
+        Path = '..\Src\Core\brick6_wave_runtime.c'
+        Application = 'out_mono[frame] = rendered * BRICK6_WAVE_OUTPUT_GAIN'
+        UseCount = 2
+    }
 }
 
 foreach ($entry in $expected.GetEnumerator()) {
+    $runtimePath = Join-Path $PSScriptRoot $entry.Value.Path
+    $source = Get-Content -LiteralPath $runtimePath -Raw
     $match = [regex]::Match(
         $source,
-        ('#define\s+{0}\s+\(([0-9.]+)f\)' -f [regex]::Escape($entry.Key)))
+        ('#define\s+{0}\s+([0-9.]+)f' -f [regex]::Escape($entry.Key)))
     if (-not $match.Success) {
         throw "Missing precalculated gain $($entry.Key)"
     }
@@ -29,38 +39,22 @@ foreach ($entry in $expected.GetEnumerator()) {
     if (($gain -gt 1.0) -or (($gain * 1.0) -ge 1.0)) {
         throw "Full-scale input clips for $($entry.Key)"
     }
-}
-
-if ($source -match 'powf\s*\(') {
-    throw 'powf must not be used by the audio runtime'
-}
-
-$requiredApplications = @(
-    'direct_l, direct_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN',
-    'sampler_tmp_l, sampler_tmp_r, frames, BRICK6_SAMPLER_OUTPUT_GAIN',
-    'direct_mono, frames, BRICK6_WAVE_OUTPUT_GAIN',
-    'wave_tmp, frames, BRICK6_WAVE_OUTPUT_GAIN',
-    'direct_mono, frames, BRICK6_DELUGE_OUTPUT_GAIN',
-    'deluge_tmp, frames, BRICK6_DELUGE_OUTPUT_GAIN'
-)
-foreach ($application in $requiredApplications) {
-    if (-not $source.Contains($application)) {
-        throw "Missing output-gain application: $application"
+    if (-not $source.Contains($entry.Value.Application)) {
+        throw "Missing fused output-gain application: $($entry.Value.Application)"
     }
-}
-foreach ($entry in $expected.GetEnumerator()) {
     $useCount = [regex]::Matches($source, ('\b' + $entry.Key + '\b')).Count
-    if ($useCount -ne 3) {
+    if ($useCount -ne $entry.Value.UseCount) {
         throw "Unexpected application count for $($entry.Key): $useCount"
     }
 }
 
-foreach ($unchanged in 'prism_tmp', 'stack_tmp', 'drum_tmp') {
-    $forbiddenPattern = 'brick6_apply_output_gain_(?:mono|stereo)\s*\([^;]*' `
-        + [regex]::Escape($unchanged)
-    if ($source -match $forbiddenPattern) {
-        throw "Forbidden output correction applied to $unchanged"
-    }
+$audioRuntimePath = Join-Path $PSScriptRoot '..\Src\Core\brick6_audio_runtime.c'
+$audioRuntimeSource = Get-Content -LiteralPath $audioRuntimePath -Raw
+if ($audioRuntimeSource -match 'brick6_apply_output_gain_(?:mono|stereo)\s*\(') {
+    throw 'Post-render output-gain passes must remain removed from the audio runtime'
+}
+if ($audioRuntimeSource -match 'BRICK6_SAMPLER_OUTPUT_GAIN') {
+    throw 'Sampler output must remain at its nominal renderer level'
 }
 
 # Raw calibration deltas selected for this pass, expressed relative to PRISM.
@@ -68,12 +62,10 @@ foreach ($unchanged in 'prism_tmp', 'stack_tmp', 'drum_tmp') {
 $rawMeanRelativeToPrism = [ordered]@{
     DELUGE = [Math]::Pow(10.0, 7.1 / 20.0)
     WAVE = [Math]::Pow(10.0, 7.5 / 20.0)
-    SAMPLER = [Math]::Pow(10.0, 5.7 / 20.0)
 }
 $gainByEngine = @{
     DELUGE = $expected.BRICK6_DELUGE_OUTPUT_GAIN.Gain
     WAVE = $expected.BRICK6_WAVE_OUTPUT_GAIN.Gain
-    SAMPLER = $expected.BRICK6_SAMPLER_OUTPUT_GAIN.Gain
 }
 foreach ($engine in $rawMeanRelativeToPrism.Keys) {
     $corrected = $rawMeanRelativeToPrism[$engine] * $gainByEngine[$engine]

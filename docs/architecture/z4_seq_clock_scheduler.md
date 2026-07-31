@@ -1052,6 +1052,21 @@ Limites volontaires de cette etape:
 - La collecte lit les p-locks non-PLAY uniquement sur `source_track/source_step`, ignore toujours `SEQ_PLOCK_SET_PLAY`, puis valide chaque slot contre la cible par position logique `set/page/slot`.
 - Les p-locks non-PLAY locaux des slaves sont donc ignores pendant la lecture quand `SEQ LINK=ON`, sans copie, merge, suppression ni fallback local.
 
+## Addendum 2026-07-30 - correction generique des parametres SEQ LINK
+
+- Cause racine: la collecte liee reutilisait directement le numero de slot source sur
+  la cible. Les slots `TONE` etant propres au type de moteur, cette adresse
+  positionnelle pouvait designer un autre parametre ou etre rejetee; les parametres
+  discrets comme `STACK/OSC1/MODEL` n'avaient donc pas une propagation fiable.
+- En mode lie, la collecte resout maintenant `slot source -> param_id` dans le
+  contexte de la master puis `param_id -> slot cible` dans le contexte de chaque
+  membre. Le support effectif reste valide sur la cible et il n'existe aucun
+  fallback positionnel entre moteurs.
+- La whitelist est explicite et fermee aux ensembles p-lock non-PLAY correspondant
+  a `TONE`, `ENV/COLORS`, `MOD` et `MIX`. `PLAY`, `CFG` et tout domaine hors de ces
+  ensembles restent exclus. Le chemin est identique pour les floats, ints, enums et
+  bools; aucune classification par type de valeur n'est appliquee.
+
 ## Addendum 2026-07-28 - design resolver PLAY SEQ LINK
 
 Objet:
@@ -1335,8 +1350,37 @@ Correction:
 - Chaque événement scheduler porte la génération de sa track. Le début, le clear
   et la fin de restauration avancent cette génération : un événement déjà collecté
   ou resté en lookahead ne peut donc pas être rejoué après le paste.
-- Le début et la fin restaurent les p-locks actifs, invalident le boundary state et
-  remettent la phase de division de la track à zéro. La fin purge une dernière fois
-  notes, gates, fenêtres ARP et événements avant de réautoriser le scheduling.
+- Le début et la fin restaurent les p-locks actifs sans invalider le boundary
+  courant, sans déplacer le playhead et sans remettre la phase de division à zéro.
+  La fin purge une dernière fois notes, gates, fenêtres ARP et événements avant de
+  réautoriser le scheduling au prochain vrai boundary.
 - Les tracks hors fermeture structurelle restent actives et leurs files ne sont pas
   modifiées.
+
+### Correction cause racine
+
+- Le premier correctif invalidait `prev_step_valid` et remettait `track_div_phase`
+  à zéro. Le passage boundary suivant pouvait alors traiter la position courante
+  comme un nouveau step et reconstruire un trigger après le paste.
+- Le restore Track conserve désormais strictement le curseur musical et la phase.
+  Seuls les événements sample-domain des tracks concernées changent de génération
+  et sont retirés.
+- La reconstruction structurelle ne migre plus un gate VCA/filtre actif vers la
+  nouvelle lane. Les commandes note Stack déjà en file et les états ARP latched ou
+  pending sont annulés par track à la frontière audio.
+# Addendum 2026-07-30 - ordre des p-locks MD
+
+- Lors de la collecte TONE d'un step, `seq_boundary_engine` deplace
+  `PARAM_DRUM_MD_MODEL` en tete avant toute capture/application des slots.
+- L'ordre stocke dans le step n'a donc aucune incidence: le changement de
+  modele reinitialise d'abord l'etat runtime incompatible, puis les locks
+  `P1..P8` applicables sont projetes.
+# Addendum 2026-07-31 - liberation source-aware au STOP
+
+- Le scheduler alloue et libere ses voix polyphoniques sous l'identite
+  `SEQUENCER`.
+- STOP, changement de pattern/projet et panic emettent un note-off individuel
+  vers chaque instance encore possedee par le sequenceur; les voix passent en
+  release normale et les voix `MANUAL` restent tenues.
+- Le garde de sortie n'emet plus de CC all-sound-off global qui couperait des
+  notes MIDI manuelles non possedees par le transport.

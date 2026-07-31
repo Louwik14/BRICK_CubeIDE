@@ -1,4 +1,5 @@
 #include "Core/track_runtime.h"
+#include "Core/synth_polyphony.h"
 
 #include <string.h>
 
@@ -114,8 +115,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_WAVE:
             return TRACK_RUNTIME_TYPE_WAVE;
 
-        case UI_TRACK_TYPE_DRUM_TRX_BD:
-            return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
+        case UI_TRACK_TYPE_DRUM_MD:
+            return TRACK_RUNTIME_TYPE_DRUM_MD;
         case UI_TRACK_TYPE_MIDI:
             return TRACK_RUNTIME_TYPE_MIDI;
         case UI_TRACK_TYPE_MASTER_FX:
@@ -140,7 +141,7 @@ static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
 {
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+        case TRACK_RUNTIME_TYPE_DRUM_MD:
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
             return 1U;
         default:
@@ -469,6 +470,12 @@ static const param_id_t g_track_runtime_tone_slots_drum_bd_analog[] = {
     PARAM_DRUM_TRX_BD_PITCH_SWEEP
 };
 
+static const param_id_t g_track_runtime_tone_slots_drum_md[] = {
+    PARAM_DRUM_MD_MODEL,
+    PARAM_DRUM_MD_P1, PARAM_DRUM_MD_P2, PARAM_DRUM_MD_P3, PARAM_DRUM_MD_P4,
+    PARAM_DRUM_MD_P5, PARAM_DRUM_MD_P6, PARAM_DRUM_MD_P7, PARAM_DRUM_MD_P8
+};
+
 static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
                                                  const param_id_t **out_table,
                                                  uint8_t *out_count)
@@ -540,9 +547,9 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_drum_bd_analog) / sizeof(g_track_runtime_tone_slots_drum_bd_analog[0]));
             return 1U;
 
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-            *out_table = NULL;
-            *out_count = 8U;
+        case TRACK_RUNTIME_TYPE_DRUM_MD:
+            *out_table = g_track_runtime_tone_slots_drum_md;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_drum_md) / sizeof(g_track_runtime_tone_slots_drum_md[0]));
             return 1U;
 
         default:
@@ -559,8 +566,8 @@ static uint8_t track_runtime_tone_drum_range(track_runtime_type_t type, param_id
 
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-            *out_first = PARAM_DRUM_TRX_BD_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_MD:
+            *out_first = PARAM_DRUM_MD_MODEL; *out_count = 9U; return 1U;
         default:
             return 0U;
     }
@@ -661,6 +668,11 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
 {
+    if ((ctx != NULL) && ((ctx->engine == TRACK_RUNTIME_ENGINE_PRISM)
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_DELUGE)))
+        return synth_polyphony_get_voice_count(ctx->track_id);
     return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
 }
 
@@ -676,6 +688,11 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
     {
         return 4U;
     }
+    if ((descriptor->engine == TRACK_RUNTIME_ENGINE_PRISM)
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_STACK)
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_DELUGE))
+        return synth_polyphony_get_voice_count(descriptor->instance_id);
 
     switch ((track_runtime_engine_t)descriptor->engine)
     {
@@ -1696,6 +1713,15 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_TRX_BD_NOISE:
         case PARAM_DRUM_TRX_BD_HARMONICS:
         case PARAM_DRUM_TRX_BD_DRIVE:
+        case PARAM_DRUM_MD_MODEL:
+        case PARAM_DRUM_MD_P1:
+        case PARAM_DRUM_MD_P2:
+        case PARAM_DRUM_MD_P3:
+        case PARAM_DRUM_MD_P4:
+        case PARAM_DRUM_MD_P5:
+        case PARAM_DRUM_MD_P6:
+        case PARAM_DRUM_MD_P7:
+        case PARAM_DRUM_MD_P8:
         case PARAM_PRISM_EDIT:
         case PARAM_PRISM_FINE:
         case PARAM_PRISM_COARSE:
@@ -1855,6 +1881,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SEQ_PLAY_V4_VEL:
         case PARAM_SEQ_PLAY_V4_LEN:
         case PARAM_SEQ_PLAY_V4_MICTIM:
+        case PARAM_CFG_POLY_VOICES:
+        case PARAM_CFG_POLY_SPREAD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_PLAY;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

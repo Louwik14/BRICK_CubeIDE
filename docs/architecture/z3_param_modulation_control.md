@@ -1,5 +1,20 @@
 # Z3 - Param / Modulation / Control
 
+## Addendum 2026-07-31 - autorite COMP LAB finale
+
+- Les seuls controles publics sont `MODEL OFF/DELUGE/BRICK`,
+  `SIDECHAIN MIX/T1..T12`, `AMT 0..100` et `CHAR`.
+- Deux valeurs globales distinctes portent `SAT` Deluge et `PEAK/RMS` Brick.
+  Les changements de modele ne recopient ni ne remappent ces valeurs.
+- Les anciens controles libres threshold/ratio/attack/release/makeup/mix/knee
+  sont supprimes; les profils et courbes AMT vivent uniquement dans le DSP.
+
+## Paramètres vocaux
+
+`VOICES` et `SPREAD` sont track-wide. Matrix/LFO et TONE/MOD/MIX restent communs;
+leurs valeurs sont appliquées à chaque voix sans partager phase, note, filtre ou
+enveloppes dynamiques.
+
 ## Addendum 2026-07-30 - projection temporaire VCA
 
 - Les p-locks `VCA ATTACK/DECAY/SUSTAIN/RELEASE` utilisent le chemin temporaire
@@ -425,7 +440,7 @@ Call-sites critiques:
 ## 12. Contrat Drum Tone final
 
 - Types Drum produit:
-  - `UI_TRACK_TYPE_DRUM_TRX_BD`: slot reserve/futur, expose en UI, silencieux tant que le moteur n'est pas reinstalle,
+  - `UI_TRACK_TYPE_DRUM_MD`: slot reserve/futur, expose en UI, silencieux tant que le moteur n'est pas reinstalle,
   - `UI_TRACK_TYPE_DRUM_BD_ANALOG`: moteur actif Plaits `AnalogBassDrum`.
 - Params Drum restants dans `PARAM_COUNT`:
   - `PARAM_DRUM_TRX_BD_PITCH`,
@@ -506,7 +521,7 @@ Call-sites critiques:
 - Nettoyage catalogue LFO:
   - `PARAM_SAMPLER_SAMPLE` est exclu: selection/load/import possible selon type Sampler/Stream/Multi.
   - `PARAM_MASTER_FX1_TYPE..PARAM_MASTER_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_master_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
-  - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_TRX_BD`: le type est reserve/silencieux et `drum_synth` n'a pas de modele actif TRX.
+  - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_MD`: le type MD est silencieux et `drum_synth` ne rend aucun DSP MD a cette etape.
 
 ## 24. Contrat Hybrid v1 (param/runtime borne)
 - `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input1/2/3` en mode `Hybrid` uniquement.
@@ -688,7 +703,7 @@ Dette explicite post-passe 4:
 
 ## 30. Contrat Drum params finaux
 
-- Le bloc Drum ne conserve que les huit `PARAM_DRUM_TRX_BD_*` utiles au slot futur `TRX BD` et au moteur actif `BD_ANALOG`.
+- Le bloc Drum ne conserve que les huit `PARAM_DRUM_TRX_BD_*` utiles au slots MD futurs et au moteur actif `BD_ANALOG`.
 - Les anciens params Drum retires ne sont plus presents dans `PARAM_COUNT`.
 - Les anciens params `PARAM_TB3_*` sont retires de `PARAM_COUNT`; aucun tombstone ni compatibilite projet/config `TB3` n'est conserve.
 - `PARAM_COUNT` est reduit par cette suppression; aucun maintien de compatibilite ancien projet Drum n'est requis.
@@ -983,3 +998,32 @@ Dette explicite post-passe 4:
 - Les parametres globaux communs sont `MODEL/THRESH/RATIO/ATTACK/RELEASE/MAKEUP/MIX/SC HPF`; l'auto-makeup reste force OFF.
 - `SAT` ne pilote que Deluge; `DETECT` et `KNEE` ne pilotent que Brick. Les quatre nouveaux IDs caracteristiques sont ajoutes en fin d'enum pour conserver les indices existants.
 - Les sept anciens `PARAM_DAISY_COMP_*` sont supprimes sans tombstone ni migration, conformement au statut prototype.
+## Addendum 2026-07-30 - parametres reverb Mutable
+
+- La surface globale reverb est `LVL/SIZE/DECAY/PRE-D/DAMP/HPF/LPF/SMEAR`. `DAMP` ne pilote plus `LPF`: il controle exclusivement les deux one-poles du tank.
+- Les IDs persistants restent stables: `DAMP` et `SMEAR` reutilisent les deux tombstones reserves `PARAM_MIX_DELAY_SWING/ACCENT`; `PARAM_COUNT` et les payloads Pattern/Project ne changent pas.
+## Addendum 2026-07-30 - banques reverb par modele
+
+- `MODEL` choisit `MUTABLE/DIGITAL`. Mutable conserve ses valeurs DECAY/SIZE/DAMP/HPF/LPF/SMEAR; Digital possede des IDs distincts DECAY/DAMP/HPF/LPF. LVL et PRE-D restent communs.
+- Les six nouveaux controles reutilisent des tombstones mixer physiques non operationnels; tous les IDs existants, `PARAM_COUNT` et les tailles Project/Pattern restent stables.
+## Addendum 2026-07-30 - retrait PAN reverb
+
+- La banque Digital conserve DECAY/DAMP/HPF/LPF; le tombstone temporairement utilise par PAN est restitue a son identite mixer legacy. MODEL, LVL et PRE-D restent inchanges.
+# Addendum 2026-07-30 - frontiere parametres MD etape 1
+
+- L'etape 1 renomme uniquement l'identite du placeholder en `DRUM / MD`.
+- Les anciens IDs TONE restent temporairement les bindings historiques de
+  `BD_ANALOG`; `MODEL + P1..P8`, profils dynamiques et ordre de p-lock sont
+  explicitement reportes a l'etape 2.
+# Addendum 2026-07-30 - `MODEL + P1..P8` DRUM / MD
+
+- L'etat canonique MD est porte par `track_tone_sound_state.md`: un modele
+  valide et huit valeurs 0..127, sans banque cachee par modele.
+- Les profils centralises dans `md_model` donnent labels, cardinalite et
+  defaults pour les six modeles du plan. Changer `MODEL` remplace tous les
+  slots par les defaults du nouveau profil.
+- Les neuf IDs reutilisent `PARAM_MIX_TRACK3_ROUTE` puis les huit tombstones
+  legacy `PARAM_MIX_TRACKx_INSERTy`; `PARAM_COUNT` reste stable et les quatre
+  controles historiques `BD_ANALOG` restent sur leurs IDs existants.
+- `MODEL` est p-lockable mais jamais modulable. Seuls les slots actifs du
+  profil courant sont proposes comme destinations MOD.

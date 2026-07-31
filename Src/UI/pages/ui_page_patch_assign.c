@@ -68,7 +68,7 @@ typedef enum
     PATCH_ASSIGN_TYPE_AUDIO,
     PATCH_ASSIGN_TYPE_HYBRID,
     PATCH_ASSIGN_TYPE_FX,
-    PATCH_ASSIGN_TYPE_DRUM_TRX_BD,
+    PATCH_ASSIGN_TYPE_DRUM_MD,
     PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG,
     PATCH_ASSIGN_TYPE_COUNT
 } patch_assign_type_filter_t;
@@ -179,7 +179,7 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_AUDIO: return "AUDIO";
         case PATCH_ASSIGN_TYPE_HYBRID: return "HYBRID";
         case PATCH_ASSIGN_TYPE_FX: return "FX";
-        case PATCH_ASSIGN_TYPE_DRUM_TRX_BD: return "TRX BD";
+        case PATCH_ASSIGN_TYPE_DRUM_MD: return "DRUM MD";
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG: return "BD ANA";
         default: return "ALL";
     }
@@ -244,7 +244,7 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
         case PATCH_ASSIGN_FAMILY_DRUM:
             switch (type)
             {
-                case UI_TRACK_TYPE_DRUM_TRX_BD: return PATCH_ASSIGN_TYPE_DRUM_TRX_BD;
+                case UI_TRACK_TYPE_DRUM_MD: return PATCH_ASSIGN_TYPE_DRUM_MD;
                 case UI_TRACK_TYPE_DRUM_BD_ANALOG: return PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
@@ -276,7 +276,7 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
                     || (type == PATCH_ASSIGN_TYPE_LOOPER)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_DRUM:
-            return ((type == PATCH_ASSIGN_TYPE_DRUM_TRX_BD)
+            return ((type == PATCH_ASSIGN_TYPE_DRUM_MD)
                     || (type == PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_INPUT:
@@ -378,8 +378,8 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
             return (type == UI_TRACK_TYPE_HYBRID) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_FX:
             return (type == UI_TRACK_TYPE_MASTER_FX) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_DRUM_TRX_BD:
-            return (type == UI_TRACK_TYPE_DRUM_TRX_BD) ? 1U : 0U;
+        case PATCH_ASSIGN_TYPE_DRUM_MD:
+            return (type == UI_TRACK_TYPE_DRUM_MD) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG:
             return (type == UI_TRACK_TYPE_DRUM_BD_ANALOG) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_ALL:

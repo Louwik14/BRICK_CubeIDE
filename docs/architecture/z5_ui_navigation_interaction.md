@@ -1,5 +1,17 @@
 # Z5 - UI / Navigation / Interaction
 
+## Addendum 2026-07-31 - surface MIX 3/3 finale
+
+- `MIX 3/3` contient une seule page `COMP`:
+  `MODEL / SIDECHAIN / AMT / CHAR`.
+- CHAR resout `SAT OFF/ON` pour Deluge, `PEAK/RMS` pour Brick et N/A pour OFF,
+  tout en conservant separement les deux valeurs.
+
+## TRACK CFG synth
+
+Page 1: `VOICES` et `SPREAD`; page 2: `MIDI`. Pour un master Multi, `GROUP` est en
+page 3. Le spread place les slots symétriquement et n'expose pas de paramètre KEY.
+
 ## Addendum 2026-07-30 - raccourcis sequence COPY/PASTE
 
 - En contexte sequence, `SHIFT + COPY` efface le scope sequence courant, y
@@ -742,7 +754,7 @@ Points factuels:
   - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
   - `REV2`: reservee/vide,
   - `REV3`: `HPF`, `LPF`.
-- La page active MIX n'expose plus de choix `Type` reverb: `RevB` est l'unique reverb SEND runtime et aucun tombstone de backend n'est conserve.
+- La page active MIX expose `MODEL=MUTABLE/DIGITAL` dans l'unique reverb SEND runtime RevB.
 - Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
 - Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:
@@ -884,8 +896,8 @@ Points factuels:
 ## 18. Contrat UI Drum Plaits direct
 
 - L'autorite de la liste active des types Drum `CFG` est `ui_track_catalog`.
-- La liste active Drum expose seulement `TRX BD` et `BD Analog`.
-- `TRX BD` reste visible comme entree reservee/future; a date il n'a pas de moteur runtime actif et reste silencieux via le mapping Drum `NONE`.
+- La liste active Drum expose seulement `MD` et `BD Analog`.
+- `MD` reste visible comme moteur integre silencieux; a date il n'a pas de moteur runtime actif et reste silencieux via le mapping Drum `NONE`.
 - Aucun autre type Drum n'est expose ou conserve par la liste UI active.
 - La page TONE Drum reservee garde une sous-page vide pour ne pas casser la navigation.
 - `BD Analog` est le premier type Drum propre et experimental; il reste selectionnable dans le catalogue `Drum`.
@@ -1057,7 +1069,7 @@ Points factuels:
 - `PAGE3` ouvre le mode generique `Name Edit` pour renommer le slot Patch valide selectionne. `Name Edit` recoit buffer initial, longueur max, titre/contexte et callback; `PAGE1` annule sans mutation, `PAGE2` retourne le nom valide a l'appelant. En `Name Edit`, seul `ENC1` change le caractere courant de la frise sans modifier le nom; `ENC2`/`ENC3`/`ENC4` sont no-op. `PAGE3` valide le caractere courant a la position d'ecriture puis avance le curseur si possible. `PAGE4` fait un backspace borne, `SHIFT+PAGE2` valide un espace, `PAGE3`/`PAGE4` avec SHIFT restent no-op. Le curseur represente la prochaine position a ecrire et reste borne aux caracteres existants ou a l'unique position append. Le mode affiche le nom et une frise de caracteres en police lisible, n'ecrit pas la SD lui-meme: `Patch Assign` reste responsable de `patch_v1_rename_slot` et du feedback.
 - `PAGE4` demande confirmation puis delete le slot valide selectionne; le browser reste sur le prochain slot valide ou sur le slot devenu `EMPTY`.
 - Les filtres Patch Assign sont manuels apres l'entree: `ENC1` choisit le slot visible avec navigation bornee sans wrap, `ENC2` choisit Family (`ALL`, `SYNTH`, `SAMPLER`, `DRUM`, `INPUT`, `MASTER`) avec navigation bornee sans wrap, `ENC3` choisit Type selon Family avec navigation bornee sans wrap. A l'entree, Family/Type sont initialises depuis la track focus; changer les targets par Hall ne recale pas les filtres.
-- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/PRISM/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/TRX BD/BD Analog`.
+- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/PRISM/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/MD/BD Analog`.
 - Regle de visibilite: `Family ALL + Type ALL` montre tous les slots Patch valides puis `BAD PATCH`; les filtres precis montrent uniquement les patches valides correspondants. Si aucun slot n'est visible, le menu affiche `NO PATCH`.
 - Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
 - `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
@@ -1312,12 +1324,17 @@ Points factuels:
 - Une navigation ou une entree en prepare MUTE vers une page proprietaire des LEDs step annule les mutes prepares sans les appliquer: le snapshot prepare est remplace par l'etat runtime courant.
 - Hors page proprietaire des LEDs step, `MUTE` et `MUTE hold` continuent a afficher les tracks et les mutes prepares restent conserves jusqu'a apply ou sortie existante.
 
+## Addendum 2026-07-31 - priorite QUICK MUTE sur SHIFT
+
+- Une fois `QUICK MUTE` actif, les HALL/STEP de track restent proprietaires du mute meme si `SHIFT` est encore maintenu: press mute/demute, release consomme.
+- Le service Hall court-circuite alors les actions normales `SHIFT + HALL`; les boutons `SHIFT` et `MUTE` restent geres par la sous-machine mute pour conserver les sorties `QUICK`, `HOLD_QUICK` et `PREPARE`.
+
 ## Addendum 2026-07-28 - priorite input sous MUTE
 
-- `MUTE` n'est pas un overlay bloquant global: `ui_core_mute` capture seulement `SHIFT+MUTE`, le bouton MUTE, et les HALL/STEP de track utilises sans `SHIFT` pour quick mute ou prepare mute.
+- `MUTE` n'est pas un overlay bloquant global: `ui_core_mute` capture seulement `SHIFT+MUTE`, le bouton MUTE, et les HALL/STEP de track; une fois le mode ouvert, ces touches track restent prioritaires meme si `SHIFT` est maintenu.
 - Les actions globales de navigation gardent la priorite sous `MUTE`/`MUTE hold`: `SHIFT + STEP`, `SHIFT + HALL` en contexte `KEYBOARD`, et les raccourcis de touches noires sans `SHIFT` en contexte `SEQ` passent par les chemins existants.
 - Pendant `MUTE`, les entrees clavier lisent le mode de jeu sous-jacent memorise a l'entree du mute (`SEQ`, `KEYBOARD` ou `ARP`) via `ui_core_mute_get_passthrough_hall_mode()`. Le rendu conserve le label/LED `MUTE`; seul le routage input clavier utilise ce mode pass-through.
-- Un HALL/STEP de track sans `SHIFT` reste proprietaire du mute et ne descend pas vers la navigation ou le clavier. Un HALL/STEP avec `SHIFT` n'est pas capture par `ui_core_mute`; la suppression de note posee par le raccourci continue de bloquer uniquement l'evenement de note correspondant.
+- Un HALL/STEP de track reste proprietaire du mute et ne descend pas vers la navigation ou le clavier, quel que soit l'etat de `SHIFT`.
 
 ## Addendum 2026-07-29 - priorite raccourcis Hall en ARP
 
@@ -1379,6 +1396,14 @@ Points factuels:
   de l'état de note de la configuration remplacée; une séquence remplie reprend
   uniquement avec des événements créés après la restauration.
 
+### Correction cause racine
+
+- Le paste Track ne réinitialise plus le playhead et ne réapplique plus les bases
+  `PLAY` qui ne font pas partie du snapshot éditable copié.
+- Après le rebind et les apply de paramètres, une barrière finale ciblée remet à
+  zéro les états note/gate/voix, ARP et commandes moteur en attente des seules
+  tracks de la fermeture structurelle. Les autres tracks ne reçoivent aucun panic.
+
 ## Addendum 2026-07-30 - calibration et VELOCITY clavier low-cost
 
 - En low-cost, la racine `SETTINGS` liste `SAMPLE`, `PROJECT`, puis `CALIBRATION` avant l'eventuel menu diagnostic `TEST`. `CALIBRATION` propose `HALL KBD` et `HALL VEL`.
@@ -1389,3 +1414,26 @@ Points factuels:
 
 - Le bouton MIX cycle maintenant `MIX 1/3`, `MIX 2/3`, `MIX 3/3`; les pages et controles historiques des deux premiers ensembles sont inchanges.
 - `MIX 3/3` expose `COMP MAIN`, `COMP ENV` et `COMP CHAR`; `MODEL` vaut `OFF/DELUGE/BRICK` et CHAR est resolue selon le modele (Deluge: SAT, Brick: DETECT/KNEE, OFF: N/A).
+## Addendum 2026-07-30 - pages reverb
+
+- `MIX 1/3` resout les pages reverb selon `MODEL`; aucun controle sans effet n'est affiche.
+## Addendum 2026-07-30 - UI reverb dynamique
+
+- Mutable: `MODEL/LVL/DECAY/PRE-D`, puis `SIZE/DAMP/HPF/LPF`, puis `SMEAR`.
+- Digital: `MODEL/LVL/DECAY/PRE-D`, puis `DAMP/HPF/LPF/-`. SIZE/SMEAR et PAN ne sont pas exposes sur Digital.
+## Addendum 2026-07-30 - navigation modele et widget HPF/LPF
+
+- `ui_template_page` peut explicitement conserver une sous-page encore valide lors d'un changement de famille resolue; MIX active ce contrat afin que MODEL remplace Mutable/Digital sans retour a la page MIX.
+- Sur les pages delay et reverb, les deux cellules HPF/LPF gardent leurs labels, focus et edition independants, mais leur zone widget est remplacee par une courbe de reponse commune couvrant exactement les deux cellules.
+# Addendum 2026-07-30 - type visible `DRUM / MD`
+
+- Le catalogue CFG et l'affectation de patch affichent desormais `DRUM / MD`
+  a la place de `TRX BD`; `BD Analog` reste disponible sans changement.
+- La page TONE dynamique `MODEL + P1..P8` appartient a l'etape 2 et n'est pas
+  exposee par cette integration silencieuse.
+# Addendum 2026-07-30 - pages TONE dynamiques MD
+
+- Pour `Drum/MD`, TONE expose `MODEL` puis les slots actifs sur deux ou trois
+  sous-pages. Les labels viennent du profil courant (`PTCH`, `DEC`, `GAP`,
+  `MFRQ`, etc.) et les slots absents ne sont pas affiches.
+- `BD Analog` conserve sa page TONE et ses quatre controles historiques.

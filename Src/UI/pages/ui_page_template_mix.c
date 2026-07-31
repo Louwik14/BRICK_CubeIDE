@@ -7,25 +7,67 @@
 
 static uint8_t g_ui_template_mix_subset = 0U;
 
-static const ui_template_family_t g_ui_template_mix_family_main = {
+static ui_template_custom_widget_kind_t ui_page_template_mix_pick_custom_widget(uint8_t slot,
+                                                                                const ui_template_subpage_t *subpage,
+                                                                                param_id_t id)
+{
+    (void)slot;
+    (void)subpage;
+    if ((id == PARAM_MIX_REVERB_HPF)
+            || (id == PARAM_MIX_REVERB_LPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
+            || (id == PARAM_MIX_REVERB_DIGITAL_LPF)
+            || (id == PARAM_MIX_DELAY_HPF)
+            || (id == PARAM_MIX_DELAY_LPF))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP;
+    }
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static const ui_template_family_t g_ui_template_mix_family_main_mutable = {
     .family_title = "MIX 1/3",
-    .nav_labels = { "MIX", "REVB", "REV2", "REV3" },
+    .nav_labels = { "MIX", "REVERB 1", "REVERB 2", "REVERB 3" },
     .subpages = {
         {
             .title = "MIX",
             .param_bank = { .params = { PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1, PARAM_MIX_SEND2 } },
         },
         {
-            .title = "REVB",
-            .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } },
+            .title = "REVERB 1",
+            .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } },
         },
         {
-            .title = "REV2",
+            .title = "REVERB 2",
+            .param_bank = { .params = { PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF } },
+        },
+        {
+            .title = "REVERB 3",
+            .param_bank = { .params = { PARAM_MIX_REVERB_SMEAR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_main_digital = {
+    .family_title = "MIX 1/3",
+    .nav_labels = { "MIX", "REVERB 1", "REVERB 2", "-" },
+    .subpages = {
+        {
+            .title = "MIX",
+            .param_bank = { .params = { PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1, PARAM_MIX_SEND2 } },
+        },
+        {
+            .title = "REVERB 1",
+            .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DIGITAL_DECAY, PARAM_MIX_REVERB_PRED } },
+        },
+        {
+            .title = "REVERB 2",
+            .param_bank = { .params = { PARAM_MIX_REVERB_DIGITAL_DAMP, PARAM_MIX_REVERB_DIGITAL_HPF, PARAM_MIX_REVERB_DIGITAL_LPF, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
-        },
-        {
-            .title = "REV3",
-            .param_bank = { .params = { PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -81,11 +123,11 @@ static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_off = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .nav_labels = { "COMP", "-", "-", "-" },
     .subpages = {
-        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
-        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
-        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -93,11 +135,11 @@ static const ui_template_family_t g_ui_template_mix_family_comp_off = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_deluge = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .nav_labels = { "COMP", "-", "-", "-" },
     .subpages = {
-        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
-        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
-        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DELUGE_SAT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COMP_DELUGE_SAT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -105,11 +147,11 @@ static const ui_template_family_t g_ui_template_mix_family_comp_deluge = {
 
 static const ui_template_family_t g_ui_template_mix_family_comp_brick = {
     .family_title = "MIX 3/3",
-    .nav_labels = { "MAIN", "ENV", "CHAR", "-" },
+    .nav_labels = { "COMP", "-", "-", "-" },
     .subpages = {
-        { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
-        { .title = "COMP ENV", .param_bank = { .params = { PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX, PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ } } },
-        { .title = "COMP CHAR", .param_bank = { .params = { PARAM_COMP_DETECT, PARAM_COMP_KNEE_DB, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "COMP", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_COMP_SIDECHAIN, PARAM_COMP_AMOUNT, PARAM_COMP_DETECT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -152,7 +194,9 @@ static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 
     if (g_ui_template_mix_subset == 0U)
     {
-        return &g_ui_template_mix_family_main;
+        return (param_get(PARAM_MIX_REVERB_MODEL) >= 0.5f)
+                ? &g_ui_template_mix_family_main_digital
+                : &g_ui_template_mix_family_main_mutable;
     }
 
     if (g_ui_template_mix_subset == 1U)
@@ -172,12 +216,13 @@ static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
 {
     if (g_ui_template_mix_subset == 0U)
     {
-        return (subpage_index < 4U) ? 1U : 0U;
+        const uint8_t count = (param_get(PARAM_MIX_REVERB_MODEL) >= 0.5f) ? 3U : 4U;
+        return (subpage_index < count) ? 1U : 0U;
     }
 
     if (g_ui_template_mix_subset == 2U)
     {
-        return (subpage_index < 3U) ? 1U : 0U;
+        return (subpage_index == 0U) ? 1U : 0U;
     }
 
     const uint8_t delay_is_dual = (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f) ? 1U : 0U;
@@ -188,9 +233,11 @@ static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
 static ui_template_page_state_t g_ui_template_mix_state = {
     .family = 0,
     .family_resolver = ui_page_template_mix_resolve_family,
+    .custom_widget_picker = ui_page_template_mix_pick_custom_widget,
     .subpage_enabled = ui_page_template_mix_subpage_enabled,
     .active_subpage = 0U,
     .has_visited = 0U,
+    .preserve_subpage_on_family_change = 1U,
 };
 
 void ui_page_template_mix_open_primary(void)
@@ -238,7 +285,7 @@ void ui_page_template_mix_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_MIX,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_mix_family_main);
+                                        &g_ui_template_mix_family_main_mutable);
         }
     }
 }

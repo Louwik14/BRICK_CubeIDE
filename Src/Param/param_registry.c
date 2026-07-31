@@ -29,7 +29,10 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/synth_polyphony.h"
+#include "Audio/mixer.h"
 #include "Core/track_tone_sound_state.h"
+#include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
 #include "Core/track_state_internal.h"
@@ -40,6 +43,7 @@
 #include "Sampler/multi_sample_pool.h"
 #include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
+#include "Keyboard/keyboard_engine.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -930,6 +934,19 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_DRUM_TRX_BD_DRIVE:
             *out_value = state->trx_bd.drive;
             return 1U;
+        case PARAM_DRUM_MD_MODEL:
+            *out_value = state->md.model;
+            return 1U;
+        case PARAM_DRUM_MD_P1:
+        case PARAM_DRUM_MD_P2:
+        case PARAM_DRUM_MD_P3:
+        case PARAM_DRUM_MD_P4:
+        case PARAM_DRUM_MD_P5:
+        case PARAM_DRUM_MD_P6:
+        case PARAM_DRUM_MD_P7:
+        case PARAM_DRUM_MD_P8:
+            *out_value = state->md.slot[(uint8_t)(id - PARAM_DRUM_MD_P1)];
+            return 1U;
         default:
             return 0U;
     }
@@ -1238,6 +1255,33 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_DRUM_TRX_BD_DRIVE:
             state->trx_bd.drive = value;
             return 1U;
+        case PARAM_DRUM_MD_MODEL:
+        {
+            const uint8_t model = md_model_validate(value);
+            if ((uint8_t)state->md.model != model)
+            {
+                const md_model_profile_t *const profile = md_model_profile_get(model);
+                state->md.model = model;
+                for (uint8_t slot = 0U; slot < 8U; ++slot)
+                {
+                    state->md.slot[slot] = profile->defaults[slot];
+                    param_registry_runtime_commit_authoritative_write(
+                        track, (param_id_t)(PARAM_DRUM_MD_P1 + slot), state->md.slot[slot], 1U);
+                }
+            }
+            return 1U;
+        }
+        case PARAM_DRUM_MD_P1:
+        case PARAM_DRUM_MD_P2:
+        case PARAM_DRUM_MD_P3:
+        case PARAM_DRUM_MD_P4:
+        case PARAM_DRUM_MD_P5:
+        case PARAM_DRUM_MD_P6:
+        case PARAM_DRUM_MD_P7:
+        case PARAM_DRUM_MD_P8:
+            state->md.slot[(uint8_t)(id - PARAM_DRUM_MD_P1)] =
+                (uint8_t)(clamp_value(value, 0.0f, 127.0f) + 0.5f);
+            return 1U;
         default:
             return 0U;
     }
@@ -1376,9 +1420,9 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
 
     {
         const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
-                                                                        TRACK_RUNTIME_TYPE_DRUM_TRX_BD,
-                                                                        PARAM_DRUM_TRX_BD_PITCH,
-                                                                        PARAM_DRUM_TRX_BD_DRIVE);
+                                                                        TRACK_RUNTIME_TYPE_DRUM_MD,
+                                                                        PARAM_DRUM_MD_MODEL,
+                                                                        PARAM_DRUM_MD_P8);
         if (applied != 2U)
         {
             return applied;
@@ -1469,6 +1513,16 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
 
     if (track < SEQ_TRACK_COUNT)
     {
+        if (id == PARAM_CFG_POLY_VOICES)
+        {
+            *out_value = (float)synth_polyphony_get_voice_count(track);
+            return 1U;
+        }
+        if (id == PARAM_CFG_POLY_SPREAD)
+        {
+            *out_value = synth_polyphony_get_spread(track);
+            return 1U;
+        }
         switch (id)
         {
             case PARAM_CFG_TRACK:
@@ -1632,6 +1686,18 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
+    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
+    {
+        keyboard_engine_all_notes_off_for_track(track);
+        synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+        return 1U;
+    }
+    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_SPREAD))
+    {
+        synth_polyphony_set_spread(track, clamped);
+        return 1U;
+    }
+
     if (param_filter_is_param(id) != 0U)
     {
         return param_filter_apply_value(id, track, clamped, 0U, 0U);
@@ -1722,6 +1788,18 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     }
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
+
+    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
+    {
+        keyboard_engine_all_notes_off_for_track(track);
+        synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+        return 1U;
+    }
+    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_SPREAD))
+    {
+        synth_polyphony_set_spread(track, clamped);
+        return 1U;
+    }
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
     {

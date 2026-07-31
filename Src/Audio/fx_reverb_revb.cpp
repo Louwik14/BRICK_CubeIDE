@@ -5,6 +5,7 @@
 #include "fx_revb_model.h"
 
 #include <string.h>
+#include <math.h>
 
 namespace
 {
@@ -12,6 +13,12 @@ constexpr float kDefaultSampleRate = 48000.0f;
 constexpr uint32_t kEngineBufferSize = 32768U;
 constexpr float kPredelayMaxSeconds = 0.090f;
 constexpr uint32_t kPredelayBufferSize = 4322U;
+constexpr uint32_t kTopologySamples48k = 23528U;
+constexpr uint32_t kDigitalTopologySamples48k = 13958U;
+static_assert(kTopologySamples48k + 10U < kEngineBufferSize,
+              "48 kHz Mutable topology must fit the 32768-sample engine buffer");
+static_assert(kDigitalTopologySamples48k + 12U < kEngineBufferSize,
+              "48 kHz Digital topology must fit the shared 32768-sample engine buffer");
 
 AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
 AUDIO_WARM ALIGN32 static float g_revb_predelay_buffer[kPredelayBufferSize];
@@ -26,8 +33,23 @@ struct revb_global_state_t
     float decay;
     float predelay_s;
     float lpf;
+    float damp;
+    float hpf;
+    float smear;
+    float wet_current;
+    float size_current;
+    float decay_current;
+    float damp_current;
+    float hpf_current;
+    float lpf_current;
+    float smear_current;
     float predelay_lag_samples;
+    float predelay_current_samples;
     uint32_t predelay_write;
+    uint32_t model_fade_remaining;
+    uint8_t model;
+    float last_out_l;
+    float last_out_r;
     uint8_t initialized;
 };
 
@@ -56,19 +78,37 @@ static void apply_params(void)
     if(g_revb.initialized == 0U)
         return;
 
-    const float diffusion = 0.45f + (0.45f * g_revb.size);
-    const float time = 0.20f + (0.78f * g_revb.decay);
-    const float lp = 0.02f + (0.83f * (1.0f - g_revb.lpf));
-    const float lfo1_hz = 0.25f + (0.50f * g_revb.size);
-    const float lfo2_hz = 0.15f + (0.35f * g_revb.size);
+    const float diffusion = 0.45f + (0.45f * g_revb.size_current);
+    const float time = (g_revb.model == 0U)
+            ? (0.20f + (0.78f * g_revb.decay_current))
+            : (0.01f + (0.97f * g_revb.decay_current));
+    const float damping_arg = ((1.0f - g_revb.damp_current) * 50.0f) + 1.0f;
+    const float damping_curve = clampf_local(log2f(damping_arg) / 5.7f, 0.0f, 1.0f);
+    const float lp = (g_revb.damp_current <= 0.0f)
+            ? 1.0f
+            : (1.0f - damping_curve);
+    const float lfo1_hz = 0.25f + (0.50f * g_revb.size_current);
+    const float lfo2_hz = 0.15f + (0.35f * g_revb.size_current);
+    const float hp_hz = 20.0f + ((expf(1.5f * g_revb.hpf_current) - 1.0f) * 150.0f);
+    const float lpf_deluge_value = 1.0f - g_revb.lpf_current;
+    const float lp_hz = (expf(1.5f * lpf_deluge_value) - 1.0f) * 5083.74f;
+    const float hp_fc = hp_hz / g_revb.sample_rate;
+    const float lp_fc = lp_hz / g_revb.sample_rate;
 
     g_revb.engine.set_amount(1.0f);
-    g_revb.engine.set_input_gain(g_revb.wet);
+    g_revb.engine.set_input_gain(1.0f);
     g_revb.engine.set_diffusion(clampf_local(diffusion, 0.0f, 0.95f));
     g_revb.engine.set_time(clampf_local(time, 0.0f, 0.98f));
-    g_revb.engine.set_lp(clampf_local(lp, 0.01f, 0.95f));
-    g_revb.engine.set_lfo1_freq(lfo1_hz);
-    g_revb.engine.set_lfo2_freq(lfo2_hz);
+    g_revb.engine.set_lp(clampf_local(lp, 0.0f, 1.0f));
+    g_revb.engine.set_output_filters(hp_fc / (1.0f + hp_fc),
+                                      (g_revb.lpf_current <= 0.0f)
+                                              ? 1.0f
+                                              : (lp_fc / (1.0f + lp_fc)));
+    g_revb.engine.set_smear_depth((g_revb.smear_current <= 0.0001f)
+                                      ? 0.0f
+                                      : (80.0f * g_revb.smear_current));
+    g_revb.engine.set_lfo1_freq((g_revb.model == 0U) ? lfo1_hz : 0.5f);
+    g_revb.engine.set_lfo2_freq((g_revb.model == 0U) ? lfo2_hz : 0.3f);
 
     g_revb.predelay_s = clampf_local(g_revb.predelay_s, 0.0f, kPredelayMaxSeconds);
     g_revb.predelay_lag_samples = clampf_local(g_revb.predelay_s * g_revb.sample_rate,
@@ -98,12 +138,38 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.predelay_s = 0.045f;
     g_revb.wet = 0.0f;
     g_revb.lpf = 0.0f;
+    g_revb.damp = 0.70f;
+    g_revb.hpf = 0.0f;
+    g_revb.smear = 1.0f;
+    g_revb.model = 0U;
+    g_revb.model_fade_remaining = 0U;
+    g_revb.last_out_l = 0.0f;
+    g_revb.last_out_r = 0.0f;
+    g_revb.wet_current = 0.0f;
+    g_revb.size_current = g_revb.size;
+    g_revb.decay_current = g_revb.decay;
+    g_revb.damp_current = g_revb.damp;
+    g_revb.hpf_current = g_revb.hpf;
+    g_revb.lpf_current = g_revb.lpf;
+    g_revb.smear_current = g_revb.smear;
     g_revb.predelay_lag_samples = 0.0f;
     g_revb.predelay_write = 0U;
+    g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
     g_revb.initialized = 0U;
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.engine.Init(g_revb_engine_buffer);
     g_revb.initialized = 1U;
+    apply_params();
+}
+
+void fx_reverb_revb_global_set_model(uint8_t model)
+{
+    const uint8_t next = (model != 0U) ? 1U : 0U;
+    if(next == g_revb.model)
+        return;
+    fx_reverb_revb_global_reset();
+    g_revb.model = next;
+    g_revb.model_fade_remaining = AUDIO_BLOCK_SIZE;
     apply_params();
 }
 
@@ -114,6 +180,8 @@ void fx_reverb_revb_global_reset(void)
 
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.predelay_write = 0U;
+    g_revb.predelay_current_samples = g_revb.predelay_lag_samples;
+    g_revb.wet_current = 0.0f;
     g_revb.engine.Clear();
 }
 
@@ -135,16 +203,30 @@ void fx_reverb_revb_global_set_decay(float decay)
     apply_params();
 }
 
+void fx_reverb_revb_global_set_damp(float damp)
+{
+    g_revb.damp = clamp01_local(damp);
+}
+
 void fx_reverb_revb_global_set_predelay(float predelay_s)
 {
     g_revb.predelay_s = (predelay_s < 0.0f) ? 0.0f : predelay_s;
     apply_params();
 }
 
+void fx_reverb_revb_global_set_hpf(float hpf)
+{
+    g_revb.hpf = clamp01_local(hpf);
+}
+
 void fx_reverb_revb_global_set_lpf(float lpf)
 {
     g_revb.lpf = clamp01_local(lpf);
-    apply_params();
+}
+
+void fx_reverb_revb_global_set_smear(float smear)
+{
+    g_revb.smear = clamp01_local(smear);
 }
 
 ITCM_TEXT_NAMED("fx_reverb_revb_global")
@@ -166,14 +248,61 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
+    const float block_smooth = 0.125f;
+    g_revb.size_current += (g_revb.size - g_revb.size_current) * block_smooth;
+    g_revb.decay_current += (g_revb.decay - g_revb.decay_current) * block_smooth;
+    g_revb.damp_current += (g_revb.damp - g_revb.damp_current) * block_smooth;
+    g_revb.hpf_current += (g_revb.hpf - g_revb.hpf_current) * block_smooth;
+    g_revb.lpf_current += (g_revb.lpf - g_revb.lpf_current) * block_smooth;
+    g_revb.smear_current += (g_revb.smear - g_revb.smear_current) * block_smooth;
+    if((g_revb.smear == 0.0f) && (g_revb.smear_current < 0.0001f))
+        g_revb.smear_current = 0.0f;
+    apply_params();
+
+    const float wet_step = (g_revb.wet - g_revb.wet_current) / (float)frames;
+    const float predelay_old = g_revb.predelay_current_samples;
+    const float predelay_new = g_revb.predelay_lag_samples;
+    const float predelay_delta = predelay_new - predelay_old;
+    const uint8_t predelay_crossfade = ((predelay_delta > 0.0001f)
+            || (predelay_delta < -0.0001f)) ? 1U : 0U;
     for(uint32_t i = 0U; i < frames; ++i)
     {
-        g_revb_predelay_buffer[g_revb.predelay_write] = in[i];
-        g_revb_predelayed[i] = read_predelay(g_revb.predelay_lag_samples);
+        g_revb.wet_current += wet_step;
+        g_revb_predelay_buffer[g_revb.predelay_write] = in[i] * g_revb.wet_current;
+        if(predelay_crossfade != 0U)
+        {
+            const float xfade = (float)(i + 1U) / (float)frames;
+            const float old_read = read_predelay(predelay_old);
+            const float new_read = read_predelay(predelay_new);
+            g_revb_predelayed[i] = old_read + ((new_read - old_read) * xfade);
+        }
+        else
+        {
+            g_revb_predelayed[i] = read_predelay(predelay_new);
+        }
         g_revb.predelay_write++;
         if(g_revb.predelay_write >= kPredelayBufferSize)
             g_revb.predelay_write = 0U;
     }
+    g_revb.wet_current = g_revb.wet;
+    g_revb.predelay_current_samples = predelay_new;
 
-    g_revb.engine.Process(g_revb_predelayed, out_l, out_r, frames);
+    if(g_revb.model == 0U)
+        g_revb.engine.Process(g_revb_predelayed, out_l, out_r, frames);
+    else
+        g_revb.engine.ProcessDigital(g_revb_predelayed, out_l, out_r, frames);
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        if(g_revb.model_fade_remaining > 0U)
+        {
+            const float fade = 1.0f
+                    - ((float)g_revb.model_fade_remaining / (float)AUDIO_BLOCK_SIZE);
+            out_l[i] = (g_revb.last_out_l * (1.0f - fade)) + (out_l[i] * fade);
+            out_r[i] = (g_revb.last_out_r * (1.0f - fade)) + (out_r[i] * fade);
+            g_revb.model_fade_remaining--;
+        }
+        g_revb.last_out_l = out_l[i];
+        g_revb.last_out_r = out_r[i];
+    }
 }

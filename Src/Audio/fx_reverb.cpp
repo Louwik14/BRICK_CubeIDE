@@ -20,8 +20,16 @@ typedef struct
     float wet;
     float size;
     float decay;
+    float damp;
     float predelay_s;
+    float hpf;
     float lpf;
+    float smear;
+    float digital_decay;
+    float digital_damp;
+    float digital_hpf;
+    float digital_lpf;
+    uint8_t model;
 } fx_reverb_global_state_t;
 
 static fx_reverb_global_state_t g_reverb_global = {
@@ -30,8 +38,16 @@ static fx_reverb_global_state_t g_reverb_global = {
     .wet = 0.0f,
     .size = 0.0f,
     .decay = 0.50f,
+    .damp = 0.70f,
     .predelay_s = 0.045f,
+    .hpf = 0.0f,
     .lpf = 0.0f,
+    .smear = 1.0f,
+    .digital_decay = 0.5f,
+    .digital_damp = 0.7f,
+    .digital_hpf = 0.0f,
+    .digital_lpf = 0.0f,
+    .model = 0U,
 };
 
 AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
@@ -43,9 +59,23 @@ static void fx_reverb_global_apply_params(void)
 
     fx_reverb_revb_global_set_wet(g_reverb_global.wet);
     fx_reverb_revb_global_set_size(g_reverb_global.size);
-    fx_reverb_revb_global_set_decay(g_reverb_global.decay);
+    fx_reverb_revb_global_set_model(g_reverb_global.model);
+    fx_reverb_revb_global_set_decay((g_reverb_global.model == 0U)
+            ? g_reverb_global.decay : g_reverb_global.digital_decay);
+    fx_reverb_revb_global_set_damp((g_reverb_global.model == 0U)
+            ? g_reverb_global.damp : g_reverb_global.digital_damp);
     fx_reverb_revb_global_set_predelay(g_reverb_global.predelay_s);
-    fx_reverb_revb_global_set_lpf(g_reverb_global.lpf);
+    fx_reverb_revb_global_set_hpf((g_reverb_global.model == 0U)
+            ? g_reverb_global.hpf : g_reverb_global.digital_hpf);
+    fx_reverb_revb_global_set_lpf((g_reverb_global.model == 0U)
+            ? g_reverb_global.lpf : g_reverb_global.digital_lpf);
+    fx_reverb_revb_global_set_smear(g_reverb_global.smear);
+}
+
+void fx_reverb_global_set_model(uint8_t model)
+{
+    g_reverb_global.model = (model != 0U) ? 1U : 0U;
+    fx_reverb_global_apply_params();
 }
 
 void fx_reverb_global_init(float sample_rate)
@@ -58,7 +88,10 @@ void fx_reverb_global_init(float sample_rate)
 
 void fx_reverb_global_set_wet(float wet)
 {
+    const float previous = g_reverb_global.wet;
     g_reverb_global.wet = fx_reverb_clamp01(wet);
+    if((previous > 0.0f) && (g_reverb_global.wet <= 0.0f))
+        fx_reverb_revb_global_reset();
     fx_reverb_global_apply_params();
 }
 
@@ -74,15 +107,57 @@ void fx_reverb_global_set_decay(float decay)
     fx_reverb_global_apply_params();
 }
 
+void fx_reverb_global_set_damp(float damp)
+{
+    g_reverb_global.damp = fx_reverb_clamp01(damp);
+    fx_reverb_global_apply_params();
+}
+
 void fx_reverb_global_set_predelay(float predelay_s)
 {
     g_reverb_global.predelay_s = (predelay_s < 0.0f) ? 0.0f : predelay_s;
     fx_reverb_global_apply_params();
 }
 
+void fx_reverb_global_set_hpf(float hpf)
+{
+    g_reverb_global.hpf = fx_reverb_clamp01(hpf);
+    fx_reverb_global_apply_params();
+}
+
 void fx_reverb_global_set_lpf(float lpf)
 {
     g_reverb_global.lpf = fx_reverb_clamp01(lpf);
+    fx_reverb_global_apply_params();
+}
+
+void fx_reverb_global_set_smear(float smear)
+{
+    g_reverb_global.smear = fx_reverb_clamp01(smear);
+    fx_reverb_global_apply_params();
+}
+
+void fx_reverb_global_set_digital_decay(float decay)
+{
+    g_reverb_global.digital_decay = fx_reverb_clamp01(decay);
+    fx_reverb_global_apply_params();
+}
+
+void fx_reverb_global_set_digital_damp(float damp)
+{
+    g_reverb_global.digital_damp = fx_reverb_clamp01(damp);
+    fx_reverb_global_apply_params();
+}
+
+void fx_reverb_global_set_digital_hpf(float hpf)
+{
+    g_reverb_global.digital_hpf = fx_reverb_clamp01(hpf);
+    fx_reverb_global_apply_params();
+}
+
+void fx_reverb_global_set_digital_lpf(float lpf)
+{
+    g_reverb_global.digital_lpf = fx_reverb_clamp01(lpf);
     fx_reverb_global_apply_params();
 }
 

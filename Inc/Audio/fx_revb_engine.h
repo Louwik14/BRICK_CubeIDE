@@ -323,7 +323,13 @@ namespace mifx {
         };
 
         inline void SetLFOFrequency(LFOIndex index, float frequency) {
-            lfo_[index].template Init<stmlib::COSINE_OSCILLATOR_APPROXIMATE>(frequency * 32.0f);
+            const float stepped_frequency = frequency * 32.0f;
+            if(lfo_initialized_[index] == 0U) {
+                lfo_[index].template Init<stmlib::COSINE_OSCILLATOR_APPROXIMATE>(stepped_frequency);
+                lfo_initialized_[index] = 1U;
+            } else {
+                lfo_[index].InitApproximate(stepped_frequency);
+            }
         }
 
         inline void Start(Context *c) {
@@ -355,6 +361,20 @@ namespace mifx {
             c->write_ptr_ = write_ptr_;
         }
 
+        template<typename D>
+        inline float ReadSample(D &d, int32_t offset) const {
+            const int32_t resolved = (offset == -1) ? (D::length - 1) : offset;
+            return DataType<format>::Decompress(
+                    buffer_[(write_ptr_ + D::base + resolved) & MASK]);
+        }
+
+        template<typename D>
+        inline void WriteSample(D &d, int32_t offset, float value) {
+            const int32_t resolved = (offset == -1) ? (D::length - 1) : offset;
+            buffer_[(write_ptr_ + D::base + resolved) & MASK] =
+                    DataType<format>::Compress(value);
+        }
+
     private:
         enum {
             MASK = size - 1
@@ -363,6 +383,7 @@ namespace mifx {
         int32_t write_ptr_ = 0;
         T *buffer_;
         stmlib::CosineOscillator lfo_[2];
+        uint8_t lfo_initialized_[2] = {};
 
         DISALLOW_COPY_AND_ASSIGN(FxEngine);
     };

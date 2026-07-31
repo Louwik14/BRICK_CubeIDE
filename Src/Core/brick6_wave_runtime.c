@@ -30,6 +30,7 @@
 #define WAVE_PHASE_270             0xC0000000UL
 #define WAVE_S16_TO_FLOAT          (1.0f / 32768.0f)
 #define WAVE_LEVEL_SILENCE_EPS     0.00001f
+#define BRICK6_WAVE_OUTPUT_GAIN    0.42169650f
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define WAVE_OUTPUT_TRIM           0.30f
 #else
@@ -73,6 +74,8 @@ typedef struct
 } wave_osc_block_ctx_t;
 
 AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
+SEQ_STATE_D2 static brick6_wave_runtime_instance_t
+    g_wave_poly_runtime[BRICK6_WAVE_VOICE_INSTANCE_COUNT - BRICK6_WAVE_MAX_INSTANCES];
 static volatile uint8_t g_wave_dwt_enabled;
 static brick6_wave_runtime_dwt_stats_t g_wave_dwt_stats;
 
@@ -91,20 +94,24 @@ static float wave_clampf(float value, float min_value, float max_value)
 
 static brick6_wave_runtime_instance_t *wave_get_instance_mut(uint8_t instance_id)
 {
-    if (instance_id >= BRICK6_WAVE_MAX_INSTANCES)
+    if (instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT)
     {
         return NULL;
     }
-    return &g_wave_runtime[instance_id];
+    return (instance_id < BRICK6_WAVE_MAX_INSTANCES)
+        ? &g_wave_runtime[instance_id]
+        : &g_wave_poly_runtime[instance_id - BRICK6_WAVE_MAX_INSTANCES];
 }
 
 static const brick6_wave_runtime_instance_t *wave_get_instance(uint8_t instance_id)
 {
-    if (instance_id >= BRICK6_WAVE_MAX_INSTANCES)
+    if (instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT)
     {
         return NULL;
     }
-    return &g_wave_runtime[instance_id];
+    return (instance_id < BRICK6_WAVE_MAX_INSTANCES)
+        ? &g_wave_runtime[instance_id]
+        : &g_wave_poly_runtime[instance_id - BRICK6_WAVE_MAX_INSTANCES];
 }
 
 static void wave_resolve_table(brick6_wave_runtime_osc_t *osc)
@@ -631,9 +638,9 @@ static float wave_render_osc_sample_stable_ctx(wave_osc_block_ctx_t *ctx)
 
 void brick6_wave_runtime_init(void)
 {
-    for (uint8_t instance = 0U; instance < BRICK6_WAVE_MAX_INSTANCES; ++instance)
+    for (uint8_t instance = 0U; instance < BRICK6_WAVE_VOICE_INSTANCE_COUNT; ++instance)
     {
-        wave_reset_instance(&g_wave_runtime[instance]);
+        wave_reset_instance(wave_get_instance_mut(instance));
     }
 }
 
@@ -865,6 +872,63 @@ void brick6_wave_runtime_clear_trigger(uint8_t instance_id)
     }
 }
 
+void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance)
+{
+    const brick6_wave_runtime_instance_t *const src =
+        wave_get_instance(track_instance);
+    brick6_wave_runtime_instance_t *const dst =
+        wave_get_instance_mut(voice_instance);
+    if ((src == NULL) || (dst == NULL) || (src == dst))
+    {
+        return;
+    }
+    dst->quality = src->quality;
+    for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+    {
+        const uint32_t phase = dst->osc[osc].phase;
+        const uint32_t phase_inc_current = dst->osc[osc].phase_inc_current;
+        const float level_current = dst->osc[osc].level_current;
+        const float pos_smoothed = dst->osc[osc].pos_smoothed;
+        dst->osc[osc] = src->osc[osc];
+        dst->osc[osc].phase = phase;
+        dst->osc[osc].phase_inc_current = phase_inc_current;
+        dst->osc[osc].level_current = level_current;
+        dst->osc[osc].pos_smoothed = pos_smoothed;
+    }
+}
+
+uint8_t brick6_wave_runtime_prepare_block(uint8_t instance_id,
+                                          uint32_t frames,
+                                          uint8_t downstream_source_required)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if ((instance == NULL) || (frames == 0U))
+    {
+        return 0U;
+    }
+
+    if (instance->voice.velocity <= 0.0f)
+    {
+        return 0U;
+    }
+
+    if ((instance->voice.gate == 0U) && (downstream_source_required == 0U))
+    {
+        for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+        {
+            brick6_wave_runtime_osc_t *const voice_osc = &instance->osc[osc];
+            voice_osc->phase += voice_osc->phase_inc * frames;
+            voice_osc->phase_inc_current = voice_osc->phase_inc;
+            voice_osc->level_current = voice_osc->level;
+            wave_advance_pos_silent_block(
+                voice_osc, frames, instance->quality.pos_smooth_enabled);
+        }
+        return 0U;
+    }
+
+    return 1U;
+}
+
 uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
@@ -906,7 +970,8 @@ uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono
                 ? wave_render_osc_sample_stable_ctx(&osc_ctx[osc])
                 : wave_render_osc_sample_dynamic_ctx(&osc_ctx[osc]);
         }
-        out_mono[frame] = mono * instance->voice.velocity * WAVE_OUTPUT_TRIM;
+        const float rendered = mono * instance->voice.velocity * WAVE_OUTPUT_TRIM;
+        out_mono[frame] = rendered * BRICK6_WAVE_OUTPUT_GAIN;
     }
     if (g_wave_dwt_enabled != 0U)
     {

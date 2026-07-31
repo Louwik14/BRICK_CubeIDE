@@ -1,11 +1,83 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-07-31 - sidechain et profils master fixes
+
+- L'ordre track devient `moteur -> filtre/VCA/volume -> inserts -> tap sidechain
+  -> pan -> sends/bus`. Une track mutee produit un tap nul; le tap existe meme
+  sans route MAIN, ce qui autorise un ghost sidechain.
+- `MIX` utilise un HPF detecteur fixe 90 Hz. Deluge y mesure le bloc de sortie
+  compressee precedent; Brick reste feed-forward. `T1..T12` utilisent le tap
+  courant feed-forward et un anti-DC 20 Hz.
+- `AMT=0` retourne avant tout calcul DSP. Sinon AMT prepare seuil et makeup
+  borne selon le profil fixe; ratio, attack, release, knee et wet restent fixes.
+- Brick PEAK prend le maximum des huit samples de controle et son enveloppe
+  demarre a 1. La saturation Deluge est normalisee par `tanh(3x)/3`.
+
+## Addendum 2026-07-31 - renderer natif `TRX-BD`
+
+- `DRUM/MD` rend maintenant `TRX-BD` par une fonction specialisee: sinus
+  fondamental, seconde harmonique, enveloppes internes amplitude/pitch,
+  transitoire, bruit par voix, hard clipping et fondu court de retrigger.
+- `PTCH DEC RAMP RDEC STRT NOIS HARM CLIP` suivent les mappings initiaux du
+  plan. Les conversions exponentielles et coefficients sont prepares lors des
+  changements/notes; la boucle sample ne contient aucune transcendantale,
+  allocation ou lecture SD.
+- Phase et RNG sont reinitialises de facon deterministe au trigger. La queue
+  s'arrete lorsque l'enveloppe amplitude atteint son seuil borne.
+- Le stockage moteur est une union exclusive `AnalogBassDrum/TRX-BD` par
+  instance: `BD_ANALOG` garde son implementation et son comportement, tandis
+  que le chemin MD n'appelle jamais Plaits.
+- `TRX-SD`, `TRX-CH`, `EFM-BD`, `EFM-SD` et `EFM-CB` restent explicitement
+  silencieux.
+
+## Addendum 2026-07-31 - primitives MD non publiees
+
+- `md_dsp` ajoute une phase Q32 et une LUT sinus native S16 de 1024 intervalles
+  avec interpolation lineaire. La LUT est partagee, constante et independante
+  de Plaits, Deluge et des ressources Mutable.
+- Les primitives communes couvrent enveloppe exponentielle interne, PRNG
+  xorshift32 par etat de voix, HPF `x-x1+a*y1`, LPF one-pole, hard clipping
+  borne, mix lineaire et queue courte de retrigger.
+- Les increments, coefficients d'enveloppe et coefficients de filtres sont
+  prepares hors boucle sample. Le hot path ne contient ni allocation, acces
+  SD, division transcendante, `sinf`, `expf` ni etat global mutable.
+- Aucun renderer TRX/EFM n'appelle encore ces fonctions; le type MD reste
+  silencieux a l'etape 3.
+
+## Polyphonie synth interne
+
+Prism, Stack, Wave et DELUGE disposent de 1 à 8 slots statiques. Chaque slot
+polyphonique possède moteur, filtre/keytrack, ENV FLT, ENV VCA et pan, puis les voix
+sont sommées en stéréo avant les inserts, gain, sends et routing communs.
+`VOICES=1` conserve le chemin mono natif historique.
+
+## Addendum 2026-07-30 - premiere passe CPU locale Synth
+
+- Stack rend directement dans la reservation mono-native du mixer et ne publie
+  plus de lane lorsque gate et source de release sont tous deux inactifs; son
+  avance de phase `FREE` reste analytique.
+- Wave consulte, comme Stack et DELUGE, le besoin aval de la VCA avant toute
+  reservation de source. Apres la release, il avance analytiquement ses etats
+  continus sans rendre de wavetable ni publier de lane.
+- Les trims finaux Wave/DELUGE sont fusionnes dans leurs boucles de conversion,
+  Prism n'efface plus un buffer refuse, et le clear defensif pre-rendu des
+  metadonnees de sources est retire. L'init, les rebinds et la fin de
+  `mixer_process()` restent les points de clear autoritatifs.
+
+## Addendum 2026-07-30 - niveau nominal des moteurs sample
+
+- Sampler/RAM, Sampler/Stream et le slicing/looping porte par ces renderers
+  sortent de nouveau a leur niveau nominal, sans facteur fixe post-renderer.
+- Le Looper autonome n'utilisait pas cette compensation et reste inchange.
+  Les corrections DELUGE/WAVE, les moteurs synthe et le mixer global restent
+  inchanges.
+
 ## Addendum 2026-07-30 - alignement fixe des niveaux moteurs
 
 - PRISM reste la reference inchangee a `0 dB`. Les sorties DELUGE, WAVE et
-  SAMPLER sont multipliees respectivement par `0.44157045`, `0.42169650` et
-  `0.51880004` immediatement apres leur renderer et avant le filtre/VCA/inserts
-  de piste. STACK et DRUM restent inchanges.
+  sont multipliees respectivement par `0.44157045` et `0.42169650`
+  immediatement apres leur renderer et avant le filtre/VCA/inserts de piste.
+  SAMPLER, STACK et DRUM restent inchanges.
 - Ces facteurs lineaires precalcules sont fixes par moteur, sans calibration
   par modele, lecture de `recommended_gain_db`, calcul en dB ou `powf` dans
   l'IRQ. Le trim commun, le master et les enveloppes ne sont pas modifies.
@@ -83,7 +155,7 @@
 
 ## Addendum 2026-07-29 - placement ITCM noyau REVB
 
-- Le hot path REVB global place en ITCM uniquement `fx_reverb_revb_global_process_send_mono_to_stereo_wet()` et `mifx::Reverb::Process(const float*, float*, float*, size_t)` via les macros centralisees `ITCM_TEXT` / `ITCM_TEXT_NAMED` de `Inc/Storage/memory_layout.h`.
+- Le hot path REVB global place en ITCM `fx_reverb_revb_global_process_send_mono_to_stereo_wet()` et les deux kernels exclusifs `mifx::Reverb::Process*()` via les macros centralisees `ITCM_TEXT` / `ITCM_TEXT_NAMED` de `Inc/Storage/memory_layout.h`.
 - Les buffers de delay, predelay, etats mutables, init/reset/setters et mapping parametres restent dans leurs regions existantes; aucun calcul sonore, parametre ou rendu n'est modifie.
 - Verification Release/Premium du 2026-07-29: `.itcm_text` occupe `0x488` octets (1160 B), soit 64 KiB - 1160 B = 64376 B restants, dans les deux variantes. La boucle DSP `mifx::Reverb::Process()` est hors ligne et resident en ITCM a `0x00000000`; le wrapper REVB est a `0x00000358`.
 - Le gain CPU doit etre mesure uniquement sur la machine avec le CPU Load global, reverb seule activee puis desactivee; aucune instrumentation DWT locale n'appartient a ce chemin.
@@ -402,7 +474,8 @@ Flux nominal prouve par code:
 
 5) Rendu engines/tracks
 - Le callback DSP effectif est `brick6_audio_runtime_dsp` (via `dsp_engine`).
-- `mixer_external_inputs_clear` puis injections engines.
+- Les engines injectent leurs sources dans les reservations mixer laissees vides
+  par le clear de fin du bloc precedent.
 
 6) Mixage bus / sends / master
 - `mixer_process`:
@@ -449,7 +522,7 @@ Memoire:
 - Lanes externes mixer `g_external_track_l/r` dimensionnees `MIXER_MAX_TRACKS x AUDIO_BLOCK_SIZE`.
 
 Placement memoire valide pour la reverb SEND runtime:
-- `RevB` est l'unique backend reverb runtime compile.
+- `RevB` est l'unique backend reverb runtime compile; il selectionne exclusivement le modele Mutable ou Digital.
 - `g_revb_engine_buffer[32768]` et le predelay RevB restent en D1 via `AUDIO_WARM`.
 - Les anciens buffers runtime Drumboy (feedback DTCM, predelay/surround RAM_D2), GVerb et Oliverb sont retires.
 - Le code dormant Mutable/Inspiration non compile n'appartient pas au backend SEND runtime et n'est pas concerne par ce retrait.
@@ -521,7 +594,8 @@ Granular / fx_pool:
 Points factuels:
 - Responsabilites concentrees: `brick6_audio_runtime_dsp` cumule orchestration engines + modulation + sampler.
 - Ordre d'appel tres contraint:
-  - `mixer_external_inputs_clear` appele a la fois dans runtime et mixer (redondance defensive).
+  - `mixer_external_inputs_clear` est autoritatif a l'init, au rebind et en fin
+    de `mixer_process`; le clear pre-rendu redondant est retire.
   - post-mix: `fx_master_macro_process_block` reste apres `mixer_process` et avant preview SD.
   - autorite source capture: bus dedie dans `mixer_process`, avec mapping `mix_track -> logical_track` via `track_runtime_get_logical_track_for_mix_track`; le routage source par track filtre la capture.
   - aucun second backend recorder concurrent observe in-tree.
@@ -588,7 +662,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## 14.b Addendum - reverb send RevB unique
 
 - `RevB` est l'unique backend global send1 runtime compile; Drumboy, GVerb et Oliverb runtime sont retires.
-- Aucun parametre de type/backend reverb n'est conserve: `RevB` est l'unique backend runtime et la retrocompatibilite projet prototype n'est pas maintenue.
+- `RevB` reste l'unique backend runtime; `MODEL` choisit exclusivement son kernel `MUTABLE/DIGITAL`.
 - La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
 - `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
 - `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
@@ -1087,7 +1161,10 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-07-25 - fondation runtime Stack
 
 - `Src/Core/brick6_stack_runtime.c` porte le runtime Stack v0: trois slots, niveaux Q15, noise, note on/off/all-notes-off/reset, pending mono 24 samples par instance et trim nominal Q15 applique apres somme.
-- Le chemin Z1 rend les tracks bindees `TRACK_RUNTIME_ENGINE_STACK` via `brick6_stack_runtime_render_instance()` puis les injecte en mono-native avec `mixer_submit_external_mono_native()`, comme source externe separee de Prism.
+- Le chemin Z1 rend les tracks bindees `TRACK_RUNTIME_ENGINE_STACK` directement
+  dans une reservation mono-native du mixer; une track Stack sans gate ni source
+  de release ne valide aucune lane et conserve seulement son avance de phase
+  `FREE`.
 - Le kernel audible actuel est volontairement provisoire et local a Stack; aucune instance `MacroOscillator` Braids n'est creee par slot et le runtime Prism historique reste rendu par `brick6_braids_runtime`.
 - La file de commandes Stack est dimensionnee pour absorber un refresh/reapply complet de toutes les instances Stack (`reset + 16 params` par track) sans overflow silencieux avant drainage audio.
 
@@ -1243,3 +1320,41 @@ Clarification START/END/LOOP live:
 - Un seul modele est calcule par bloc: port float du RMS feedback Deluge ou Brick feed-forward stereo-link. Le sidechain HPF est commun; Brick actualise son controle toutes les 8 samples et interpole le gain.
 - L'ancien coeur et wrapper compresseur DaisySP sont supprimes; le slot devient `FX_COMP_LAB` et ne depend plus de DaisySP.
 - Un changement de modele remet a zero le nouvel etat et interpole depuis le gain sortant sur 128 samples, sans allocation ni double calcul de modele.
+## Addendum 2026-07-30 - reverb Mutable 48 kHz
+
+- La topologie RevB est transposee de 44,1 a 48 kHz: LFO, dix longueurs de delai/all-pass, offsets et excursions longues. Les dix reserves occupent statiquement 23 528 samples (+ séparateurs), sous le buffer fixe de 32 768.
+- `DAMP` suit la courbe Deluge et alimente un one-pole independant dans chaque branche du tank. `HPF/LPF` sont maintenant les one-poles stereo independants places sur les sorties wet; les anciens filtres d'entree mixer sont retires.
+- `SMEAR` lisse une profondeur AP1 de 0 a 80 samples. Une fois zero atteint, les deux operations `Interpolate/Write` AP1 sont omises dans la boucle sample afin que le cout IRQ mesure soit reellement different.
+- SIZE/DECAY/DAMP/HPF/LPF/SMEAR evoluent au block-rate, LVL rampe l'injection, et PRE-D crossfade les anciennes/nouvelles lectures. La courbe DECAY et le lien SIZE/diffusion/LFO restent inchanges.
+- `LVL=0` reste l'autorite hard-off: le mixer ne lance plus la reverb et le passage a zero efface hors chemin DSP la predelay et le tank, empechant toute ancienne queue de reparaitre.
+## Addendum 2026-07-30 - modele Digital Deluge
+
+- Le backend RevB partage maintenant son moteur et son buffer 32 768 entre `MUTABLE` et `DIGITAL`; un seul modele est execute par bloc. Digital transpose a 48 kHz le ratio Lexicon `29761/Fs`, ses douze lignes, excursions LFO et taps stereo.
+- Digital reprend les courbes Deluge DECAY/DAMP/HPF/LPF. LVL et PRE-D restent dans le wrapper commun.
+
+## Addendum 2026-07-31 - correction du tank Digital
+
+- Les all-pass modules `dap1a/dap2a` gardent le couplage croise du Deluge: lecture interpolee en tete de branche, puis ecriture unique depuis la branche opposee. Aucune ecriture all-pass locale ne doit interrompre cette boucle.
+- Les delais simples lisent le tap `length` du slot de garde Deluge et les deux branches utilisent leurs etats de damping independants `lp_1/lp_2`; la courbe DAMP reprend l'inversion `1-value` et le cas neutre a zero du code source pour les deux modeles.
+- Un changement de modele reset predelay, buffer, tank et filtres, puis la rampe LVL commune produit le fondu court. `LVL=0` conserve le hard-off sans appel backend.
+## Addendum 2026-07-30 - audit parametres reverb
+
+- La cause de la rupture DAMP Mutable etait une parenthese de mapping incorrecte puis une inversion omise: la division par `5.7` s'applique au resultat du logarithme et son argument utilise la convention Deluge `1-value`, commune a Mutable et Digital.
+- Les mises a jour LFO block-rate changent maintenant le coefficient de recurrence sans rappeler `Start()`: SIZE ne reinitialise plus la phase a chaque bloc. DECAY, SIZE, SMEAR, filtres wet stereo et valeurs specifiques Digital ont ete retraces jusqu'au kernel.
+- PRE-D ne fait deux lectures que pendant un vrai changement; une valeur stable revient a une lecture unique. LVL=0, reset de queue, rampe LVL et transition de modele restent inchanges.
+- Le PAN wet Digital est retire; les deux canaux sortent a leur niveau natif.
+# Addendum 2026-07-30 - integration silencieuse `DRUM / MD`
+
+- `brick6_audio_runtime` mappe `TRACK_RUNTIME_TYPE_DRUM_MD` vers
+  `DRUM_MODEL_ID_MD`; ce modele accepte le binding mais produit uniquement des
+  zeros a cette etape.
+- Le chemin MD n'appelle aucun rendu Plaits. `BD_ANALOG` reste le seul modele
+  Drum rendu par `AnalogBassDrum`, avec son comportement existant.
+- Aucun moteur TRX/EFM, primitive MD ou nouvel etat DSP n'est introduit.
+# Addendum 2026-07-31 - enveloppe de cycle de vie polyphonique
+
+- Chaque lane de voix polyphonique execute toujours sa propre enveloppe VCA,
+  independamment du flag d'activation du processeur VCA mono de la track.
+- L'etat `IDLE` de cette enveloppe est l'unique acquittement audio qui rend la
+  voix a l'allocateur; un all-notes-off poly declenche une release et ne reset
+  plus brutalement l'enveloppe.

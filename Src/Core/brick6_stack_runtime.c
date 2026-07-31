@@ -104,9 +104,15 @@ _Static_assert(sizeof(stack_osc_slot_t) <= 192U, "stack_osc_slot_t RAM budget ex
 _Static_assert(sizeof(brick6_stack_runtime_instance_t) <= 768U, "brick6_stack_runtime_instance_t RAM budget exceeded");
 
 AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_runtime[BRICK6_STACK_MAX_INSTANCES];
+enum { STACK_POLY_D2_COUNT = 30U, STACK_POLY_D1_COUNT = 13U, STACK_POLY_D3_COUNT = 12U };
+SEQ_STATE_D2 static brick6_stack_runtime_instance_t g_stack_poly_runtime_d2[STACK_POLY_D2_COUNT];
+AUDIO_WARM static brick6_stack_runtime_instance_t g_stack_poly_runtime_d1[STACK_POLY_D1_COUNT];
+AUDIO_STATE_D3 static brick6_stack_runtime_instance_t g_stack_poly_runtime_d3[STACK_POLY_D3_COUNT];
+AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_poly_runtime_hot[1U];
 AUDIO_HOT static volatile uint8_t g_stack_command_head;
 AUDIO_HOT static volatile uint8_t g_stack_command_tail;
 AUDIO_HOT static brick6_stack_runtime_command_t g_stack_command_queue[STACK_COMMAND_QUEUE_CAP];
+AUDIO_HOT static volatile uint8_t g_stack_note_cancel_pending[BRICK6_STACK_MAX_INSTANCES];
 
 static const brick6_stack_model_desc_t k_stack_model_catalog[BRICK6_STACK_MODEL_COUNT] = {
     [BRICK6_STACK_MODEL_SINFD] = {
@@ -232,7 +238,7 @@ static uint8_t brick6_stack_runtime_submit_command(uint8_t type,
                                                    int16_t value_i16,
                                                    uint16_t value_u16)
 {
-    if (instance_id >= BRICK6_STACK_MAX_INSTANCES)
+    if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
     {
         return 0U;
     }
@@ -268,20 +274,31 @@ static const brick6_stack_model_desc_t *brick6_stack_runtime_model_desc(brick6_s
 
 static brick6_stack_runtime_instance_t *brick6_stack_runtime_get_instance_mut(uint8_t instance_id)
 {
-    if (instance_id >= BRICK6_STACK_MAX_INSTANCES)
+    if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
     {
         return NULL;
     }
-    return &g_stack_runtime[instance_id];
+    if (instance_id < BRICK6_STACK_MAX_INSTANCES)
+        return &g_stack_runtime[instance_id];
+    uint8_t index = (uint8_t)(instance_id - BRICK6_STACK_MAX_INSTANCES);
+    if (index < STACK_POLY_D2_COUNT)
+        return &g_stack_poly_runtime_d2[index];
+    index = (uint8_t)(index - STACK_POLY_D2_COUNT);
+    if (index < STACK_POLY_D1_COUNT)
+        return &g_stack_poly_runtime_d1[index];
+    index = (uint8_t)(index - STACK_POLY_D1_COUNT);
+    if (index < STACK_POLY_D3_COUNT)
+        return &g_stack_poly_runtime_d3[index];
+    return &g_stack_poly_runtime_hot[0];
 }
 
 static const brick6_stack_runtime_instance_t *brick6_stack_runtime_get_instance(uint8_t instance_id)
 {
-    if (instance_id >= BRICK6_STACK_MAX_INSTANCES)
+    if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
     {
         return NULL;
     }
-    return &g_stack_runtime[instance_id];
+    return brick6_stack_runtime_get_instance_mut(instance_id);
 }
 
 static void brick6_stack_runtime_flush_pending(brick6_stack_runtime_instance_t *instance)
@@ -1222,9 +1239,11 @@ void brick6_stack_runtime_init(void)
 {
     g_stack_command_head = 0U;
     g_stack_command_tail = 0U;
-    for (uint8_t instance = 0U; instance < BRICK6_STACK_MAX_INSTANCES; ++instance)
+    memset((void *)g_stack_note_cancel_pending, 0, sizeof(g_stack_note_cancel_pending));
+    for (uint8_t instance = 0U; instance < BRICK6_STACK_VOICE_INSTANCE_COUNT; ++instance)
     {
-        brick6_stack_runtime_init_instance(&g_stack_runtime[instance]);
+        brick6_stack_runtime_init_instance(
+            brick6_stack_runtime_get_instance_mut(instance));
     }
 }
 
@@ -1473,6 +1492,40 @@ uint8_t brick6_stack_runtime_submit_reset_instance(uint8_t instance_id)
                                                0U);
 }
 
+void brick6_stack_runtime_cancel_note_state(uint8_t instance_id)
+{
+    if (instance_id >= BRICK6_STACK_MAX_INSTANCES)
+    {
+        return;
+    }
+
+    const uint32_t primask = brick6_stack_enter_critical();
+    uint8_t read = g_stack_command_tail;
+    uint8_t write = read;
+    const uint8_t head = g_stack_command_head;
+    while (read != head)
+    {
+        const brick6_stack_runtime_command_t command = g_stack_command_queue[read];
+        read = (uint8_t)((read + 1U) % STACK_COMMAND_QUEUE_CAP);
+
+        const uint8_t is_note_command =
+            ((command.type == (uint8_t)STACK_COMMAND_NOTE_ON)
+                || (command.type == (uint8_t)STACK_COMMAND_NOTE_OFF)
+                || (command.type == (uint8_t)STACK_COMMAND_ALL_NOTES_OFF)
+                || (command.type == (uint8_t)STACK_COMMAND_RESET)) ? 1U : 0U;
+        if ((command.instance_id == instance_id) && (is_note_command != 0U))
+        {
+            continue;
+        }
+
+        g_stack_command_queue[write] = command;
+        write = (uint8_t)((write + 1U) % STACK_COMMAND_QUEUE_CAP);
+    }
+    g_stack_command_head = write;
+    g_stack_note_cancel_pending[instance_id] = 1U;
+    brick6_stack_exit_critical(primask);
+}
+
 uint8_t brick6_stack_runtime_submit_slot_model(uint8_t instance_id, uint8_t slot, brick6_stack_model_t model)
 {
     if (slot >= BRICK6_STACK_SLOT_COUNT)
@@ -1589,6 +1642,19 @@ uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t ena
 
 void brick6_stack_runtime_process_commands_from_audio(void)
 {
+    for (uint8_t instance_id = 0U; instance_id < BRICK6_STACK_MAX_INSTANCES; ++instance_id)
+    {
+        uint8_t cancel_pending = 0U;
+        const uint32_t primask = brick6_stack_enter_critical();
+        cancel_pending = g_stack_note_cancel_pending[instance_id];
+        g_stack_note_cancel_pending[instance_id] = 0U;
+        brick6_stack_exit_critical(primask);
+        if (cancel_pending != 0U)
+        {
+            brick6_stack_runtime_all_notes_off(instance_id);
+        }
+    }
+
     for (;;)
     {
         const uint32_t primask = brick6_stack_enter_critical();
@@ -1705,20 +1771,49 @@ void brick6_stack_runtime_clear_trigger(uint8_t instance_id)
     }
 }
 
-void brick6_stack_runtime_render_instance(uint8_t instance_id,
-                                          float *out_mono,
-                                          uint32_t frames,
-                                          uint8_t downstream_source_required)
+void brick6_stack_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance)
+{
+    const brick6_stack_runtime_instance_t *const src =
+        brick6_stack_runtime_get_instance(track_instance);
+    brick6_stack_runtime_instance_t *const dst =
+        brick6_stack_runtime_get_instance_mut(voice_instance);
+    if ((src == NULL) || (dst == NULL) || (src == dst))
+    {
+        return;
+    }
+    dst->noise_level_q15 = src->noise_level_q15;
+    dst->osc_detune_q15 = src->osc_detune_q15;
+    dst->phase_reset = src->phase_reset;
+    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+    {
+        stack_osc_slot_t *const out = &dst->slots[slot];
+        const stack_osc_slot_t *const in = &src->slots[slot];
+        out->model = in->model;
+        out->family = in->family;
+        out->kernel_id = in->kernel_id;
+        out->renderer_id = in->renderer_id;
+        out->level_q15 = in->level_q15;
+        out->tune_cents = in->tune_cents;
+        out->timbre_q15 = in->timbre_q15;
+        out->color_q15 = in->color_q15;
+        out->param3_q15 = in->param3_q15;
+    }
+}
+
+uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
+                                             float *out_mono,
+                                             uint32_t frames,
+                                             uint8_t downstream_source_required)
 {
     brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(instance_id);
     if (out_mono == NULL)
     {
-        return;
+        return 0U;
     }
     if (instance == NULL)
     {
         memset(out_mono, 0, frames * sizeof(float));
-        return;
+        return 0U;
     }
 
     if ((instance->release_source_active != 0U)
@@ -1730,6 +1825,19 @@ void brick6_stack_runtime_render_instance(uint8_t instance_id,
     const uint8_t source_active =
         (uint8_t)((instance->voice.gate != 0U)
                || (instance->release_source_active != 0U));
+    if (source_active == 0U)
+    {
+        uint32_t remaining = frames;
+        while (remaining > 0U)
+        {
+            const uint8_t chunk = (remaining > UINT8_MAX)
+                ? UINT8_MAX
+                : (uint8_t)remaining;
+            brick6_stack_runtime_advance_free_running(instance, chunk);
+            remaining -= chunk;
+        }
+        return 0U;
+    }
 
     uint32_t rendered = 0U;
     while (rendered < frames)
@@ -1755,6 +1863,7 @@ void brick6_stack_runtime_render_instance(uint8_t instance_id,
             instance->pending_count--;
         }
     }
+    return 1U;
 }
 
 const brick6_stack_runtime_voice_t *brick6_stack_runtime_get_voice(uint8_t instance_id)
