@@ -110,6 +110,23 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
                 && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
                 && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI))
         {
+            if (brick6_sampler_runtime_track_ram_is_mono(ctx->track_id) != 0U)
+            {
+                float *direct_mono = NULL;
+                if (mixer_begin_external_mono_native(ctx->mix_track_id,
+                                                     frames,
+                                                     &direct_mono) != 0U)
+                {
+                    memset(direct_mono, 0, frames * sizeof(float));
+                    brick6_sampler_runtime_render_ram_track_mono(ctx,
+                                                                  direct_mono,
+                                                                  frames);
+                    mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                    sampler_tracks++;
+                    continue;
+                }
+            }
+
             float *direct_l = NULL;
             float *direct_r = NULL;
             if (mixer_begin_external_stereo(ctx->mix_track_id, frames, &direct_l, &direct_r) != 0U)

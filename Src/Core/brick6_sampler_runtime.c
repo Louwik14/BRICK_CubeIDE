@@ -211,6 +211,7 @@ static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
 static AUDIO_HOT brick6_sampler_declick_tail_t
     g_sampler_declick_tail[STEAL_DECLICK_TAIL_SLOTS];
+static AUDIO_HOT ALIGN32 float g_sampler_ram_mono_discard[AUDIO_BLOCK_SIZE];
 static uint32_t g_sampler_voice_trigger_counter;
 static uint8_t g_sampler_multi_alloc_stole_voice;
 static CTRL_STATE uint8_t
@@ -5865,6 +5866,19 @@ uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id)
             && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)) ? 1U : 0U;
 }
 
+uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    return ((voice->active != 0U)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+            && (voice->ram_format == SAMPLER_RAM_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
+}
+
 void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
                                              float *out_l,
                                              float *out_r,
@@ -5900,6 +5914,24 @@ void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
     }
 
     brick6_sampler_runtime_mix_declick_tails(ctx->track_id, out_l, out_r, frames);
+}
+
+void brick6_sampler_runtime_render_ram_track_mono(const track_runtime_ctx_t *ctx,
+                                                  float *out_mono,
+                                                  uint32_t frames)
+{
+    if ((ctx == NULL) || (out_mono == NULL) || (frames == 0U)
+        || (frames > AUDIO_BLOCK_SIZE)
+        || (brick6_sampler_runtime_track_ram_is_mono(ctx->track_id) == 0U))
+    {
+        return;
+    }
+
+    memset(g_sampler_ram_mono_discard, 0, frames * sizeof(float));
+    brick6_sampler_runtime_render_ram_track(ctx,
+                                            out_mono,
+                                            g_sampler_ram_mono_discard,
+                                            frames);
 }
 
 void brick6_sampler_runtime_render_stream_track(const track_runtime_ctx_t *ctx,
