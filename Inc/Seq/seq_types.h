@@ -24,6 +24,29 @@
 /* Global per-track memory budget: shared by all steps of the track. */
 #define SEQ_PLOCK_BUDGET_PER_TRACK SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK
 
+/* Current firmware p-lock contract.  These slots are the compact identity
+ * used by the runtime and the current Pattern format; no legacy slot range
+ * is part of the contract. */
+#define SEQ_PARAM_ENV_SLOT_COUNT       25U
+#define SEQ_PARAM_TONE_SLOT_COUNT      21U
+#define SEQ_PARAM_PLAY_SLOT_COUNT      16U
+#define SEQ_PARAM_MOD_SLOT_COUNT       12U
+#define SEQ_PARAM_MIDI_FX_SLOT_COUNT   16U
+#define SEQ_PARAM_MIX_SLOT_COUNT        4U
+
+#define SEQ_PARAM_ENV_SLOT_OFFSET       0U
+#define SEQ_PARAM_TONE_SLOT_OFFSET     (SEQ_PARAM_ENV_SLOT_OFFSET + SEQ_PARAM_ENV_SLOT_COUNT)
+#define SEQ_PARAM_PLAY_SLOT_OFFSET     (SEQ_PARAM_TONE_SLOT_OFFSET + SEQ_PARAM_TONE_SLOT_COUNT)
+#define SEQ_PARAM_MOD_SLOT_OFFSET      (SEQ_PARAM_PLAY_SLOT_OFFSET + SEQ_PARAM_PLAY_SLOT_COUNT)
+#define SEQ_PARAM_MIDI_FX_SLOT_OFFSET  (SEQ_PARAM_MOD_SLOT_OFFSET + SEQ_PARAM_MOD_SLOT_COUNT)
+#define SEQ_PARAM_MIX_SLOT_OFFSET      (SEQ_PARAM_MIDI_FX_SLOT_OFFSET + SEQ_PARAM_MIDI_FX_SLOT_COUNT)
+#define SEQ_PARAM_RUNTIME_SLOT_COUNT   (SEQ_PARAM_MIX_SLOT_OFFSET + SEQ_PARAM_MIX_SLOT_COUNT)
+
+#define SEQ_PARAM_RUNTIME_FLAG_BIT_COUNT \
+    (SEQ_TRACK_COUNT * SEQ_PARAM_RUNTIME_SLOT_COUNT)
+#define SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT \
+    ((SEQ_PARAM_RUNTIME_FLAG_BIT_COUNT + 7U) / 8U)
+
 typedef uint8_t seq_track_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;

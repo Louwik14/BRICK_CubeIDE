@@ -104,11 +104,11 @@ $patternBank = Get-Content -Raw (Join-Path $repo 'Src\Storage\pattern_sd_bank.c'
 $projectHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\project_v1.h')
 $kitBankHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\kit_sd_bank.h')
 $patchBankHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\patch_sd_bank.h')
-if (-not ($patternBank.Contains('#define PATTERN_VERSION    4U') -and
-          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    4U') -and
+if (-not ($patternBank.Contains('#define PATTERN_VERSION    5U') -and
+          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    5U') -and
           $kitBankHeader.Contains('#define KIT_SD_FILE_VERSION 3U') -and
           $patchBankHeader.Contains('#define PATCH_SD_FILE_VERSION 3U'))) {
     throw 'ENV ownership migration versions are inconsistent'
 }
 
-'play_special_storage_validation=PASS save_load=yes special_action=yes notes_arp=excluded clipboard_roles=strict clear=yes undo_redo=yes formats=pattern/project-v4-kit/patch-v3'
+'play_special_storage_validation=PASS save_load=yes special_action=yes notes_arp=excluded clipboard_roles=strict clear=yes undo_redo=yes formats=pattern/project-v5-kit/patch-v3'

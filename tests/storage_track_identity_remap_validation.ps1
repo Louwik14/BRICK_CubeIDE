@@ -86,11 +86,11 @@ $patternBank = Get-Content -Raw (Join-Path $repo 'Src\Storage\pattern_sd_bank.c'
 $projectHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\project_v1.h')
 $kitBank = Get-Content -Raw (Join-Path $repo 'Inc\Storage\kit_sd_bank.h')
 $patchBank = Get-Content -Raw (Join-Path $repo 'Inc\Storage\patch_sd_bank.h')
-if (-not ($patternBank.Contains('#define PATTERN_VERSION    4U') -and
-          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    4U') -and
+if (-not ($patternBank.Contains('#define PATTERN_VERSION    5U') -and
+          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    5U') -and
           $kitBank.Contains('#define KIT_SD_FILE_VERSION 3U') -and
           $patchBank.Contains('#define PATCH_SD_FILE_VERSION 3U'))) {
     throw 'Persistent format version changed'
 }
 
-'storage_track_identity_remap_validation=PASS old_order_lowcost=yes old_order_premium=yes bijection=yes pattern=all_track_blocks project=multi+macro kit=payload+summary formats=v4,v4,v3,v3'
+'storage_track_identity_remap_validation=PASS old_order_lowcost=yes old_order_premium=yes bijection=yes pattern=all_track_blocks project=multi+macro kit=payload+summary formats=v5,v5,v3,v3'

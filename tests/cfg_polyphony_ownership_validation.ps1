@@ -81,8 +81,8 @@ Require-Text $kitHeader 'float synth_spread;' 'Kit payload does not carry SPREAD
 Require-Text $kit 'dst->synth_spread = (family == UI_TRACK_FAMILY_SYNTH)' 'Kit capture does not carry SPREAD'
 Require-Text $kit 'synth_polyphony_set_spread(track, kit->tracks[track].synth_spread);' 'Kit restore does not carry SPREAD'
 
-Require-Text (Read-RepoFile 'Src\Storage\pattern_sd_bank.c') '#define PATTERN_VERSION    4U' 'Pattern version changed unexpectedly'
-Require-Text (Read-RepoFile 'Inc\Storage\project_v1.h') '#define PROJECT_V1_FILE_VERSION    4U' 'Project version changed unexpectedly'
+Require-Text (Read-RepoFile 'Src\Storage\pattern_sd_bank.c') '#define PATTERN_VERSION    5U' 'Pattern version changed unexpectedly'
+Require-Text (Read-RepoFile 'Inc\Storage\project_v1.h') '#define PROJECT_V1_FILE_VERSION    5U' 'Project version changed unexpectedly'
 Require-Text (Read-RepoFile 'Inc\Storage\kit_sd_bank.h') '#define KIT_SD_FILE_VERSION 3U' 'Kit version changed unexpectedly'
 Require-Text (Read-RepoFile 'Inc\Storage\patch_sd_bank.h') '#define PATCH_SD_FILE_VERSION 3U' 'Patch version changed unexpectedly'
 

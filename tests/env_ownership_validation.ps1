@@ -3,6 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 
 $runtime = Get-Content -Raw (Join-Path $root 'Src/Core/track_runtime.c')
 $iface = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_param_iface.c')
+$types = Get-Content -Raw (Join-Path $root 'Inc/Seq/seq_types.h')
 $store = Get-Content -Raw (Join-Path $root 'Inc/Param/param_store.h')
 $macro = Get-Content -Raw (Join-Path $root 'Src/Param/param_macro.c')
 $catalog = Get-Content -Raw (Join-Path $root 'Src/Mod/mod_destination_catalog.c')
@@ -43,7 +44,7 @@ $mixExpected = @('PARAM_MIX_LEVEL','PARAM_MIX_PAN','PARAM_MIX_SEND1','PARAM_MIX_
 $mixTable = [regex]::Match($iface, '(?s)g_seq_param_mix_slot_to_id\[[^\]]+\]\s*=\s*\{(.*?)\};').Groups[1].Value
 $mixActual = @([regex]::Matches($mixTable, 'PARAM_[A-Z0-9_]+') | ForEach-Object { $_.Value })
 if (($mixActual -join ',') -ne ($mixExpected -join ',')) { throw "MIX slot table mismatch: $($mixActual -join ',')" }
-if ($iface -notmatch '#define SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK 4U') { throw 'MIX state capacity is not four slots' }
+if ($types -notmatch '#define SEQ_PARAM_MIX_SLOT_COUNT\s+4U') { throw 'MIX contract capacity is not four slots' }
 
 $enumBody = [regex]::Match($store, '(?s)enum\s*\{(.*?)\sPARAM_COUNT\s*[,}]').Groups[1].Value
 $enumParams = @([regex]::Matches($enumBody, 'PARAM_[A-Z0-9_]+') | ForEach-Object { $_.Value })
@@ -95,8 +96,8 @@ if (($kit -notmatch 'memcpy\(&dst->sound, sound') -or
     ($kit -notmatch 'memcpy\(dst_sound, &src->sound') -or
     ($kit -notmatch 'rule\.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV')) { throw 'Kit ENV sound round-trip missing' }
 if (($project -notmatch 'PatternSaveV1 live') -or
-    ($project -notmatch '#define PROJECT_V1_FILE_VERSION\s+4U') -or
-    ($patternBank -notmatch '#define PATTERN_VERSION\s+4U') -or
+    ($project -notmatch '#define PROJECT_V1_FILE_VERSION\s+5U') -or
+    ($patternBank -notmatch '#define PATTERN_VERSION\s+5U') -or
     ($kitBank -notmatch '#define KIT_SD_FILE_VERSION 3U')) { throw 'Persistence version contract mismatch' }
 
-Write-Output "env_ownership_validation=PASS env_slots=$($next.ENV)/256 mix_slots=4 mod_slots=$($next.MOD) pattern_project=v4 kit=v3"
+Write-Output "env_ownership_validation=PASS env_slots=$($next.ENV)/256 mix_slots=4 mod_slots=$($next.MOD) pattern_project=v5 kit=v3"

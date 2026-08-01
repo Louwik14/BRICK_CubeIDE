@@ -10,6 +10,7 @@
 typedef struct __attribute__((packed))
 {
     uint8_t set_id;
+    /* Current-format compact slot; legacy slot numbers are not accepted. */
     seq_param_slot_t param_slot;
     seq_value16_t value16;
     uint8_t flags;

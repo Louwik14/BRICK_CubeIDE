@@ -22,21 +22,26 @@ typedef struct
     seq_value16_t runtime_value;
 } seq_param_slot_state_t;
 
-#define SEQ_PARAM_NON_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
-#define SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK 4U
-#define SEQ_PARAM_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
-#define SEQ_PARAM_FLAG_BIT_COUNT (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_SLOT_COUNT)
+/* Step 1 only defines the future compact contract. The runtime storage and
+ * bitmap layout remain on the pre-migration representation until step 2. */
+#define SEQ_PARAM_NON_MIX_SLOT_COUNT \
+    (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
+#define SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK SEQ_PARAM_MIX_SLOT_COUNT
+#define SEQ_PARAM_MIX_STATE_SLOT_COUNT \
+    (SEQ_TRACK_COUNT * SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK)
+#define SEQ_PARAM_FLAG_BIT_COUNT \
+    (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_STATE_SLOT_COUNT)
 #define SEQ_PARAM_FLAG_BYTE_COUNT ((SEQ_PARAM_FLAG_BIT_COUNT + 7U) / 8U)
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 SEQ_STATE_D2 static seq_param_slot_state_t
-    g_seq_param_mix_state[SEQ_TRACK_COUNT][SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK];
+    g_seq_param_mix_state[SEQ_TRACK_COUNT][SEQ_PARAM_MIX_SLOT_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_MIX][PARAM_COUNT];
 SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 
-static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK] = {
+static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
     PARAM_MIX_LEVEL,
     PARAM_MIX_PAN,
     PARAM_MIX_SEND1,
@@ -54,11 +59,12 @@ static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_i
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
     {
         return SEQ_PARAM_NON_MIX_SLOT_COUNT
-            + ((uint32_t)track * SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
+            + ((uint32_t)track * SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK)
             + (uint32_t)param_slot;
     }
 
-    return (((uint32_t)track * (uint32_t)SEQ_PLOCK_SET_MIX + (uint32_t)set_id) * 256U) + (uint32_t)param_slot;
+    return (((uint32_t)track * (uint32_t)SEQ_PLOCK_SET_MIX + (uint32_t)set_id) * 256U)
+        + (uint32_t)param_slot;
 }
 
 static uint8_t seq_param_get_flag(const uint8_t *bits,
@@ -193,7 +199,7 @@ static uint8_t seq_param_iface_mix_param_to_slot(param_id_t param, seq_param_slo
     }
 
     for (seq_param_slot_t slot = 0U;
-         slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK;
+         slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT;
          ++slot)
     {
         if (g_seq_param_mix_slot_to_id[slot] == param)
@@ -208,7 +214,7 @@ static uint8_t seq_param_iface_mix_param_to_slot(param_id_t param, seq_param_slo
 
 static uint8_t seq_param_iface_mix_slot_to_param(seq_param_slot_t slot, param_id_t *out_param)
 {
-    if ((out_param == 0) || (slot >= (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK))
+    if ((out_param == 0) || (slot >= (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT))
     {
         return 0U;
     }
@@ -226,7 +232,7 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, ui
 
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
     {
-        return (param_slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
+        return (param_slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT)
             ? &g_seq_param_mix_state[track][param_slot]
             : 0;
     }
@@ -273,6 +279,62 @@ static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t d
     }
 }
 
+static uint8_t seq_param_iface_is_excluded_from_plock(param_id_t param_id)
+{
+    switch (param_id)
+    {
+        case PARAM_SAMPLER_SLICE_COUNT:
+        /* Looper decision for the current firmware: ARM/LEN/PLAY/XFADE are
+         * p-lockable; STRETCH/PITCH/GRAIN are intentionally excluded. */
+        case PARAM_LOOPER_STRETCH:
+        case PARAM_LOOPER_PITCH:
+        case PARAM_LOOPER_GRAIN:
+        case PARAM_MOD_MATRIX_SLOT:
+        case PARAM_MOD_MATRIX_SOURCE:
+        case PARAM_MOD_MATRIX_DEST:
+        case PARAM_MOD_MATRIX_DEPTH:
+        case PARAM_MOD_MULTI_1_A:
+        case PARAM_MOD_MULTI_1_B:
+        case PARAM_MOD_MULTI_2_A:
+        case PARAM_MOD_MULTI_2_B:
+        case PARAM_MOD_SLEW_1_SOURCE:
+        case PARAM_MOD_SLEW_1_AMOUNT:
+        case PARAM_MOD_SLEW_2_SOURCE:
+        case PARAM_MOD_SLEW_2_AMOUNT:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
+{
+    if (param_id >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (seq_param_iface_is_excluded_from_plock(param_id) != 0U))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+            && (seq_param_iface_is_mix_param_plockable(param_id) == 0U))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
+}
+
 static void seq_param_iface_rebuild_slot_maps(void)
 {
     memset(g_seq_param_id_to_slot, SEQ_PARAM_SLOT_UNMAPPED, sizeof(g_seq_param_id_to_slot));
@@ -297,25 +359,7 @@ static void seq_param_iface_rebuild_slot_maps(void)
             g_seq_param_slot_to_id[SEQ_PLOCK_SET_MIDI_FX][slot] = param;
             continue;
         }
-        if ((param == PARAM_SAMPLER_SLICE_COUNT)
-                || (param == PARAM_LOOPER_ARM)
-                || (param == PARAM_LOOPER_LEN)
-                || (param == PARAM_LOOPER_PLAY)
-                || (param == PARAM_LOOPER_STRETCH)
-                || (param == PARAM_LOOPER_PITCH)
-                || (param == PARAM_LOOPER_GRAIN)
-                || (param == PARAM_MOD_MATRIX_SLOT)
-                || (param == PARAM_MOD_MATRIX_SOURCE)
-                || (param == PARAM_MOD_MATRIX_DEST)
-                || (param == PARAM_MOD_MATRIX_DEPTH)
-                || (param == PARAM_MOD_MULTI_1_A)
-                || (param == PARAM_MOD_MULTI_1_B)
-                || (param == PARAM_MOD_MULTI_2_A)
-                || (param == PARAM_MOD_MULTI_2_B)
-                || (param == PARAM_MOD_SLEW_1_SOURCE)
-                || (param == PARAM_MOD_SLEW_1_AMOUNT)
-                || (param == PARAM_MOD_SLEW_2_SOURCE)
-                || (param == PARAM_MOD_SLEW_2_AMOUNT))
+        if (seq_param_iface_is_param_plockable(param) == 0U)
         {
             continue;
         }
@@ -327,6 +371,13 @@ static void seq_param_iface_rebuild_slot_maps(void)
 
         uint8_t set_id = 0U;
         if (seq_param_iface_set_id_from_domain(track_runtime_get_param_rule(param).domain, &set_id) == 0U)
+        {
+            continue;
+        }
+
+        /* TONE slots are selected by the active engine and are never assigned
+         * by the generic non-track-aware map. */
+        if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
         {
             continue;
         }
@@ -346,26 +397,7 @@ static void seq_param_iface_rebuild_slot_maps(void)
 static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
-    {
-        return 0U;
-    }
-    if ((param == PARAM_SAMPLER_SLICE_COUNT)
-            || (param == PARAM_LOOPER_STRETCH)
-            || (param == PARAM_LOOPER_PITCH)
-            || (param == PARAM_LOOPER_GRAIN)
-                || (param == PARAM_MOD_MATRIX_SLOT)
-                || (param == PARAM_MOD_MATRIX_SOURCE)
-                || (param == PARAM_MOD_MATRIX_DEST)
-                || (param == PARAM_MOD_MATRIX_DEPTH)
-                || (param == PARAM_MOD_MULTI_1_A)
-                || (param == PARAM_MOD_MULTI_1_B)
-                || (param == PARAM_MOD_MULTI_2_A)
-                || (param == PARAM_MOD_MULTI_2_B)
-                || (param == PARAM_MOD_SLEW_1_SOURCE)
-                || (param == PARAM_MOD_SLEW_1_AMOUNT)
-                || (param == PARAM_MOD_SLEW_2_SOURCE)
-                || (param == PARAM_MOD_SLEW_2_AMOUNT))
+    if (seq_param_iface_is_param_plockable(param) == 0U)
     {
         return 0U;
     }

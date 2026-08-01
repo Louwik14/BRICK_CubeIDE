@@ -469,6 +469,31 @@ static const param_id_t g_track_runtime_tone_slots_drum_md[] = {
     PARAM_DRUM_MD_P5, PARAM_DRUM_MD_P6, PARAM_DRUM_MD_P7, PARAM_DRUM_MD_P8
 };
 
+_Static_assert((sizeof(g_track_runtime_tone_slots_prism) / sizeof(g_track_runtime_tone_slots_prism[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "PRISM TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtime_tone_slots_stack[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "STACK TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "WAVE TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_deluge) / sizeof(g_track_runtime_tone_slots_deluge[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "DELUGE TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_sampler) / sizeof(g_track_runtime_tone_slots_sampler[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "SAMPLER TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "STREAM TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_looper) / sizeof(g_track_runtime_tone_slots_looper[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "LOOPER TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_multi) / sizeof(g_track_runtime_tone_slots_multi[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "MULTI TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_midi) / sizeof(g_track_runtime_tone_slots_midi[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "MIDI TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_macro_fx) / sizeof(g_track_runtime_tone_slots_macro_fx[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "MACRO FX TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_drum_bd_analog) / sizeof(g_track_runtime_tone_slots_drum_bd_analog[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "DRUM BD TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_drum_md) / sizeof(g_track_runtime_tone_slots_drum_md[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "DRUM MD TONE slots exceed compact capacity");
+
 static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
                                                  const param_id_t **out_table,
                                                  uint8_t *out_count)

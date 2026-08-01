@@ -102,6 +102,9 @@ if(WIN32)
     add_test(NAME env_ownership
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/env_ownership_validation.ps1)
+    add_test(NAME seq_param_compact_contract
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/seq_param_compact_contract_validation.ps1)
     add_test(NAME vca_dispatcher
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/vca_dispatcher_validation.ps1)

@@ -17,6 +17,30 @@ typedef enum
     SEQ_PLOCK_SET_COUNT
 } seq_plock_set_id_t;
 
+_Static_assert(SEQ_PLOCK_SET_ENV == 0, "ENV p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_TONE == 1, "TONE p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_PLAY == 2, "PLAY p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_MOD == 3, "MOD p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_MIDI_FX == 4, "MIDI FX p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_MIX == 5, "MIX p-lock set ordinal changed");
+_Static_assert(SEQ_PLOCK_SET_COUNT == 6, "p-lock set count changed");
+_Static_assert(SEQ_PARAM_ENV_SLOT_OFFSET == 0U, "ENV p-lock offset changed");
+_Static_assert(SEQ_PARAM_TONE_SLOT_OFFSET == 25U, "TONE p-lock offset changed");
+_Static_assert(SEQ_PARAM_PLAY_SLOT_OFFSET == 46U, "PLAY p-lock offset changed");
+_Static_assert(SEQ_PARAM_MOD_SLOT_OFFSET == 62U, "MOD p-lock offset changed");
+_Static_assert(SEQ_PARAM_MIDI_FX_SLOT_OFFSET == 74U, "MIDI FX p-lock offset changed");
+_Static_assert(SEQ_PARAM_MIX_SLOT_OFFSET == 90U, "MIX p-lock offset changed");
+_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT == 94U, "runtime p-lock slot count changed");
+_Static_assert(SEQ_PARAM_ENV_SLOT_COUNT <= 255U, "ENV p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_TONE_SLOT_COUNT <= 255U, "TONE p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_PLAY_SLOT_COUNT <= 255U, "PLAY p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_MOD_SLOT_COUNT <= 255U, "MOD p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_MIDI_FX_SLOT_COUNT <= 255U, "MIDI FX p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds slot type");
+_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 165U, "runtime p-lock bitmap size changed");
+_Static_assert((PARAM_MIDI_FX_S4_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+               "MIDI FX inverse table capacity changed");
+
 typedef enum
 {
     SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT = 0
@@ -33,6 +57,9 @@ typedef struct
 } seq_param_iface_base_commit_cmd_t;
 
 void seq_param_iface_init(void);
+
+/* Track-independent compact-slot allowlist. TONE remains engine-specific at mapping time. */
+uint8_t seq_param_iface_is_param_plockable(param_id_t param_id);
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id);
 uint8_t seq_param_iface_set_to_mask(uint8_t set_id);

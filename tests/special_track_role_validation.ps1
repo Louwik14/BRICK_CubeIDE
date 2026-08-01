@@ -135,11 +135,11 @@ if (-not $pattern.Contains('out_pattern->globals.global_values[id] = param_get(i
     -not $pattern.Contains('param_set(id, ctx->pattern->globals.global_values[id])')) {
     throw 'Pattern global capture/restore does not preserve param_get/param_set DSP reapply'
 }
-if (-not ($patternBank.Contains('#define PATTERN_VERSION    4U') -and
-          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    4U') -and
+if (-not ($patternBank.Contains('#define PATTERN_VERSION    5U') -and
+          $projectHeader.Contains('#define PROJECT_V1_FILE_VERSION    5U') -and
           $kitBank.Contains('#define KIT_SD_FILE_VERSION 3U') -and
           $patchBank.Contains('#define PATCH_SD_FILE_VERSION 3U'))) {
     throw 'Persistence versions changed unexpectedly'
 }
 
-'special_track_role_validation=PASS matrix=master/fx:cfg+tone-only resolver=role-aware clipboard=master-global/fx-track macrofx=16 reverb-globals=4 formats=v4,v4,v3,v3'
+'special_track_role_validation=PASS matrix=master/fx:cfg+tone-only resolver=role-aware clipboard=master-global/fx-track macrofx=16 reverb-globals=4 formats=v5,v5,v3,v3'
