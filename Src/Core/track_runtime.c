@@ -309,7 +309,8 @@ static uint8_t track_runtime_param_is_vca(param_id_t param)
     return (uint8_t)((param == PARAM_VCA_ATTACK)
                      || (param == PARAM_VCA_DECAY)
                      || (param == PARAM_VCA_SUSTAIN)
-                     || (param == PARAM_VCA_RELEASE));
+                     || (param == PARAM_VCA_RELEASE)
+                     || (param == PARAM_ENV_RETRIG_VCA));
 }
 
 static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_ctx_t *ctx)
@@ -2206,7 +2207,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
             if ((track_runtime_param_is_vca(param) != 0U)
-                    && (track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U))
+                    && (track_runtime_supports_vca_gate(ctx) == 0U))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

@@ -65,10 +65,13 @@ static float param_backend_normalize_macro_fx_type(uint8_t track, param_id_t id,
 uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    const uint8_t uses_mix_backend = (uint8_t)(((rule.resource == TRACK_RUNTIME_RESOURCE_MIX)
+                                                && ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                                                    || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)))
+                                               || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+                                                   && (id == PARAM_ENV_RETRIG_FILTER)));
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-            && !((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
-                 && (id == PARAM_ENV_RETRIG_FILTER)))
+            && (uses_mix_backend == 0U))
     {
         return 0U;
     }
@@ -110,8 +113,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     }
 
     uint8_t applied = 0U;
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-            || (id == PARAM_ENV_RETRIG_FILTER))
+    if (uses_mix_backend != 0U)
     {
         applied = param_backend_apply_mix_track(ctx, track, id, effective_value, update_base_state);
     }

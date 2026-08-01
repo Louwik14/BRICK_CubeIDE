@@ -41,7 +41,8 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
     return (uint8_t)((id == PARAM_VCA_ATTACK)
                      || (id == PARAM_VCA_DECAY)
                      || (id == PARAM_VCA_SUSTAIN)
-                     || (id == PARAM_VCA_RELEASE));
+                     || (id == PARAM_VCA_RELEASE)
+                     || (id == PARAM_ENV_RETRIG_VCA));
 }
 
 static uint8_t param_backend_prism_param_slot(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
@@ -73,18 +74,6 @@ static uint8_t param_backend_prism_param_slot(param_id_t id, uint8_t *out_osc, u
         case PARAM_PRISM_OSC2_LEVEL: *out_osc = 1U; *out_param = 8U; return 1U;
         default: return 0U;
     }
-}
-
-static uint8_t param_backend_ctx_is_sampler_clip_or_looper(const track_runtime_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
-                          || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
 }
 
 static uint8_t param_backend_clip_size_index(float value)
@@ -1434,10 +1423,8 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
     }
 
     if ((param_backend_is_vca_param(id) != 0U)
-            && (param_backend_ctx_is_sampler_clip_or_looper(ctx) != 0U))
+            && (track_runtime_supports_vca_gate(ctx) == 0U))
     {
-        mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
-        mixer_set_track_vca_enabled((uint32_t)ctx->mix_track_id, 0U);
         return 0U;
     }
 
