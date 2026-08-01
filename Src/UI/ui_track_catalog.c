@@ -1,5 +1,48 @@
 #include "ui_track_catalog.h"
 
+static const ui_track_family_t g_cfg_play_family_order[] = {
+    UI_TRACK_FAMILY_OFF,
+    UI_TRACK_FAMILY_SYNTH,
+    UI_TRACK_FAMILY_DRUM,
+    UI_TRACK_FAMILY_MIDI,
+    UI_TRACK_FAMILY_EXTERNAL,
+    UI_TRACK_FAMILY_SAMPLER,
+};
+
+uint8_t ui_track_catalog_cfg_family_order_count(void)
+{
+    return (uint8_t)(sizeof(g_cfg_play_family_order) / sizeof(g_cfg_play_family_order[0]));
+}
+
+ui_track_family_t ui_track_catalog_cfg_family_order_at(uint8_t index)
+{
+    if (index >= ui_track_catalog_cfg_family_order_count())
+    {
+        return UI_TRACK_FAMILY_OFF;
+    }
+
+    return g_cfg_play_family_order[index];
+}
+
+bool ui_track_catalog_cfg_family_order_index(ui_track_family_t family, uint8_t *out_index)
+{
+    if (out_index == 0)
+    {
+        return false;
+    }
+
+    for (uint8_t index = 0U; index < ui_track_catalog_cfg_family_order_count(); ++index)
+    {
+        if (g_cfg_play_family_order[index] == family)
+        {
+            *out_index = index;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO };
@@ -265,6 +308,43 @@ bool ui_track_catalog_family_is_available(uint8_t track,
     }
 
     return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
+}
+
+ui_track_family_t ui_track_catalog_cfg_family_step(
+    ui_track_family_t current,
+    int8_t direction,
+    uint8_t track,
+    const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    uint8_t position = 0U;
+    const uint8_t order_count = ui_track_catalog_cfg_family_order_count();
+
+    if ((direction == 0)
+            || (order_count == 0U)
+            || !ui_track_catalog_cfg_family_order_index(current, &position))
+    {
+        return current;
+    }
+
+    for (uint8_t attempt = 0U; attempt < order_count; ++attempt)
+    {
+        if (direction > 0)
+        {
+            position = (position + 1U < order_count) ? (uint8_t)(position + 1U) : 0U;
+        }
+        else
+        {
+            position = (position == 0U) ? (uint8_t)(order_count - 1U) : (uint8_t)(position - 1U);
+        }
+
+        const ui_track_family_t candidate = ui_track_catalog_cfg_family_order_at(position);
+        if (ui_track_catalog_family_is_available(track, candidate, track_configs))
+        {
+            return candidate;
+        }
+    }
+
+    return current;
 }
 
 bool ui_track_catalog_family_has_available_type(uint8_t track,

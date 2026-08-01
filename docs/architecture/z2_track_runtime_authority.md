@@ -30,7 +30,9 @@ Les mutations invalident explicitement le runtime puis un appel autorisé demand
 
 ## Play : familles, types et capacités
 
-Les familles Play configurables sont `Off`, `Synth`, `Sampler`, `Drum`, `MIDI` et `External`. Les types courants sont :
+Les familles Play configurables sont `Off`, `Synth`, `Drum`, `MIDI`, `External` et `Sampler`. Les types courants sont :
+
+L'ordre de sélection CFG des Play est explicitement `Off → Synth → Drum → MIDI → External → Sampler`. Il est indépendant des valeurs numériques persistées de `ui_track_family_t`; les labels sont résolus par la famille enum canonique et les familles Special `Input1..3` restent hors de ce catalogue.
 
 - Synth : `Prism`, `Wave`, `Stack`, `DELUGE` ;
 - Sampler : `RAM`, `Stream`, `Multi` ;

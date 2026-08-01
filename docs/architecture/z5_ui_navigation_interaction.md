@@ -8,6 +8,8 @@ Z5 décrit la surface UI actuelle. La résolution se fait par contexte : ensembl
 
 La page CFG permet de modifier famille/type uniquement pour une Play Track. Les Special affichent leur rôle fixe et leur identité CFG ; elles ne proposent ni conversion de famille ni browser Play.
 
+Dans CFG Play, l'encodeur suit l'ordre `Off → Synth → Drum → MIDI → External → Sampler`, avec wrap dans les deux directions et saut des familles indisponibles. Cet ordre d'affichage/navigation est distinct des valeurs enum persistées ; `Input1..3` n'en font jamais partie.
+
 La navigation Low-Cost et Premium partage les mêmes ensembles et se distingue uniquement par la topologie publiée : Low-Cost expose une entrée, Premium trois. Toute page conditionnelle passe par `track_runtime_is_ui_ensemble_available()`.
 
 ## Ensembles et boutons

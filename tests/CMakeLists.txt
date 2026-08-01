@@ -62,7 +62,19 @@ target_include_directories(stack_vca_release_test PRIVATE
 target_link_libraries(stack_vca_release_test PRIVATE m)
 add_test(NAME stack_vca_release COMMAND stack_vca_release_test)
 
+add_executable(cfg_track_family_order_test
+    cfg_track_family_order_test.c
+    ../Src/UI/ui_track_catalog.c
+    ../Src/Core/track_topology.c
+)
+target_compile_definitions(cfg_track_family_order_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
+target_include_directories(cfg_track_family_order_test PRIVATE ../Inc)
+add_test(NAME cfg_track_family_order_unit COMMAND cfg_track_family_order_test)
+
 if(WIN32)
+    add_test(NAME cfg_track_family_order_static
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/cfg_track_family_order_validation.ps1)
     add_test(NAME engine_output_gain
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/engine_output_gain_validation.ps1)

@@ -448,36 +448,18 @@ static uint8_t ui_param_relative_multi_track_is_record_context_blocked(void)
     return 0U;
 }
 
-static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family, uint8_t active_track)
-{
-    return (uint8_t)(ui_track_catalog_family_has_available_type(active_track,
-                                                                family,
-                                                                track_state_get_configs()) ? 1U : 0U);
-}
-
 static float ui_param_step_cfg_track(float current_value, int8_t direction, uint8_t active_track)
 {
-    int16_t candidate = (int16_t)(current_value + 0.5f);
-
     if (direction == 0)
     {
         return current_value;
     }
 
-    while (1)
-    {
-        candidate = (int16_t)(candidate + direction);
-
-        if ((candidate < 0) || (candidate >= (int16_t)UI_TRACK_FAMILY_COUNT))
-        {
-            return current_value;
-        }
-
-        if (ui_param_cfg_track_family_is_available((ui_track_family_t)candidate, active_track) != 0U)
-        {
-            return (float)candidate;
-        }
-    }
+    return (float)ui_track_catalog_cfg_family_step(
+        (ui_track_family_t)(uint8_t)(current_value + 0.5f),
+        direction,
+        active_track,
+        track_state_get_configs());
 }
 
 static float ui_param_step_cfg_track_type(float current_value,
