@@ -31,6 +31,15 @@ Require-Text "Src/App/Hall/hall_engine.c" `
     "hall_velocity\[key\] = hall_velocity_compute\(key, range\);[\s\S]*hall_velocity_valid\[key\] = 1U;[\s\S]*hall_note_on_pending\[key\] = 1U" `
     "Note On is not published when velocity becomes determinable."
 Require-Text "Src/App/Hall/hall_engine.c" `
+    "defined\(BRICK6_VARIANT_LOWCOST\)[\s\S]*HALL_THRESHOLD_PPM\s+300U[\s\S]*#else[\s\S]*HALL_THRESHOLD_PPM\s+400U" `
+    "Low-Cost/Premium Hall press thresholds are not variant-specific."
+Require-Text "Src/App/Hall/hall_engine.c" `
+    "HALL_HYST_PPM\s+100U" `
+    "Hall hysteresis changed unexpectedly."
+Require-Text "Src/App/Hall/hall_engine.c" `
+    "range \* lo_ppm[\s\S]*range \* hi_ppm" `
+    "Hall thresholds no longer use calibrated range."
+Require-Text "Src/App/Hall/hall_engine.c" `
     "HALL_KEY_SAMPLE_PERIOD_US\s+2800U" `
     "Low-cost Hall debug cadence is not 2.8 ms."
 Require-Text "Src/UI/pages/ui_page_settings.c" `

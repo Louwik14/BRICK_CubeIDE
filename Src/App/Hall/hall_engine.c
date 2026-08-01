@@ -2,7 +2,11 @@
 
 #include "stm32h7xx_hal.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#define HALL_THRESHOLD_PPM                 300U
+#else
 #define HALL_THRESHOLD_PPM                 400U
+#endif
 #define HALL_HYST_PPM                      100U
 #define HALL_MIN_RANGE                     400U
 
