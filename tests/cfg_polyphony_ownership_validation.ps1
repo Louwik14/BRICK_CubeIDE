@@ -56,8 +56,8 @@ if ($runtime -match '(?s)case PARAM_SEQ_PLAY_V4_MICTIM:.*?case PARAM_CFG_POLY_VO
     throw 'VOICES/SPREAD still fall through the PLAY rule'
 }
 
-Require-Text $seq 'case TRACK_RUNTIME_PARAM_DOMAIN_CFG:' 'Sequence interface has no CFG guard'
-Require-Text $seq 'if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)' 'Sequence slot matcher accepts CFG'
+Require-Text $seq 'rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG' 'Sequence interface has no CFG guard'
+Require-Text $seq '(rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)' 'Sequence slot matcher accepts CFG'
 Require-Text $macro 'case TRACK_RUNTIME_PARAM_DOMAIN_CFG:' 'Macro lock interface has no CFG guard'
 Require-Text $mod 'if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)' 'Modulation catalog has no CFG guard'
 Require-Text $ui 'case TRACK_RUNTIME_PARAM_DOMAIN_CFG:' 'UI sequence resolver has no CFG guard'
