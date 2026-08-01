@@ -1,4 +1,4 @@
-#include "pages/ui_page_template_filter.h"
+#include "pages/ui_page_template_env.h"
 
 #include "mixer.h"
 #include "param_store.h"
@@ -6,9 +6,9 @@
 #include "ui_template_page.h"
 #include "Core/track_runtime.h"
 
-static uint8_t g_ui_template_filter_subset = 0U;
+static uint8_t g_ui_template_env_subset = 0U;
 
-static ui_template_family_t g_ui_template_filter_family_audio = {
+static ui_template_family_t g_ui_template_env_family_audio = {
     .family_title = "ENV 1/2",
     .nav_labels = { "FILTER", "ADSR", "VCA", "ENV 3" },
     .subpages = {
@@ -32,7 +32,7 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_filter_family_retrig = {
+static const ui_template_family_t g_ui_template_env_family_retrig = {
     .family_title = "ENV 2/2",
     .nav_labels = { "RETRIG", "-", "-", "-" },
     .subpages = {
@@ -58,9 +58,9 @@ static const ui_template_family_t g_ui_template_filter_family_retrig = {
 
 static const ui_template_family_t *ui_page_template_env_resolve_family(void)
 {
-    if (g_ui_template_filter_subset != 0U)
+    if (g_ui_template_env_subset != 0U)
     {
-        return &g_ui_template_filter_family_retrig;
+        return &g_ui_template_env_family_retrig;
     }
 
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ENV);
@@ -79,7 +79,7 @@ static uint8_t ui_page_template_subpage_matches_adsr(const ui_template_subpage_t
             && (subpage->param_bank.params[3] == release));
 }
 
-static ui_template_custom_widget_kind_t ui_page_template_filter_pick_custom_widget(uint8_t slot,
+static ui_template_custom_widget_kind_t ui_page_template_env_pick_custom_widget(uint8_t slot,
                                                                                    const ui_template_subpage_t *subpage,
                                                                                    param_id_t id)
 {
@@ -149,34 +149,34 @@ static ui_template_custom_widget_kind_t ui_page_template_filter_pick_custom_widg
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
-static ui_template_page_state_t g_ui_template_filter_state = {
+static ui_template_page_state_t g_ui_template_env_state = {
     .family = 0,
     .family_resolver = ui_page_template_env_resolve_family,
-    .custom_widget_picker = ui_page_template_filter_pick_custom_widget,
+    .custom_widget_picker = ui_page_template_env_pick_custom_widget,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
 
 void ui_page_template_env_open_primary(void)
 {
-    g_ui_template_filter_subset = 0U;
-    g_ui_template_filter_state.resolved_family = ui_page_template_env_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, 0U);
+    g_ui_template_env_subset = 0U;
+    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_env_state, 0U);
 }
 
 uint8_t ui_page_template_env_open_vca(void)
 {
-    g_ui_template_filter_subset = 0U;
-    g_ui_template_filter_state.resolved_family = ui_page_template_env_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, 2U);
-    return (g_ui_template_filter_state.active_subpage == 2U) ? 1U : 0U;
+    g_ui_template_env_subset = 0U;
+    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_env_state, 2U);
+    return (g_ui_template_env_state.active_subpage == 2U) ? 1U : 0U;
 }
 
 void ui_page_template_env_toggle_subset(void)
 {
-    g_ui_template_filter_subset = (g_ui_template_filter_subset == 0U) ? 1U : 0U;
-    g_ui_template_filter_state.resolved_family = ui_page_template_env_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, 0U);
+    g_ui_template_env_subset = (g_ui_template_env_subset == 0U) ? 1U : 0U;
+    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_env_state, 0U);
 }
 
 typedef struct
@@ -208,7 +208,7 @@ void ui_page_template_env_register_families(void)
                 continue;
             }
 
-            ui_template_family_register(UI_TEMPLATE_FAMILY_ENV, track_family, track_type, &g_ui_template_filter_family_audio);
+            ui_template_family_register(UI_TEMPLATE_FAMILY_ENV, track_family, track_type, &g_ui_template_env_family_audio);
         }
     }
 }
@@ -248,7 +248,7 @@ static uint8_t ui_page_template_env_sync_should_recompute(uint8_t active_track,
 
 static void ui_page_template_env_sync_family(void)
 {
-    if (g_ui_template_filter_subset != 0U)
+    if (g_ui_template_env_subset != 0U)
     {
         return;
     }
@@ -348,7 +348,7 @@ static void ui_page_template_env_handle_event(const ui_event_t *ev)
 {
     ui_template_page_handle_event(ev);
     ui_page_template_env_sync_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
+    ui_template_page_select_subpage(&g_ui_template_env_state, g_ui_template_env_state.active_subpage);
 }
 
 static void ui_page_template_env_tick(void)
@@ -376,5 +376,5 @@ const ui_page_t g_ui_page_template_env = {
     .tick = ui_page_template_env_tick,
     .sync_active_context = ui_page_template_env_sync_active_context,
     .render = ui_page_template_env_render,
-    .context = &g_ui_template_filter_state,
+    .context = &g_ui_template_env_state,
 };

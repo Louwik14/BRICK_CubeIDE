@@ -3,7 +3,7 @@
 #include "pages/ui_page_param_test.h"
 #include "pages/ui_page_debug_hall.h"
 #include "pages/ui_page_calibration.h"
-#include "pages/ui_page_template_filter.h"
+#include "pages/ui_page_template_env.h"
 #include "pages/ui_page_template_tone.h"
 #include "pages/ui_page_template_mod.h"
 #include "pages/ui_page_template_cfg.h"

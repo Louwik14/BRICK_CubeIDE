@@ -28,7 +28,7 @@ Les écarts les plus dangereux ne sont pas esthétiques :
 | Concept produit actuel | Nom utilisateur | Nom interne actuel | Nom interne recommandé | Propriétaire logique | Emplacement recommandé | Anciens noms à éliminer ou conserver |
 |---|---|---|---|---|---|---|
 | Configuration de track | CFG | `UI_TEMPLATE_FAMILY_CFG`, `PARAM_CFG_*` | identique | configuration structurante de Play / transport global selon le paramètre | UI CFG, `track_state`, `synth_polyphony`, transport | conserver CFG ; sortir VOICES/SPREAD du domaine PLAY |
-| Enveloppes et filtre | ENV | `COLORS`, fichier `ui_page_template_filter`, domaines COLORS/MIX/MOD | `ENV`, `ui_page_template_env`, domaine et set p-lock ENV | état sonore de track | UI ENV, `track_sound_state`; apply vers filtre, mixer VCA et `mod_env3` | éliminer COLORS ; ne pas renommer les backends filtre/VCA/ENV3 |
+| Enveloppes et filtre | ENV | `COLORS`, fichier `ui_page_template_env`, domaines COLORS/MIX/MOD | `ENV`, `ui_page_template_env`, domaine et set p-lock ENV | état sonore de track | UI ENV, `track_sound_state`; apply vers filtre, mixer VCA et `mod_env3` | éliminer COLORS ; ne pas renommer les backends filtre/VCA/ENV3 |
 | Timbre/moteur | TONE | TONE | identique | moteur de la track ou rôle Special | UI TONE, `track_tone_sound_state`, backends moteur | conserver |
 | Modulation | MOD | MOD | identique | LFO, matrice, Multi, Slew | UI MOD, `track_sound_state`, `mod_*` | retirer ENV3 du propriétaire MOD |
 | Mix de track | MIX | MIX | identique | niveau, pan, sends et mute track-aware | UI MIX, `track_sound_state`, mixer | retirer VCA du domaine/set MIX ; éliminer les lanes MIX historiques après découplage des IDs |
@@ -51,7 +51,7 @@ Les noms `Braids` et `Daisy` sont des noms d'implémentation amont, pas des conc
 
 ### ENV
 
-Le bouton produit ENV ouvre aujourd'hui `UI_PAGE_TEMPLATE_COLORS`; `ui_page_template_filter.c` affiche les pages `ENV 1/2` et `ENV 2/2`. Ses banques contiennent filtre, ADSR filtre, ADSR VCA, ADSR ENV3 et retriggers FLT/VCA/MOD. L'état canonique est regroupé dans `track_sound_state`. Les apply aboutissent respectivement au filtre, au mixer/VCA et à `mod_env3`.
+Le bouton produit ENV ouvre aujourd'hui `UI_PAGE_TEMPLATE_COLORS`; `ui_page_template_env.c` affiche les pages `ENV 1/2` et `ENV 2/2`. Ses banques contiennent filtre, ADSR filtre, ADSR VCA, ADSR ENV3 et retriggers FLT/VCA/MOD. L'état canonique est regroupé dans `track_sound_state`. Les apply aboutissent respectivement au filtre, au mixer/VCA et à `mod_env3`.
 
 La chaîne se fracture ensuite : `track_runtime_get_param_rule()` classe filtre en COLORS, VCA en MIX, ENV3 en MOD ; `seq_param_iface.c` range donc VCA dans les slots MIX et ENV3 dans MOD. `ui_param`, `param_macro`, `mod_destination_catalog`, `track_snapshot`, Pattern et Kit consomment ces domaines. Clipboard/clear résolvent la famille de template COLORS. La correction canonique est un domaine logique ENV unique, tout en gardant trois backends d'exécution. Les IDs numériques du set p-lock doivent rester stables pendant le renommage mécanique ; la reclassification sémantique doit être une étape distincte et testée.
 
@@ -105,7 +105,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 
 - Ancien concept : ensemble de coloration/filtre.
 - Produit actuel : ENV, contenant FLT, VCA et ENV3.
-- Preuves : `ui_page_template_filter.c` affiche ENV mais résout `UI_TEMPLATE_FAMILY_COLORS`; symboles actifs dans `ui_template_page.h`, `ui_page_manager.h`, `track_runtime.h`, `seq_param_iface.h`, navigation, clipboard, modulation et persistence.
+- Preuves : `ui_page_template_env.c` affiche ENV mais résout `UI_TEMPLATE_FAMILY_COLORS`; symboles actifs dans `ui_template_page.h`, `ui_page_manager.h`, `track_runtime.h`, `seq_param_iface.h`, navigation, clipboard, modulation et persistence.
 - Effet : ambiguïté transverse ; aucune panne si le renommage conserve valeurs d'enum et de set.
 - Portée : enums, fonctions, variables, tests et documents ; fichier renommé seulement dans CLEAN-MOVE-001.
 - Risque : ordinal persistant des sets p-lock et pages ; conserver explicitement les valeurs.
@@ -128,7 +128,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 
 - Ancien concept : enveloppe de modulation présentée avec MOD.
 - Produit actuel : ENV3 et retrig MOD visibles dans ENV.
-- Preuves : `ui_page_template_filter.c:29,41` les expose ; `track_runtime.c:1922-1926` les classe MOD ; `param_registry.c` applique toujours ENV3 au backend `mod_env3`, ce qui est légitime.
+- Preuves : `ui_page_template_env.c:29,41` les expose ; `track_runtime.c:1922-1926` les classe MOD ; `param_registry.c` applique toujours ENV3 au backend `mod_env3`, ce qui est légitime.
 - Effet : même fracture p-lock/clipboard/persistence que VCA, sans nécessité de déplacer le moteur.
 - Portée : domaine logique/set ENV uniquement ; conserver `mod_env3` comme backend.
 - Risque/tests/dépendances : identiques à CLEAN-OWNER-001 ; tester aussi le catalogue des destinations et les retriggers.
@@ -285,7 +285,7 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 
 ### CLEAN-MOVE-001 — `MOVE` — page filtre vers propriétaire ENV
 
-- Ancien placement : `ui_page_template_filter.[ch]` contient désormais filtre, VCA, ENV3 et retriggers.
+- Ancien placement : `ui_page_template_env.[ch]` contient désormais filtre, VCA, ENV3 et retriggers.
 - Propriétaire actuel : ensemble ENV.
 - Justification : le fichier n'est plus seulement un filtre ; le déplacement rend le scope réel sans changer d'architecture.
 - Portée : renommer fichier/API en `ui_page_template_env`; conserver les sous-composants et backends à leur place.
@@ -364,7 +364,7 @@ Renommages rejetés comme cosmétiques : Braids interne sous Prism, ressources B
 
 ## 7. Déplacements recommandés
 
-1. Renommer `ui_page_template_filter.[ch]` en `ui_page_template_env.[ch]` après unification du domaine. Le fichier possède réellement tout ENV ; ce n'est pas une réorganisation esthétique.
+1. Le module `ui_page_template_env.[ch]` possède réellement tout ENV ; ce n'est pas une réorganisation esthétique.
 2. Ne pas déplacer `mod_env3` hors de `Mod` : ENV est son propriétaire UI, mais son moteur d'exécution reste une modulation.
 3. Ne pas déplacer l'état/apply VCA hors du mixer : le mixer est son backend physique valide.
 4. Ne déplacer `fx_master_macro` que si le nouveau nom explicite à la fois propriétaire FX et insertion master-bus ; sinon renommer seulement API/état produit.
@@ -502,7 +502,7 @@ Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-
 
 ### Étape 5A — Déplacer la page sous son propriétaire ENV
 
-- Objectif : `ui_page_template_filter` devient `ui_page_template_env`.
+- Objectif : `ui_page_template_env` est le nom du module ENV.
 - Autorisé : rename fichier/API/includes/CMake/tests.
 - Interdit : modifier contenu fonctionnel ou layouts.
 - Tests/builds : templates toutes familles/types, navigation/calibration, deux variantes.

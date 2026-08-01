@@ -33,7 +33,7 @@ Nuance importante : le registre affirme que la garde IPSR interdit le refresh de
 - `Src/Core/track_runtime.c::track_runtime_refresh_all()` écrit successivement chaque entrée de `g_track_runtime_ctx`, réserve les lanes, appelle `track_runtime_bind_ctx()`, prépare les remplacements Looper, réapplique les backends tone, écrit `g_track_runtime_synth_usage`, reconstruit `g_track_runtime_logical_track_by_mix_track`, puis seulement incrémente `g_track_runtime_revision`.
 - `track_runtime_bind_ctx()` appelle directement `synth_polyphony_set_track_active()` / `set_voice_count()`. Ces chemins réinitialisent les moteurs et des slots mixer : la construction n'est pas une opération pure sur une table locale.
 - `track_runtime_refresh_track()` construit seulement `next_ctx`, mais le publie par affectation dans `g_track_runtime_ctx[track]` avant les resets/reapply, puis reconstruit la map inverse et la synth usage. Les autres entrées sont simultanément consultées pour les allocations.
-- Ni ctx, map inverse, synth usage ni revisions ne sont `volatile`; aucune exclusion IRQ ni protocole seqlock/double-buffer n'encadre leur publication. Les revisions sont écrites à la fin et ne sont lues que par `Src/UI/pages/ui_page_template_filter.c`; elles ne protègent aucun consommateur audio.
+- Ni ctx, map inverse, synth usage ni revisions ne sont `volatile`; aucune exclusion IRQ ni protocole seqlock/double-buffer n'encadre leur publication. Les revisions sont écrites à la fin et ne sont lues que par `Src/UI/pages/ui_page_template_env.c`; elles ne protègent aucun consommateur audio.
 
 ### Lecteurs IRQ
 

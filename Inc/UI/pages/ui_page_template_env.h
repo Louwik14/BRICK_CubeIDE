@@ -1,5 +1,5 @@
-#ifndef UI_PAGE_TEMPLATE_FILTER_H
-#define UI_PAGE_TEMPLATE_FILTER_H
+#ifndef UI_PAGE_TEMPLATE_ENV_H
+#define UI_PAGE_TEMPLATE_ENV_H
 
 #include "ui_page.h"
 
@@ -10,4 +10,4 @@ void ui_page_template_env_open_primary(void);
 uint8_t ui_page_template_env_open_vca(void);
 void ui_page_template_env_toggle_subset(void);
 
-#endif /* UI_PAGE_TEMPLATE_FILTER_H */
+#endif /* UI_PAGE_TEMPLATE_ENV_H */
