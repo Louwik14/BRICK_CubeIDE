@@ -282,19 +282,28 @@ static uint8_t ui_core_clipboard_collect_ensemble_params(ui_template_family_id_t
 
     uint8_t count = 0U;
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_config_t config = ui_get_track_config(active_track);
-    const ui_template_family_t *family = ui_template_family_resolve(family_id, active_track, config.family, config.type);
-
-    if (family == 0)
+    const uint8_t scope_count = ui_template_family_get_effective_scope_count(family_id, active_track);
+    if (scope_count == 0U)
     {
         return 0U;
     }
 
-    for (uint8_t sp = 0U; sp < 4U; ++sp)
+    for (uint8_t scope = 0U; scope < scope_count; ++scope)
     {
-        if (ui_core_clipboard_collect_params_from_subpage(&family->subpages[sp], out_ids, &count) == 0U)
+        const uint8_t scope_index = (scope_count > 1U) ? scope : UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT;
+        const ui_template_family_t *const family =
+                ui_template_family_resolve_effective_for_track(family_id, active_track, scope_index);
+        if (family == 0)
         {
             return 0U;
+        }
+
+        for (uint8_t sp = 0U; sp < 4U; ++sp)
+        {
+            if (ui_core_clipboard_collect_params_from_subpage(&family->subpages[sp], out_ids, &count) == 0U)
+            {
+                return 0U;
+            }
         }
     }
 
@@ -383,7 +392,15 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         const param_id_t id = params[i];
         if (id < PARAM_COUNT)
         {
-            (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+            if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            {
+                param_set(id, param_registry[id].min);
+            }
+            else
+            {
+                (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+            }
         }
     }
     param_registry_batch_end();
@@ -514,7 +531,16 @@ static uint8_t ui_core_clipboard_copy_param_scope(ui_param_clipboard_t *clipboar
     {
         const param_id_t id = params[i];
         float value = 0.0f;
-        if ((id >= PARAM_COUNT) || (param_registry_get_track_value(id, track, &value) == 0U))
+        if (id >= PARAM_COUNT)
+        {
+            return 0U;
+        }
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+        {
+            value = param_get(id);
+        }
+        else if (param_registry_get_track_value(id, track, &value) == 0U)
         {
             return 0U;
         }
@@ -567,7 +593,13 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
         }
 
         ++common;
-        if (param_registry_apply_track_value(target, track, value) != 0U)
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
+        if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+        {
+            param_set(target, value);
+            ++applied;
+        }
+        else if (param_registry_apply_track_value(target, track, value) != 0U)
         {
             ++applied;
         }

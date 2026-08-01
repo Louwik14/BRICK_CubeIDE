@@ -59,61 +59,33 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
     switch (page_id)
     {
         case UI_PAGE_TEMPLATE_ENV:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_ENV) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ENV) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_ENV) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_CFG:
         case UI_PAGE_TEMPLATE_REC_CFG:
             return 1U;
 
         case UI_PAGE_TEMPLATE_TONE:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_TONE) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_TONE) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_MOD:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MOD) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MOD) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_MOD) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_KEYBOARD:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_KEYBOARD) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_KEYBOARD) != 0) ? 1U : 0U;
 
         case UI_PAGE_MIDI_FX:
             return (uint8_t)((track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) != 0U)
                 || (ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode()) != UI_HALL_ROUT_CONTEXT_NONE));
 
         case UI_PAGE_TEMPLATE_SEQ:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_SEQ) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_SEQ) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_SEQ) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_MIX:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MIX) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MIX) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_MIX) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_PLAY:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_PLAY) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_PLAY) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_PLAY) != 0) ? 1U : 0U;
 
         default:
             return 1U;

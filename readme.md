@@ -37,6 +37,7 @@ Les rôles sont fixes : `Master`, `Looper`, `Input` et `FX`.
 
 - `Master` porte les effets globaux reverb, delay et compresseur ;
 - `FX` porte exclusivement quatre slots MacroFX ;
+- Master et FX exposent `CFG`, `TONE` et leur séquence/action Special ; `ENV`, `MOD` et `MIX` y restent indisponibles ;
 - `Looper` porte son routage et ses contrôles de boucle ;
 - `Input` représente chaque ressource d'entrée physique de la variante ;
 - Master et FX sont deux rôles distincts, dérivés de `track_topology`.

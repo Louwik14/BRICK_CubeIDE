@@ -46,6 +46,8 @@ Les lanes physiques DSP et les tracks logiques ne sont jamais confondues.
 
 Les MacroFX sont la propriété produit de FX. `fx_master_macro` est un nom DSP légitime pour l'insertion post-mix sur le master-bus ; il ne transforme pas Master en propriétaire MacroFX. `MIX` reste le mix track-aware et ne devient pas un conteneur d'effets Master.
 
+Master et FX exposent chacun `CFG`, `TONE` et leur séquence/action Special ; `ENV`, `MOD` et `MIX` y sont indisponibles. La résolution effective des templates part du masque runtime et du rôle topologique avant tout fallback famille/type Play.
+
 ## Paramètres et UI
 
 Les ensembles courants sont `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI FX`.

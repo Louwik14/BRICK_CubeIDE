@@ -287,18 +287,19 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
+const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t track, uint8_t scope_index)
 {
-    const uint8_t active_track = ui_get_active_track();
-    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+    const uint8_t subset = (scope_index == UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT)
+            ? g_ui_template_tone_subset : scope_index;
+    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
     {
-        if (g_ui_template_tone_subset == 0U)
+        if (subset == 0U)
         {
             return (param_get(PARAM_MIX_REVERB_MODEL) >= 0.5f)
                     ? &g_ui_template_tone_family_master_reverb_digital
                     : &g_ui_template_tone_family_master_reverb_mutable;
         }
-        if (g_ui_template_tone_subset == 1U)
+        if (subset == 1U)
         {
             return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
                     ? &g_ui_template_tone_family_master_delay_dual
@@ -310,28 +311,34 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
     }
-    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
+    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
     {
         return &g_ui_template_tone_family_macro_fx;
     }
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DELUGE))
+    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_DELUGE))
     {
         return &g_ui_template_tone_family_deluge;
     }
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
+    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_STACK)
             && (g_ui_template_tone_subset != 0U))
     {
         return &g_ui_template_tone_family_stack_global;
     }
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
+    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_WAVE)
             && (g_ui_template_tone_subset != 0U))
     {
         return &g_ui_template_tone_family_wave_quality;
     }
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
+    const ui_track_config_t config = ui_get_track_config(track);
+    return ui_template_family_resolve(UI_TEMPLATE_FAMILY_TONE, track, config.family, config.type);
+}
+
+static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
+{
+    return ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
 static uint8_t ui_page_template_tone_param_text(uint8_t slot,

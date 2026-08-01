@@ -26,7 +26,7 @@ Les transitions structurelles passent par les commandes dédiées et les snapsho
 
 ENV est le propriétaire logique unique des paramètres filtre, VCA, ENV3 et de leurs retriggers. Le paramètre peut utiliser une ressource interne différente : le VCA est appliqué au backend mixer et ENV3 au backend `mod_env3`. Cette différence d'exécution ne crée ni ensemble VCA ni domaine MIX/MOD autonome.
 
-Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
+Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. Cette classification inclut notamment `PARAM_MIX_REVERB_WET`, `PARAM_MIX_REVERB_SIZE`, `PARAM_MIX_REVERB_DECAY` et `PARAM_MIX_REVERB_PRED`. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
 
 `CFG_POLY_VOICES` et `CFG_POLY_SPREAD` appartiennent à CFG, sont appliqués par `synth_polyphony`, ne sont ni p-lockables ni modulables et ne sont pas une capacité PLAY.
 
@@ -57,7 +57,7 @@ La persistence utilise la classification explicite de `pattern_live` : global, t
 
 Les formats courants sont Pattern v4, Project v4, Patch v3 et Kit v3. Les snapshots agrégés réappliquent les paramètres par leurs symboles et leurs règles actuelles ; Patch reste Play-only.
 
-Le clipboard et l'undo opèrent par intersection d'IDs compatibles avec le domaine et le scope. Ils capturent les valeurs canoniques et les locks autorisés, jamais les états audio transitoires. Les scènes Macro/locks Project utilisent l'API scène/lock courante ; les anciens noms d'API persistence contenant `V1` restent inchangés.
+Le clipboard et l'undo opèrent par intersection d'IDs compatibles avec le domaine et le scope. TONE Master lit et écrit directement les globals canoniques ; TONE FX conserve les seize valeurs MacroFX dans `track_tone_sound_state.macro_fx` de la Special FX résolue. Ils capturent les valeurs canoniques et les locks autorisés, jamais les états audio transitoires. Les scènes Macro/locks Project utilisent l'API scène/lock courante ; les anciens noms d'API persistence contenant `V1` restent inchangés.
 
 La projection des quatre pots utilise `param_macro_set_amount()` et `param_macro_sync_scene_sources()` ; les sources de scène sont synchronisées sans recréer une banque Macro parallèle.
 

@@ -606,7 +606,6 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
     if (topology.role == (uint8_t)TRACK_TOPOLOGY_ROLE_FX)
     {
-        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
         return mask;
     }
 
@@ -1948,6 +1947,44 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_MIDI_FX;
             return rule;
 
+        case PARAM_MIX_REVERB_MODEL:
+        case PARAM_MIX_REVERB_WET:
+        case PARAM_MIX_REVERB_SIZE:
+        case PARAM_MIX_REVERB_DECAY:
+        case PARAM_MIX_REVERB_PRED:
+        case PARAM_MIX_REVERB_DIGITAL_DECAY:
+        case PARAM_MIX_REVERB_DIGITAL_DAMP:
+        case PARAM_MIX_REVERB_DIGITAL_HPF:
+        case PARAM_MIX_REVERB_DIGITAL_LPF:
+        case PARAM_MIX_REVERB_HPF:
+        case PARAM_MIX_REVERB_LPF:
+        case PARAM_MIX_REVERB_DAMP:
+        case PARAM_MIX_REVERB_SMEAR:
+        case PARAM_MIX_DELAY_TYPE:
+        case PARAM_MIX_DELAY_TIME:
+        case PARAM_MIX_DELAY_PINGPONG:
+        case PARAM_MIX_DELAY_MODE:
+        case PARAM_MIX_DELAY_TIME_R:
+        case PARAM_MIX_DELAY_WIDTH:
+        case PARAM_MIX_DELAY_FEEDBACK:
+        case PARAM_MIX_DELAY_HPF:
+        case PARAM_MIX_DELAY_LPF:
+        case PARAM_MIX_DELAY_FBW:
+        case PARAM_MIX_DELAY_MOD:
+        case PARAM_MIX_DELAY_MOD_RATE:
+        case PARAM_MIX_DELAY_REV:
+        case PARAM_MIX_DELAY_VOL:
+        case PARAM_COMP_MODEL:
+        case PARAM_BUS_COMP_THRESHOLD_DB:
+        case PARAM_BUS_COMP_RATIO:
+        case PARAM_BUS_COMP_ATTACK_INDEX:
+        case PARAM_BUS_COMP_RELEASE_INDEX:
+        case PARAM_BUS_COMP_MAKEUP_DB:
+        case PARAM_BUS_COMP_DRYWET:
+        case PARAM_BUS_COMP_HPF_HZ:
+        case PARAM_COMP_DETECT:
+        case PARAM_COMP_KNEE_DB:
+        case PARAM_COMP_DELUGE_SAT:
         case PARAM_MASTER_GAIN:
         case PARAM_POST_GAIN:
         case PARAM_OUTPUT_COMP:

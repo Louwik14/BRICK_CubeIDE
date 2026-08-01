@@ -66,6 +66,8 @@ typedef enum
 } ui_template_custom_widget_kind_t;
 
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);
+
+#define UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT 0xFFU
 typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
                                                          param_id_t id,
                                                          const char *value_label,
@@ -126,5 +128,10 @@ const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t f
                                                        ui_track_family_t track_family,
                                                        ui_track_type_t track_type);
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id);
+const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_template_family_id_t family_id,
+                                                                            uint8_t track,
+                                                                            uint8_t scope_index);
+const ui_template_family_t *ui_template_family_resolve_effective_active_track(ui_template_family_id_t family_id);
+uint8_t ui_template_family_get_effective_scope_count(ui_template_family_id_t family_id, uint8_t track);
 
 #endif /* UI_TEMPLATE_PAGE_H */

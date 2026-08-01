@@ -12,6 +12,8 @@ Dans CFG Play, l'encodeur suit l'ordre `Off → Synth → Drum → MIDI → Exte
 
 La navigation Low-Cost et Premium partage les mêmes ensembles et se distingue uniquement par la topologie publiée : Low-Cost expose une entrée, Premium trois. Toute page conditionnelle passe par `track_runtime_is_ui_ensemble_available()`.
 
+`ui_template_family_resolve_effective_for_track()` est l'autorité commune entre masque runtime, rôle topologique et template effectif. Navigation, page TONE et clipboard d'ensemble réutilisent cette résolution ; la famille/type UI brute reste uniquement le fallback des Play Tracks et des rôles déjà couverts par ce contrat.
+
 ## Ensembles et boutons
 
 Les ensembles UI courants sont `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI FX`. Le mapping produit des boutons de paramètres est :
@@ -31,7 +33,7 @@ Les LEDs reflètent l'ensemble logique actif, pas un backend physique : le bouto
 
 ENV regroupe filtre, VCA, ENV3 et retriggers. La navigation expose les sous-pages ENV correspondantes. Le backend mixer VCA et le backend `mod_env3` restent invisibles comme ensembles autonomes.
 
-Sur Master, TONE expose les effets globaux reverb, delay et compresseur. Sur FX, TONE expose les quatre MacroFX. Ces deux surfaces sont résolues par le rôle issu de `track_topology` ; Master et FX ne sont pas fusionnés.
+Sur Master, TONE ouvre reverb puis parcourt reverb, delay et compresseur. Sur FX, TONE ouvre FX1 et parcourt les quatre MacroFX FX1 à FX4. Ces deux surfaces sont résolues par le rôle issu de `track_topology` ; Master et FX ne sont pas fusionnés. Pour les deux rôles, seuls `CFG`, `TONE` et la séquence/action Special sont accessibles : `ENV`, `MOD` et `MIX` ne résolvent aucun template ou fallback vide.
 
 `MIX` reste limité aux contrôles de mixage track-aware : niveau, pan, sends et mute. Les routes Looper et le contexte UI-only des MacroFX réutilisent le contexte ROUT approprié ; ils ne créent pas une nouvelle famille de paramètres.
 
@@ -60,6 +62,8 @@ Les scopes sont explicites :
 - `SHIFT + PASTE` dans un scope ensemble/page remet les paramètres ciblés à leur minimum.
 
 Le collage par ensemble/page utilise l'intersection des `param_id` compatibles ; il ne dépend pas d'un layout strict. Le collage d'une track valide `role + ordinal`, famille/type, capacités et ressources exclusives avant mutation. Une track `External` conserve exactement son entrée physique ; un conflit est refusé sans substitution automatique.
+
+Le scope TONE Master agrège les pages reverb, delay et compresseur et manipule leurs globals par `param_get/param_set`; son undo/redo utilise le snapshot global Pattern. Le scope TONE FX couvre les seize paramètres des quatre MacroFX et reste track-aware sur l'index de la Special FX. Un collage sans intersection compatible est refusé.
 
 Les overlays de scène utilisent le même feedback visuel de lock que l'édition p-lock ; ils ne créent pas un indicateur distinct par ancienne banque Macro.
 

@@ -49,11 +49,13 @@ Les capacités runtime principales sont notes, audio, MIDI, clavier, MIDI FX, au
 Les rôles sont résolus directement avec `track_topology_find_special()` :
 
 - Master : effets globaux reverb, delay, compresseur ; pas de MacroFX ;
-- FX : quatre slots MacroFX, avec `CFG`, `TONE`, `MOD`, `MIX` selon les capacités courantes ;
+- FX : quatre slots MacroFX, avec `CFG` et `TONE` ; `ENV`, `MOD` et `MIX` sont indisponibles ;
 - Looper : backend Looper et contrôles de boucle ;
 - Input : monitoring de l'entrée physique correspondante.
 
 Master et FX sont donc deux rôles différents. `fx_master_macro` est une projection DSP post-mix légitime ; son nom ne désigne pas un rôle Master.
+
+La matrice d'ensembles des deux rôles est fixe : Master et FX exposent `CFG`, `TONE` et leur séquence/action Special ; `ENV`, `MOD` et `MIX` restent absents. Cette matrice est projetée par `track_runtime` et ne dépend pas de la configuration UI brute `Off/Audio` des adaptateurs Special.
 
 Les entrées physiques sont publiées par la variante : `Input1` en Low-Cost, `Input1..3` en Premium. Une entrée réservée par `External` reste visible sur son rôle Input avec `USED Pn`, sans second monitoring.
 

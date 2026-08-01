@@ -24,7 +24,7 @@ Chaque track persistée est identifiée par `role + ordinal` issu de `track_topo
 - Kit capture les états de son scope et ne convertit pas une Special en Play ;
 - le binding audio, les voix, les playheads et les autres états transitoires sont reconstruits par les autorités runtime.
 
-Master porte les globals reverb, delay et compresseur. FX porte les quatre MacroFX. Looper et Input conservent leurs rôles fixes. Aucun fichier ne déduit ces ownerships d'un index de lane physique.
+Master porte les globals reverb, delay et compresseur. Les valeurs reverb `WET`, `SIZE`, `DECAY` et `PRED` utilisent les matrices globales existantes et sont capturées/restaurées comme les autres globals Master. FX porte les quatre MacroFX. Looper et Input conservent leurs rôles fixes. Aucun fichier ne déduit ces ownerships d'un index de lane physique.
 
 ## Classification des paramètres
 
@@ -51,6 +51,8 @@ Les IDs `0..5` sont réservés à l'ancien granular et ne sont pas des paramètr
 ## Pattern et Project
 
 Pattern v4 capture l'état live courant, les valeurs track/global classifiées, les locks par set/slot, les séquences, la configuration Play/Special et les bases MIDI FX autorisées. Project v4 enveloppe le pattern, l'état de projet, les autoloads et les scènes Macro/locks.
+
+Le restore des globals reverb passe par `param_set`, donc réapplique leurs callbacks DSP dans le batch existant. L'ajout de `WET`, `SIZE`, `DECAY` et `PRED` à la classification ne change ni structure, ni taille, ni offset : Pattern et Project restent v4, Patch et Kit restent v3.
 
 Le restore suit un ordre borné : validation de l'en-tête et du checksum, validation des identités et versions, capture/arrêt des états temporaires nécessaires, application des valeurs canoniques, reconstruction des projections runtime, puis restauration UI/transport autorisée. Une erreur de validation ne réalise aucune mutation partielle.
 

@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "buttons.h"
+#include "Core/track_runtime.h"
 #include "Storage/memory_layout.h"
+#include "pages/ui_page_template_tone.h"
 #include "ui_page_manager.h"
 #include "ui_navigation.h"
 #include "ui_renderer_template.h"
@@ -223,6 +225,69 @@ const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_
     const uint8_t active_track = ui_get_active_track();
     const ui_track_config_t config = ui_get_track_config(active_track);
     return ui_template_family_resolve(family_id, active_track, config.family, config.type);
+}
+
+static uint8_t ui_template_family_to_runtime_ensemble(ui_template_family_id_t family_id,
+                                                       track_runtime_ui_ensemble_t *out_ensemble)
+{
+    if (out_ensemble == 0)
+    {
+        return 0U;
+    }
+
+    switch (family_id)
+    {
+        case UI_TEMPLATE_FAMILY_ENV: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_ENV; return 1U;
+        case UI_TEMPLATE_FAMILY_CFG: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_CFG; return 1U;
+        case UI_TEMPLATE_FAMILY_TONE: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_TONE; return 1U;
+        case UI_TEMPLATE_FAMILY_MOD: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MOD; return 1U;
+        case UI_TEMPLATE_FAMILY_KEYBOARD: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD; return 1U;
+        case UI_TEMPLATE_FAMILY_MIDI_FX: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX; return 1U;
+        case UI_TEMPLATE_FAMILY_SEQ: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_SEQ; return 1U;
+        case UI_TEMPLATE_FAMILY_MIX: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MIX; return 1U;
+        case UI_TEMPLATE_FAMILY_PLAY: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_PLAY; return 1U;
+        default: return 0U;
+    }
+}
+
+const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_template_family_id_t family_id,
+                                                                            uint8_t track,
+                                                                            uint8_t scope_index)
+{
+    track_runtime_ui_ensemble_t ensemble = TRACK_RUNTIME_UI_ENSEMBLE_COUNT;
+    if ((ui_template_family_to_runtime_ensemble(family_id, &ensemble) == 0U)
+            || (track_runtime_is_ui_ensemble_available(track, ensemble) == 0U))
+    {
+        return 0;
+    }
+
+    if (family_id == UI_TEMPLATE_FAMILY_TONE)
+    {
+        return ui_page_template_tone_resolve_for_track(track, scope_index);
+    }
+
+    const ui_track_config_t config = ui_get_track_config(track);
+    return ui_template_family_resolve(family_id, track, config.family, config.type);
+}
+
+const ui_template_family_t *ui_template_family_resolve_effective_active_track(ui_template_family_id_t family_id)
+{
+    return ui_template_family_resolve_effective_for_track(family_id,
+                                                           ui_get_active_track(),
+                                                           UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
+}
+
+uint8_t ui_template_family_get_effective_scope_count(ui_template_family_id_t family_id, uint8_t track)
+{
+    if (ui_template_family_resolve_effective_for_track(family_id,
+                                                       track,
+                                                       UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT) == 0)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(((family_id == UI_TEMPLATE_FAMILY_TONE)
+            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)) ? 3U : 1U);
 }
 
 static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)

@@ -158,7 +158,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - Low-Cost : Input1 + Looper + FX + Master
 - Premium : Input1 + Looper + FX + Master + Input2 + Input3
 - les Special affichent une identité CFG fixe et ne sont jamais proposées comme families/types convertibles; Master et FX sont dérivés directement du rôle topologique, sans adaptateur family/type UI partagé
-- Master porte les effets globaux reverb, delay et compresseur via `TONE`; FX porte exclusivement les quatre slots MacroFX; `MIX` reste limité au mix par track
+- Master porte les effets globaux reverb, delay et compresseur via `TONE`; FX porte exclusivement les quatre slots MacroFX; Master et FX n'exposent ni `ENV`, ni `MOD`, ni `MIX`
 
 ### Families configurables des Play Tracks
 - `Off`
