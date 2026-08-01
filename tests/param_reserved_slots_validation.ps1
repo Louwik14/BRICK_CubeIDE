@@ -43,6 +43,40 @@ $expected = @{
     PARAM_RESERVED_003 = 3
     PARAM_RESERVED_004 = 4
     PARAM_RESERVED_005 = 5
+    PARAM_RESERVED_006 = 6
+    PARAM_RESERVED_011 = 11
+    PARAM_RESERVED_012 = 12
+    PARAM_RESERVED_013 = 13
+    PARAM_RESERVED_018 = 18
+    PARAM_RESERVED_019 = 19
+    PARAM_RESERVED_020 = 20
+    PARAM_RESERVED_030 = 30
+    PARAM_RESERVED_031 = 31
+    PARAM_RESERVED_032 = 32
+    PARAM_RESERVED_033 = 33
+    PARAM_RESERVED_034 = 34
+    PARAM_RESERVED_035 = 35
+    PARAM_RESERVED_036 = 36
+    PARAM_RESERVED_037 = 37
+    PARAM_MIX_REVERB_DIGITAL_DECAY = 7
+    PARAM_MIX_REVERB_DIGITAL_DAMP = 8
+    PARAM_MIX_REVERB_DIGITAL_HPF = 9
+    PARAM_MIX_REVERB_DIGITAL_LPF = 10
+    PARAM_MIX_MUTE = 14
+    PARAM_MIX_REVERB_MODEL = 15
+    PARAM_CFG_POLY_VOICES = 16
+    PARAM_CFG_POLY_SPREAD = 17
+    PARAM_DRUM_MD_MODEL = 21
+    PARAM_DRUM_MD_P1 = 22
+    PARAM_DRUM_MD_P2 = 23
+    PARAM_DRUM_MD_P3 = 24
+    PARAM_DRUM_MD_P4 = 25
+    PARAM_DRUM_MD_P5 = 26
+    PARAM_DRUM_MD_P6 = 27
+    PARAM_DRUM_MD_P7 = 28
+    PARAM_DRUM_MD_P8 = 29
+    PARAM_MIX_REVERB_DAMP = 174
+    PARAM_MIX_REVERB_SMEAR = 175
 }
 $current = Get-ParamEnumValues $store
 foreach ($entry in $expected.GetEnumerator()) {
@@ -51,10 +85,11 @@ foreach ($entry in $expected.GetEnumerator()) {
     }
 }
 
+$renamed = @($expected.Keys)
 $headStore = (& git -C $root show 'HEAD:Inc/Param/param_store.h') -join "`n"
 $before = Get-ParamEnumValues $headStore
 foreach ($entry in $current.GetEnumerator()) {
-    if ($entry.Key -like 'PARAM_RESERVED_*') { continue }
+    if ($renamed -contains $entry.Key) { continue }
     if (-not $before.ContainsKey($entry.Key) -or $before[$entry.Key] -ne $entry.Value) {
         throw "ordinal changed for $($entry.Key)"
     }
@@ -62,8 +97,17 @@ foreach ($entry in $current.GetEnumerator()) {
 
 foreach ($name in $expected.Keys) {
     if ($catalog -notmatch [regex]::Escape("$name, ")) { throw "descriptor missing for $name" }
+}
+foreach ($name in ($expected.Keys | Where-Object { $_ -like 'PARAM_RESERVED_*' })) {
     $descriptor = ($catalog -split "`r?`n") | Where-Object { $_ -match [regex]::Escape("$name,") } | Select-Object -First 1
     if ($descriptor -match ',\s*apply_') { throw "reserved descriptor has an apply callback: $name" }
+}
+if ((($current.Values | Measure-Object -Maximum).Maximum + 1) -ne 323) { throw 'PARAM_COUNT changed' }
+if ($store -notmatch '#define PARAM_PERSIST_COUNT PARAM_MIDI_FX_S1_PARAM1') {
+    throw 'PARAM_PERSIST_COUNT boundary changed'
+}
+if ($store -notmatch 'PARAM_MIDI_FX_S1_PARAM1\s*,') {
+    throw 'PARAM_PERSIST_COUNT source ordinal missing'
 }
 if ($registry -notmatch 'param_id_is_reserved\(id\)') { throw 'reserved write guard missing' }
 if ($ui -notmatch '\.params = \{ PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT \}') {
@@ -90,4 +134,15 @@ foreach ($file in $files) {
     }
 }
 
-Write-Output 'param_reserved_slots_validation=PASS ids=0..5 inert=1 ui=hidden p_lock=off modulation=off persistence=unused'
+$legacyPrefix = 'PARAM_' + 'MIX_TRACK'
+foreach ($file in $files) {
+    $text = Get-Content -Raw -LiteralPath $file.FullName
+    if ($text.Contains($legacyPrefix + '0_') -or
+        $text.Contains($legacyPrefix + '1_') -or
+        $text.Contains($legacyPrefix + '2_') -or
+        $text.Contains($legacyPrefix + '3_')) {
+        throw "historical MIX lane symbol remains in $($file.FullName)"
+    }
+}
+
+Write-Output 'param_reserved_slots_validation=PASS ids=0..37 canonical=active-or-reserved inert=1 ui=hidden p_lock=off modulation=off persistence=unused'

@@ -258,7 +258,7 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         return 0U;
     }
 
-    if (((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
+    if (((id >= PARAM_RESERVED_006) && (id <= PARAM_RESERVED_037))
             && (id != PARAM_MIX_MUTE))
     {
         return 0U;
@@ -796,7 +796,7 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
         if (ctx->pattern->globals.global_valid[id] != 0U)
         {
-            if ((((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
+            if ((((id >= PARAM_RESERVED_006) && (id <= PARAM_RESERVED_037))
                     && (id != PARAM_MIX_MUTE)
                     && (pattern_live_is_reverb_global_tombstone(id) == 0U))
                     || (pattern_live_is_track_scoped_param(id) != 0U))

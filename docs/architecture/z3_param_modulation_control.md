@@ -140,9 +140,9 @@ Familles d'autorite:
   - Modulation runtime: chemins directs `mod_lfo_v1` quand une destination LFO effective est exposee; `param_registry_apply_track_value_rt_fast` reste fallback de securite/future destination.
   - Release: restaure la base, jamais la derniere valeur modulee.
 
-- `legacy-physical` (`PARAM_MIX_TRACK0..3_*`):
-  - Statut: tombstones de compat storage/load-only.
-  - Pas de write runtime normal; les flows utilisateur MIX passent par `PARAM_MIX_*` et `param_registry_apply_track_value`.
+- `legacy-physical` (plage historique MIX `6..37`):
+  - Statut: réserves neutres pour les slots morts; les IDs actifs de la plage portent désormais leurs symboles canoniques.
+  - Pas de write runtime normal pour les réserves; les flows utilisateur MIX passent par `PARAM_MIX_*` et `param_registry_apply_track_value`.
 
 ## 2.b Repartition des responsabilites (etat courant)
 
@@ -308,7 +308,7 @@ Call-sites critiques:
   - la valeur p-lock est une projection runtime temporaire,
   - les p-locks ne mettent pas a jour le miroir UI, les bases track-scoped ni le cache runtime autoritatif,
   - les p-locks ne pilotent pas l'affichage live; seul un feedback volontaire de p-lock en edition/step context peut afficher une valeur de lock.
-- `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
+- La plage historique MIX `6..37` reste temporairement bornée dans la persistence; les slots morts sont des réserves et les paramètres actifs utilisent leurs symboles canoniques.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
 ## 6. Dette technique restante (bornee)
@@ -318,7 +318,7 @@ Call-sites critiques:
 - Le chemin d'apply track-aware normal est maintenant plus lisible: autorisation -> backend -> resync LFO, avec un exécuteur backend centralisé cote `param_registry_tone_backends.c`.
 - Les familles tonales stables ont ete extraites dans `param_registry_tone_backends.c`; `param_registry_backends.c` porte surtout les backends communs.
 - Les commits de write runtime passent maintenant par un helper unique dans `param_registry_runtime_state.c`.
-- Ilot legacy `PARAM_MIX_TRACK0..3_*` conserve pour layout storage et migration load-only; UI mute, restore normal et boot defaults ne l'utilisent plus comme runtime physique.
+- La plage historique MIX `6..37` conserve ses ordinaux pour le layout storage; les réserves sont inertes et l'UI mute, le restore normal et les boot defaults n'utilisent plus de runtime physique.
 
 ## 7. Carte courte de la dette reelle (audit code)
 
@@ -562,7 +562,7 @@ Call-sites critiques:
   - `PARAM_MIX_DELAY_MOD_RATE`,
   - `PARAM_MIX_DELAY_REV`,
   - `PARAM_MIX_DELAY_VOL`.
-- Les anciens IDs `PARAM_MIX_DELAY_SWING` et `PARAM_MIX_DELAY_ACCENT` restent reserves/tombstones pour conserver la numerotation `PARAM_COUNT`, mais ne sont plus des params produit et n'ont plus d'apply DSP.
+- `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` sont les symboles canoniques des IDs 174/175 et conservent leurs apply DSP.
 - `TYPE=CLASSIC` reste le default et continue de router vers le moteur `fx_delay_stereo.*`.
 - `TYPE=DUAL` route vers `fx_delay_dual.*`; `MODE` est interprete uniquement par ce backend.
 - En CLASSIC, `PARAM_MIX_DELAY_PINGPONG` garde le controle visible `X`.
@@ -796,7 +796,7 @@ Dette explicite post-passe 4:
 ## Addendum 2026-07-17 - lot 4B catalogue param low-cost
 
 - Le catalogue CFG/MIX consomme les macros de variante issues de `ui_core.h`: en low-cost, seuls les choix de family disponibles peuvent atteindre `Input1`; `Input2..4` ne sont plus des choix valides via le catalogue UI.
-- Les tombstones legacy `PARAM_MIX_TRACK0..3_ROUTE` restent dans `PARAM_COUNT` pour ne pas renumeroter le layout, mais leurs labels/bornes low-cost sont limites a `None/Master`. Les routes `Cue` et `Both` ne sont plus exposables dans cette variante.
+- Les réserves neutres des IDs 18..20 restent dans `PARAM_COUNT` pour ne pas renuméroter le layout; aucune route n'est exposée dans cette variante.
 - Premium conserve les labels et bornes `None/Master/Cue/Both` inchanges.
 
 ## 41. Contrat restore Kit V1
@@ -956,11 +956,11 @@ Dette explicite post-passe 4:
 ## Addendum 2026-07-30 - parametres reverb Mutable
 
 - La surface globale reverb est `LVL/SIZE/DECAY/PRE-D/DAMP/HPF/LPF/SMEAR`. `DAMP` ne pilote plus `LPF`: il controle exclusivement les deux one-poles du tank.
-- Les IDs persistants restent stables: `DAMP` et `SMEAR` reutilisent les deux tombstones reserves `PARAM_MIX_DELAY_SWING/ACCENT`; `PARAM_COUNT` et les payloads Pattern/Project ne changent pas.
+- Les IDs persistants restent stables: `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` sont les symboles canoniques des valeurs 174/175; `PARAM_COUNT` et les payloads Pattern/Project ne changent pas.
 ## Addendum 2026-07-30 - banques reverb par modele
 
 - `MODEL` choisit `MUTABLE/DIGITAL`. Mutable conserve ses valeurs DECAY/SIZE/DAMP/HPF/LPF/SMEAR; Digital possede des IDs distincts DECAY/DAMP/HPF/LPF. LVL et PRE-D restent communs.
-- Les six nouveaux controles reutilisent des tombstones mixer physiques non operationnels; tous les IDs existants, `PARAM_COUNT` et les tailles Project/Pattern restent stables.
+- Les six contrôles Digital conservent leurs ordinals historiques sous leurs symboles canoniques; tous les IDs existants, `PARAM_COUNT` et les tailles Project/Pattern restent stables.
 ## Addendum 2026-07-30 - retrait PAN reverb
 
 - La banque Digital conserve DECAY/DAMP/HPF/LPF; le tombstone temporairement utilise par PAN est restitue a son identite mixer legacy. MODEL, LVL et PRE-D restent inchanges.
@@ -977,9 +977,9 @@ Dette explicite post-passe 4:
 - Les profils centralises dans `md_model` donnent labels, cardinalite et
   defaults pour les six modeles du plan. Changer `MODEL` remplace tous les
   slots par les defaults du nouveau profil.
-- Les neuf IDs reutilisent `PARAM_MIX_TRACK3_ROUTE` puis les huit tombstones
-  legacy `PARAM_MIX_TRACKx_INSERTy`; `PARAM_COUNT` reste stable et les quatre
-  controles historiques `BD_ANALOG` restent sur leurs IDs existants.
+- Les neuf IDs sont déclarés directement sous `PARAM_DRUM_MD_MODEL` et
+  `PARAM_DRUM_MD_P1..P8`; `PARAM_COUNT` reste stable et les quatre contrôles
+  historiques `BD_ANALOG` restent sur leurs IDs existants.
 - `MODEL` est p-lockable mais jamais modulable. Seuls les slots actifs du
   profil courant sont proposes comme destinations MOD.
 # Addendum 2026-07-31 - parametre VOICES borne globalement

@@ -32,18 +32,18 @@ $snapshotHeader = Read-RepoFile 'Inc\Core\track_snapshot.h'
 $kit = Read-RepoFile 'Src\Storage\kit_v1.c'
 $kitHeader = Read-RepoFile 'Inc\Storage\kit_v1.h'
 
-Require-Text $store '#define PARAM_CFG_POLY_VOICES PARAM_MIX_TRACK2_MUTE' 'VOICES alias/ID changed'
-Require-Text $store '#define PARAM_CFG_POLY_SPREAD PARAM_MIX_TRACK3_MUTE' 'SPREAD alias/ID changed'
+Require-Text $store 'PARAM_CFG_POLY_VOICES = 16' 'VOICES canonical ID changed'
+Require-Text $store 'PARAM_CFG_POLY_SPREAD = 17' 'SPREAD canonical ID changed'
 $paramEnum = [regex]::Match($store, '(?s)enum\s*\{(?<body>.*?)\};').Groups['body'].Value
 $paramOrdinal = 0
 foreach ($match in [regex]::Matches($paramEnum, '(?m)^\s*(PARAM_[A-Z0-9_]+)\s*(?:=\s*([0-9]+))?\s*,')) {
     if ($match.Groups[2].Success) {
         $paramOrdinal = [int]$match.Groups[2].Value
     }
-    if ($match.Groups[1].Value -eq 'PARAM_MIX_TRACK2_MUTE' -and $paramOrdinal -ne 16) {
+    if ($match.Groups[1].Value -eq 'PARAM_CFG_POLY_VOICES' -and $paramOrdinal -ne 16) {
         throw "VOICES numeric ID changed: $paramOrdinal"
     }
-    if ($match.Groups[1].Value -eq 'PARAM_MIX_TRACK3_MUTE' -and $paramOrdinal -ne 17) {
+    if ($match.Groups[1].Value -eq 'PARAM_CFG_POLY_SPREAD' -and $paramOrdinal -ne 17) {
         throw "SPREAD numeric ID changed: $paramOrdinal"
     }
     $paramOrdinal++

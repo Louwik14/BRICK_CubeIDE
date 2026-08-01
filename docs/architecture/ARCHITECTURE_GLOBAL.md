@@ -50,7 +50,7 @@
 
 - Z3 porte une autorite canonique par track `MODEL + P1..P8`, avec profils
   `TRX-BD/TRX-SD/TRX-CH/EFM-BD/EFM-SD/EFM-CB`; les slots utilisent neuf
-  tombstones legacy contigus et ne changent pas `PARAM_COUNT`.
+  réserves neutres et IDs actifs canoniques contigus; `PARAM_COUNT` reste inchangé.
 - Z4 applique toujours le p-lock `MODEL` avant les slots MD du meme step.
 - Z5 resout labels et cardinalite depuis le profil courant; `MODEL` est
   p-lockable mais exclu des destinations de modulation.

@@ -20,8 +20,8 @@
 
 ## Compatibilité polyphonie
 
-`VOICES` et `SPREAD` réemploient deux tombstones legacy: `PARAM_COUNT`, les payloads
-et les versions projet/pattern restent inchangés.
+`VOICES` et `SPREAD` sont désormais déclarés directement aux IDs 16 et 17;
+`PARAM_COUNT`, les payloads et les versions projet/pattern restent inchangés.
 
 ## Addendum 2026-07-30 - MT-11 journal SD MONKEY TEST
 
@@ -613,7 +613,7 @@ Plus petite prochaine passe utile:
 ## 15. Contrat send2 delay global
 
 - Les params delay globaux produit (`PARAM_MIX_DELAY_TYPE`, `PARAM_MIX_DELAY_TIME`, `PARAM_MIX_DELAY_PINGPONG`, `PARAM_MIX_DELAY_MODE`, `PARAM_MIX_DELAY_TIME_R`, `PARAM_MIX_DELAY_WIDTH`, `PARAM_MIX_DELAY_FEEDBACK`, `PARAM_MIX_DELAY_HPF`, `PARAM_MIX_DELAY_LPF`, `PARAM_MIX_DELAY_FBW`, `PARAM_MIX_DELAY_MOD`, `PARAM_MIX_DELAY_MOD_RATE`, `PARAM_MIX_DELAY_REV`, `PARAM_MIX_DELAY_VOL`) sont captures dans `PatternSaveV1.globals`.
-- Les anciens IDs `PARAM_MIX_DELAY_SWING` et `PARAM_MIX_DELAY_ACCENT` restent dans le layout `PARAM_COUNT` comme tombstones reserves; ils ne sont plus reappliques comme globals utiles.
+- `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` restent dans le layout `PARAM_COUNT` aux IDs 174/175 et sont réappliqués comme globals utiles.
 - `PARAM_MIX_DELAY_TIME` persiste la division musicale sync BPM, pas la duree calculee en ms/secondes.
 - `PARAM_MIX_DELAY_TIME_R` persiste aussi une division musicale sync BPM; en DUAL/Tap elle sert de temps principal.
 - `PARAM_MIX_DELAY_TYPE` persiste le choix `CLASSIC`/`DUAL`; le default est `CLASSIC`.
@@ -1180,7 +1180,7 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Les versions SD prototype Pattern, Patch, Kit et Project passent a v2 afin
   de refuser sans ambiguite les payloads anterieurs dont la structure TONE
   n'inclut pas l'etat MD.
-- `PARAM_COUNT` reste inchange grace a la reutilisation de tombstones legacy.
+- `PARAM_COUNT` reste inchangé grâce au maintien des ordinals, avec réserves neutres pour les slots morts.
 # Addendum 2026-07-31 - normalisation Looper LowCost
 
 - Tout restore Project/Pattern/Kit/Snapshot passe par la mutation bulk canonique. Sur LowCost, le premier `Sampler/Looper` par index de track est conserve; chaque Looper suivant devient explicitement `Sampler/RAM`. Le commit reste atomique et ne publie jamais plusieurs owners.
