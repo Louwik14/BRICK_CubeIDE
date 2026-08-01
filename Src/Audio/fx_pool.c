@@ -101,9 +101,6 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
             }
             break;
 
-        case FX_GRANULAR:
-            return 0;
-
         case FX_COMP_LAB:
             slot->state = fx_comp_lab_get_instance();
             break;

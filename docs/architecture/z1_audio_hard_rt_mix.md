@@ -538,9 +538,8 @@ Placement code ITCM:
 - La copie boot de `.itcm_text` est installee dans les startups LowCost/Premium.
 - REVB utilise actuellement l'ITCM pour son wrapper SEND global et le corps DSP mono de `mifx::Reverb::Process()`.
 
-Granular / fx_pool:
-- Le backend granular legacy de `fx_pool` est retire du produit: plus de buffers `grain_buffer_l/r`, plus de storage granular SDRAM, et `FX_GRANULAR` reste seulement un tombstone refuse par `fx_pool_activate_slot()`.
-- Les params historiques `PARAM_GRAN_*` restent des tombstones no-op pour conserver les IDs tant qu'aucune rupture explicite de layout param n'est faite.
+fx_pool:
+- Le pool produit expose uniquement les types FX actifs `FX_EQ3`, `FX_SAT` et `FX_COMP_LAB`; aucun backend ou type FX granular n'est compile.
 
 ## 8. Invariants a ne pas casser
 

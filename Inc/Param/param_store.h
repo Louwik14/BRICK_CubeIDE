@@ -9,12 +9,12 @@ extern "C" {
 typedef uint16_t param_id_t;
 
 enum {
-    PARAM_GRAN_DENSITY = 0,
-    PARAM_GRAN_PITCH,
-    PARAM_GRAN_MIX,
-    PARAM_GRAN_FREEZE,
-    PARAM_GRAN_SPREAD,
-    PARAM_GRAN_STEREO,
+    PARAM_RESERVED_000 = 0,
+    PARAM_RESERVED_001 = 1,
+    PARAM_RESERVED_002 = 2,
+    PARAM_RESERVED_003 = 3,
+    PARAM_RESERVED_004 = 4,
+    PARAM_RESERVED_005 = 5,
 
     /* Legacy physical MIX tombstones kept to preserve PARAM_COUNT-indexed storage layout. */
     PARAM_MIX_TRACK0_GAIN,
@@ -353,6 +353,11 @@ enum {
 
     PARAM_COUNT
 };
+
+static inline uint8_t param_id_is_reserved(param_id_t id)
+{
+    return (id >= PARAM_RESERVED_000) && (id <= PARAM_RESERVED_005);
+}
 
 #ifdef __cplusplus
 #define PARAM_STORE_STATIC_ASSERT static_assert

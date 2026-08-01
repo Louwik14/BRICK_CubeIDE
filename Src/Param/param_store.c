@@ -61,7 +61,7 @@ void param_store_init(void)
  */
 void param_store_set_staging(param_id_t id, float v)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
         return;
 
     g_ps.staging[id] = v;
@@ -82,7 +82,7 @@ void param_store_set_staging(param_id_t id, float v)
  */
 void param_store_set_active(param_id_t id, float v)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
         return;
 
     g_ps.staging[id] = v;

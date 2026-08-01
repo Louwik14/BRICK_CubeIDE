@@ -66,7 +66,7 @@ typedef struct
 } ui_param_value_flash_slot_t;
 
 static ui_param_state_t g_ui_param = {
-    .bank = { .params = { PARAM_GRAN_DENSITY, PARAM_GRAN_PITCH, PARAM_GRAN_MIX, PARAM_GRAN_FREEZE } },
+    .bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
     .valid = 0U,
 };
 static ui_param_value_flash_slot_t g_ui_param_value_flash[4];

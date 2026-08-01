@@ -169,36 +169,6 @@ void apply_midi_cc3_2(float v) { apply_tone_live_track(PARAM_MIDI_CC3_2, v); }
 void apply_midi_cc3_3(float v) { apply_tone_live_track(PARAM_MIDI_CC3_3, v); }
 void apply_midi_cc3_4(float v) { apply_tone_live_track(PARAM_MIDI_CC3_4, v); }
 
-void apply_gran_density(float v)
-{
-    (void)v;
-}
-
-void apply_gran_pitch(float v)
-{
-    (void)v;
-}
-
-void apply_gran_mix(float v)
-{
-    (void)v;
-}
-
-void apply_gran_freeze(float v)
-{
-    (void)v;
-}
-
-void apply_gran_spread(float v)
-{
-    (void)v;
-}
-
-void apply_gran_stereo(float v)
-{
-    (void)v;
-}
-
 void apply_eq_low_db(float v) { audio_float_set_dj_eq_low_db(v); }
 void apply_eq_mid_db(float v) { audio_float_set_dj_eq_mid_db(v); }
 void apply_eq_high_db(float v) { audio_float_set_dj_eq_high_db(v); }

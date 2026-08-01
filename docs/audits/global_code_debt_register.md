@@ -14,7 +14,7 @@ Le risque dominant est déjà monocœur. Huit sujets P0 sont confirmés : mutati
 
 ### Matrice de build réellement déclarée
 
-`CMakePresets.json` déclare cinq profils : Debug Low-Cost avec diagnostics, Release Low-Cost, Test Low-Cost, Release Premium et Test Premium. `CMakeLists.txt` compile le même arbre fonctionnel globé pour les deux variantes, ajoute les sources Board/CubeMX propres à la variante et retire les sources diagnostic des builds non-Test. Premium ne possède pas de preset Debug. Le backend granular est explicitement exclu. Les fichiers de diagnostic sont sélectionnés par `BRICK_TEST_BUILD`.
+`CMakePresets.json` déclare cinq profils : Debug Low-Cost avec diagnostics, Release Low-Cost, Test Low-Cost, Release Premium et Test Premium. `CMakeLists.txt` compile le même arbre fonctionnel globé pour les deux variantes, ajoute les sources Board/CubeMX propres à la variante et retire les sources diagnostic des builds non-Test. Premium ne possède pas de preset Debug. Les fichiers de diagnostic sont sélectionnés par `BRICK_TEST_BUILD`.
 
 | Zone | Autorité et données canoniques observées | Projections et consommateurs | Frontières et fichiers pivots |
 |---|---|---|---|
@@ -118,16 +118,12 @@ Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, top
 - **Correction recommandée / patch minimal probable :** audit exhaustif ID→domaine→owner, table canonique testée et politique explicite de tombstones/aliases ; ne pas renuméroter avant d'avoir vérifié tous les payloads.
 - **Validations / régression :** unicité des descripteurs effectifs, round-trip slot/param/persistence, fichiers v3 courants ; risque élevé si renumérotation. Lié à `DOC-002` et `DOC-006`.
 
-### Z3-002 — surface granular active sans backend actif
+### Z3-002 — surface granular supprimée
 
-- **Priorité / statut / zones :** P3, `CONFIRMED`, Z3 avec Z0/Z1/Z5.
-- **Fichiers et symboles :** `Src/Audio/fx_granular.cpp` ; `CMakeLists.txt` ; `Inc/Param/param_store.h` (`PARAM_GRAN_*`) ; `Src/Param/param_registry_catalog.c` ; `Src/Param/param_registry_apply_wrappers.c` (`apply_gran_*`) ; `Src/UI/ui_param.c`.
-- **Preuve :** le fichier DSP granular est explicitement retiré du build ; les six paramètres restent catalogués et présents dans une banque UI de fallback, mais leurs wrappers apply sont des no-op. Z1 les décrit comme tombstones.
-- **Cause racine :** backend retiré sans séparation nette entre IDs réservés et surface sélectionnable.
-- **Conséquence / déclencheur :** si la banque fallback devient atteignable, l'utilisateur peut éditer des contrôles sans effet ; sinon le code augmente seulement la surface de diagnostic.
-- **Impact :** dette legacy limitée, pas un défaut audio démontré.
-- **Correction recommandée / patch minimal probable :** audit d'atteignabilité UI puis masquer les tombstones tout en conservant les IDs si nécessaire ; supprimer le backend exclu seulement après décision produit.
-- **Validations / régression :** résolution de toutes les pages/families et stabilité des IDs. Risque faible à moyen. Lié à `Z0-002`.
+- **Priorité / statut / zones :** P3, `DONE`, Z3 avec Z0/Z1/Z5.
+- **Preuve :** les six ordinaux 0..5 sont désormais des réserves explicites avec des descriptors inertes; la banque UI fallback est vide/invalide, les wrappers et le backend ont été supprimés, et aucun type FX granular ne subsiste dans le pool.
+- **Contrat conservé :** `PARAM_COUNT`, `PARAM_PERSIST_COUNT` et tous les ordinaux suivants restent inchangés; les réserves sont rejetées par les écritures paramètre et ne reçoivent aucun domaine runtime.
+- **Validations / régression :** recherche négative des symboles, couverture/unicité du registre, inertie des réserves et builds des deux variantes.
 
 ### Z4-001 — rattrapage de clock externe non borné dans l'IRQ audio
 
@@ -276,7 +272,6 @@ Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, top
 
 ### Encore compilé ou exposé sans rôle produit clair
 
-- Les `PARAM_GRAN_*`, leur catalogue et leurs wrappers no-op restent compilés, alors que `fx_granular.cpp` est exclu ; voir `Z3-002`.
 - `usb_host_tasklet_poll_bounded` est compilé sur les deux variantes mais sans appel. Z0 documente qu'il a été laissé disponible ; ce n'est donc pas une suppression automatique.
 - `brick6_stack_runtime_cancel_note_state` n'a pas de caller produit observé mais est exercé par `tests/stack_vca_release_test.c`; son contrat partiel 8/16 instances doit être décidé dans l'audit Z1.
 
@@ -340,7 +335,7 @@ Placement de moteurs hors DTCM, taille exacte des files, quotas SD/USB, taille d
 | 3 | Z2 runtime authority | Transaction de binding et durée des pointeurs : `Z2-001` | Z1 consommateurs, Z3 transitions, Z6 restore | état forward/reverse cohérent à toute observation audio | Oui avec Z0 après gel des interfaces Z1 |
 | 4 | Z0 cadence/build | Latence USB, matrice sources/flags : `Z0-001`, `Z0-002`, `GLOBAL-002` | Board variants, Z1 budgets, Z6 services | temps max d'un tour et manifests reproductibles des cinq presets | Oui avec Z2 |
 | 5 | Z6 persistence/SD | Réalité des budgets, atomicité erreur/retry : `Z6-001..003` | Z0 superloop, Z1 cache/writer, Z2/Z3 restore | chaque service a une borne ou une interdiction d'usage explicite, recovery testé | Non avec changements Z0 du superloop ; analyse statique possible en parallèle |
-| 6 | Z3 paramètres/modulation | Identité des IDs, owners d'apply, granular legacy : `Z3-001`, `Z3-002` | résultats Z1/Z2/Z4, formats Z6 | matrice ID→domaine→owner→contexte complète, aucun alias ambigu non documenté | Oui avec Z6 une fois Z2 stabilisé |
+| 6 | Z3 paramètres/modulation | Identité des IDs et owners d'apply : `Z3-001` | résultats Z1/Z2/Z4, formats Z6 | matrice ID→domaine→owner→contexte complète, aucun alias ambigu non documenté | Oui avec Z6 une fois Z2 stabilisé |
 | 7 | Z5 UI | Overflow événement, dépendances directes et stack UI : `Z5-001`, `GLOBAL-002` | Z0 cadence, Z2 capacités, Z3 commandes, Z6 workflows | invariants press/release/focus et aucune mutation DSP hors commande autorisée | Oui avec consolidation documentaire finale, pas avant Z0/Z2/Z3 |
 
 Chaque audit doit travailler depuis un worktree stabilisé ou enregistrer précisément la révision fonctionnelle, car le présent audit a observé une migration MIDI FX non commitée.
@@ -352,7 +347,7 @@ Chaque audit doit travailler depuis un worktree stabilisé ou enregistrer préci
 3. **Lot cadence superloop :** `Z0-001`, `Z6-001`, `Z6-002`, avec budgets mesurés et services vitaux préservés.
 4. **Lot garde mémoire :** mesure et seuils `GLOBAL-002`/`DOC-005`, puis seulement les gros temporaires prouvés.
 5. **Nettoyages sûrs :** entrées CMake mortes, `control_router`, `Z6-003`, puis `Z0-002`; un changement par patch avec manifests comparés.
-6. **Corrections structurelles non urgentes :** `Z3-001`, puis décision `Z3-002` après inventaire de persistence et UI.
+6. **Corrections structurelles non urgentes :** `Z3-001`, puis consolidation documentaire de `Z3-002` désormais terminé.
 7. **Documentation :** `DOC-001` et `DOC-002` d'abord, consolidation Z/README ensuite, audits mémoire/dual-core en dernier lorsque le code est stabilisé.
 8. **À reporter au H747 :** IPC, affectation des cœurs, régions partagées et cache/cohérence.
 9. **À ne pas toucher avant mesure ou découpage réel :** relocalisation massive DTCM/SDRAM, taille arbitraire des files, réécriture des moteurs, des formats ou de `ui_core` pour leur seule taille.

@@ -4,10 +4,9 @@
 
 typedef enum {
     FX_NONE = 0,
-    FX_EQ3,
-    FX_SAT,
-    FX_GRANULAR,
-    FX_COMP_LAB
+    FX_EQ3 = 1,
+    FX_SAT = 2,
+    FX_COMP_LAB = 4
 } fx_type_t;
 
 typedef struct {

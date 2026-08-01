@@ -171,10 +171,6 @@ file(GLOB SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.cpp"
 )
 
-list(REMOVE_ITEM SRC_AUDIO_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_granular.cpp"
-)
-
 file(GLOB SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"

@@ -187,16 +187,16 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 - Tests : unicité ID/descriptor, classification exhaustive, round-trip de chaque format, p-lock, clipboard/undo, deux variantes.
 - Dépendances : après domaines ENV/CFG stabilisés ; étape indépendante et réversible avec invalidation explicite des anciens fichiers si nécessaire.
 
-### CLEAN-DEAD-002 — `DEAD` — granular sans backend produit
+### CLEAN-DEAD-002 — `DONE` — granular supprimé, ordinaux réservés
 
 - Ancien concept : FX granular.
 - Produit actuel : aucune page/track/capacité ne l'expose.
-- Preuves : `PARAM_GRAN_*` et descriptors restent compilés ; les apply sont no-op ; l'unique banque UI par défaut est marquée invalide ; `fx_granular.cpp` est explicitement exclu du build ; `FX_GRANULAR` subsiste dans le pool.
-- Consommateur utile : aucun chemin produit démontré ; le pool et les IDs sont une surface fantôme, pas une feature.
-- Portée : retirer UI fallback, paramètres/descriptors/wrappers puis décider suppression ou déplacement hors build du backend source et de l'enum pool.
-- Risque : renumérotation des IDs ; faire avec CLEAN-OWNER-003, pas avant.
-- Tests : recherche zéro, construction pool, persistence et registres.
-- Dépendances : CLEAN-OWNER-003.
+- Preuves : les six ordinaux 0..5 sont des réserves explicites avec descriptors inertes ; la banque UI fallback est vide/invalide ; le backend, les wrappers, le header et l'enum pool granular ont été supprimés.
+- Consommateur utile : aucun chemin produit ; les réserves ne sont ni applicables, ni p-lockables, ni modulables, ni utiles à la persistence.
+- Portée réalisée : suppression de la surface UI/paramètre et du backend sans renumérotation ; `PARAM_COUNT`, `PARAM_PERSIST_COUNT` et les IDs suivants restent inchangés.
+- Risque : couvert par la validation d'inertie et les recherches négatives ; aucune compaction n'est effectuée.
+- Tests : recherche zéro, couverture/unicité du registre, persistence et builds des deux variantes.
+- Dépendances : aucune pour cette sous-étape.
 
 ### CLEAN-DEAD-003 — `DEAD` — `control_router`
 
@@ -329,7 +329,6 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 | Élément | État | Action |
 |---|---|---|
 | `control_events` | init et consommateur IRQ compilés, zéro producteur | vérifier frontière BSP puis supprimer tout le chemin |
-| paramètres granular | descriptors et no-op apply compilés, banque UI invalide, backend exclu | supprimer avec reconstruction des IDs |
 | filtres Patch Input/Looper | UI/validation présents, capture non-Play interdite | limiter Patch aux familles Play |
 | page test boutons Low-Cost | code compilé sous garde fonctionnelle à 0 | conserver comme outil si une procédure usine le réclame, sinon déplacer sous build test |
 
@@ -347,7 +346,6 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 
 ### Décision produit requise
 
-- suppression physique ou archivage hors build de `fx_granular.cpp` ;
 - statut externe de `control_events` et `usb_host_tasklet_poll_bounded` ;
 - politique explicite d'invalidation des fichiers v3 lors de la reconstruction des IDs.
 
@@ -487,10 +485,15 @@ Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-
 - Docs : Z2/Z3/Z5/Z6.
 - Dépendances : étape 1 ; IDs encore inchangés jusqu'à 4C.
 
+### Étape 4C1 — Supprimer la surface granular sans renumérotation
+
+- Objectif : remplacer les six symboles produit 0..5 par `PARAM_RESERVED_000..005`, supprimer la surface granular et conserver tous les ordinaux.
+- État : TERMINEE le 2026-08-01. Les trous `PARAM_SAMPLER_CLIP_QUANT` et `PARAM_SAMPLER_CLIP_BEAT_RESYNC` restent hors périmètre.
+
 ### Étape 4C — Reconstruire les IDs et retirer granular/tombstones MIX
 
 - Objectif : un ID par concept actuel, aucune collision sémantique.
-- Fichiers/symboles : `param_store.h`, catalogue, runtime/apply, Pattern/Project/Patch/Kit, p-lock, macro/mod, tests ; `PARAM_GRAN_*`, `PARAM_MIX_TRACKx_*` morts.
+- Fichiers/symboles restants : `param_store.h`, catalogue, runtime/apply, Pattern/Project/Patch/Kit, p-lock, macro/mod, tests ; tombstones `PARAM_MIX_TRACKx_*` morts.
 - Autorisé : nouvelle numérotation atomique, invalidation documentée des anciens fichiers, suppression des branches compensatoires.
 - Interdit : conserver une fausse compatibilité partielle, changer DSP ou UI produit.
 - Tests/builds : unicité et couverture du registre, round-trip exhaustif, p-lock/clipboard/undo, builds Debug/Release Low-Cost/Premium.

@@ -1510,7 +1510,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
 uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value)
 {
     /* RT fast path: same value semantics as apply_track_value, but restricted to modulation callers. */
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
     {
         return 0U;
     }
@@ -1533,7 +1533,7 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
     {
         return 0U;
     }
@@ -1602,7 +1602,7 @@ void param_registry_clear_track_runtime_state(uint8_t track)
 /* Command surface: track-aware apply and post-commit routing. */
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
     {
         return 0U;
     }
@@ -1833,7 +1833,7 @@ float param_get(param_id_t id)
 /* Command surface: global canonical write. */
 void param_set(param_id_t id, float value)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
         return;
 
     const param_desc_t *desc = &param_registry[id];
@@ -1870,7 +1870,7 @@ void param_set(param_id_t id, float value)
 /* Command surface: reset global canonical value to default. */
 void param_reset(param_id_t id)
 {
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
         return;
 
     param_set(id, param_registry[id].default_value);
