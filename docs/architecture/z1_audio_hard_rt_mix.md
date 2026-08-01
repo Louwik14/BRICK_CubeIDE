@@ -1384,3 +1384,10 @@ Clarification START/END/LOOP live:
 # Addendum 2026-08-01 - application sample-accurate MIDI FX
 
 Le decoupage audio tient compte de la prochaine echeance `note_fx_engine` en plus des boundaries sequenceur. Les sorties generees sont donc appliquees au dispatcher terminal commun a leur date sample-domain, avant le rendu du segment suivant, avec un nombre de sous-segments borne.
+
+# Addendum 2026-08-01 - suivi de note Sampler/Stream
+
+- `STREAM_SAMPLER_ROOT_NOTE=60` est la racine fixe du Stream, sans parametre ni etat persistant. Chaque Note On terminale conserve sa note dans la voix et reconstruit le plan avant le rendu.
+- Le ratio de pitch desire est `(source_sample_rate / 48000) * 2^(((played_note - 60) + clip_pitch_semitones) / 12)`, avec soustraction signee. Le Q16 courant sature le ratio final dans `0.03125..32`, sans clamp du delta.
+- Stretch OFF porte directement ce ratio dans le reader. Le mode timing sans shifter compose `timing_ratio * desired_pitch_ratio` dans le reader. Le mode SHIFTER porte `(source_sample_rate / 48000) * timing_ratio` dans le reader et applique `desired_pitch_ratio / reader_timing_ratio` au shifter; la limite interne existante du shifter reste `0.25..4`.
+- Clavier, sequenceur, quatre voix PLAY et NoteFx restent en amont du dispatcher terminal commun. VCA Stream, Note Off, DMA, cache, pages, import WAV et formats persistants restent inchanges.

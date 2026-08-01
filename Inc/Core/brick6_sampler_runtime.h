@@ -22,6 +22,7 @@ extern "C" {
 
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (4U)
 #define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (16U)
+#define STREAM_SAMPLER_ROOT_NOTE            (60U)
 
 typedef enum
 {

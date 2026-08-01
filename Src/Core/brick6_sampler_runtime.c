@@ -10,6 +10,7 @@
 
 #include "Audio/audio_float.h"
 #include "Audio/mixer.h"
+#include "Board/board_audio_format.h"
 #include "Core/brick6_clip_shifter.h"
 #include "Storage/memory_layout.h"
 #include "Sampler/multi_sample_loader.h"
@@ -128,7 +129,17 @@ typedef struct
     uint8_t clip_slot_index;
     uint32_t timing_ratio_q16;
     uint32_t pitch_ratio_q16;
+    float shifter_correction;
 } brick6_sampler_clip_runtime_t;
+
+typedef struct
+{
+    int16_t note_delta;
+    uint32_t timing_ratio_q16;
+    uint32_t pitch_ratio_q16;
+    uint32_t step_q16;
+    float shifter_correction;
+} brick6_sampler_stream_pitch_plan_t;
 
 typedef struct
 {
@@ -224,7 +235,6 @@ static uint32_t brick6_sampler_runtime_ram_step_q16(const brick6_sampler_voice_t
                                                     const sampler_ram_slot_t *ram);
 static uint32_t brick6_sampler_runtime_next_trigger_order(void);
 static uint32_t brick6_sampler_runtime_clip_ratio_q16(float source_bpm);
-static uint32_t brick6_sampler_runtime_clip_pitch_ratio_q16(float semitones);
 static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames, float start);
 static uint32_t brick6_sampler_runtime_clamp_region_end(uint32_t length_frames, float end);
 static void brick6_sampler_runtime_build_effective_ram_region(uint32_t length_frames,
@@ -258,6 +268,14 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
                                                                      const brick6_sampler_clip_runtime_t *clip,
                                                                      uint32_t *out_region_begin,
                                                                      uint32_t *out_region_end);
+static brick6_sampler_stream_pitch_plan_t brick6_sampler_runtime_stream_build_pitch_plan(
+    uint8_t track_id,
+    uint8_t played_note,
+    const sample_desc_t *desc,
+    const brick6_sampler_clip_runtime_t *clip,
+    uint8_t use_shifter,
+    uint32_t *out_region_begin,
+    uint32_t *out_region_end);
 static uint8_t brick6_sampler_runtime_clip_uses_shifter(const brick6_sampler_clip_runtime_t *clip);
 static uint16_t brick6_sampler_runtime_clip_sanitize_grain_size(uint16_t grain_size);
 static uint16_t brick6_sampler_runtime_clip_shifter_window_frames(uint16_t grain_size);
@@ -1105,31 +1123,14 @@ static void brick6_sampler_runtime_clip_release_slot(uint8_t track_id)
 static void brick6_sampler_runtime_clip_configure_shifter(const brick6_sampler_clip_runtime_t *clip,
                                                           brick6_sampler_clip_slot_t *slot)
 {
-    float timing_ratio = 1.0f;
-    float pitch_ratio = 1.0f;
-    float pitch_correction = 1.0f;
-
     if ((clip == NULL) || (slot == NULL))
     {
         return;
     }
 
-    if (clip->timing_ratio_q16 != 0U)
-    {
-        timing_ratio = (float)clip->timing_ratio_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-    }
-    if (clip->pitch_ratio_q16 != 0U)
-    {
-        pitch_ratio = (float)clip->pitch_ratio_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-    }
-    if (timing_ratio > 0.0f)
-    {
-        pitch_correction = pitch_ratio / timing_ratio;
-    }
-
     brick6_clip_shifter_set_window_frames(&slot->shifter,
                                           brick6_sampler_runtime_clip_shifter_window_frames(clip->grain_size));
-    brick6_clip_shifter_set_pitch_correction(&slot->shifter, pitch_correction);
+    brick6_clip_shifter_set_pitch_correction(&slot->shifter, clip->shifter_correction);
 }
 
 static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_runtime_t *clip,
@@ -1166,8 +1167,10 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
     g_sampler_clip_runtime[track_id].clip_slot_index = BRICK6_SAMPLER_CLIP_SLOT_NONE;
     g_sampler_clip_runtime[track_id].timing_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
     g_sampler_clip_runtime[track_id].pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
+    g_sampler_clip_runtime[track_id].shifter_correction = 1.0f;
     sample_voice_reader_reset(&g_sampler_voice[track_id].reader);
     g_sampler_voice[track_id].active = 0U;
+    g_sampler_voice[track_id].note = STREAM_SAMPLER_ROOT_NOTE;
     g_sampler_voice[track_id].position = 0.0f;
     g_sampler_voice[track_id].sample = NULL;
     g_sampler_voice[track_id].source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
@@ -1200,30 +1203,6 @@ static uint32_t brick6_sampler_runtime_clip_ratio_q16(float source_bpm)
         ratio = 2.0f;
     }
 
-    return (uint32_t)(ratio * (float)BRICK6_SAMPLER_Q16_ONE + 0.5f);
-}
-
-static uint32_t brick6_sampler_runtime_clip_pitch_ratio_q16(float semitones)
-{
-    float ratio;
-    if (semitones < -12.0f)
-    {
-        semitones = -12.0f;
-    }
-    else if (semitones > 12.0f)
-    {
-        semitones = 12.0f;
-    }
-
-    ratio = powf(2.0f, semitones / 12.0f);
-    if (ratio < 0.5f)
-    {
-        ratio = 0.5f;
-    }
-    else if (ratio > 2.0f)
-    {
-        ratio = 2.0f;
-    }
     return (uint32_t)(ratio * (float)BRICK6_SAMPLER_Q16_ONE + 0.5f);
 }
 
@@ -1311,6 +1290,60 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
     return ratio_q16;
 }
 
+static brick6_sampler_stream_pitch_plan_t brick6_sampler_runtime_stream_build_pitch_plan(
+    uint8_t track_id,
+    uint8_t played_note,
+    const sample_desc_t *desc,
+    const brick6_sampler_clip_runtime_t *clip,
+    uint8_t use_shifter,
+    uint32_t *out_region_begin,
+    uint32_t *out_region_end)
+{
+    brick6_sampler_stream_pitch_plan_t plan = {
+        .note_delta = (int16_t)played_note - (int16_t)STREAM_SAMPLER_ROOT_NOTE,
+        .timing_ratio_q16 = BRICK6_SAMPLER_Q16_ONE,
+        .pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE,
+        .step_q16 = BRICK6_SAMPLER_Q16_ONE,
+        .shifter_correction = 1.0f,
+    };
+    const uint32_t source_sample_rate = ((desc != NULL) && (desc->sample_rate != 0U))
+                                            ? desc->sample_rate
+                                            : BOARD_AUDIO_SAMPLE_RATE_HZ;
+    const float semitones = (float)plan.note_delta
+                            + ((clip != NULL) ? clip->pitch_semitones : 0.0f);
+    const float musical_ratio = powf(2.0f, semitones / 12.0f);
+    const float sample_rate_ratio = (float)source_sample_rate
+                                    / (float)BOARD_AUDIO_SAMPLE_RATE_HZ;
+    const float desired_pitch_ratio = sample_rate_ratio * musical_ratio;
+
+    plan.timing_ratio_q16 = brick6_sampler_runtime_clip_resolve_timing_ratio_q16(
+        track_id, desc, clip, out_region_begin, out_region_end);
+    plan.pitch_ratio_q16 = brick6_sampler_runtime_ratio_to_q16(desired_pitch_ratio);
+
+    const float timing_ratio = (float)plan.timing_ratio_q16
+                               / (float)BRICK6_SAMPLER_Q16_ONE;
+    const float represented_pitch_ratio = (float)plan.pitch_ratio_q16
+                                          / (float)BRICK6_SAMPLER_Q16_ONE;
+    if (use_shifter != 0U)
+    {
+        plan.step_q16 = brick6_sampler_runtime_ratio_to_q16(
+            sample_rate_ratio * timing_ratio);
+        const float reader_timing_ratio = (float)plan.step_q16
+                                          / (float)BRICK6_SAMPLER_Q16_ONE;
+        if (reader_timing_ratio > 0.0f)
+        {
+            plan.shifter_correction = represented_pitch_ratio / reader_timing_ratio;
+        }
+    }
+    else
+    {
+        plan.step_q16 = brick6_sampler_runtime_ratio_to_q16(
+            timing_ratio * desired_pitch_ratio);
+    }
+
+    return plan;
+}
+
 static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
 {
     brick6_sampler_clip_slot_t *slot = NULL;
@@ -1324,10 +1357,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     const sample_desc_t *const desc = sample_pool_get(clip->sample_id);
     const uint8_t cache_voice_id = brick6_sampler_runtime_cache_voice_id(track_id);
     sample_play_plan_t play_plan;
-    uint32_t ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
-    uint32_t pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
+    brick6_sampler_stream_pitch_plan_t pitch_plan;
     uint8_t use_shifter = brick6_sampler_runtime_clip_uses_shifter(clip);
-    uint32_t step_q16 = BRICK6_SAMPLER_Q16_ONE;
     uint32_t region_begin = 0U;
     uint32_t region_end = 0U;
 
@@ -1357,16 +1388,16 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
         brick6_sampler_runtime_clip_release_slot(track_id);
     }
 
-    ratio_q16 = brick6_sampler_runtime_clip_resolve_timing_ratio_q16(track_id, desc, clip, &region_begin, &region_end);
-    clip->timing_ratio_q16 = ratio_q16;
-    clip->pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
-    if (use_shifter != 0U)
-    {
-        pitch_ratio_q16 = brick6_sampler_runtime_clip_pitch_ratio_q16(clip->pitch_semitones);
-        clip->pitch_ratio_q16 = pitch_ratio_q16;
-    }
-
-    step_q16 = ratio_q16;
+    pitch_plan = brick6_sampler_runtime_stream_build_pitch_plan(track_id,
+                                                                voice->note,
+                                                                desc,
+                                                                clip,
+                                                                use_shifter,
+                                                                &region_begin,
+                                                                &region_end);
+    clip->timing_ratio_q16 = pitch_plan.timing_ratio_q16;
+    clip->pitch_ratio_q16 = pitch_plan.pitch_ratio_q16;
+    clip->shifter_correction = pitch_plan.shifter_correction;
 
     memset(&play_plan, 0, sizeof(play_plan));
     play_plan.sample_id = clip->sample_id;
@@ -1378,12 +1409,12 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     play_plan.loop_end = region_end;
     play_plan.fade_in_frames = 0U;
     play_plan.fade_out_frames = 0U;
-    play_plan.step_q16 = step_q16;
+    play_plan.step_q16 = pitch_plan.step_q16;
     play_plan.direction = 0U;
     play_plan.loop_mode = (clip->loop_enabled != 0U) ? BRICK6_SAMPLER_LOOP_FORWARD
                                                      : BRICK6_SAMPLER_LOOP_NONE;
     play_plan.stop_on_underrun = 1U;
-    play_plan.kernel_type = (step_q16 == BRICK6_SAMPLER_Q16_ONE)
+    play_plan.kernel_type = (pitch_plan.step_q16 == BRICK6_SAMPLER_Q16_ONE)
                                 ? SAMPLE_KERNEL_FWD_1X
                                 : SAMPLE_KERNEL_PITCH_FWD_LINEAR;
 
@@ -1418,8 +1449,6 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     voice->sample = desc;
     voice->position = (float)region_begin;
     voice->active = 1U;
-    voice->note = 60U;
-    voice->velocity = 127U;
     voice->mode = 2U;
     voice->slice_count = 0U;
     voice->slice_index = 0U;
@@ -1433,7 +1462,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     voice->loop_frames = region_end - region_begin;
     voice->fade_in_frames = 0U;
     voice->fade_out_frames = 0U;
-    voice->step_signed = (float)step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    voice->step_signed = (float)pitch_plan.step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
     voice->reverse = 0U;
     voice->loop_mode = (clip->loop_enabled != 0U) ? BRICK6_SAMPLER_LOOP_FORWARD
                                                   : BRICK6_SAMPLER_LOOP_NONE;
@@ -2889,6 +2918,16 @@ void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note
 
     g_sampler_voice[track_id].note = note;
     g_sampler_voice[track_id].velocity = velocity;
+
+    if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
+    {
+        brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+        clip->state = (brick6_sampler_runtime_clip_start_playback(track_id) != 0U)
+                          ? (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING
+                          : (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
+        return;
+    }
+
     brick6_sampler_runtime_trigger(track_id);
 }
 
