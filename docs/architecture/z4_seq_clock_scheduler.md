@@ -483,7 +483,7 @@ Contraintes RT observees:
 - Mutations du pool/listes p-lock (`seq_model_step_plock_upsert/delete/clear`) executees en section critique IRQ pour garantir la coherence avec la lecture boundary runtime en IRQ.
 - Chemin audio-bloc borne par capacites fixes:
   - scheduler collect par tranches de 16 events dans `seq_runtime_audio_collect_block_events`.
-  - queue globale capee a `SEQ_PLAY_SCHEDULER_EVENT_CAP` (256).
+- queue globale capee a `SEQ_PLAY_SCHEDULER_EVENT_CAP` (512). Chaque paire Note On/Note Off est reservee sous une unique section critique : avec moins de deux places, les deux evenements sont refuses et le token n'est pas alloue.
 
 Contraintes CPU/ordre:
 - Cohesion temporelle dependante de l'ordre:

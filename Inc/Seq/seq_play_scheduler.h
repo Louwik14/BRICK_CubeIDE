@@ -26,6 +26,7 @@ typedef struct
     uint16_t queue_high_water;
     uint16_t max_events_collected_per_call;
     uint32_t queue_overflow_drop_count;
+    uint32_t note_pair_overflow_drop_count;
     uint32_t overdue_event_count;
     uint32_t offset_clamp_count;
     uint32_t stale_generation_drop_count;

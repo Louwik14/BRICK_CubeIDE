@@ -116,6 +116,11 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t note,
                                     uint8_t velocity,
                                     uint32_t event_token);
+static uint8_t seq_play_scheduler_push_note_pair(uint64_t note_on_sample_time,
+                                                 uint64_t note_off_sample_time,
+                                                 seq_track_id_t target_track,
+                                                 uint8_t note,
+                                                 uint8_t velocity);
 static void seq_play_scheduler_push_note_retrigs(uint64_t note_on_sample_time,
                                                  uint64_t len_samples,
                                                  uint64_t step_span_q16,
@@ -341,25 +346,59 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     seq_play_scheduler_exit_critical(primask);
 }
 
-static void seq_play_scheduler_push_note_pair(uint64_t note_on_sample_time,
-                                              uint64_t note_off_sample_time,
-                                              seq_track_id_t target_track,
-                                              uint8_t note,
-                                              uint8_t velocity)
+static uint8_t seq_play_scheduler_push_note_pair(uint64_t note_on_sample_time,
+                                                 uint64_t note_off_sample_time,
+                                                 seq_track_id_t target_track,
+                                                 uint8_t note,
+                                                 uint8_t velocity)
 {
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    if ((target_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            || (g_seq_play_track_suspended[target_track] != 0U))
+    {
+        seq_play_scheduler_exit_critical(primask);
+        return 0U;
+    }
+
+    if ((uint16_t)(SEQ_PLAY_SCHEDULER_EVENT_CAP - g_seq_play_event_count) < 2U)
+    {
+        g_seq_play_diag.queue_overflow_drop_count += 2U;
+        g_seq_play_diag.note_pair_overflow_drop_count++;
+        seq_play_scheduler_exit_critical(primask);
+        return 0U;
+    }
+
     const uint32_t event_token = seq_play_scheduler_alloc_event_token();
-    seq_play_scheduler_push(note_on_sample_time,
-                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
-                            target_track,
-                            note,
-                            velocity,
-                            event_token);
-    seq_play_scheduler_push(note_off_sample_time,
-                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                            target_track,
-                            note,
-                            0U,
-                            event_token);
+    seq_play_scheduler_evt_t *const note_on = &g_seq_play_events[g_seq_play_event_count++];
+    *note_on = (seq_play_scheduler_evt_t){
+        .due_sample_time = note_on_sample_time,
+        .track = target_track,
+        .note = note,
+        .velocity = velocity,
+        .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
+        .audio_dispatched = 0U,
+        .generation = g_seq_play_generation,
+        .track_generation = g_seq_play_track_generation[target_track],
+        .event_token = event_token,
+    };
+    seq_play_scheduler_evt_t *const note_off = &g_seq_play_events[g_seq_play_event_count++];
+    *note_off = (seq_play_scheduler_evt_t){
+        .due_sample_time = note_off_sample_time,
+        .track = target_track,
+        .note = note,
+        .velocity = 0U,
+        .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+        .audio_dispatched = 0U,
+        .generation = g_seq_play_generation,
+        .track_generation = g_seq_play_track_generation[target_track],
+        .event_token = event_token,
+    };
+    if (g_seq_play_event_count > g_seq_play_diag.queue_high_water)
+    {
+        g_seq_play_diag.queue_high_water = g_seq_play_event_count;
+    }
+    seq_play_scheduler_exit_critical(primask);
+    return 1U;
 }
 
 static void seq_play_scheduler_push_note_retrigs(uint64_t note_on_sample_time,
