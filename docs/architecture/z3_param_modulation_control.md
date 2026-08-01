@@ -703,6 +703,7 @@ Dette explicite post-passe 4:
 - Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
 - Autorite de base: `track_sound_state` par track; projection runtime autoritative via `param_registry_apply_track_value`, modulation temporaire via chemins directs `mod_lfo_v1` vers la lane mixer resolue par Z2.
 - Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.
+- Le set p-lock `ENV` utilise 25 slots sans collision: filtre `0..13`, VCA `14..17`, ENV3 `18..21`, retriggers FLT/VCA/MOD `22..24`. Les anciens slots VCA `MIX 4..7` et ENV3/retrigger `MOD 12..16` ne sont plus actifs; `MIX 0..3` reste niveau/pan/send1/send2 et `MOD 0..11` reste les trois LFO.
 - Execution LFO MIX simple: `mod_lfo_v1` applique directement `LEVEL`, `PAN`, `SEND1` et `SEND2` sur la target mixer resolue par Z2, sans passer par `param_registry_apply_track_value_rt_fast`.
 - Ce chemin direct ne modifie pas `track_sound_state`, `param_store`, le cache runtime param ou l'etat UI: il reste une projection runtime modulee temporaire.
 - La release LFO de ces quatre destinations reapplique la base capturee par le meme chemin direct, sauf si un autre LFO actif de la meme track cible deja la meme destination.
@@ -800,7 +801,7 @@ Dette explicite post-passe 4:
 
 ## 41. Contrat restore Kit V1
 
-- L'apply Kit restaure les bases canoniques `track_sound_state` et `track_tone_sound_state`, puis reprojette uniquement les domaines track-aware `ENV`, `TONE` et `MIX` par `param_registry_apply_track_value`.
+- L'apply Kit restaure les bases canoniques `track_sound_state` et `track_tone_sound_state`, puis reprojette les domaines track-aware `ENV`, `TONE` et `MIX` par `param_registry_apply_track_value`; ENV inclut donc FLT, VCA et ENV3.
 - La config LFO/Matrix/ENV3 est portee par `track_sound_state_t` et reprojetee par les params track-aware courants; aucun payload LFO separe n'est restaure.
 - Le domaine `PLAY` reste exclu de l'apply Kit pour ne pas restaurer seq/pattern/p-locks/transport.
 ## 42. Contrat dirty Kit

@@ -23,7 +23,7 @@ typedef struct
 } seq_param_slot_state_t;
 
 #define SEQ_PARAM_NON_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
-#define SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK 8U
+#define SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK 4U
 #define SEQ_PARAM_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * SEQ_PARAM_MIX_SLOT_COUNT_PER_TRACK)
 #define SEQ_PARAM_FLAG_BIT_COUNT (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_SLOT_COUNT)
 #define SEQ_PARAM_FLAG_BYTE_COUNT ((SEQ_PARAM_FLAG_BIT_COUNT + 7U) / 8U)
@@ -40,11 +40,7 @@ static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT_PER_
     PARAM_MIX_LEVEL,
     PARAM_MIX_PAN,
     PARAM_MIX_SEND1,
-    PARAM_MIX_SEND2,
-    PARAM_VCA_ATTACK,
-    PARAM_VCA_DECAY,
-    PARAM_VCA_SUSTAIN,
-    PARAM_VCA_RELEASE
+    PARAM_MIX_SEND2
 };
 
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
@@ -183,10 +179,6 @@ static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
-        case PARAM_VCA_ATTACK:
-        case PARAM_VCA_DECAY:
-        case PARAM_VCA_SUSTAIN:
-        case PARAM_VCA_RELEASE:
             return 1U;
         default:
             return 0U;

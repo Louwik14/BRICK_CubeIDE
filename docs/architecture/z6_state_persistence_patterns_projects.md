@@ -1199,12 +1199,12 @@ Le payload Kit porte egalement la cardinalite synthetique par track et son forma
 - Les formats SD Pattern et Project passent de v2 à v3; les payloads prototypes antérieurs sont refusés par version/taille, sans migration.
 # Addendum 2026-07-31 - modele sequence Play/Special final
 
-- `PatternSaveV1.seq` contient huit tracks Play `64 x 32` et six emplacements Special `64 x 16`; le format binaire v3 reste commun Low-Cost/Premium et sa taille courante invalide directement les anciens fichiers.
+- `PatternSaveV1.seq` contient huit tracks Play `64 x 32` et six emplacements Special `64 x 16`; le format binaire reste commun Low-Cost/Premium et sa validation stricte de version/taille invalide directement les anciens fichiers.
 - Chaque track capturee porte l'identite `role + ordinal` issue de `track_topology`. Restore Pattern/Project, snapshot Track, Kit et Patch valident la compatibilite avant mutation; Patch reste exclusivement Play.
 - Les captures/restores Special ne transportent que longueur/page, action et locks non-PLAY. Notes, velocite, duree, microtiming et ARP n'ont aucun champ Special.
 - Pattern/Project, snapshot Track, clipboard de steps/Track et snapshots Undo/Redo conservent les actions Special. Clear remet l'action a `NONE` et vide les locks.
 - L'ancien `seq_project_data_t`, son scratch SDRAM et `seq_persistence` ont ete retires; Pattern/Project sont l'unique chemin de persistence sequence.
-- Les numeros de formats Pattern/Project/Kit/Patch restent a 3 conformement au contrat sans retrocompatibilite; aucune conversion de fichier n'est ajoutee.
+- La migration d'ownership ENV porte Pattern et Project en v4: les anciens payloads v3 sont refuses explicitement, sans conversion, car les slots p-lock et la repartition `sound`/`mix` ont change. Kit et Patch restent en v3: leurs snapshots agreges `track_sound_state` conservent le meme layout et restaurent desormais FLT/VCA/ENV3 via le domaine ENV courant.
 # Addendum 2026-07-31 - capacite p-lock Special
 
 - Pattern/Project, snapshots Track et Undo/Redo valident desormais jusqu'a 512 p-locks par Special Track via la capacite canonique du modele.

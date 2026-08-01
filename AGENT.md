@@ -92,7 +92,7 @@ Règles :
 ### Politique sauvegardes prototype
 - le projet est en phase de prototypage
 - la retrocompatibilite des projets, patterns et presets n'est pas requise
-- les formats persistés courants Pattern, Project, Kit et Patch sont en version 3
+- les formats persistés courants Pattern et Project sont en version 4; Kit et Patch restent en version 3
 - une évolution de structure modifie le format courant; aucune migration, conversion ni rétrocompatibilité ne doit être ajoutée sans demande explicite
 - les anciens payloads incompatibles sont refusés par validation stricte; ils peuvent devenir illisibles sans traitement particulier
 - toute modification de version est explicite et cohérente sur le format concerné
@@ -248,7 +248,7 @@ Cas transverses fréquents :
 - MIDI FX : raccourci physique `ARP`, page `MIDI FX`
 - routage Looper et routage UI-only MacroFX : contexte `ROUT` via réemploi de `ARP`
 
-Les symboles internes actifs de l'ensemble produit utilisent désormais `ENV`; le reclassement logique de VCA/ENV3 et la reconstruction des IDs de paramètres restent des dettes planifiées. Le renommage propriétaire `MASTER_FX` vers `MACRO_FX` est réalisé sans renumérotation.
+Les symboles internes actifs de l'ensemble produit utilisent désormais `ENV`; FLT, VCA, ENV3 et leurs retriggers appartiennent tous au domaine et au set p-lock `ENV`. La reconstruction des IDs de paramètres reste une dette planifiée. Le renommage propriétaire `MASTER_FX` vers `MACRO_FX` est réalisé sans renumérotation.
 
 Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
 

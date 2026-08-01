@@ -657,6 +657,7 @@ Points factuels:
   - la sortie de `KEYBOARD` envoie les note-off locaux du clavier avant de nettoyer l'etat interne; les clears silencieux restent reserves aux sync de focus ou resets deja proprietaires du contexte.
 
 ## 13.b Contrat ENV UI
+- `ENV` est l'unique proprietaire logique des pages FLT, VCA et ENV3 et de leurs trois retriggers. Les scopes ensemble clipboard/copy/paste/clear et l'undo enumerent cette famille de template; les scopes `MIX` et `MOD` ne touchent respectivement plus VCA et ENV3.
 - L'ensemble `ENV` conserve uniquement les pages filtre utiles:
   - `MAIN`: `F Type`, cutoff/low, resonance/mid, `EG Amt`/high selon type de filtre,
   - `ADSR`: `Atk`, `Dec`, `Sus`, `Rel` uniquement pour les filtres biquad avec envelope,

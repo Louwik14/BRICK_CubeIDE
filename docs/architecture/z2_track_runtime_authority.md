@@ -166,6 +166,7 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - Les couches d'exécution (scheduler/param apply) lisent le channel MIDI via Z2 (`track_runtime_get_midi_channel_*`) au lieu d'un couplage direct à l'état UI.
 - Le resolver structurel pur est explicite: `track_runtime_resolve_track()` renvoie une vue résolue (descriptor + cibles runtime valides) sans logique UI contextuelle.
 - Pour le set `TONE`, le mapping `slot -> param` est local au type runtime effectif; il ne doit pas être dupliqué dans Z4/Z5/Z3.
+- Le domaine logique `ENV` couvre filtre/enveloppe filtre, ADSR/retrigger VCA et ADSR/retrigger ENV3. Les ressources runtime restent distinctes (`FILTER`, `MIX`, `PLAY`) afin de conserver les backends mixer VCA et `mod_env3`; `MIX` et `MOD` ne possedent plus ces parametres.
 
 ## 8. Dépendances inter-zones
 Entrées de Z2:

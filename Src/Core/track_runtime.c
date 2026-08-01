@@ -1703,6 +1703,22 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
+        case PARAM_VCA_ATTACK:
+        case PARAM_VCA_DECAY:
+        case PARAM_VCA_SUSTAIN:
+        case PARAM_VCA_RELEASE:
+        case PARAM_ENV_RETRIG_VCA:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
+            rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
+            return rule;
+        case PARAM_ENV3_ATTACK:
+        case PARAM_ENV3_DECAY:
+        case PARAM_ENV3_SUSTAIN:
+        case PARAM_ENV3_RELEASE:
+        case PARAM_ENV_RETRIG_MOD:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
+            rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+            return rule;
         case PARAM_DRUM_TRX_BD_PITCH:
         case PARAM_DRUM_TRX_BD_DECAY:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
@@ -1854,11 +1870,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
         case PARAM_MIX_MUTE:
-        case PARAM_VCA_ATTACK:
-        case PARAM_VCA_DECAY:
-        case PARAM_VCA_SUSTAIN:
-        case PARAM_VCA_RELEASE:
-        case PARAM_ENV_RETRIG_VCA:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
             return rule;
@@ -1909,11 +1920,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MOD_SLEW_1_AMOUNT:
         case PARAM_MOD_SLEW_2_SOURCE:
         case PARAM_MOD_SLEW_2_AMOUNT:
-        case PARAM_ENV3_ATTACK:
-        case PARAM_ENV3_DECAY:
-        case PARAM_ENV3_SUSTAIN:
-        case PARAM_ENV3_RELEASE:
-        case PARAM_ENV_RETRIG_MOD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MOD;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

@@ -1071,8 +1071,16 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
             return 0U;
         }
 
+        if (mod_destination_is_direct_vca(dest) != 0U)
+        {
+            return ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+                ? track_runtime_supports_vca_gate(ctx)
+                : 0U;
+        }
+
         return (((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_ENVDLY))
-                || ((dest >= PARAM_FILTER_EQ_LOW) && (dest <= PARAM_FILTER_EQ_HIGH))) ? 1U : 0U;
+                || ((dest >= PARAM_FILTER_EQ_LOW) && (dest <= PARAM_FILTER_EQ_HIGH))
+                || ((dest >= PARAM_ENV3_ATTACK) && (dest <= PARAM_ENV3_RELEASE))) ? 1U : 0U;
     }
 
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -1080,11 +1088,6 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
         {
             return 0U;
-        }
-
-        if (mod_destination_is_direct_vca(dest) != 0U)
-        {
-            return track_runtime_supports_vca_gate(ctx);
         }
 
         return ((dest == PARAM_MIX_LEVEL)

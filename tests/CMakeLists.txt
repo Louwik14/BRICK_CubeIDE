@@ -84,6 +84,9 @@ if(WIN32)
     add_test(NAME note_fx_persistence
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_persistence_validation.ps1)
+    add_test(NAME env_ownership
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/env_ownership_validation.ps1)
     add_test(NAME seq_play_scheduler_pair
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/seq_play_scheduler_pair_validation.ps1)
