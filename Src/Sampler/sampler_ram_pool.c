@@ -22,6 +22,119 @@ typedef struct
 STORAGE_STATE_SDRAM static sampler_ram_pool_state_t g_sampler_ram_pool;
 AUDIO_WARM ALIGN32 static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
 
+uint16_t sampler_ram_format_channels(sampler_ram_format_t format)
+{
+    switch (format)
+    {
+        case SAMPLER_RAM_FORMAT_FLOAT32_MONO:
+            return 1U;
+        case SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED:
+            return 2U;
+        default:
+            return 0U;
+    }
+}
+
+uint16_t sampler_ram_format_bytes_per_frame(sampler_ram_format_t format)
+{
+    const uint16_t channels = sampler_ram_format_channels(format);
+    return (channels != 0U) ? (uint16_t)(channels * sizeof(float)) : 0U;
+}
+
+uint8_t sampler_ram_frames_to_bytes(sampler_ram_format_t format,
+                                    uint32_t frames,
+                                    uint32_t *out_bytes)
+{
+    if (out_bytes != 0)
+    {
+        *out_bytes = 0U;
+    }
+
+    const uint16_t bytes_per_frame = sampler_ram_format_bytes_per_frame(format);
+    const uint64_t bytes = (uint64_t)frames * bytes_per_frame;
+    if ((bytes_per_frame == 0U) || (bytes > UINT32_MAX))
+    {
+        return 0U;
+    }
+
+    if (out_bytes != 0)
+    {
+        *out_bytes = (uint32_t)bytes;
+    }
+    return 1U;
+}
+
+uint8_t sampler_ram_bytes_to_pages(uint32_t bytes, uint32_t *out_pages)
+{
+    if (out_pages != 0)
+    {
+        *out_pages = 0U;
+    }
+    if (bytes == 0U)
+    {
+        return 0U;
+    }
+
+    const uint64_t pages = ((uint64_t)bytes + SAMPLE_PAGE_BYTES - 1U)
+                           / SAMPLE_PAGE_BYTES;
+    if ((pages == 0U) || (pages > UINT32_MAX))
+    {
+        return 0U;
+    }
+    if (out_pages != 0)
+    {
+        *out_pages = (uint32_t)pages;
+    }
+    return 1U;
+}
+
+uint8_t sampler_ram_format_cost_bytes(sampler_ram_format_t format,
+                                      uint32_t frames,
+                                      uint32_t *out_logical_bytes,
+                                      uint32_t *out_page_count,
+                                      uint32_t *out_cost_bytes)
+{
+    if (out_logical_bytes != 0)
+    {
+        *out_logical_bytes = 0U;
+    }
+    if (out_page_count != 0)
+    {
+        *out_page_count = 0U;
+    }
+    if (out_cost_bytes != 0)
+    {
+        *out_cost_bytes = 0U;
+    }
+
+    uint32_t logical_bytes = 0U;
+    uint32_t page_count = 0U;
+    if ((sampler_ram_frames_to_bytes(format, frames, &logical_bytes) == 0U)
+        || (sampler_ram_bytes_to_pages(logical_bytes, &page_count) == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t cost = (uint64_t)page_count * SAMPLE_PAGE_BYTES;
+    if (cost > UINT32_MAX)
+    {
+        return 0U;
+    }
+    if (out_logical_bytes != 0)
+    {
+        *out_logical_bytes = logical_bytes;
+    }
+    if (out_page_count != 0)
+    {
+        *out_page_count = page_count;
+    }
+    if (out_cost_bytes != 0)
+    {
+        *out_cost_bytes = (uint32_t)cost;
+    }
+    return 1U;
+}
+
 static uint16_t sampler_ram_waveform_abs_i16(int16_t value)
 {
     if (value >= 0)
@@ -77,7 +190,7 @@ static uint8_t sampler_ram_waveform_slot_ready(const sampler_ram_slot_t *slot)
 {
     return (uint8_t)((slot != 0)
                     && (slot->state == SAMPLER_RAM_SLOT_READY)
-                    && (slot->format == SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+                    && (sampler_ram_format_channels(slot->format) != 0U)
                     && (slot->data != 0)
                     && (slot->frames != 0U)
                     && (slot->channels != 0U));
@@ -503,18 +616,26 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     }
 
     const uint32_t frames = info.data_size / info.block_align;
-    const uint16_t bytes_per_frame = (uint16_t)(2U * sizeof(float));
-    if ((frames == 0U) || (frames > (UINT32_MAX / bytes_per_frame)))
+    const sampler_ram_format_t format =
+        (info.channels == 1U)
+            ? SAMPLER_RAM_FORMAT_FLOAT32_MONO
+            : SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    const uint16_t bytes_per_frame = sampler_ram_format_bytes_per_frame(format);
+    uint32_t data_bytes = 0U;
+    uint32_t page_count = 0U;
+    uint32_t cost = 0U;
+    if ((frames == 0U)
+        || (sampler_ram_format_cost_bytes(format,
+                                          frames,
+                                          &data_bytes,
+                                          &page_count,
+                                          &cost) == 0U))
     {
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
         sampler_ram_set_last(SAMPLER_RAM_RESULT_TOO_LARGE);
         return SAMPLER_RAM_RESULT_TOO_LARGE;
     }
-    const uint32_t data_bytes = frames * bytes_per_frame;
-    const uint32_t page_count =
-        (data_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
-    const uint32_t cost = page_count * SAMPLE_PAGE_BYTES;
     if ((cost == 0U) || (cost > SAMPLER_RAM_POOL_BYTES))
     {
         (void)f_close(&fp);
@@ -558,8 +679,8 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     slot->state = SAMPLER_RAM_SLOT_LOADING;
     slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     (void)sampler_ram_copy_path(slot->path, sizeof(slot->path), path);
-    slot->format = SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED;
-    slot->channels = 2U;
+    slot->format = format;
+    slot->channels = sampler_ram_format_channels(format);
     slot->sample_rate = info.sample_rate;
     slot->frames = frames;
     slot->bytes_per_frame = bytes_per_frame;
@@ -605,7 +726,7 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
             return SAMPLER_RAM_RESULT_READ_FAIL;
         }
 
-        float *dst = &slot->data[frames_done * 2U];
+        float *dst = &slot->data[frames_done * slot->channels];
         const uint8_t *src = g_sampler_ram_io;
         if (info.bits_per_sample == 16U)
         {
@@ -613,12 +734,12 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
             {
                 const float left = sampler_ram_pcm16_to_float(src);
                 src += 2U;
-                const float right = (info.channels == 2U)
-                                        ? sampler_ram_pcm16_to_float(src)
-                                        : left;
-                src += (info.channels == 2U) ? 2U : 0U;
-                dst[(i * 2U) + 0U] = left;
-                dst[(i * 2U) + 1U] = right;
+                dst[i * slot->channels] = left;
+                if (slot->channels == 2U)
+                {
+                    dst[(i * slot->channels) + 1U] = sampler_ram_pcm16_to_float(src);
+                    src += 2U;
+                }
             }
         }
         else
@@ -627,12 +748,12 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
             {
                 const float left = sampler_ram_pcm24_to_float(src);
                 src += 3U;
-                const float right = (info.channels == 2U)
-                                        ? sampler_ram_pcm24_to_float(src)
-                                        : left;
-                src += (info.channels == 2U) ? 3U : 0U;
-                dst[(i * 2U) + 0U] = left;
-                dst[(i * 2U) + 1U] = right;
+                dst[i * slot->channels] = left;
+                if (slot->channels == 2U)
+                {
+                    dst[(i * slot->channels) + 1U] = sampler_ram_pcm24_to_float(src);
+                    src += 3U;
+                }
             }
         }
         frames_done += frames_chunk;
@@ -714,7 +835,9 @@ sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
     uint16_t *out_global_slot)
 {
     const uint32_t frames = 4800U;
-    const uint32_t data_bytes = frames * 2U * sizeof(float);
+    uint32_t data_bytes = 0U;
+    uint32_t page_count = 0U;
+    uint32_t cost = 0U;
     const uint16_t ram_slot = sampler_ram_pool_find_free_slot();
     sample_page_raw_allocation_t allocation;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -731,9 +854,14 @@ sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
     {
         return SAMPLER_RAM_RESULT_POOL_FULL;
     }
-    const uint32_t page_count =
-        (data_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
-    const uint32_t cost = page_count * SAMPLE_PAGE_BYTES;
+    if (sampler_ram_format_cost_bytes(SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED,
+                                       frames,
+                                       &data_bytes,
+                                       &page_count,
+                                       &cost) == 0U)
+    {
+        return SAMPLER_RAM_RESULT_TOO_LARGE;
+    }
     if ((sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_RAM,
                                             ram_slot,
                                             cost) == 0U)
@@ -752,11 +880,11 @@ sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
     slot->state = SAMPLER_RAM_SLOT_LOADING;
     slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     (void)sampler_ram_copy_path(slot->path, sizeof(slot->path), "@AUDIO_TEST");
-    slot->format = SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED;
-    slot->channels = 2U;
+    slot->format = SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    slot->channels = sampler_ram_format_channels(slot->format);
     slot->sample_rate = 48000U;
     slot->frames = frames;
-    slot->bytes_per_frame = (uint16_t)(2U * sizeof(float));
+    slot->bytes_per_frame = sampler_ram_format_bytes_per_frame(slot->format);
     slot->data_offset = (uint32_t)allocation.first_slot * SAMPLE_PAGE_BYTES;
     slot->first_page_slot = allocation.first_slot;
     slot->page_count = allocation.page_count;

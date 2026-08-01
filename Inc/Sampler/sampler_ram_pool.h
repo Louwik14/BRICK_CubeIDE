@@ -27,7 +27,8 @@ typedef enum
 typedef enum
 {
     SAMPLER_RAM_FORMAT_NONE = 0,
-    SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED
+    SAMPLER_RAM_FORMAT_FLOAT32_MONO,
+    SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED
 } sampler_ram_format_t;
 
 typedef enum
@@ -94,6 +95,20 @@ typedef struct
     uint32_t flags;
     sample_ram_waveform_overview_t waveform;
 } sampler_ram_slot_t;
+
+/* Physical RAM pages stay fixed at 16 KiB; the logical frame stride follows
+ * the stored format. */
+uint16_t sampler_ram_format_channels(sampler_ram_format_t format);
+uint16_t sampler_ram_format_bytes_per_frame(sampler_ram_format_t format);
+uint8_t sampler_ram_frames_to_bytes(sampler_ram_format_t format,
+                                    uint32_t frames,
+                                    uint32_t *out_bytes);
+uint8_t sampler_ram_bytes_to_pages(uint32_t bytes, uint32_t *out_pages);
+uint8_t sampler_ram_format_cost_bytes(sampler_ram_format_t format,
+                                      uint32_t frames,
+                                      uint32_t *out_logical_bytes,
+                                      uint32_t *out_page_count,
+                                      uint32_t *out_cost_bytes);
 
 void sampler_ram_pool_init(void);
 void sampler_ram_pool_reset(void);

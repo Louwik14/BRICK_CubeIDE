@@ -92,6 +92,7 @@ typedef struct
     uint8_t last_out_valid;
     uint8_t start_fade_remaining;
     uint16_t ram_channels;
+    sampler_ram_format_t ram_format;
     uint32_t slice_grid_generation;
     uint32_t slice_begin[64U];
     uint32_t slice_end[64U];
@@ -1707,6 +1708,7 @@ static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
             voice->ram_generation = ram->generation;
             voice->ram_data = ram->data;
             voice->ram_channels = ram->channels;
+            voice->ram_format = ram->format;
             voice->position = (float)((reverse != 0U) ? (region_end - 1U) : region_begin);
             voice->ram_position_q16 =
                 (uint64_t)((reverse != 0U) ? (region_end - 1U) : region_begin) << 16U;
@@ -1778,7 +1780,7 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     if ((ram == NULL)
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != global_slot)
-        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         || (ram->data == NULL)
         || (ram->frames == 0U)
         || (ram->channels != 2U))
@@ -1898,7 +1900,7 @@ static uint8_t brick6_sampler_runtime_ram_slot_valid(const brick6_sampler_voice_
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != voice->sample_id)
         || (ram->generation != voice->ram_generation)
-        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         || (ram->data == NULL)
         || (ram->frames == 0U)
         || (ram->channels != 2U))
@@ -1963,6 +1965,7 @@ static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id)
     voice->ram_generation = ram->generation;
     voice->ram_data = ram->data;
     voice->ram_channels = ram->channels;
+    voice->ram_format = ram->format;
     voice->position = (float)((reverse != 0U) ? (region_end - 1U) : region_begin);
     voice->ram_position_q16 =
         (uint64_t)((reverse != 0U) ? (region_end - 1U) : region_begin) << 16U;
