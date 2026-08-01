@@ -2,6 +2,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:33:9:track_snapshot_last_voice_limited	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:34:9:track_snapshot_last_voice_max	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:302:9:track_snapshot_capture	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:340:9:track_snapshot_make_default	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:389:9:track_snapshot_apply_ex	256	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:549:9:track_snapshot_apply	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:341:9:track_snapshot_make_default	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:391:9:track_snapshot_apply_ex	256	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:552:9:track_snapshot_apply	8	static

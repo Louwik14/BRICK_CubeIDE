@@ -12,7 +12,6 @@
 
 #define SAMPLE_CACHE_MAX_VOICES (16U)
 #define SAMPLE_CACHE_IO_BYTES (4096U)
-#define SAMPLE_CACHE_FATFS_SCRATCH_OFFSET (1U)
 #define SAMPLE_CACHE_STREAM_START_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_WINDOW_PAGES
 #define SAMPLE_CACHE_STREAM_TAIL_PAGES SAMPLE_PAGE_CLASSIC_REVERSE_WINDOW_PAGES
 #define SAMPLE_CACHE_STREAM_FORWARD_LOOKAHEAD_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES
@@ -23,8 +22,7 @@
 
 SDRAM_CLASSIC_POOL static sample_cache_desc_t g_sample_cache[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
-static DMA_BUFFER uint8_t
-    g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + SAMPLE_CACHE_FATFS_SCRATCH_OFFSET];
+static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
 static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static CTRL_STATE uint32_t g_sample_cache_voice_generation_counter;
 
@@ -36,8 +34,6 @@ _Static_assert(SAMPLE_POOL_PROJECT_CAPACITY >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
 _Static_assert(SAMPLE_CACHE_FULL_MAX_BYTES
                    == (SAMPLE_CACHE_FULL_MAX_FRAMES * SAMPLE_PAGE_BYTES_PER_FRAME),
                "FULL frame threshold must match decoded stereo float bytes");
-_Static_assert((SAMPLE_CACHE_FATFS_SCRATCH_OFFSET & 0x3U) != 0U,
-               "FatFs sample buffer base must remain off the direct DMA path");
 #endif
 
 static uint8_t sample_cache_open_source(uint16_t sample_id, FIL *fp);
@@ -80,8 +76,12 @@ static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
 
 static uint8_t *sample_cache_io_buffer(void)
 {
-    /* Preserve the off-base FatFs destination and its scratch-buffer routing. */
-    return &g_sample_cache_io_storage[SAMPLE_CACHE_FATFS_SCRATCH_OFFSET];
+    /*
+     * Keep FatFs on the diskio scratch-buffer path. The preview path works
+     * through a non-direct destination; this avoids the direct multi-block DMA
+     * path for sample import while still decoding into the SDRAM cache after IO.
+     */
+    return &g_sample_cache_io_storage[1U];
 }
 
 static void sample_cache_clear_desc(sample_cache_desc_t *desc)

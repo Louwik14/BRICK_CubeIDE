@@ -175,7 +175,7 @@ static uint8_t ui_macro_interaction_is_switch_mode(void)
 static uint8_t ui_macro_interaction_is_assignable_param(param_id_t param)
 {
     const uint8_t active_track = g_ui_macro_interaction.capture_track;
-    if (param_macro_slot_target_is_supported(active_track, param) == 0U)
+    if (param_macro_lock_target_is_supported(active_track, param) == 0U)
     {
         return 0U;
     }
@@ -342,7 +342,7 @@ static uint8_t ui_macro_interaction_resolve_lock_value(uint8_t *out_track,
 
         if ((lock_entry.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
                 || (lock_entry.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)
-                || (param_macro_slot_target_is_supported(lock_entry.track, lock_entry.param) == 0U))
+                || (param_macro_lock_target_is_supported(lock_entry.track, lock_entry.param) == 0U))
         {
             continue;
         }
@@ -356,18 +356,16 @@ static uint8_t ui_macro_interaction_resolve_lock_value(uint8_t *out_track,
     return 0U;
 }
 
-static uint8_t ui_macro_interaction_resolve_slot_target(uint8_t *out_bank,
-                                                        uint8_t *out_macro,
-                                                        uint8_t *out_slot)
+static uint8_t ui_macro_interaction_resolve_lock_target(uint8_t *out_scene,
+                                                        uint8_t *out_lock)
 {
-    if ((out_bank == NULL) || (out_macro == NULL) || (out_slot == NULL))
+    if ((out_scene == NULL) || (out_lock == NULL))
     {
         return 0U;
     }
 
-    *out_bank = 0U;
-    *out_macro = 0U;
-    *out_slot = 0U;
+    *out_scene = 0U;
+    *out_lock = 0U;
 
     return 0U;
 }
@@ -666,19 +664,18 @@ uint8_t ui_macro_interaction_get_param_lock_value(param_id_t param,
     return 1U;
 }
 
-uint8_t ui_macro_interaction_get_active_slot_lock(param_id_t *out_param)
+uint8_t ui_macro_interaction_get_active_lock_param(param_id_t *out_param)
 {
     return ui_macro_interaction_resolve_lock_param(out_param);
 }
 
-uint8_t ui_macro_interaction_get_active_slot_target(uint8_t *out_bank,
-                                                    uint8_t *out_macro,
-                                                    uint8_t *out_slot)
+uint8_t ui_macro_interaction_get_active_lock_target(uint8_t *out_scene,
+                                                    uint8_t *out_lock)
 {
-    return ui_macro_interaction_resolve_slot_target(out_bank, out_macro, out_slot);
+    return ui_macro_interaction_resolve_lock_target(out_scene, out_lock);
 }
 
-uint8_t ui_macro_interaction_get_active_slot_value(uint8_t *out_track,
+uint8_t ui_macro_interaction_get_active_lock_value(uint8_t *out_track,
                                                    param_id_t *out_param,
                                                    float *out_scene_value)
 {

@@ -659,7 +659,7 @@ static void led_apply_fixed_scene(void)
         ui_hall_mode_resolve_rout_context(active_track, hall_mode);
     const button_id_t active_button = ui_navigation_get_button_for_page(active_page_id);
     const led_id_t active_param_led = led_remap_param_led_for_button(active_button);
-    if (ui_macro_interaction_get_active_slot_lock(&macro_param) != 0U)
+    if (ui_macro_interaction_get_active_lock_param(&macro_param) != 0U)
     {
         macro_button = led_macro_param_to_button(macro_param);
     }

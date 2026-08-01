@@ -52,12 +52,12 @@ typedef struct
 typedef struct
 {
     uint8_t valid;
-    project_v1_macro_slot_t slot;
-} ui_macro_slot_clipboard_t;
+    project_v1_macro_lock_t lock;
+} ui_macro_lock_clipboard_t;
 
 typedef struct
 {
-    ui_macro_slot_clipboard_t macro_slot;
+    ui_macro_lock_clipboard_t macro_lock;
     ui_track_clipboard_t track;
     ui_param_clipboard_t ensemble;
     ui_param_clipboard_t page;
@@ -116,59 +116,58 @@ static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, c
     }
 }
 
-static uint8_t ui_core_clipboard_macro_make_empty_slot(project_v1_macro_slot_t *out_slot)
+static uint8_t ui_core_clipboard_macro_make_empty_lock(project_v1_macro_lock_t *out_lock)
 {
-    if (out_slot == 0)
+    if (out_lock == 0)
     {
         return 0U;
     }
 
-    out_slot->track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
-    out_slot->param = PROJECT_V1_MACRO_SLOT_PARAM_NONE;
-    out_slot->scene_value = 0.0f;
+    out_lock->track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    out_lock->param = PROJECT_V1_MACRO_LOCK_PARAM_NONE;
+    out_lock->scene_value = 0.0f;
     return 1U;
 }
 
-static uint8_t ui_core_clipboard_resolve_active_macro_slot_target(uint8_t *out_bank,
-                                                                  uint8_t *out_macro,
-                                                                  uint8_t *out_slot)
+static uint8_t ui_core_clipboard_resolve_active_macro_lock_target(uint8_t *out_scene,
+                                                                  uint8_t *out_lock)
 {
-    return ui_macro_interaction_get_active_slot_target(out_bank, out_macro, out_slot);
+    return ui_macro_interaction_get_active_lock_target(out_scene, out_lock);
 }
 
-static uint8_t ui_core_clipboard_copy_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+static uint8_t ui_core_clipboard_copy_macro_lock(uint8_t scene, uint8_t lock)
 {
-    project_v1_macro_slot_t current;
+    project_v1_macro_lock_t current;
 
-    if (project_v1_macro_get_slot(bank, macro, slot, &current) == 0U)
+    if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
     {
         return 0U;
     }
 
-    g_ui_clipboard.macro_slot.slot = current;
-    g_ui_clipboard.macro_slot.valid = 1U;
+    g_ui_clipboard.macro_lock.lock = current;
+    g_ui_clipboard.macro_lock.valid = 1U;
     return 1U;
 }
 
-static uint8_t ui_core_clipboard_paste_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+static uint8_t ui_core_clipboard_paste_macro_lock(uint8_t scene, uint8_t lock)
 {
-    if (g_ui_clipboard.macro_slot.valid == 0U)
+    if (g_ui_clipboard.macro_lock.valid == 0U)
     {
         return 0U;
     }
 
-    return project_v1_macro_set_slot(bank, macro, slot, &g_ui_clipboard.macro_slot.slot);
+    return project_v1_macro_set_scene_lock(scene, lock, &g_ui_clipboard.macro_lock.lock);
 }
 
-static uint8_t ui_core_clipboard_clear_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+static uint8_t ui_core_clipboard_clear_macro_lock(uint8_t scene, uint8_t lock)
 {
-    project_v1_macro_slot_t empty_slot;
-    if (ui_core_clipboard_macro_make_empty_slot(&empty_slot) == 0U)
+    project_v1_macro_lock_t empty_lock;
+    if (ui_core_clipboard_macro_make_empty_lock(&empty_lock) == 0U)
     {
         return 0U;
     }
 
-    return project_v1_macro_set_slot(bank, macro, slot, &empty_slot);
+    return project_v1_macro_set_scene_lock(scene, lock, &empty_lock);
 }
 
 static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_subpage_t *subpage,
@@ -653,13 +652,12 @@ void ui_core_clipboard_init(void)
     memset(&g_ui_clipboard, 0, sizeof(g_ui_clipboard));
 }
 
-uint8_t ui_core_clipboard_handle_macro_slot_event(const ui_event_t *ev,
+uint8_t ui_core_clipboard_handle_macro_lock_event(const ui_event_t *ev,
                                                   uint8_t shift_down,
                                                   ui_core_clipboard_feedback_fn feedback)
 {
-    uint8_t bank = 0U;
-    uint8_t macro = 0U;
-    uint8_t slot = 0U;
+    uint8_t scene = 0U;
+    uint8_t lock = 0U;
 
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
     {
@@ -671,14 +669,14 @@ uint8_t ui_core_clipboard_handle_macro_slot_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if (ui_core_clipboard_resolve_active_macro_slot_target(&bank, &macro, &slot) == 0U)
+    if (ui_core_clipboard_resolve_active_macro_lock_target(&scene, &lock) == 0U)
     {
         return 0U;
     }
 
     if (ev->id == (uint8_t)BTN_COPY)
     {
-        if (ui_core_clipboard_copy_macro_slot(bank, macro, slot) != 0U)
+        if (ui_core_clipboard_copy_macro_lock(scene, lock) != 0U)
         {
             ui_core_clipboard_feedback(feedback, "MACRO COPIED");
         }
@@ -687,14 +685,14 @@ uint8_t ui_core_clipboard_handle_macro_slot_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        if (ui_core_clipboard_clear_macro_slot(bank, macro, slot) != 0U)
+        if (ui_core_clipboard_clear_macro_lock(scene, lock) != 0U)
         {
             ui_core_clipboard_feedback(feedback, "MACRO CLEARED");
         }
         return 1U;
     }
 
-    if (ui_core_clipboard_paste_macro_slot(bank, macro, slot) != 0U)
+    if (ui_core_clipboard_paste_macro_lock(scene, lock) != 0U)
     {
         ui_core_clipboard_feedback(feedback, "MACRO PASTED");
     }

@@ -19,8 +19,8 @@ typedef struct
 
 void param_macro_init(void);
 float param_macro_lerp(float base_value, float scene_value, float amount);
-uint8_t param_macro_slot_target_is_supported(uint8_t track, param_id_t param);
-void param_macro_sync_active_bank(void);
+uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param);
+void param_macro_sync_scene_sources(void);
 uint8_t param_macro_set_amount(uint8_t macro, float amount);
 uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta);
 float param_macro_get_amount(uint8_t macro);
@@ -30,11 +30,6 @@ uint8_t param_macro_get_ui_held_scene(uint8_t macro, uint8_t *out_scene);
 uint8_t param_macro_resolve_lock(uint8_t scene,
                                  uint8_t lock,
                                  param_macro_resolution_t *out_resolution);
-uint8_t param_macro_resolve_slot(uint8_t bank,
-                                 uint8_t macro,
-                                 uint8_t slot,
-                                 param_macro_resolution_t *out_resolution);
 uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution);
-uint8_t param_macro_apply_slot(uint8_t bank, uint8_t macro, uint8_t slot, float amount);
 
 #endif /* PARAM_MACRO_H */

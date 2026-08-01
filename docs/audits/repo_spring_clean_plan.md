@@ -272,13 +272,13 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 - Tests : tailles/layouts statiques, quatre round-trips, tests v3 existants.
 - Dépendances : après corrections sémantiques de persistence ; ne jamais mêler rename et changement de format.
 
-### CLEAN-NAME-005 — `ALIAS` — compatibilité Macro devenue scènes/locks
+### CLEAN-NAME-005 — `DONE` — compatibilité Macro devenue scènes/locks supprimée
 
 - Ancien concept : banques/slots Macro.
 - Produit actuel : scènes et locks de Macro.
-- Preuves : `PROJECT_V1_MACRO_BANK_COUNT` alias de `MACRO_SCENE_COUNT`; `project_v1_macro_get_slot/set_slot` ignorent l'argument `macro` et transfèrent vers la scène 0 ; seuls les chemins clipboard consomment encore ces wrappers.
+- Preuves historiques : `PROJECT_V1_MACRO_BANK_COUNT` était un alias de `MACRO_SCENE_COUNT`; les wrappers `project_v1_macro_get_slot/set_slot` ignoraient l’argument `macro` et le resolver clipboard Macro était leur dernier consommateur statique. Ce resolver ne produisait toutefois aucune cible active.
 - Effet : API mensongère et argument sans effet.
-- Portée : migrer le clipboard vers API scène/lock, puis supprimer aliases, typedefs et wrappers.
+- Portée réalisée : migrer le clipboard vers l’API scène/lock, puis supprimer aliases, typedefs et wrappers.
 - Risque : clipboard/undo Macro ; préserver exactement la scène ciblée.
 - Tests : copie/colle/clear de locks et round-trip Project.
 - Dépendances : avant renommage global persistence.

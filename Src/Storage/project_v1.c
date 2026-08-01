@@ -799,27 +799,6 @@ void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t m
     g_project_macro_state.hall_switch_mode = mode;
 }
 
-uint8_t project_v1_macro_get_active_bank(void)
-{
-    return g_project_macro_state.macro_scene[0U];
-}
-
-void project_v1_macro_set_active_bank(uint8_t bank)
-{
-    if (bank >= PROJECT_V1_MACRO_SCENE_COUNT)
-    {
-        return;
-    }
-
-    if (g_project_macro_state.macro_scene[0U] == bank)
-    {
-        return;
-    }
-
-    g_project_macro_state.macro_scene[0U] = bank;
-    param_macro_sync_active_bank();
-}
-
 uint8_t project_v1_macro_get_macro_scene(uint8_t macro)
 {
     if (macro >= PROJECT_V1_MACRO_POT_COUNT)
@@ -850,7 +829,7 @@ static void project_v1_macro_set_macro_scene_impl(uint8_t macro, uint8_t scene, 
     g_project_macro_state.macro_scene[macro] = scene;
     if (sync_runtime != 0U)
     {
-        param_macro_sync_active_bank();
+        param_macro_sync_scene_sources();
     }
 }
 
@@ -1013,29 +992,8 @@ uint8_t project_v1_macro_set_scene_lock(uint8_t scene, uint8_t lock, const proje
     }
 
     g_project_macro_state.scenes[scene].locks[lock] = *in_lock;
-    param_macro_sync_active_bank();
+    param_macro_sync_scene_sources();
     return 1U;
-}
-
-uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot)
-{
-    (void)macro;
-    return project_v1_macro_scene_lock_is_empty(bank, slot);
-}
-
-uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot)
-{
-    (void)macro;
-    return project_v1_macro_get_scene_lock(bank, slot, out_slot);
-}
-
-uint8_t project_v1_macro_set_slot(uint8_t bank,
-                                  uint8_t macro,
-                                  uint8_t slot,
-                                  const project_v1_macro_slot_t *in_slot)
-{
-    (void)macro;
-    return project_v1_macro_set_scene_lock(bank, slot, in_slot);
 }
 
 void project_v1_init(void)
@@ -1132,7 +1090,7 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
     g_project_macro_state = project->macro;
     project_v1_macro_sanitize_state(&g_project_macro_state);
-    param_macro_sync_active_bank();
+    param_macro_sync_scene_sources();
     g_project_active_slot_valid = project->state.active_project_slot_valid;
     g_project_active_slot = project->state.active_project_slot;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
@@ -1459,7 +1417,7 @@ uint8_t project_v1_load_blank(void)
         return 0U;
     }
 
-    param_macro_sync_active_bank();
+    param_macro_sync_scene_sources();
 
     undo_v2_clear_all();
 

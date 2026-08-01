@@ -19,11 +19,10 @@ uint8_t ui_macro_interaction_param_is_locked(param_id_t param);
 uint8_t ui_macro_interaction_get_param_lock_value(param_id_t param,
                                                   uint8_t *out_track,
                                                   float *out_scene_value);
-uint8_t ui_macro_interaction_get_active_slot_lock(param_id_t *out_param);
-uint8_t ui_macro_interaction_get_active_slot_target(uint8_t *out_bank,
-                                                    uint8_t *out_macro,
-                                                    uint8_t *out_slot);
-uint8_t ui_macro_interaction_get_active_slot_value(uint8_t *out_track,
+uint8_t ui_macro_interaction_get_active_lock_param(param_id_t *out_param);
+uint8_t ui_macro_interaction_get_active_lock_target(uint8_t *out_scene,
+                                                    uint8_t *out_lock);
+uint8_t ui_macro_interaction_get_active_lock_value(uint8_t *out_track,
                                                    param_id_t *out_param,
                                                    float *out_scene_value);
 

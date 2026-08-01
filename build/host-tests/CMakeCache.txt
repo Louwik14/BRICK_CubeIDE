@@ -36,7 +36,7 @@ brick6_filter_tests_BINARY_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743
 brick6_filter_tests_IS_TOP_LEVEL:STATIC=ON
 
 //Value Computed by CMake
-brick6_filter_tests_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests
+brick6_filter_tests_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Tests
 
 
 ########################

@@ -115,7 +115,7 @@ float param_macro_lerp(float base_value, float scene_value, float amount)
     return base_value + ((scene_value - base_value) * amount);
 }
 
-uint8_t param_macro_slot_target_is_supported(uint8_t track, param_id_t param)
+uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
 {
     if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT))
     {
@@ -149,7 +149,7 @@ static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     track_runtime_resolved_track_t resolved;
 
-    if (param_macro_slot_target_is_supported(track, param) == 0U)
+    if (param_macro_lock_target_is_supported(track, param) == 0U)
     {
         return 0U;
     }
@@ -340,7 +340,7 @@ uint8_t param_macro_resolve_lock(uint8_t scene,
 
     if ((macro_lock.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
             || (macro_lock.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)
-            || (param_macro_slot_target_is_supported(macro_lock.track, macro_lock.param) == 0U))
+            || (param_macro_lock_target_is_supported(macro_lock.track, macro_lock.param) == 0U))
     {
         return 0U;
     }
@@ -361,21 +361,12 @@ uint8_t param_macro_resolve_lock(uint8_t scene,
     return 1U;
 }
 
-uint8_t param_macro_resolve_slot(uint8_t bank,
-                                 uint8_t macro,
-                                 uint8_t slot,
-                                 param_macro_resolution_t *out_resolution)
-{
-    (void)macro;
-    return param_macro_resolve_lock(bank, slot, out_resolution);
-}
-
 uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
 {
     if ((resolution == NULL)
             || (resolution->track >= SEQ_TRACK_COUNT)
             || (resolution->param >= PARAM_COUNT)
-            || (param_macro_slot_target_is_supported(resolution->track, resolution->param) == 0U))
+            || (param_macro_lock_target_is_supported(resolution->track, resolution->param) == 0U))
     {
         return 0U;
     }
@@ -385,7 +376,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
                                            resolution->resolved_value);
 }
 
-void param_macro_sync_active_bank(void)
+void param_macro_sync_scene_sources(void)
 {
     for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
     {
@@ -454,28 +445,4 @@ void param_macro_release_scene_source(uint8_t scene)
     }
 
     (void)param_macro_set_source_amount((uint8_t)(PARAM_MACRO_POT_SOURCE_COUNT + scene), scene, 0.0f);
-}
-
-uint8_t param_macro_apply_slot(uint8_t bank, uint8_t macro, uint8_t slot, float amount)
-{
-    param_macro_resolution_t resolution;
-    float clamped_amount = amount;
-
-    if (param_macro_resolve_slot(bank, macro, slot, &resolution) == 0U)
-    {
-        return 0U;
-    }
-
-    if (clamped_amount < 0.0f)
-    {
-        clamped_amount = 0.0f;
-    }
-    else if (clamped_amount > 1.0f)
-    {
-        clamped_amount = 1.0f;
-    }
-
-    resolution.amount = clamped_amount;
-    resolution.resolved_value = param_macro_lerp(resolution.base_value, resolution.scene_value, clamped_amount);
-    return param_macro_apply_resolution(&resolution);
 }

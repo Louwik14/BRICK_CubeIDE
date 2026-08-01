@@ -1,0 +1,12 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:59:36:ui_page_template_env_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:249:13:ui_page_template_env_sync_family	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:366:13:ui_page_template_env_render	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:360:13:ui_page_template_env_sync_active_context	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:354:13:ui_page_template_env_tick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:347:13:ui_page_template_env_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:341:13:ui_page_template_env_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:82:41:ui_page_template_env_pick_custom_widget	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:160:6:ui_page_template_env_open_primary	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:167:9:ui_page_template_env_open_vca	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:175:6:ui_page_template_env_toggle_subset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c:194:6:ui_page_template_env_register_families	32	static

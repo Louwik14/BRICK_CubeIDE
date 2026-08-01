@@ -631,19 +631,19 @@ static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_p
     }
 
     float value = ui_renderer_template_get_param_display_value(id);
-    uint8_t macro_slot_track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
-    float macro_slot_scene_value = 0.0f;
-    const uint8_t has_macro_slot_value =
+    uint8_t macro_lock_track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    float macro_lock_scene_value = 0.0f;
+    const uint8_t has_macro_lock_value =
         ui_macro_interaction_get_param_lock_value(id,
-                                                  &macro_slot_track,
-                                                  &macro_slot_scene_value);
+                                                  &macro_lock_track,
+                                                  &macro_lock_scene_value);
     const uint8_t macro_value_visible =
-        (uint8_t)((has_macro_slot_value != 0U)
-                && (macro_slot_track == ui_get_active_track()));
+        (uint8_t)((has_macro_lock_value != 0U)
+                && (macro_lock_track == ui_get_active_track()));
 
     if (macro_value_visible != 0U)
     {
-        value = macro_slot_scene_value;
+        value = macro_lock_scene_value;
     }
     else
     {

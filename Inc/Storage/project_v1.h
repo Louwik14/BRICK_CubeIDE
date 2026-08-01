@@ -15,9 +15,6 @@
 #define PROJECT_V1_MACRO_SCENE_COUNT      16U
 #define PROJECT_V1_MACRO_POT_COUNT        4U
 #define PROJECT_V1_MACRO_SCENE_LOCK_COUNT 32U
-#define PROJECT_V1_MACRO_BANK_COUNT       PROJECT_V1_MACRO_SCENE_COUNT
-#define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
-#define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
 #define PROJECT_V1_FILE_VERSION    4U /* ENV owns FLT, VCA and ENV3, including p-lock slots. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
@@ -45,8 +42,6 @@ typedef enum
 
 #define PROJECT_V1_MACRO_LOCK_TRACK_NONE 0xFFU
 #define PROJECT_V1_MACRO_LOCK_PARAM_NONE PARAM_COUNT
-#define PROJECT_V1_MACRO_SLOT_TRACK_NONE PROJECT_V1_MACRO_LOCK_TRACK_NONE
-#define PROJECT_V1_MACRO_SLOT_PARAM_NONE PROJECT_V1_MACRO_LOCK_PARAM_NONE
 
 typedef enum
 {
@@ -82,20 +77,10 @@ typedef struct
     float scene_value;
 } project_v1_macro_lock_t;
 
-typedef project_v1_macro_lock_t project_v1_macro_slot_t;
-
 typedef struct
 {
     project_v1_macro_lock_t locks[PROJECT_V1_MACRO_SCENE_LOCK_COUNT];
 } project_v1_macro_scene_t;
-
-typedef struct
-{
-    project_v1_macro_scene_t scenes[PROJECT_V1_MACRO_SCENE_COUNT];
-} project_v1_macro_scene_bank_t;
-
-typedef project_v1_macro_scene_t project_v1_macro_t;
-typedef project_v1_macro_scene_bank_t project_v1_macro_bank_t;
 
 typedef struct
 {
@@ -183,8 +168,6 @@ void project_v1_init(void);
 void project_v1_macro_init(void);
 project_v1_macro_hall_switch_mode_t project_v1_macro_get_hall_switch_mode(void);
 void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t mode);
-uint8_t project_v1_macro_get_active_bank(void);
-void project_v1_macro_set_active_bank(uint8_t bank);
 uint8_t project_v1_macro_get_macro_scene(uint8_t macro);
 void project_v1_macro_set_macro_scene(uint8_t macro, uint8_t scene);
 void project_v1_macro_set_macro_scene_no_sync(uint8_t macro, uint8_t scene);
@@ -198,12 +181,6 @@ uint8_t project_v1_macro_get_scene_lock_for_param(uint8_t scene,
 uint8_t project_v1_macro_scene_lock_is_empty(uint8_t scene, uint8_t lock);
 uint8_t project_v1_macro_get_scene_lock(uint8_t scene, uint8_t lock, project_v1_macro_lock_t *out_lock);
 uint8_t project_v1_macro_set_scene_lock(uint8_t scene, uint8_t lock, const project_v1_macro_lock_t *in_lock);
-uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot);
-uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot);
-uint8_t project_v1_macro_set_slot(uint8_t bank,
-                                  uint8_t macro,
-                                  uint8_t slot,
-                                  const project_v1_macro_slot_t *in_slot);
 uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path);
 uint8_t project_v1_get_track_multi_path(uint8_t track, char *out_path, uint32_t out_size);
 void project_v1_get_multi_restore_diag(project_v1_multi_restore_diag_t *out_diag);

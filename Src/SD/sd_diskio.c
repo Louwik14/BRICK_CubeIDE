@@ -46,6 +46,13 @@
 #define SD_DEFAULT_BLOCK_SIZE 512
 
 /*
+ * Keep the FatFs destination independent from the physical DMA target.
+ * Eight sectors cover the 4092-byte WAV streaming reads in one SD multiblock
+ * transaction while keeping the bounce buffer bounded.
+ */
+#define SD_READ_BOUNCE_BLOCK_COUNT 8U
+
+/*
  * Depending on the use case, the SD card initialization could be done at the
  * application level: if it is the case define the flag below to disable
  * the BSP_SD_Init() call in the SD_Initialize() and add a call to
@@ -77,9 +84,9 @@
 /* Private variables ---------------------------------------------------------*/
 #if defined(ENABLE_SCRATCH_BUFFER)
 #if defined (ENABLE_SD_DMA_CACHE_MAINTENANCE)
-ALIGN_32BYTES(static uint8_t scratch[BLOCKSIZE]); // 32-Byte aligned for cache maintenance
+ALIGN_32BYTES(static uint8_t scratch[BLOCKSIZE * SD_READ_BOUNCE_BLOCK_COUNT]);
 #else
-__ALIGN_BEGIN static uint8_t scratch[BLOCKSIZE] __ALIGN_END;
+__ALIGN_BEGIN static uint8_t scratch[BLOCKSIZE * SD_READ_BOUNCE_BLOCK_COUNT] __ALIGN_END;
 #endif
 #endif
 /* Disk status */
@@ -338,19 +345,32 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
     else
     {
-      /* Slow path, fetch each sector a part and memcpy to destination buffer */
-      int i;
+      /*
+       * Bounce path: keep FatFs' logical destination untouched, but receive
+       * aligned groups of sectors with a real multiblock DMA transaction.
+       */
+      UINT blocks_done = 0U;
 
-      for (i = 0; i < count; i++) {
+      while (blocks_done < count) {
+        UINT bounce_count = count - blocks_done;
+        size_t bounce_bytes;
+
+        if (bounce_count > SD_READ_BOUNCE_BLOCK_COUNT)
+        {
+          bounce_count = SD_READ_BOUNCE_BLOCK_COUNT;
+        }
+        bounce_bytes = (size_t)bounce_count * BLOCKSIZE;
         ReadStatus = 0;
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
         /*
          * scratch can retain dirty lines from prior CPU writes (e.g. write path).
          * Invalidate before DMA reception to prevent dirty eviction corruption.
          */
-        dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
+        dcache_invalidate_by_addr_aligned(scratch, bounce_bytes);
 #endif
-        ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch, (uint32_t)sector++, 1);
+        ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch,
+                                   (uint32_t)(sector + blocks_done),
+                                   bounce_count);
         if (ret == MSD_OK) {
           /* wait until the read is successful or a timeout occurs */
 
@@ -376,10 +396,10 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
               *
               * invalidate the scratch buffer before the next read to get the actual data instead of the cached one
               */
-              dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
+              dcache_invalidate_by_addr_aligned(scratch, bounce_bytes);
 #endif
-              memcpy(buff, scratch, BLOCKSIZE);
-              buff += BLOCKSIZE;
+              memcpy(buff + ((size_t)blocks_done * BLOCKSIZE), scratch, bounce_bytes);
+              blocks_done += bounce_count;
               break;
             }
           }
@@ -397,7 +417,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
         }
       }
 
-      if ((i == count) && (ret == MSD_OK))
+      if ((blocks_done == count) && (ret == MSD_OK))
         res = RES_OK;
     }
 #endif
