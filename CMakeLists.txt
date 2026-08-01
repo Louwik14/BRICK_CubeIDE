@@ -547,7 +547,11 @@ set_source_files_properties(${U8G2_SRC} PROPERTIES
 )
 list(FILTER AUDIO_C_SOURCES INCLUDE REGEX ".*\\.c$")
 
-set_source_files_properties(${AUDIO_C_SOURCES} PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>")
+# wav_audio_codec.c en O3 pour isoler l'impact de son optimisation
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
+    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>"
+)
 # --------------------------------------------------------------------------
 # Link options aligned with CubeIDE
 # --------------------------------------------------------------------------
