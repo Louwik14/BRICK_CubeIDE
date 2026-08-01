@@ -22,18 +22,20 @@ add_executable(common_modulation_test
 target_link_libraries(common_modulation_test PRIVATE m)
 add_test(NAME common_modulation COMMAND common_modulation_test)
 
-add_executable(keyboard_arp_multitrack_test
-    keyboard_arp_multitrack_test.c
-    ../Src/Keyboard/keyboard_arp.c
-    ../Src/Core/track_topology.c
-)
+add_executable(note_fx_arp_test note_fx_arp_test.c ../Src/NoteFx/note_fx_arp.c)
+target_include_directories(note_fx_arp_test PRIVATE ../Inc)
+add_test(NAME note_fx_arp COMMAND note_fx_arp_test)
 
-target_include_directories(keyboard_arp_multitrack_test PRIVATE
-    stubs
-    ../Inc
+add_executable(note_fx_runtime_test
+    note_fx_runtime_test.c
+    ../Src/NoteFx/note_fx_arp.c
+    ../Src/NoteFx/note_fx_engine.c
+    ../Src/NoteFx/note_fx_pipeline.c
+    ../Src/NoteFx/note_fx_state.c
 )
-target_compile_definitions(keyboard_arp_multitrack_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
-add_test(NAME keyboard_arp_multitrack COMMAND keyboard_arp_multitrack_test)
+target_include_directories(note_fx_runtime_test PRIVATE stubs ../Inc)
+target_compile_definitions(note_fx_runtime_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
+add_test(NAME note_fx_runtime COMMAND note_fx_runtime_test)
 
 add_executable(hall_engine_lowcost_test
     hall_engine_lowcost_test.c
@@ -73,4 +75,13 @@ if(WIN32)
     add_test(NAME track_paste_playback
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/track_paste_playback_validation.ps1)
+    add_test(NAME note_fx_pipeline
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_pipeline_validation.ps1)
+    add_test(NAME note_fx_plock
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_plock_validation.ps1)
+    add_test(NAME note_fx_persistence
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_persistence_validation.ps1)
 endif()

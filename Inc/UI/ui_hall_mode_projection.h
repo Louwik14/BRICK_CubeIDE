@@ -13,7 +13,6 @@ typedef enum
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode);
 ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode);
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode);
-uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode);
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode);
 void ui_hall_patch_feedback_begin(uint32_t now_ms);
 void ui_hall_patch_feedback_end(uint32_t now_ms);

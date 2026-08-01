@@ -439,7 +439,6 @@ D1 mÃ©lange :
 
 Gros Ã©lÃ©ments notables :
 
-- `g_keyboard_arp` : 528 B
 - tables function pointers Wave : 384 B / 280 B / 72 B
 - `_impure_data` : 76 B
 - USB descriptors et petits Ã©tats HAL/audio/master

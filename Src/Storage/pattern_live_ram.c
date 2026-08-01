@@ -19,6 +19,8 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
+#include "NoteFx/note_fx_pipeline.h"
+#include "NoteFx/note_fx_state.h"
 #include "Storage/pattern_sd_bank.h"
 
 #define PATTERN_BANK_COUNT 16U
@@ -536,6 +538,11 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         out_pattern->track_cfg.external_input[track] = ui_get_track_external_input(track);
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+        if ((track < NOTE_FX_TRACK_COUNT)
+                && (note_fx_state_capture_track(track, &out_pattern->note_fx[track]) == 0U))
+        {
+            return 0U;
+        }
         for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
         {
             out_pattern->track_cfg.looper_route_enabled[track][source_track] =
@@ -596,7 +603,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         }
     }
 
-    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
+    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_PERSIST_COUNT; ++id_raw)
     {
         const param_id_t id = (param_id_t)id_raw;
 
@@ -775,7 +782,7 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
     param_registry_batch_begin();
 
-    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
+    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_PERSIST_COUNT; ++id_raw)
     {
         const param_id_t id = (param_id_t)id_raw;
 
@@ -813,6 +820,14 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     }
 
     param_registry_batch_end();
+
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
+        if (note_fx_state_restore_track(track, &ctx->pattern->note_fx[track]) == 0U)
+        {
+            return 0U;
+        }
+    }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -920,6 +935,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         return 0U;
     }
     g_apply_in_progress = 1U;
+    note_fx_pipeline_reset_all_runtime_overrides();
 
     pattern_live_transition_ctx_t transition_ctx = {
         .pattern = pattern,

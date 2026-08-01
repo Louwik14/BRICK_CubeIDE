@@ -330,9 +330,6 @@ Autorite hall modes:
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
-- ARP HOLD:
-  - la config ARP reste par track via `keyboard_arp`,
-  - le runtime ARP est hybride: clavier physique/UI global, etats ARP de jeu par track dans `keyboard_arp`,
   - chaque track possede ses notes tenues/latched, pending notes, notes emises, phase et timers,
   - un changement de focus UI ne vide pas les HOLD des autres tracks et le tick scanne les tracks actives,
   - un nouveau note-on ARP sur une autre track alimente seulement cette track, sans reprendre d'owner global.
@@ -376,7 +373,6 @@ Entrees evenementielles:
   - le delta est relatif (`delta * step`) et chaque track clamp individuellement selon ses bornes effectives; une track active deja en butee n'empeche pas les autres tracks de bouger,
   - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `COLORS`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
   - exception SEQ per-track hors `track_runtime`: `PARAM_SEQ_LENGTH`, `PARAM_SEQ_DIV`, `PARAM_SEQ_QUANT`, `PARAM_SEQ_SWING` passent par l'autorite `seq_model_get/set_track_length` ou `seq_runtime_set/get_track_*` avec le meme delta UI (`delta * step`),
-  - les params ARP sont des reglages par track portes par `keyboard_arp` sous forme de config par track; la lecture/ecriture UI passe par `keyboard_runtime_*_for_track`,
   - les tracks `Master`, les params globaux, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
 - `track_selection` reste hors table et execute en amont.
 - `navigation` puis `active_page->handle_event` restent en fin de chaine.
@@ -547,7 +543,6 @@ Flux nominal prouve:
 - `hall_keyboard_bridge` consomme hall mode + flags suppression pour autoriser/bloquer emission note hall.
 - Gardes runtime explicites en contexte `ROUT`:
   - `hall_keyboard_bridge_process` utilise `ui_hall_allows_injection(...)`,
-  - `keyboard_runtime_tick` utilise `ui_hall_uses_arp_engine(...)` ou un HOLD ARP par-track actif pour continuer le tick hors focus,
   - `keyboard_input_note_on/off/all_notes_off` s'aligne sur `ui_hall_uses_arp_engine(...)` + `effective_view`.
 
 ## 7. Contraintes RT/CPU/memoire
@@ -1403,3 +1398,22 @@ Le collage de track et l'application de Patch preflightent le budget avant toute
 - Note-off et all-notes-off ferment uniquement les notes de la track adressee; le panic global continue de parcourir toutes les Play Tracks.
 
 - Chaque Play Track expose directement CFG, MIDI, ARP et ses quatre pages PLAY selon ses capacites propres; l'armement live-rec cible la track active.
+# Addendum 2026-07-31 - entree MIDI FX, retrait du mode ARP UI
+
+- Le raccourci physique historique ARP ouvre directement la page temporaire `MIDI FX`; il ne cree plus de hall mode ARP, ne change pas le mode musical `SEQ/KEYBOARD` sous-jacent et ne possede aucun double-tap.
+- La page `MIDI FX` expose provisoirement quatre pages vides `SLOT 1..4`. L'etat canonique et les parametres arrivent a l'etape suivante.
+- L'ouverture, la fermeture et le changement de focus de cette page n'activent, ne coupent et ne resynchronisent aucun etat sonore ARP.
+- Sur les contextes Special historiques, le meme bouton conserve la projection `ROUT`; l'interception de routing est maintenant gardee par l'identite de page, pas par un hall mode ARP.
+- Les releases Low-Cost, les raccourcis noirs, le jeu `KEYBOARD` et les steps `SEQ` restent portes par leur mode musical existant.
+# Addendum 2026-07-31 - surface MIDI FX quatre slots
+
+- La page MIDI FX expose `SLOT 1..4`, chacun avec `PARAM1/PARAM2/PARAM3/MODEL`.
+- Avec `MODEL=ARP`, les projections deviennent `RATE/STYLE/RANGE/MODEL`; avec OFF, les trois bases restent stockees mais sont affichees neutralisees et ne sont pas editables.
+- La page suit la track active et chaque Play Track conserve ses quatre valeurs independantes. Page/ensemble Clipboard et clear passent par les IDs generiques et l'apply track-aware.
+- Le shortcut MIDI FX maintenu selectionne le scope ensemble; sur MIDI FX, COPY/PASTE direct cible la page active.
+# Addendum 2026-08-01 - focus et MIDI FX
+
+Le focus de piste et l'ouverture/fermeture de la page MIDI FX restent sans effet sonore. Seules les mutations effectives de MODEL et les actions explicites de cycle de vie declenchent un cleanup.
+# Addendum 2026-08-01 - edition p-lock MIDI FX
+
+PARAM1, PARAM2, PARAM3 et MODEL des quatre pages MIDI FX empruntent le flux p-lock UI generique, y compris edition sur steps tenus, live-record, Undo/Redo et feedback de valeur runtime, via le set MIDI FX dedie.

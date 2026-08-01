@@ -20,6 +20,7 @@
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "midi.h"
+#include "NoteFx/note_fx_pipeline.h"
 
 typedef struct
 {
@@ -100,6 +101,7 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 
 void seq_output_guard_panic(uint8_t send_transport_stop)
 {
+    note_fx_pipeline_cleanup_all();
     synth_polyphony_panic();
     for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {

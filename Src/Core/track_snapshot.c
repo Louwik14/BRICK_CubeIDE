@@ -14,8 +14,9 @@
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
 #include "Core/synth_polyphony.h"
-#include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
+#include "NoteFx/note_fx_pipeline.h"
+#include "NoteFx/note_fx_state.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
@@ -90,8 +91,7 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
         return;
     }
 
-    keyboard_arp_all_notes_off_track(track);
-    keyboard_arp_clear_track(track);
+    note_fx_pipeline_reset_runtime_overrides(track);
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);
@@ -112,8 +112,7 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
         return;
     }
 
-    keyboard_arp_all_notes_off_track(track);
-    keyboard_arp_clear_track(track);
+    note_fx_pipeline_cleanup_track(track);
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);
@@ -323,6 +322,11 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     out_snapshot->synth_voice_count = synth_polyphony_get_voice_count(track);
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
+    if ((track < NOTE_FX_TRACK_COUNT)
+            && (note_fx_state_capture_track(track, &out_snapshot->note_fx) == 0U))
+    {
+        return 0U;
+    }
 
     if (track_snapshot_capture_sequence(track, out_snapshot) == 0U)
     {
@@ -359,6 +363,13 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
 
     track_sound_state_make_default(&out_snapshot->sound);
     track_tone_sound_state_make_default(&out_snapshot->tone);
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        out_snapshot->note_fx.value[slot][0] = 2U;
+        out_snapshot->note_fx.value[slot][1] = 0U;
+        out_snapshot->note_fx.value[slot][2] = 1U;
+        out_snapshot->note_fx.value[slot][3] = NOTE_FX_MODEL_OFF;
+    }
 
     if (track_topology_is_play(track) != 0U)
     {
@@ -507,6 +518,11 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
     memcpy(dst_sound, &snapshot->sound, sizeof(*dst_sound));
     memcpy(dst_tone, &snapshot->tone, sizeof(*dst_tone));
+    if ((target_track < NOTE_FX_TRACK_COUNT)
+            && (note_fx_state_restore_track(target_track, &snapshot->note_fx) == 0U))
+    {
+        goto restore_done;
+    }
 
     track_runtime_invalidate_all();
     track_runtime_refresh_all();

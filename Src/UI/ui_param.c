@@ -36,6 +36,7 @@
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
+#include "NoteFx/note_fx_state.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
@@ -423,149 +424,6 @@ static uint8_t ui_param_apply_seq_runtime_track_value(param_id_t param, uint8_t 
             seq_runtime_set_track_swing(track, (uint8_t)(ui_param_clamp(value, 0.0f, 100.0f) + 0.5f));
             return 1U;
 
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t ui_param_is_arp_track_param(param_id_t param)
-{
-    switch (param)
-    {
-        case PARAM_ARP_HOLD:
-        case PARAM_ARP_RATE:
-        case PARAM_ARP_OCT:
-        case PARAM_ARP_PATTERN:
-        case PARAM_ARP_GATE:
-        case PARAM_ARP_SWING:
-        case PARAM_ARP_ACCENT:
-        case PARAM_ARP_VEL_ACC:
-        case PARAM_ARP_STRUM:
-        case PARAM_ARP_OFFSET:
-        case PARAM_ARP_TRANS:
-        case PARAM_ARP_SPREAD:
-        case PARAM_ARP_DIR:
-        case PARAM_ARP_SYNC:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t ui_param_arp_track_is_valid(uint8_t track)
-{
-    return (uint8_t)((track < SEQ_TRACK_COUNT)
-            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) == 0U)
-            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U));
-}
-
-static uint8_t ui_param_get_arp_track_value(param_id_t param, uint8_t track, float *out_value)
-{
-    if ((out_value == 0) || (ui_param_arp_track_is_valid(track) == 0U))
-    {
-        return 0U;
-    }
-
-    switch (param)
-    {
-        case PARAM_ARP_HOLD:
-            *out_value = (keyboard_runtime_get_arp_hold_for_track(track) != 0) ? 1.0f : 0.0f;
-            return 1U;
-        case PARAM_ARP_RATE:
-            *out_value = (float)keyboard_runtime_get_arp_rate_for_track(track);
-            return 1U;
-        case PARAM_ARP_OCT:
-            *out_value = (float)keyboard_runtime_get_arp_oct_for_track(track);
-            return 1U;
-        case PARAM_ARP_PATTERN:
-            *out_value = (float)keyboard_runtime_get_arp_pattern_for_track(track);
-            return 1U;
-        case PARAM_ARP_GATE:
-            *out_value = (float)keyboard_runtime_get_arp_gate_for_track(track);
-            return 1U;
-        case PARAM_ARP_SWING:
-            *out_value = (float)keyboard_runtime_get_arp_swing_for_track(track);
-            return 1U;
-        case PARAM_ARP_ACCENT:
-            *out_value = (float)keyboard_runtime_get_arp_accent_for_track(track);
-            return 1U;
-        case PARAM_ARP_VEL_ACC:
-            *out_value = (float)keyboard_runtime_get_arp_vel_acc_for_track(track);
-            return 1U;
-        case PARAM_ARP_STRUM:
-            *out_value = (float)keyboard_runtime_get_arp_strum_for_track(track);
-            return 1U;
-        case PARAM_ARP_OFFSET:
-            *out_value = (float)keyboard_runtime_get_arp_offset_for_track(track);
-            return 1U;
-        case PARAM_ARP_TRANS:
-            *out_value = (float)keyboard_runtime_get_arp_transpose_for_track(track);
-            return 1U;
-        case PARAM_ARP_SPREAD:
-            *out_value = (float)keyboard_runtime_get_arp_spread_for_track(track);
-            return 1U;
-        case PARAM_ARP_DIR:
-            *out_value = (float)keyboard_runtime_get_arp_dir_for_track(track);
-            return 1U;
-        case PARAM_ARP_SYNC:
-            *out_value = (float)keyboard_runtime_get_arp_sync_for_track(track);
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t ui_param_apply_arp_track_value(param_id_t param, uint8_t track, float value)
-{
-    if (ui_param_arp_track_is_valid(track) == 0U)
-    {
-        return 0U;
-    }
-
-    switch (param)
-    {
-        case PARAM_ARP_HOLD:
-            keyboard_runtime_set_arp_hold_for_track(track, value >= 0.5f);
-            return 1U;
-        case PARAM_ARP_RATE:
-            keyboard_runtime_set_arp_rate_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 7.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_OCT:
-            keyboard_runtime_set_arp_oct_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 4.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_PATTERN:
-            keyboard_runtime_set_arp_pattern_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 4.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_GATE:
-            keyboard_runtime_set_arp_gate_for_track(track, (uint8_t)(ui_param_clamp(value, 1.0f, 127.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_SWING:
-            keyboard_runtime_set_arp_swing_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 100.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_ACCENT:
-            keyboard_runtime_set_arp_accent_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 3.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_VEL_ACC:
-            keyboard_runtime_set_arp_vel_acc_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 64.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_STRUM:
-            keyboard_runtime_set_arp_strum_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 4.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_OFFSET:
-            keyboard_runtime_set_arp_offset_for_track(track, (int8_t)(ui_param_clamp(value, -24.0f, 24.0f) + ((value >= 0.0f) ? 0.5f : -0.5f)));
-            return 1U;
-        case PARAM_ARP_TRANS:
-            keyboard_runtime_set_arp_transpose_for_track(track, (int8_t)(ui_param_clamp(value, -24.0f, 24.0f) + ((value >= 0.0f) ? 0.5f : -0.5f)));
-            return 1U;
-        case PARAM_ARP_SPREAD:
-            keyboard_runtime_set_arp_spread_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 12.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_DIR:
-            keyboard_runtime_set_arp_dir_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 2.0f) + 0.5f));
-            return 1U;
-        case PARAM_ARP_SYNC:
-            keyboard_runtime_set_arp_sync_for_track(track, (uint8_t)(ui_param_clamp(value, 0.0f, 2.0f) + 0.5f));
-            return 1U;
         default:
             return 0U;
     }
@@ -1014,15 +872,6 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
     {
         param_store_set_active(PARAM_SEQ_SWING, (float)track_swing);
     }
-    for (param_id_t id = PARAM_ARP_HOLD; id <= PARAM_ARP_SYNC; id = (param_id_t)(id + 1))
-    {
-        float value = 0.0f;
-        if (ui_param_get_arp_track_value(id, active_track, &value) != 0U)
-        {
-            param_store_set_active(id, value);
-        }
-    }
-
     param_registry_sync_filter_ui_for_active_track();
 }
 
@@ -1132,7 +981,7 @@ void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t
 
 static uint8_t ui_param_is_track_scoped(param_id_t param)
 {
-    if ((ui_param_is_seq_runtime_track_param(param) != 0U) || (ui_param_is_arp_track_param(param) != 0U))
+    if (ui_param_is_seq_runtime_track_param(param) != 0U)
     {
         return 1U;
     }
@@ -1154,11 +1003,6 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
     {
         return ui_param_seq_runtime_track_is_valid(track);
     }
-    if (ui_param_is_arp_track_param(param) != 0U)
-    {
-        return ui_param_arp_track_is_valid(track);
-    }
-
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE))
@@ -1329,11 +1173,6 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     {
         return value;
     }
-    if (ui_param_get_arp_track_value(param, active_track, &value) != 0U)
-    {
-        return value;
-    }
-
     if (ui_param_is_track_scoped(param) == 0U)
     {
         return param_get(param);
@@ -1358,11 +1197,6 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
     {
         return 1U;
     }
-    if (ui_param_get_arp_track_value(param, track, out_value) != 0U)
-    {
-        return 1U;
-    }
-
     if (ui_param_is_prism_tune(param, track) != 0U)
     {
         float coarse = 0.5f;
@@ -1390,7 +1224,7 @@ static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint
         return 0U;
     }
 
-    if ((ui_param_is_seq_runtime_track_param(param) != 0U) || (ui_param_is_arp_track_param(param) != 0U))
+    if (ui_param_is_seq_runtime_track_param(param) != 0U)
     {
         return ui_param_track_accepts_relative_param(active_track, param);
     }
@@ -1430,6 +1264,9 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
             break;
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX:
+            set_id = (uint8_t)SEQ_PLOCK_SET_MIDI_FX;
             break;
         case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
             set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
@@ -1531,41 +1368,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
-    if (ui_param_is_arp_track_param(param) != 0U)
-    {
-        const param_desc_t *const desc = &param_registry[param];
-        const float clamped = ui_param_clamp(value, desc->min, desc->max);
-        float current_value = 0.0f;
-        if (ui_param_get_arp_track_value(param, track, &current_value) == 0U)
-        {
-            return 0U;
-        }
-
-        if (ui_param_value_is_same(current_value, clamped) != 0U)
-        {
-            if (update_active_mirror != 0U)
-            {
-                param_store_set_active(param, clamped);
-            }
-            return 1U;
-        }
-
-        ui_param_ensure_undo_transaction(encoder, param, track);
-        if (ui_param_apply_arp_track_value(param, track, clamped) == 0U)
-        {
-            return 0U;
-        }
-
-        if (update_active_mirror != 0U)
-        {
-            param_store_set_active(param, clamped);
-        }
-        if (undo_v2_is_transaction_open() != 0U)
-        {
-            (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
-        }
-        return 1U;
-    }
 
     if (ui_param_is_track_scoped(param) == 0U)
     {
@@ -1654,6 +1456,15 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
     float current_value = 0.0f;
+    uint8_t note_fx_slot = 0U;
+    uint8_t note_fx_param = 0U;
+    uint8_t displaced_arp_slot = NOTE_FX_SLOT_NONE;
+    if ((note_fx_state_param_map(param, &note_fx_slot, &note_fx_param) != 0U)
+            && (note_fx_param == 3U)
+            && ((uint8_t)(clamped + 0.5f) == NOTE_FX_MODEL_ARP))
+    {
+        displaced_arp_slot = note_fx_state_find_arp_slot(track, note_fx_slot);
+    }
 
     if ((param_registry_get_track_value(param, track, &current_value) != 0U)
             && (ui_param_value_is_same(current_value, clamped) != 0U))
@@ -1701,6 +1512,16 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
     }
     if (undo_v2_is_transaction_open() != 0U)
     {
+        if (displaced_arp_slot < NOTE_FX_SLOT_COUNT)
+        {
+            const param_id_t displaced_model = (param_id_t)(PARAM_MIDI_FX_S1_MODEL
+                + (displaced_arp_slot * NOTE_FX_PARAM_COUNT));
+            (void)undo_v2_record_param_change(displaced_model,
+                                              1U,
+                                              track,
+                                              (float)NOTE_FX_MODEL_ARP,
+                                              (float)NOTE_FX_MODEL_OFF);
+        }
         (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
     }
     return 1U;

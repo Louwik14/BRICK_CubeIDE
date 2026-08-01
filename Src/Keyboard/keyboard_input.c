@@ -18,7 +18,6 @@
 #include "Board/board_product.h"
 #include "Keyboard/kbd_chords_dict.h"
 #include "Keyboard/kbd_input_mapper.h"
-#include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/ui_keyboard_app.h"
@@ -40,7 +39,6 @@
 typedef struct
 {
     uint8_t track;
-    uint8_t uses_arp;
 } keyboard_input_note_owner_t;
 
 static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
@@ -53,7 +51,7 @@ static uint8_t g_keyboard_input_note_owner_count[128U];
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
 
-static void keyboard_input_note_owner_push(uint8_t note, uint8_t track, uint8_t uses_arp)
+static void keyboard_input_note_owner_push(uint8_t note, uint8_t track)
 {
     if (note >= 128U)
     {
@@ -72,7 +70,6 @@ static void keyboard_input_note_owner_push(uint8_t note, uint8_t track, uint8_t 
     }
 
     g_keyboard_input_note_owner[note][count].track = track;
-    g_keyboard_input_note_owner[note][count].uses_arp = uses_arp;
     g_keyboard_input_note_owner_count[note] = (uint8_t)(count + 1U);
 }
 
@@ -222,7 +219,7 @@ static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t
     const uint8_t shift_down = (button_down(BTN_SHIFT) != 0U) ? 1U : 0U;
     const uint8_t shortcut_active =
         (uint8_t)(((mode == UI_HALL_MODE_SEQ)
-                   || (((mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP))
+                   || ((mode == UI_HALL_MODE_KEYBOARD)
                        && (shift_down != 0U)))
                   ? 1U : 0U);
     if (shortcut_active == 0U)
@@ -362,19 +359,12 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
     const ui_hall_mode_effective_view_t effective_view =
         ui_hall_mode_resolve_effective_view(active_track, hall_mode);
 
-    if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
-    {
-        keyboard_input_note_owner_push(note, active_track, 1U);
-        keyboard_arp_note_on_for_track(active_track, note, velocity);
-        return;
-    }
-
     if (effective_view == UI_HALL_MODE_VIEW_ROUT)
     {
         return;
     }
 
-    keyboard_input_note_owner_push(note, active_track, 0U);
+    keyboard_input_note_owner_push(note, active_track);
     keyboard_engine_note_on_for_track(active_track, note, velocity);
 }
 
@@ -383,12 +373,6 @@ static void keyboard_input_note_off_sink(uint8_t note)
     keyboard_input_note_owner_t owner;
     if (keyboard_input_note_owner_pop(note, &owner) == 0U)
     {
-        return;
-    }
-
-    if (owner.uses_arp != 0U)
-    {
-        keyboard_arp_note_off_for_track(owner.track, note);
         return;
     }
 
@@ -402,14 +386,7 @@ static void keyboard_input_all_notes_off_sink(void)
         keyboard_input_note_owner_t owner;
         while (keyboard_input_note_owner_pop(note, &owner) != 0U)
         {
-            if (owner.uses_arp != 0U)
-            {
-                keyboard_arp_note_off_for_track(owner.track, note);
-            }
-            else
-            {
-                keyboard_engine_note_off_for_track(owner.track, note);
-            }
+            keyboard_engine_note_off_for_track(owner.track, note);
         }
     }
 }

@@ -5,7 +5,6 @@
 #include "Audio/fx_master_macro.h"
 #include "Core/track_runtime.h"
 #include "Core/track_sound_state.h"
-#include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_types.h"
@@ -120,7 +119,6 @@ uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state
         if (muted != 0U)
         {
             seq_runtime_set_tracks_muted(&seq_track, 1U, 1U);
-            keyboard_arp_all_notes_off_track(track);
             keyboard_engine_all_notes_off_for_track(track);
         }
         else

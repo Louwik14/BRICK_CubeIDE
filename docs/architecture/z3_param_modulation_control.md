@@ -176,8 +176,6 @@ Familles d'autorite:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
   - les commandes CFG avec track explicite passent par `param_registry_apply_track_value(..., track, ...)` et n'utilisent pas l'active track implicite des wrappers.
-  - les wrappers ARP ecrivent maintenant l'etat ARP de la track active via `keyboard_runtime`; l'autorite config ARP est par track dans `keyboard_arp`, pas `param_store.active[]`.
-  - le runtime de jeu ARP est aussi par track cote `keyboard_arp`; les writes HOLD/ARP ne doivent pas couper les autres tracks.
 - `track_sound_state.*`:
   - premiere base canonique par track pour les blocs sonores extraits du runtime,
   - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,
@@ -1000,3 +998,22 @@ L'editeur CFG calcule sa borne effective a chaque mouvement (`16 - voix reservee
 - Le changement d'entrée suit la transition globale de rebind et reste hors RT fast; un conflit retourne un échec sans modifier la base ni le runtime.
 
 - L'apply historique de ces commandes est neutralise et la propagation manuelle `LINK` entre tracks est desactivee. `PARAM_CFG_POLY_VOICES`, `PARAM_CFG_POLY_SPREAD` et les spreads moteur restent inchanges.
+# Addendum 2026-07-31 - etat canonique MIDI FX
+
+- Seize IDs generiques `PARAM_MIDI_FX_S1_PARAM1..PARAM_MIDI_FX_S4_MODEL` exposent quatre slots de quatre controles.
+- L'autorite de base est `note_fx_state`: matrice fixe `8 Play Tracks x 4 slots x 4 valeurs`, sans allocation et sans emission sonore.
+- Defaults: `PARAM1=1/16`, `PARAM2=ORDER`, `PARAM3=1`, `MODEL=OFF`. Choisir ARP coupe canoniquement le MODEL ARP eventuel d'un autre slot de la meme track.
+- Le domaine runtime MIDI FX est track-scoped et distinct de COLORS/TONE/MOD/MIX/PLAY; aucun set de p-lock MIDI FX n'est cree dans cette etape.
+# Addendum 2026-08-01 - runtime MIDI FX et ARP neuf
+
+Le moteur `note_fx_engine` fixe (8 Play Tracks x 4 slots) est separe du modele neuf `note_fx_arp`. Il porte generation, sources ordonnees, phase/direction, echeance sample-domain, PRNG local deterministe, sorties possedees avec token/destination et suspension. Les limites sont fixes a 16 sources et 16 sorties par slot et 8 emissions par piste/bloc; `OFF` reste transparent. Le moteur reste isole des producteurs et dispatchers jusqu'a l'etape 4.
+# Addendum 2026-08-01 - changements effectifs MIDI FX
+
+Un changement effectif de `MODEL` nettoie la generation et les sorties possedees avant la mutation canonique. RATE, STYLE et RANGE restent des mises a jour sans restart et prennent effet au tick suivant.
+# Addendum 2026-08-01 - p-locks MIDI FX
+
+Le set `SEQ_PLOCK_SET_MIDI_FX` mappe fixement les seize IDs generiques sur les slots 0..15. Les locks utilisent un overlay runtime distinct de la base `note_fx_state`; RATE/STYLE/RANGE s'appliquent au tick suivant, tandis que MODEL nettoie la generation avant chaque changement effectif et maintient un seul ARP runtime par piste.
+# Addendum 2026-08-01 - correction overlay MODEL MIDI FX
+
+- Chaque lock MODEL conserve son propre overlay; la contrainte d'un ARP effectif unique est projetee separement et la liberation d'un lock ne supprime jamais les overlays des autres slots.
+- Une modification de base MIDI FX resynchronise immediatement le moteur actif. Les restores bornent RATE/STYLE/RANGE/MODEL et normalisent deterministement toute duplication ARP.

@@ -611,7 +611,7 @@ static uint8_t led_apply_patch_assign_hall_scene(uint8_t hall)
 
 static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
 {
-    return (mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP);
+    return (mode == UI_HALL_MODE_KEYBOARD);
 }
 
 static bool led_hall_mode_uses_seq_scene(ui_hall_mode_t mode)

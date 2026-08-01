@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "Storage/pattern_live_ram.h"
+#include "NoteFx/note_fx_state.h"
 #include "Param/param_store.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -100,6 +101,8 @@ typedef struct
 {
     PatternSaveV1 before_snapshot;
     PatternSaveV1 after_snapshot;
+    note_fx_track_state_t before_note_fx[NOTE_FX_TRACK_COUNT];
+    note_fx_track_state_t after_note_fx[NOTE_FX_TRACK_COUNT];
     uint8_t before_valid;
     uint8_t after_valid;
 } undo_v2_snapshot_payload_t;

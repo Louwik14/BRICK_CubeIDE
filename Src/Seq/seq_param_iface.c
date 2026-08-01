@@ -13,6 +13,8 @@
 #include "Core/track_runtime.h"
 #include "Mod/mod_matrix.h"
 #include "param_registry.h"
+#include "NoteFx/note_fx_pipeline.h"
+#include "NoteFx/note_fx_state.h"
 
 typedef struct
 {
@@ -266,6 +268,9 @@ static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t d
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
             return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_MIDI_FX;
+            return 1U;
         case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
             return 1U;
@@ -291,6 +296,13 @@ static void seq_param_iface_rebuild_slot_maps(void)
     for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
     {
         const param_id_t param = (param_id_t)param_raw;
+        if ((param >= PARAM_MIDI_FX_S1_PARAM1) && (param <= PARAM_MIDI_FX_S4_MODEL))
+        {
+            const seq_param_slot_t slot = (seq_param_slot_t)(param - PARAM_MIDI_FX_S1_PARAM1);
+            g_seq_param_id_to_slot[SEQ_PLOCK_SET_MIDI_FX][param] = slot;
+            g_seq_param_slot_to_id[SEQ_PLOCK_SET_MIDI_FX][slot] = param;
+            continue;
+        }
         if ((param == PARAM_SAMPLER_SLICE_COUNT)
                 || (param == PARAM_LOOPER_ARM)
                 || (param == PARAM_LOOPER_LEN)
@@ -368,7 +380,8 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX))
     {
         return 0U;
     }
@@ -386,6 +399,11 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         return 0U;
     }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) && (set_id != (uint8_t)SEQ_PLOCK_SET_MOD))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+            && (set_id != (uint8_t)SEQ_PLOCK_SET_MIDI_FX))
     {
         return 0U;
     }
@@ -773,6 +791,18 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
+    {
+        uint8_t slot = 0U, fx_param = 0U;
+        if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
+            note_fx_pipeline_apply_runtime_param(track, slot, fx_param,
+                (uint8_t)(seq_param_iface_decode_param_value(param, value16) + 0.5f)) == 0U)
+            return 0U;
+        state->runtime_value = value16;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
+        return 1U;
+    }
+
     const float decoded = seq_param_iface_decode_param_value(param, value16);
     mod_matrix_set_runtime_base_override(track, param, decoded);
     if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
@@ -813,6 +843,19 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     if (seq_param_iface_is_play_param(param) != 0U)
     {
         state->runtime_value = base_value16;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
+        return 1U;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
+    {
+        uint8_t slot = 0U, fx_param = 0U;
+        if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
+            note_fx_pipeline_release_runtime_param(track, slot, fx_param) == 0U)
+            return 0U;
+        state->base_value = base_value16;
+        state->runtime_value = base_value16;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
         seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
         return 1U;
     }

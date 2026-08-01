@@ -27,7 +27,7 @@ static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t
         return 0U;
     }
 
-    return (uint8_t)(((hall_mode == UI_HALL_MODE_KEYBOARD) || (hall_mode == UI_HALL_MODE_ARP)) ? 1U : 0U);
+    return (uint8_t)(hall_mode == UI_HALL_MODE_KEYBOARD);
 }
 
 uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,

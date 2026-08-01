@@ -507,3 +507,26 @@ Documents conserves pour tracabilite uniquement:
 
 - Z2 ne porte plus aucune autorite de regroupement entre Play Tracks. Chaque identite logique possede directement son runtime, ses quatre voix PLAY et ses parametres moteur.
 - Z3 a Z6 operent strictement par track pour controle, sequence, UI et persistence. Patch reste mono-track; la Special Track Master et le master audio sont inchanges.
+# Addendum 2026-07-31 - seam UI MIDI FX
+
+- Z5 retire le mode/vue ARP et transforme son raccourci en ouverture directe de la page temporaire `MIDI FX`, sans mutation du mode musical `SEQ/KEYBOARD` et sans effet sonore a l'ouverture.
+- La projection `ROUT` des Special necessaires est conservee sur cette meme page. Z4 garde provisoirement l'ancien moteur ARP historique jusqu'au branchement du nouveau pipeline MIDI FX.
+# Addendum 2026-07-31 - MIDI FX etape 2
+
+- Z2 publie une capacite, un ensemble et un domaine MIDI FX reserves aux huit Play Tracks note-capable. Z3 porte l'autorite fixe `track x 4 slots`; Z5 projette les quatre pages et leurs labels dynamiques.
+- Z6 etend seulement les snapshots RAM Undo. Pattern, Project, track snapshot, Patch et Kit restent hors MIDI FX jusqu'a l'etape persistence dediee.
+# Addendum 2026-08-01 - moteur MIDI FX isole
+
+Le moteur generique `Src/NoteFx/note_fx_engine.c` et le modele ARP neuf separe utilisent exclusivement le sample-domain. A l'etape 3 ils sont compiles mais pas encore inseres dans le flux live/sequenceur, inchange jusqu'a l'etape 4.
+# Addendum 2026-08-01 - MIDI FX operationnel
+
+Z4 unifie clavier, MIDI entrant et sequenceur avant les quatre slots MIDI FX, puis reutilise le dispatcher terminal moteur/MIDI existant. Z1 honore les echeances du moteur dans son decoupage sample-domain. Le live record reste en amont et ne capture jamais les notes generees.
+# Addendum 2026-08-01 - lifecycle MIDI FX
+
+Z2/Z4 centralisent cleanup et suspension MIDI FX sur Stop/Panic, mute, Pattern et mutations structurelles; Z3 nettoie avant changement effectif de MODEL. Les sorties conservent leur destination d'origine jusqu'au Note Off.
+# Addendum 2026-08-01 - p-locks MIDI FX operationnels
+
+Z3 porte un overlay runtime MIDI FX separe des bases, Z4 l'applique avant les sources de note au boundary, Z5 reutilise l'edition/live-record/Undo generiques et Z6 conserve les locks dans le pool sequenceur existant.
+# Addendum 2026-08-01 - persistence MIDI FX
+
+Z6 persiste les bases MIDI FX dans Pattern/Project et Track snapshot/Clipboard/Undo, sans etat runtime et sans inclusion Patch/Kit. Les overlays p-lock sont reinitialises avant toute restauration de bases.

@@ -10,7 +10,6 @@ typedef struct
 } ui_hall_mode_contract_t;
 
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
-#define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_PATCH_MODE_TRIGGER 0U
 #define UI_HALL_AUDIO_REC_MODE_TRIGGER 14U
@@ -24,11 +23,6 @@ static const ui_hall_mode_contract_t g_ui_hall_mode_contracts[UI_HALL_MODE_COUNT
         .trigger_hall = UI_HALL_KEYBOARD_MODE_TRIGGER,
         .target_page = UI_PAGE_TEMPLATE_KEYBOARD,
         .base_label = "KBD"
-    },
-    [UI_HALL_MODE_ARP] = {
-        .trigger_hall = UI_HALL_ARP_MODE_TRIGGER,
-        .target_page = UI_PAGE_TEMPLATE_ARP,
-        .base_label = "ARP"
     },
     [UI_HALL_MODE_MACRO] = {
         .trigger_hall = UI_HALL_MODE_TRIGGER_NONE,

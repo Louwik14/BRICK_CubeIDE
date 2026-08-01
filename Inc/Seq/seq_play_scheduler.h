@@ -66,6 +66,13 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
  * - does not change transport or timeline ownership.
  */
 void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t *event);
+void seq_play_scheduler_dispatch_terminal_note(seq_track_id_t track, uint8_t note,
+                                               uint8_t velocity, uint8_t is_note_on);
+void seq_play_scheduler_dispatch_terminal_note_to_channel(seq_track_id_t track,
+                                                          uint8_t channel,
+                                                          uint8_t note,
+                                                          uint8_t velocity,
+                                                          uint8_t is_note_on);
 /*
  * Contract surface:
  * - post-commit notifications from runtime/transport.

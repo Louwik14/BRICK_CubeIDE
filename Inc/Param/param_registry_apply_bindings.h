@@ -4,20 +4,6 @@
 extern "C" {
 #endif
 
-void apply_arp_accent(float v);
-void apply_arp_dir(float v);
-void apply_arp_gate(float v);
-void apply_arp_hold(float v);
-void apply_arp_oct(float v);
-void apply_arp_offset(float v);
-void apply_arp_pattern(float v);
-void apply_arp_rate(float v);
-void apply_arp_spread(float v);
-void apply_arp_strum(float v);
-void apply_arp_swing(float v);
-void apply_arp_sync(float v);
-void apply_arp_trans(float v);
-void apply_arp_vel_acc(float v);
 void apply_comp_model(float v);
 void apply_comp_detect(float v);
 void apply_comp_knee(float v);

@@ -15,10 +15,10 @@
 
 #include "Keyboard/keyboard_runtime.h"
 
-#include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/keyboard_input.h"
+#include "NoteFx/note_fx_pipeline.h"
 
 #include "ui_core.h"
 
@@ -32,11 +32,6 @@ static uint8_t g_keyboard_runtime_midi_sustained_release[KEYBOARD_RUNTIME_MIDI_C
 static uint8_t g_keyboard_runtime_midi_sustain_down[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT];
 
 void keyboard_runtime_all_notes_off(void);
-
-static uint8_t keyboard_runtime_hall_mode_uses_arp_engine(ui_hall_mode_t hall_mode)
-{
-    return ui_hall_uses_arp_engine(ui_get_active_track(), hall_mode);
-}
 
 static void keyboard_runtime_reset_midi_state(void)
 {
@@ -126,6 +121,7 @@ static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len
         memset(g_keyboard_runtime_midi_sustained_release[channel_zero_based], 0, sizeof(g_keyboard_runtime_midi_sustained_release[channel_zero_based]));
         g_keyboard_runtime_midi_sustain_down[channel_zero_based] = 0U;
     }
+    note_fx_pipeline_cleanup_all();
     keyboard_engine_midi_receive(msg, len);
 }
 
@@ -133,7 +129,7 @@ void keyboard_runtime_init(void)
 {
     keyboard_input_init();
     keyboard_params_init();
-    keyboard_arp_init();
+    note_fx_pipeline_init();
     keyboard_runtime_reset_midi_state();
 }
 
@@ -141,13 +137,6 @@ void keyboard_runtime_tick(void)
 {
     ui_keyboard_app_tick(0U);
 
-    if ((keyboard_runtime_hall_mode_uses_arp_engine(ui_get_hall_mode()) == 0U)
-            && (keyboard_arp_has_hold_activity() == 0U))
-    {
-        return;
-    }
-
-    keyboard_arp_tick();
 }
 
 void keyboard_runtime_set_root(uint8_t root_index) { keyboard_params_set_root(root_index); }
@@ -164,36 +153,6 @@ void keyboard_runtime_set_mono_last(bool enabled)
     }
 }
 
-
-void keyboard_runtime_set_arp_hold(bool enabled) { keyboard_arp_set_hold_for_track(ui_get_active_track(), enabled); }
-void keyboard_runtime_set_arp_rate(uint8_t value) { keyboard_arp_set_rate_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_oct(uint8_t value) { keyboard_arp_set_oct_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_pattern(uint8_t value) { keyboard_arp_set_pattern_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_gate(uint8_t value) { keyboard_arp_set_gate_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_swing(uint8_t value) { keyboard_arp_set_swing_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_accent(uint8_t value) { keyboard_arp_set_accent_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_vel_acc(uint8_t value) { keyboard_arp_set_vel_acc_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_strum(uint8_t value) { keyboard_arp_set_strum_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_offset(int8_t value) { keyboard_arp_set_offset_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_transpose(int8_t value) { keyboard_arp_set_transpose_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_spread(uint8_t value) { keyboard_arp_set_spread_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_dir(uint8_t value) { keyboard_arp_set_dir_for_track(ui_get_active_track(), value); }
-void keyboard_runtime_set_arp_sync(uint8_t value) { keyboard_arp_set_sync_for_track(ui_get_active_track(), value); }
-
-void keyboard_runtime_set_arp_hold_for_track(uint8_t track, bool enabled) { keyboard_arp_set_hold_for_track(track, enabled); }
-void keyboard_runtime_set_arp_rate_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_rate_for_track(track, value); }
-void keyboard_runtime_set_arp_oct_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_oct_for_track(track, value); }
-void keyboard_runtime_set_arp_pattern_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_pattern_for_track(track, value); }
-void keyboard_runtime_set_arp_gate_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_gate_for_track(track, value); }
-void keyboard_runtime_set_arp_swing_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_swing_for_track(track, value); }
-void keyboard_runtime_set_arp_accent_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_accent_for_track(track, value); }
-void keyboard_runtime_set_arp_vel_acc_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_vel_acc_for_track(track, value); }
-void keyboard_runtime_set_arp_strum_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_strum_for_track(track, value); }
-void keyboard_runtime_set_arp_offset_for_track(uint8_t track, int8_t value) { keyboard_arp_set_offset_for_track(track, value); }
-void keyboard_runtime_set_arp_transpose_for_track(uint8_t track, int8_t value) { keyboard_arp_set_transpose_for_track(track, value); }
-void keyboard_runtime_set_arp_spread_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_spread_for_track(track, value); }
-void keyboard_runtime_set_arp_dir_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_dir_for_track(track, value); }
-void keyboard_runtime_set_arp_sync_for_track(uint8_t track, uint8_t value) { keyboard_arp_set_sync_for_track(track, value); }
 
 void keyboard_runtime_step_octave(int8_t delta)
 {
@@ -283,17 +242,7 @@ void keyboard_runtime_all_notes_off(void)
 {
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
-    keyboard_arp_all_notes_off();
-}
-
-void keyboard_runtime_clear_arp_track(uint8_t track)
-{
-    keyboard_arp_all_notes_off_track(track);
-}
-
-void keyboard_runtime_clear_arp_seq_step_source(void)
-{
-    keyboard_arp_clear_seq_step_source();
+    note_fx_pipeline_cleanup_all();
 }
 
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
@@ -308,7 +257,7 @@ uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
 void keyboard_runtime_sync_track_focus_context(void)
 {
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
-    if ((hall_mode != UI_HALL_MODE_KEYBOARD) && (hall_mode != UI_HALL_MODE_ARP))
+    if (hall_mode != UI_HALL_MODE_KEYBOARD)
     {
         return;
     }
@@ -318,31 +267,13 @@ void keyboard_runtime_sync_track_focus_context(void)
      * On ne doit pas envoyer de panic/runtime reset global ici,
      * sinon on coupe aussi des notes/séquences qui jouent encore.
      *
-     * On purge uniquement l'état local clavier/arp pour éviter que
+     * On purge uniquement l'état local clavier pour éviter que
      * des relâchements tardifs d'anciens halls pilotent la nouvelle track.
     */
-    keyboard_arp_sync_track(ui_get_active_track());
-
-    if (keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
-    {
-        keyboard_arp_on_mode_enter_silent();
-    }
 }
 
 void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode)
 {
-    if (keyboard_runtime_hall_mode_uses_arp_engine(previous_mode) != 0U)
-    {
-        keyboard_arp_on_mode_leave();
-    }
-
-    if ((keyboard_runtime_hall_mode_uses_arp_engine(new_mode) != 0U)
-            && (keyboard_runtime_hall_mode_uses_arp_engine(previous_mode) == 0U))
-    {
-        keyboard_arp_sync_track(ui_get_active_track());
-        keyboard_arp_on_mode_enter();
-    }
-
     if ((previous_mode == UI_HALL_MODE_KEYBOARD) && (new_mode != UI_HALL_MODE_KEYBOARD))
     {
         ui_keyboard_app_all_notes_off();
@@ -365,18 +296,3 @@ void keyboard_runtime_get_active_chord_label(char *out, uint32_t out_len)
 {
     ui_keyboard_app_format_active_chord_label(out, out_len);
 }
-
-bool keyboard_runtime_get_arp_hold_for_track(uint8_t track) { return keyboard_arp_get_hold_for_track(track); }
-uint8_t keyboard_runtime_get_arp_rate_for_track(uint8_t track) { return keyboard_arp_get_rate_for_track(track); }
-uint8_t keyboard_runtime_get_arp_oct_for_track(uint8_t track) { return keyboard_arp_get_oct_for_track(track); }
-uint8_t keyboard_runtime_get_arp_pattern_for_track(uint8_t track) { return keyboard_arp_get_pattern_for_track(track); }
-uint8_t keyboard_runtime_get_arp_gate_for_track(uint8_t track) { return keyboard_arp_get_gate_for_track(track); }
-uint8_t keyboard_runtime_get_arp_swing_for_track(uint8_t track) { return keyboard_arp_get_swing_for_track(track); }
-uint8_t keyboard_runtime_get_arp_accent_for_track(uint8_t track) { return keyboard_arp_get_accent_for_track(track); }
-uint8_t keyboard_runtime_get_arp_vel_acc_for_track(uint8_t track) { return keyboard_arp_get_vel_acc_for_track(track); }
-uint8_t keyboard_runtime_get_arp_strum_for_track(uint8_t track) { return keyboard_arp_get_strum_for_track(track); }
-int8_t keyboard_runtime_get_arp_offset_for_track(uint8_t track) { return keyboard_arp_get_offset_for_track(track); }
-int8_t keyboard_runtime_get_arp_transpose_for_track(uint8_t track) { return keyboard_arp_get_transpose_for_track(track); }
-uint8_t keyboard_runtime_get_arp_spread_for_track(uint8_t track) { return keyboard_arp_get_spread_for_track(track); }
-uint8_t keyboard_runtime_get_arp_dir_for_track(uint8_t track) { return keyboard_arp_get_dir_for_track(track); }
-uint8_t keyboard_runtime_get_arp_sync_for_track(uint8_t track) { return keyboard_arp_get_sync_for_track(track); }

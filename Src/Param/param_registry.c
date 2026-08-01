@@ -20,6 +20,8 @@
  */
 
 #include "param_registry.h"
+#include "NoteFx/note_fx_state.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Param/param_macro.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
@@ -1359,6 +1361,13 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 0U;
     }
 
+    uint8_t note_fx_slot = 0U;
+    uint8_t note_fx_param = 0U;
+    if (note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+    {
+        return note_fx_state_get_param(track, id, out_value);
+    }
+
     if (track < SEQ_TRACK_COUNT)
     {
         if (id == PARAM_CFG_POLY_VOICES)
@@ -1605,6 +1614,31 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
+    uint8_t note_fx_slot = 0U;
+    uint8_t note_fx_param = 0U;
+    if (note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+    {
+        if (track_runtime_is_ui_ensemble_available(track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) == 0U)
+        {
+            return 0U;
+        }
+        if (note_fx_param == 3U)
+        {
+            float previous = 0.0f;
+            if ((note_fx_state_get_param(track, id, &previous) != 0U)
+                    && ((uint8_t)(previous + 0.5f) != (uint8_t)(clamped + 0.5f)))
+            {
+                note_fx_pipeline_before_model_change(track);
+            }
+        }
+        if (note_fx_state_set_param(track, id, clamped) == 0U)
+        {
+            return 0U;
+        }
+        note_fx_pipeline_on_base_param_change(track);
+        return 1U;
+    }
+
     if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
     {
         keyboard_engine_all_notes_off_for_track(track);
@@ -1619,6 +1653,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
     {
+        note_fx_pipeline_cleanup_track(track);
         const uint8_t ok = param_apply_cfg_track_value(id, track, clamped);
         if (ok != 0U)
         {
@@ -1753,6 +1788,7 @@ void param_registry_init(void)
     param_macro_init();
     param_filter_init();
     mod_lfo_v1_init();
+    note_fx_state_init();
     param_registry_runtime_state_init();
 }
 

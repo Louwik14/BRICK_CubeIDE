@@ -3971,6 +3971,28 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
 
     ui_renderer_template_draw_param_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
 
+    if ((state != NULL) && (state->virtual_slot_text != NULL))
+    {
+        char virt_name[24];
+        char virt_value[20];
+        if (state->virtual_slot_text(slot,
+                                     virt_name,
+                                     (uint32_t)sizeof(virt_name),
+                                     virt_value,
+                                     (uint32_t)sizeof(virt_value)) != 0U)
+        {
+            drv_display_set_font(&FONT_4X6);
+            ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+            ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+            uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, virt_value);
+            drv_display_set_font(&FONT_4X6);
+            drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
+                                  (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
+                                  virt_name);
+            return;
+        }
+    }
+
     if (id >= PARAM_COUNT)
     {
         if (slot_locked != 0U)

@@ -40,6 +40,7 @@
 #include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
 #include "Core/track_input_ownership.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "ui_bootstrap.h"
 #include "ui_event.h"
 #include "ui_core_navigation_bridge.h"
@@ -238,6 +239,10 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
         return false;
     }
 
+    if (track_state_get_midi_channel(track) != channel_1_16)
+    {
+        note_fx_pipeline_cleanup_track(track);
+    }
     if (track_state_set_track_midi_channel(track, channel_1_16) == false)
     {
         return false;

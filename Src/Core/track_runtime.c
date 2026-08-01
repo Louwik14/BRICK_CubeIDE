@@ -586,9 +586,12 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     {
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD);
     }
-    if ((topology.capabilities & (uint16_t)TRACK_CAPABILITY_ARPEGGIATOR) != 0U)
+    if (((topology.capabilities & (uint16_t)TRACK_CAPABILITY_MIDI_FX) != 0U)
+            && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
+            && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER)))
     {
-        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ARP);
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX);
     }
 
     if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -1925,6 +1928,26 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;
 
+        case PARAM_MIDI_FX_S1_PARAM1:
+        case PARAM_MIDI_FX_S1_PARAM2:
+        case PARAM_MIDI_FX_S1_PARAM3:
+        case PARAM_MIDI_FX_S1_MODEL:
+        case PARAM_MIDI_FX_S2_PARAM1:
+        case PARAM_MIDI_FX_S2_PARAM2:
+        case PARAM_MIDI_FX_S2_PARAM3:
+        case PARAM_MIDI_FX_S2_MODEL:
+        case PARAM_MIDI_FX_S3_PARAM1:
+        case PARAM_MIDI_FX_S3_PARAM2:
+        case PARAM_MIDI_FX_S3_PARAM3:
+        case PARAM_MIDI_FX_S3_MODEL:
+        case PARAM_MIDI_FX_S4_PARAM1:
+        case PARAM_MIDI_FX_S4_PARAM2:
+        case PARAM_MIDI_FX_S4_PARAM3:
+        case PARAM_MIDI_FX_S4_MODEL:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX;
+            rule.resource = TRACK_RUNTIME_RESOURCE_MIDI_FX;
+            return rule;
+
         case PARAM_MASTER_GAIN:
         case PARAM_POST_GAIN:
         case PARAM_OUTPUT_COMP:
@@ -2153,6 +2176,12 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return (track_runtime_is_audio_routable(track) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+
+        case TRACK_RUNTIME_RESOURCE_MIDI_FX:
+            return (track_runtime_is_ui_ensemble_available(track,
+                                                            TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) != 0U)
+                ? TRACK_RUNTIME_PARAM_ALLOWED
+                : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

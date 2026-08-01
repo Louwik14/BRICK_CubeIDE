@@ -133,7 +133,6 @@ Lectures runtime explicites, sans autorite locale de mutation:
 - `seq_live_rec_capture`: lit `track_runtime_get_midi_source`, `track_runtime_get_midi_channel_zero_based` et `track_runtime_get_effective_param_status` comme gardes de capture.
 - `seq_led`: lit `seq_runtime_is_running` et `seq_runtime_get_playhead_step` comme projections de cursor.
 - `seq_output_guard`: lit `track_runtime_get_midi_channel_zero_based` et la projection runtime resolue pour le panic/cleanup.
-- `keyboard_arp`: rend pour `seq_play_scheduler` les notes/velocites ARP derivees d'un step actif; le scheduler reste proprietaire de l'horodatage sample-domain et de la queue audio.
 
 Contrat:
 - ces consumers ne font pas de refresh implicite;
@@ -734,12 +733,10 @@ Points factuels observes:
 
 - Quand `ARP Hold` est actif sur une track, un step sequenceur actif de cette meme track fournit une fenetre source au runtime ARP de la track.
 - Cette fenetre reste track-locale et ne modifie pas les autres etats ARP; `ARP Hold=Off` conserve le pilotage clavier uniquement.
-- Le scheduler PLAY collecte les notes du step actif, conserve la fenetre `SEQ_STEP`, demande a `keyboard_arp` de rendre seulement la tranche temporelle due au boundary courant, puis queue les note-on/note-off ARP dans la meme queue sample-domain que PLAY.
 - Le chemin `SEQ_STEP` ne depend plus du tick UI/systeme ni de `HAL_GetTick` pour son horodatage: note-on, strum et note-off ARP sont collectes/appliques par `seq_runtime_audio_collect_block_events` avec offsets intra-buffer.
 - Les divisions ARP sont converties depuis la cadence sequencer audio (`samples_per_step_q16`, base 16th = 6 PPQN24), sans accumulation en millisecondes et sans recalage au wrap pattern.
 - La fenetre ARP `SEQ_STEP` est bornee par la duree PLAY effective du step: une note `LEN=16` rend progressivement tous les pas ARP dus dans ces 16 steps, sans note source brute concurrente.
 - Les parametres ARP sont relus par tranche de scheduler; une revision de config ARP force la prochaine tranche a repartir du boundary courant avec les nouveaux reglages, sans reappui sur le step source.
-- Le rendu `SEQ_STEP` de `keyboard_arp` est transitoire: seule la phase ARP avance, puis la source/pattern `KBD` eventuelle est restauree; `keyboard_arp_tick` ne devient pas proprietaire de cette cadence.
 - Au STOP transport, `seq_runtime` demande uniquement le clear de la source ARP `SEQ_STEP`: la phase `SEQ_STEP` repartira du debut au prochain PLAY si aucune source `KBD` n'est active, tandis que la source `KBD` latchee reste disponible pour le jeu manuel hors sequenceur.
 
 ## Addendum 2026-07-25 - LENGTH rapide low-cost et DIV
@@ -1040,7 +1037,6 @@ Program Change:
 
 ARP Hold:
 - `ARP Hold` reste une capacite de la track cible.
-- Le resolver PLAY doit donc produire des notes resolues par cible avant l'appel aux chemins `keyboard_arp_*`; il ne doit pas rendre l'ARP lui-meme.
 
 Forme d'API cible:
 - Une API de resolution d'item PLAY est preferee: elle retourne pour une position scheduler la paire `source_track/source_step/source_voice` et `target_track/target_voice`.
@@ -1225,7 +1221,6 @@ Correction:
 
 ## Addendum 2026-07-29 - ownership ARP multi-track
 
-- `keyboard_arp` possede une instance complete par track: notes physiques/latchees, HOLD, pattern source, phase, direction, RNG, timers, notes actives et evenements strum differes.
 - Toute API `*_for_track` restaure le contexte ARP appelant apres operation; une consultation, un clear ou une edition d'une track ne laisse plus le selecteur interne pointe sur une autre instance.
 - Les note-on/off ARP passent jusqu'au moteur avec leur track proprietaire. Le pairing live-rec des emissions ARP est indexe par `owner_track + note`, et non plus par note seule.
 - Les marqueurs de provenance des notes strum differees sont stockes par entree sur toute la capacite de queue; ils ne partagent plus un masque limite aux huit premieres entrees.
@@ -1285,7 +1280,6 @@ Correction:
 - `seq_model` alloue huit pools Play de 1024 p-locks et un pool de 512 p-locks par Special effective; les limites par step sont respectivement 32 et 16.
 - Le set `SEQ_PLOCK_SET_PLAY` est refuse sur les Special. Leur step est actif par automatisation non-PLAY ou par `seq_special_action_t`; trig note et roll restent exclusivement Play.
 - Le champ action est borne et extensible, mais aucune action Brain/MIDI FX n'est definie. Le scheduler PLAY conserve exactement son modele et son garde de capacite notes.
-- `keyboard_arp` alloue runtime, configuration et revisions uniquement sur `TRACK_TOPOLOGY_PLAY_TRACK_COUNT`.
 - Le scheduler PLAY et `seq_output_guard` dimensionnent leurs tokens/notes par huit Play Tracks; les overlays de locks actifs utilisent 32 slots par Play et 16 par Special.
 - `seq_clipboard` conserve l'action sur Special et refuse le paste si l'identite source n'est pas compatible avec le role cible; aucun champ trig/roll/note n'est applique sur Special.
 # Addendum 2026-07-31 - capacite p-lock Special
@@ -1296,3 +1290,19 @@ Correction:
 - Le scheduler PLAY lit les quatre voix de la track source et adresse exclusivement cette meme track; aucune distribution tournante ni contexte multi-membre ne subsiste.
 - Les fenetres ARP schedulees restent sur leur track proprietaire. Le live record conserve la track directement adressee par le clavier ou le canal MIDI.
 - Les tokens note-on/note-off, les purges ciblees et Stop/Panic restent par track; les compteurs d'occupation inter-tracks ont ete retires.
+# Addendum 2026-08-01 - MIDI FX sample-domain
+
+Le moteur MIDI FX recoit explicitement les dates absolues et `samples_per_step_q16`; il ne possede aucune horloge milliseconde et ne depend pas de `HAL_GetTick()`. Son branchement aux sources live/sequenceur et au dispatcher terminal appartient a l'etape 4.
+# Addendum 2026-08-01 - pipeline MIDI FX unifie
+
+Les evenements du scheduler entrent dans MIDI FX au seam d'application audio, tandis que live et MIDI entrant enregistrent d'abord leur evenement source puis empruntent le meme pipeline. Le moteur publie sa prochaine echeance afin que Z1 decoupe le bloc sans rattrapage ni horloge parallele. L'ancien moteur et son tick milliseconde ont ete supprimes.
+# Addendum 2026-08-01 - securite de cycle de vie MIDI FX
+
+Clear/Stop/Panic invalident les generations MIDI FX et liberent les sorties. Le mute suspend la piste apres cleanup; l'unmute la rearme sans rejouer les sources manquees. Les changements et chargements de Pattern nettoient avant mutation.
+# Addendum 2026-08-01 - ordre boundary MIDI FX
+
+Les locks MIDI FX font partie des locks non-PLAY appliques/restaures au boundary avant la planification et la soumission des notes sources. Apparition, remplacement et disparition d'un lock passent par le meme overlay; la restauration de base ne rejoue aucun evenement manque.
+# Addendum 2026-08-01 - fermeture MIDI FX complete
+
+- Les commandes All Notes Off MIDI et le panic clavier nettoient aussi les sources, sorties et echeances MIDI FX avant de poursuivre leur fermeture terminale.
+- La liberation d'un p-lock MODEL restaure uniquement son overlay et reprojette l'unique ARP effectif depuis les autres locks puis les bases.

@@ -368,6 +368,11 @@ set(EXCLUDED_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_recorder_runtime.c"
 )
 
+file(GLOB SRC_NOTE_FX_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/*.cpp"
+)
+
 set(BRICK_TEST_ONLY_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_track_diag.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_test_runner.c"
@@ -403,6 +408,7 @@ set(ALL_USER_SOURCES
     ${SRC_KEYBOARD_SRC}
     ${SRC_MIDI_SRC}
     ${SRC_MOD_SRC}
+    ${SRC_NOTE_FX_SRC}
     ${SRC_PARAM_SRC}
     ${SRC_SD_SRC}
     ${SRC_SAMPLER_SRC}

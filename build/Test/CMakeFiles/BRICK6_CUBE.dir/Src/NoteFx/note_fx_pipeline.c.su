@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:26:13:note_fx_pipeline_sync_track	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:14:13:note_fx_pipeline_terminal	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:45:6:note_fx_pipeline_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:94:9:note_fx_pipeline_submit	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:109:6:note_fx_pipeline_cleanup_track	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:51:9:note_fx_pipeline_apply_runtime_param	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:76:9:note_fx_pipeline_release_runtime_param	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:115:6:note_fx_pipeline_cleanup_all	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:121:6:note_fx_pipeline_suspend_track	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:128:6:note_fx_pipeline_before_model_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:133:6:note_fx_pipeline_reset_runtime_overrides	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:141:6:note_fx_pipeline_reset_all_runtime_overrides	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:147:6:note_fx_pipeline_process	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:154:10:note_fx_pipeline_frames_until_deadline	16	static

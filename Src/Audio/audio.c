@@ -31,6 +31,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
+#include "NoteFx/note_fx_pipeline.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -111,8 +112,21 @@ static void audio_apply_seq_event_at_sample(seq_runtime_audio_event_t *event,
 }
 static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
-    (void)sample_time;
-    audio_process_block_int32(rx, tx, frames);
+    uint32_t cursor = 0U;
+    while (cursor < frames)
+    {
+        const uint64_t now = sample_time + cursor;
+        note_fx_pipeline_process(now, 1U, seq_runtime_get_samples_per_step_q16());
+        const uint16_t remaining = (uint16_t)(frames - cursor);
+        uint16_t span = note_fx_pipeline_frames_until_deadline(now, remaining);
+        if (span == 0U)
+        {
+            span = 1U;
+        }
+        audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  &tx[cursor * AUDIO_WORDS_PER_FRAME], span);
+        cursor += span;
+    }
 }
 
 /**
@@ -253,6 +267,8 @@ static void process_half(uint32_t half_index)
     {
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
         uint16_t block_frames = audio_seq_collect_frames_until_next_internal_pulse(remaining);
+        block_frames = note_fx_pipeline_frames_until_deadline(
+            seq_runtime_exec_get_audio_timeline_sample(), block_frames);
         if (block_frames == 0U)
         {
             block_frames = 1U;

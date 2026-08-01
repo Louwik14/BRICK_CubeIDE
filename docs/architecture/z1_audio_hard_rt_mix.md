@@ -1356,3 +1356,6 @@ Clarification START/END/LOOP live:
 - Le mute FX interpole la sortie Macro FX vers le dry original. Il coupe uniquement la contribution FX et ne coupe jamais le signal direct.
 
 - Les buffers temporaires et le refresh runtime dedies a cette projection sont supprimes, sans modifier le moteur Multi ni ses voix internes.
+# Addendum 2026-08-01 - application sample-accurate MIDI FX
+
+Le decoupage audio tient compte de la prochaine echeance `note_fx_engine` en plus des boundaries sequenceur. Les sorties generees sont donc appliquees au dispatcher terminal commun a leur date sample-domain, avant le rendu du segment suivant, avec un nombre de sous-segments borne.

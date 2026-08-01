@@ -43,6 +43,8 @@ static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
 
+static void ui_hall_mode_flow_leave_lowcost_special_page(void);
+
 static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
 {
     const board_product_capabilities_t *caps = board_product_capabilities();
@@ -61,6 +63,12 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
     }
     ui_set_hall_mode(target_mode);
     ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
+}
+
+static void ui_hall_mode_flow_open_midi_fx(void)
+{
+    ui_hall_mode_flow_leave_lowcost_special_page();
+    ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
 }
 
 static void ui_hall_mode_flow_close_lowcost_rec(void)
@@ -201,9 +209,8 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             break;
 
         case 6U:
-            target_mode = UI_HALL_MODE_ARP;
-            target_page = UI_PAGE_TEMPLATE_ARP;
-            break;
+            ui_hall_mode_flow_open_midi_fx();
+            return 1U;
 
         case 7U:
             target_mode = UI_HALL_MODE_MACRO;
@@ -351,6 +358,13 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
     g_patch_pending.active = 0U;
     g_kit_pending.active = 0U;
+
+    if (hall == 9U)
+    {
+        hall_note_suppressed[hall] = 1U;
+        ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
+        return;
+    }
 
     ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
     uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;

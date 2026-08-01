@@ -10,6 +10,7 @@
 #include "ui_core_pattern.h"
 #include "ui_core_runtime_bridge.h"
 #include "ui_hall_mode_contract.h"
+#include "ui_page_manager.h"
 
 #define UI_HALL_PATCH_FEEDBACK_MS 1000U
 
@@ -48,7 +49,8 @@ void ui_hall_kit_feedback_end(uint32_t now_ms)
 
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)
 {
-    if ((track >= UI_TRACK_COUNT) || (raw_mode != UI_HALL_MODE_ARP))
+    (void)raw_mode;
+    if (track >= UI_TRACK_COUNT)
     {
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
@@ -81,15 +83,6 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
                     ? UI_HALL_MODE_VIEW_KEYBOARD
                     : UI_HALL_MODE_VIEW_SEQ;
 
-        case UI_HALL_MODE_ARP:
-            if (ui_hall_mode_resolve_rout_context(track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
-            {
-                return UI_HALL_MODE_VIEW_ROUT;
-            }
-            return (track_topology_has_capability(track, TRACK_CAPABILITY_ARPEGGIATOR) != 0U)
-                    ? UI_HALL_MODE_VIEW_ARP
-                    : UI_HALL_MODE_VIEW_SEQ;
-
         case UI_HALL_MODE_MACRO:
             return UI_HALL_MODE_VIEW_MACRO;
 
@@ -117,13 +110,7 @@ uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
         return 0U;
     }
     const ui_hall_mode_effective_view_t view = ui_hall_mode_resolve_effective_view(track, raw_mode);
-    return (uint8_t)((view == UI_HALL_MODE_VIEW_KEYBOARD) || (view == UI_HALL_MODE_VIEW_ARP));
-}
-
-uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode)
-{
-    return (uint8_t)((track_topology_has_capability(track, TRACK_CAPABILITY_ARPEGGIATOR) != 0U)
-            && (ui_hall_mode_resolve_effective_view(track, raw_mode) == UI_HALL_MODE_VIEW_ARP));
+    return (uint8_t)(view == UI_HALL_MODE_VIEW_KEYBOARD);
 }
 
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
@@ -141,7 +128,7 @@ uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
         return 0U;
     }
 
-    return (uint8_t)((raw_mode == UI_HALL_MODE_KEYBOARD) || (raw_mode == UI_HALL_MODE_ARP));
+    return (uint8_t)(raw_mode == UI_HALL_MODE_KEYBOARD);
 }
 
 const char *ui_get_hall_mode_short_label(void)
@@ -170,6 +157,13 @@ const char *ui_get_hall_mode_short_label(void)
             || (ui_hall_kit_feedback_active(HAL_GetTick()) != 0U))
     {
         return "KIT";
+    }
+
+    if (ui_page_get_id() == UI_PAGE_MIDI_FX)
+    {
+        return (ui_hall_mode_resolve_rout_context(active_track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
+            ? "ROUT"
+            : "MIDI FX";
     }
 
     const ui_hall_mode_effective_view_t view =

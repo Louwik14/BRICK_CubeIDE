@@ -620,7 +620,6 @@ static void neutralize_track(uint8_t track)
     set_track_param(track, PARAM_FILTER_EQ_LOW, 64.0f);
     set_track_param(track, PARAM_FILTER_EQ_MID, 64.0f);
     set_track_param(track, PARAM_FILTER_EQ_HIGH, 64.0f);
-    set_track_param(track, PARAM_ARP_HOLD, 0.0f);
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
     {
         (void)mod_matrix_set_slot_source(track, slot, 0.0f);

@@ -21,7 +21,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
-#include "Keyboard/keyboard_arp.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Mod/mod_lfo_v1.h"
 #include "param_registry.h"
 #include "midi.h"
@@ -31,10 +31,10 @@
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_runtime_exec.h"
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 512U
-#define SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP 64U
 
 
 
@@ -68,17 +68,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t active;
-    uint8_t count;
-    uint8_t revision;
-    uint8_t notes[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
-    uint8_t velocities[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
-    uint64_t end_sample_time;
-    uint64_t next_due_sample_q16;
-} seq_play_scheduler_arp_window_t;
-
-typedef struct
-{
     seq_track_id_t target_track;
     seq_track_id_t source_track;
     seq_step_id_t source_step;
@@ -99,7 +88,6 @@ typedef struct
 } seq_play_scheduler_play_context_t;
 
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
-static seq_play_scheduler_arp_window_t g_seq_play_arp_windows[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static uint16_t g_seq_play_event_count;
 static uint8_t g_seq_play_generation;
 static uint8_t g_seq_play_midi_program_valid[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
@@ -643,6 +631,32 @@ static void seq_play_scheduler_emit_midi_note_raw(const seq_play_scheduler_audio
     seq_output_guard_note_off_seen(event->track, event->note);
 }
 
+void seq_play_scheduler_dispatch_terminal_note(seq_track_id_t track, uint8_t note,
+                                               uint8_t velocity, uint8_t is_note_on)
+{
+    seq_play_scheduler_dispatch_terminal_note_to_channel(
+        track, track_runtime_get_midi_channel_zero_based(track), note, velocity, is_note_on);
+}
+
+void seq_play_scheduler_dispatch_terminal_note_to_channel(seq_track_id_t track,
+                                                          uint8_t channel,
+                                                          uint8_t note,
+                                                          uint8_t velocity,
+                                                          uint8_t is_note_on)
+{
+    if (is_note_on != 0U)
+    {
+        midi_note_on(MIDI_DEST_BOTH, channel, note, velocity);
+        seq_output_guard_note_on_seen(track, note);
+    }
+    else
+    {
+        midi_note_off(MIDI_DEST_BOTH, channel, note, 0U);
+        seq_output_guard_note_off_seen(track, note);
+    }
+    seq_play_scheduler_emit_engine_note(track, note, velocity, is_note_on);
+}
+
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
                                                               seq_step_id_t step,
                                                               param_id_t param_id)
@@ -738,7 +752,6 @@ void seq_play_scheduler_init(void)
     g_seq_play_generation = 1U;
     g_seq_play_next_event_token = 0U;
     g_seq_play_diag = (seq_play_scheduler_diag_t){0};
-    memset(g_seq_play_arp_windows, 0, sizeof(g_seq_play_arp_windows));
     for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
     {
         g_seq_play_midi_program_valid[track] = 0U;
@@ -754,9 +767,9 @@ void seq_play_scheduler_init(void)
 
 void seq_play_scheduler_clear(void)
 {
+    note_fx_pipeline_cleanup_all();
     const uint32_t primask = seq_play_scheduler_enter_critical();
     g_seq_play_event_count = 0U;
-    memset(g_seq_play_arp_windows, 0, sizeof(g_seq_play_arp_windows));
     memset(g_seq_play_active_event_token, 0, sizeof(g_seq_play_active_event_token));
     memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
     for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
@@ -780,6 +793,7 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
     {
         if (tracks[i] < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
         {
+            note_fx_pipeline_cleanup_track(tracks[i]);
             clear_track[tracks[i]] = 1U;
         }
     }
@@ -853,7 +867,6 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         {
             continue;
         }
-        memset(&g_seq_play_arp_windows[track], 0, sizeof(g_seq_play_arp_windows[track]));
     }
     seq_play_scheduler_exit_critical(primask);
 }
@@ -871,6 +884,7 @@ void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t tra
         const seq_track_id_t track = tracks[i];
         if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
         {
+            note_fx_pipeline_suspend_track(track, 1U);
             g_seq_play_track_suspended[track] = 1U;
             seq_play_scheduler_next_track_generation(track);
         }
@@ -893,6 +907,7 @@ void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t trac
         const seq_track_id_t track = tracks[i];
         if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
         {
+            note_fx_pipeline_suspend_track(track, 0U);
             seq_play_scheduler_next_track_generation(track);
             g_seq_play_track_suspended[track] = 0U;
         }
@@ -912,161 +927,6 @@ static uint64_t seq_play_scheduler_track_step_span_samples_q16(seq_track_id_t tr
 
     const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
     return (uint64_t)sps_q16 * (uint64_t)div;
-}
-
-static uint32_t seq_play_scheduler_samples_ceil_from_q16(uint64_t value_q16)
-{
-    return (uint32_t)((value_q16 + 0xFFFFULL) >> 16);
-}
-
-static uint64_t seq_play_scheduler_slice_end_sample(seq_track_id_t track,
-                                                    uint64_t step_sample_time,
-                                                    uint32_t samples_per_step_q16)
-{
-    const uint32_t span_samples =
-        seq_play_scheduler_samples_ceil_from_q16(seq_play_scheduler_track_step_span_samples_q16(track,
-                                                                                                samples_per_step_q16));
-    return step_sample_time + (uint64_t)((span_samples == 0U) ? 1U : span_samples);
-}
-
-static void seq_play_scheduler_push_arp_note(seq_track_id_t track,
-                                             uint64_t base_sample_time,
-                                             const keyboard_arp_scheduled_note_t *arp_note)
-{
-    if (arp_note == NULL)
-    {
-        return;
-    }
-
-    const seq_track_id_t target_track = track;
-    const uint32_t event_token = seq_play_scheduler_alloc_event_token();
-    const uint64_t note_on_sample_time = base_sample_time + (uint64_t)arp_note->on_offset_samples;
-    uint64_t note_off_sample_time = base_sample_time + (uint64_t)arp_note->off_offset_samples;
-    if (note_off_sample_time <= note_on_sample_time)
-    {
-        note_off_sample_time = note_on_sample_time + 1ULL;
-    }
-
-    seq_play_scheduler_push(note_on_sample_time,
-                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
-                            target_track,
-                            arp_note->note,
-                            arp_note->velocity,
-                            event_token);
-    seq_play_scheduler_push(note_off_sample_time,
-                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                            target_track,
-                            arp_note->note,
-                            0U,
-                            event_token);
-}
-
-static void seq_play_scheduler_schedule_arp_window_slice(seq_track_id_t track,
-                                                         uint64_t slice_start_sample,
-                                                         uint64_t slice_end_sample,
-                                                         uint32_t samples_per_step_q16)
-{
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (slice_end_sample <= slice_start_sample))
-    {
-        return;
-    }
-
-    seq_play_scheduler_arp_window_t *const window = &g_seq_play_arp_windows[track];
-    if (window->active == 0U)
-    {
-        return;
-    }
-
-    if ((keyboard_arp_get_hold_for_track(track) == false)
-            || (window->count == 0U)
-            || (window->end_sample_time <= slice_start_sample))
-    {
-        window->active = 0U;
-        return;
-    }
-
-    const uint8_t revision = keyboard_arp_get_revision_for_track(track);
-    const uint64_t slice_start_q16 = slice_start_sample << 16;
-    if (window->revision != revision)
-    {
-        window->revision = revision;
-        window->next_due_sample_q16 = slice_start_q16;
-    }
-    else if (window->next_due_sample_q16 < slice_start_q16)
-    {
-        window->next_due_sample_q16 = slice_start_q16;
-    }
-
-    const uint64_t due_sample_time = window->next_due_sample_q16 >> 16;
-    const uint64_t limit_sample_time =
-        (window->end_sample_time < slice_end_sample) ? window->end_sample_time : slice_end_sample;
-    if (due_sample_time >= limit_sample_time)
-    {
-        return;
-    }
-
-    uint64_t duration = limit_sample_time - due_sample_time;
-    if (duration > 0xFFFFFFFFULL)
-    {
-        duration = 0xFFFFFFFFULL;
-    }
-
-    keyboard_arp_scheduled_note_t arp_notes[SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP];
-    uint64_t next_offset_q16 = 0ULL;
-    const uint8_t arp_note_count =
-        keyboard_arp_seq_step_render_for_track(track,
-                                               window->notes,
-                                               window->velocities,
-                                               window->count,
-                                               samples_per_step_q16,
-                                               (uint32_t)duration,
-                                               arp_notes,
-                                               SEQ_PLAY_SCHEDULER_ARP_NOTE_CAP,
-                                               &next_offset_q16);
-    for (uint8_t i = 0U; i < arp_note_count; ++i)
-    {
-        seq_play_scheduler_push_arp_note(track, due_sample_time, &arp_notes[i]);
-    }
-
-    if (next_offset_q16 == 0ULL)
-    {
-        window->next_due_sample_q16 = limit_sample_time << 16;
-    }
-    else
-    {
-        window->next_due_sample_q16 += next_offset_q16;
-    }
-
-    if ((window->next_due_sample_q16 >> 16) >= window->end_sample_time)
-    {
-        window->active = 0U;
-    }
-}
-
-static void seq_play_scheduler_begin_arp_window(seq_track_id_t track,
-                                                const uint8_t *notes,
-                                                const uint8_t *velocities,
-                                                uint8_t count,
-                                                uint64_t start_sample_time,
-                                                uint64_t end_sample_time)
-{
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (notes == NULL) || (velocities == NULL) || (count == 0U)
-            || (end_sample_time <= start_sample_time))
-    {
-        return;
-    }
-
-    seq_play_scheduler_arp_window_t *const window = &g_seq_play_arp_windows[track];
-    window->active = 1U;
-    window->count = (count > SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? SEQ_PLAY_SCHEDULER_VOICE_COUNT : count;
-    window->revision = keyboard_arp_get_revision_for_track(track);
-    window->end_sample_time = end_sample_time;
-    window->next_due_sample_q16 = start_sample_time << 16;
-    for (uint8_t i = 0U; i < window->count; ++i)
-    {
-        window->notes[i] = notes[i];
-        window->velocities[i] = velocities[i];
-    }
 }
 
 static void seq_play_scheduler_context_add_item(seq_play_scheduler_play_context_t *context,
@@ -1148,15 +1008,11 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      uint8_t negative_lookahead)
 {
     seq_play_scheduler_refresh_track(track);
-    const uint64_t arp_slice_end_sample =
-        seq_play_scheduler_slice_end_sample(track, step_sample_time, samples_per_step_q16);
-    uint8_t schedule_existing_arp_slice = (negative_lookahead == 0U) ? 1U : 0U;
 
     if (track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U)
     {
         if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
         {
-            memset(&g_seq_play_arp_windows[track], 0, sizeof(g_seq_play_arp_windows[track]));
         }
         return;
     }
@@ -1205,14 +1061,6 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
 
     uint8_t has_first_note = 0U;
     uint64_t first_note_sample_time = 0U;
-    const uint8_t arp_hold_step =
-        ((negative_lookahead == 0U) && keyboard_arp_get_hold_for_track(track)) ? 1U : 0U;
-    uint8_t arp_step_notes[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
-    uint8_t arp_step_vel[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
-    uint8_t arp_step_count = 0U;
-    uint8_t arp_window_valid = 0U;
-    uint64_t arp_window_start_sample_time = 0U;
-    uint64_t arp_window_end_sample_time = 0U;
 
     for (uint8_t voice = 0U; voice < play_context.item_count; ++voice)
     {
@@ -1301,26 +1149,6 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
             note_off_sample_time = note_on_sample_time + 1ULL;
         }
 
-        if (arp_hold_step != 0U)
-        {
-            if (arp_step_count < SEQ_PLAY_SCHEDULER_VOICE_COUNT)
-            {
-                arp_step_notes[arp_step_count] = note;
-                arp_step_vel[arp_step_count] = vel;
-                arp_step_count++;
-            }
-            if ((arp_window_valid == 0U) || (note_on_sample_time < arp_window_start_sample_time))
-            {
-                arp_window_start_sample_time = note_on_sample_time;
-            }
-            if ((arp_window_valid == 0U) || (note_off_sample_time > arp_window_end_sample_time))
-            {
-                arp_window_end_sample_time = note_off_sample_time;
-            }
-            arp_window_valid = 1U;
-            continue;
-        }
-
         seq_play_scheduler_push_note_retrigs(note_on_sample_time,
                                              len_samples,
                                              track_step_span_q16,
@@ -1348,29 +1176,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         }
     }
 
-    if ((arp_step_count > 0U) && (arp_window_valid != 0U) && (arp_window_end_sample_time > arp_window_start_sample_time))
-    {
-        seq_play_scheduler_begin_arp_window(track,
-                                            arp_step_notes,
-                                            arp_step_vel,
-                                            arp_step_count,
-                                            arp_window_start_sample_time,
-                                            arp_window_end_sample_time);
-        seq_play_scheduler_schedule_arp_window_slice(track,
-                                                     arp_window_start_sample_time,
-                                                     arp_slice_end_sample,
-                                                     samples_per_step_q16);
-        schedule_existing_arp_slice = 0U;
-    }
-
 finish:
-    if (schedule_existing_arp_slice != 0U)
-    {
-        seq_play_scheduler_schedule_arp_window_slice(track,
-                                                     step_sample_time,
-                                                     arp_slice_end_sample,
-                                                     samples_per_step_q16);
-    }
 }
 
 void seq_play_scheduler_schedule_step(seq_track_id_t track,
@@ -1589,25 +1395,12 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     }
     else if (valid_note_key != 0U)
     {
-        if (g_seq_play_active_event_token[event->track][event->note] != 0U)
-        {
-            seq_play_scheduler_audio_event_t forced_off = *event;
-            forced_off.type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF;
-            forced_off.velocity = 0U;
-            seq_play_scheduler_emit_midi_note_raw(&forced_off);
-            seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
-                                                event->note,
-                                                0U,
-                                                0U);
-        }
         g_seq_play_active_event_token[event->track][event->note] = event->event_token;
     }
 
-    seq_play_scheduler_emit_midi_note_raw(event);
-    seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
-                                        event->note,
-                                        event->velocity,
-                                        is_note_on);
+    const uint64_t sample_time = seq_runtime_exec_get_audio_timeline_sample();
+    (void)note_fx_pipeline_submit(event->track, event->note, event->velocity,
+                                  is_note_on, sample_time);
 }
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)

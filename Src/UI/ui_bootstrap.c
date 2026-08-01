@@ -8,7 +8,7 @@
 #include "pages/ui_page_template_mod.h"
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
-#include "pages/ui_page_template_arp.h"
+#include "pages/ui_page_midi_fx.h"
 #include "pages/ui_page_template_seq.h"
 #include "pages/ui_page_template_macro.h"
 #include "pages/ui_page_template_mix.h"
@@ -31,7 +31,7 @@ void ui_bootstrap_init(void)
     ui_page_template_tone_register_families();
     ui_page_template_mod_register_families();
     ui_page_template_keyboard_register_families();
-    ui_page_template_arp_register_families();
+    ui_page_template_midi_fx_register_families();
     ui_page_template_seq_register_families();
     ui_page_template_mix_register_families();
     ui_page_template_play_register_families();
@@ -53,7 +53,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_template_tone);
     ui_page_manager_register(&g_ui_page_template_mod);
     ui_page_manager_register(&g_ui_page_template_keyboard);
-    ui_page_manager_register(&g_ui_page_template_arp);
+    ui_page_manager_register(&g_ui_page_midi_fx);
     ui_page_manager_register(&g_ui_page_template_seq);
     ui_page_manager_register(&g_ui_page_template_macro);
     ui_page_manager_register(&g_ui_page_template_mix);

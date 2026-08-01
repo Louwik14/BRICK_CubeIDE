@@ -459,3 +459,14 @@ La liberation et la reutilisation passent par la meme autorite: note-off, reset 
 
 - Les projections runtime traitent chaque track comme `SOLO`: le role projete est `SOLO`, la master effective est la track demandee et la collecte contient uniquement cette track.
 - Cette neutralisation ne modifie ni la topologie des huit Play Tracks, ni les Special Tracks, ni la polyphonie interne des moteurs.
+# Addendum 2026-07-31 - capacite runtime MIDI FX
+
+- `TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX` et le domaine/ressource `MIDI_FX` sont explicites dans Z2.
+- La capacite est reservee aux huit Play Tracks note-capable effectivement liees; `Off`, `Sampler/Looper` et toutes les Special sont bloques.
+- L'ancien bit topologique ARP reste un alias temporaire du bit `MIDI_FX` tant que le moteur historique Z4 n'est pas retire.
+# Addendum 2026-08-01 - dispatcher terminal de notes commun
+
+Les sources clavier interne, MIDI entrant et sequenceur soumettent des evenements horodates au pipeline MIDI FX par identite de Play Track. Apres le slot 4, l'unique dispatcher terminal existant du scheduler conserve le routage moteur, polyphonie, MIDI et External; aucune seconde autorite de notes n'est creee.
+# Addendum 2026-08-01 - cycle de vie MIDI FX
+
+Les transitions family/type/OFF et les restaurations de Track nettoient MIDI FX avant mutation. La destination MIDI de chaque sortie possedee est memorisee a son Note On et reutilisee pour le Note Off, independamment d'un changement de canal ulterieur.

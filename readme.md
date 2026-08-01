@@ -1,5 +1,9 @@
 # Embedded Audio Engine - Product Overview
 
+Le raccourci ARP ouvre directement la surface `MIDI FX`, composee de quatre slots. Cette entree ne change pas le mode musical SEQ/KEYBOARD et n'active aucun effet a l'ouverture.
+
+Chaque Play Track note-capable possede quatre slots MIDI FX independants. La surface propose `OFF/ARP`, avec `RATE`, `STYLE` et `RANGE`; un seul slot ARP peut etre selectionne par piste.
+
 Les tracks synth Prism, Stack, Wave et DELUGE proposent 1 à 8 voix internes avec
 moteur, filtre/keytrack, enveloppes VCA/filtre et pan indépendants par voix.
 
@@ -91,7 +95,7 @@ Current logical layout:
 - fixed Special Tracks: Master, Looper, physical Inputs and FX
 - Low-Cost: `8 Play + Master + Looper + Input1 + FX`
 - Premium: `8 Play + Master + Looper + Input1 + Input2 + Input3 + FX`
-- only Play Tracks can change family/type, open instrument browsers, play notes, or use Keyboard/ARP; Special Tracks expose a fixed identity
+- only Play Tracks can change family/type, open instrument browsers, play notes, or use Keyboard/MIDI FX; Special Tracks expose a fixed identity
 
 ### Families
 Current families:
@@ -218,7 +222,7 @@ Le moteur WAVE natif float utilise des mipmaps band-limited préparées à l'imp
 - contextual UI based on active track family/type/runtime
 - track-aware page exposure
 - hall-based interaction model
-- keyboard / arp / pattern / mute workflows; in QUICK MUTE, track keys mute/unmute directly even while SHIFT remains held
+- keyboard / MIDI FX / pattern / mute workflows; in QUICK MUTE, track keys mute/unmute directly even while SHIFT remains held
 - Omnichord chord buttons follow the Orchid order `Dim`, `Min`, `Maj`, `Sus`, `6`, `m7`, `M7`, `9`, with Orchid-style secret chord combinations and a live chord label in `KEYBOARD`
 - OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - `COLORS/ENV` exposes `ENV 1/2` for filter/VCA/ENV3 shaping and `ENV 2/2 > RETRIG` for `ENV FLT`, `ENV VCA`, `ENV MOD` hard/soft retrigger switches plus filter `KeyTrk`; retrigger defaults to `ON`/hard.
@@ -337,9 +341,6 @@ Master and FX are fixed Special tracks. Master exposes the global reverb, delay 
 
 Track `LP`, `HP` and `BP` modes use one stereo/mono float TPT state-variable filter over `20 Hz..16 kHz`. Resonance progresses from clean to a softly saturated, bounded loop with a maximum Q of 6.5; LP, HP and BP have calibrated output levels. Cutoff keeps `0.01` control and p-lock resolution, while base cutoff is smoothed in octaves and Matrix/LFO, filter envelope and keytrack retain their musical depth. `OFF` uses a 256-sample constant-sum transition and clears stale states; LP/HP/BP changes use 64-sample transitions. The track order is identical for mono and stereo: filter, VCA/volume, track inserts, then sends/bus. Delay feedback, volume and stereo width use 10 ms change-triggered ramps.
 
-## Multi-track arpeggiator
-
-Each track keeps its held notes, HOLD state, phase, direction, rate, and note-on/off events. Selecting another track or switching that track between ARP and KBD does not stop or alter an already running HOLD arpeggio.
 # AUDIO TEST - calibration de volume
 
 Le banc automatique du firmware de test mesure chaque modele sur C2/C4/C6 et
@@ -385,13 +386,18 @@ Le mute coupe progressivement la sortie audio sans clic. Il stoppe les notes int
 
 # Sequences Play et Special
 
-Les huit Play Tracks conservent 64 steps, jusqu'a 32 p-locks par step et 1024 p-locks par piste avec notes, velocite, duree et microtiming. Les Special Tracks utilisent 64 steps d'automatisation, 16 p-locks par step et un pool de 256, sans notes ni ARP; leur champ d'action leger est reserve aux commandes propres a leur role.
+Les huit Play Tracks conservent 64 steps, jusqu'a 32 p-locks par step et 1024 p-locks par piste avec notes, velocite, duree et microtiming. Les Special Tracks utilisent 64 steps d'automatisation, 16 p-locks par step et un pool de 256, sans notes ni MIDI FX; leur champ d'action leger est reserve aux commandes propres a leur role.
 
 Pattern, Project, Undo/Redo et Clipboard conservent ces deux modeles sans convertir une Special en Play. Un collage entre roles incompatibles est refuse; clear efface aussi l'action Special.
 
 # Play Tracks independantes
 
-Clavier, MIDI, arp, sequenceur et mute agissent directement sur chaque Play Track. Chaque piste conserve ses quatre voix PLAY et la polyphonie reste celle de son moteur; Stop/Panic ferme toujours toutes les notes actives.
+Clavier, MIDI, MIDI FX, sequenceur et mute agissent directement sur chaque Play Track. Chaque piste conserve ses quatre voix PLAY et la polyphonie reste celle de son moteur; Stop/Panic ferme toujours toutes les notes actives.
 
 
 Les p-locks, l'edition LENGTH et le copier/coller de steps agissent uniquement sur la track editee. Le clipboard conserve trig, roll et p-locks vers une track compatible, sans copie implicite d'autres pistes.
+# MIDI FX
+
+Les huit Play Tracks note-capable disposent de quatre slots MIDI FX ordonnes. Le modele ARP neuf transforme maintenant de facon identique les notes du clavier, du MIDI entrant et du sequenceur sur l'horloge audio sample-domain; `OFF` conserve le chemin direct et le live record capture uniquement la source.
+Les quatre controles de chacun des quatre slots MIDI FX sont p-lockables. Un lock MODEL coupe proprement l'ancienne generation avant de changer de modele; la fin du lock restaure la base sans ressusciter de note.
+Les reglages MIDI FX suivent la piste dans les Patterns, Projects, copies de Track et Undo/Redo. Ils ne font pas partie des Patchs ni des Kits.

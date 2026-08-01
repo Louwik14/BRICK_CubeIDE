@@ -1,4 +1,5 @@
 #include "ui_core_runtime_bridge.h"
+#include "ui_page_manager.h"
 
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
@@ -1270,7 +1271,6 @@ bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
                                                      track,
                                                      post_sync);
     transition_ctx.family = family;
-    keyboard_runtime_clear_arp_track(track);
 
     const uint8_t ok = (changes_external_ownership != 0U)
         ? param_registry_run_track_transition_pipeline(&(param_registry_track_transition_pipeline_cmd_t){
@@ -1324,7 +1324,6 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
                                                      track,
                                                      post_sync);
     transition_ctx.type = type;
-    keyboard_runtime_clear_arp_track(track);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_type_change_mutate,
                                                              (void *)&transition_ctx,
@@ -1380,7 +1379,7 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
 
     if ((ev == 0)
             || ((is_master_fx == 0U) && (is_sampler_looper == 0U))
-            || (hall_mode != UI_HALL_MODE_ARP)
+            || (ui_page_get_id() != UI_PAGE_MIDI_FX)
             || (track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
             || (ev->id >= UI_TRACK_COUNT))

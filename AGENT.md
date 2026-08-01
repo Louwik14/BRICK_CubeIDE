@@ -246,7 +246,7 @@ Cas transverses fréquents :
 - paramètres filtre / couleur audio : `COLORS`
 - paramètres moteur sonore / oscillateurs : `TONE`
 - jeu clavier : `KEYBOARD`
-- arpégiateur : `ARP`
+- MIDI FX : raccourci physique `ARP`, page `MIDI FX`
 - routage Looper et routage UI-only MacroFX : contexte `ROUT` via réemploi de `ARP`
 
 Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
@@ -254,6 +254,11 @@ Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point
 ---
 
 ## 9. UI : règles à ne pas casser
+
+### MIDI FX p-lock
+- Le set `SEQ_PLOCK_SET_MIDI_FX` utilise le mapping fixe 0..15 des seize IDs generiques.
+- Son overlay runtime ne modifie jamais les bases `note_fx_state`; MODEL nettoie avant changement et la restauration ne rejoue aucun evenement source.
+- Les bases MIDI FX appartiennent au Pattern/Project et au snapshot Track, jamais aux Patchs/Kits; aucun etat runtime MIDI FX n'est persiste.
 
 ### Résolution
 L’UI se résout par contexte, pas page par page isolée.
@@ -273,15 +278,13 @@ Toujours penser :
 - `MIX`
 - `VCA`
 - `KEYBOARD`
-- `ARP`
 
 ### Hall modes
 - `TRACK` maintenu puis `HALL 0..7` = sélection track
 - `SHIFT + HALL 9` = `KEYBOARD`
-- `SHIFT + HALL 10` = `ARP`
+- `SHIFT + HALL 10` = ouverture de `MIDI FX`
 - `SHIFT` doit être pressé avant le hall
-- `ARP` est un sous-mode du `KEYBOARD`
-- `ARP` ne doit jamais casser l’activation explicite de `KEYBOARD`
+- `MIDI FX` n'est pas un hall mode et ne doit jamais modifier le mode musical `KEYBOARD`/`SEQ`
 
 ### MUTE / PATTERN
 - `SHIFT + -` => `PATTERN RECALL`
@@ -376,7 +379,7 @@ Quand tu modifies le projet :
 7. garde les remaps explicites
 8. respecte la logique track-aware
 9. ne casse pas `SHIFT before HALL`
-10. ne casse pas `KEYBOARD` / `ARP`
+10. ne casse pas `KEYBOARD` / `MIDI FX`
 11. ne fais pas de redesign gratuit
 12. ne suppose pas qu’un bug est dans la UI si l’état runtime n’est pas tracé
 13. ne déclare pas un bug résolu sans preuve code réelle
@@ -433,6 +436,14 @@ Principe directeur :
 
 - Ne pas recreer de backend buffer master dedie.
 - `audio_xfade` appartient au flux `Sampler/Looper` courant via `PARAM_LOOPER_XFADE`.
+
+## Entree MIDI FX
+
+- Le raccourci physique historique ARP ouvre directement `MIDI FX` sans hall mode ARP, sans double-tap et sans modifier le mode musical `SEQ/KEYBOARD` sous-jacent.
+- Les Special qui reutilisent ce bouton conservent leur acces `ROUT`.
+- L'ouverture ou la fermeture de MIDI FX ne doit jamais produire de transition sonore.
+- `note_fx_state` est l'autorite canonique des bases MIDI FX: huit Play Tracks, quatre slots, quatre valeurs generiques; aucune Special n'alloue cet etat.
+- Le domaine runtime `MIDI_FX` reste distinct de PLAY et aucun moteur sonore ne doit dependre de la page affichee.
 
 ## Autorite mute
 

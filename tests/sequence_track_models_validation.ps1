@@ -5,19 +5,15 @@ $compiler = (Get-Command arm-none-eabi-gcc -ErrorAction Stop).Source
 $include = Join-Path $repo 'Inc'
 $stubs = Join-Path $repo 'tests\stubs'
 $model = Join-Path $repo 'Src\Seq\seq_model.c'
-$arp = Join-Path $repo 'Src\Keyboard\keyboard_arp.c'
 
 foreach ($variant in @('BRICK6_VARIANT_LOWCOST', 'BRICK6_VARIANT_PREMIUM')) {
     & $compiler '-std=gnu11' '-Wall' '-Werror' '-fsyntax-only' "-D$variant" "-I$stubs" "-I$include" $model
     if ($LASTEXITCODE -ne 0) { throw "seq_model compile failed for $variant" }
-    & $compiler '-std=gnu11' '-Wall' '-Werror' '-fsyntax-only' "-D$variant" "-I$stubs" "-I$include" $arp
-    if ($LASTEXITCODE -ne 0) { throw "keyboard_arp compile failed for $variant" }
 }
 
 $types = Get-Content -Raw (Join-Path $include 'Seq\seq_types.h')
 $header = Get-Content -Raw (Join-Path $include 'Seq\seq_model.h')
 $implementation = Get-Content -Raw $model
-$arpImplementation = Get-Content -Raw $arp
 $keyboardEngine = Get-Content -Raw (Join-Path $repo 'Src\Keyboard\keyboard_engine.c')
 $scheduler = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_play_scheduler.c')
 $outputGuard = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_output_guard.c')
@@ -56,13 +52,6 @@ if (-not $implementation.Contains('seq_model_toggle_special_action')) {
 if (-not $edit.Contains('seq_model_toggle_special_action(track, step)')) {
     throw 'Special step gesture is not routed to the action field.'
 }
-if ($arpImplementation.Contains('g_keyboard_arp_state[SEQ_TRACK_COUNT]') -or
-    $arpImplementation.Contains('g_keyboard_arp_config[SEQ_TRACK_COUNT]')) {
-    throw 'ARP state is still allocated for Special tracks.'
-}
-if (-not $arpImplementation.Contains('g_keyboard_arp_state[TRACK_TOPOLOGY_PLAY_TRACK_COUNT]')) {
-    throw 'ARP state is not bounded to the eight Play tracks.'
-}
 if (-not $keyboardEngine.Contains('g_kbd_rec_track_note_count[TRACK_TOPOLOGY_PLAY_TRACK_COUNT]')) {
     throw 'Keyboard note ownership is still allocated for Special tracks.'
 }
@@ -86,4 +75,4 @@ if (-not $pattern.Contains('seq_model_get_track_plock_capacity(track)')) {
     throw 'Legacy Pattern adapter does not validate heterogeneous capacities.'
 }
 
-'sequence_track_models_validation=PASS play=64x32/1024 special=64x16/512 notes=play_only arp=play_only action=extensible'
+'sequence_track_models_validation=PASS play=64x32/1024 special=64x16/512 notes=play_only action=extensible'

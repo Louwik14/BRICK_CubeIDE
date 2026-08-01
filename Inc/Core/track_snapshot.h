@@ -8,6 +8,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Seq/seq_model.h"
 #include "UI/ui_core.h"
+#include "NoteFx/note_fx_state.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +54,7 @@ typedef struct
     uint8_t synth_voice_count;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
+    note_fx_track_state_t note_fx;
     union
     {
         track_snapshot_play_sequence_t play_sequence;

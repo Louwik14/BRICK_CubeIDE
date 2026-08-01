@@ -1,4 +1,6 @@
 #include "ui_core_clipboard.h"
+#include "App/Hall/hall_surface.h"
+#include "Board/board_product.h"
 
 #include <string.h>
 
@@ -237,6 +239,17 @@ static uint8_t ui_core_clipboard_get_held_param_button(button_id_t *out_button)
     }
 
     return 0U;
+}
+
+static uint8_t ui_core_clipboard_midi_fx_shortcut_is_held(void)
+{
+    if (ui_page_get_id() != UI_PAGE_MIDI_FX)
+    {
+        return 0U;
+    }
+    const board_product_capabilities_t *const caps = board_product_capabilities();
+    const uint8_t hall = ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 6U : 9U;
+    return hall_surface_is_pressed(hall);
 }
 
 static uint8_t ui_core_clipboard_resolve_template_family_from_button(button_id_t button,
@@ -758,14 +771,14 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
         return 0U;
     }
 
-    button_id_t held_button = BTN_COUNT;
-    if (ui_core_clipboard_get_held_param_button(&held_button) == 0U)
-    {
-        return 0U;
-    }
-
     ui_template_family_id_t family_id = UI_TEMPLATE_FAMILY_COUNT;
-    if (ui_core_clipboard_resolve_template_family_from_button(held_button, &family_id) == 0U)
+    button_id_t held_button = BTN_COUNT;
+    if (ui_core_clipboard_midi_fx_shortcut_is_held() != 0U)
+    {
+        family_id = UI_TEMPLATE_FAMILY_MIDI_FX;
+    }
+    else if ((ui_core_clipboard_get_held_param_button(&held_button) == 0U)
+            || (ui_core_clipboard_resolve_template_family_from_button(held_button, &family_id) == 0U))
     {
         return 0U;
     }
@@ -843,7 +856,8 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if (ui_core_clipboard_is_active_page_button_held() == 0U)
+    if ((ui_page_get_id() != UI_PAGE_MIDI_FX)
+            && (ui_core_clipboard_is_active_page_button_held() == 0U))
     {
         return 0U;
     }

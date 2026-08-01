@@ -5,6 +5,7 @@
 
 #include "Seq/seq_model.h"
 #include "Param/param_store.h"
+#include "NoteFx/note_fx_state.h"
 
 typedef struct __attribute__((packed))
 {
@@ -67,14 +68,14 @@ typedef struct
 
 typedef struct
 {
-    float track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
-    uint8_t track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+    float track_values[SEQ_TRACK_COUNT][PARAM_PERSIST_COUNT];
+    uint8_t track_valid[SEQ_TRACK_COUNT][PARAM_PERSIST_COUNT];
 } pattern_v1_track_param_block_t;
 
 typedef struct
 {
-    float global_values[PARAM_COUNT];
-    uint8_t global_valid[PARAM_COUNT];
+    float global_values[PARAM_PERSIST_COUNT];
+    uint8_t global_valid[PARAM_PERSIST_COUNT];
     uint32_t tempo_bpm_milli;
     uint8_t clock_src;
     uint8_t rec_start_mode;
@@ -94,6 +95,7 @@ typedef struct
     pattern_v1_track_param_block_t sound;
     pattern_v1_track_param_block_t mix;
     pattern_v1_globals_block_t globals;
+    note_fx_track_state_t note_fx[NOTE_FX_TRACK_COUNT];
 } PatternSaveV1;
 
 void pattern_live_init(void);

@@ -30,6 +30,8 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_runtime_exec.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include <string.h>
 
 static bool g_keyboard_engine_sounding_active = false;
@@ -210,7 +212,7 @@ static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
     keyboard_engine_all_notes_off_local_track(owner_track);
 }
 
-static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on)
+static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on)
 {
     if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
     {
@@ -377,7 +379,8 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
                                                       uint8_t velocity,
                                                       uint8_t is_note_on)
 {
-    keyboard_engine_emit_note_for_track(owner_track, note, velocity, is_note_on);
+    (void)note_fx_pipeline_submit(owner_track, note, velocity, is_note_on,
+                                  seq_runtime_exec_get_audio_timeline_sample());
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -541,14 +544,6 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
     keyboard_engine_live_rec_push_internal_channel(note, channel_zero_based);
     seq_runtime_live_rec_note_on(source, channel_zero_based, note, velocity);
 
-    if ((source == SEQ_LIVE_REC_SRC_INTERNAL) && keyboard_engine_active_track_has_midi_note_path())
-    {
-        midi_note_on(MIDI_DEST_USB,
-                     keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track()),
-                     note,
-                     velocity);
-    }
-
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
         if (!keyboard_engine_active_track_has_midi_note_path())
@@ -593,14 +588,6 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
 {
     const uint8_t note_on_channel = keyboard_engine_live_rec_pop_internal_channel(note, channel_zero_based);
     seq_runtime_live_rec_note_off(source, note_on_channel, note);
-
-    if ((source == SEQ_LIVE_REC_SRC_INTERNAL) && keyboard_engine_active_track_has_midi_note_path())
-    {
-        midi_note_off(MIDI_DEST_USB,
-                      keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track()),
-                      note,
-                      0U);
-    }
 
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
@@ -688,11 +675,6 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
     keyboard_engine_live_rec_push_track_channel(owner_track, note, channel);
     seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, channel, note, velocity);
 
-    if (keyboard_engine_track_has_midi_note_path(owner_track))
-    {
-        midi_note_on(MIDI_DEST_USB, channel, note, velocity);
-    }
-
     if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
             || (keyboard_engine_track_accepts_internal_source(owner_track) == false))
     {
@@ -715,11 +697,6 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
     const uint8_t note_on_channel =
         keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
     seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, note_on_channel, note);
-
-    if (keyboard_engine_track_has_midi_note_path(owner_track))
-    {
-        midi_note_off(MIDI_DEST_USB, channel, note, 0U);
-    }
 
     if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
             || (keyboard_engine_track_accepts_internal_source(owner_track) == false))

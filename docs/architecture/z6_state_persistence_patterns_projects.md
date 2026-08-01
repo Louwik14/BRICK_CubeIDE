@@ -1191,3 +1191,20 @@ Le payload Kit porte egalement la cardinalite synthetique par track et son forma
 
 - Pattern/Project, snapshots Track et Undo/Redo valident desormais jusqu'a 512 p-locks par Special Track via la capacite canonique du modele.
 - Les structures persistantes restent a 64 steps et 16 locks par step; les formats courants et le stockage separe des actions Special ne changent pas.
+# Addendum 2026-07-31 - Undo transitoire MIDI FX
+
+- Les transactions delta Undo/Redo appliquent les IDs MIDI FX par l'autorite `note_fx_state`, y compris le deplacement atomique de l'unique MODEL ARP.
+- Les snapshots Undo internes capturent les 128 octets de bases MIDI FX separement de `PatternSaveV1`, afin que clear/paste page ou ensemble soit reversible sans anticiper la persistence Pattern/Project de l'etape 7.
+- Aucun etat MIDI FX n'est encore ajoute aux formats SD, au track snapshot, Patch ou Kit.
+# Addendum 2026-08-01 - restore MIDI FX sur
+
+Pattern restore et Undo/Redo nettoient toutes les generations et sorties MIDI FX avant de restaurer l'etat. Aucun etat runtime (phase, sources, tokens, sorties) n'entre dans les snapshots.
+# Addendum 2026-08-01 - stockage des locks MIDI FX
+
+Les p-locks MIDI FX utilisent le pool de locks sequenceur existant avec un set dedie et un mapping fixe de seize slots. Aucun payload runtime MIDI FX supplementaire n'est sauvegarde.
+# Addendum 2026-08-01 - persistence des bases MIDI FX
+
+`PatternSaveV1` porte directement les seize valeurs de base de chacune des huit Play Tracks; Project les embarque via son snapshot Pattern courant. `track_snapshot_t` porte le meme bloc, donc Clipboard Track et clear/paste le copient ou le remettent aux defaults. Undo/Redo restaure les bases apres nettoyage des overlays. Patch et Kit restent exclus grace a la frontiere `PARAM_PERSIST_COUNT`, et aucun runtime MIDI FX n'est serialise.
+# Addendum 2026-08-01 - normalisation restore MIDI FX
+
+- Les restores de bases MIDI FX bornent les quatre valeurs de chaque slot et conservent au plus le premier MODEL ARP du payload; aucun etat de phase, sortie, token ou echeance n'est restaure.

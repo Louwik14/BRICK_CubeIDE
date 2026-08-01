@@ -9,6 +9,8 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "NoteFx/note_fx_state.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Storage/memory_layout.h"
 #include "main.h"
 
@@ -413,48 +415,6 @@ static uint8_t undo_v2_apply_param_value(const undo_v2_param_delta_t *delta, uin
             }
             seq_runtime_set_track_swing(delta->track, (uint8_t)(value + 0.5f));
             return 1U;
-        case PARAM_ARP_HOLD:
-            keyboard_runtime_set_arp_hold_for_track(delta->track, value >= 0.5f);
-            return 1U;
-        case PARAM_ARP_RATE:
-            keyboard_runtime_set_arp_rate_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_OCT:
-            keyboard_runtime_set_arp_oct_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_PATTERN:
-            keyboard_runtime_set_arp_pattern_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_GATE:
-            keyboard_runtime_set_arp_gate_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_SWING:
-            keyboard_runtime_set_arp_swing_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_ACCENT:
-            keyboard_runtime_set_arp_accent_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_VEL_ACC:
-            keyboard_runtime_set_arp_vel_acc_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_STRUM:
-            keyboard_runtime_set_arp_strum_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_OFFSET:
-            keyboard_runtime_set_arp_offset_for_track(delta->track, (int8_t)(value + ((value >= 0.0f) ? 0.5f : -0.5f)));
-            return 1U;
-        case PARAM_ARP_TRANS:
-            keyboard_runtime_set_arp_transpose_for_track(delta->track, (int8_t)(value + ((value >= 0.0f) ? 0.5f : -0.5f)));
-            return 1U;
-        case PARAM_ARP_SPREAD:
-            keyboard_runtime_set_arp_spread_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_DIR:
-            keyboard_runtime_set_arp_dir_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
-        case PARAM_ARP_SYNC:
-            keyboard_runtime_set_arp_sync_for_track(delta->track, (uint8_t)(value + 0.5f));
-            return 1U;
         default:
             break;
     }
@@ -615,9 +575,22 @@ static undo_v2_status_t undo_v2_apply_snapshot_transaction(const undo_v2_tx_entr
         return UNDO_V2_STATUS_ERR_APPLY_FAILED;
     }
 
-    return (pattern_live_apply_snapshot(snapshot, 0U) != 0U)
-        ? UNDO_V2_STATUS_OK
-        : UNDO_V2_STATUS_ERR_APPLY_FAILED;
+    if (pattern_live_apply_snapshot(snapshot, 0U) == 0U)
+    {
+        return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+    }
+
+    const note_fx_track_state_t *const note_fx = (use_after != 0U)
+        ? payload->after_note_fx : payload->before_note_fx;
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
+        note_fx_pipeline_reset_runtime_overrides(track);
+        if (note_fx_state_restore_track(track, &note_fx[track]) == 0U)
+        {
+            return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+        }
+    }
+    return UNDO_V2_STATUS_OK;
 }
 
 static undo_v2_status_t undo_v2_apply_plock_transaction(const undo_v2_tx_entry_t *tx, uint8_t use_after)
@@ -1028,6 +1001,14 @@ undo_v2_status_t undo_v2_capture_snapshot_before(void)
         undo_v2_set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
         return g_undo_v2_runtime.last_status;
     }
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
+        if (note_fx_state_capture_track(track, &payload->before_note_fx[track]) == 0U)
+        {
+            undo_v2_set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
+            return g_undo_v2_runtime.last_status;
+        }
+    }
 
     payload->before_valid = 1U;
     tx->end_tick = engine_tick_count;
@@ -1055,6 +1036,14 @@ undo_v2_status_t undo_v2_capture_snapshot_after(void)
     {
         undo_v2_set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
         return g_undo_v2_runtime.last_status;
+    }
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
+        if (note_fx_state_capture_track(track, &payload->after_note_fx[track]) == 0U)
+        {
+            undo_v2_set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
+            return g_undo_v2_runtime.last_status;
+        }
     }
 
     payload->after_valid = 1U;

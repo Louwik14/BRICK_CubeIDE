@@ -195,7 +195,6 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
-    keyboard_runtime_clear_arp_seq_step_source();
     metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
     {
