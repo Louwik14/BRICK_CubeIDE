@@ -1,5 +1,17 @@
 # Z4 - Seq / Clock / Scheduler
 
+## Contrat produit actuel
+
+Les huit Play Tracks sont des séquenceurs indépendants : chacune possède ses steps, ses quatre voix PLAY, ses p-locks, son scheduler, son clavier/MIDI FX et son état de live record. Les Special ont un modèle de séquence distinct, borné à l'automatisation non-PLAY et aux actions de leur rôle.
+
+Il n'existe aucun groupe master/slave produit et `SEQ LINK` n'est pas un comportement actif. Le scheduler ne fusionne, ne copie et ne distribue pas implicitement les données d'une Play Track vers une autre. Les identités de source et de cible sont toujours explicites et locales à la track concernée.
+
+ARP est un modèle MIDI FX et un marquage physique du raccourci ARP. Ce n'est ni une capacité topologique, ni un hall mode autonome, ni une architecture de groupe du séquenceur. Le raccourci ouvre MIDI FX sans modifier `SEQ`/`KEYBOARD`.
+
+Les p-locks utilisent les sets courants `ENV`, `TONE`, `PLAY`, `MOD`, `MIDI_FX` et `MIX`, avec validation de la capacité runtime. Les bases MIDI FX appartiennent aux huit Play Tracks ; aucune Special n'alloue d'état MIDI FX.
+
+Le reste de ce fichier conserve des notes d'audit et des décisions historiques de scheduler. Toute mention de groupes, master/slave, `SEQ LINK` ou d'un ancien ARP dans ces sections est une preuve historique, une dette explicitement bornée ou une proposition non active ; elle ne modifie pas le contrat ci-dessus.
+
 ## Addendum 2026-07-30 - p-lock enveloppe VCA
 
 - Les quatre parametres `PARAM_VCA_ATTACK/DECAY/SUSTAIN/RELEASE` sont declares

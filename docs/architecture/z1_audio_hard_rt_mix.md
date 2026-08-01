@@ -1,5 +1,13 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Contrat produit actuel
+
+La Special Master porte les traitements globaux reverb, delay et compresseur. La Special FX porte les quatre MacroFX. `fx_master_macro` est le nom technique légitime de l'insertion MacroFX post-mix sur le master-bus ; il décrit le chemin DSP et non le propriétaire produit.
+
+Le mix track-aware reste séparé des effets globaux. Le backend VCA du mixer et le backend ENV3 de modulation sont des cibles d'exécution légitimes de l'owner logique `ENV`, sans créer de familles audio supplémentaires.
+
+Le reste de ce fichier conserve l'audit hard-RT détaillé et les notes historiques de l'implémentation. Les mentions d'anciens owners, de chemins retirés ou de prototypes ne sont pas des contrats produit courants.
+
 ## Addendum 2026-08-01 - audit Recorder/preroll apres activation WBWA
 
 - Les deux rings `multi_record_writer`, le preroll Looper et le ring AUDIO TEST 2 sont les buffers SDRAM partages IRQ/superloop identifies; ils restent dans l'overlay `SDRAM_RECORDER` non cacheable. Le pack PCM24 est hors IRQ et peut rester dans la SDRAM cacheable.
