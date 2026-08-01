@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #define SAMPLE_STREAM_MAX_ACTIVE (16U)
+#define SAMPLE_STREAM_STEP_Q16_ONE (65536U)
 
 typedef enum
 {
@@ -31,6 +32,7 @@ typedef struct
     sample_audio_key_t key;
     uint32_t current_frame;
     uint32_t end_frame;
+    uint32_t step_q16;
     int8_t direction;
     uint8_t lookahead_pages;
     uint8_t request_current_page;

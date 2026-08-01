@@ -235,6 +235,7 @@ static uint8_t sample_cache_voice_reserve_start_window(const sample_cache_voice_
         .key = sample_audio_key_classic(voice->sample_id),
         .current_frame = voice->frame_pos,
         .end_frame = desc->total_frames,
+        .step_q16 = SAMPLE_STREAM_STEP_Q16_ONE,
         .direction = voice->direction,
         .lookahead_pages = (voice->direction < 0)
                                ? SAMPLE_CACHE_STREAM_REVERSE_LOOKAHEAD_PAGES
@@ -945,6 +946,7 @@ static void sample_cache_queue_active_stream_pages(void)
             .key = sample_audio_key_classic(voice->sample_id),
         .current_frame = voice->frame_pos,
         .end_frame = desc->total_frames,
+        .step_q16 = SAMPLE_STREAM_STEP_Q16_ONE,
         .direction = voice->direction,
         .lookahead_pages = (voice->direction < 0)
                                    ? SAMPLE_CACHE_STREAM_REVERSE_LOOKAHEAD_PAGES

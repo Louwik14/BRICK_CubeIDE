@@ -141,14 +141,37 @@ static uint32_t sample_stream_manager_page_deadline_frames(const sample_stream_a
         return UINT32_MAX;
     }
 
+    uint32_t source_distance = 0U;
     if (desc->direction < 0)
     {
-        const uint32_t page_end = (page_index + 1U) * SAMPLE_PAGE_FRAMES;
-        return (desc->current_frame >= page_end) ? (desc->current_frame - page_end) : 0U;
+        const uint64_t page_end = ((uint64_t)page_index + 1ULL) * SAMPLE_PAGE_FRAMES;
+        if ((uint64_t)desc->current_frame >= page_end)
+        {
+            source_distance = (uint32_t)((uint64_t)desc->current_frame - page_end);
+        }
+    }
+    else
+    {
+        const uint64_t page_start = (uint64_t)page_index * SAMPLE_PAGE_FRAMES;
+        if (page_start > (uint64_t)desc->current_frame)
+        {
+            const uint64_t distance = page_start - (uint64_t)desc->current_frame;
+            source_distance = (distance > UINT32_MAX) ? UINT32_MAX : (uint32_t)distance;
+        }
     }
 
-    const uint32_t page_start = page_index * SAMPLE_PAGE_FRAMES;
-    return (page_start > desc->current_frame) ? (page_start - desc->current_frame) : 0U;
+    if (source_distance == 0U)
+    {
+        return 0U;
+    }
+    if (desc->step_q16 == 0U)
+    {
+        return UINT32_MAX;
+    }
+
+    const uint64_t output_distance =
+        ((uint64_t)source_distance * SAMPLE_STREAM_STEP_Q16_ONE) / desc->step_q16;
+    return (output_distance > UINT32_MAX) ? UINT32_MAX : (uint32_t)output_distance;
 }
 
 static void sample_stream_manager_close_reader(sample_stream_reader_t *reader)
