@@ -58,8 +58,9 @@ foreach ($param in $excluded) {
 foreach ($param in @('PARAM_LOOPER_ARM', 'PARAM_LOOPER_LEN', 'PARAM_LOOPER_PLAY', 'PARAM_LOOPER_XFADE')) {
     Assert-Contract ($excludedBody -notmatch [regex]::Escape("case ${param}:")) "Looper p-lock decision unexpectedly excludes: $param"
 }
-Assert-Contract ($iface -match 'seq_param_iface_is_param_plockable\(param\)') 'mapping rebuild does not use central p-lock authority'
-Assert-Contract (($iface -split 'seq_param_iface_is_param_plockable\(param\)').Count -ge 3) 'both mapping directions do not use central p-lock authority'
+Assert-Contract ($iface -match 'seq_param_iface_is_param_plockable\(param\)') 'mapping validation does not use central p-lock authority'
+Assert-Contract ($iface -match 'g_seq_param_param_to_slot\[param_id\]') 'direct mapping table is not used for param-to-slot lookup'
+Assert-Contract ($iface -match 'g_seq_param_inverse_tables\[set_id\]') 'inverse mapping tables are not used for slot-to-param lookup'
 Assert-Contract ($iface -match 'TONE slots are selected by the active engine') 'generic TONE mapping guard missing'
 
 $groups = [regex]::Matches($runtime, '(?s)((?:\s*case PARAM_[A-Z0-9_]+:)+)\s*rule\.domain = TRACK_RUNTIME_PARAM_DOMAIN_([A-Z_]+);')
