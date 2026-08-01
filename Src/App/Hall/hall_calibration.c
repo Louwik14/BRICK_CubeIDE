@@ -5,9 +5,6 @@
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_adc.h"
-#if !defined(BRICK6_VARIANT_LOWCOST)
-#include "App/Hall/hall_filter_asc.h"
-#endif
 #include "Storage/memory_layout.h"
 
 #define CALIBRATION_PRESS_ADC                 50000U
@@ -721,9 +718,6 @@ void hall_calibration_process(void)
 #endif
 
         g_calibration_done = 1U;
-#if !defined(BRICK6_VARIANT_LOWCOST)
-        hall_filter_asc_reset_all();
-#endif
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
     }
 }
@@ -802,8 +796,6 @@ uint8_t hall_calibration_load(void)
         hall_velocity_settings_apply(stored->velocity_profile,
                                      stored->velocity_mode,
                                      stored->velocity_curve);
-#else
-        hall_filter_asc_reset_all();
 #endif
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
         return 1U;
@@ -833,9 +825,6 @@ uint8_t hall_calibration_load(void)
     }
 
     g_cal_blob = *legacy;
-#if !defined(BRICK6_VARIANT_LOWCOST)
-    hall_filter_asc_reset_all();
-#endif
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
 
     return 1U;

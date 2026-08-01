@@ -16,6 +16,12 @@ La navigation Low-Cost et Premium partage les mêmes ensembles et se distingue u
 
 `ui_template_family_resolve_effective_for_track()` est l'autorité commune entre masque runtime, rôle topologique et template effectif. Navigation, page TONE et clipboard d'ensemble réutilisent cette résolution ; la famille/type UI brute reste uniquement le fallback des Play Tracks et des rôles déjà couverts par ce contrat.
 
+## Chaîne Hall press/release et notes
+
+Les deux variantes transmettent les mesures Hall brutes calibrées directement à `hall_engine_process_sample()` : il n'y a pas de moyenne numérique multi-échantillons entre l'ADC et les seuils. La cadence par touche est de 2,8 ms en Low-Cost et 0,8 ms en Premium ; `HALL_THRESHOLD_PPM` et `HALL_HYST_PPM` restent relatifs à la calibration `min/max`.
+
+La navigation/on-off lit uniquement l'état pressé projeté par `hall_surface_refresh()` et ne consomme ni la vélocité ni une fenêtre d'attente. Le chemin note consomme séparément les drapeaux `hall_engine_consume_note_on()` / `hall_engine_consume_note_off()` ; la vélocité est calculée au franchissement press et le Note On est publié dans le même cycle superloop. Le Note Off reste soumis à l'hystérésis de release, sans debounce additionnel.
+
 ## Ensembles et boutons
 
 Les ensembles UI courants sont `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI FX`. Le mapping produit des boutons de paramètres est :

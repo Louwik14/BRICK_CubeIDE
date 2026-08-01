@@ -11,7 +11,8 @@
 - Le timer/MUX low-cost publie une mesure valide par touche toutes les 2,8 ms. `hall_loop_process()` transmet chaque entree FIFO brute a `hall_engine_process_sample()` sans moyenne numerique ASC.
 - Le filtre analogique du PCB est l'autorite de lissage low-cost. Les seuils, l'hysteresis, la position, les transitions note-on/off et la calibration restent dans les autorites Hall existantes.
 - Le mode TIME low-cost utilise des bornes comptees a 2,8 ms (`4..56` mesures) afin de conserver sa fenetre temporelle reelle historique. Le debug Hall annonce 2,8 ms et distingue la mesure ADC de la valeur recue par le moteur.
-- Premium conserve `hall_filter_asc` x4, son appel dans `hall_loop` et ses constantes runtime historiques.
+- Les deux variantes transmettent chaque mesure Hall brute calibrée à `hall_engine_process_sample()` : aucun filtre numérique ASC multi-échantillons ne retarde le press, la navigation ou le Note On.
+- La cadence d'acceptation reste de 2,8 ms par touche en Low-Cost et 0,8 ms en Premium ; la calibration, les seuils relatifs et l'hystérésis restent dans `hall_engine`.
 
 ## Addendum 2026-07-30 - MT-12 replay du dernier crash
 

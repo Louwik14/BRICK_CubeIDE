@@ -49,6 +49,17 @@ target_include_directories(hall_engine_lowcost_test PRIVATE
 )
 add_test(NAME hall_engine_lowcost COMMAND hall_engine_lowcost_test)
 
+add_executable(hall_engine_premium_test
+    hall_engine_lowcost_test.c
+    ../Src/App/Hall/hall_engine.c
+)
+
+target_include_directories(hall_engine_premium_test PRIVATE
+    stubs
+    ../Inc
+)
+add_test(NAME hall_engine_premium COMMAND hall_engine_premium_test)
+
 add_executable(stack_vca_release_test
     stack_vca_release_test.c
     ../Src/Core/brick6_stack_runtime.c

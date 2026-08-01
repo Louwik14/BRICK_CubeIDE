@@ -16,11 +16,20 @@ function Require-Text {
 }
 
 Require-Text "Src/App/Hall/hall_loop.c" `
-    "BRICK6_VARIANT_LOWCOST[\s\S]*hall_engine_process_sample\(sample\.key, sample\.raw, sample\.sample_count\)" `
-    "Low-cost Hall samples are not routed raw to hall_engine."
-Require-Text "Src/App/Hall/hall_loop.c" `
-    "hall_filter_asc_process\(sample\.key, sample\.raw, &filtered_raw\)" `
-    "Premium ASC path is no longer present."
+    "hall_engine_process_sample\(sample\.key, sample\.raw, sample\.sample_count\)" `
+    "Hall samples are not routed raw to hall_engine."
+if ((Get-Content -Raw (Join-Path $repo "Src/App/Hall/hall_loop.c")) -match "hall_filter_asc|filtered_raw") {
+    throw "A multi-sample ASC filter remains in the Hall runtime path."
+}
+Require-Text "Src/App/Hall/hall_surface.c" `
+    "hall_engine_is_pressed\(lane\)[\s\S]*hall_engine_get_value\(lane\)" `
+    "Navigation does not use the calibrated Hall press state."
+Require-Text "Src/App/Hall/hall_keyboard_bridge.c" `
+    "hall_engine_consume_note_on\(key\)[\s\S]*hall_engine_consume_note_off\(key\)[\s\S]*hall_engine_get_velocity\(key\)" `
+    "Hall note bridge does not consume press/release and velocity from the same sample cycle."
+Require-Text "Src/App/Hall/hall_engine.c" `
+    "hall_velocity\[key\] = hall_velocity_compute\(key, range\);[\s\S]*hall_velocity_valid\[key\] = 1U;[\s\S]*hall_note_on_pending\[key\] = 1U" `
+    "Note On is not published when velocity becomes determinable."
 Require-Text "Src/App/Hall/hall_engine.c" `
     "HALL_KEY_SAMPLE_PERIOD_US\s+2800U" `
     "Low-cost Hall debug cadence is not 2.8 ms."

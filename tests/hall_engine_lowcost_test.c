@@ -91,7 +91,11 @@ int main(void)
     {
         hall_velocity_debug_t debug = {0};
         hall_engine_get_velocity_debug(0U, &debug);
+#if defined(BRICK6_VARIANT_LOWCOST)
         expect_true(debug.sample_period_us == 2800U, "low-cost debug cadence must report 2.8 ms");
+#else
+        expect_true(debug.sample_period_us == 800U, "premium debug cadence must report 0.8 ms");
+#endif
         expect_true(debug.sample_count == g_sample_count, "engine must consume every raw sample");
     }
 
