@@ -75,6 +75,9 @@ if(WIN32)
     add_test(NAME cfg_track_family_order_static
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/cfg_track_family_order_validation.ps1)
+    add_test(NAME led_track_select_static
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/led_track_select_validation.ps1)
     add_test(NAME engine_output_gain
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/engine_output_gain_validation.ps1)

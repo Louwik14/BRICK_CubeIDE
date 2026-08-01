@@ -26,6 +26,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "Core/track_topology.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "buttons.h"
@@ -62,6 +63,9 @@
 #define LED_FIXED_DARK_BLUE_R     0U
 #define LED_FIXED_DARK_BLUE_G     24U
 #define LED_FIXED_DARK_BLUE_B     88U
+#define LED_FIXED_VIOLET_R        LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_VIOLET_G        0U
+#define LED_FIXED_VIOLET_B        LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_BLUE_R          0U
 #define LED_FIXED_BLUE_G          0U
 #define LED_FIXED_BLUE_B          LED_FIXED_HALF_BRIGHTNESS
@@ -533,7 +537,13 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
 
     if (hall < UI_ACTIVE_TRACK_COUNT)
     {
-        if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
+        if (track_topology_is_special(hall) != 0U)
+        {
+            r = LED_FIXED_VIOLET_R;
+            g = LED_FIXED_VIOLET_G;
+            b = LED_FIXED_VIOLET_B;
+        }
+        else if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
         {
             r = LED_FIXED_DARK_BLUE_R;
             g = LED_FIXED_DARK_BLUE_G;
