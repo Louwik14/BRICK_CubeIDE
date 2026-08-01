@@ -22,22 +22,10 @@ typedef struct
     seq_value16_t runtime_value;
 } seq_param_slot_state_t;
 
-/* Step 1 only defines the future compact contract. The runtime storage and
- * bitmap layout remain on the pre-migration representation until step 2. */
-#define SEQ_PARAM_NON_MIX_SLOT_COUNT \
-    (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
-#define SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK SEQ_PARAM_MIX_SLOT_COUNT
-#define SEQ_PARAM_MIX_STATE_SLOT_COUNT \
-    (SEQ_TRACK_COUNT * SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK)
-#define SEQ_PARAM_FLAG_BIT_COUNT \
-    (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_STATE_SLOT_COUNT)
-#define SEQ_PARAM_FLAG_BYTE_COUNT ((SEQ_PARAM_FLAG_BIT_COUNT + 7U) / 8U)
-
-SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 SEQ_STATE_D2 static seq_param_slot_state_t
-    g_seq_param_mix_state[SEQ_TRACK_COUNT][SEQ_PARAM_MIX_SLOT_COUNT];
-SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
-SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
+    g_seq_param_runtime_state[SEQ_TRACK_COUNT][SEQ_PARAM_RUNTIME_SLOT_COUNT];
+SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
+SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_MIX][PARAM_COUNT];
 SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 
@@ -48,22 +36,36 @@ static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
     PARAM_MIX_SEND2
 };
 
+static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
+    SEQ_PARAM_ENV_SLOT_OFFSET,
+    SEQ_PARAM_TONE_SLOT_OFFSET,
+    SEQ_PARAM_PLAY_SLOT_OFFSET,
+    SEQ_PARAM_MOD_SLOT_OFFSET,
+    SEQ_PARAM_MIDI_FX_SLOT_OFFSET,
+    SEQ_PARAM_MIX_SLOT_OFFSET
+};
+
+static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
+    SEQ_PARAM_ENV_SLOT_COUNT,
+    SEQ_PARAM_TONE_SLOT_COUNT,
+    SEQ_PARAM_PLAY_SLOT_COUNT,
+    SEQ_PARAM_MOD_SLOT_COUNT,
+    SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+    SEQ_PARAM_MIX_SLOT_COUNT
+};
+
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 #define SEQ_PARAM_ID_UNMAPPED ((param_id_t)0xFFFFU)
 
 static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
                                                         uint8_t set_id,
                                                         seq_param_slot_t param_slot);
+static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track,
+                                                         track_runtime_type_t *out_type);
 static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
-    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
-    {
-        return SEQ_PARAM_NON_MIX_SLOT_COUNT
-            + ((uint32_t)track * SEQ_PARAM_MIX_STATE_SLOT_COUNT_PER_TRACK)
-            + (uint32_t)param_slot;
-    }
-
-    return (((uint32_t)track * (uint32_t)SEQ_PLOCK_SET_MIX + (uint32_t)set_id) * 256U)
+    return ((uint32_t)track * SEQ_PARAM_RUNTIME_SLOT_COUNT)
+        + (uint32_t)g_seq_param_set_offsets[set_id]
         + (uint32_t)param_slot;
 }
 
@@ -225,24 +227,25 @@ static uint8_t seq_param_iface_mix_slot_to_param(seq_param_slot_t slot, param_id
 
 static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
-    if (seq_param_iface_track_is_valid(track) == 0U)
+    if ((seq_param_iface_track_is_valid(track) == 0U)
+            || (set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
+            || (param_slot >= (seq_param_slot_t)g_seq_param_set_capacities[set_id]))
     {
         return 0;
     }
 
-    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
     {
-        return (param_slot < (seq_param_slot_t)SEQ_PARAM_MIX_SLOT_COUNT)
-            ? &g_seq_param_mix_state[track][param_slot]
-            : 0;
+        track_runtime_type_t tone_type = TRACK_RUNTIME_TYPE_OTHER;
+        param_id_t tone_param = PARAM_COUNT;
+        if ((seq_param_iface_resolve_runtime_tone_type(track, &tone_type) == 0U)
+                || (track_runtime_tone_slot_to_param(tone_type, param_slot, &tone_param) == 0U))
+        {
+            return 0;
+        }
     }
 
-    if (set_id >= (uint8_t)SEQ_PLOCK_SET_MIX)
-    {
-        return 0;
-    }
-
-    return &g_seq_param_state[track][set_id][param_slot];
+    return &g_seq_param_runtime_state[track][g_seq_param_set_offsets[set_id] + param_slot];
 }
 
 static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t domain, uint8_t *out_set_id)
@@ -487,8 +490,7 @@ static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
 
 void seq_param_iface_init(void)
 {
-    memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
-    memset(&g_seq_param_mix_state, 0, sizeof(g_seq_param_mix_state));
+    memset(&g_seq_param_runtime_state, 0, sizeof(g_seq_param_runtime_state));
     seq_param_clear_flags();
     track_runtime_init();
     seq_param_iface_rebuild_slot_maps();
