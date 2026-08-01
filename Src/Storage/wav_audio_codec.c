@@ -30,6 +30,124 @@ float wav_audio_codec_pcm32_to_float(const uint8_t *p)
     return (float)v * (1.0f / 2147483648.0f);
 }
 
+static void wav_audio_codec_decode_pcm16_mono_block(const uint8_t *src,
+                                                     float *dst,
+                                                     uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        const float sample = wav_audio_codec_pcm16_to_float_impl(src);
+        dst[0] = sample;
+        dst[1] = sample;
+        src += 2U;
+        dst += 2U;
+    }
+}
+
+static void wav_audio_codec_decode_pcm16_stereo_block(const uint8_t *src,
+                                                       float *dst,
+                                                       uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        dst[0] = wav_audio_codec_pcm16_to_float_impl(src);
+        dst[1] = wav_audio_codec_pcm16_to_float_impl(src + 2U);
+        src += 4U;
+        dst += 2U;
+    }
+}
+
+static void wav_audio_codec_decode_pcm24_mono_block(const uint8_t *src,
+                                                     float *dst,
+                                                     uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        const float sample = wav_audio_codec_pcm24_to_float(src);
+        dst[0] = sample;
+        dst[1] = sample;
+        src += 3U;
+        dst += 2U;
+    }
+}
+
+static void wav_audio_codec_decode_pcm24_stereo_block(const uint8_t *src,
+                                                       float *dst,
+                                                       uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        dst[0] = wav_audio_codec_pcm24_to_float(src);
+        dst[1] = wav_audio_codec_pcm24_to_float(src + 3U);
+        src += 6U;
+        dst += 2U;
+    }
+}
+
+static void wav_audio_codec_decode_pcm32_mono_block(const uint8_t *src,
+                                                     float *dst,
+                                                     uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        const float sample = wav_audio_codec_pcm32_to_float(src);
+        dst[0] = sample;
+        dst[1] = sample;
+        src += 4U;
+        dst += 2U;
+    }
+}
+
+static void wav_audio_codec_decode_pcm32_stereo_block(const uint8_t *src,
+                                                       float *dst,
+                                                       uint32_t frame_count)
+{
+    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    {
+        dst[0] = wav_audio_codec_pcm32_to_float(src);
+        dst[1] = wav_audio_codec_pcm32_to_float(src + 4U);
+        src += 8U;
+        dst += 2U;
+    }
+}
+
+wav_audio_codec_decode_block_fn wav_audio_codec_select_pcm_decode_block(uint16_t channels,
+                                                                        uint16_t bits_per_sample)
+{
+    if (channels == 1U)
+    {
+        if (bits_per_sample == 16U)
+        {
+            return wav_audio_codec_decode_pcm16_mono_block;
+        }
+        if (bits_per_sample == 24U)
+        {
+            return wav_audio_codec_decode_pcm24_mono_block;
+        }
+        if (bits_per_sample == 32U)
+        {
+            return wav_audio_codec_decode_pcm32_mono_block;
+        }
+    }
+    else if (channels == 2U)
+    {
+        if (bits_per_sample == 16U)
+        {
+            return wav_audio_codec_decode_pcm16_stereo_block;
+        }
+        if (bits_per_sample == 24U)
+        {
+            return wav_audio_codec_decode_pcm24_stereo_block;
+        }
+        if (bits_per_sample == 32U)
+        {
+            return wav_audio_codec_decode_pcm32_stereo_block;
+        }
+    }
+
+    return 0;
+}
+
 void wav_audio_codec_decode_stereo_frame(const uint8_t *frame,
                                          uint16_t channels,
                                          uint16_t bits_per_sample,

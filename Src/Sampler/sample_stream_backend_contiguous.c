@@ -33,6 +33,16 @@ static sample_page_load_result_t sample_stream_backend_decode_pcm_page(
         return SAMPLE_PAGE_LOAD_INVALID_ARG;
     }
 
+    const wav_audio_codec_decode_block_fn decode_block =
+        wav_audio_codec_select_pcm_decode_block(info->info.channels,
+                                                info->info.bits_per_sample);
+    const uint32_t expected_block_align =
+        (uint32_t)info->info.channels * ((uint32_t)info->info.bits_per_sample / 8U);
+    if ((decode_block == 0) || (info->info.block_align != expected_block_align))
+    {
+        return SAMPLE_PAGE_LOAD_DECODE_FAILED;
+    }
+
     const uint32_t source_bytes = target->frame_count * info->info.block_align;
     if (source_bytes != 0U)
     {
@@ -43,18 +53,7 @@ static sample_page_load_result_t sample_stream_backend_decode_pcm_page(
         }
     }
 
-    for (uint32_t frame = 0U; frame < target->frame_count; ++frame)
-    {
-        float left = 0.0f;
-        float right = 0.0f;
-        wav_audio_codec_decode_stereo_frame(&pcm[frame * info->info.block_align],
-                                            info->info.channels,
-                                            info->info.bits_per_sample,
-                                            &left,
-                                            &right);
-        target->frames_interleaved[(frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS)] = left;
-        target->frames_interleaved[(frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS) + 1U] = right;
-    }
+    decode_block(pcm, target->frames_interleaved, target->frame_count);
 
     return SAMPLE_PAGE_LOAD_OK;
 }
