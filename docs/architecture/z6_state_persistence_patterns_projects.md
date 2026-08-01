@@ -1161,13 +1161,19 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - La suppression du modele Daisy et de ses sept IDs ne porte aucune migration de projet prototype; Deluge et Brick conservent leurs parametres globaux.
 ## Addendum 2026-07-30 - persistence reverb
 
-- Pattern/Project capturent `DAMP` et `SMEAR` comme globals via deux IDs tombstones existants. La cardinalite `PARAM_COUNT`, les IDs historiques et la taille des snapshots restent identiques.
+- Pattern/Project capturent `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` comme globals actifs via leur classification explicite. La cardinalite `PARAM_COUNT`, les IDs historiques et la taille des snapshots restent identiques.
 ## Addendum 2026-07-30 - persistence des deux reverbs
 
-- Project/Pattern sauvegardent `MODEL` et les banques Mutable/Digital comme globals. Les IDs reposent sur des tombstones existants: format, cardinalite et taille des snapshots restent inchanges.
+- Project/Pattern sauvegardent `MODEL`, les quatre paramètres Digital et les paramètres Mutable reverb réellement capturés comme globals. La classification repose sur les symboles canoniques; format, cardinalite et taille des snapshots restent inchanges.
 ## Addendum 2026-07-30 - retrait PAN Digital
 
-- PAN Digital n'est plus capture ni restaure; son ID tombstone redevient libre. MODEL et toutes les valeurs sonores Mutable/Digital restantes restent globales et persistantes sans changement de format.
+- PAN Digital n'est plus capture ni restaure. MODEL et les valeurs sonores Digital/Mutable couvertes par le chemin courant restent globales et persistantes sans changement de format.
+
+## Addendum 2026-08-01 - classification persistence 4C3
+
+- `pattern_live_classify_param()` est l'unique classification locale du chemin Pattern: globals persistants autorises, parametres track-aware stockes dans leur bloc canonique, `PARAM_RESERVED_*` inertes et parametres non pertinents.
+- Capture, restore et reapplication de transition utilisent cette classification; aucune decision persistence ne depend d'une plage physique MIX historique.
+- Pattern v4 et Project v4 conservent exactement leurs IDs, tailles et layouts; Project continue d'embarquer le snapshot Pattern.
 
 ## Addendum 2026-07-30 - capacite banque Patch
 

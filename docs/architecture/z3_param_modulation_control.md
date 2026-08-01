@@ -140,9 +140,9 @@ Familles d'autorite:
   - Modulation runtime: chemins directs `mod_lfo_v1` quand une destination LFO effective est exposee; `param_registry_apply_track_value_rt_fast` reste fallback de securite/future destination.
   - Release: restaure la base, jamais la derniere valeur modulee.
 
-- `legacy-physical` (plage historique MIX `6..37`):
-  - Statut: réserves neutres pour les slots morts; les IDs actifs de la plage portent désormais leurs symboles canoniques.
-  - Pas de write runtime normal pour les réserves; les flows utilisateur MIX passent par `PARAM_MIX_*` et `param_registry_apply_track_value`.
+- Les paramètres destinés à la persistence Pattern/Project sont classés explicitement par symbole dans Z6: globals autorisés, paramètres track-aware stockés dans `sound`/`mix`, réserves inertes et paramètres hors de ce bloc.
+  - Les réserves `PARAM_RESERVED_*` sont refusées par le registre et ne sont jamais capturées, restaurées ou réappliquées.
+  - Les paramètres actifs qui occupent encore les anciens ordinaux MIX gardent leur domaine courant; l'ordinal `6..37` ne porte aucune décision sémantique.
 
 ## 2.b Repartition des responsabilites (etat courant)
 
@@ -308,7 +308,7 @@ Call-sites critiques:
   - la valeur p-lock est une projection runtime temporaire,
   - les p-locks ne mettent pas a jour le miroir UI, les bases track-scoped ni le cache runtime autoritatif,
   - les p-locks ne pilotent pas l'affichage live; seul un feedback volontaire de p-lock en edition/step context peut afficher une valeur de lock.
-- La plage historique MIX `6..37` reste temporairement bornée dans la persistence; les slots morts sont des réserves et les paramètres actifs utilisent leurs symboles canoniques.
+- La persistence ne filtre plus une plage MIX historique: `pattern_live_classify_param` distingue explicitement globals, paramètres track-aware, réserves et paramètres non pertinents.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
 ## 6. Dette technique restante (bornee)
@@ -318,7 +318,7 @@ Call-sites critiques:
 - Le chemin d'apply track-aware normal est maintenant plus lisible: autorisation -> backend -> resync LFO, avec un exécuteur backend centralisé cote `param_registry_tone_backends.c`.
 - Les familles tonales stables ont ete extraites dans `param_registry_tone_backends.c`; `param_registry_backends.c` porte surtout les backends communs.
 - Les commits de write runtime passent maintenant par un helper unique dans `param_registry_runtime_state.c`.
-- La plage historique MIX `6..37` conserve ses ordinaux pour le layout storage; les réserves sont inertes et l'UI mute, le restore normal et les boot defaults n'utilisent plus de runtime physique.
+- Les ordinaux historiques restent inchangés pour le layout storage, mais leur traitement persistence est déterminé par `pattern_live_classify_param`; les réserves sont inertes et l'UI mute, le restore normal et les boot defaults n'utilisent plus de runtime physique.
 
 ## 7. Carte courte de la dette reelle (audit code)
 
@@ -955,15 +955,15 @@ Dette explicite post-passe 4:
 - Les sept anciens `PARAM_DAISY_COMP_*` sont supprimes sans tombstone ni migration, conformement au statut prototype.
 ## Addendum 2026-07-30 - parametres reverb Mutable
 
-- La surface globale reverb est `LVL/SIZE/DECAY/PRE-D/DAMP/HPF/LPF/SMEAR`. `DAMP` ne pilote plus `LPF`: il controle exclusivement les deux one-poles du tank.
-- Les IDs persistants restent stables: `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` sont les symboles canoniques des valeurs 174/175; `PARAM_COUNT` et les payloads Pattern/Project ne changent pas.
+- La surface globale reverb est `LVL/SIZE/DECAY/PRE-D/DAMP/HPF/LPF/SMEAR`. `DAMP` ne pilote plus `LPF`: il controle exclusivement les deux one-poles du tank. Le chemin Pattern/Project classe explicitement comme globals persistés `PARAM_MIX_REVERB_MODEL`, les quatre paramètres Digital, `PARAM_MIX_REVERB_HPF/LPF` et `PARAM_MIX_REVERB_DAMP/SMEAR`.
+- Les IDs persistants restent stables: `PARAM_MIX_REVERB_DAMP` et `PARAM_MIX_REVERB_SMEAR` sont les symboles canoniques des valeurs 174/175; `pattern_live_classify_param` les traite comme globals actifs, sans statut de tombstone. `PARAM_COUNT` et les payloads Pattern/Project ne changent pas.
 ## Addendum 2026-07-30 - banques reverb par modele
 
 - `MODEL` choisit `MUTABLE/DIGITAL`. Mutable conserve ses valeurs DECAY/SIZE/DAMP/HPF/LPF/SMEAR; Digital possede des IDs distincts DECAY/DAMP/HPF/LPF. LVL et PRE-D restent communs.
 - Les six contrôles Digital conservent leurs ordinals historiques sous leurs symboles canoniques; tous les IDs existants, `PARAM_COUNT` et les tailles Project/Pattern restent stables.
 ## Addendum 2026-07-30 - retrait PAN reverb
 
-- La banque Digital conserve DECAY/DAMP/HPF/LPF; le tombstone temporairement utilise par PAN est restitue a son identite mixer legacy. MODEL, LVL et PRE-D restent inchanges.
+- La banque Digital conserve DECAY/DAMP/HPF/LPF; PAN Digital n'est plus capture ni restaure. MODEL et les valeurs Digital/Mutable couvertes par le chemin courant restent globales et persistantes sans changement de format.
 # Addendum 2026-07-30 - frontiere parametres MD etape 1
 
 - L'etape 1 renomme uniquement l'identite du placeholder en `DRUM / MD`.

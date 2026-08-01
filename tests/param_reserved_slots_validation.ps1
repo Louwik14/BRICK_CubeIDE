@@ -115,7 +115,10 @@ if ($ui -notmatch '\.params = \{ PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_CO
 }
 if ($runtime -notmatch 'default:\s*return rule;') { throw 'runtime NONE fallback missing' }
 if ($seq -notmatch 'default:\s*return 0U;') { throw 'p-lock NONE fallback missing' }
-if ($pattern -notmatch 'pattern_live_is_global_param_useful') { throw 'Pattern usefulness gate missing' }
+if ($pattern -notmatch 'pattern_live_classify_param') { throw 'Pattern persistence classification missing' }
+if ($pattern -match 'pattern_live_is_global_param_useful|pattern_live_is_reverb_global_tombstone') {
+    throw 'Historical Pattern persistence helper remains'
+}
 
 $excluded = '\\(build|\.git|Inspiration|artifacts|mutable_instruments|Drivers|App|tinyusb)\\'
 $files = Get-ChildItem -LiteralPath $root -File -Recurse |

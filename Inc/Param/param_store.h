@@ -355,10 +355,33 @@ enum {
 
 static inline uint8_t param_id_is_reserved(param_id_t id)
 {
-    return (uint8_t)(((id >= PARAM_RESERVED_000) && (id <= PARAM_RESERVED_006))
-        || ((id >= PARAM_RESERVED_011) && (id <= PARAM_RESERVED_013))
-        || ((id >= PARAM_RESERVED_018) && (id <= PARAM_RESERVED_020))
-        || ((id >= PARAM_RESERVED_030) && (id <= PARAM_RESERVED_037)));
+    switch (id)
+    {
+        case PARAM_RESERVED_000:
+        case PARAM_RESERVED_001:
+        case PARAM_RESERVED_002:
+        case PARAM_RESERVED_003:
+        case PARAM_RESERVED_004:
+        case PARAM_RESERVED_005:
+        case PARAM_RESERVED_006:
+        case PARAM_RESERVED_011:
+        case PARAM_RESERVED_012:
+        case PARAM_RESERVED_013:
+        case PARAM_RESERVED_018:
+        case PARAM_RESERVED_019:
+        case PARAM_RESERVED_020:
+        case PARAM_RESERVED_030:
+        case PARAM_RESERVED_031:
+        case PARAM_RESERVED_032:
+        case PARAM_RESERVED_033:
+        case PARAM_RESERVED_034:
+        case PARAM_RESERVED_035:
+        case PARAM_RESERVED_036:
+        case PARAM_RESERVED_037:
+            return 1U;
+        default:
+            return 0U;
+    }
 }
 
 #ifdef __cplusplus

@@ -240,43 +240,27 @@ static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
             && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-static uint8_t pattern_live_is_global_param_useful(param_id_t id)
+typedef enum
 {
-    if ((id == PARAM_MIX_REVERB_MODEL)
-            || (id == PARAM_MIX_REVERB_DIGITAL_DECAY)
-            || (id == PARAM_MIX_REVERB_DIGITAL_DAMP)
-            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
-            || (id == PARAM_MIX_REVERB_DIGITAL_LPF))
-    {
-        return 1U;
-    }
+    PATTERN_LIVE_PARAM_GLOBAL = 0,
+    PATTERN_LIVE_PARAM_TRACK_AWARE,
+    PATTERN_LIVE_PARAM_RESERVED,
+    PATTERN_LIVE_PARAM_NOT_RELEVANT
+} pattern_live_param_class_t;
 
-    if ((id == PARAM_MASTER_GAIN) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
-        || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC)
-        )
-    {
-        return 0U;
-    }
-
-    if (((id >= PARAM_RESERVED_006) && (id <= PARAM_RESERVED_037))
-            && (id != PARAM_MIX_MUTE))
-    {
-        return 0U;
-    }
-
-    if (pattern_live_is_track_scoped_param(id) != 0U)
-    {
-        return 0U;
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-    {
-        return 1U;
-    }
-
+static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
+{
     switch (id)
     {
+        case PARAM_MIX_REVERB_MODEL:
+        case PARAM_MIX_REVERB_DIGITAL_DECAY:
+        case PARAM_MIX_REVERB_DIGITAL_DAMP:
+        case PARAM_MIX_REVERB_DIGITAL_HPF:
+        case PARAM_MIX_REVERB_DIGITAL_LPF:
+        case PARAM_MIX_REVERB_HPF:
+        case PARAM_MIX_REVERB_LPF:
+        case PARAM_MIX_REVERB_DAMP:
+        case PARAM_MIX_REVERB_SMEAR:
         case PARAM_CFG_START:
         case PARAM_CFG_TEMPO:
         case PARAM_CFG_SYNC:
@@ -298,10 +282,6 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_MIX_DELAY_MOD_RATE:
         case PARAM_MIX_DELAY_REV:
         case PARAM_MIX_DELAY_VOL:
-        case PARAM_MIX_REVERB_HPF:
-        case PARAM_MIX_REVERB_LPF:
-        case PARAM_MIX_REVERB_DAMP:
-        case PARAM_MIX_REVERB_SMEAR:
         case PARAM_COMP_MODEL:
         case PARAM_BUS_COMP_THRESHOLD_DB:
         case PARAM_BUS_COMP_RATIO:
@@ -313,20 +293,43 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_COMP_DETECT:
         case PARAM_COMP_KNEE_DB:
         case PARAM_COMP_DELUGE_SAT:
-            return 1U;
+        case PARAM_POST_GAIN:
+        case PARAM_OUTPUT_COMP:
+            return PATTERN_LIVE_PARAM_GLOBAL;
+
+        case PARAM_RESERVED_000:
+        case PARAM_RESERVED_001:
+        case PARAM_RESERVED_002:
+        case PARAM_RESERVED_003:
+        case PARAM_RESERVED_004:
+        case PARAM_RESERVED_005:
+        case PARAM_RESERVED_006:
+        case PARAM_RESERVED_011:
+        case PARAM_RESERVED_012:
+        case PARAM_RESERVED_013:
+        case PARAM_RESERVED_018:
+        case PARAM_RESERVED_019:
+        case PARAM_RESERVED_020:
+        case PARAM_RESERVED_030:
+        case PARAM_RESERVED_031:
+        case PARAM_RESERVED_032:
+        case PARAM_RESERVED_033:
+        case PARAM_RESERVED_034:
+        case PARAM_RESERVED_035:
+        case PARAM_RESERVED_036:
+        case PARAM_RESERVED_037:
+            return PATTERN_LIVE_PARAM_RESERVED;
 
         default:
-            return 0U;
+            break;
     }
-}
 
-static uint8_t pattern_live_is_reverb_global_tombstone(param_id_t id)
-{
-    return (uint8_t)((id == PARAM_MIX_REVERB_MODEL)
-            || (id == PARAM_MIX_REVERB_DIGITAL_DECAY)
-            || (id == PARAM_MIX_REVERB_DIGITAL_DAMP)
-            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
-            || (id == PARAM_MIX_REVERB_DIGITAL_LPF));
+    if (pattern_live_is_track_scoped_param(id) != 0U)
+    {
+        return PATTERN_LIVE_PARAM_TRACK_AWARE;
+    }
+
+    return PATTERN_LIVE_PARAM_NOT_RELEVANT;
 }
 
 static uint8_t pattern_live_locks_required(const pattern_v1_plock_t *locks,
@@ -605,10 +608,17 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     {
         const param_id_t id = (param_id_t)id_raw;
 
-        if (pattern_live_is_global_param_useful(id) != 0U)
+        const pattern_live_param_class_t classification = pattern_live_classify_param(id);
+
+        if (classification == PATTERN_LIVE_PARAM_GLOBAL)
         {
             out_pattern->globals.global_values[id] = param_get(id);
             out_pattern->globals.global_valid[id] = 1U;
+        }
+
+        if (classification != PATTERN_LIVE_PARAM_TRACK_AWARE)
+        {
+            continue;
         }
 
         for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -773,37 +783,34 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_PERSIST_COUNT; ++id_raw)
     {
         const param_id_t id = (param_id_t)id_raw;
+        const pattern_live_param_class_t classification = pattern_live_classify_param(id);
 
-        if (id == PARAM_CFG_POLY_VOICES)
+        if (classification == PATTERN_LIVE_PARAM_TRACK_AWARE)
         {
-            continue;
-        }
-
-        for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-        {
-            if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
-            if (ctx->pattern->sound.track_valid[track][id] != 0U)
-            {
-                (void)param_registry_apply_track_value(id, track, ctx->pattern->sound.track_values[track][id]);
-            }
-
-            if ((pattern_live_is_param_in_mix_domain(id) != 0U)
-                    && (ctx->pattern->mix.track_valid[track][id] != 0U))
-            {
-                (void)param_registry_apply_track_value(id, track, ctx->pattern->mix.track_values[track][id]);
-            }
-        }
-
-        if (ctx->pattern->globals.global_valid[id] != 0U)
-        {
-            if ((((id >= PARAM_RESERVED_006) && (id <= PARAM_RESERVED_037))
-                    && (id != PARAM_MIX_MUTE)
-                    && (pattern_live_is_reverb_global_tombstone(id) == 0U))
-                    || (pattern_live_is_track_scoped_param(id) != 0U))
+            if (id == PARAM_CFG_POLY_VOICES)
             {
                 continue;
             }
 
+            for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+            {
+                if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
+                if (ctx->pattern->sound.track_valid[track][id] != 0U)
+                {
+                    (void)param_registry_apply_track_value(id, track, ctx->pattern->sound.track_values[track][id]);
+                }
+
+                if ((pattern_live_is_param_in_mix_domain(id) != 0U)
+                        && (ctx->pattern->mix.track_valid[track][id] != 0U))
+                {
+                    (void)param_registry_apply_track_value(id, track, ctx->pattern->mix.track_values[track][id]);
+                }
+            }
+        }
+
+        if ((classification == PATTERN_LIVE_PARAM_GLOBAL)
+                && (ctx->pattern->globals.global_valid[id] != 0U))
+        {
             param_set(id, ctx->pattern->globals.global_values[id]);
         }
     }
