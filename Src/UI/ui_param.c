@@ -537,7 +537,6 @@ static uint8_t ui_param_macro_fx_step_type(uint8_t track,
     if ((out_value == 0)
             || (delta == 0)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
-            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (ui_param_macro_fx_type_slot_from_param(param, &slot) == 0U))
     {
         return 0U;
@@ -673,7 +672,6 @@ static uint8_t ui_param_macro_fx_quantize_edit(uint8_t track,
     uint8_t macro = 0U;
     if ((out_value == 0)
             || (delta == 0)
-            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (ui_param_macro_fx_slot_from_param(param, &slot, &macro) == 0U))
     {
