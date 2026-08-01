@@ -6,12 +6,57 @@ Z6 décrit les snapshots, les banques SD et les règles de restore du produit ac
 
 | Format | Version actuelle | Scope |
 |---|---:|---|
-| Pattern | v4 | état Play/Special et globals |
-| Project | v4 | projet, pattern embarqué et scènes Macro |
+| Pattern | v5 | état Play/Special, globals et slots p-lock compacts |
+| Project | v5 | projet, pattern embarqué, scènes Macro et slots p-lock compacts |
 | Patch | v3 | une Play Track, Play-only |
 | Kit | v3 | snapshot de kit selon les rôles compatibles |
 
 Les noms techniques `PatternSaveV1`, `ProjectSaveV1`, `PatchSaveV1` et `KitSaveV1`, ainsi que les API `*_v1`, ne sont pas renommés dans cette passe. Ils ne changent pas les versions de fichier indiquées ci-dessus. Les payloads d'une autre version sont refusés par validation stricte ; aucune migration n'est ajoutée.
+
+## Contrat final des p-locks compacts
+
+Les six sets conservent leurs ordinals et utilisent directement le slot compact comme identité runtime et stockage :
+
+| Set | Ordinal | Capacité | Offset runtime |
+|---|---:|---:|---:|
+| ENV | 0 | 25 | 0 |
+| TONE | 1 | 21 | 25 |
+| PLAY | 2 | 16 | 46 |
+| MOD | 3 | 12 | 62 |
+| MIDI_FX | 4 | 16 | 74 |
+| MIX | 5 | 4 | 90 |
+| **Total** |  | **94 slots/track** |  |
+
+Pattern, Project, Clipboard, Undo/Redo et le modèle séquenceur stockent donc `set_id + param_slot` avec `param_slot` compact. Les slots historiques, les tables de traduction et toute migration d'anciens fichiers sont volontairement absents. Pattern/Project v5 acceptent uniquement le format courant ; un en-tête ou un payload incompatible est rejeté.
+
+Les slots TONE sont résolus par les tables du moteur actif. Chaque moteur couvert par `track_runtime` fournit au plus 21 paramètres ; un slot hors table du moteur courant est refusé et l'état TONE est revalidé lors d'un changement de moteur.
+
+Décision Looper : `ARM`, `LEN`, `PLAY` et `XFADE` sont p-lockables ; `STRETCH`, `PITCH` et `GRAIN` sont exclus. Cette allowlist est l'autorité unique du caractère p-lockable. Les exclusions des autres paramètres structurels restent centralisées dans l'interface séquenceur.
+
+Les limites musicales ne changent pas : 64 steps par track, 32 locks maximum par step Play, 16 locks maximum par step Special, mêmes pools Play/Special et aucune allocation dynamique.
+
+## Mesure finale RAM_D2
+
+Le budget isolé des anciens états/mappings p-lock était de 80 573 B :
+
+| Symbole / groupe | Avant | Après | Zone après |
+|---|---:|---:|---|
+| `g_seq_param_state` → `g_seq_param_runtime_state` | 71 680 B | 5 264 B | RAM_D2 |
+| `g_seq_param_mix_state` | 224 B | 0 B | supprimé |
+| `g_seq_param_base_valid_bits` | 2 247 B | 165 B | RAM_D2 |
+| `g_seq_param_runtime_locked_bits` | 2 247 B | 165 B | RAM_D2 |
+| `g_seq_param_id_to_slot` | 1 615 B | 0 B RAM | Flash const |
+| `g_seq_param_slot_to_id` | 2 560 B | 0 B RAM | Flash const |
+| **Total p-lock** | **80 573 B** | **5 594 B** | **gain 74 979 B** |
+
+La comparaison des sections `RAM_D2` des maps de référence et finales donne :
+
+| Variante | Avant | Après | Delta |
+|---|---:|---:|---:|
+| Release Low-Cost | 232 576 B | 153 504 B | −79 072 B |
+| Release Premium | 243 424 B | 168 224 B | −75 200 B |
+
+Les tables de mapping compactes ajoutent 852 B en Flash (`const`) et ne consomment plus de RAM. Le critère Low-Cost de 74 900 B récupérés est atteint.
 
 ## Ownership et identité
 
@@ -50,9 +95,9 @@ Les IDs `0..5` sont réservés à l'ancien granular et ne sont pas des paramètr
 
 ## Pattern et Project
 
-Pattern v4 capture l'état live courant, les valeurs track/global classifiées, les locks par set/slot, les séquences, la configuration Play/Special et les bases MIDI FX autorisées. Project v4 enveloppe le pattern, l'état de projet, les autoloads et les scènes Macro/locks.
+Pattern v5 capture l'état live courant, les valeurs track/global classifiées, les locks par set/slot compact, les séquences, la configuration Play/Special et les bases MIDI FX autorisées. Project v5 enveloppe le pattern, l'état de projet, les autoloads et les scènes Macro/locks.
 
-Le restore des globals reverb passe par `param_set`, donc réapplique leurs callbacks DSP dans le batch existant. L'ajout de `WET`, `SIZE`, `DECAY` et `PRED` à la classification ne change ni structure, ni taille, ni offset : Pattern et Project restent v4, Patch et Kit restent v3.
+Le restore des globals reverb passe par `param_set`, donc réapplique leurs callbacks DSP dans le batch existant. Les slots p-lock sont validés par set, capacité et moteur TONE avant application ; Pattern et Project restent v5, Patch et Kit restent v3.
 
 Le restore suit un ordre borné : validation de l'en-tête et du checksum, validation des identités et versions, capture/arrêt des états temporaires nécessaires, application des valeurs canoniques, reconstruction des projections runtime, puis restauration UI/transport autorisée. Une erreur de validation ne réalise aucune mutation partielle.
 
@@ -86,4 +131,4 @@ Sont refusés : version non courante, checksum invalide, rôle absent, identité
 
 ## Historique utile
 
-Les références V1 dans les noms de structures/API sont conservées comme interfaces techniques. Pattern/Project v3, Kit/Patch v1, une migration MIX physique ou une persistence granular ne sont pas des formats courants ; ils ne doivent pas être présentés comme des alternatives de restore.
+Les références V1 dans les noms de structures/API sont conservées comme interfaces techniques. Pattern/Project v5, Kit/Patch v3, une migration MIX physique ou une persistence granular ne sont pas des formats alternatifs ; ils ne doivent pas être présentés comme des chemins de restore concurrents.

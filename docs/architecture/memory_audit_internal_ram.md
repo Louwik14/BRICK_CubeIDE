@@ -66,9 +66,20 @@ ConsÃ©quences d'audit :
 
 - `DTCMRAM` a retrouvÃ© de la marge et ne demande pas de dÃ©placement agressif hors profiling.
 - `RAM_D1` est nettement plus saine, mais reste une rÃ©gion critique.
-- `RAM_D2` reste chargÃ©e, avec les gros Ã©tats sÃ©quenceur/param runtime toujours en place.
+- `RAM_D2` reste chargÃ©e, mais les Ã©tats p-lock ont Ã©tÃ© rÃ©duits au runtime compact final ; les gros pools sÃ©quenceur/param restent hors de ce chantier.
 - `RAM_D3` est maintenant une rÃ©serve control rÃ©ellement consommÃ©e, pas une zone vide.
 - `SDRAM` porte dÃ©sormais une part plus large des blocs froids non-RT.
+
+### Validation finale du compactage p-lock (2026-08-02)
+
+Les builds de rÃ©fÃ©rence `Release_lowcost_clean` et `Release_premium_clean` confirment le contrat final :
+
+| Variante | RAM_D2 avant | RAM_D2 aprÃ¨s | Gain de section |
+|---|---:|---:|---:|
+| Low-Cost | 232 576 B | 153 504 B | 79 072 B |
+| Premium | 243 424 B | 168 224 B | 75 200 B |
+
+Le delta isolÃ© des symboles p-lock est de 74 979 B : le runtime compact et les bitmaps utilisent 5 594 B (`14 x 94` slots et deux bitmaps de 165 B). Les mappings `param -> set/slot` et inverses sont `const` en Flash pour 852 B cumulÃ©s. Les anciens symboles `g_seq_param_state`, `g_seq_param_mix_state`, `g_seq_param_id_to_slot` et `g_seq_param_slot_to_id` ne sont plus prÃ©sents.
 
 ---
 
@@ -268,7 +279,9 @@ Candidats transverses identifiÃ©s ensuite :
 
 ---
 
-# 8. RAM_D2
+# 8. RAM_D2 — audit de rÃ©fÃ©rence avant compactage p-lock
+
+Les tableaux de symboles dÃ©taillÃ©s des sections 8.3 Ã  8.6 correspondent Ã  l'audit prÃ©-compactage. Les valeurs finales et le delta validÃ© sont ceux de la section 3 ci-dessus ; les anciens symboles p-lock listÃ©s ici ne sont pas conservÃ©s dans le firmware final.
 
 ## 8.1 Verdict RAM_D2
 
