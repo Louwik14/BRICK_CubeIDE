@@ -196,18 +196,19 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
 
         if (tr0_on != 0U)
         {
-            tr0_l[n] = s242f_fast(s0, in_scale);
-            tr0_r[n] = s242f_fast(s1, in_scale);
+            /* PCB codec input is wired L/R-reversed: restore the internal order here. */
+            tr0_l[n] = s242f_fast(s1, in_scale);
+            tr0_r[n] = s242f_fast(s0, in_scale);
         }
         if (tr1_on != 0U)
         {
-            tr1_l[n] = s242f_fast(s2, in_scale);
-            tr1_r[n] = s242f_fast(s3, in_scale);
+            tr1_l[n] = s242f_fast(s3, in_scale);
+            tr1_r[n] = s242f_fast(s2, in_scale);
         }
         if (tr2_on != 0U)
         {
-            tr2_l[n] = s242f_fast(s4, in_scale);
-            tr2_r[n] = s242f_fast(s5, in_scale);
+            tr2_l[n] = s242f_fast(s5, in_scale);
+            tr2_r[n] = s242f_fast(s4, in_scale);
         }
 
         prx += BOARD_AUDIO_TDM_SLOTS;
@@ -237,19 +238,20 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
         const float cue_sample_r = cue_r[n] * cue_gain;
 
 #if defined(USE_F2S24_SSAT)
-        ptx[0] = f2s24_fast_ssat(main_sample_l);
-        ptx[1] = f2s24_fast_ssat(main_sample_r);
-        ptx[2] = f2s24_fast_ssat(cue_sample_l);
-        ptx[3] = f2s24_fast_ssat(cue_sample_r);
-        ptx[4] = f2s24_fast_ssat(main_sample_l);
-        ptx[5] = f2s24_fast_ssat(main_sample_r);
+        /* PCB codec output is wired L/R-reversed: swap every stereo SAI pair. */
+        ptx[0] = f2s24_fast_ssat(main_sample_r);
+        ptx[1] = f2s24_fast_ssat(main_sample_l);
+        ptx[2] = f2s24_fast_ssat(cue_sample_r);
+        ptx[3] = f2s24_fast_ssat(cue_sample_l);
+        ptx[4] = f2s24_fast_ssat(main_sample_r);
+        ptx[5] = f2s24_fast_ssat(main_sample_l);
 #else
-        ptx[0] = f2s24_fast(main_sample_l);
-        ptx[1] = f2s24_fast(main_sample_r);
-        ptx[2] = f2s24_fast(cue_sample_l);
-        ptx[3] = f2s24_fast(cue_sample_r);
-        ptx[4] = f2s24_fast(main_sample_l);
-        ptx[5] = f2s24_fast(main_sample_r);
+        ptx[0] = f2s24_fast(main_sample_r);
+        ptx[1] = f2s24_fast(main_sample_l);
+        ptx[2] = f2s24_fast(cue_sample_r);
+        ptx[3] = f2s24_fast(cue_sample_l);
+        ptx[4] = f2s24_fast(main_sample_r);
+        ptx[5] = f2s24_fast(main_sample_l);
 #endif
         if (diag_enabled != 0U)
         {

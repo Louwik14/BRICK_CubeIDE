@@ -167,8 +167,9 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
     const int32_t *AUDIO_RESTRICT prx = rx;
     for (uint32_t n = 0; n < frames; n++)
     {
-        tr0_l[n] = s242f_fast(prx[0], in_scale);
-        tr0_r[n] = s242f_fast(prx[1], in_scale);
+        /* PCB codec input is wired L/R-reversed: restore the internal order here. */
+        tr0_l[n] = s242f_fast(prx[1], in_scale);
+        tr0_r[n] = s242f_fast(prx[0], in_scale);
         prx += BOARD_AUDIO_TDM_SLOTS;
     }
 }
@@ -192,11 +193,12 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
     for (uint32_t n = 0; n < frames; n++)
     {
 #if defined(USE_F2S24_SSAT)
-        ptx[0] = f2s24_fast_ssat(main_l[n]);
-        ptx[1] = f2s24_fast_ssat(main_r[n]);
+        /* PCB codec output is wired L/R-reversed: swap only at the SAI boundary. */
+        ptx[0] = f2s24_fast_ssat(main_r[n]);
+        ptx[1] = f2s24_fast_ssat(main_l[n]);
 #else
-        ptx[0] = f2s24_fast(main_l[n]);
-        ptx[1] = f2s24_fast(main_r[n]);
+        ptx[0] = f2s24_fast(main_r[n]);
+        ptx[1] = f2s24_fast(main_l[n]);
 #endif
         if (diag_enabled != 0U)
         {
