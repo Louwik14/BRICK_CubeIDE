@@ -382,6 +382,10 @@ La cible LowCost fournit un seul Looper utilisable dans tout le produit. Une sec
 
 LowCost et Premium partagent un maximum global de 16 voix synthetiques reservees sur au plus 8 tracks. Chaque track Synth reserve de 1 a 8 voix; changer de moteur Synth conserve cette valeur. `VOICES` s'arrete au budget disponible et n'est ni modulable ni p-lockable. La famille Synth reste visible a saturation (`FAMILY : MAX`). Un collage de track ou une application de Patch trop polyphonique applique tout sauf la cardinalite, limitee avec `VOICE LIMITED`; sans slot disponible l'operation est refusee sans mutation avec `VOICE MAX`.
 
+# Addendum 2026-08-01 - ownership CFG de la polyphonie
+
+`VOICES` et `SPREAD` appartiennent a `CFG`, sont lus et appliques par `synth_polyphony`, et restent exclus de la modulation et des p-locks. Les IDs historiques sont preserves jusqu'a l'etape 4C.
+
 # Mute par type de track
 
 Le mute coupe progressivement la sortie audio sans clic. Il stoppe les notes internes/MIDI des tracks Play, MIDI et External, fond le retour External/Input, laisse avancer le Looper en silence et retire seulement la contribution de la track FX. Master n'a pas de mute ordinaire; rien de manque pendant le mute n'est rejoue au demute.

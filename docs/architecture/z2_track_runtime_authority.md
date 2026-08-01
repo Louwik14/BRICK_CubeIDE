@@ -460,6 +460,12 @@ La liberation et la reutilisation passent par la meme autorite: note-off, reset 
 
 - Les projections runtime traitent chaque track comme `SOLO`: le role projete est `SOLO`, la master effective est la track demandee et la collecte contient uniquement cette track.
 - Cette neutralisation ne modifie ni la topologie des huit Play Tracks, ni les Special Tracks, ni la polyphonie interne des moteurs.
+
+## Addendum 2026-08-01 - ownership CFG de la polyphonie
+
+- `track_runtime_get_param_rule()` classe `PARAM_CFG_POLY_VOICES` et `PARAM_CFG_POLY_SPREAD` dans `CFG` avec la ressource `SYNTH`; ils ne reutilisent plus la ressource `PLAY`.
+- `synth_polyphony` reste l'autorite unique des valeurs, du budget et des slots. Les deux controles restent exclus des p-locks, macros et destinations de modulation.
+- Les IDs historiques sont preserves jusqu'a l'etape 4C; cette passe ne renumerote aucun parametre.
 # Addendum 2026-07-31 - capacite runtime MIDI FX
 
 - `TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX` et le domaine/ressource `MIDI_FX` sont explicites dans Z2.

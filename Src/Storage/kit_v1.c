@@ -494,6 +494,7 @@ static uint8_t kit_v1_transition_reapply(void *ctx_ptr)
             {
                 return 0U;
             }
+            synth_polyphony_set_spread(track, kit->tracks[track].synth_spread);
         }
     }
     return (kit_v1_restore_loaded_kit_state(kit) == KIT_V1_RESULT_OK) ? 1U : 0U;
@@ -544,6 +545,8 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
         dst->type = (uint8_t)type;
         dst->synth_voice_count = (family == UI_TRACK_FAMILY_SYNTH)
             ? synth_polyphony_get_voice_count(track) : 0U;
+        dst->synth_spread = (family == UI_TRACK_FAMILY_SYNTH)
+            ? synth_polyphony_get_spread(track) : 0.0f;
         track_topology_identity_t identity = {
             .role = (uint8_t)TRACK_TOPOLOGY_ROLE_UNUSED,
             .ordinal = 0U

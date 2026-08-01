@@ -1171,6 +1171,10 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(dest);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
+    {
+        return 0U;
+    }
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))

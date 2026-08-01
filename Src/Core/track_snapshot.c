@@ -320,6 +320,7 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     out_snapshot->midi_channel = ui_get_track_midi_channel(track);
     out_snapshot->midi_source = ui_get_track_midi_source(track);
     out_snapshot->synth_voice_count = synth_polyphony_get_voice_count(track);
+    out_snapshot->synth_spread = synth_polyphony_get_spread(track);
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
     if ((track < NOTE_FX_TRACK_COUNT)
@@ -352,6 +353,7 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
     out_snapshot->synth_voice_count = 1U;
+    out_snapshot->synth_spread = 0.0f;
     if (track_topology_is_special(track) != 0U)
     {
         out_snapshot->config = ui_get_track_config(track);
@@ -530,6 +532,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     if (target_family == UI_TRACK_FAMILY_SYNTH)
     {
         (void)synth_polyphony_set_voice_count(target_track, applied_voice_count);
+        synth_polyphony_set_spread(target_track, snapshot->synth_spread);
     }
 
     track_snapshot_apply_sequence(target_track, snapshot);

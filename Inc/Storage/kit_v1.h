@@ -82,6 +82,7 @@ typedef struct
     uint8_t synth_voice_count;
     uint8_t topology_role;
     uint8_t topology_ordinal;
+    float synth_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     kit_v1_asset_ref_t asset;

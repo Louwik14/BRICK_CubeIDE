@@ -172,6 +172,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Portée : propriétaire CFG/non-lockable explicite ; stockage Pattern canonique unique ; IDs propres dans CLEAN-OWNER-003.
 - Risque : budget de voix et restore ; préserver `synth_polyphony` comme autorité.
 - Tests : budget voix, Pattern/Project/Kit restore, absence dans maps p-lock/modulation.
+Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource `SYNTH`; les p-locks, macros et destinations MOD refusent ces deux IDs, Pattern/Project utilisent le bloc `sound` canonique et les snapshots/Kit restaurent aussi `SPREAD`. Les IDs restent inchanges pour l'etape 4C.
 - Dépendances : séparer correction de domaine et renumérotation.
 
 ### CLEAN-OWNER-003 — `ALIAS`, `WRONG OWNER` — IDs actuels superposés aux tombstones MIX
@@ -482,6 +483,7 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 - Autorisé : supprimer les fallbacks de domaine une fois le nouveau contrat validé.
 - Interdit : changer budget de voix ou comportement Synth.
 - Tests/builds : voice budget, absence maps p-lock/mod, Pattern/Project/Kit restore, deux variantes.
+Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-Cost/Premium requis par la passe; le budget Synth et le moteur `synth_polyphony` restent inchanges.
 - Docs : Z2/Z3/Z5/Z6.
 - Dépendances : étape 1 ; IDs encore inchangés jusqu'à 4C.
 

@@ -63,6 +63,8 @@ static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t dom
 
     switch (domain)
     {
+        case TRACK_RUNTIME_PARAM_DOMAIN_CFG:
+            return 0U;
         case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             return 1U;

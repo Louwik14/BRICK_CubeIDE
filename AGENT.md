@@ -465,6 +465,7 @@ Principe directeur :
 
 - Les huit Play Tracks sont des autorites musicales independantes pour clavier, MIDI, modèle MIDI FX `note_fx_arp`, scheduler, live record, mute, parametres, p-locks, sequence, snapshots et persistence.
 - Chaque Play Track conserve quatre voix PLAY; la polyphonie et le spread sont exclusivement ceux du moteur via `PARAM_CFG_POLY_VOICES` et `PARAM_CFG_POLY_SPREAD`.
+- `PARAM_CFG_POLY_VOICES` et `PARAM_CFG_POLY_SPREAD` appartiennent au domaine `CFG`, restent non p-lockables et non modulables, et sont appliques/lus uniquement via `synth_polyphony`; leurs IDs historiques restent inchanges jusqu'a l'etape 4C.
 - Patch stocke exactement une piste et peut etre applique independamment a plusieurs pistes selectionnees.
 
 

@@ -1890,10 +1890,14 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SEQ_PLAY_V4_VEL:
         case PARAM_SEQ_PLAY_V4_LEN:
         case PARAM_SEQ_PLAY_V4_MICTIM:
-        case PARAM_CFG_POLY_VOICES:
-        case PARAM_CFG_POLY_SPREAD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_PLAY;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+            return rule;
+
+        case PARAM_CFG_POLY_VOICES:
+        case PARAM_CFG_POLY_SPREAD:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_CFG;
+            rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;
 
         case PARAM_LFO1_RATE:

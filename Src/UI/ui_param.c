@@ -118,7 +118,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
 
 static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
 {
-    if (param == PARAM_CFG_POLY_VOICES) return 0U;
     return ((param == PARAM_STACK_OSC1_TUNE)
             || (param == PARAM_STACK_OSC2_TUNE)
             || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
@@ -1083,7 +1082,8 @@ static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, 
 static uint8_t ui_param_begin_structural_undo(uint8_t encoder, param_id_t param, uint8_t track)
 {
     if ((param != PARAM_CFG_TRACK) && (param != PARAM_CFG_TRACK_TYPE)
-            && (param != PARAM_CFG_POLY_VOICES)) return 0U;
+            && (param != PARAM_CFG_POLY_VOICES)
+            && (param != PARAM_CFG_POLY_SPREAD)) return 0U;
     if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_ENCODER,
             ui_param_make_gesture_key(encoder, param, track)) != UNDO_V2_STATUS_OK) return 0U;
     if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
@@ -1253,6 +1253,8 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
     uint8_t set_id = 0U;
     switch (rule.domain)
     {
+        case TRACK_RUNTIME_PARAM_DOMAIN_CFG:
+            return 0U;
         case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
             set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             break;

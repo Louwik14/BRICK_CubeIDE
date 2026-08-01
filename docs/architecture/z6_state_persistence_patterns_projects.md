@@ -1226,3 +1226,9 @@ Les p-locks MIDI FX utilisent le pool de locks sequenceur existant avec un set d
 # Addendum 2026-08-01 - normalisation restore MIDI FX
 
 - Les restores de bases MIDI FX bornent les quatre valeurs de chaque slot et conservent au plus le premier MODEL ARP du payload; aucun etat de phase, sortie, token ou echeance n'est restaure.
+
+## Addendum 2026-08-01 - persistence CFG VOICES/SPREAD
+
+- Pattern/Project v4 stockent `VOICES` et `SPREAD` dans le bloc `sound` canonique; aucun fallback `mix` n'est conserve. L'apply recalcule le budget puis republie les valeurs effectives dans la meme zone.
+- Le snapshot Track porte les deux controles pour Clipboard et Undo/Redo. Kit reste en version 3 et porte aussi `SPREAD`; Patch reste en version 3 avec son contrat de cardinalite existant, sans nouveau champ spread.
+- Les payloads courants restent stricts: aucune migration n'est ajoutee et les IDs historiques ne sont pas renumerotes dans cette etape.

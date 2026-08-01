@@ -248,6 +248,8 @@ static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t d
 
     switch (domain)
     {
+        case TRACK_RUNTIME_PARAM_DOMAIN_CFG:
+            return 0U;
         case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             return 1U;
@@ -344,6 +346,10 @@ static void seq_param_iface_rebuild_slot_maps(void)
 static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
+    {
+        return 0U;
+    }
     if ((param == PARAM_SAMPLER_SLICE_COUNT)
             || (param == PARAM_LOOPER_STRETCH)
             || (param == PARAM_LOOPER_PITCH)

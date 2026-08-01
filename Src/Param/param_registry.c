@@ -1329,6 +1329,11 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
         return param_apply_play_track_value(id, track, clamped);
     }
 
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
+    {
+        return 0U;
+    }
+
     param_track_exec_ctx_t ctx;
     if (param_track_exec_ctx_build(&ctx, track, id, clamped, rule, rt_fast) == 0U)
     {
@@ -1513,14 +1518,9 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
-    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
+    if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
     {
         return 0U;
-    }
-    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_SPREAD))
-    {
-        synth_polyphony_set_spread(track, clamped);
-        return 1U;
     }
 
     if (param_filter_is_param(id) != 0U)
@@ -1639,15 +1639,22 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 1U;
     }
 
-    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_VOICES))
+    if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
     {
-        keyboard_engine_all_notes_off_for_track(track);
-        synth_polyphony_set_voice_count(track, (uint8_t)clamped);
-        return 1U;
-    }
-    if ((track < SYNTH_POLYPHONY_TRACK_CAPACITY) && (id == PARAM_CFG_POLY_SPREAD))
-    {
-        synth_polyphony_set_spread(track, clamped);
+        if (track >= SYNTH_POLYPHONY_TRACK_CAPACITY)
+        {
+            return 0U;
+        }
+        if (id == PARAM_CFG_POLY_VOICES)
+        {
+            keyboard_engine_all_notes_off_for_track(track);
+            (void)synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+        }
+        else
+        {
+            synth_polyphony_set_spread(track, clamped);
+        }
+        kit_v1_mark_dirty();
         return 1U;
     }
 

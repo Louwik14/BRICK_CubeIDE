@@ -1000,6 +1000,11 @@ L'editeur CFG calcule sa borne effective a chaque mouvement (`16 - voix reservee
 - L'autorite de base est `note_fx_state`: matrice fixe `8 Play Tracks x 4 slots x 4 valeurs`, sans allocation et sans emission sonore.
 - Defaults: `PARAM1=1/16`, `PARAM2=ORDER`, `PARAM3=1`, `MODEL=OFF`. Choisir ARP coupe canoniquement le MODEL ARP eventuel d'un autre slot de la meme track.
 - Le domaine runtime MIDI FX est track-scoped et distinct de ENV/TONE/MOD/MIX/PLAY; aucun set de p-lock MIDI FX n'est cree dans cette etape.
+
+## Addendum 2026-08-01 - controles polyphonie sous CFG
+
+- `VOICES` et `SPREAD` resolvent vers le domaine `CFG`, sans set p-lock et sans cible Macro ou modulation.
+- L'apply normal les route directement vers `synth_polyphony`; les chemins RT fast et runtime-temp les refusent afin qu'aucune modulation ne puisse modifier le budget ou le spread.
 # Addendum 2026-08-01 - runtime MIDI FX et ARP neuf
 
 Le moteur `note_fx_engine` fixe (8 Play Tracks x 4 slots) est separe du modele neuf `note_fx_arp`. Il porte generation, sources ordonnees, phase/direction, echeance sample-domain, PRNG local deterministe, sorties possedees avec token/destination et suspension. Les limites sont fixes a 16 sources et 16 sorties par slot et 8 emissions par piste/bloc; `OFF` reste transparent. Le moteur reste isole des producteurs et dispatchers jusqu'a l'etape 4.

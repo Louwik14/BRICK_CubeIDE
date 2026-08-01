@@ -1406,6 +1406,11 @@ Le collage de track et l'application de Patch preflightent le budget avant toute
 - L'ouverture, la fermeture et le changement de focus de cette page n'activent, ne coupent et ne resynchronisent aucun etat sonore ARP.
 - Sur les contextes Special historiques, le meme bouton conserve la projection `ROUT`; l'interception de routing est maintenant gardee par l'identite de page, pas par un hall mode ARP.
 - Les releases Low-Cost, les raccourcis noirs, le jeu `KEYBOARD` et les steps `SEQ` restent portes par leur mode musical existant.
+
+## Addendum 2026-08-01 - edition CFG VOICES/SPREAD
+
+- La page `CFG` reste l'unique surface UI de `VOICES` et `SPREAD`; le resolver UI de p-lock refuse explicitement le domaine `CFG`.
+- Les deux controles passent par l'undo structurel base sur snapshot Track, et leurs valeurs sont conservees par le clipboard Track sans les transformer en parametres PLAY.
 # Addendum 2026-07-31 - surface MIDI FX quatre slots
 
 - La page MIDI FX expose `SLOT 1..4`, chacun avec `PARAM1/PARAM2/PARAM3/MODEL`.
