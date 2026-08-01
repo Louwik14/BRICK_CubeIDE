@@ -1777,13 +1777,18 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     }
 
     const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(ram_slot);
+    const uint16_t ram_channels = (ram != NULL)
+                                      ? sampler_ram_format_channels(ram->format)
+                                      : 0U;
     if ((ram == NULL)
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != global_slot)
-        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        || ((ram->format != SAMPLER_RAM_FORMAT_FLOAT32_MONO)
+            && (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED))
         || (ram->data == NULL)
         || (ram->frames == 0U)
-        || (ram->channels != 2U))
+        || (ram->channels != ram_channels)
+        || (ram->bytes_per_frame != sampler_ram_format_bytes_per_frame(ram->format)))
     {
         return 0U;
     }
@@ -1896,14 +1901,21 @@ static uint8_t brick6_sampler_runtime_ram_slot_valid(const brick6_sampler_voice_
     }
 
     const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(voice->ram_slot);
+    const uint16_t ram_channels = (ram != NULL)
+                                      ? sampler_ram_format_channels(ram->format)
+                                      : 0U;
     if ((ram == NULL)
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != voice->sample_id)
         || (ram->generation != voice->ram_generation)
-        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        || ((ram->format != SAMPLER_RAM_FORMAT_FLOAT32_MONO)
+            && (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED))
         || (ram->data == NULL)
         || (ram->frames == 0U)
-        || (ram->channels != 2U))
+        || (ram->channels != ram_channels)
+        || (ram->bytes_per_frame != sampler_ram_format_bytes_per_frame(ram->format))
+        || (voice->ram_format != ram->format)
+        || (voice->ram_channels != ram_channels))
     {
         return 0U;
     }
@@ -4758,6 +4770,8 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
     float last_l = 0.0f;
     float last_r = 0.0f;
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     uint32_t produced = 0U;
     uint8_t terminal = 0U;
     while (produced < frames)
@@ -4803,9 +4817,9 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
             {
                 gain *= fade_buf[produced + i];
             }
-            const uint32_t src = frame_index * 2U;
+            const uint32_t src = frame_index * frame_stride;
             last_l = data[src] * gain;
-            last_r = data[src + 1U] * gain;
+            last_r = data[src + right_offset] * gain;
             out_l[produced + i] += last_l;
             out_r[produced + i] += last_r;
         }
@@ -4901,6 +4915,8 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
 
     uint64_t position_q16 = *io_position_q16;
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float last_l = 0.0f;
     float last_r = 0.0f;
@@ -4960,9 +4976,9 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
                     const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     position_q16 += (uint64_t)step_q16;
@@ -4973,9 +4989,9 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
                     const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     position_q16 += (uint64_t)step_q16;
@@ -4990,9 +5006,9 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
                 {
                     const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
-                    const uint32_t src = frame_index * 2U;
-                    last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+        const uint32_t src = frame_index * frame_stride;
+        last_l = data[src] * gain;
+        last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     position_q16 += (uint64_t)step_q16;
@@ -5004,9 +5020,9 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
                 {
                     const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     position_q16 += (uint64_t)step_q16;
@@ -5057,6 +5073,8 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
 
     uint64_t position_q16 = *io_position_q16;
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float last_l = 0.0f;
     float last_r = 0.0f;
@@ -5095,9 +5113,9 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
             if (edge_segment != 0U)
             {
                 const uint32_t frame_index = (uint32_t)(segment_start_q16 >> 16U);
-                const uint32_t src0 = frame_index * 2U;
+                const uint32_t src0 = frame_index * frame_stride;
                 const float l0 = data[src0];
-                const float r0 = data[src0 + 1U];
+                const float r0 = data[src0 + right_offset];
                 last_l = l0 * render_gain;
                 last_r = r0 * render_gain;
                 out_l[produced] += last_l;
@@ -5109,9 +5127,9 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 -= (uint64_t)step_q16;
@@ -5123,10 +5141,10 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
             if (edge_segment != 0U)
             {
                 const uint32_t frame_index = (uint32_t)(segment_start_q16 >> 16U);
-                const uint32_t src0 = frame_index * 2U;
+                const uint32_t src0 = frame_index * frame_stride;
                 const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
                 const float l0 = data[src0];
-                const float r0 = data[src0 + 1U];
+                const float r0 = data[src0 + right_offset];
                 last_l = l0 * gain;
                 last_r = r0 * gain;
                 out_l[produced] += last_l;
@@ -5139,9 +5157,9 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 -= (uint64_t)step_q16;
@@ -5235,6 +5253,8 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
     }
 
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float last_l = 0.0f;
     float last_r = 0.0f;
@@ -5255,9 +5275,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
             {
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
-                    const uint32_t src = (position + i) * 2U;
+                    const uint32_t src = (position + i) * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                 }
@@ -5266,10 +5286,10 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
             {
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
-                    const uint32_t src = (position + i) * 2U;
+                    const uint32_t src = (position + i) * frame_stride;
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                 }
@@ -5293,9 +5313,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
             {
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
-                    const uint32_t src = (position - i) * 2U;
+                    const uint32_t src = (position - i) * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                 }
@@ -5304,10 +5324,10 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
             {
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
-                    const uint32_t src = (position - i) * 2U;
+                    const uint32_t src = (position - i) * frame_stride;
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                 }
@@ -5382,6 +5402,8 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
     }
 
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float last_l = 0.0f;
     float last_r = 0.0f;
@@ -5405,9 +5427,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 += (uint64_t)step_q16;
@@ -5419,9 +5441,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 += (uint64_t)step_q16;
@@ -5454,9 +5476,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
                 for (uint32_t i = 0U; i < todo; ++i)
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * render_gain;
-                    last_r = data[src + 1U] * render_gain;
+                    last_r = data[src + right_offset] * render_gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 -= (uint64_t)step_q16;
@@ -5468,9 +5490,9 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
                 {
                     const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
                     const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
-                    const uint32_t src = frame_index * 2U;
+                    const uint32_t src = frame_index * frame_stride;
                     last_l = data[src] * gain;
-                    last_r = data[src + 1U] * gain;
+                    last_r = data[src + right_offset] * gain;
                     out_l[produced + i] += last_l;
                     out_r[produced + i] += last_r;
                     render_position_q16 -= (uint64_t)step_q16;
@@ -5672,6 +5694,8 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
     float last_l = 0.0f;
     float last_r = 0.0f;
     const float *const data = ram->data;
+    const uint32_t frame_stride = voice->ram_channels;
+    const uint32_t right_offset = frame_stride - 1U;
     uint32_t produced = 0U;
     uint8_t terminal = 0U;
     while (produced < frames)
@@ -5743,9 +5767,9 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
             gain *= (float)fade_pos * fade_scale;
             voice->start_fade_remaining--;
         }
-        const uint32_t src = frame_index * 2U;
-        last_l = data[src] * gain;
-        last_r = data[src + 1U] * gain;
+                    const uint32_t src = frame_index * frame_stride;
+                    last_l = data[src] * gain;
+                    last_r = data[src + right_offset] * gain;
 
         out_l[produced] += last_l;
         out_r[produced] += last_r;
