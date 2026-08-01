@@ -1747,6 +1747,7 @@ static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
+    voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     voice->use_segment_cursor = 0U;
     voice->release_pending = 0U;
     memset(&voice->play_plan, 0, sizeof(voice->play_plan));
@@ -2497,6 +2498,7 @@ void brick6_sampler_runtime_reset_track(uint8_t track_id)
     g_sampler_voice[track_id].ram_generation = 0U;
     g_sampler_voice[track_id].ram_data = NULL;
     g_sampler_voice[track_id].ram_channels = 0U;
+    g_sampler_voice[track_id].ram_format = SAMPLER_RAM_FORMAT_NONE;
     g_sampler_voice[track_id].velocity = 127U;
     g_sampler_voice[track_id].gain = 1.0f;
     g_sampler_voice[track_id].trigger_velocity_gain = 1.0f;
@@ -2944,6 +2946,7 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
+    voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     voice->use_segment_cursor = 0U;
     voice->release_pending = 0U;
     memset(&voice->play_plan, 0, sizeof(voice->play_plan));
@@ -3709,6 +3712,11 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
         voice->active = 0U;
         voice->position = 0.0f;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+        voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        voice->ram_generation = 0U;
+        voice->ram_data = NULL;
+        voice->ram_channels = 0U;
+        voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     }
 
     brick6_sampler_voice_t *const multi_voice =
@@ -4030,6 +4038,7 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
+    voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     sample_voice_reader_stop(&voice->reader);
     brick6_sampler_runtime_multi_stop_track(track_id);
 }
@@ -4865,6 +4874,7 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
+        voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
         return;
     }
     voice->ram_position_q16 = (uint64_t)position << 16U;
@@ -5556,6 +5566,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
+        voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
         return;
     }
 
@@ -5654,6 +5665,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                 voice->ram_generation = 0U;
                 voice->ram_data = NULL;
                 voice->ram_channels = 0U;
+                voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
                 return;
             }
             voice->ram_position_q16 = position_q16;
@@ -5683,6 +5695,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                 voice->ram_generation = 0U;
                 voice->ram_data = NULL;
                 voice->ram_channels = 0U;
+                voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
                 return;
             }
             voice->ram_position_q16 = position_q16;
@@ -5831,6 +5844,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
+        voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
         return;
     }
     voice->ram_position_q16 = position_q16;
@@ -5852,6 +5866,7 @@ static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
+    voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
 }
 
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id)
@@ -5874,9 +5889,11 @@ uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id)
     }
 
     const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    const sampler_ram_slot_t *ram = NULL;
     return ((voice->active != 0U)
-            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
-            && (voice->ram_format == SAMPLER_RAM_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
+            && (brick6_sampler_runtime_ram_slot_valid(voice, &ram) != 0U)
+            && (ram != NULL)
+            && (ram->format == SAMPLER_RAM_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
 }
 
 void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
