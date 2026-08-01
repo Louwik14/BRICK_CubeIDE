@@ -8,10 +8,12 @@ La topologie est compile-time et dépend de la variante :
 
 | Variante | Play | Special | Tracks actives |
 |---|---:|---|---:|
-| Low-Cost | 8 | Master, Looper, Input1, FX | 12 |
-| Premium | 8 | Master, Looper, Input1, Input2, Input3, FX | 14 |
+| Low-Cost | 8 | Input1, Looper, FX, Master | 12 |
+| Premium | 8 | Input1, Looper, FX, Master, Input2, Input3 | 14 |
 
 Le stockage partagé conserve 14 slots. `track_topology` publie les rôles, les ordinals, la catégorie Play/Special/unused, les entrées physiques et les capacités. Il n'existe pas d'Input4. Une Special est fixe : elle n'est jamais une famille ou un type configurable de Play.
+
+Les indices courants sont Input1=8, Looper=9, FX=10 et Master=11; Premium ajoute Input2=12 et Input3=13.
 
 Les identités persistables et copiables sont `role + ordinal`. Une lane DSP ou un index mixer n'est jamais déduit de l'ordinal logique sans passer par la projection runtime.
 

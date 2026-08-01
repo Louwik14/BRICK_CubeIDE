@@ -154,9 +154,9 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 
 ### Layout logique actuel
 - 8 Play Tracks
-- Special Tracks fixes : Master, Looper, Input et FX
-- Low-Cost : Master + Looper + Input1 + FX
-- Premium : Master + Looper + Input1 + Input2 + Input3 + FX
+- Special Tracks fixes : Input, Looper, FX et Master
+- Low-Cost : Input1 + Looper + FX + Master
+- Premium : Input1 + Looper + FX + Master + Input2 + Input3
 - les Special affichent une identité CFG fixe et ne sont jamais proposées comme families/types convertibles; Master et FX sont dérivés directement du rôle topologique, sans adaptateur family/type UI partagé
 - Master porte les effets globaux reverb, delay et compresseur via `TONE`; FX porte exclusivement les quatre slots MacroFX; `MIX` reste limité au mix par track
 

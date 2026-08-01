@@ -22,6 +22,7 @@
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
 #include "Storage/pattern_sd_bank.h"
+#include "Storage/storage_track_identity.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -48,6 +49,7 @@ UI_SDRAM static PatternSaveV1 g_current_pattern;
 UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
 UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
+UI_SDRAM static PatternSaveV1 g_pattern_apply_normalized;
 static uint8_t g_pattern_voice_limited;
 
 uint8_t pattern_live_last_voice_limited(void) { return g_pattern_voice_limited; }
@@ -110,6 +112,8 @@ static uint8_t g_pattern_load_last_error;
 #define PATTERN_LOAD_ERR_RECORD_ACTIVE 3U
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
+static uint8_t pattern_live_normalize_by_identity(const PatternSaveV1 *stored,
+                                                  PatternSaveV1 *normalized);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_play_step_required_lock_count(const pattern_v1_play_step_t *step);
 static uint8_t pattern_live_special_step_required_lock_count(const pattern_v1_special_step_t *step);
@@ -127,6 +131,71 @@ static void pattern_live_apply_linked_kit_for_snapshot(const PatternSaveV1 *patt
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
+}
+
+static uint8_t pattern_live_normalize_by_identity(const PatternSaveV1 *stored,
+                                                  PatternSaveV1 *normalized)
+{
+    uint8_t remap[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
+    const uint8_t track_count = track_topology_get_logical_track_count();
+    if ((stored == 0) || (normalized == 0) || (stored == normalized)
+            || (storage_track_identity_build_remap(stored->track_cfg.identity,
+                                                   track_count,
+                                                   remap) == 0U))
+    {
+        return 0U;
+    }
+
+    memcpy(normalized, stored, sizeof(*normalized));
+    for (uint8_t source = 0U; source < track_count; ++source)
+    {
+        const uint8_t destination = remap[source];
+        normalized->track_cfg.identity[destination] = stored->track_cfg.identity[source];
+        normalized->track_cfg.family[destination] = stored->track_cfg.family[source];
+        normalized->track_cfg.type[destination] = stored->track_cfg.type[source];
+        normalized->track_cfg.external_input[destination] = stored->track_cfg.external_input[source];
+        normalized->track_cfg.midi_channel[destination] = stored->track_cfg.midi_channel[source];
+        normalized->track_cfg.midi_source[destination] = stored->track_cfg.midi_source[source];
+        memcpy(normalized->sound.track_values[destination],
+               stored->sound.track_values[source],
+               sizeof(normalized->sound.track_values[destination]));
+        memcpy(normalized->sound.track_valid[destination],
+               stored->sound.track_valid[source],
+               sizeof(normalized->sound.track_valid[destination]));
+        memcpy(normalized->mix.track_values[destination],
+               stored->mix.track_values[source],
+               sizeof(normalized->mix.track_values[destination]));
+        memcpy(normalized->mix.track_valid[destination],
+               stored->mix.track_valid[source],
+               sizeof(normalized->mix.track_valid[destination]));
+        normalized->globals.track_div[destination] = stored->globals.track_div[source];
+        normalized->globals.track_quant[destination] = stored->globals.track_quant[source];
+        normalized->globals.track_swing[destination] = stored->globals.track_swing[source];
+
+        if (source < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+        {
+            normalized->seq.play[destination] = stored->seq.play[source];
+            if ((source < NOTE_FX_TRACK_COUNT) && (destination < NOTE_FX_TRACK_COUNT))
+            {
+                normalized->note_fx[destination] = stored->note_fx[source];
+            }
+        }
+        else
+        {
+            normalized->seq.special[destination - TRACK_TOPOLOGY_PLAY_TRACK_COUNT] =
+                stored->seq.special[source - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+        }
+    }
+
+    for (uint8_t source_looper = 0U; source_looper < track_count; ++source_looper)
+    {
+        for (uint8_t source_track = 0U; source_track < track_count; ++source_track)
+        {
+            normalized->track_cfg.looper_route_enabled[remap[source_looper]][remap[source_track]] =
+                stored->track_cfg.looper_route_enabled[source_looper][source_track];
+        }
+    }
+    return 1U;
 }
 
 static pattern_v1_special_track_seq_t *pattern_live_special_seq_mut(pattern_v1_seq_block_t *seq,
@@ -896,6 +965,12 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     {
         return 0U;
     }
+
+    if (pattern_live_normalize_by_identity(pattern, &g_pattern_apply_normalized) == 0U)
+    {
+        return 0U;
+    }
+    pattern = &g_pattern_apply_normalized;
 
     if (pattern_live_seq_block_validate_plock_budget(&pattern->seq, 0, 0) == 0U)
     {

@@ -13,12 +13,14 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Storage/kit_sd_bank.h"
 #include "Storage/memory_layout.h"
+#include "Storage/storage_track_identity.h"
 #include "UI/ui_active_track_sync.h"
 
 static uint16_t g_kit_v1_current_slot = KIT_V1_INVALID_SLOT;
 static uint8_t g_kit_v1_dirty;
 static uint8_t g_kit_v1_dirty_suspended;
 STORAGE_STATE_SDRAM static KitSaveV1 g_kit_v1_work;
+STORAGE_STATE_SDRAM static KitSaveV1 g_kit_v1_normalized;
 
 static void kit_v1_copy_text(char *dst, uint32_t dst_size, const char *src)
 {
@@ -448,6 +450,39 @@ static kit_v1_result_t kit_v1_validate_loaded_kit(KitSaveV1 *kit)
     return KIT_V1_RESULT_OK;
 }
 
+static uint8_t kit_v1_normalize_by_identity(const KitSaveV1 *stored,
+                                            KitSaveV1 *normalized)
+{
+    track_topology_identity_t identities[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
+    uint8_t remap[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
+    const uint8_t track_count = track_topology_get_logical_track_count();
+    if ((stored == 0) || (normalized == 0) || (stored == normalized)
+            || (stored->meta.track_count != track_count))
+    {
+        return 0U;
+    }
+
+    memset(identities, 0, sizeof(identities));
+    for (uint8_t source = 0U; source < track_count; ++source)
+    {
+        identities[source].role = stored->tracks[source].topology_role;
+        identities[source].ordinal = stored->tracks[source].topology_ordinal;
+    }
+    if (storage_track_identity_build_remap(identities, track_count, remap) == 0U)
+    {
+        return 0U;
+    }
+
+    memcpy(normalized, stored, sizeof(*normalized));
+    for (uint8_t source = 0U; source < track_count; ++source)
+    {
+        const uint8_t destination = remap[source];
+        normalized->tracks[destination] = stored->tracks[source];
+        normalized->meta.summary[destination] = stored->meta.summary[source];
+    }
+    return 1U;
+}
+
 static uint8_t kit_v1_apply_track_structure(const KitSaveV1 *kit)
 {
     uint8_t family[UI_TRACK_COUNT];
@@ -636,13 +671,18 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
         return KIT_V1_RESULT_SD_FAIL;
     }
 
-    kit_v1_result_t result = kit_v1_validate_loaded_kit(&g_kit_v1_work);
+    if (kit_v1_normalize_by_identity(&g_kit_v1_work, &g_kit_v1_normalized) == 0U)
+    {
+        return KIT_V1_RESULT_BAD_KIT;
+    }
+
+    kit_v1_result_t result = kit_v1_validate_loaded_kit(&g_kit_v1_normalized);
     if (result != KIT_V1_RESULT_OK)
     {
         return result;
     }
 
-    const uint8_t voice_resolution = kit_v1_resolve_voice_budget(&g_kit_v1_work);
+    const uint8_t voice_resolution = kit_v1_resolve_voice_budget(&g_kit_v1_normalized);
     if (voice_resolution == 0U) return KIT_V1_RESULT_APPLY_FAIL;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
@@ -659,7 +699,7 @@ kit_v1_result_t kit_v1_apply_slot(uint16_t slot)
         .seq_runtime_sync_fn = 0,
         .ui_sync_fn = kit_v1_transition_ui_sync,
         .resume_fn = 0,
-        .ctx = (void *)&g_kit_v1_work
+        .ctx = (void *)&g_kit_v1_normalized
     };
 
     g_kit_v1_dirty_suspended++;

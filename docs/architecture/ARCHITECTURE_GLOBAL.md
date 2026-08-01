@@ -17,8 +17,8 @@ Une décision ne doit avoir qu'une autorité. Une représentation interne peut �
 `track_topology` est l'autorité de la topologie produit : rôles, présence, cardinalités, identités `role + ordinal` et capacités structurantes.
 
 - 8 Play Tracks configurables ;
-- Low-Cost : 4 Special (`Master`, `Looper`, `Input1`, `FX`) et 12 tracks actives ;
-- Premium : 6 Special (`Master`, `Looper`, `Input1..3`, `FX`) et 14 tracks actives ;
+- Low-Cost : 4 Special (`Input1`, `Looper`, `FX`, `Master`) et 12 tracks actives ;
+- Premium : 6 Special (`Input1`, `Looper`, `FX`, `Master`, `Input2`, `Input3`) et 14 tracks actives ;
 - capacité de stockage commune : 14 slots ;
 - aucune ressource Input4 ;
 - les Special ne sont pas convertibles en famille/type Play.

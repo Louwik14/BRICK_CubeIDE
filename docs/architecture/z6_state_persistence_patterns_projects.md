@@ -18,7 +18,7 @@ Les noms techniques `PatternSaveV1`, `ProjectSaveV1`, `PatchSaveV1` et `KitSaveV
 Chaque track persistée est identifiée par `role + ordinal` issu de `track_topology`. Avant toute mutation, le restore vérifie la variante, la présence du rôle, la compatibilité de la famille/type, les capacités et les ressources exclusives.
 
 - les huit Play Tracks restent indépendantes ;
-- les Special restent Master, Looper, Input et FX ;
+- les Special restent Input, Looper, FX et Master ;
 - Pattern/Project stockent des séquences Play et Special distinctes ;
 - Patch capture et applique une Play Track seulement ;
 - Kit capture les états de son scope et ne convertit pas une Special en Play ;
@@ -53,6 +53,8 @@ Les IDs `0..5` sont réservés à l'ancien granular et ne sont pas des paramètr
 Pattern v4 capture l'état live courant, les valeurs track/global classifiées, les locks par set/slot, les séquences, la configuration Play/Special et les bases MIDI FX autorisées. Project v4 enveloppe le pattern, l'état de projet, les autoloads et les scènes Macro/locks.
 
 Le restore suit un ordre borné : validation de l'en-tête et du checksum, validation des identités et versions, capture/arrêt des états temporaires nécessaires, application des valeurs canoniques, reconstruction des projections runtime, puis restauration UI/transport autorisée. Une erreur de validation ne réalise aucune mutation partielle.
+
+Avant les validations track-aware et toute mutation, Pattern construit une bijection bornée `identité stockée role+ordinal -> index topology courant`. Cette normalisation en mémoire remappe configuration, sound, mix, séquences, actions Special, routes et tables track-indexées. Project réutilise la même identité embarquée pour `multi[]` et les cibles de locks Macro; Kit normalise ses payloads et résumés par leur identité propre. Une identité absente, dupliquée ou invalide refuse le payload sans fallback par index. Les formats, tailles, offsets et checksums restent inchangés.
 
 Les locks MIDI FX persistent comme `set_id + param_slot + value16` dans Pattern/Project. Les bases `note_fx_state` de huit Play Tracks appartiennent au snapshot musical ; l'état d'exécution MIDI FX est reconstruit et n'est pas écrit comme état audio transitoire.
 

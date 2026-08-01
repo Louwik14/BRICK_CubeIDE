@@ -7,8 +7,8 @@ BRICK6 est une machine audio embarquée track-aware pour le jeu live, séquencé
 La topologie logique est publiée par `track_topology` et projetée par `track_runtime`.
 
 - 8 Play Tracks configurables sur Low-Cost et Premium ;
-- Low-Cost : `8 Play + Master + Looper + Input1 + FX` (12 tracks actives) ;
-- Premium : `8 Play + Master + Looper + Input1 + Input2 + Input3 + FX` (14 tracks actives) ;
+- Low-Cost : `8 Play + Input1 + Looper + FX + Master` (12 tracks actives) ;
+- Premium : `8 Play + Input1 + Looper + FX + Master + Input2 + Input3` (14 tracks actives) ;
 - le stockage commun conserve 14 slots ; les tracks inutilisées Low-Cost ne sont pas sélectionnables ;
 - les Special sont fixes et ne sont jamais des familles/types de Play configurables ;
 - les tracks logiques et les lanes DSP physiques sont des espaces distincts.

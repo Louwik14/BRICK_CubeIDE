@@ -33,10 +33,12 @@ foreach ($contract in @(
     '#define TRACK_TOPOLOGY_LOGICAL_TRACK_COUNT 14U',
     '#define TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT 1U',
     '#define TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT 3U',
-    '#define TRACK_TOPOLOGY_MASTER_TRACK_INDEX 8U',
+    '#define TRACK_TOPOLOGY_INPUT_FIRST_TRACK_INDEX 8U',
     '#define TRACK_TOPOLOGY_LOOPER_TRACK_INDEX 9U',
-    '#define TRACK_TOPOLOGY_FX_TRACK_INDEX 11U',
-    '#define TRACK_TOPOLOGY_FX_TRACK_INDEX 13U',
+    '#define TRACK_TOPOLOGY_FX_TRACK_INDEX 10U',
+    '#define TRACK_TOPOLOGY_MASTER_TRACK_INDEX 11U',
+    '#define TRACK_TOPOLOGY_INPUT_SECOND_TRACK_INDEX 12U',
+    '#define TRACK_TOPOLOGY_INPUT_THIRD_TRACK_INDEX 13U',
     'TRACK_CAPABILITY_INPUT_RESERVATION'
 )) {
     if (-not $header.Contains($contract)) {
@@ -62,6 +64,9 @@ if ($catalog -match 'k_sampler_types\[\]\s*=\s*\{[^}]*UI_TRACK_TYPE_LOOPER' -or
 }
 if (-not $implementation.Contains('TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT <= 3U')) {
     throw 'Topology lacks the three-input compile-time bound'
+}
+if ($implementation -notmatch 'PLAY_DESCRIPTOR\(7U\),\s*SPECIAL_DESCRIPTOR\(TRACK_TOPOLOGY_INPUT_FIRST_TRACK_INDEX[\s\S]*SPECIAL_DESCRIPTOR\(TRACK_TOPOLOGY_LOOPER_TRACK_INDEX[\s\S]*SPECIAL_DESCRIPTOR\(TRACK_TOPOLOGY_FX_TRACK_INDEX[\s\S]*SPECIAL_DESCRIPTOR\(TRACK_TOPOLOGY_MASTER_TRACK_INDEX') {
+    throw 'Special topology order is not Input1, Looper, FX, Master'
 }
 if (-not $trackState.Contains('track_state_topology_config(track)')) {
     throw 'Track state does not force topology-owned Special identities'
@@ -109,4 +114,4 @@ foreach ($file in $audioPathFiles) {
     }
 }
 
-'track_topology_validation=PASS lowcost=8+4 premium=8+6 fixed_special=yes notes_arp=play_only input4_hybrid=absent mute_roles=yes realtime_alloc=none'
+'track_topology_validation=PASS lowcost=Play1-8,Input1,Looper,FX,Master premium=Play1-8,Input1,Looper,FX,Master,Input2,Input3 fixed_special=yes notes_arp=play_only input4_hybrid=absent mute_roles=yes realtime_alloc=none'

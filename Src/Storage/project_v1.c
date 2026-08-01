@@ -10,6 +10,7 @@
 #include "Storage/project_sd_bank.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
+#include "Storage/storage_track_identity.h"
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
@@ -33,6 +34,8 @@
 UI_SDRAM static ProjectSaveV1 g_project_work;
 UI_SDRAM static project_v1_macro_state_t g_project_macro_state;
 UI_SDRAM static project_v1_multi_track_t g_project_multi_assign[SEQ_TRACK_COUNT];
+UI_SDRAM static project_v1_multi_track_t g_project_normalized_multi[SEQ_TRACK_COUNT];
+UI_SDRAM static project_v1_macro_state_t g_project_normalized_macro;
 UI_SDRAM static project_v1_multi_restore_diag_t g_project_multi_restore_diag;
 static uint8_t g_project_active_slot_valid;
 static uint8_t g_project_active_slot;
@@ -59,6 +62,46 @@ static void project_v1_macro_clear_lock(project_v1_macro_lock_t *lock)
     lock->track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
     lock->param = PROJECT_V1_MACRO_LOCK_PARAM_NONE;
     lock->scene_value = 0.0f;
+}
+
+static uint8_t project_v1_normalize_track_payloads(const ProjectSaveV1 *project)
+{
+    uint8_t remap[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
+    const uint8_t track_count = track_topology_get_logical_track_count();
+    if ((project == 0)
+            || (storage_track_identity_build_remap(project->live.track_cfg.identity,
+                                                   track_count,
+                                                   remap) == 0U))
+    {
+        return 0U;
+    }
+
+    memcpy(g_project_normalized_multi, project->multi, sizeof(g_project_normalized_multi));
+    for (uint8_t source = 0U; source < track_count; ++source)
+    {
+        g_project_normalized_multi[remap[source]] = project->multi[source];
+    }
+
+    g_project_normalized_macro = project->macro;
+    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
+    {
+        for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+        {
+            project_v1_macro_lock_t *const entry =
+                &g_project_normalized_macro.scenes[scene].locks[lock];
+            if ((entry->track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
+                    || (entry->param == PROJECT_V1_MACRO_LOCK_PARAM_NONE))
+            {
+                continue;
+            }
+            if (entry->track >= track_count)
+            {
+                return 0U;
+            }
+            entry->track = remap[entry->track];
+        }
+    }
+    return 1U;
 }
 
 static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
@@ -610,16 +653,17 @@ static void project_v1_reset_blank_transient_runtime(void)
 }
 
 static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *project,
+                                                          const project_v1_multi_track_t *multi,
                                                           uint8_t track)
 {
-    if ((project == 0) || (track >= SEQ_TRACK_COUNT)
-        || (project->multi[track].path[0] == '\0'))
+    if ((project == 0) || (multi == 0) || (track >= SEQ_TRACK_COUNT)
+        || (multi[track].path[0] == '\0'))
     {
         return MULTI_SAMPLE_POOL_INVALID_ID;
     }
 
     const uint16_t autoload_slot =
-        project_v1_sample_autoload_find_multi_slot(project, project->multi[track].path);
+        project_v1_sample_autoload_find_multi_slot(project, multi[track].path);
     if (autoload_slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
     {
         return autoload_slot;
@@ -631,7 +675,7 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
             multi_sample_pool_get_instrument(slot);
         if ((instrument != 0) && (instrument->index_path[0] != '\0')
             && (project_v1_sample_autoload_path_equal(instrument->index_path,
-                                                      project->multi[track].path) != 0U))
+                                                      multi[track].path) != 0U))
         {
             return slot;
         }
@@ -639,9 +683,9 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
 
     for (uint8_t prev = 0U; prev < track; ++prev)
     {
-        if ((project->multi[prev].path[0] != '\0')
-            && (project_v1_text_equal(project->multi[prev].path,
-                                      project->multi[track].path) != 0U))
+        if ((multi[prev].path[0] != '\0')
+            && (project_v1_text_equal(multi[prev].path,
+                                      multi[track].path) != 0U))
         {
             uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
             if (brick6_sampler_runtime_get_multi_instrument(prev, &instrument_id) != 0U)
@@ -654,10 +698,11 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
     return track;
 }
 
-static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
+static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
+                                                   const project_v1_multi_track_t *multi)
 {
     memset(&g_project_multi_restore_diag, 0, sizeof(g_project_multi_restore_diag));
-    if (project == 0)
+    if ((project == 0) || (multi == 0))
     {
         return;
     }
@@ -665,7 +710,7 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const project_v1_multi_track_t *const src = &project->multi[track];
+        const project_v1_multi_track_t *const src = &multi[track];
         project_v1_multi_track_t *const dst = &g_project_multi_assign[track];
 
         dst->gain = src->gain;
@@ -694,7 +739,7 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
             continue;
         }
 
-        const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, track);
+        const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, multi, track);
         if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
         {
             brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
@@ -711,8 +756,8 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
         uint8_t shared_with_previous = 0U;
         for (uint8_t prev = 0U; prev < track; ++prev)
         {
-            if ((project->multi[prev].path[0] != '\0')
-                && (project_v1_text_equal(project->multi[prev].path, dst->path) != 0U))
+            if ((multi[prev].path[0] != '\0')
+                && (project_v1_text_equal(multi[prev].path, dst->path) != 0U))
             {
                 shared_with_previous = 1U;
                 break;
@@ -1068,6 +1113,12 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
         return 0U;
     }
 
+    if (project_v1_normalize_track_payloads(project) == 0U)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
+        return 0U;
+    }
+
     if (pattern_live_apply_snapshot(&project->live, resume_transport) == 0U)
     {
         project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
@@ -1086,9 +1137,9 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
                                   project->state.queued_pattern_bank,
                                   project->state.queued_pattern_slot);
 
-    project_v1_multi_restore_from_snapshot(project);
+    project_v1_multi_restore_from_snapshot(project, g_project_normalized_multi);
 
-    g_project_macro_state = project->macro;
+    g_project_macro_state = g_project_normalized_macro;
     project_v1_macro_sanitize_state(&g_project_macro_state);
     param_macro_sync_scene_sources();
     g_project_active_slot_valid = project->state.active_project_slot_valid;
