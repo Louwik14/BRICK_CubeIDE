@@ -62,6 +62,14 @@ typedef struct
     uint32_t slot_index;
 } sample_page_ref_t;
 
+typedef struct
+{
+    uint8_t owner_kind;
+    uint8_t owner_id;
+    uint16_t reserved;
+    uint32_t owner_generation;
+} sample_page_window_owner_t;
+
 typedef enum
 {
     SAMPLE_PAGE_BLOCK_OK = 0,
@@ -215,6 +223,9 @@ uint8_t sample_page_cache_acquire_window_page_key(sample_audio_key_t key,
                                                   uint8_t owner_kind,
                                                   uint8_t owner_id,
                                                   uint32_t owner_generation);
+uint8_t sample_page_cache_find_window_owner_key(sample_audio_key_t key,
+                                                uint32_t page_index,
+                                                sample_page_window_owner_t *out_owner);
 void sample_page_cache_release_window_owner(uint8_t owner_kind,
                                             uint8_t owner_id,
                                             uint32_t owner_generation);

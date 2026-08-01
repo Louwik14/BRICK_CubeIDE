@@ -361,7 +361,31 @@ static void sample_stream_manager_drop_pending_slot(sample_stream_pending_t *pen
     const sample_audio_key_t key = pending->key;
     const uint32_t page_index = pending->page_index;
     (void)sample_page_cache_cancel_queued_page_key(key, page_index, reason);
+    if (sample_page_cache_get_page_state_key(key, page_index) == SAMPLE_PAGE_QUEUED)
+    {
+        pending->owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_NONE;
+        pending->owner_id = 0U;
+        pending->owner_generation = 0U;
+        return;
+    }
     memset(pending, 0, sizeof(*pending));
+}
+
+static sample_stream_pending_t *sample_stream_manager_find_pending_key(sample_audio_key_t key,
+                                                                       uint32_t page_index)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
+        if ((pending->active != 0U)
+            && (sample_audio_key_equal(&pending->key, &key) != 0U)
+            && (pending->page_index == page_index))
+        {
+            return pending;
+        }
+    }
+
+    return 0;
 }
 
 static uint8_t sample_stream_manager_pending_budget_allows(
@@ -497,6 +521,69 @@ static uint8_t sample_stream_manager_note_requested_page_key(sample_audio_key_t 
         return sample_stream_manager_note_pending_key(key, page_index, priority, deadline_frames, owner);
     }
     return 1U;
+}
+
+static uint8_t sample_stream_manager_repair_queued_page(sample_audio_key_t key,
+                                                        uint32_t page_index,
+                                                        sample_stream_priority_t priority,
+                                                        uint32_t deadline_frames)
+{
+    if (sample_page_cache_get_page_state_key(key, page_index) != SAMPLE_PAGE_QUEUED)
+    {
+        return 1U;
+    }
+
+    if (sample_stream_manager_find_pending_key(key, page_index) != 0)
+    {
+        return 1U;
+    }
+
+    sample_page_window_owner_t remaining_owner;
+    if (sample_page_cache_find_window_owner_key(key, page_index, &remaining_owner) != 0U)
+    {
+        sample_stream_active_desc_t owner;
+        memset(&owner, 0, sizeof(owner));
+        owner.owner_kind = remaining_owner.owner_kind;
+        owner.owner_id = remaining_owner.owner_id;
+        owner.owner_generation = remaining_owner.owner_generation;
+        return sample_stream_manager_note_pending_key(key,
+                                                      page_index,
+                                                      priority,
+                                                      deadline_frames,
+                                                      &owner);
+    }
+
+    (void)sample_page_cache_cancel_queued_page_key(key,
+                                                   page_index,
+                                                   SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+    if (sample_page_cache_get_page_state_key(key, page_index) != SAMPLE_PAGE_QUEUED)
+    {
+        return 1U;
+    }
+
+    return sample_stream_manager_note_pending_key(key,
+                                                  page_index,
+                                                  priority,
+                                                  deadline_frames,
+                                                  0);
+}
+
+static void sample_stream_manager_repair_queued_pages(void)
+{
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        const sample_page_desc_t *const page = sample_page_cache_get_page_desc(i);
+        if ((page == 0) || (page->state != SAMPLE_PAGE_QUEUED)
+            || (sample_stream_manager_find_pending_key(page->key, page->page_index) != 0))
+        {
+            continue;
+        }
+
+        (void)sample_stream_manager_repair_queued_page(page->key,
+                                                       page->page_index,
+                                                       SAMPLE_STREAM_PRIORITY_URGENT,
+                                                       0U);
+    }
 }
 
 static uint16_t sample_stream_manager_fair_distance_pending(const sample_stream_pending_t *pending)
@@ -861,13 +948,37 @@ void sample_stream_manager_release_owner(uint8_t owner_kind,
             && (pending->owner_id == owner_id)
             && (pending->owner_generation == owner_generation))
         {
-            (void)sample_page_cache_cancel_queued_page_key(
-                pending->key,
-                pending->page_index,
-                SAMPLE_STREAM_PENDING_REASON_RELEASE_OWNER);
-            memset(pending, 0, sizeof(*pending));
+            sample_page_window_owner_t remaining_owner;
+            if (sample_page_cache_find_window_owner_key(pending->key,
+                                                        pending->page_index,
+                                                        &remaining_owner) != 0U)
+            {
+                pending->owner_kind = remaining_owner.owner_kind;
+                pending->owner_id = remaining_owner.owner_id;
+                pending->owner_generation = remaining_owner.owner_generation;
+            }
+            else
+            {
+                (void)sample_page_cache_cancel_queued_page_key(
+                    pending->key,
+                    pending->page_index,
+                    SAMPLE_STREAM_PENDING_REASON_RELEASE_OWNER);
+                if (sample_page_cache_get_page_state_key(pending->key,
+                                                         pending->page_index)
+                    == SAMPLE_PAGE_QUEUED)
+                {
+                    pending->owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_NONE;
+                    pending->owner_id = 0U;
+                    pending->owner_generation = 0U;
+                }
+                else
+                {
+                    memset(pending, 0, sizeof(*pending));
+                }
+            }
         }
     }
+    sample_stream_manager_repair_queued_pages();
 }
 
 uint8_t sample_stream_manager_request_page(uint16_t sample_id, uint32_t page_index)
@@ -1153,6 +1264,22 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
             continue;
         }
 
+        if ((sample_page_cache_get_page_state_key(desc->key, page_index) == SAMPLE_PAGE_QUEUED)
+            && (sample_stream_manager_find_pending_key(desc->key, page_index) == 0))
+        {
+            if (sample_stream_manager_note_pending_key(desc->key,
+                                                       page_index,
+                                                       priority,
+                                                       deadline_frames,
+                                                       desc) != 0U)
+            {
+                sample_stream_manager_active_state_note(
+                    desc->state, page_index, priority, desc->direction);
+                requested = 1U;
+            }
+            continue;
+        }
+
         if (sample_stream_manager_active_state_allows(
                 desc->state, page_index, priority, desc->direction) == 0U)
         {
@@ -1298,6 +1425,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
     }
 
     const uint32_t start_tick = HAL_GetTick();
+    sample_stream_manager_repair_queued_pages();
     uint32_t pages_this_call = 0U;
     g_sample_stream_service_fatfs_ops = 0U;
 
@@ -1514,6 +1642,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
+    sample_stream_manager_repair_queued_pages();
     uint8_t pending_seen = 0U;
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
     {

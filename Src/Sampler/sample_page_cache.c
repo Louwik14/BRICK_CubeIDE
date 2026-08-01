@@ -1657,6 +1657,40 @@ uint8_t sample_page_cache_acquire_window_page_key(sample_audio_key_t key,
     return 1U;
 }
 
+uint8_t sample_page_cache_find_window_owner_key(sample_audio_key_t key,
+                                                uint32_t page_index,
+                                                sample_page_window_owner_t *out_owner)
+{
+    if ((sample_page_cache_key_valid(key) == 0U) || (out_owner == 0))
+    {
+        return 0U;
+    }
+
+    const sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
+    if (page == 0)
+    {
+        return 0U;
+    }
+
+    const uint16_t slot_index = (uint16_t)(page - g_sample_page_desc);
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_WINDOW_LOCK_MAX; ++i)
+    {
+        const sample_page_window_lock_t *const lock = &g_sample_page_window_lock[i];
+        if ((lock->used == 0U) || (lock->slot_index != slot_index))
+        {
+            continue;
+        }
+
+        out_owner->owner_kind = lock->owner_kind;
+        out_owner->owner_id = lock->owner_id;
+        out_owner->reserved = 0U;
+        out_owner->owner_generation = lock->owner_generation;
+        return 1U;
+    }
+
+    return 0U;
+}
+
 void sample_page_cache_release_window_owner(uint8_t owner_kind,
                                             uint8_t owner_id,
                                             uint32_t owner_generation)
