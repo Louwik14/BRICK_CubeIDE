@@ -30,7 +30,7 @@ typedef struct
     uint16_t id;
     char name[MULTI_SAMPLE_POOL_NAME_MAX];
     char index_path[MULTI_SAMPLE_POOL_PATH_MAX];
-    multi_sample_instrument_state_t state;
+    volatile multi_sample_instrument_state_t state;
     uint8_t note_min;
     uint8_t note_max;
     uint16_t sample_count;

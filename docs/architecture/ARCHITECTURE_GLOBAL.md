@@ -1,5 +1,11 @@
 # ARCHITECTURE_GLOBAL.md
 
+## Addendum 2026-08-01 - autorite MPU SDRAM
+
+- Z0 configure les 32 MiB de SDRAM externe en memoire normale write-back/write-allocate, non-shareable et XN. Les linkers Low-Cost/Premium reservent les 31 premiers MiB aux sections cacheables.
+- Une region MPU prioritaire de 1 MiB a `0xC1F00000` reste shareable, non cacheable, non bufferable et XN pour les rings Recorder et le preroll Looper. Le pool de pages Sampler/Looper/Wavetables demeure hors de cet overlay.
+- Z1 conserve l'autorite hard-RT de lecture des pages; Z6 les remplit hors IRQ. Les protocoles de publication/recyclage et la compatibilite DMA restent explicites et ne sont pas remplaces par une maintenance cache globale.
+
 ## Addendum 2026-07-31 - Play MIDI et External
 
 - Z2 distingue `MIDI/MIDI`, sans cible audio, de `External/External`, qui combine le chemin MIDI et une cible audio sur une entrée physique sélectionnée.

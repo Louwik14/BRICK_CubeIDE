@@ -1,5 +1,23 @@
 # Z1 - Audio Hard-RT et Mix
 
+## Addendum 2026-08-01 - audit Recorder/preroll apres activation WBWA
+
+- Les deux rings `multi_record_writer`, le preroll Looper et le ring AUDIO TEST 2 sont les buffers SDRAM partages IRQ/superloop identifies; ils restent dans l'overlay `SDRAM_RECORDER` non cacheable. Le pack PCM24 est hors IRQ et peut rester dans la SDRAM cacheable.
+- Le producteur Recorder publie `write_index` apres les samples; le consommateur applique une barriere avant lecture et publie `read_index` apres consommation. Le preroll publie de meme son compteur de frames apres copie et son adoption applique une barriere apres arret de capture.
+- Aucune maintenance D-cache n'est executee dans l'IRQ Recorder ou Looper. Les DMA audio, LED, ADC et display utilisent leurs buffers D2/autorites existants et n'accedent pas directement au pool de pages.
+
+## Addendum 2026-08-01 - publication et recyclage des pages cacheables
+
+- `sample_page_cache` publie une page par `DMB` avant `SAMPLE_PAGE_READY`; les getters/acquisitions appliquent la barriere d'acquisition apres observation de `READY`. Aucune maintenance D-cache n'est requise ni ajoutee pour cet echange CPU vers CPU.
+- `use_count` est acquis et libere sous une section critique IRQ courte. Une victime de recyclage est revalidee puis retiree de `READY` atomiquement avant suppression d'index, changement de generation et reutilisation; une page acquise, pinee, verrouillee ou residentielle n'est pas recyclable.
+- Sampler RAM publie toutes ses metadonnees avant `SAMPLER_RAM_SLOT_READY`; RAM et Wavetable retirent atomiquement le slot de `READY` avant de rendre leurs pages permanentes au pool. Wavetable conserve son commit transactionnel sous IRQ masquee et Multi publie son etat `READY` avec le meme contrat de barriere.
+
+## Addendum 2026-08-01 - pool de pages cacheable
+
+- Le pool commun de pages Sampler/Looper/Wavetables appartient a la region SDRAM globale MPU write-back/write-allocate. Les lectures audio CPU dans l'IRQ profitent donc du D-cache; cette etape n'ajoute aucune maintenance cache dans l'IRQ.
+- Les rings Recorder et le preroll Looper restent dans l'overlay MPU non cacheable de 1 MiB a `0xC1F00000`. Leur contrat IRQ/superloop ne change pas.
+- La coherence de publication et de recyclage des pages, ainsi que l'audit des acces DMA ou autres maitres memoire, restent des contrats distincts a valider avant qualification fonctionnelle complete.
+
 ## Addendum 2026-07-31 - renderer natif `TRX-BD`
 
 - `DRUM/MD` rend maintenant `TRX-BD` par une fonction specialisee: sinus

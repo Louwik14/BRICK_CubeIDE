@@ -1,5 +1,11 @@
 # Z0 - Plateforme / Cadence
 
+## Addendum 2026-08-01 - attributs MPU de la SDRAM externe
+
+- Les deux variantes configurent la region MPU 3 sur les 32 MiB de SDRAM a `0xC0000000` en memoire normale, full-access, non-shareable, write-back/write-allocate et XN avant activation du D-cache.
+- La region MPU 4, de priorite superieure, recouvre le dernier MiB a `0xC1F00000` en memoire normale shareable, non cacheable, non bufferable et XN. Elle porte exclusivement les rings Recorder et le preroll Looper places par les linkers.
+- La region 1 D2 DMA et la region 2 Backup SRAM conditionnelle restent inchangees. `Release`, `Test`, `Premium` et `TestPremium` utilisent donc les memes numeros et attributs SDRAM, sans depasser les huit regions du Cortex-M7.
+
 ## Addendum 2026-07-30 - cadence Hall low-cost sans ASC
 
 - Le timer/MUX low-cost publie une mesure valide par touche toutes les 2,8 ms. `hall_loop_process()` transmet chaque entree FIFO brute a `hall_engine_process_sample()` sans moyenne numerique ASC.

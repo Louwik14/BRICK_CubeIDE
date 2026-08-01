@@ -102,6 +102,7 @@ static void writer_debug_mark(const multi_record_writer_client_t *client,
 static uint32_t ring_pending_frames(const multi_record_writer_client_t *client)
 {
     const uint32_t wr = client->write_index;
+    __DMB();
     const uint32_t rd = client->read_index;
     return (wr >= rd) ? (wr - rd) : (MULTI_RECORD_WRITER_RING_FRAMES - (rd - wr));
 }
@@ -252,6 +253,8 @@ static void pack_pcm24_from_ring(uint32_t client_id, uint32_t frames)
     uint32_t rd = client->read_index;
     uint32_t out = 0U;
 
+    __DMB();
+
     for(uint32_t i = 0U; i < frames; ++i)
     {
         const uint32_t src = rd * MULTI_RECORD_WRITER_CHANNELS;
@@ -272,6 +275,7 @@ static void pack_pcm24_from_ring(uint32_t client_id, uint32_t frames)
 static void drain_client_frames(uint32_t client_id, uint32_t frames)
 {
     multi_record_writer_client_t *client = &g_record_clients[client_id];
+    __DMB();
     client->read_index = (client->read_index + frames) % MULTI_RECORD_WRITER_RING_FRAMES;
     client->frames_drained += frames;
     client->frames_written += frames;

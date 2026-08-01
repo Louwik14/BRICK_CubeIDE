@@ -75,7 +75,7 @@ typedef struct
 
 typedef struct
 {
-    sampler_ram_slot_state_t state;
+    volatile sampler_ram_slot_state_t state;
     uint16_t global_slot;
     char path[SAMPLER_RAM_POOL_PATH_MAX];
     sampler_ram_format_t format;

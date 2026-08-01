@@ -93,6 +93,8 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
 #define BACKUP_SRAM_MPU_BASE               (0x38800000UL)
+#define SDRAM_MPU_BASE                     (0xC0000000UL)
+#define SDRAM_RECORDER_MPU_BASE            (0xC1F00000UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
@@ -125,7 +127,34 @@ static void MPU_Config(void)
   MPU_InitStruct.SubRegionDisable = 0x00U;
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 #endif
+
+  MPU_InitStruct.Number = MPU_REGION_NUMBER3;
+  MPU_InitStruct.BaseAddress = SDRAM_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_32MB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  MPU_InitStruct.Number = MPU_REGION_NUMBER4;
+  MPU_InitStruct.BaseAddress = SDRAM_RECORDER_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+  __DSB();
+  __ISB();
 }
 
 static void lowcost_bootloader_shift_step16_service(void)

@@ -1696,18 +1696,27 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
         return;
     }
 
-    const wavetable_slot_t *const old = &g_wavetable_pool.slots[wavetable_slot];
+    wavetable_slot_t *const slot = &g_wavetable_pool.slots[wavetable_slot];
+    const wavetable_slot_t old = *slot;
     const uint32_t generation = wavetable_pool_next_generation();
-    g_wavetable_pool.slots[wavetable_slot].generation = generation;
-    if (old->page_count != 0U)
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    slot->state = WAVETABLE_SLOT_EMPTY;
+    slot->generation = generation;
+    __DMB();
+    if (primask == 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old->first_page_slot,
-                                                       old->page_count);
+        __enable_irq();
     }
-    if (old->mipmap.page_count != 0U)
+    if (old.page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old->mipmap.first_page_slot,
-                                                       old->mipmap.page_count);
+        sample_page_cache_release_slot_pool_allocation(old.first_page_slot,
+                                                       old.page_count);
+    }
+    if (old.mipmap.page_count != 0U)
+    {
+        sample_page_cache_release_slot_pool_allocation(old.mipmap.first_page_slot,
+                                                       old.mipmap.page_count);
     }
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_WAVETABLE, wavetable_slot);
     memset(&g_wavetable_pool.slots[wavetable_slot], 0, sizeof(g_wavetable_pool.slots[wavetable_slot]));

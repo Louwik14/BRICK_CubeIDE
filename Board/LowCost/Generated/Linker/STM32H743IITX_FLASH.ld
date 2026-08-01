@@ -52,13 +52,20 @@ MEMORY
   RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
   RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
   BKPSRAM (xrw)  : ORIGIN = 0x38800000, LENGTH = 4K
-  SDRAM (xrw)    : ORIGIN = 0xC0000000, LENGTH = 32M
+  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 31M
+  SDRAM_RECORDER (xrw) : ORIGIN = 0xC1F00000, LENGTH = 1M
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
 /* Exported symbols for boot context backend */
 __boot_context_flash_start__ = ORIGIN(BOOT_CTX_FLASH);
 __boot_context_flash_end__ = ORIGIN(BOOT_CTX_FLASH) + LENGTH(BOOT_CTX_FLASH);
+__sdram_global_start__ = ORIGIN(SDRAM);
+__sdram_global_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
+__sdram_cacheable_start__ = ORIGIN(SDRAM);
+__sdram_cacheable_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
+__sdram_recorder_region_start__ = ORIGIN(SDRAM_RECORDER);
+__sdram_recorder_region_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
 
 /* Define output sections */
 SECTIONS
@@ -312,9 +319,11 @@ SECTIONS
   .sdram_sample_page_pool (NOLOAD) :
   {
     . = ALIGN(32);
+    __sdram_page_pool_start__ = .;
     *(.sdram_sample_page_pool)
     *(.sdram_sample_page_pool*)
     . = ALIGN(32);
+    __sdram_page_pool_end__ = .;
   } >SDRAM
 
   .sdram_page_meta (NOLOAD) :
@@ -401,7 +410,6 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.sdram)
-    *(.sdram*)
     . = ALIGN(32);
   } >SDRAM
 
@@ -432,10 +440,12 @@ SECTIONS
   .sdram_recorder (NOLOAD) :
   {
     . = ALIGN(32);
+    __sdram_recorder_start__ = .;
     *(.sdram_recorder)
     *(.sdram_recorder*)
     . = ALIGN(32);
-  } >SDRAM
+    __sdram_recorder_end__ = .;
+  } >SDRAM_RECORDER
 
   .sdram_audio_cold (NOLOAD) :
   {
@@ -444,6 +454,18 @@ SECTIONS
     *(.sdram_audio_cold*)
     . = ALIGN(32);
   } >SDRAM
+  ASSERT(__sdram_page_pool_start__ >= __sdram_cacheable_start__,
+         "Sample page pool starts outside cacheable SDRAM")
+  ASSERT(__sdram_page_pool_end__ <= __sdram_cacheable_end__,
+         "Sample page pool exceeds cacheable SDRAM")
+  ASSERT(__sdram_recorder_start__ >= __sdram_recorder_region_start__,
+         "Recorder starts outside dedicated SDRAM region")
+  ASSERT(__sdram_recorder_end__ <= __sdram_recorder_region_end__,
+         "Recorder exceeds dedicated SDRAM region")
+  ASSERT((ORIGIN(SDRAM_RECORDER) & (LENGTH(SDRAM_RECORDER) - 1)) == 0,
+         "Recorder SDRAM region is not MPU aligned")
+  ASSERT((LENGTH(SDRAM_RECORDER) & (LENGTH(SDRAM_RECORDER) - 1)) == 0,
+         "Recorder SDRAM region size is not a power of two")
   /* USER MEMORY SECTIONS END */
 
   /* User_heap_stack section, used to check that there is enough RAM left */

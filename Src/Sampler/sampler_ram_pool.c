@@ -1,6 +1,7 @@
 #include "Sampler/sampler_ram_pool.h"
 
 #include <string.h>
+#include "stm32h7xx.h"
 
 #include "ff.h"
 #include "Storage/memory_layout.h"
@@ -657,10 +658,11 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
         return SAMPLER_RAM_RESULT_REGISTER_FAIL;
     }
 
-    slot->state = SAMPLER_RAM_SLOT_READY;
     slot->global_slot = (forced_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
                             ? forced_global_slot
                             : global_slot;
+    __DMB();
+    slot->state = SAMPLER_RAM_SLOT_READY;
     sampler_ram_waveform_begin(slot);
     sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
     if (out_global_slot != 0)
@@ -783,8 +785,9 @@ sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
         sampler_ram_pool_clear(ram_slot);
         return SAMPLER_RAM_RESULT_REGISTER_FAIL;
     }
-    slot->state = SAMPLER_RAM_SLOT_READY;
     slot->global_slot = global_slot;
+    __DMB();
+    slot->state = SAMPLER_RAM_SLOT_READY;
     sampler_ram_waveform_begin(slot);
     sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
     if (out_ram_slot != 0)
@@ -805,13 +808,22 @@ void sampler_ram_pool_clear(uint16_t ram_slot)
     {
         return;
     }
-    const sampler_ram_slot_t *const old = &g_sampler_ram_pool.slots[ram_slot];
+    sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[ram_slot];
+    const sampler_ram_slot_t old = *slot;
     const uint32_t generation = sampler_ram_next_generation();
-    g_sampler_ram_pool.slots[ram_slot].generation = generation;
-    if (old->page_count != 0U)
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    slot->state = SAMPLER_RAM_SLOT_EMPTY;
+    slot->generation = generation;
+    __DMB();
+    if (primask == 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old->first_page_slot,
-                                                       old->page_count);
+        __enable_irq();
+    }
+    if (old.page_count != 0U)
+    {
+        sample_page_cache_release_slot_pool_allocation(old.first_page_slot,
+                                                       old.page_count);
     }
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_RAM, ram_slot);
     memset(&g_sampler_ram_pool.slots[ram_slot], 0, sizeof(g_sampler_ram_pool.slots[ram_slot]));
@@ -828,7 +840,12 @@ const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot)
     {
         return 0;
     }
-    return &g_sampler_ram_pool.slots[ram_slot];
+    const sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[ram_slot];
+    if (slot->state == SAMPLER_RAM_SLOT_READY)
+    {
+        __DMB();
+    }
+    return slot;
 }
 
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot)

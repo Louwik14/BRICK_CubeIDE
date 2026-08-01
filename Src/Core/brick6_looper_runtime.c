@@ -87,7 +87,7 @@ typedef struct
 typedef struct
 {
     volatile uint32_t frames;
-    uint8_t active;
+    volatile uint8_t active;
     uint8_t track_id;
     uint8_t raw_slot;
     uint8_t reserved;
@@ -533,6 +533,7 @@ static void looper_adopt_preroll_take(brick6_looper_track_state_t *state,
         return;
 
     looper_preroll_stop_capture();
+    __DMB();
     state->preroll_frames = 0U;
     state->preroll_used_reported = 0U;
     state->preroll_valid = 0U;
@@ -1362,6 +1363,7 @@ void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
         g_looper_preroll_pcm[dst++] = lr_interleaved[src];
         g_looper_preroll_pcm[dst++] = lr_interleaved[src + 1U];
     }
+    __DMB();
     g_looper_preroll.frames += frames_to_copy;
 
     if(g_looper_preroll.frames >= BRICK6_LOOPER_PREROLL_FRAMES)

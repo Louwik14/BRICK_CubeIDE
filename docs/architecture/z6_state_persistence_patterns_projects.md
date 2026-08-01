@@ -1,5 +1,23 @@
 # Z6 - State / Persistence / Patterns / Projects
 
+## Addendum 2026-08-01 - audit SDMMC/DMA des pages cacheables
+
+- Le pool de pages, les wavetables et les rings Recorder ne sont jamais des cibles/sources directes du DMA SDMMC. FatFs passe par `sd_diskio`, qui maintient deja la coherence de tout buffer cacheable: invalidate avant/apres RX, clean avant TX, avec scratch 512 octets aligne pour les adresses appelant non alignees.
+- Les scratchs Stream, Wavetable, conversion, preview et pack Recorder sont utilises hors IRQ. Lorsqu'ils atteignent SDMMC via FatFs, la maintenance reste localisee dans `sd_diskio`; aucun clean/invalidate par page audio n'est ajoute.
+- Les rings et le preroll restent CPU-only dans l'overlay non cacheable. Leur format, leurs tailles, leurs budgets et leur comportement fonctionnel sont inchanges.
+
+## Addendum 2026-08-01 - contrat producteur des pages audio
+
+- Les decodeurs WAV/RAW et le service Stream remplissent completement donnees et metadonnees avant la publication `SAMPLE_PAGE_READY`; la primitive centrale de changement d'etat porte la barriere de publication.
+- Les chargements residents RAM, Multi et Wavetable publient egalement leur etat final apres leurs donnees. Une reservation brute de pages reste invisible au playback jusqu'a la publication de l'asset proprietaire.
+- Le recyclage Stream invalide d'abord l'ancienne disponibilite, puis retire l'index et change la generation avant remplissage de la nouvelle identite. Aucun clean/invalidate n'est introduit dans les services storage ou dans l'IRQ.
+
+## Addendum 2026-08-01 - frontiere cache SDRAM storage/audio
+
+- La SDRAM externe est maintenant globalement configuree en write-back/write-allocate. Le pool de pages rempli hors IRQ par les services Sampler, Stream, Multi, Looper et Wavetable est cacheable.
+- Les rings `multi_record_writer` et le preroll Looper restent explicitement dans la region linker/MPU Recorder non cacheable. Aucun clean/invalidate systematique n'est introduit pour les echanges CPU vers CPU.
+- Tout chemin DMA ou autre maitre memoire visant une zone SDRAM cacheable doit conserver un protocole de coherence explicite et borne; cette activation MPU ne constitue pas a elle seule une validation de ces chemins.
+
 ## Compatibilité polyphonie
 
 `VOICES` et `SPREAD` réemploient deux tombstones legacy: `PARAM_COUNT`, les payloads

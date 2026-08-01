@@ -7,6 +7,7 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
+#include "stm32h7xx.h"
 
 typedef struct
 {
@@ -186,7 +187,13 @@ const multi_sample_instrument_t *multi_sample_pool_get_instrument(uint16_t instr
         return 0;
     }
 
-    return &g_multi_instruments[instrument_id].desc;
+    const multi_sample_instrument_t *const instrument =
+        &g_multi_instruments[instrument_id].desc;
+    if (instrument->state == MULTI_SAMPLE_INSTRUMENT_READY)
+    {
+        __DMB();
+    }
+    return instrument;
 }
 
 const multi_sample_desc_t *multi_sample_pool_get_sample(uint16_t multi_sample_id)
@@ -216,6 +223,10 @@ uint8_t multi_sample_pool_set_state(uint16_t instrument_id,
         return 0U;
     }
 
+    if (state == MULTI_SAMPLE_INSTRUMENT_READY)
+    {
+        __DMB();
+    }
     g_multi_instruments[instrument_id].desc.state = state;
     return 1U;
 }

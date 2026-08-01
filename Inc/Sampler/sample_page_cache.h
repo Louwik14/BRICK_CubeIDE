@@ -36,7 +36,7 @@ typedef struct
     uint32_t start_frame;
     uint32_t frame_count;
     float *data;
-    sample_page_state_t state;
+    volatile sample_page_state_t state;
     uint16_t pin_count;
     uint16_t use_count;
     uint16_t window_pin_count;
