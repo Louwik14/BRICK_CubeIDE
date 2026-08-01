@@ -41,7 +41,6 @@
 #include "audio_io.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"
-#include "control_events.h"
 #include "fx_comp_lab.h"
 #include "Core/audio_test2.h"
 
@@ -563,13 +562,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     g_audio_block_counter++;
     g_audio_dsp_frames_counter += frames;
 
-#define CONTROL_EVT_BUDGET 8U
-    control_event_t evt;
-    for(uint32_t i = 0U; i < CONTROL_EVT_BUDGET; i++)
-    {
-        if(!control_event_pop(&evt))
-            break;
-    }
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 

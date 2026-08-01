@@ -13,6 +13,7 @@ $kitHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\kit_v1.h')
 $kit = Get-Content -Raw (Join-Path $repo 'Src\Storage\kit_v1.c')
 $patchHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\patch_v1.h')
 $patch = Get-Content -Raw (Join-Path $repo 'Src\Storage\patch_v1.c')
+$patchBank = Get-Content -Raw (Join-Path $repo 'Src\Storage\patch_sd_bank.c')
 $modelHeader = Get-Content -Raw (Join-Path $repo 'Inc\Seq\seq_model.h')
 $model = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_model.c')
 
@@ -71,8 +72,28 @@ if (-not ($kitHeader.Contains('topology_role') -and $kit.Contains('track_topolog
     throw 'Kit records are not role-aware'
 }
 if (-not ($patchHeader.Contains('topology_role') -and
-          $patch.Contains('track_topology_is_play(target) == 0U'))) {
+          $patch.Contains('track_topology_is_play(target_track) == 0U') -and
+          $patch.Contains('track_topology_is_play(track) == 0U'))) {
     throw 'Patch apply does not reject Special targets'
+}
+foreach ($required in @(
+    'case UI_TRACK_FAMILY_MIDI:',
+    'case UI_TRACK_FAMILY_EXTERNAL:',
+    'UI_TRACK_TYPE_MULTI)) ? 1U : 0U;',
+    'patch->meta.family != patch->track.family',
+    'PATCH_V1_RESULT_BAD_PATCH'
+)) { if (-not $patch.Contains($required)) { throw "Patch Play-only metadata contract missing: $required" } }
+if (-not ($patchBank.Contains('patch_sd_family_type_is_play_valid') -and
+          $patchBank.Contains('patch_sd_family_type_is_play_valid(hdr->family, hdr->type)'))) {
+    throw 'Patch bank still accepts legacy Special metadata as valid headers'
+}
+foreach ($forbidden in @(
+    'PATCH_ASSIGN_FAMILY_INPUT',
+    'PATCH_ASSIGN_TYPE_LOOPER',
+    'PATCH_ASSIGN_TYPE_AUDIO'
+)) {
+    $patchUi = Get-Content -Raw (Join-Path $repo 'Src\UI\pages\ui_page_patch_assign.c')
+    if ($patchUi.Contains($forbidden)) { throw "Ghost Patch filter remains: $forbidden" }
 }
 if ($modelHeader.Contains('seq_project_data_t') -or $model.Contains('g_seq_legacy_project') -or
     (Test-Path (Join-Path $repo 'Src\Seq\seq_persistence.c'))) {

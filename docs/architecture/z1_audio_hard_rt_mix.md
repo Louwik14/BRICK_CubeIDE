@@ -283,7 +283,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/fx_delay_shared_pool.c` + `Inc/Audio/fx_delay_shared_pool.h` : pool SDRAM L/R commun aux delays globaux CLASSIC et DUAL, avec ownership exclusif controle par le mixer.
-- `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE` et `FREEZE`, STUTTER stereo global unique, et coloration sombre/brillant par slot pour `COLOR`.
+- `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master-bus leger pour les 4 slots MacroFX propriétaires de la Special FX, avec core delay mono statique par slot pour `COMB`, `WOBBLE` et `FREEZE`, STUTTER stereo global unique, et coloration sombre/brillant par slot pour `COLOR`. Le nom technique `fx_master_macro` est conserve car il décrit cette insertion post-mix, pas le propriétaire produit.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
@@ -292,7 +292,7 @@ Dependances de Z1 sans appartenir a Z1:
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
-- `track_tone_sound_state` pour les valeurs `Master/FX` type/LVL/A/B lues par `fx_master_macro`.
+- `track_tone_sound_state` pour les valeurs MacroFX type/LVL/A/B lues par `fx_master_macro`.
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
 
 Exclusions explicites:
@@ -343,7 +343,7 @@ Autorite de mixage final:
 
 Autorite de monitoring final:
 - `audio_io_pack_ramped()` ajoute le metronome MAIN monitor-only apres `mixer_process()`, `fx_master_macro_process_block()` et `sd_preview_render_main()`, juste avant conversion TX.
-- Cette injection ne touche pas CUE et ne repasse pas par tracks, sends, Master/FX, Looper, Audio Rec ni preview/cache SD.
+- Cette injection ne touche pas CUE et ne repasse pas par tracks, sends, MacroFX, Looper, Audio Rec ni preview/cache SD.
 - Le metronome bypass le gain de sortie final deja applique au MAIN musical; son gain propre reste borne par `METRO` et `METRO_MAX_GAIN`.
 
 Autorite de flux bloc-a-bloc:
@@ -571,7 +571,7 @@ Granular / fx_pool:
 - Les samples longs en `READY_PARTIAL` gardent une preparation reverse tail legacy dans `sample_cache`, mais RAM ne la consomment plus. Le prefetch hors IRQ utilise aussi une fenetre reverse plus large que le forward pour couvrir les transitions `page N -> N-1`; les pages stream non pinnees peuvent etre reclamees avant un chargement `READY_FULL`, mais les pages de samples full deja chargees ne doivent pas etre evincees par le stream.
 - Les autres modes (`slice`) ne sont plus streamables et ne demarrent plus de reader Classic: RAM slicing attend le futur sampler RAM dedie.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
-- Les delays MacroFX restent monophoniques par slot pour `COMB`, `WOBBLE` et `FREEZE`, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `FREEZE` garde son historique vivant tant que `TYPE=FREEZE`: `LVL=0` ecrit seulement l'historique et laisse passer le live dry, `LVL>0` engage le freeze de boucle et dose le retour wet par la valeur `LVL`. Le mix FREEZE morphe vers un repeater: le dry est ducke par `LVL` jusqu'a etre coupe a `LVL=127`, le retour freeze monte avec gain borne, et l'input send vers la boucle passe de normal en OFF a nul au niveau maximum. Fallback dry tant que l'historique demande n'est pas encore pret. `B=HOLD` est quantifie en 4 modes DSP distincts (`SHORT/MID/LONG/INF`) qui pilotent le feedback de boucle, avec `INF` regle en quasi-maintien borne. `ECHO` est retire de `Master/FX`; les delays globaux `CLASSIC`/`DUAL` restent portes par le pool SDRAM partage du mixer.
+- Les delays MacroFX restent monophoniques par slot pour `COMB`, `WOBBLE` et `FREEZE`, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `FREEZE` garde son historique vivant tant que `TYPE=FREEZE`: `LVL=0` ecrit seulement l'historique et laisse passer le live dry, `LVL>0` engage le freeze de boucle et dose le retour wet par la valeur `LVL`. Le mix FREEZE morphe vers un repeater: le dry est ducke par `LVL` jusqu'a etre coupe a `LVL=127`, le retour freeze monte avec gain borne, et l'input send vers la boucle passe de normal en OFF a nul au niveau maximum. Fallback dry tant que l'historique demande n'est pas encore pret. `B=HOLD` est quantifie en 4 modes DSP distincts (`SHORT/MID/LONG/INF`) qui pilotent le feedback de boucle, avec `INF` regle en quasi-maintien borne. `ECHO` est retire de la Special FX; les delays globaux `CLASSIC`/`DUAL` restent portes par le pool SDRAM partage du mixer.
 - `DRIVE` est une saturation master legere inspiree tanh mais volontairement plus extreme: `LVL` reste le dry/wet du slot, `A=DRIVE` pilote un pre-gain fort, un etage principal de saturation polynomial sans division et un clip final leger sans division, `B=TONE` pilote une pre-emphase et une coloration sombre/brillant par filtre simple. L'algo n'utilise pas `tanhf`, pas de table et pas d'oversampling; un mode fast retire la pre-emphase et le clip final quand `A` reste bas/moyen. Le gain staging applique un post-gain dependant de `A` et un limiteur final sans division pour garder `LVL` exploitable a fort drive sans neutraliser la saturation.
 - `FREEZE` est une ressource FX unique dans les 4 slots: le premier slot `TYPE=FREEZE` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Il reutilise le `g_delay[4][48000]` existant et ne partage pas l'historique stereo global de `STUTTER`.
 - `STUTTER` est une ressource FX globale unique: le premier slot `TYPE=STUTTER` par ordre de slot devient owner audio, les doublons sont ignores par guard runtime. Son historique stereo circulaire unique fait 24000 frames a 48 kHz, soit environ 192 KiB en float stereo, place dans `.audio_history_sdram` via `AUDIO_HISTORY_SDRAM`. `LVL` est volontairement on/off pour STUTTER: `LVL=0` coupe la sortie audible et remplit seulement l'historique L/R, `LVL>0` rend STUTTER full wet sans mix dry/wet progressif. Au passage `LVL` OFF -> ON, la lecture latch immediatement la fenetre historique `SIZE` deja remplie, mais place la tete a la fin de cette fenetre moins le micro-fade de boucle pour entendre la portion la plus recente sans phase recording audible. En lecture, `RATE` est lu en continu et `SIZE` relatch immediatement vers la portion recente avec crossfade court.
@@ -687,9 +687,9 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## 15. Addendum - retrait COLORS/CRUNCH
 
 - La page `COLORS/CRUNCH` est retiree du produit.
-- Les params track-aware `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne sont plus exposes par COLORS, ne sont plus p-lockables/macro-assignables, et ne reappliquent plus de runtime track insert.
+- Les params track-aware `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne sont plus exposes par l'ancien ensemble `COLORS`, ne sont plus p-lockables/macro-assignables, et ne reappliquent plus de runtime track insert.
 - La policy boot ne pre-active plus le slot `FX_SAT` en slot 1.
-- `fx_saturation.*` reste present comme code legacy/global non expose par COLORS; il n'est plus branche par le runtime COLORS track-aware.
+- `fx_saturation.*` reste present comme code legacy/global non expose par l'ancien ensemble `COLORS`; il n'est plus branche par l'ancien runtime `COLORS` track-aware.
 
 ## 16. Addendum - modele Drum final
 

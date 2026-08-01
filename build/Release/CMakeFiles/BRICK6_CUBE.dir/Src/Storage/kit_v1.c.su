@@ -29,4 +29,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:777:9
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:782:6:kit_v1_mark_dirty	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:790:6:kit_v1_clear_dirty	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:795:13:kit_v1_result_label	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:819:13:kit_v1_label_code_short_name	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c:816:13:kit_v1_label_code_short_name	16	static

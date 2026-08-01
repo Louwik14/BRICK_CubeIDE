@@ -15,12 +15,12 @@
  * To add a new workflow, add/edit rules here without changing the engine logic.
  */
 static const ui_nav_rule_t g_ui_nav_rules[] = {
-    { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_COLORS },
+    { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_ENV },
     { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_TONE },
     { BTN_PARAM_3, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_MOD },
     { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_MIX },
     { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_PLAY },
-    { BTN_PARAM_6, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_VCA },
+    { BTN_PARAM_6, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_ENV },
 };
 
 static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
@@ -36,7 +36,7 @@ static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 {
     switch (page_id)
     {
-        case UI_PAGE_TEMPLATE_COLORS:
+        case UI_PAGE_TEMPLATE_ENV:
         case UI_PAGE_TEMPLATE_CFG:
         case UI_PAGE_TEMPLATE_TONE:
         case UI_PAGE_TEMPLATE_MOD:
@@ -45,7 +45,6 @@ static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
         case UI_PAGE_TEMPLATE_SEQ:
         case UI_PAGE_TEMPLATE_MIX:
         case UI_PAGE_TEMPLATE_PLAY:
-        case UI_PAGE_TEMPLATE_VCA:
             return 1U;
 
         default:
@@ -59,12 +58,12 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 
     switch (page_id)
     {
-        case UI_PAGE_TEMPLATE_COLORS:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_COLORS) == 0U)
+        case UI_PAGE_TEMPLATE_ENV:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_ENV) == 0U)
             {
                 return 0U;
             }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_COLORS) != 0) ? 1U : 0U;
+            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ENV) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_CFG:
         case UI_PAGE_TEMPLATE_REC_CFG:
@@ -116,13 +115,6 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
             }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_PLAY) != 0) ? 1U : 0U;
 
-        case UI_PAGE_TEMPLATE_VCA:
-            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_VCA) == 0U)
-            {
-                return 0U;
-            }
-            return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_VCA) != 0) ? 1U : 0U;
-
         default:
             return 1U;
     }
@@ -132,7 +124,7 @@ static uint8_t ui_navigation_is_track_bound_template_page(uint8_t page_id)
 {
     switch (page_id)
     {
-        case UI_PAGE_TEMPLATE_COLORS:
+        case UI_PAGE_TEMPLATE_ENV:
         case UI_PAGE_TEMPLATE_CFG:
         case UI_PAGE_TEMPLATE_TONE:
         case UI_PAGE_TEMPLATE_MOD:
@@ -141,7 +133,6 @@ static uint8_t ui_navigation_is_track_bound_template_page(uint8_t page_id)
         case UI_PAGE_TEMPLATE_SEQ:
         case UI_PAGE_TEMPLATE_MIX:
         case UI_PAGE_TEMPLATE_PLAY:
-        case UI_PAGE_TEMPLATE_VCA:
             return 1U;
 
         default:
@@ -243,14 +234,21 @@ void ui_navigation_handle_event(const ui_event_t *event)
         if ((event->id == (uint8_t)rule->button)
                 && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page)))
         {
+            if ((rule->button == BTN_PARAM_6) && (rule->target_page == UI_PAGE_TEMPLATE_ENV))
+            {
+                ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
+                (void)ui_page_template_env_open_vca();
+                break;
+            }
+
             if ((rule->target_page == UI_PAGE_TEMPLATE_MIX) && (current_page == UI_PAGE_TEMPLATE_MIX))
             {
                 ui_page_template_mix_toggle_subset();
                 break;
             }
-            if ((rule->target_page == UI_PAGE_TEMPLATE_COLORS) && (current_page == UI_PAGE_TEMPLATE_COLORS))
+            if ((rule->target_page == UI_PAGE_TEMPLATE_ENV) && (current_page == UI_PAGE_TEMPLATE_ENV))
             {
-                ui_page_template_colors_toggle_subset();
+                ui_page_template_env_toggle_subset();
                 break;
             }
             if ((rule->target_page == UI_PAGE_TEMPLATE_TONE) && (current_page == UI_PAGE_TEMPLATE_TONE))
@@ -285,6 +283,11 @@ uint8_t ui_navigation_is_ensemble_button_available(button_id_t button)
 
         if (rule->button == button)
         {
+            if (button == BTN_PARAM_6)
+            {
+                return (uint8_t)((ui_navigation_is_page_available(UI_PAGE_TEMPLATE_ENV) != 0U)
+                        && (track_runtime_supports_vca_gate(track_runtime_get_ctx(ui_get_active_track())) != 0U));
+            }
             return ui_navigation_is_page_available(rule->target_page);
         }
     }

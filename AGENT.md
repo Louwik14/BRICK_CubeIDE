@@ -92,14 +92,10 @@ Règles :
 ### Politique sauvegardes prototype
 - le projet est en phase de prototypage
 - la retrocompatibilite des projets, patterns et presets n'est pas requise
-- lors d'une modification d'une structure de sauvegarde, modifier directement la structure courante plutot que d'ajouter une migration, une conversion ou une compatibilite ascendante
-- ne pas creer de nouveaux formats `V2`, `V3`, etc. ni conserver d'anciens formats, sauf demande explicite
-- les anciens payloads doivent etre refuses par validation stricte du format courant quand ils ne correspondent plus
-- les constantes de version des formats de sauvegarde restent a `1` et ne doivent jamais etre incrementees automatiquement lors d'une modification de structure
-- pendant toute la phase de prototypage, une structure de sauvegarde evolue par modification directe du format courant
-- les anciens projets peuvent devenir illisibles sans migration, sans conversion et sans detection particuliere
-- aucun systeme de compatibilite ne doit etre ajoute
-- un bump de version ne doit etre effectue que sur demande explicite
+- les formats persistés courants Pattern, Project, Kit et Patch sont en version 3
+- une évolution de structure modifie le format courant; aucune migration, conversion ni rétrocompatibilité ne doit être ajoutée sans demande explicite
+- les anciens payloads incompatibles sont refusés par validation stricte; ils peuvent devenir illisibles sans traitement particulier
+- toute modification de version est explicite et cohérente sur le format concerné
 
 ---
 
@@ -136,7 +132,9 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - comportement borné en worst-case
 
 ### Autorités runtime
+- `track_topology` est l'autorité des rôles, de leur présence et des cardinalités selon la variante.
 - L’autorité de binding reste `track_runtime`.
+- `track_runtime` est la projection autoritaire des familles, types, capacités et bindings.
 - Le mapping `UI track -> mix target runtime` est explicite et unique.
 - Le mapping `UI track -> cible DSP physique` ne doit jamais être supposé implicite.
 - Les getters/checks runtime ne doivent pas déclencher de refresh implicite, sauf exception explicitement auditée et documentée.
@@ -201,7 +199,8 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `External` est une Play Track MIDI + audio qui réserve exactement une entrée physique; `track_input_ownership` est l'unique autorité de cette réservation.
 - une entrée réservée par `External` reste visible sur sa Special fixe avec `USED Pn`, sans second monitoring ni choix automatique d'une autre entrée.
 - le type historique `Input/Hybrid` et le shim `runtime_target` sont supprimés.
-- `Master` est une family spéciale non standard
+- les rôles Special ne sont jamais des families de Play Track sélectionnables.
+- `Braids`, `Daisy` et `note_fx_arp` sont des noms internes légitimes; ne pas les renommer par cosmétique.
 
 ---
 
@@ -243,11 +242,13 @@ Cas transverses fréquents :
 ## 8. Où brancher les choses
 
 - choix family/type d’une track : `CFG`
-- paramètres filtre / couleur audio : `COLORS`
+- paramètres filtre, VCA et ENV3 exposés au produit : `ENV`
 - paramètres moteur sonore / oscillateurs : `TONE`
 - jeu clavier : `KEYBOARD`
 - MIDI FX : raccourci physique `ARP`, page `MIDI FX`
 - routage Looper et routage UI-only MacroFX : contexte `ROUT` via réemploi de `ARP`
+
+Les symboles internes actifs de l'ensemble produit utilisent désormais `ENV`; le reclassement logique de VCA/ENV3 et la reconstruction des IDs de paramètres restent des dettes planifiées. Le renommage propriétaire `MASTER_FX` vers `MACRO_FX` est réalisé sans renumérotation.
 
 Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
 
@@ -272,12 +273,14 @@ Toujours penser :
 
 ### Ensembles importants
 - `CFG`
-- `COLORS`
+- `ENV`
 - `TONE`
 - `MOD`
 - `MIX`
-- `VCA`
-- `KEYBOARD`
+- `PLAY`
+- `MIDI FX`
+
+`ENV` est l'ensemble produit unique qui regroupe FLT, VCA et ENV3, sur Low-Cost comme Premium. Le backend VCA du mixer et `mod_env3` dans la modulation restent légitimes; ils ne créent pas d'ensemble autonome.
 
 ### Hall modes
 - `TRACK` maintenu puis `HALL 0..7` = sélection track
@@ -293,7 +296,7 @@ Toujours penser :
 
 ### MOD
 - les destinations LFO doivent venir d’une liste explicite validée runtime
-- autorisés uniquement : domaines `COLORS` et `TONE` réellement valides pour la track
+- autorisés uniquement : domaines produits `ENV` et `TONE` réellement valides pour la track
 - interdit : domaine `PLAY`
 - filtrage strictement track-aware, sans fallback cross-engine
 
@@ -307,12 +310,11 @@ Toujours penser :
 - si l’ensemble actif n’a pas de bouton param associé : toutes vertes
 
 ### Mapping boutons param
-- `BTN_PARAM_1` -> `COLORS`
+- `BTN_PARAM_1` -> `ENV`
 - `BTN_PARAM_2` -> `TONE`
 - `BTN_PARAM_3` -> `MOD`
 - `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` uniquement pour families moteur `Synth`, `Sampler` ou `Drum`
-- `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth`, `Sampler`, `Drum` ou `External`
 - `BTN_TRACK` -> bouton spécial `TRACK`
 
 ### Règle générale
@@ -453,18 +455,18 @@ Principe directeur :
 
 ## Modeles sequence
 
-- Play: 64 steps, 32 p-locks maximum par step, pool 1024, donnees PLAY et ARP autorisees.
-- Special: 64 steps, 16 p-locks maximum par step, pool 256, automatisation non-PLAY et action bornee uniquement.
-- Ne jamais allouer d'etat note ou ARP par Special Track; ne pas utiliser le champ action pour introduire Brain ou MIDI FX sans chantier explicite.
+- Play: 64 steps, 32 p-locks maximum par step, pool 1024, donnees PLAY et MIDI FX autorisees.
+- Special: 64 steps, 16 p-locks maximum par step, pool 512, automatisation non-PLAY et action bornee uniquement.
+- Ne jamais allouer d'etat note ou MIDI FX par Special Track; ne pas utiliser le champ action pour introduire Brain ou MIDI FX sans chantier explicite.
 - Les formats persistants et les clipboards identifient les tracks par `role + ordinal`; tout paste entre roles incompatibles est refuse avant mutation.
 - Une sequence Special persiste uniquement longueur/page, action et automatisation non-PLAY. Aucun adaptateur homogene ne doit etre recree.
 
 ## Play Tracks independantes
 
-- Les huit Play Tracks sont des autorites musicales independantes pour clavier, MIDI, ARP, scheduler, live record, mute, parametres, p-locks, sequence, snapshots et persistence.
+- Les huit Play Tracks sont des autorites musicales independantes pour clavier, MIDI, modèle MIDI FX `note_fx_arp`, scheduler, live record, mute, parametres, p-locks, sequence, snapshots et persistence.
 - Chaque Play Track conserve quatre voix PLAY; la polyphonie et le spread sont exclusivement ceux du moteur via `PARAM_CFG_POLY_VOICES` et `PARAM_CFG_POLY_SPREAD`.
 - Patch stocke exactement une piste et peut etre applique independamment a plusieurs pistes selectionnees.
 
 
-- Clavier, MIDI, ARP, live record, scheduler PLAY et mute adressent exclusivement leur Play Track; aucune distribution ou pile de notes inter-tracks ne doit etre recreee.
+- Clavier, MIDI, MIDI FX, live record, scheduler PLAY et mute adressent exclusivement leur Play Track; aucune distribution ou pile de notes inter-tracks ne doit etre recreee.
 - Conserver strictement `PARAM_CFG_POLY_VOICES`, `PARAM_CFG_POLY_SPREAD` et les spreads internes des moteurs.

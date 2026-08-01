@@ -4,7 +4,7 @@ Audit statique du 1er août 2026. Cette passe ne modifie ni le firmware, ni les 
 
 ## 1. Verdict
 
-Le dépôt est fonctionnellement plus cohérent que sa nomenclature ne le laisse penser : la topologie Play/Special, l'autorité de binding `track_runtime`, les moteurs actuels et les formats de sauvegarde v3 sont déjà réels. La dette principale est une superposition de trois générations : topologie uniforme configurable, ensembles `COLORS`/`VCA`/`ARP`, puis produit Play/Special avec `ENV` et MIDI FX.
+Le dépôt est fonctionnellement plus cohérent que sa nomenclature ne le laisse penser : la topologie Play/Special, l'autorité de binding `track_runtime`, les moteurs actuels et les formats de sauvegarde v3 sont déjà réels. La dette principale est une superposition de trois générations : topologie uniforme configurable, ensembles historiques doublons, puis produit Play/Special avec `ENV` et MIDI FX.
 
 Les écarts les plus dangereux ne sont pas esthétiques :
 
@@ -73,7 +73,7 @@ Les pages PLAY présentent quatre voix par Play track. `seq_model` porte bases e
 
 ### MIDI FX
 
-`ui_page_midi_fx.c` expose 16 IDs génériques répartis sur quatre slots. `note_fx_state` est canonique ; le pipeline NoteFx et ses moteurs, dont `note_fx_arp`, exécutent la chaîne. Le set p-lock est `SEQ_PLOCK_SET_MIDI_FX`. Les snapshots track, Pattern et Project ont un stockage NoteFx dédié ; Patch/Kit ne l'incluent pas via le tableau générique. Le bouton physique ARP ouvre cette page sur Play et sert de contexte ROUT sur Special. Seuls l'alias de capacité `TRACK_CAPABILITY_ARPEGGIATOR` et les textes faisant d'ARP un ensemble autonome sont obsolètes ; le modèle ARP reste produit.
+`ui_page_midi_fx.c` expose 16 IDs génériques répartis sur quatre slots. `note_fx_state` est canonique ; le pipeline NoteFx et ses moteurs, dont `note_fx_arp`, exécutent la chaîne. Le set p-lock est `SEQ_PLOCK_SET_MIDI_FX`. Les snapshots track, Pattern et Project ont un stockage NoteFx dédié ; Patch/Kit ne l'incluent pas via le tableau générique. Le bouton physique ARP ouvre cette page sur Play et sert de contexte ROUT sur Special. ARP reste un modèle MIDI FX, pas une capacité ou un ensemble autonome.
 
 ### Master et FX
 
@@ -91,7 +91,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 
 ### CLEAN-DOC-001 — `STALE DOC` — contrat d'instructions contradictoire
 
-- Ancien concept : 14 tracks configurables, families Input/Hybrid/Master, ensembles COLORS/VCA/ARP, persistence « version 1 ».
+- Ancien concept : 14 tracks configurables, families Input/Hybrid/Master, anciens ensembles de navigation et persistence « version 1 ».
 - Produit actuel : 8 Play configurables, Specials fixes, ENV, MIDI FX, fichiers v3.
 - Preuves : `AGENTS.md` décrit encore Input4/Hybrid/Master configurable et l'ancien clavier/ARP ; `AGENT.md` emploie encore COLORS/VCA et contient des passages Master historiques ; `tests/play_special_storage_validation.ps1:86-89` exige quatre versions 3.
 - Références actives : ces fichiers pilotent les futures passes et peuvent provoquer une réintroduction de dette.
@@ -119,10 +119,10 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Preuves : page ENV contient `PARAM_VCA_ATTACK..RELEASE`; `track_runtime.c:1867-1871` les classe avec retrig VCA dans MIX ; `seq_param_iface.c` inclut VCA dans la table MIX ; Pattern sépare `sound`/`mix` selon ce domaine.
 - Références actives : UI p-lock, `param_macro`, clipboard, snapshot, Pattern, Kit, modulation.
 - Effet : p-locks et copie/clear sont attachés à un ensemble qui n'est plus visible comme propriétaire ; le bloc de persistence dépend du passé.
-- Portée : domaine ENV et table de slots ENV ; retirer VCA de MIX ; garder l'état/apply DSP dans le mixer.
+- Portée : rattacher `PARAM_VCA_ATTACK..RELEASE` et `PARAM_ENV_RETRIG_VCA` au domaine logique et au set p-lock ENV, les retirer de MIX, puis faire utiliser ce propriétaire unique par p-lock, modulation, clipboard/clear/undo et persistence. L'état canonique et l'apply DSP VCA restent dans le mixer : le backend physique n'est pas déplacé.
 - Risque : changement de disposition de p-lock et incompatibilité des snapshots v3 existants ; aucune rétrocompatibilité n'étant requise, faire une rupture explicite et atomique.
 - Tests : mapping chaque paramètre ENV, capture/apply Pattern, locks ENV et MIX indépendants, clipboard page/ensemble.
-- Dépendances : CLEAN-NAME-001 et décision sur la page VCA séparée.
+- Dépendances : CLEAN-NAME-001 et suppression atomique du chemin VCA autonome définie par CLEAN-DEAD-001.
 
 ### CLEAN-OWNER-002 — `WRONG OWNER` — ENV3 encore propriétaire MOD
 
@@ -133,16 +133,13 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Portée : domaine logique/set ENV uniquement ; conserver `mod_env3` comme backend.
 - Risque/tests/dépendances : identiques à CLEAN-OWNER-001 ; tester aussi le catalogue des destinations et les retriggers.
 
-### CLEAN-DEAD-001 — `DUPLICATE` — ensemble/page VCA séparé
+### CLEAN-DEAD-001 — `DONE`, `DUPLICATE` — ancien chemin VCA autonome supprimé
 
 - Ancien concept : VCA accessible comme ensemble autonome.
-- Produit actuel : VCA est une page d'ENV ; la liste de mission ne définit plus VCA comme ensemble.
-- Preuves : `UI_TEMPLATE_FAMILY_VCA`, `UI_PAGE_TEMPLATE_VCA`, `TRACK_RUNTIME_UI_ENSEMBLE_VCA` et le bouton param Premium coexistent avec les mêmes `PARAM_VCA_*` présents dans ENV. Low-Cost n'expose pas ce raccourci.
-- Effet : deux chemins UI et deux scopes de clipboard pour le même état.
-- Portée : supprimer page/famille/capacité après décision explicite du devenir de BTN_PARAM_6 Premium ; ne pas supprimer les paramètres VCA.
-- Risque : régression de navigation Premium si le bouton n'est pas remappé ou rendu explicitement sans cible.
-- Tests : matrices boutons Premium/Low-Cost, LEDs, clipboard et retour de calibration.
-- Dépendances : décision produit locale puis CLEAN-OWNER-001.
+- Produit actuel : VCA appartient exclusivement à ENV, sur Premium comme sur Low-Cost. Les paramètres VCA restent dans la page interne ENV.
+- Effet corrigé : le bouton Premium ouvre ENV directement sur sa sous-page VCA; le clipboard, le clear et l'undo réutilisent désormais le propriétaire ENV.
+- Validation : la famille, la page et l'ensemble runtime autonomes ont été supprimés; les paramètres VCA, leur état et leur backend mixer restent présents.
+- Dépendances : CLEAN-NAME-001 ; doit précéder CLEAN-OWNER-001 et CLEAN-MOVE-001.
 
 ### CLEAN-NAME-002 — `RENAME` — MasterFX vers MacroFX propriétaire FX
 
@@ -155,16 +152,16 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Tests : quatre slots, quantification TYPE/A/B, routage FX, capture/restore, test audio existant.
 - Dépendances : topologie inchangée ; précède toute MOVE associée.
 
-### CLEAN-NAME-003 — `ALIAS` — capacité ARPEGGIATOR
+### CLEAN-NAME-003 — `DONE` — capacité MIDI FX sans alias ARP
 
 - Ancien concept : ARP comme capacité/ensemble.
 - Produit actuel : MIDI FX, dont ARP est un modèle.
-- Preuves : `TRACK_CAPABILITY_ARPEGGIATOR = TRACK_CAPABILITY_MIDI_FX`, consommé par `track_topology.c`, switch runtime et test qui exige l'alias. Le pipeline `note_fx_arp` est réellement actif.
-- Effet : encourage la résurrection d'un chemin ARP autonome.
-- Portée : utiliser uniquement `TRACK_CAPABILITY_MIDI_FX`, mettre à jour le test ; conserver modèle ARP et bouton physique.
-- Risque : faible, renommage mécanique sans ordinal.
+- Preuves : `TRACK_CAPABILITY_MIDI_FX` est consommé par `track_topology.c`, le switch runtime et le test de topologie. Le pipeline `note_fx_arp` est réellement actif.
+- Effet corrigé : aucun alias de capacité ne suggère un chemin ARP autonome.
+- Portée réalisée : utiliser uniquement `TRACK_CAPABILITY_MIDI_FX`; conserver le modèle ARP et le bouton physique.
+- Risque : faible, suppression mécanique sans ordinal.
 - Tests : `track_topology_validation.ps1`, navigation MIDI FX et ROUT Special.
-- Dépendances : aucune après docs.
+- Dépendances : aucune.
 
 ### CLEAN-BUG-001 — `WRONG OWNER` — VOICES/SPREAD classés PLAY
 
@@ -293,7 +290,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Portée : renommer fichier/API en `ui_page_template_env`; conserver les sous-composants et backends à leur place.
 - Risque : règles CMake glob et includes ; faible après CLEAN-NAME-001/OWNER.
 - Tests : toutes variantes de template par famille/type et calibration return-page.
-- Dépendances : exécuter après CLEAN-NAME-001, CLEAN-OWNER-001/002 et décision VCA.
+- Dépendances : exécuter après CLEAN-NAME-001, la suppression effective du chemin autonome CLEAN-DEAD-001 et CLEAN-OWNER-001/002.
 
 ### CLEAN-DOC-002 — `STALE DOC` — README et architecture globale mélangent familles et rôles
 
@@ -349,7 +346,6 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 
 ### Décision produit requise
 
-- devenir du bouton VCA Premium après suppression de l'ensemble dupliqué ;
 - suppression physique ou archivage hors build de `fx_granular.cpp` ;
 - statut externe de `control_events` et `usb_host_tasklet_poll_bounded` ;
 - politique explicite d'invalidation des fichiers v3 lors de la reconstruction des IDs.
@@ -360,7 +356,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 |---|---|---|---|---|
 | COLORS → ENV | enums UI/runtime, set p-lock, navigation, clipboard, modulation, persistence, tests | toutes les couches de la carte ENV | conserver les ordinals pendant ce lot | mécanique |
 | MASTER_FX → MACRO_FX | 16 IDs, état `master_fx`, helpers UI/backend, routes, diagnostics | TONE FX, snapshots, audio tests | conserver IDs et layout | mécanique avec clarification propriétaire/insertion |
-| ARPEGGIATOR capability → MIDI_FX | topology/runtime/test | capacité seulement | nul si valeur supprimée après remplacement | mécanique |
+| alias de capacité ARP → MIDI_FX | topology/runtime/test | capacité seulement | alias supprimé sans impact d'ordinal | terminé |
 | `*V1` API → courant | structs, fichiers, fonctions Pattern/Project/Patch/Kit | Storage, undo, tests, crash/monkey | ne changer ni version ni layout | mécanique, lot large isolé |
 | Macro bank/slot → scene/lock | wrappers Project et clipboard | UI clipboard, persistence Project | vérifier scène exacte | sémantique localisée |
 | `PARAM_PERSIST_COUNT` | borne générique ambiguë | registre/persistence | aucun ordinal si macro seulement renommée | commentaire et nom sémantique |
@@ -458,15 +454,26 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 - Docs : Z2/Z4/Z5/Z6 selon contrat ; Z4 séparément.
 - Dépendances : étapes 1 et API scène disponible ; deux sous-commits revertables.
 
+### Étape 3D — Rediriger Premium vers ENV et supprimer le chemin VCA autonome — TERMINÉE
+
+- Objectif : aligner Premium sur Low-Cost avec ENV comme unique propriétaire UI de VCA.
+- Fichiers/symboles : mapping du bouton Premium, navigation et retour de page, LEDs, résolution ENV et scopes clipboard/clear/undo.
+- Autorisé : faire ouvrir au bouton Premium directement la page VCA interne à ENV si le ciblage existant est simple, sinon ENV selon son mécanisme normal ; supprimer ensuite famille/page/ensemble/scope VCA autonomes. Conserver `PARAM_VCA_*`, l'état VCA et le backend mixer.
+- Interdit : supprimer les paramètres VCA avant leur rattachement ENV, laisser momentanément le bouton sans cible, créer un ensemble de remplacement ou réaffecter le bouton à une autre fonction produit.
+- Atomicité/revert : installer la redirection du bouton et supprimer le chemin autonome dans le même changement ; un revert restaure les deux côtés ensemble. La suppression ne doit jamais précéder la redirection validée.
+- Tests/builds : navigation du bouton VCA Premium ; ouverture correcte d'ENV et accès aux paramètres VCA ; LEDs et retour de page/calibration ; clipboard/clear/undo sous le seul scope ENV ; builds Low-Cost et Premium ; recherche zéro des symboles autonomes et équivalents, hors paramètres/état/backend DSP VCA légitimes.
+- Docs : README et Z5.
+- Dépendances : étape 3A ; précède 4A et 5A.
+
 ### Étape 4A — Unifier le propriétaire logique ENV
 
-- Objectif : FLT, VCA, ENV3 et retriggers appartiennent au domaine/set ENV.
+- Objectif : FLT, VCA, ENV3 et retriggers appartiennent au domaine/set ENV unique, après disparition du chemin UI VCA autonome.
 - Fichiers/symboles : `track_runtime_get_param_rule`, `seq_param_iface`, `ui_param`, `param_macro`, destination catalog, Pattern, Kit, snapshots, clipboard.
 - Autorisé : reclassification logique et migration/invalidation v3 explicitement choisie.
-- Interdit : déplacer les backends mixer/`mod_env3`, optimiser le chemin audio.
-- Tests/builds : table exhaustive param→domain→set, p-locks ENV/MIX/MOD, modulation, clipboard/undo, quatre formats, deux variantes.
+- Interdit : déplacer le backend VCA du mixer ou `mod_env3`, recréer une famille/ensemble VCA, optimiser le chemin audio.
+- Tests/builds : table exhaustive param→domain→set ; VCA absent du domaine/set MIX et présent dans ENV ; p-locks ENV/MIX/MOD ; modulation ; clipboard/clear/undo sous ENV uniquement ; navigation Premium vers ENV ; quatre formats ; builds Low-Cost/Premium ; recherche zéro des symboles VCA autonomes hors paramètres/état/backend DSP légitimes.
 - Docs : Z2/Z3/Z5/Z6, README.
-- Dépendances : 3A et décision VCA ; revert atomique indépendant.
+- Dépendances : 3A et 3D ; revert atomique indépendant.
 
 ### Étape 4B — Reclasser CFG VOICES/SPREAD
 
@@ -530,7 +537,7 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 - Objectif : prouver absence de reliquats et divergence de variantes.
 - Autorisé : correctifs microscopiques découverts par les validations, chacun isolé.
 - Interdit : nouvelle architecture, optimisation CPU/RAM, correction hard-RT non liée.
-- Tests/builds : configure/build Debug et Release Low-Cost/Premium ; suite PowerShell complète ; recherches négatives COLORS, MASTER_FX propriétaire, ARPEGGIATOR capability, IDs alias, groupes/SEQ LINK actifs, granular et modules supprimés ; round-trips storage et clipboard/undo.
+- Tests/builds : configure/build Debug et Release Low-Cost/Premium ; suite PowerShell complète ; recherches négatives COLORS, MASTER_FX propriétaire, alias de capacité ARP, IDs alias, groupes/SEQ LINK actifs, granular et modules supprimés ; round-trips storage et clipboard/undo.
 - Docs : matrice finale de conformité dans le rapport de l'étape, puis mise à jour des docs seulement si le code final l'exige.
 - Dépendances : toutes ; aucun regroupement empêchant un revert ciblé.
 

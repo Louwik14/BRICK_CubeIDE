@@ -1012,7 +1012,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 || (dest == PARAM_LOOPER_GRAIN)
                 || (dest == PARAM_SAMPLER_SAMPLE)
                 || (dest == PARAM_SAMPLER_CLIP_SEARCH)
-                || ((dest >= PARAM_MASTER_FX1_TYPE) && (dest <= PARAM_MASTER_FX4_B))
+                || ((dest >= PARAM_MACRO_FX1_TYPE) && (dest <= PARAM_MACRO_FX4_B))
                 || (dest == PARAM_DRUM_MD_MODEL)
                 || (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_MD)
                     && (dest >= PARAM_DRUM_TRX_BD_PITCH)
@@ -1057,7 +1057,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         return 1U;
     }
 
-    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
     {
         if (family == UI_TRACK_FAMILY_MIDI)
         {
@@ -1168,7 +1168,7 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(dest);
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
     {

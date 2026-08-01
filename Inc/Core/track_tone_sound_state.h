@@ -2,6 +2,7 @@
 #define TRACK_TONE_SOUND_STATE_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,7 +50,7 @@ typedef struct
         float level[4];
         float macro_a[4];
         float macro_b[4];
-    } master_fx;
+    } macro_fx;
     struct
     {
         float edit[2];
@@ -118,6 +119,13 @@ typedef struct
         uint8_t slot[8];
     } md;
 } track_tone_sound_state_t;
+
+_Static_assert(offsetof(track_tone_sound_state_t, macro_fx) == 100U,
+               "MacroFX state offset changed");
+_Static_assert(sizeof(((track_tone_sound_state_t *)0)->macro_fx) == 64U,
+               "MacroFX state size changed");
+_Static_assert(sizeof(track_tone_sound_state_t) == 524U,
+               "track tone state layout changed");
 
 void track_tone_sound_state_init(void);
 void track_tone_sound_state_make_default(track_tone_sound_state_t *out_state);

@@ -274,7 +274,7 @@ static void track_snapshot_reapply_track_params(uint8_t track)
     {
         const param_id_t id = (param_id_t)raw_id;
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+        if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
                 && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                 && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
                 && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))

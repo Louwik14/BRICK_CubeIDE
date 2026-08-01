@@ -256,8 +256,8 @@ static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t d
 
     switch (domain)
     {
-        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
-            *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+        case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             return 1U;
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
@@ -376,7 +376,7 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
     {
         return 0U;
     }
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -386,7 +386,7 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         return 0U;
     }
 
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS) && (set_id != (uint8_t)SEQ_PLOCK_SET_COLORS))
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV) && (set_id != (uint8_t)SEQ_PLOCK_SET_ENV))
     {
         return 0U;
     }

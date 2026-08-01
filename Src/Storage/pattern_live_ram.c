@@ -33,7 +33,6 @@
 typedef struct
 {
     uint8_t has_snapshot;
-    uint8_t dirty_pending_persist;
 } pattern_slot_meta_t;
 
 typedef enum
@@ -192,7 +191,7 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
 static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY);
 }
@@ -1189,7 +1188,6 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
     }
 
     g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
-    g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 1U;
 
     if ((bank == g_queued_bank) && (pattern == g_queued_pattern) && (g_queued_valid != 0U))
     {
@@ -1417,7 +1415,6 @@ void pattern_live_init(void)
         for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
         {
             g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
-            g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 0U;
         }
     }
 }

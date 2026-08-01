@@ -249,7 +249,7 @@ P-locks :
 - `seq_param_iface_apply_lock()` et `seq_param_iface_restore_base()` consomment ces slots et repassent par `param_registry_apply_track_value()` pour les domaines non-PLAY.
 
 Contrat des mappings :
-- sets génériques (`PLAY`, `MOD`, `COLORS`) : mapping stable par set.
+- sets génériques (`PLAY`, `MOD`, `ENV`) : mapping stable par set.
 - set `TONE` : mapping dépendant du `track_runtime_type` effectif de la track.
 - changement moteur : les p-locks `TONE` sont conservés par slot, sans migration implicite de sémantique.
 - slot non résoluble ou contexte runtime non bound : skip propre.

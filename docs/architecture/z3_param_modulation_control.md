@@ -159,7 +159,7 @@ Familles d'autorite:
 - `param_filter.*`:
   - domaine FILTER complet: resolution cible, conversions, apply runtime, shadow-state UI, orchestration normal/rt_fast.
 - `param_registry_backends.*`:
-  - details backend par ressource/famille (mix, colors, engines TONE) consommes par le coeur Z3.
+  - details backend par ressource/famille (mix, env, engines TONE) consommes par le coeur Z3.
 - `param_registry_tone_backends.*`:
   - exécuteur backend central pour le flux d'apply track-aware normal,
   - dispatch tone/mix-aware par engine/family stable.
@@ -233,11 +233,6 @@ Call-sites critiques:
 
 ## 3. Statut des chemins sensibles
 
-- `control_router_set_param`:
-  - Statut: dormant compat.
-  - Aucun caller actif trouve dans `Src/`.
-  - Les macros `CTRL_PARAM_MIX_TRACK0..3_*` ne sont pas exposees.
-
 - Restore LFO/Matrix (Z6 via `pattern_live_apply_snapshot`):
   - Autorite unique: les valeurs track-aware du layout courant `PARAM_COUNT`.
   - Aucun payload separe LFO `DEST/DEPTH` n'est restaure pour Matrix/ENV3.
@@ -296,7 +291,7 @@ Call-sites critiques:
 - `param_registry_apply_track_value_rt_fast` reserve a la modulation RT.
 - Release LFO doit restaurer la base (et non la derniere valeur modulee).
 - Pour `PARAM_FILTER_TYPE`, un re-apply de la meme valeur effective ne doit pas provoquer de reset DSP audible: la cible runtime mixer est idempotente sur type identique.
-- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` track-aware: ils sont p-lockables, macro-assignables, et appliques via `param_filter_apply_value` vers les setters mixer filter envelope.
+- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `ENV` track-aware: ils sont p-lockables, macro-assignables, et appliques via `param_filter_apply_value` vers les setters mixer filter envelope.
 - `param_store.active[]`:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
@@ -368,7 +363,7 @@ Call-sites critiques:
 
 - Les edits locaux `CFG_TRACK` / `CFG_TRACK_TYPE` passent par `param_registry_run_track_transition_pipeline_for_track(cmd, track)`.
 - Le pipeline local capture uniquement le mix target de la track cible, refresh uniquement cette track, rebind uniquement sa lane mixer et re-apply uniquement les params runtime de cette track.
-- La re-application locale couvre les params communs lane-bound (`COLORS/FILTER`, `MIX`, `VCA`) puis les params `TONE` du type runtime courant, sans toucher les autres tracks et sans repasser par `refresh_all()`.
+- La re-application locale couvre les params communs lane-bound (`ENV/FILTER`, `MIX`, `VCA`) puis les params `TONE` du type runtime courant, sans toucher les autres tracks et sans repasser par `refresh_all()`.
 - Apres re-application locale, le mixer snap les valeurs lissees de la lane cible vers les targets reappliquees pour eviter qu'un rebind neuf joue un bloc avec les defaults internes du mixer alors que l'UI/base track-aware garde les bonnes valeurs.
 - Le pipeline global `param_registry_run_track_transition_pipeline(cmd)` reste le chemin restore/load/init et conserve le refresh/rebind global.
 - Le rebind mixer local ne reset pas les lanes des autres tracks; les lanes inchangees sont no-op.
@@ -473,7 +468,7 @@ Call-sites critiques:
 - Pour une track MIDI:
   - destinations LFO autorisees: `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` (TONE/CC),
   - destinations LFO interdites: `PARAM_MIDI_PROGRAM`,
-  - destinations LFO interdites: tout domaine `COLORS`.
+  - destinations LFO interdites: tout domaine `ENV`.
 - Application modulation runtime:
   - chemin direct `mod_lfo_v1` pour les destinations MIDI CC,
   - emission CC via `midi_cc` seulement quand la valeur 7-bit change,
@@ -507,13 +502,13 @@ Call-sites critiques:
   - release et changement de destination restent geres par la base capturee dans `mod_lfo_v1`.
 - Nettoyage catalogue LFO:
   - `PARAM_SAMPLER_SAMPLE` est exclu: selection/load/import possible selon type Sampler/Stream/Multi.
-  - `PARAM_MASTER_FX1_TYPE..PARAM_MASTER_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_master_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
+  - `PARAM_MACRO_FX1_TYPE..PARAM_MACRO_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_macro_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
   - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_MD`: le type MD est silencieux et `drum_synth` ne rend aucun DSP MD a cette etape.
 
-## 25. Contrat LFO COLORS + rebind MIX (runtime)
+## 25. Contrat LFO ENV + rebind MIX (runtime)
 - `mod_lfo_v1` applique directement les destinations LFO FILTER continues exposees (`CUTOFF`, `RESONANCE`, `EQ_LOW`, `EQ_MID`, `EQ_HIGH`, `EG_AMT`, `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`) sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
 - `param_registry_apply_track_value_rt_fast` reste fallback de securite pour destination future non specialisee; il n'est plus le chemin volontaire des destinations LFO FILTER effectives.
-- La page produit `COLORS/CRUNCH` est retiree: `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne font plus partie du domaine COLORS effectif, ne sont plus p-lockables/macro-assignables et leurs wrappers d'apply ne branchent plus de runtime.
+- L'ancienne page produit `COLORS/CRUNCH` est retiree: `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne font plus partie du domaine ENV effectif, ne sont plus p-lockables/macro-assignables et leurs wrappers d'apply ne branchent plus de runtime.
 - Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
 - Le bloc MIX suit le meme principe: la base track-aware est portee par `track_sound_state`, la lane mixer n'est qu'une projection temporaire.
 - Le bloc MOD suit le meme principe: la config LFO canonique par track est portee par `track_sound_state`, `mod_lfo_v1` n'en fait que l'execution/runtime et le cache de destination.
@@ -659,20 +654,20 @@ Dette explicite post-passe 4:
 - `param_registry_apply_track_value` porte maintenant le refresh runtime explicite avant resolution et execution track-aware.
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
 
-## 29. Contrat Master/FX MacroFX
+## 29. Contrat MacroFX de la Special FX
 - L'owner topologique de ce bloc est exclusivement la Special FX. La Special Master partage encore le couple family/type d'adaptation, mais les normalisations, applies et statuts effectifs MacroFX exigent `TRACK_TOPOLOGY_ROLE_FX`.
 - Les reverb, delay et compresseur visibles sur la Special Master gardent leur autorite globale `param_store` et leurs setters mixer existants; ils ne sont pas copies dans un état par track.
-- `track_tone_sound_state` porte un bloc `master_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
-- Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
+- `track_tone_sound_state` porte un bloc `macro_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
+- Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MACRO_FX1_TYPE/LVL/A/B` a `PARAM_MACRO_FX4_TYPE/LVL/A/B`, avec les 16 IDs historiques conserves.
 - Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants.
 - Z3 conserve uniquement l'autorite de stockage/apply param; l'execution DSP lit la base `track_tone_sound_state` en Z1 sans ajouter de seconde autorite param.
 - `LVL` est interprete par le DSP comme profondeur/intensite du slot. Exception locale: `STUTTER LVL` reste on/off (`0` OFF, `>0` full wet), tandis que `FREEZE LVL` utilise le seuil `>0` pour engager le freeze et conserve la valeur `1..127` comme niveau progressif de retour wet/freeze et de duck dry; a `127`, le dry est coupe pour un comportement repeater dominant.
-- Cote edition UI, `STUTTER LVL` reste stocke en brut `0..127` mais quantifie en deux etats: `0` pour OFF, `127` pour ON. `FREEZE LVL` reste edite en continu `0..127`: affichage `OFF` a zero, puis pourcentage au-dessus de zero. Les autres types Master/FX conservent l'edition continue de `LVL`.
+- Cote edition UI, `STUTTER LVL` reste stocke en brut `0..127` mais quantifie en deux etats: `0` pour OFF, `127` pour ON. `FREEZE LVL` reste edite en continu `0..127`: affichage `OFF` a zero, puis pourcentage au-dessus de zero. Les autres types MacroFX conservent l'edition continue de `LVL`.
 - Pour `FREEZE`, `A=TIME` reste la division temporelle et `B=HOLD` reste un choix discret `SHORT/MID/LONG/INF`; le DSP consomme la valeur raw `B` quantifiee en 4 modes de feedback distincts, dont `INF` quasi maintenu mais borne.
 - Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER`, `COLOR`.
 - Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `WOBBLE`, `COMB`, `RING`, `STUTTER`, `FREEZE`, `COLOR`.
-- `TALK`, `PITCH` et `ECHO` sont retires sans tombstone produit; la plage `PARAM_MASTER_FXn_TYPE` est compacte `0..10`.
-- `STUTTER` et `FREEZE` sont des types a ressource unique dans les 4 slots Master/FX: l'apply Z3 normalise une tentative de doublon vers `OFF` pour eviter un etat canonique mensonger apres restore/load. Les autres types restent slot-local.
+- `TALK`, `PITCH` et `ECHO` sont retires sans tombstone produit; la plage `PARAM_MACRO_FXn_TYPE` est compacte `0..10`.
+- `STUTTER` et `FREEZE` sont des types a ressource unique dans les 4 slots MacroFX: l'apply Z3 normalise une tentative de doublon vers `OFF` pour eviter un etat canonique mensonger apres restore/load. Les autres types restent slot-local.
 - Pour `DRIVE`, le mapping visible est `A=DRIVE` et `B=TONE`; `LVL` reste la profondeur/wet du slot et ne pilote plus le pre-gain interne.
 - `COLOR` reutilise les macros de slot existantes: `A=AMT` bipolaire sombre/brillant centre a 64, `B=FOCUS` continu large/aigu. Aucun nouveau parametre ni changement `PARAM_COUNT` n'est introduit.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.
@@ -698,10 +693,10 @@ Dette explicite post-passe 4:
   - `drum_synth` n'est que l'executant runtime et instancie `plaits::AnalogBassDrum` directement, sans `plaits::Voice`.
 - Frontieres:
   - PLAY fournit `note_on`, note, velocity/accent et comportement de trigger,
-  - COLORS reste le chemin commun filtre/EQ de track,
+  - ENV reste le chemin commun filtre/EQ de track,
   - MIX reste niveau/pan/sends/mute,
   - VCA reste amplitude/enveloppe dynamique mixer pour les types qui l'exposent encore; `Sampler/Stream` et `Sampler/Looper` bloquent `PARAM_VCA_*` et neutralisent tout state VCA stale,
-  - MOD atteint TONE et COLORS via `track_runtime_tone_param_to_slot()` et les chemins directs `mod_lfo_v1`; `drum_synth` est appele uniquement via ses setters runtime audites.
+  - MOD atteint TONE et ENV via `track_runtime_tone_param_to_slot()` et les chemins directs `mod_lfo_v1`; `drum_synth` est appele uniquement via ses setters runtime audites.
 
 ## 32. Contrat MIX page 1 p-lock / LFO
 
@@ -715,7 +710,7 @@ Dette explicite post-passe 4:
 - Ces chemins directs ne mutent pas la base `track_sound_state`, le shadow FILTER, `param_store` ni le cache runtime param; la base capturee reste restauree sur release, sauf si l'autre LFO actif de la meme track cible encore la meme destination.
 - Execution LFO Sampler/Stream/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH` expose `Tune`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte. `PARAM_SAMPLER_LOOP_START` reste hors catalogue LFO: il est live par edit/p-lock, mais pas une destination LFO produit.
 - `PARAM_SAMPLER_CLIP_SEARCH` reste stockable/reserve hors surface produit, mais n'est plus expose comme destination LFO valide.
-- Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi), triggers, commandes, Master FX no-op, Drum TRX reserve et MIDI program sont exclues du catalogue LFO; elles ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
+- Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi), triggers, commandes, MacroFX no-op, Drum TRX reserve et MIDI program sont exclues du catalogue LFO; elles ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
 - Le chemin RT fast generique reste present uniquement comme fallback de securite pour future destination explicitement ajoutee.
 - `PARAM_SAMPLER_TUNE` partage le meme setter runtime `brick6_sampler_runtime_set_tune()` pour les edits UI, p-locks, LFO et restore de base: la base canonique `track_tone_sound_state` n'est mutee que par les writes autoritatifs, tandis que les projections p-lock/LFO/restore recalculent le pas RAM actif sans animer le miroir UI.
 - Pour `Sampler/RAM`, ce setter reprojette le pitch live sur les voix actives du track: chromatique = note + Tune, slice actif = note->slice uniquement et Tune->pitch global.
@@ -805,12 +800,12 @@ Dette explicite post-passe 4:
 
 ## 41. Contrat restore Kit V1
 
-- L'apply Kit restaure les bases canoniques `track_sound_state` et `track_tone_sound_state`, puis reprojette uniquement les domaines track-aware `COLORS`, `TONE` et `MIX` par `param_registry_apply_track_value`.
+- L'apply Kit restaure les bases canoniques `track_sound_state` et `track_tone_sound_state`, puis reprojette uniquement les domaines track-aware `ENV`, `TONE` et `MIX` par `param_registry_apply_track_value`.
 - La config LFO/Matrix/ENV3 est portee par `track_sound_state_t` et reprojetee par les params track-aware courants; aucun payload LFO separe n'est restaure.
 - Le domaine `PLAY` reste exclu de l'apply Kit pour ne pas restaurer seq/pattern/p-locks/transport.
 ## 42. Contrat dirty Kit
 
-- Les writes sonores autoritatifs qui passent par `param_registry_apply_track_value` marquent le Kit actif dirty si un slot Kit actif existe: CFG family/type, FILTER/COLORS, TONE, MIX et LFO config.
+- Les writes sonores autoritatifs qui passent par `param_registry_apply_track_value` marquent le Kit actif dirty si un slot Kit actif existe: CFG family/type, FILTER/ENV, TONE, MIX et LFO config.
 - Le dirty Kit appartient a `kit_v1`, pas a Z3: Z3 emet seulement la notification post-apply apres succes. Les restores Kit suspendent ce marquage et nettoient le dirty apres apply/save.
 - Les projections temporaires runtime, p-lock playback, transport, playhead, sequence et navigation UI ne doivent pas marquer le Kit dirty.
 
@@ -1003,7 +998,7 @@ L'editeur CFG calcule sa borne effective a chaque mouvement (`16 - voix reservee
 - Seize IDs generiques `PARAM_MIDI_FX_S1_PARAM1..PARAM_MIDI_FX_S4_MODEL` exposent quatre slots de quatre controles.
 - L'autorite de base est `note_fx_state`: matrice fixe `8 Play Tracks x 4 slots x 4 valeurs`, sans allocation et sans emission sonore.
 - Defaults: `PARAM1=1/16`, `PARAM2=ORDER`, `PARAM3=1`, `MODEL=OFF`. Choisir ARP coupe canoniquement le MODEL ARP eventuel d'un autre slot de la meme track.
-- Le domaine runtime MIDI FX est track-scoped et distinct de COLORS/TONE/MOD/MIX/PLAY; aucun set de p-lock MIDI FX n'est cree dans cette etape.
+- Le domaine runtime MIDI FX est track-scoped et distinct de ENV/TONE/MOD/MIX/PLAY; aucun set de p-lock MIDI FX n'est cree dans cette etape.
 # Addendum 2026-08-01 - runtime MIDI FX et ARP neuf
 
 Le moteur `note_fx_engine` fixe (8 Play Tracks x 4 slots) est separe du modele neuf `note_fx_arp`. Il porte generation, sources ordonnees, phase/direction, echeance sample-domain, PRNG local deterministe, sorties possedees avec token/destination et suspension. Les limites sont fixes a 16 sources et 16 sorties par slot et 8 emissions par piste/bloc; `OFF` reste transparent. Le moteur reste isole des producteurs et dispatchers jusqu'a l'etape 4.

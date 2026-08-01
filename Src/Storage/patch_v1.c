@@ -158,17 +158,35 @@ static uint8_t patch_v1_sampler_asset_kind_matches_type(uint8_t kind,
 
 static uint8_t patch_v1_family_type_is_valid(uint8_t family, uint8_t type)
 {
-    if ((family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-            || (type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    switch ((ui_track_family_t)family)
     {
-        return 0U;
+        case UI_TRACK_FAMILY_OFF:
+            return (type == (uint8_t)UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_SYNTH:
+            return ((type == (uint8_t)UI_TRACK_TYPE_PRISM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_WAVE)
+                    || (type == (uint8_t)UI_TRACK_TYPE_STACK)
+                    || (type == (uint8_t)UI_TRACK_TYPE_DELUGE)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_SAMPLER:
+            return ((type == (uint8_t)UI_TRACK_TYPE_RAM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_STREAM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_MULTI)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_DRUM:
+            return ((type == (uint8_t)UI_TRACK_TYPE_DRUM_MD)
+                    || (type == (uint8_t)UI_TRACK_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_MIDI:
+            return (type == (uint8_t)UI_TRACK_TYPE_MIDI) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_EXTERNAL:
+            return (type == (uint8_t)UI_TRACK_TYPE_EXTERNAL) ? 1U : 0U;
+
+        default:
+            return 0U;
     }
-    if (family == (uint8_t)UI_TRACK_FAMILY_OFF)
-    {
-        return (type == (uint8_t)UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
-    }
-    return (ui_track_type_is_valid_for_family((ui_track_family_t)family,
-                                              (ui_track_type_t)type) != false) ? 1U : 0U;
 }
 
 static void patch_v1_reapply_track_params(uint8_t track)
@@ -286,7 +304,9 @@ static patch_v1_result_t patch_v1_validate_loaded_patch(PatchSaveV1 *patch)
     if ((patch == 0)
             || (patch_v1_family_type_is_valid(patch->meta.family, patch->meta.type) == 0U)
             || (patch->meta.topology_role != (uint8_t)TRACK_TOPOLOGY_ROLE_PLAY)
-            || (patch_v1_family_type_is_valid(patch->track.family, patch->track.type) == 0U))
+            || (patch_v1_family_type_is_valid(patch->track.family, patch->track.type) == 0U)
+            || (patch->meta.family != patch->track.family)
+            || (patch->meta.type != patch->track.type))
     {
         return PATCH_V1_RESULT_BAD_PATCH;
     }
@@ -390,7 +410,8 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
 }
 patch_v1_result_t patch_v1_apply_slot_to_track(uint16_t slot, uint8_t target_track)
 {
-    if ((slot >= PATCH_V1_SLOT_COUNT) || (target_track >= UI_TRACK_COUNT))
+    if ((slot >= PATCH_V1_SLOT_COUNT) || (target_track >= UI_TRACK_COUNT)
+            || (track_topology_is_play(target_track) == 0U))
     {
         return PATCH_V1_RESULT_INVALID_ARG;
     }

@@ -27,8 +27,6 @@
 typedef uint8_t seq_track_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;
-/* Temporary compatibility alias; target name is seq_param_slot_t. */
-typedef seq_param_slot_t seq_param8_t;
 typedef uint16_t seq_value16_t;
 
 typedef enum

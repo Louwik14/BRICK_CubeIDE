@@ -362,7 +362,7 @@ Contrats timing:
 - `g_current_pattern` (`PatternSaveV1`): dernier snapshot live capture/applique.
 - `g_next_pattern` (`PatternSaveV1`): snapshot pattern queue pour prochaine bascule.
 - `g_boot_pattern` (`PatternSaveV1`): fallback snapshot boot si slot absent.
-- `g_pattern_slot_meta[16][16]` (`pattern_slot_meta_t {has_snapshot, dirty_pending_persist}`): meta locale des slots.
+- `g_pattern_slot_meta[16][16]` (`pattern_slot_meta_t {has_snapshot}`): meta locale de presence des slots.
 - `g_active_bank`, `g_active_pattern`: pattern actif.
 - `g_queued_valid`, `g_queued_bank`, `g_queued_pattern`: pattern queue.
 - `g_apply_in_progress`: garde anti re-entrance apply.
@@ -456,7 +456,7 @@ Points de lecture principaux:
 
 3. Save pattern:
 - `pattern_live_capture_to_slot()` capture `g_current_pattern` puis `pattern_sd_bank_store_slot()`.
-- Maj meta locale `has_snapshot/dirty_pending_persist`.
+- Maj meta locale `has_snapshot`.
 
 4. Load/queue pattern:
 - `pattern_live_queue_slot()` lit presence slot via `pattern_sd_bank_slot_has_data()`.
@@ -544,7 +544,6 @@ Effets aval:
 
 - Couplage inter-zone eleve dans `pattern_live_apply_snapshot` (UI + Z2 + Z3 + Z4 dans une seule routine).
 - Dependance implicite a l'ordre d'appel superloop pour `pattern_live_service` (si non appele, queue pattern ne commute pas).
-- `dirty_pending_persist` est ecrit mais non exploite dans le flux observe (meta partiellement orpheline).
 - `project_v1_apply_snapshot` est un orchestrateur mince: delegation du live apply a `pattern_live_apply_snapshot` + restauration etat actif/queued/slot projet.
 - Couplage UI implicite dans la condition de boundary (`seq_runtime_get_playhead_step(ui_get_active_track(), ...)`) au lieu d'une reference transport neutre.
 
@@ -649,12 +648,12 @@ TODO policy SD/projet:
 - Reste a faire: pattern save pending budgete et pattern load avec stop/finalize musical avant load/apply.
 - Politique finale SD attendue: SAMPLE_CACHE prioritaire, PATTERN_LOAD entre refills, PATTERN_SAVE differe, PROJECT hors playback, PREVIEW exclusif, sans scheduler SD generique.
 
-## Addendum 2026-05-06 - Master/FX UI-only
+## Addendum 2026-05-06 - MacroFX de la Special FX
 
-- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
-- L'ajout du type Master/FX `COLOR` etend seulement l'enum de valeur stockee dans les params `PARAM_MASTER_FXn_TYPE`; `PARAM_COUNT`, `PatternSaveV1` et `ProjectSaveV1` ne changent pas.
+- Les params `PARAM_MACRO_FX1_*` a `PARAM_MACRO_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
+- L'ajout du type MacroFX `COLOR` etend seulement l'enum de valeur stockee dans les params `PARAM_MACRO_FXn_TYPE`; `PARAM_COUNT`, `PatternSaveV1` et `ProjectSaveV1` ne changent pas.
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
-- L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
+- L'etat ROUT MacroFX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
 
 ## Addendum 2026-05-08 - contrat SD audio recording multi-client
 
@@ -979,6 +978,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - La banque Patch V1 expose un slot state minimal `EMPTY/VALID/INVALID`, `patch_sd_bank_rename_slot` et `patch_sd_bank_delete_slot`. Rename recharge le payload, modifie `meta.name` et reecrit le meme fichier avec checksum recalcule; delete supprime le fichier de slot et met le slot en `EMPTY`.
 - Le slot courant reste l'index choisi par le browser/save/apply. Save direct ecrit le slot courant s'il est utilisable, sinon le premier slot vide; apply positionne le slot courant sur le slot applique; delete choisit le prochain slot valide ou conserve le slot devenu vide.
 - Les filtres/tri Patch Assign utilisent uniquement le cache metadata/header de `patch_sd_bank`; aucun payload lourd n'est charge pour construire la liste. Les filtres precis Family/Type listent uniquement les slots `VALID` compatibles; `BAD PATCH` et `EMPTY` restent visibles seulement dans la vue `ALL/ALL`, apres les patches valides.
+- Les métadonnées header, les payloads et les targets Patch n'acceptent que les couples Family/Type des tracks Play (`Off`, Synth, Sampler RAM/Stream/Multi, Drum, MIDI, External). Un fichier portant Input ou Sampler/Looper, ou tout autre rôle Special, est marqué invalide par la banque et refusé par `patch_v1_apply_slot_to_track()` avec `PATCH_V1_RESULT_BAD_PATCH` (`BAD PATCH`); aucun changement de version ou de layout n'est requis.
 - Le multi-target Patch Assign ne change pas le format Patch: un fichier `.B6P` reste mono-track. L'UI applique le meme slot sequentiellement vers les targets cochees via `patch_v1_apply_slot_to_track`, dans l'ordre croissant des track id, et continue apres un echec partiel sans rollback.
 - La reference asset Sampler est resolue uniquement si l'asset est deja present et `READY` dans `sample_global_pool` avec kind/path compatible; aucun reload FatFs, page-cache, reader ou voice n'est cree par l'apply Patch.
 - Preview, rollback, reload asset Sampler complet, filtres avances et Kit restent hors perimetre V1.
@@ -1003,7 +1003,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - `kit_v1_apply_slot` charge et valide le slot Kit (`B6KT`, version, payload size, checksum via `kit_sd_bank_load_slot`, puis `meta.track_count == UI_TRACK_COUNT` et family/type valides).
 - Avant toute mutation, les refs asset Sampler `RAM/STREAM/MULTI` sont resolues uniquement contre un slot `sample_global_pool` deja `READY`, de meme kind/path; aucun reload SD, reader, page-cache ou streamer n'est cree. Refus: `ASSET MISS`.
-- Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, puis reprojette les domaines `COLORS`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
+- Le pipeline neutralise notes/voix par track, applique family/type complet en mutation bulk `track_state`, invalide/refresh runtime via le pipeline structurel `param_registry`, restaure `track_sound_state_t` et `track_tone_sound_state_t`, puis reprojette les domaines `ENV`, `TONE` et `MIX` autorises par `param_registry_apply_track_value`.
 - Le transport, playhead, sequence, pattern et p-locks ne sont ni captures ni restaures. Si une erreur arrive apres mutation structurelle/reapply partiel, le refus final est `ERROR`; aucun rollback complet n'est garanti en V1.
 ## Addendum 2026-05-29 - Pattern linked Kit
 
@@ -1011,7 +1011,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Au changement de pattern, un lien Kit valide applique le Kit complet via `kit_v1_apply_slot`, positionne le slot actif et nettoie le dirty apres succes. Un pattern sans lien invalide l'affichage Kit actif (`Kit: ---`) et n'applique pas de Kit implicite.
 - Apply Kit depuis le browser et Save Kit direct lient le slot Kit au pattern actif seulement apres succes. Un echec d'apply (`BAD KIT`, `ASSET MISS`, SD) ne change pas le lien.
 - Delete du slot Kit actif clear uniquement le lien du pattern actif; les autres patterns peuvent encore porter une reference devenue invalide et seront refuses proprement au prochain chargement.
-- Le dirty Kit est porte par `kit_v1`: false apres apply/save, true sur edits sonores centraux (CFG family/type, domains COLORS/TONE/MIX, FILTER, LFO). Il ne suit pas transport, playhead, sequence ni navigation UI.
+- Le dirty Kit est porte par `kit_v1`: false apres apply/save, true sur edits sonores centraux (CFG family/type, domains ENV/TONE/MIX, FILTER, LFO). Il ne suit pas transport, playhead, sequence ni navigation UI.
 
 ## Addendum 2026-07-17 - lot 4B persistence low-cost
 
@@ -1145,7 +1145,7 @@ Addendum 2026-07-27 - simplification buffers Pattern/Project:
 - Le payload Track reste limité aux données éditables: configuration, sound/tone,
   commandes moteur, gates filtre/VCA et voix audio ne sont ni capturés ni restaurés.
 - La réapplication post-snapshot est limitée aux domaines persistants réellement
-  capturés (`COLORS`, `TONE`, `MOD`, `MIX`); les bases `PLAY` et l'action
+  capturés (`ENV`, `TONE`, `MOD`, `MIX`); les bases `PLAY` et l'action
   `LOOPER PLAY` ne sont pas rejouées pendant le paste.
 
 ## Addendum 2026-07-30 - settings de velocite Hall low-cost

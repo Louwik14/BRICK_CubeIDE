@@ -48,7 +48,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
    - metronome: `metronome_runtime_trigger_at`;
    - events PLAY: `seq_runtime_audio_apply_event`.
 4. Chaque segment appelle `audio_process_block_int32()` (`Src/Audio/audio.c:115`).
-5. `audio_process_block_int32()` depile jusqu'a 8 `control_event_t`, unpacke les entrees, appelle le DSP, puis packe la sortie (`Src/Audio/audio_float.c:561-590`).
+5. `audio_process_block_int32()` unpacke les entrees, appelle le DSP, puis packe la sortie (`Src/Audio/audio_float.c`).
 6. `audio_io_unpack()` delegue au backend Board (`Src/Audio/audio_io.c:11`).
 7. `dsp_engine_process_block()` appelle `brick6_audio_runtime_dsp()` via le callback pose dans `brick6_app_init()` (`Src/Core/brick6_app_init.c:130`).
 8. `brick6_audio_runtime_dsp()` rafraichit/consulte `track_runtime`, execute LFO, synths, sampler, Looper, Wave, voice manager, mixer, MasterFX et preview SD (`Src/Core/brick6_audio_runtime.c:197-259`).
@@ -62,7 +62,6 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 
 | Appel depuis audio | Fichier | Probleme dual-core |
 |---|---|---|
-| `control_event_pop()` | `Src/Audio/audio_float.c:568` | consomme une queue controle dans l'IRQ; le producteur serait M4, il faut une file SPSC M4->M7 explicite ou retirer ce chemin |
 | `track_runtime_refresh_if_dirty()` | `Src/Core/brick6_audio_runtime.c:202` | lecture dirty controle depuis M7; refresh refuse en IRQ, mais dependance directe au dirty M4 |
 | `seq_runtime_audio_collect_block_events()` | `Src/Audio/audio.c:262` | collecte avance timeline et scheduler dans IRQ; a garder M7 ou remplacer par evenements prepares M4 + apply M7 |
 | `seq_runtime_audio_apply_event()` | `Src/Audio/audio.c:109` | applique note/program vers engines/MIDI; MIDI out est M4-cible, engine apply M7-cible |
@@ -141,9 +140,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 9. `track_runtime_refresh_if_dirty()` en IRQ refuse le refresh mais laisse l'audio lire l'ancien runtime (`Src/Core/track_runtime.c:926-957`).
    - C'est une degradation acceptable mono-core; en dual-core il faut un contrat de publication de revision.
 
-10. `control_event_pop()` dans `audio_process_block_int32()` (`Src/Audio/audio_float.c:568`) n'a pas de role clair dans le chemin audio cible.
-
-11. Board abstraction progresse, mais CubeMX/generated et handles HAL restent tres centralises.
+10. Board abstraction progresse, mais CubeMX/generated et handles HAL restent tres centralises.
 
 ## 5. Tableau des etats et proprietaires
 
@@ -183,7 +180,7 @@ Ambiguites a eliminer:
 |---|---|---|---|---|---|
 | Commande structure track | M4 | M7 | rare, edits/restore | generation, track, family/type/midi, mix target calcule ou snapshot runtime complet | derniere commande gagne; si plein, drop ancienne non appliquee avant commit generation |
 | Snapshot runtime tracks | M4 | M7 | rare a moderee | tableau `track_runtime` immutable + revision | double-buffer; M7 garde ancienne revision si nouvelle incomplete |
-| Snapshot params debut bloc | M4 | M7 | moderee | valeurs MIX/COLORS/TONE/VCA/engine, MasterFX, LFO config/base par track | coalescing par param; derniere valeur gagne |
+| Snapshot params debut bloc | M4 | M7 | moderee | valeurs MIX/ENV/TONE/VCA/engine, MasterFX, LFO config/base par track | coalescing par param; derniere valeur gagne |
 | Events audio sample-accurate | M4 ou M7 prepare | M7 apply | par bloc/horizon court | note on/off, p-lock apply/release, program, boundary, metro, offset intra-bloc ou sample absolu | si plein: drop selon priorite diagnostique; notes off/panic prioritaires |
 | Commandes transport | M4 | M7 | faible | start/stop/continue, tempo, clock source, count-in, sample anchor si connu | start/stop atomiques; si plein, stop/panic prioritaire |
 | MIDI out audio-aligne | M7 | M4 | par event | status/data/channel, sample_time/order | M4 peut etre en retard; horodatage USB best effort, ne bloque jamais M7 |

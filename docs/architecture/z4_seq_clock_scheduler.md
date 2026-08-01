@@ -852,7 +852,7 @@ Principe commun avant design des resolvers:
 - La correspondance reste strictement positionnelle. Le routage ne compare pas les noms, ne cherche pas de param equivalent entre moteurs, ne merge pas et ne copie pas.
 
 Adresse logique:
-- `set` reste l'ensemble p-lock existant: `COLORS`, `TONE`, `PLAY`, `MOD`, `MIX`.
+- `set` reste l'ensemble p-lock existant: `ENV`, `TONE`, `PLAY`, `MOD`, `MIX`.
 - `page` represente la page logique exposee par le consumer quand elle existe. Pour les surfaces actuellement stockees sans page explicite, la page peut etre derivee du slot ou fixee a `0` par le resolver specialise.
 - `slot` est le rang logique dans la page ou le slot p-lock deja persiste selon le set.
 - L'adresse logique ne devient pas un `param_id` global. La resolution finale `slot -> param` reste locale a la track cible via les autorites existantes, notamment les tables TONE par type runtime.
@@ -886,7 +886,7 @@ Contraintes:
 
 
 Objet:
-- Le resolver non-PLAY couvre uniquement la lecture playback boundary des sets `COLORS`, `TONE`, `MOD` et `MIX`.
+- Le resolver non-PLAY couvre uniquement la lecture playback boundary des sets `ENV`, `TONE`, `MOD` et `MIX`.
 - `PLAY` est explicitement exclu de ce resolver et reste traite par le design PLAY dedie.
 - Le resolver ne possede ni transport, ni playhead, ni stockage p-lock, ni etat runtime applique. Il resout seulement une source de lecture et une cible d'application pour un boundary donne.
 
@@ -916,7 +916,7 @@ Resolution set/slot:
 - La validation de support se fait toujours avec `target_track`, `set_id`, `target_slot`.
 - Pour `TONE`, la conversion `slot -> param` reste celle du type runtime cible via Z2; un slot TONE master peut donc piloter une fonction differente sur la cible.
 - Pour `MIX`, seuls les slots MIX p-lockables existants restent admissibles cote cible.
-- Pour `COLORS`, la cible effective filtre/engine reste resolue par les autorites Z2/Z3 existantes, pas par la source master.
+- Pour `ENV`, la cible effective filtre/engine reste resolue par les autorites Z2/Z3 existantes, pas par la source master.
 
 Apply/restore:
 - La capture de base se fait toujours sur `target_track + target_slot`.
@@ -997,7 +997,7 @@ Limites volontaires de cette etape:
   membre. Le support effectif reste valide sur la cible et il n'existe aucun
   fallback positionnel entre moteurs.
 - La whitelist est explicite et fermee aux ensembles p-lock non-PLAY correspondant
-  a `TONE`, `ENV/COLORS`, `MOD` et `MIX`. `PLAY`, `CFG` et tout domaine hors de ces
+  a `TONE`, `ENV`, `MOD` et `MIX`. `PLAY`, `CFG` et tout domaine hors de ces
   ensembles restent exclus. Le chemin est identique pour les floats, ints, enums et
   bools; aucune classification par type de valeur n'est appliquee.
 
@@ -1036,7 +1036,7 @@ Program Change:
 - Le miroir `g_seq_play_midi_program_valid/last` reste indexe par cible d'emission, pas par source de lecture.
 
 ARP Hold:
-- `ARP Hold` reste une capacite de la track cible.
+- `ARP Hold` reste une fonction track-aware de la track cible, dans le pipeline MIDI FX; il ne constitue pas une capacite topologique distincte.
 
 Forme d'API cible:
 - Une API de resolution d'item PLAY est preferee: elle retourne pour une position scheduler la paire `source_track/source_step/source_voice` et `target_track/target_voice`.
@@ -1075,7 +1075,6 @@ Forme d'API cible:
 - Entree contexte: `scheduler_track`, `scheduler_step`, `negative_lookahead`.
 - Sortie contexte:
   - `source_track` et `source_step` pour le gate de trig et le roll;
-  - `linked` pour diagnostics internes;
   - liste bornee d'items PLAY, chaque item portant `target_track`, `target_voice`, `source_track`, `source_step`, `source_voice`;
   - `item_count`, plafonne par `SEQ_PLAY_SCHEDULER_VOICE_COUNT` hors groupe et par le plafond groupe existant de 8 membres.
 - Une API de lecture de valeur PLAY doit accepter explicitement:

@@ -448,11 +448,11 @@ static const param_id_t g_track_runtime_tone_slots_midi[] = {
     PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4
 };
 
-static const param_id_t g_track_runtime_tone_slots_master_fx[] = {
-    PARAM_MASTER_FX1_TYPE, PARAM_MASTER_FX1_LEVEL, PARAM_MASTER_FX1_A, PARAM_MASTER_FX1_B,
-    PARAM_MASTER_FX2_TYPE, PARAM_MASTER_FX2_LEVEL, PARAM_MASTER_FX2_A, PARAM_MASTER_FX2_B,
-    PARAM_MASTER_FX3_TYPE, PARAM_MASTER_FX3_LEVEL, PARAM_MASTER_FX3_A, PARAM_MASTER_FX3_B,
-    PARAM_MASTER_FX4_TYPE, PARAM_MASTER_FX4_LEVEL, PARAM_MASTER_FX4_A, PARAM_MASTER_FX4_B
+static const param_id_t g_track_runtime_tone_slots_macro_fx[] = {
+    PARAM_MACRO_FX1_TYPE, PARAM_MACRO_FX1_LEVEL, PARAM_MACRO_FX1_A, PARAM_MACRO_FX1_B,
+    PARAM_MACRO_FX2_TYPE, PARAM_MACRO_FX2_LEVEL, PARAM_MACRO_FX2_A, PARAM_MACRO_FX2_B,
+    PARAM_MACRO_FX3_TYPE, PARAM_MACRO_FX3_LEVEL, PARAM_MACRO_FX3_A, PARAM_MACRO_FX3_B,
+    PARAM_MACRO_FX4_TYPE, PARAM_MACRO_FX4_LEVEL, PARAM_MACRO_FX4_A, PARAM_MACRO_FX4_B
 };
 
 static const param_id_t g_track_runtime_tone_slots_drum_bd_analog[] = {
@@ -530,8 +530,8 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             return 1U;
 
         case TRACK_RUNTIME_TYPE_SPECIAL_FX:
-            *out_table = g_track_runtime_tone_slots_master_fx;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_master_fx) / sizeof(g_track_runtime_tone_slots_master_fx[0]));
+            *out_table = g_track_runtime_tone_slots_macro_fx;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_macro_fx) / sizeof(g_track_runtime_tone_slots_macro_fx[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
@@ -625,22 +625,12 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     if (((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) != 0U)
             && (track_runtime_is_audio_routable(ctx->track_id) != 0U))
     {
-        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_COLORS);
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ENV);
     }
 
     if (track_runtime_is_audio_routable(ctx->track_id) != 0U)
     {
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
-    }
-
-    if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
-            || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_LOOPER))
-            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
-            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL))
-    {
-        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_VCA);
     }
 
     return mask;
@@ -1464,7 +1454,7 @@ uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capabilit
     {
         case TRACK_CAPABILITY_NOTES:
         case TRACK_CAPABILITY_KEYBOARD:
-        case TRACK_CAPABILITY_ARPEGGIATOR:
+        case TRACK_CAPABILITY_MIDI_FX:
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U) ? 1U : 0U;
 
         case TRACK_CAPABILITY_AUDIO:
@@ -1710,7 +1700,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
         case PARAM_ENV_RETRIG_FILTER:
-            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_COLORS;
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
         case PARAM_DRUM_TRX_BD_PITCH:
@@ -1796,22 +1786,22 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DELUGE_WIDTH:
         case PARAM_DELUGE_PHASE:
         case PARAM_DELUGE_RETRIG:
-        case PARAM_MASTER_FX1_TYPE:
-        case PARAM_MASTER_FX1_LEVEL:
-        case PARAM_MASTER_FX1_A:
-        case PARAM_MASTER_FX1_B:
-        case PARAM_MASTER_FX2_TYPE:
-        case PARAM_MASTER_FX2_LEVEL:
-        case PARAM_MASTER_FX2_A:
-        case PARAM_MASTER_FX2_B:
-        case PARAM_MASTER_FX3_TYPE:
-        case PARAM_MASTER_FX3_LEVEL:
-        case PARAM_MASTER_FX3_A:
-        case PARAM_MASTER_FX3_B:
-        case PARAM_MASTER_FX4_TYPE:
-        case PARAM_MASTER_FX4_LEVEL:
-        case PARAM_MASTER_FX4_A:
-        case PARAM_MASTER_FX4_B:
+        case PARAM_MACRO_FX1_TYPE:
+        case PARAM_MACRO_FX1_LEVEL:
+        case PARAM_MACRO_FX1_A:
+        case PARAM_MACRO_FX1_B:
+        case PARAM_MACRO_FX2_TYPE:
+        case PARAM_MACRO_FX2_LEVEL:
+        case PARAM_MACRO_FX2_A:
+        case PARAM_MACRO_FX2_B:
+        case PARAM_MACRO_FX3_TYPE:
+        case PARAM_MACRO_FX3_LEVEL:
+        case PARAM_MACRO_FX3_A:
+        case PARAM_MACRO_FX3_B:
+        case PARAM_MACRO_FX4_TYPE:
+        case PARAM_MACRO_FX4_LEVEL:
+        case PARAM_MACRO_FX4_A:
+        case PARAM_MACRO_FX4_B:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;
@@ -2099,8 +2089,8 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U
                     && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX)
-                    && (param >= PARAM_MASTER_FX1_TYPE)
-                    && (param <= PARAM_MASTER_FX4_B))
+                    && (param >= PARAM_MACRO_FX1_TYPE)
+                    && (param <= PARAM_MACRO_FX4_B))
             {
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             }

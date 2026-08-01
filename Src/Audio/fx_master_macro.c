@@ -104,7 +104,7 @@ static float fxmm_audio_clampf(float v, float lo, float hi)
     const float clipped = fxmm_clampf(v, lo, hi);
     if (g_fxmm_diag_enabled != 0U)
     {
-        audio_global_diag_report_master_fx_clamp(v, clipped);
+        audio_global_diag_report_macro_fx_clamp(v, clipped);
     }
     return clipped;
 }
@@ -621,7 +621,7 @@ static uint32_t fxmm_get_bpm_milli(void)
     return bpm_milli;
 }
 
-static uint8_t fxmm_find_master_fx_track(uint8_t *out_track)
+static uint8_t fxmm_find_macro_fx_track(uint8_t *out_track)
 {
     uint8_t track = 0U;
     if (track_topology_find_special(TRACK_TOPOLOGY_ROLE_FX, 0U, &track) == 0U)
@@ -1126,7 +1126,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
 {
     g_fxmm_diag_enabled = audio_track_diag_is_enabled();
     uint8_t track = 0U;
-    if ((left == NULL) || (right == NULL) || (frames == 0U) || (fxmm_find_master_fx_track(&track) == 0U))
+    if ((left == NULL) || (right == NULL) || (frames == 0U) || (fxmm_find_macro_fx_track(&track) == 0U))
     {
         return;
     }
@@ -1149,7 +1149,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     uint8_t freeze_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
-        const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
+        const uint8_t type = fxmm_u7(state->macro_fx.type[slot]);
         if ((type == FX_MASTER_MACRO_STUTTER) && (stutter_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
         {
             stutter_owner_slot = slot;
@@ -1167,13 +1167,13 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
 
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
-        const uint8_t type = fxmm_u7(state->master_fx.type[slot]);
+        const uint8_t type = fxmm_u7(state->macro_fx.type[slot]);
         fxmm_process_slot(&g_slots[slot],
                           slot,
                           type,
-                          state->master_fx.level[slot],
-                          state->master_fx.macro_a[slot],
-                          state->master_fx.macro_b[slot],
+                          state->macro_fx.level[slot],
+                          state->macro_fx.macro_a[slot],
+                          state->macro_fx.macro_b[slot],
                           left,
                           right,
                           frames,
@@ -1210,7 +1210,7 @@ void fx_master_macro_get_diag_state(fx_master_macro_diag_state_t *out)
     }
     memset(out, 0, sizeof(*out));
     uint8_t track = 0U;
-    if (fxmm_find_master_fx_track(&track) == 0U)
+    if (fxmm_find_macro_fx_track(&track) == 0U)
     {
         return;
     }
@@ -1221,8 +1221,8 @@ void fx_master_macro_get_diag_state(fx_master_macro_diag_state_t *out)
     }
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_DIAG_SLOT_COUNT; ++slot)
     {
-        out->type[slot] = fxmm_u7(state->master_fx.type[slot]);
-        out->level[slot] = fxmm_u7(state->master_fx.level[slot]);
+        out->type[slot] = fxmm_u7(state->macro_fx.type[slot]);
+        out->level[slot] = fxmm_u7(state->macro_fx.level[slot]);
         if ((fxmm_type_is_active(out->type[slot]) != 0U) && (out->level[slot] != 0U))
         {
             out->active_mask |= (uint8_t)(1U << slot);

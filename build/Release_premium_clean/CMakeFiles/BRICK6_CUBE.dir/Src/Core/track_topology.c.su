@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:68:9:track_topology_get_descriptor	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:80:9:track_topology_has_capability	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:91:9:track_topology_is_active	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:98:9:track_topology_is_play	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:105:9:track_topology_is_special	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:112:9:track_topology_is_role	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:119:9:track_topology_find_special	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:149:9:track_topology_get_logical_track_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:154:9:track_topology_get_play_track_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:159:9:track_topology_get_special_track_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:164:9:track_topology_get_physical_input_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:169:9:track_topology_get_identity	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:188:9:track_topology_resolve_identity	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:225:9:track_topology_identity_is_compatible	24	static

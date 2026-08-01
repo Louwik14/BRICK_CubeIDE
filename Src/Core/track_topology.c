@@ -6,7 +6,7 @@
                                       | TRACK_CAPABILITY_AUDIO \
                                       | TRACK_CAPABILITY_MIDI \
                                       | TRACK_CAPABILITY_KEYBOARD \
-                                      | TRACK_CAPABILITY_ARPEGGIATOR \
+                                      | TRACK_CAPABILITY_MIDI_FX \
                                       | TRACK_CAPABILITY_AUTOMATION \
                                       | TRACK_CAPABILITY_MUTE \
                                       | TRACK_CAPABILITY_INPUT_RESERVATION))

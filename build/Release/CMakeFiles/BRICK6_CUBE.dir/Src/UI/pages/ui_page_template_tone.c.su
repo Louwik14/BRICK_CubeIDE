@@ -1,7 +1,7 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:477:17:ui_page_template_tone_prism_u15	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:510:13:ui_page_template_tone_prism_format_bipolar_float	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:561:13:ui_page_template_tone_prism_format_q7_interval	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:1358:13:ui_page_template_tone_master_fx_format_choice	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:1358:13:ui_page_template_tone_macro_fx_format_choice	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:490:13:ui_page_template_tone_prism_format_percent	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:442:38:ui_page_template_tone_prism_labels_for_param	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:290:36:ui_page_template_tone_resolve_family	16	static

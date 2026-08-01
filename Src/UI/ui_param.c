@@ -100,12 +100,12 @@ static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t a
 static uint8_t ui_param_resolve_play_context(param_id_t param,
                                              uint8_t active_track,
                                              ui_page_template_play_context_t *out_context);
-static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
+static uint8_t ui_param_macro_fx_quantize_edit(uint8_t track,
                                                 param_id_t param,
                                                 float current_value,
                                                 int16_t delta,
                                                 float *out_value);
-static uint8_t ui_param_master_fx_step_type(uint8_t track,
+static uint8_t ui_param_macro_fx_step_type(uint8_t track,
                                             param_id_t param,
                                             float current_value,
                                             int16_t delta,
@@ -507,23 +507,23 @@ static float ui_param_step_cfg_track_type(float current_value,
     return (float)candidate;
 }
 
-static uint8_t ui_param_master_fx_type_slot_from_param(param_id_t param, uint8_t *out_slot)
+static uint8_t ui_param_macro_fx_type_slot_from_param(param_id_t param, uint8_t *out_slot)
 {
-    if ((param != PARAM_MASTER_FX1_TYPE)
-            && (param != PARAM_MASTER_FX2_TYPE)
-            && (param != PARAM_MASTER_FX3_TYPE)
-            && (param != PARAM_MASTER_FX4_TYPE))
+    if ((param != PARAM_MACRO_FX1_TYPE)
+            && (param != PARAM_MACRO_FX2_TYPE)
+            && (param != PARAM_MACRO_FX3_TYPE)
+            && (param != PARAM_MACRO_FX4_TYPE))
     {
         return 0U;
     }
     if (out_slot != 0)
     {
-        *out_slot = (uint8_t)((param - PARAM_MASTER_FX1_TYPE) / 4U);
+        *out_slot = (uint8_t)((param - PARAM_MACRO_FX1_TYPE) / 4U);
     }
     return 1U;
 }
 
-static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint8_t slot, uint8_t type)
+static uint8_t ui_param_macro_fx_type_is_used_by_other_slot(uint8_t track, uint8_t slot, uint8_t type)
 {
     if ((type != (uint8_t)FX_MASTER_MACRO_STUTTER)
             && (type != (uint8_t)FX_MASTER_MACRO_FREEZE))
@@ -534,7 +534,7 @@ static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint
     for (uint8_t other = 0U; other < 4U; ++other)
     {
         float value = 0.0f;
-        const param_id_t other_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (other * 4U));
+        const param_id_t other_param = (param_id_t)(PARAM_MACRO_FX1_TYPE + (other * 4U));
         if ((other != slot)
                 && (param_registry_get_track_value(other_param, track, &value) != 0U)
                 && ((uint8_t)(value + 0.5f) == type))
@@ -546,7 +546,7 @@ static uint8_t ui_param_master_fx_type_is_used_by_other_slot(uint8_t track, uint
     return 0U;
 }
 
-static uint8_t ui_param_master_fx_step_type(uint8_t track,
+static uint8_t ui_param_macro_fx_step_type(uint8_t track,
                                             param_id_t param,
                                             float current_value,
                                             int16_t delta,
@@ -557,7 +557,7 @@ static uint8_t ui_param_master_fx_step_type(uint8_t track,
             || (delta == 0)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
-            || (ui_param_master_fx_type_slot_from_param(param, &slot) == 0U))
+            || (ui_param_macro_fx_type_slot_from_param(param, &slot) == 0U))
     {
         return 0U;
     }
@@ -576,7 +576,7 @@ static uint8_t ui_param_master_fx_step_type(uint8_t track,
             candidate = (int16_t)FX_MASTER_MACRO_TYPE_COUNT - 1;
         }
 
-        if (ui_param_master_fx_type_is_used_by_other_slot(track, slot, (uint8_t)candidate) == 0U)
+        if (ui_param_macro_fx_type_is_used_by_other_slot(track, slot, (uint8_t)candidate) == 0U)
         {
             *out_value = (float)candidate;
             return 1U;
@@ -592,14 +592,14 @@ static uint8_t ui_param_master_fx_step_type(uint8_t track,
     return 1U;
 }
 
-static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out_slot, uint8_t *out_macro)
+static uint8_t ui_param_macro_fx_slot_from_param(param_id_t param, uint8_t *out_slot, uint8_t *out_macro)
 {
-    if ((param < PARAM_MASTER_FX1_TYPE) || (param > PARAM_MASTER_FX4_B))
+    if ((param < PARAM_MACRO_FX1_TYPE) || (param > PARAM_MACRO_FX4_B))
     {
         return 0U;
     }
 
-    const uint8_t offset = (uint8_t)(param - PARAM_MASTER_FX1_TYPE);
+    const uint8_t offset = (uint8_t)(param - PARAM_MACRO_FX1_TYPE);
     const uint8_t macro = (uint8_t)(offset % 4U);
     if (macro == 0U)
     {
@@ -617,7 +617,7 @@ static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out
     return 1U;
 }
 
-static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
+static uint8_t ui_param_macro_fx_discrete_count(uint8_t fx_type, uint8_t macro)
 {
     if (macro == 1U)
     {
@@ -660,14 +660,14 @@ static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
     return 0U;
 }
 
-static uint8_t ui_param_master_fx_raw_to_step(float value, uint8_t count)
+static uint8_t ui_param_macro_fx_raw_to_step(float value, uint8_t count)
 {
     const float clamped = ui_param_clamp(value, 0.0f, 127.0f);
     const uint32_t raw = (uint32_t)(clamped + 0.5f);
     return (uint8_t)((raw * (uint32_t)(count - 1U) + 63U) / 127U);
 }
 
-static float ui_param_master_fx_step_to_raw(uint8_t step, uint8_t count)
+static float ui_param_macro_fx_step_to_raw(uint8_t step, uint8_t count)
 {
     if (count <= 1U)
     {
@@ -682,7 +682,7 @@ static float ui_param_master_fx_step_to_raw(uint8_t step, uint8_t count)
     return (float)(((uint32_t)step * 127U + ((uint32_t)(count - 1U) / 2U)) / (uint32_t)(count - 1U));
 }
 
-static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
+static uint8_t ui_param_macro_fx_quantize_edit(uint8_t track,
                                                 param_id_t param,
                                                 float current_value,
                                                 int16_t delta,
@@ -694,25 +694,25 @@ static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
             || (delta == 0)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
-            || (ui_param_master_fx_slot_from_param(param, &slot, &macro) == 0U))
+            || (ui_param_macro_fx_slot_from_param(param, &slot, &macro) == 0U))
     {
         return 0U;
     }
 
     float fx_type_value = 0.0f;
-    const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (slot * 4U));
+    const param_id_t type_param = (param_id_t)(PARAM_MACRO_FX1_TYPE + (slot * 4U));
     if (param_registry_get_track_value(type_param, track, &fx_type_value) == 0U)
     {
         return 0U;
     }
 
-    const uint8_t count = ui_param_master_fx_discrete_count((uint8_t)(fx_type_value + 0.5f), macro);
+    const uint8_t count = ui_param_macro_fx_discrete_count((uint8_t)(fx_type_value + 0.5f), macro);
     if (count < 2U)
     {
         return 0U;
     }
 
-    int16_t step = (int16_t)ui_param_master_fx_raw_to_step(current_value, count);
+    int16_t step = (int16_t)ui_param_macro_fx_raw_to_step(current_value, count);
     step = (int16_t)(step + delta);
     if (step < 0)
     {
@@ -723,7 +723,7 @@ static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
         step = (int16_t)count - 1;
     }
 
-    *out_value = ui_param_master_fx_step_to_raw((uint8_t)step, count);
+    *out_value = ui_param_macro_fx_step_to_raw((uint8_t)step, count);
     return 1U;
 }
 
@@ -1019,7 +1019,7 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS))
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV))
     {
         uint8_t set_id = 0U;
         seq_param_slot_t param_slot = 0U;
@@ -1253,8 +1253,8 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
     uint8_t set_id = 0U;
     switch (rule.domain)
     {
-        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
-            set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+        case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
+            set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             break;
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
             set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
@@ -1841,7 +1841,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         }
 
         float next_value = source_value + delta_value;
-        if (ui_param_master_fx_quantize_edit(param_track, param, source_value, delta, &next_value) == 0U)
+        if (ui_param_macro_fx_quantize_edit(param_track, param, source_value, delta, &next_value) == 0U)
         {
             next_value = ui_param_apply_delta_value(param, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
         }
@@ -1994,7 +1994,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                   min_value,
                                                   max_value,
                                                   button_down(BTN_SHIFT) != 0U);
-    if (ui_param_master_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
+    if (ui_param_macro_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
     {
         next_value = ui_param_apply_delta_value(param,
                                                 source_value,
@@ -2190,11 +2190,11 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     const float source_current_value = value;
     {
-        if (ui_param_master_fx_step_type(edit_track, param, source_current_value, delta, &value) != 0U)
+        if (ui_param_macro_fx_step_type(edit_track, param, source_current_value, delta, &value) != 0U)
         {
-            /* Master/FX TYPE has slot-level availability constraints for unique FX resources. */
+            /* MacroFX TYPE has slot-level availability constraints for unique FX resources. */
         }
-        else if (ui_param_master_fx_quantize_edit(edit_track, param, source_current_value, delta, &value) == 0U)
+        else if (ui_param_macro_fx_quantize_edit(edit_track, param, source_current_value, delta, &value) == 0U)
         {
             value = ui_param_apply_delta_value(param,
                                                source_current_value,

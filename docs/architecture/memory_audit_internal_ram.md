@@ -320,7 +320,7 @@ D2 est dominÃ©e par du sÃ©quenceur/param runtime interne, pas par le DMA.
 | `tx_buffer` | 4 096 B | `audio.c` | SAI TX DMA cacheable | garder D2 | maintenance D-cache explicite IRQ |
 | `rx_buffer` | 4 096 B | `audio.c` | SAI RX DMA cacheable | garder D2 | maintenance D-cache explicite IRQ |
 | `g_track_runtime_ctx` | 154 B | `track_runtime.c` | autoritÃ© binding runtime | D3 possible avec vÃ©rification | non-DMA, autoritÃ© transversale hot |
-| `g_track_sound_state` | 1 792 B | `track_sound_state.c` | Ã©tat COLORS/MIX/VCA/MOD | D3 possible avec vÃ©rification | param/audio track-aware |
+| `g_track_sound_state` | 1 792 B | `track_sound_state.c` | Ã©tat ENV/MIX/VCA/MOD | D3 possible avec vÃ©rification | param/audio track-aware |
 | `g_track_tone_sound_state` | 8 176 B | `track_tone_sound_state.c` | Ã©tat TONE tracks | D3 possible avec vÃ©rification | param/engine state |
 | `g_param_runtime_track_valid` | 4 816 B | `param_registry_runtime_state.c` | valid flags param cache | D3 possible avec vÃ©rification | non-DMA, param runtime |
 | `g_param_runtime_track_values` | 19 264 B | `param_registry_runtime_state.c` | valeurs param runtime | D3 possible avec vÃ©rification | non-DMA, gros candidat D2â†’D3 |
@@ -330,7 +330,7 @@ D2 est dominÃ©e par du sÃ©quenceur/param runtime interne, pas par le DMA.
 | `g_seq_param_slot_to_id` | 2 048 B | `seq_param_iface.c` | mapping p-lock slotâ†’param | interne/D3 avec vÃ©rification | utilisÃ© par p-lock apply |
 | `g_seq_param_id_to_slot` | 1 376 B | `seq_param_iface.c` | mapping paramâ†’p-lock slot | interne/D3 avec vÃ©rification | utilisÃ© par scheduler/edit/live-rec |
 | `g_seq_param_mix_state` | 336 B | `seq_param_iface.c` | Ã©tat p-lock MIX | D3 possible avec vÃ©rification | apply/restore p-lock |
-| `g_seq_param_state` | 86 016 B | `seq_param_iface.c` | Ã©tat p-lock COLORS/TONE/PLAY/MOD | garder interne | gros, audio apply/p-lock runtime |
+| `g_seq_param_state` | 86 016 B | `seq_param_iface.c` | Ã©tat p-lock ENV/TONE/PLAY/MOD | garder interne | gros, audio apply/p-lock runtime |
 | `g_seq_clock_bridge` | 40 B | `seq_runtime.c` | clock bridge audio-block | garder interne | utilisÃ© par collect events audio |
 | `g_seq_track_loop_generation` | 56 B | `seq_runtime.c` | gÃ©nÃ©ration loop track | garder interne | collect events audio |
 | `g_seq_transport_fsm` | 8 B | `seq_runtime.c` | transport FSM | garder interne | collect events audio |
@@ -617,7 +617,7 @@ Gain rÃ©aliste aprÃ¨s libÃ©ration D1 et profiling : 10â€“30 KiB.
 |---|---|---:|---|---|
 | D2 | `g_param_runtime_track_values` + `g_param_runtime_track_valid` | 24 080 B | haute | bon candidat D2â†’D3 |
 | D2 | `g_track_tone_sound_state` | 8 176 B | haute | Ã©tat TONE, non-DMA |
-| D2 | `g_track_sound_state` | 1 792 B | moyenne | Ã©tat COLORS/MIX/VCA/MOD |
+| D2 | `g_track_sound_state` | 1 792 B | moyenne | Ã©tat ENV/MIX/VCA/MOD |
 | D1 | `g_sample_cache_file` | 38 400 B | Ã  auditer | ne pas classer safe sans profiling dÃ©diÃ© |
 | D1 | `g_ui_template_family_registry` | 9 200 B | haute | peut complÃ©ter D3 si place |
 | D1 | `g_param_macro_sources` | 15 680 B | moyenne | vÃ©rifier modulation/param |

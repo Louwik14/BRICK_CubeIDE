@@ -1376,14 +1376,14 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
     return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
 }
 
-uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
+uint8_t param_backend_apply_macro_fx_track(const track_runtime_ctx_t *ctx,
                                             uint8_t track,
                                             param_id_t id,
                                             float value,
                                             uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const uint8_t slot = (uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U);
+    const uint8_t slot = (uint8_t)((id - PARAM_MACRO_FX1_TYPE) / 4U);
 
     if ((ctx == NULL)
             || (state == NULL)
@@ -1391,8 +1391,8 @@ uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
             || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
             || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
             || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX)
-            || (id < PARAM_MASTER_FX1_TYPE)
-            || (id > PARAM_MASTER_FX4_B)
+            || (id < PARAM_MACRO_FX1_TYPE)
+            || (id > PARAM_MACRO_FX4_B)
             || (slot >= 4U))
     {
         return 0U;
@@ -1403,19 +1403,19 @@ uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
         return 1U;
     }
 
-    switch ((uint8_t)((id - PARAM_MASTER_FX1_TYPE) % 4U))
+    switch ((uint8_t)((id - PARAM_MACRO_FX1_TYPE) % 4U))
     {
         case 0U:
-            state->master_fx.type[slot] = param_backend_clamp_value(value, 0.0f, (float)(FX_MASTER_MACRO_TYPE_COUNT - 1U));
+            state->macro_fx.type[slot] = param_backend_clamp_value(value, 0.0f, (float)(FX_MASTER_MACRO_TYPE_COUNT - 1U));
             return 1U;
         case 1U:
-            state->master_fx.level[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            state->macro_fx.level[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
             return 1U;
         case 2U:
-            state->master_fx.macro_a[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            state->macro_fx.macro_a[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
             return 1U;
         case 3U:
-            state->master_fx.macro_b[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            state->macro_fx.macro_b[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
             return 1U;
         default:
             return 0U;
@@ -1579,7 +1579,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
     }
 }
 
-uint8_t param_backend_apply_colors_track(const track_runtime_ctx_t *ctx, param_id_t id, float value)
+uint8_t param_backend_apply_env_track(const track_runtime_ctx_t *ctx, param_id_t id, float value)
 {
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {

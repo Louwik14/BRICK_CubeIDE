@@ -35,9 +35,9 @@ static uint32_t g_user_message_tick = 0U;
 #if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_CFG;
 #else
-static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_COLORS;
+static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
 #endif
-static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_COLORS;
+static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
 #if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_lowcost_cal_prev_done[HALL_KEY_COUNT];
 static uint8_t g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
@@ -131,7 +131,7 @@ static void ui_page_calibration_tick(void)
 #if defined(BRICK6_VARIANT_LOWCOST)
         ui_page_set(g_calibration_return_page);
 #else
-        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_COLORS);
+        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
 #endif
     }
 }
@@ -397,7 +397,7 @@ static void ui_page_user_calibration_tick(void)
 #if defined(BRICK6_VARIANT_LOWCOST)
         ui_page_set(g_user_calibration_return_page);
 #else
-        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_COLORS);
+        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
 #endif
     }
     else
@@ -485,7 +485,7 @@ void ui_page_calibration_open(uint8_t return_page_id)
 #if defined(BRICK6_VARIANT_LOWCOST)
         : UI_PAGE_TEMPLATE_CFG;
 #else
-        : UI_PAGE_TEMPLATE_COLORS;
+        : UI_PAGE_TEMPLATE_ENV;
 #endif
     ui_page_set(UI_PAGE_CALIBRATION);
 }
@@ -494,6 +494,6 @@ void ui_page_user_calibration_open(uint8_t return_page_id)
 {
     g_user_calibration_return_page = (return_page_id < UI_PAGE_COUNT)
         ? return_page_id
-        : UI_PAGE_TEMPLATE_COLORS;
+        : UI_PAGE_TEMPLATE_ENV;
     ui_page_set(UI_PAGE_USER_CALIBRATION);
 }

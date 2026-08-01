@@ -15,7 +15,6 @@
 #include "Board/board_usb.h"
 #include "mixer.h"
 #include "param_store.h"
-#include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/drum_synth.h"
 #include "ui_core.h"
@@ -170,8 +169,6 @@ void brick6_app_init(void)
     project_v1_init();
     ui_boot_loading_begin();
     undo_v2_init();
-    control_event_init();
-
     hall_loop_init();
     if (hall_calibration_load() != 0U)
     {

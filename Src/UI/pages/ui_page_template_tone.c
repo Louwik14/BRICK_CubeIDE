@@ -17,14 +17,14 @@
 
 static uint8_t g_ui_template_tone_subset = 0U;
 
-static const ui_template_family_t g_ui_template_tone_family_master_fx = {
+static const ui_template_family_t g_ui_template_tone_family_macro_fx = {
     .family_title = "TONE",
     .nav_labels = { "FX1", "FX2", "FX3", "FX4" },
     .subpages = {
-        { .title = "FX1", .param_bank = { .params = { PARAM_MASTER_FX1_TYPE, PARAM_MASTER_FX1_LEVEL, PARAM_MASTER_FX1_A, PARAM_MASTER_FX1_B } } },
-        { .title = "FX2", .param_bank = { .params = { PARAM_MASTER_FX2_TYPE, PARAM_MASTER_FX2_LEVEL, PARAM_MASTER_FX2_A, PARAM_MASTER_FX2_B } } },
-        { .title = "FX3", .param_bank = { .params = { PARAM_MASTER_FX3_TYPE, PARAM_MASTER_FX3_LEVEL, PARAM_MASTER_FX3_A, PARAM_MASTER_FX3_B } } },
-        { .title = "FX4", .param_bank = { .params = { PARAM_MASTER_FX4_TYPE, PARAM_MASTER_FX4_LEVEL, PARAM_MASTER_FX4_A, PARAM_MASTER_FX4_B } } },
+        { .title = "FX1", .param_bank = { .params = { PARAM_MACRO_FX1_TYPE, PARAM_MACRO_FX1_LEVEL, PARAM_MACRO_FX1_A, PARAM_MACRO_FX1_B } } },
+        { .title = "FX2", .param_bank = { .params = { PARAM_MACRO_FX2_TYPE, PARAM_MACRO_FX2_LEVEL, PARAM_MACRO_FX2_A, PARAM_MACRO_FX2_B } } },
+        { .title = "FX3", .param_bank = { .params = { PARAM_MACRO_FX3_TYPE, PARAM_MACRO_FX3_LEVEL, PARAM_MACRO_FX3_A, PARAM_MACRO_FX3_B } } },
+        { .title = "FX4", .param_bank = { .params = { PARAM_MACRO_FX4_TYPE, PARAM_MACRO_FX4_LEVEL, PARAM_MACRO_FX4_A, PARAM_MACRO_FX4_B } } },
     },
     .default_subpage = 0U,
 };
@@ -312,7 +312,7 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
     }
     if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
     {
-        return &g_ui_template_tone_family_master_fx;
+        return &g_ui_template_tone_family_macro_fx;
     }
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DELUGE))
@@ -348,7 +348,7 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget(uint8_t slot,
                                                                                  const ui_template_subpage_t *subpage,
                                                                                  param_id_t id);
-static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro);
+static uint8_t ui_page_template_tone_macro_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro);
 
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
@@ -360,7 +360,7 @@ static ui_template_page_state_t g_ui_template_tone_state = {
     .has_visited = 0U,
 };
 
-static void ui_page_template_tone_master_fx_macro_labels(uint8_t fx_type,
+static void ui_page_template_tone_macro_fx_labels(uint8_t fx_type,
                                                          const char **out_a,
                                                          const char **out_b)
 {
@@ -392,7 +392,7 @@ static void ui_page_template_tone_master_fx_macro_labels(uint8_t fx_type,
     *out_b = k_labels[fx_type][1];
 }
 
-static uint8_t ui_page_template_tone_master_fx_u7(float value)
+static uint8_t ui_page_template_tone_macro_fx_u7(float value)
 {
     if (value < 0.0f)
     {
@@ -1205,7 +1205,7 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     uint8_t fx_type = 0U;
     uint8_t macro = 0U;
-    if ((ui_page_template_tone_master_fx_type_for_param(id, &fx_type, &macro) != 0U)
+    if ((ui_page_template_tone_macro_fx_type_for_param(id, &fx_type, &macro) != 0U)
             && (fx_type == (uint8_t)FX_MASTER_MACRO_STUTTER)
             && (macro == 1U))
     {
@@ -1300,21 +1300,21 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
-static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro)
+static uint8_t ui_page_template_tone_macro_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro)
 {
     const uint8_t active_track = ui_get_active_track();
     if ((out_fx_type == NULL)
-            || (id < PARAM_MASTER_FX1_TYPE)
-            || (id > PARAM_MASTER_FX4_B)
+            || (id < PARAM_MACRO_FX1_TYPE)
+            || (id > PARAM_MACRO_FX4_B)
             || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) == 0U))
     {
         return 0U;
     }
 
-    const uint8_t offset = (uint8_t)(id - PARAM_MASTER_FX1_TYPE);
+    const uint8_t offset = (uint8_t)(id - PARAM_MACRO_FX1_TYPE);
     const uint8_t fx_slot = (uint8_t)(offset / 4U);
     const uint8_t macro = (uint8_t)(offset % 4U);
-    const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (fx_slot * 4U));
+    const param_id_t type_param = (param_id_t)(PARAM_MACRO_FX1_TYPE + (fx_slot * 4U));
     float fx_type_value = 0.0f;
     if (param_registry_get_track_value(type_param, active_track, &fx_type_value) == 0U)
     {
@@ -1329,12 +1329,12 @@ static uint8_t ui_page_template_tone_master_fx_type_for_param(param_id_t id, uin
     return 1U;
 }
 
-static uint8_t ui_page_template_tone_master_fx_index(uint8_t raw, uint8_t max_index)
+static uint8_t ui_page_template_tone_macro_fx_index(uint8_t raw, uint8_t max_index)
 {
     return (uint8_t)(((uint32_t)raw * (uint32_t)max_index + 63U) / 127U);
 }
 
-static void ui_page_template_tone_master_fx_format_signed(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_signed(uint8_t raw,
                                                           int32_t min_value,
                                                           int32_t max_value,
                                                           const char *unit,
@@ -1346,7 +1346,7 @@ static void ui_page_template_tone_master_fx_format_signed(uint8_t raw,
     (void)snprintf(out, out_len, "%+ld%s", (long)value, (unit != NULL) ? unit : "");
 }
 
-static void ui_page_template_tone_master_fx_format_percent(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_percent(uint8_t raw,
                                                            uint8_t max_percent,
                                                            char *out,
                                                            uint32_t out_len)
@@ -1355,17 +1355,17 @@ static void ui_page_template_tone_master_fx_format_percent(uint8_t raw,
     ui_format_param_127_00((float)raw, 0.0f, 127.0f, out, out_len);
 }
 
-static void ui_page_template_tone_master_fx_format_choice(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_choice(uint8_t raw,
                                                           const char *const *labels,
                                                           uint8_t label_count,
                                                           char *out,
                                                           uint32_t out_len)
 {
-    const uint8_t idx = ui_page_template_tone_master_fx_index(raw, (uint8_t)(label_count - 1U));
+    const uint8_t idx = ui_page_template_tone_macro_fx_index(raw, (uint8_t)(label_count - 1U));
     (void)snprintf(out, out_len, "%s", labels[idx]);
 }
 
-static void ui_page_template_tone_master_fx_format_rate_div(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_rate_div(uint8_t raw,
                                                             char *out,
                                                             uint32_t out_len)
 {
@@ -1373,26 +1373,26 @@ static void ui_page_template_tone_master_fx_format_rate_div(uint8_t raw,
         "4/1", "2/1", "1/1", "1/2", "1/3",
         "1/4", "1/6", "1/8", "1/12", "1/16"
     };
-    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+    ui_page_template_tone_macro_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
 }
 
-static void ui_page_template_tone_master_fx_format_time_div(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_time_div(uint8_t raw,
                                                             char *out,
                                                             uint32_t out_len)
 {
     static const char *const k_labels[] = { "1/8", "1/4", "1/3", "1/2", "3/4", "1/1", "3/2", "2/1" };
-    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+    ui_page_template_tone_macro_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
 }
 
-static void ui_page_template_tone_master_fx_format_stutter_size(uint8_t raw,
+static void ui_page_template_tone_macro_fx_format_stutter_size(uint8_t raw,
                                                                 char *out,
                                                                 uint32_t out_len)
 {
     static const char *const k_labels[] = { "1/32", "1/16", "1/8", "1/6", "1/4", "1/3", "1/2", "3/4" };
-    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+    ui_page_template_tone_macro_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
 }
 
-static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
+static void ui_page_template_tone_macro_fx_format_value(uint8_t fx_type,
                                                          uint8_t slot,
                                                          uint8_t raw,
                                                          char *out,
@@ -1419,14 +1419,14 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
             }
             else
             {
-                ui_page_template_tone_master_fx_format_signed(raw, -64, 63, "", out, out_len);
+                ui_page_template_tone_macro_fx_format_signed(raw, -64, 63, "", out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_CRUSH:
             if (slot == 2U)
             {
-                const uint8_t bits = (uint8_t)(16U - ui_page_template_tone_master_fx_index(raw, 12U));
+                const uint8_t bits = (uint8_t)(16U - ui_page_template_tone_macro_fx_index(raw, 12U));
                 (void)snprintf(out, out_len, "%ubit", (unsigned int)((bits < 4U) ? 4U : bits));
             }
             else
@@ -1452,30 +1452,30 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
             else
             {
                 static const char *const k_color[] = { "SIN", "TRI", "SQR", "DIRT" };
-                ui_page_template_tone_master_fx_format_choice(raw, k_color, (uint8_t)(sizeof(k_color) / sizeof(k_color[0])), out, out_len);
+                ui_page_template_tone_macro_fx_format_choice(raw, k_color, (uint8_t)(sizeof(k_color) / sizeof(k_color[0])), out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_CHOP:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_rate_div(raw, out, out_len);
+                ui_page_template_tone_macro_fx_format_rate_div(raw, out, out_len);
             }
             else
             {
                 static const char *const k_shape[] = { "SOFT", "GATE", "HARD" };
-                ui_page_template_tone_master_fx_format_choice(raw, k_shape, (uint8_t)(sizeof(k_shape) / sizeof(k_shape[0])), out, out_len);
+                ui_page_template_tone_macro_fx_format_choice(raw, k_shape, (uint8_t)(sizeof(k_shape) / sizeof(k_shape[0])), out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_PUMP:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_rate_div(raw, out, out_len);
+                ui_page_template_tone_macro_fx_format_rate_div(raw, out, out_len);
             }
             else
             {
-                ui_page_template_tone_master_fx_format_percent(raw, 100U, out, out_len);
+                ui_page_template_tone_macro_fx_format_percent(raw, 100U, out, out_len);
             }
             break;
 
@@ -1487,7 +1487,7 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
             }
             else
             {
-                ui_page_template_tone_master_fx_format_percent(raw, 80U, out, out_len);
+                ui_page_template_tone_macro_fx_format_percent(raw, 80U, out, out_len);
             }
             break;
 
@@ -1499,38 +1499,38 @@ static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
             }
             else
             {
-                ui_page_template_tone_master_fx_format_percent(raw, 100U, out, out_len);
+                ui_page_template_tone_macro_fx_format_percent(raw, 100U, out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_FREEZE:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_time_div(raw, out, out_len);
+                ui_page_template_tone_macro_fx_format_time_div(raw, out, out_len);
             }
             else
             {
                 static const char *const k_hold[] = { "SHORT", "MID", "LONG", "INF" };
-                ui_page_template_tone_master_fx_format_choice(raw, k_hold, (uint8_t)(sizeof(k_hold) / sizeof(k_hold[0])), out, out_len);
+                ui_page_template_tone_macro_fx_format_choice(raw, k_hold, (uint8_t)(sizeof(k_hold) / sizeof(k_hold[0])), out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_STUTTER:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_stutter_size(raw, out, out_len);
+                ui_page_template_tone_macro_fx_format_stutter_size(raw, out, out_len);
             }
             else
             {
                 static const char *const k_rate[] = { "0.5x", "0.75x", "1x", "1.5x", "2x", "3x", "4x", "6x" };
-                ui_page_template_tone_master_fx_format_choice(raw, k_rate, (uint8_t)(sizeof(k_rate) / sizeof(k_rate[0])), out, out_len);
+                ui_page_template_tone_macro_fx_format_choice(raw, k_rate, (uint8_t)(sizeof(k_rate) / sizeof(k_rate[0])), out, out_len);
             }
             break;
 
         case FX_MASTER_MACRO_COLOR:
             if (slot == 2U)
             {
-                ui_page_template_tone_master_fx_format_signed(raw, -64, 63, "", out, out_len);
+                ui_page_template_tone_macro_fx_format_signed(raw, -64, 63, "", out, out_len);
             }
             else
             {
@@ -1951,7 +1951,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 0U;
     }
 
-    const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (g_ui_template_tone_state.active_subpage * 4U));
+    const param_id_t type_param = (param_id_t)(PARAM_MACRO_FX1_TYPE + (g_ui_template_tone_state.active_subpage * 4U));
     const param_id_t value_param = (param_id_t)(type_param + slot);
     if (id != value_param)
     {
@@ -1963,7 +1963,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     const char *label_b = "B";
 
     (void)param_registry_get_track_value(type_param, active_track, &fx_type_value);
-    ui_page_template_tone_master_fx_macro_labels((uint8_t)(fx_type_value + 0.5f), &label_a, &label_b);
+    ui_page_template_tone_macro_fx_labels((uint8_t)(fx_type_value + 0.5f), &label_a, &label_b);
 
     if ((out_name != NULL) && (out_name_len > 0U))
     {
@@ -1979,7 +1979,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 
     if ((out_value != NULL) && (out_value_len > 0U))
     {
-        const uint8_t raw_value = ui_page_template_tone_master_fx_u7(value);
+        const uint8_t raw_value = ui_page_template_tone_macro_fx_u7(value);
         if (slot == 1U)
         {
             const uint8_t fx_type = (uint8_t)(fx_type_value + 0.5f);
@@ -1995,17 +1995,17 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 }
                 else
                 {
-                    ui_page_template_tone_master_fx_format_percent(raw_value, 100U, out_value, out_value_len);
+                    ui_page_template_tone_macro_fx_format_percent(raw_value, 100U, out_value, out_value_len);
                 }
             }
             else
             {
-                ui_page_template_tone_master_fx_format_percent(raw_value, 100U, out_value, out_value_len);
+                ui_page_template_tone_macro_fx_format_percent(raw_value, 100U, out_value, out_value_len);
             }
         }
         else
         {
-            ui_page_template_tone_master_fx_format_value((uint8_t)(fx_type_value + 0.5f),
+            ui_page_template_tone_macro_fx_format_value((uint8_t)(fx_type_value + 0.5f),
                                                          slot,
                                                          raw_value,
                                                          out_value,

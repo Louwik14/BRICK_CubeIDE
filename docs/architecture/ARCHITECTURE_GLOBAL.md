@@ -17,7 +17,7 @@
 - Z2 porte `track_topology` comme description unique de la cible produit : 8 Play Tracks, 4 Special Low-Cost ou 6 Special Premium, avec identites fixes Master/Looper/Input/FX.
 - Les capacites notes, audio, MIDI, clavier, arpege, automation, mute et reservation d'entree sont explicites. Premium declare exactement trois entrees et aucune ressource Input4.
 - Les formats Pattern/Project restent communs aux deux cibles mais identifient chaque enregistrement par role/ordinal; les sequences Play et Special y ont des payloads distincts.
-- Les Special ont une identite immuable dans Z2 et leurs acces note/clavier/ARP ainsi que les navigateurs PATCH/KIT sont bloques par capacite. Master et FX reutilisent encore l'adaptateur de configuration `Master/FX`, mais Z2/Z3/Z5 discriminent leur role topologique: Master porte les effets globaux, FX les quatre MacroFX.
+- Les Special ont une identite immuable dans Z2 et leurs acces note/clavier/ARP ainsi que les navigateurs PATCH/KIT sont bloques par capacite. Master porte les effets globaux et FX porte les quatre MacroFX; Z2/Z3/Z5 discriminent directement leur role topologique.
 
 ## Addendum 2026-07-31 - ownership des Special audio
 
@@ -215,7 +215,7 @@ Lit ce document si le sujet touche :
 - taps recorder Looper dans le pipeline audio
 - playback Looper via pages RAM pretes dans le pipeline mixer
 - runtimes synth mono externes Prism / Stack / Wave / DELUGE et leurs imports DSP
-- metronome MAIN monitor-only post-capture/post-MasterFX
+- metronome MAIN monitor-only post-capture/post-MacroFX
 
 Doc :
 - `docs/architecture/z1_audio_hard_rt_mix.md`
@@ -322,7 +322,7 @@ Règle de lecture transversale :
 
 ### Cas transverses fréquents
 - **Input Special vs External Play** ? Z2 + Z3 + Z5
-- **Master/FX MacroFX** ? Z1 + Z2 + Z3 + Z5
+- **Special FX MacroFX** ? Z1 + Z2 + Z3 + Z5
 - **bug track-aware transversal** ? commencer par Z2
 - **bug après load/restore** ? Z6 puis Z2/Z3/Z4/Z5 selon symptôme
 

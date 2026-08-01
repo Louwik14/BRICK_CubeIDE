@@ -4,7 +4,7 @@ Autorite: le document canonique de zone reste la source de verite.
 
 
 Date: 2026-04-14
-Scope: Z3 write authority only (from proven code paths in `param_registry`, `param_store`, `mod_lfo_v1`, `seq_param_iface`, `pattern_live_ram`, `ui_param`, `ui_core`, `control_router`).
+Scope: Z3 write authority only (from proven code paths in `param_registry`, `param_store`, `mod_lfo_v1`, `seq_param_iface`, `pattern_live_ram`, `ui_param`, `ui_core`).
 
 ## Family matrix
 
@@ -64,22 +64,14 @@ Scope: Z3 write authority only (from proven code paths in `param_registry`, `par
 - transient override authority = `param_registry_apply_track_value_rt_fast` (LFO tick), with base restore on destination release.
 - No broad patch required for this pass.
 
-4. `control_router_set_param`
-- Decision from current code evidence: currently inactive in local `Src/` callers.
-- Status: tolerated dormant debt, not active authority.
-- Action level: mark as cleanup candidate (later), not urgent runtime authority issue.
-
 ## Ambiguities remaining
 
 - Exact long-term ownership of `param_store.active[]` for mixed global/track-scoped UI reads is still partially implicit; code shows dual use (global truth + track-scoped mirror).
 - Whether legacy-physical range should remain first-class or be folded later cannot be concluded from Z3-local evidence only.
-- If any caller exists outside current scanned `Src/` tree for `control_router_set_param`, it still must not use removed `CTRL_PARAM_MIX_TRACK0..3_*` macros as normal MIX control.
 
 ## Smallest structural patch recommended
 
 1. In `pattern_live_apply_snapshot`, remove the redundant second LFO write path (`param_registry_apply_track_value(PARAM_LFO*)`) and keep only `mod_lfo_v1_set_track_param` for restore config.
 2. Add one short contract comment near `ui_param_set_active_track_value` stating: `param_store_set_active` is a UI mirror for track-scoped params, not track runtime authority.
-3. Keep `control_router_set_param` as compat/dormant only; do not reintroduce legacy physical MIX macros.
-
 No code patch applied in this pass.
 

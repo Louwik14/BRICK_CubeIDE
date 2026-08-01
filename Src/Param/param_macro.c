@@ -63,8 +63,8 @@ static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t dom
 
     switch (domain)
     {
-        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
-            *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+        case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
             return 1U;
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;

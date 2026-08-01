@@ -51,7 +51,6 @@ typedef enum
     PATCH_ASSIGN_FAMILY_SYNTH,
     PATCH_ASSIGN_FAMILY_SAMPLER,
     PATCH_ASSIGN_FAMILY_DRUM,
-    PATCH_ASSIGN_FAMILY_INPUT,
     PATCH_ASSIGN_FAMILY_COUNT
 } patch_assign_family_filter_t;
 
@@ -65,8 +64,6 @@ typedef enum
     PATCH_ASSIGN_TYPE_RAM,
     PATCH_ASSIGN_TYPE_STREAM,
     PATCH_ASSIGN_TYPE_MULTI,
-    PATCH_ASSIGN_TYPE_LOOPER,
-    PATCH_ASSIGN_TYPE_AUDIO,
     PATCH_ASSIGN_TYPE_DRUM_MD,
     PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG,
     PATCH_ASSIGN_TYPE_COUNT
@@ -155,7 +152,6 @@ static const char *ui_page_patch_assign_family_filter_label(patch_assign_family_
     switch (filter)
     {
         case PATCH_ASSIGN_FAMILY_ALL: return "ALL";
-        case PATCH_ASSIGN_FAMILY_INPUT: return "INPUT";
         case PATCH_ASSIGN_FAMILY_SYNTH: return "SYNTH";
         case PATCH_ASSIGN_FAMILY_SAMPLER: return "SAMPLER";
         case PATCH_ASSIGN_FAMILY_DRUM: return "DRUM";
@@ -175,26 +171,14 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_RAM: return "RAM";
         case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
         case PATCH_ASSIGN_TYPE_MULTI: return "MULTI";
-        case PATCH_ASSIGN_TYPE_LOOPER: return "LOOPER";
-        case PATCH_ASSIGN_TYPE_AUDIO: return "AUDIO";
         case PATCH_ASSIGN_TYPE_DRUM_MD: return "DRUM MD";
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG: return "BD ANA";
         default: return "ALL";
     }
 }
 
-static uint8_t ui_page_patch_assign_family_is_input(ui_track_family_t family)
-{
-    return ui_track_family_is_input(family) ? 1U : 0U;
-}
-
 static patch_assign_family_filter_t ui_page_patch_assign_family_filter_from_track(ui_track_family_t family)
 {
-    if (ui_page_patch_assign_family_is_input(family) != 0U)
-    {
-        return PATCH_ASSIGN_FAMILY_INPUT;
-    }
-
     switch (family)
     {
         case UI_TRACK_FAMILY_SYNTH: return PATCH_ASSIGN_FAMILY_SYNTH;
@@ -225,14 +209,6 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
                 case UI_TRACK_TYPE_RAM: return PATCH_ASSIGN_TYPE_RAM;
                 case UI_TRACK_TYPE_STREAM: return PATCH_ASSIGN_TYPE_STREAM;
                 case UI_TRACK_TYPE_MULTI: return PATCH_ASSIGN_TYPE_MULTI;
-                case UI_TRACK_TYPE_LOOPER: return PATCH_ASSIGN_TYPE_LOOPER;
-                default: return PATCH_ASSIGN_TYPE_ALL;
-            }
-
-        case PATCH_ASSIGN_FAMILY_INPUT:
-            switch (type)
-            {
-                case UI_TRACK_TYPE_AUDIO: return PATCH_ASSIGN_TYPE_AUDIO;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
@@ -269,15 +245,11 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             return ((type == PATCH_ASSIGN_TYPE_RAM)
                     || (type == PATCH_ASSIGN_TYPE_STREAM)
-                    || (type == PATCH_ASSIGN_TYPE_MULTI)
-                    || (type == PATCH_ASSIGN_TYPE_LOOPER)) ? 1U : 0U;
+                    || (type == PATCH_ASSIGN_TYPE_MULTI)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_DRUM:
             return ((type == PATCH_ASSIGN_TYPE_DRUM_MD)
                     || (type == PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
-
-        case PATCH_ASSIGN_FAMILY_INPUT:
-            return (type == PATCH_ASSIGN_TYPE_AUDIO) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_ALL:
         default:
@@ -329,8 +301,6 @@ static uint8_t ui_page_patch_assign_family_matches(ui_track_family_t family)
     {
         case PATCH_ASSIGN_FAMILY_ALL:
             return 1U;
-        case PATCH_ASSIGN_FAMILY_INPUT:
-            return ui_page_patch_assign_family_is_input(family);
         case PATCH_ASSIGN_FAMILY_SYNTH:
             return (family == UI_TRACK_FAMILY_SYNTH) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_SAMPLER:
@@ -365,10 +335,6 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
             return (type == UI_TRACK_TYPE_STREAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_MULTI:
             return (type == UI_TRACK_TYPE_MULTI) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_LOOPER:
-            return (type == UI_TRACK_TYPE_LOOPER) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_AUDIO:
-            return (type == UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_MD:
             return (type == UI_TRACK_TYPE_DRUM_MD) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG:
@@ -1056,7 +1022,6 @@ static void ui_page_patch_assign_draw_family_band(void)
         { PATCH_ASSIGN_FAMILY_SYNTH, "SYN", 0U, 24U },
         { PATCH_ASSIGN_FAMILY_SAMPLER, "SMP", 25U, 29U },
         { PATCH_ASSIGN_FAMILY_DRUM, "DRM", 55U, 25U },
-        { PATCH_ASSIGN_FAMILY_INPUT, "IN", 81U, 20U },
     };
 
     drv_display_set_font(&FONT_4X6);

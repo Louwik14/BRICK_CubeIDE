@@ -557,29 +557,29 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_LOOPER_GRAIN:
             *out_value = state->looper.grain;
             return 1U;
-        case PARAM_MASTER_FX1_TYPE:
-        case PARAM_MASTER_FX2_TYPE:
-        case PARAM_MASTER_FX3_TYPE:
-        case PARAM_MASTER_FX4_TYPE:
-            *out_value = state->master_fx.type[(uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U)];
+        case PARAM_MACRO_FX1_TYPE:
+        case PARAM_MACRO_FX2_TYPE:
+        case PARAM_MACRO_FX3_TYPE:
+        case PARAM_MACRO_FX4_TYPE:
+            *out_value = state->macro_fx.type[(uint8_t)((id - PARAM_MACRO_FX1_TYPE) / 4U)];
             return 1U;
-        case PARAM_MASTER_FX1_LEVEL:
-        case PARAM_MASTER_FX2_LEVEL:
-        case PARAM_MASTER_FX3_LEVEL:
-        case PARAM_MASTER_FX4_LEVEL:
-            *out_value = state->master_fx.level[(uint8_t)((id - PARAM_MASTER_FX1_LEVEL) / 4U)];
+        case PARAM_MACRO_FX1_LEVEL:
+        case PARAM_MACRO_FX2_LEVEL:
+        case PARAM_MACRO_FX3_LEVEL:
+        case PARAM_MACRO_FX4_LEVEL:
+            *out_value = state->macro_fx.level[(uint8_t)((id - PARAM_MACRO_FX1_LEVEL) / 4U)];
             return 1U;
-        case PARAM_MASTER_FX1_A:
-        case PARAM_MASTER_FX2_A:
-        case PARAM_MASTER_FX3_A:
-        case PARAM_MASTER_FX4_A:
-            *out_value = state->master_fx.macro_a[(uint8_t)((id - PARAM_MASTER_FX1_A) / 4U)];
+        case PARAM_MACRO_FX1_A:
+        case PARAM_MACRO_FX2_A:
+        case PARAM_MACRO_FX3_A:
+        case PARAM_MACRO_FX4_A:
+            *out_value = state->macro_fx.macro_a[(uint8_t)((id - PARAM_MACRO_FX1_A) / 4U)];
             return 1U;
-        case PARAM_MASTER_FX1_B:
-        case PARAM_MASTER_FX2_B:
-        case PARAM_MASTER_FX3_B:
-        case PARAM_MASTER_FX4_B:
-            *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
+        case PARAM_MACRO_FX1_B:
+        case PARAM_MACRO_FX2_B:
+        case PARAM_MACRO_FX3_B:
+        case PARAM_MACRO_FX4_B:
+            *out_value = state->macro_fx.macro_b[(uint8_t)((id - PARAM_MACRO_FX1_B) / 4U)];
             return 1U;
         case PARAM_PRISM_EDIT:
         case PARAM_PRISM_FINE:
@@ -877,29 +877,29 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_LOOPER_GRAIN:
             state->looper.grain = clamp_value(value, 0.0f, 5.0f);
             return 1U;
-        case PARAM_MASTER_FX1_TYPE:
-        case PARAM_MASTER_FX2_TYPE:
-        case PARAM_MASTER_FX3_TYPE:
-        case PARAM_MASTER_FX4_TYPE:
-            state->master_fx.type[(uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U)] = value;
+        case PARAM_MACRO_FX1_TYPE:
+        case PARAM_MACRO_FX2_TYPE:
+        case PARAM_MACRO_FX3_TYPE:
+        case PARAM_MACRO_FX4_TYPE:
+            state->macro_fx.type[(uint8_t)((id - PARAM_MACRO_FX1_TYPE) / 4U)] = value;
             return 1U;
-        case PARAM_MASTER_FX1_LEVEL:
-        case PARAM_MASTER_FX2_LEVEL:
-        case PARAM_MASTER_FX3_LEVEL:
-        case PARAM_MASTER_FX4_LEVEL:
-            state->master_fx.level[(uint8_t)((id - PARAM_MASTER_FX1_LEVEL) / 4U)] = value;
+        case PARAM_MACRO_FX1_LEVEL:
+        case PARAM_MACRO_FX2_LEVEL:
+        case PARAM_MACRO_FX3_LEVEL:
+        case PARAM_MACRO_FX4_LEVEL:
+            state->macro_fx.level[(uint8_t)((id - PARAM_MACRO_FX1_LEVEL) / 4U)] = value;
             return 1U;
-        case PARAM_MASTER_FX1_A:
-        case PARAM_MASTER_FX2_A:
-        case PARAM_MASTER_FX3_A:
-        case PARAM_MASTER_FX4_A:
-            state->master_fx.macro_a[(uint8_t)((id - PARAM_MASTER_FX1_A) / 4U)] = value;
+        case PARAM_MACRO_FX1_A:
+        case PARAM_MACRO_FX2_A:
+        case PARAM_MACRO_FX3_A:
+        case PARAM_MACRO_FX4_A:
+            state->macro_fx.macro_a[(uint8_t)((id - PARAM_MACRO_FX1_A) / 4U)] = value;
             return 1U;
-        case PARAM_MASTER_FX1_B:
-        case PARAM_MASTER_FX2_B:
-        case PARAM_MASTER_FX3_B:
-        case PARAM_MASTER_FX4_B:
-            state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
+        case PARAM_MACRO_FX1_B:
+        case PARAM_MACRO_FX2_B:
+        case PARAM_MACRO_FX3_B:
+        case PARAM_MACRO_FX4_B:
+            state->macro_fx.macro_b[(uint8_t)((id - PARAM_MACRO_FX1_B) / 4U)] = value;
             return 1U;
         case PARAM_PRISM_EDIT:
         case PARAM_PRISM_FINE:
@@ -1745,7 +1745,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
         if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                 || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS))
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV))
         {
             kit_v1_mark_dirty();
         }

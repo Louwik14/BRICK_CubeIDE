@@ -73,7 +73,6 @@ typedef struct
     seq_step_id_t source_step;
     uint8_t target_voice;
     uint8_t source_voice;
-    uint8_t linked;
 } seq_play_scheduler_play_item_t;
 
 typedef struct
@@ -82,7 +81,6 @@ typedef struct
     seq_track_id_t source_track;
     seq_step_id_t source_step;
     uint8_t source_roll;
-    uint8_t linked;
     uint8_t item_count;
     seq_play_scheduler_play_item_t items[SEQ_PLAY_SCHEDULER_VOICE_COUNT];
 } seq_play_scheduler_play_context_t;
@@ -986,7 +984,6 @@ static void seq_play_scheduler_context_add_item(seq_play_scheduler_play_context_
     item->source_track = source_track;
     item->source_step = source_step;
     item->source_voice = source_voice;
-    item->linked = context->linked;
 }
 
 static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_track,
@@ -1005,7 +1002,6 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
 
     out_context->source_track = scheduler_track;
     out_context->source_step = scheduler_step;
-    out_context->linked = 0U;
     out_context->source_roll = seq_model_get_step_roll(out_context->source_track,
                                                        out_context->source_step);
 

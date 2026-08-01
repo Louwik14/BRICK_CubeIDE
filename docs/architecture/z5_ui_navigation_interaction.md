@@ -98,7 +98,7 @@ page 3. Le spread place les slots symétriquement et n'expose pas de paramètre 
 
 ## Addendum 2026-07-29 - memoire de page par ensemble
 
-- `ui_navigation` porte une memoire runtime volatile de derniere subpage par ensemble template normal (`CFG`, `COLORS`, `TONE`, `MOD`, `KEYBOARD`, `ARP`, `SEQ`, `MIX`, `PLAY`, `VCA`).
+- `ui_navigation` porte une memoire runtime volatile de derniere subpage par ensemble template normal (`CFG`, `ENV`, `TONE`, `MOD`, `KEYBOARD`, `MIDI FX`, `SEQ`, `MIX`, `PLAY`).
 - Le restore passe par `ui_page_manager` apres `enter()` et selectionne la subpage memorisee via `ui_template_page_select_nearest_subpage()`, avec bornage vers une subpage selectionnable si le layout dynamique a change.
 - `REC`, `KIT`, `PATCH` et `SETTINGS` restent hors memoire d'ensemble: leur ouverture ne modifie pas l'ensemble demande courant et leur retour vers une page template normale relance seulement le restore volatile de cette page.
 
@@ -203,7 +203,7 @@ page 3. Le spread place les slots symétriquement et n'expose pas de paramètre 
 
 ## Addendum 2026-07-26 - ENV 2/2 RETRIG
 
-- L'ensemble `COLORS/ENV` a maintenant deux sous-ensembles cyclables par le bouton `COLORS`: `ENV 1/2` garde `FILTER`, `ADSR`, `VCA`, `ENV 3`; `ENV 2/2` expose uniquement la page `RETRIG` avec `ENV FLT`, `ENV VCA`, `ENV MOD`, puis un quatrieme slot vide.
+- L'ensemble `ENV` a maintenant deux sous-ensembles cyclables par le bouton `ENV`: `ENV 1/2` garde `FILTER`, `ADSR`, `VCA`, `ENV 3`; `ENV 2/2` expose uniquement la page `RETRIG` avec `ENV FLT`, `ENV VCA`, `ENV MOD`, puis un quatrieme slot vide.
 - Les trois params `RETRIG` sont des ON/OFF persistants: `ON` = hard retrigger, `OFF` = soft retrigger.
 
 ## 1. Perimetre
@@ -343,7 +343,7 @@ Autorite navigation boutons param:
   - `ui_navigation_is_page_available` combine:
     - contrat structurel Z2 (`track_runtime_is_ui_ensemble_available`),
     - résolution template locale (`ui_template_family_resolve_active_track`).
-  - Z5 ne redécide plus seule la présence des ensembles principaux (`COLORS/TONE/MOD/MIX/PLAY/VCA`).
+  - Z5 ne redécide plus seule la présence des ensembles principaux (`ENV/TONE/MOD/MIX/PLAY`).
 
 Autorite raccourcis interaction:
 - `ui_core_handle_global_shortcuts`, `ui_core_handle_transport_event`, `ui_core_handle_seq_mode_event`, `ui_core_handle_pattern_mode_event`, `ui_core_mute_handle_event`.
@@ -371,7 +371,7 @@ Entrees evenementielles:
   - quand `TRACK` est maintenu, un edit encodeur de base sur un parametre track-aware applique le meme delta demande aux autres tracks compatibles,
   - le point d'insertion reste `ui_param_handle_encoder_with_context` apres resolution du parametre/bank actif; Z3 reste l'autorite d'apply via `param_registry_apply_track_edit`,
   - le delta est relatif (`delta * step`) et chaque track clamp individuellement selon ses bornes effectives; une track active deja en butee n'empeche pas les autres tracks de bouger,
-  - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `COLORS`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
+  - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `ENV`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
   - exception SEQ per-track hors `track_runtime`: `PARAM_SEQ_LENGTH`, `PARAM_SEQ_DIV`, `PARAM_SEQ_QUANT`, `PARAM_SEQ_SWING` passent par l'autorite `seq_model_get/set_track_length` ou `seq_runtime_set/get_track_*` avec le meme delta UI (`delta * step`),
   - les tracks `Master`, les params globaux, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
 - `track_selection` reste hors table et execute en amont.
@@ -527,7 +527,7 @@ Flux nominal prouve:
   - visible dans une famille/template ne signifie pas selectionnable si la subpage est vide ou desactivee,
   - les boutons de page ne peuvent pas selectionner une subpage vide,
   - l'entree/reload d'ecran, le tick template, la sync active-track et les changements de famille/resolver normalisent le focus vers une subpage selectionnable,
-  - les contextes dynamiques (`COLORS` EQ3/ADSR, Master `TONE` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
+  - les contextes dynamiques (`ENV` EQ3/ADSR, Master `TONE` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
   - aucun template Buffer ni sous-page TONE Buffer ne reste actif.
@@ -610,7 +610,7 @@ Points factuels:
 - `ui_page_manager` et `ui_event` doivent etre rattaches explicitement a Z5 dans la carte globale (pas des utilitaires neutres).
 
 ## 17. Contrat UI Master et FX
-- Master et FX sont des identites Special fixes; `CFG` affiche leur role sans selecteur family/type. La resolution UI utilise exclusivement leur role topologique, sans adaptateur Master/FX.
+- Master et FX sont des identites Special fixes; `CFG` affiche leur role sans selecteur family/type. La resolution UI utilise exclusivement leur role topologique, sans adaptateur fusionne.
 - Sur Master, `TONE` cycle trois sous-ensembles globaux: `MASTER 1/3` reverb Mutable/Digital, `MASTER 2/3` delay Classic/Dual et `MASTER 3/3` compresseur Off/Deluge/Brick. Master n'expose ni MIX, ni MacroFX, ni ROUT.
 - Sur FX, `TONE` expose 4 pages de 4 slots:
   - `FX1`: `FX1`, `LVL`, macro A, macro B
@@ -634,7 +634,7 @@ Points factuels:
 - Nouvelle source UI explicite: `UI_TRACK_FAMILY_MIDI` + `UI_TRACK_TYPE_MIDI` dans `ui_core`.
 - Exposition navigation borne pour une track MIDI:
   - exposes: `PLAY`, `MOD`, `TONE`, `CFG`,
-  - non exposes: `COLORS`, `MIX`, `VCA`.
+  - non exposes: `ENV`, `MIX`.
 - `CFG` reste l'autorite UI pour le channel MIDI (`PARAM_CFG_MIDI_CH`) ; aucun deplacement vers `TONE`.
 - Resolution template contextuelle MIDI:
   - `TONE` utilise une famille template MIDI dediee (`PROG`, `CC1`, `CC2`, `CC3`) sans fallback audio Synth,
@@ -656,8 +656,8 @@ Points factuels:
   - relacher une extension revient a l'accord restant si une base `Dim/Min/Maj/Sus` et une root restent maintenues; les extensions seules restent silencieuses.
   - la sortie de `KEYBOARD` envoie les note-off locaux du clavier avant de nettoyer l'etat interne; les clears silencieux restent reserves aux sync de focus ou resets deja proprietaires du contexte.
 
-## 13.b Contrat COLORS UI
-- L'ensemble `COLORS` conserve uniquement les pages filtre utiles:
+## 13.b Contrat ENV UI
+- L'ensemble `ENV` conserve uniquement les pages filtre utiles:
   - `MAIN`: `F Type`, cutoff/low, resonance/mid, `EG Amt`/high selon type de filtre,
   - `ADSR`: `Atk`, `Dec`, `Sus`, `Rel` uniquement pour les filtres biquad avec envelope,
   - les slots 3 et 4 restent vides (`-`).
@@ -876,7 +876,7 @@ Points factuels:
 - La page TONE Drum reservee garde une sous-page vide pour ne pas casser la navigation.
 - `BD Analog` est le premier type Drum propre et experimental; il reste selectionnable dans le catalogue `Drum`.
 - Pour `BD Analog`, `TONE` expose une sous-page legere `BD`: `Pitch`, `Decay`, `Tone`, `FM`.
-- `PLAY`, `COLORS`, `MIX`, `MOD` et `VCA` restent les ensembles communs existants; aucune page UI lourde ni chemin de modulation local n'est ajoute.
+- `PLAY`, `ENV`, `MIX` et `MOD` restent les ensembles communs existants; aucune page UI lourde ni chemin de modulation local n'est ajoute.
 
 ## 19. Contrat UI Sampler/Looper skeleton
 
@@ -995,13 +995,13 @@ Points factuels:
 - La ligne basse affiche normalement le nom du parametre. Apres une edition utilisateur explicite du slot, elle affiche temporairement la valeur formatee pendant environ 800 ms, puis revient au nom.
 - L'etat de flash valeur est UI-only dans `ui_param`, statique, sans malloc, indexe par slot visible + parametre + track, et reset par changement de bank/page/track.
 - Le renderer ne deduit pas les causes de changement de valeur: il interroge seulement `ui_param` pour savoir si une valeur temporaire doit remplacer le nom.
-- Les valeurs temporaires reutilisent le formatage commun du renderer et les callbacks `param_text`, afin de conserver les labels dynamiques Master/FX, Multi/Sample/Stream et les overrides locaux.
+- Les valeurs temporaires reutilisent le formatage commun du renderer et les callbacks `param_text`, afin de conserver les labels dynamiques Master, MacroFX et Multi/Sample/Stream, ainsi que les overrides locaux.
 - Les widgets custom template sont optionnels via `custom_widget_picker`; ils se dessinent dans le rect utile du widget, ou dans un rect groupe explicite quand les quatre slots d'une sous-page declarent le meme custom widget, et doivent reutiliser la meme valeur visible que les widgets simples (base display, preview MACRO/scene, feedback p-lock), sans consommer le flash valeur comme source de courbe.
-- Custom actif: `COLORS/ADSR`, `COLORS/VCA` et `VCA/ADSR` remplacent les quatre widgets simples A/D/S/R par une seule courbe ADSR groupee sur la zone haute commune; les quatre slots restent editables et gardent leurs labels/flash/P-Lock locaux, avec fallback widget classique si le groupe attendu est incomplet ou non supporte runtime.
+- Custom actif: `ENV/ADSR` et `ENV/VCA` remplacent les quatre widgets simples A/D/S/R par une seule courbe ADSR groupee sur la zone haute commune; les quatre slots restent editables et gardent leurs labels/flash/P-Lock locaux, avec fallback widget classique si le groupe attendu est incomplet ou non supporte runtime.
 - Le dessin ADSR groupe est decoupe en quatre zones horizontales stables A/D/S/R alignees sur les quatre slots; A/D/R n'entrent pas en competition de largeur globale et deplacent les points de transition de la courbe principale dans leur zone, tandis que S pilote la hauteur du plateau.
-- `COLORS/FILTER` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
+- `ENV/FILTER` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
 - Le flash est declenche uniquement par action utilisateur explicite sur le slot: edition directe encodeur, edition p-lock, live-rec p-lock issu de l'encodeur, ou edition de valeur scene/macro en assign. Playback p-lock, LFO, morph scene continu, macro pot physique, restore/recall et refresh UI ne declenchent pas le flash.
-- Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.
+- Les pages `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.
 
 ## 27. Contrat UI Prism labels moteur
 
@@ -1035,15 +1035,15 @@ Points factuels:
 - Deuxieme tap dans `UI_HALL_MODE_DOUBLE_TAP_MS`: annule le pending single et lance un `Save Patch` direct de la track focus. `Patch` n'est pas conserve comme hall mode persistant pour ce chemin: l'UI affiche un overlay court `PATCH` + feedback (`PATCH SAVE`, puis resultat), puis le label/rendu du hall mode precedent redevient visible.
 - Expiration sans deuxieme tap: ouvre `Patch Assign`, menu global d'attribution Patch avec target track initialisee sur la track focus. Le hall mode brut `PATCH` est temporaire pendant le browser et le mode precedent est restaure a la sortie.
 - `Patch Assign` liste dynamiquement les patches visibles, affiche `BAD PATCH` en vue globale ou metadata minimale `name + family/type`, et garde `PAGE1` comme retour. Les slots `EMPTY` et `source_track` restent internes a la banque/save et ne polluent pas la navigation normale.
-- Le rendu OLED de `Patch Assign` reprend la grammaire browser Sample: header compact avec filtre actif (`ALL`, `SAMPLER/RAM`, etc.) a la place d'un compteur de slots, bandeau Family horizontal (`SYN`, `SMP`, `DRM`, `IN`, `MST`) avec family active inversee et toutes les families inversees en `ALL`, liste centrale a selection inversee, curseur de position vertical, footer PAGE en quatre zones (`RETURN | APPLY | REN | DEL`) et feedback court sur la ligne basse. Aucun bandeau texte ne rappelle les targets ou la track cible; les targets restent portees par les LEDs Hall.
+- Le rendu OLED de `Patch Assign` reprend la grammaire browser Sample: header compact avec filtre actif (`ALL`, `SAMPLER/RAM`, etc.) a la place d'un compteur de slots, bandeau Family horizontal (`SYN`, `SMP`, `DRM`) avec family active inversee et toutes les families inversees en `ALL`, liste centrale a selection inversee, curseur de position vertical, footer PAGE en quatre zones (`RETURN | APPLY | REN | DEL`) et feedback court sur la ligne basse. Aucun bandeau texte ne rappelle les targets ou la track cible; les targets restent portees par les LEDs Hall.
 - `Patch Assign` expose une selection locale multi-target: a l'entree, seule la track focus est cochee; un appui Hall toggle la target track correspondante sans changer les filtres Family/Type.
 - Pendant `Patch Assign`, le renderer LED Hall lit directement la target mask Patch: LED ON = target cochee, LED OFF = non-target; ce rendu est prioritaire sur le rendu du hall mode precedent et revient au rendu normal a la sortie.
 - `PAGE2` applique le meme slot Patch selectionne vers toutes les targets cochees, dans l'ordre croissant des track id, via `patch_v1_apply_slot_to_track`; aucune copie runtime sauvage, preview, rollback ni audition temporaire n'est ajoutee.
 - Si aucune target n'est cochee, `PAGE2` refuse par `NO TARGET`. En echec partiel, l'UI continue les targets restantes et affiche `AP n/m` avec la premiere cause disponible, afin de garder l'ordre deterministe sans rollback multi-target.
 - `PAGE3` ouvre le mode generique `Name Edit` pour renommer le slot Patch valide selectionne. `Name Edit` recoit buffer initial, longueur max, titre/contexte et callback; `PAGE1` annule sans mutation, `PAGE2` retourne le nom valide a l'appelant. En `Name Edit`, seul `ENC1` change le caractere courant de la frise sans modifier le nom; `ENC2`/`ENC3`/`ENC4` sont no-op. `PAGE3` valide le caractere courant a la position d'ecriture puis avance le curseur si possible. `PAGE4` fait un backspace borne, `SHIFT+PAGE2` valide un espace, `PAGE3`/`PAGE4` avec SHIFT restent no-op. Le curseur represente la prochaine position a ecrire et reste borne aux caracteres existants ou a l'unique position append. Le mode affiche le nom et une frise de caracteres en police lisible, n'ecrit pas la SD lui-meme: `Patch Assign` reste responsable de `patch_v1_rename_slot` et du feedback.
 - `PAGE4` demande confirmation puis delete le slot valide selectionne; le browser reste sur le prochain slot valide ou sur le slot devenu `EMPTY`.
-- Les filtres Patch Assign sont manuels apres l'entree: `ENC1` choisit le slot visible avec navigation bornee sans wrap, `ENC2` choisit Family (`ALL`, `SYNTH`, `SAMPLER`, `DRUM`, `INPUT`, `MASTER`) avec navigation bornee sans wrap, `ENC3` choisit Type selon Family avec navigation bornee sans wrap. A l'entree, Family/Type sont initialises depuis la track focus; changer les targets par Hall ne recale pas les filtres.
-- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/PRISM/WAVE`, `SAMPLER -> ALL/RAM/STREAM/MULTI/LOOPER`, `INPUT -> ALL/AUDIO/HYBRID`, `MASTER -> ALL/FX`, `DRUM -> ALL/MD/BD Analog`.
+- Les filtres Patch Assign sont manuels apres l'entree: `ENC1` choisit le slot visible avec navigation bornee sans wrap, `ENC2` choisit Family (`ALL`, `SYNTH`, `SAMPLER`, `DRUM`) avec navigation bornee sans wrap, `ENC3` choisit Type selon Family avec navigation bornee sans wrap. A l'entree, Family/Type sont initialises depuis la track focus; changer les targets par Hall ne recale pas les filtres.
+- Type depend de Family: `ALL -> ALL`, `SYNTH -> ALL/PRISM/WAVE/STACK/DELUGE`, `SAMPLER -> ALL/RAM/STREAM/MULTI`, `DRUM -> ALL/MD/BD Analog`. Les patches MIDI, External ou Off restent visibles sous `ALL`; les rôles Special Input et Looper ne sont ni filtrables ni des métadonnées Patch valides.
 - Regle de visibilite: `Family ALL + Type ALL` montre tous les slots Patch valides puis `BAD PATCH`; les filtres precis montrent uniquement les patches valides correspondants. Si aucun slot n'est visible, le menu affiche `NO PATCH`.
 - Les feedbacks UI sont courts: `PATCH APPLIED`, `PATCH RENAMED`, `PATCH DELETED`, `EMPTY`, `BAD PATCH`, `ASSET MISS`, `SD BUSY`, `RENAME FAIL`, `DELETE FAIL` ou `ERROR`.
 - `Kit Assign` reste le futur rappel de plusieurs patches differents vers plusieurs tracks; aucun niveau `Set` n'est conserve dans le contrat produit.
@@ -1111,7 +1111,7 @@ Points factuels:
 - Le clavier Hall low-cost separe utilise une table autoritative `mux index + channel -> logical key ID` dans `hall_keymap`: MUX1/MUX2/MUX3 couvrent les 24 touches chromatiques `F1..E3`, avec key IDs `0..23` dans cet ordre. Les metadonnees de touche portent explicitement type blanche/noire, index blanc/noir, position chromatique et validite.
 - Z5 conserve 16 lanes UI (`HALL_UI_LANE_COUNT`) distinctes des 24 touches clavier (`HALL_KEY_COUNT`); le pipeline UI commun ne deduit jamais blanche/noire depuis le mux, le canal ADC ou l'ordre d'acquisition.
 - Les raccourcis serigraphies des touches noires low-cost sont portes par `keyboard_input`, pas par Board: en `KEYBOARD`, `SHIFT + N1..N10`; en `SEQ`, `N1..N10` sans `SHIFT`. Une touche noire consommee reste marquee jusqu'au release et ne produit ni `note-on` ni `note-off`.
-- Table raccourcis low-cost: `N1 Tone`, `N2 Env` (ensemble interne `COLORS`, libelle visuel `ENV`), `N3 Play`, `N4 Mod`, `N5 Mix`, `N6 Undo`, `N7 Redo`, `N8` sans action, `N9 Rec Config` via le meme chemin que `SHIFT + REC`, `N10 Settings`. Les actions reutilisent la navigation, les pages et l'undo existants.
+- Table raccourcis low-cost: `N1 Tone`, `N2 Env`, `N3 Play`, `N4 Mod`, `N5 Mix`, `N6 Undo`, `N7 Redo`, `N8` sans action, `N9 Rec Config` via le meme chemin que `SHIFT + REC`, `N10 Settings`. Les actions reutilisent la navigation, les pages et l'undo existants.
 
 ## Addendum 2026-07-17 - lot 4B ressources produit low-cost
 
@@ -1139,7 +1139,7 @@ Points factuels:
 ## Addendum 2026-07-23 - raccourcis STEP low-cost temporaires
 
 - En low-cost, les `SHIFT + STEP` temporaires completent les mappings Hall existants sans modifier les assignations Hall premium.
-- `SHIFT + STEP10..16` ouvrent respectivement `TONE`, `COLORS/ENV`, `PLAY`, `MOD`, `MIX`, `REC CFG` et `SETTINGS`.
+- `SHIFT + STEP10..16` ouvrent respectivement `TONE`, `ENV`, `PLAY`, `MOD`, `MIX`, `REC CFG` et `SETTINGS`.
 - `SHIFT + STEP16` conserve son action courte `SETTINGS`; sur low-cost seulement, un maintien de 2 s est aussi surveille par Z0 pour charger BOOT0 via `PB8` puis reset en bootloader systeme.
 - `SHIFT + STEP9` est consomme sans action pour ne pas heriter d'une assignation Hall pendant l'absence des capteurs Hall low-cost.
 
@@ -1247,13 +1247,13 @@ Points factuels:
 
 ## Addendum 2026-07-26 - reorganisations TONE/ENV
 
-- `COLORS/ENV` page `FILTER` expose `CUTOFF/RES/EG AMT/F TYPE`; en mode DJ/EQ3, elle expose `LOW/MID/HIGH/F TYPE`.
+- La page `ENV/FILTER` expose `CUTOFF/RES/EG AMT/F TYPE`; en mode DJ/EQ3, elle expose `LOW/MID/HIGH/F TYPE`.
 - `Synth/Prism` page `TONE` expose maintenant `VOICE` (`PARAM1/PARAM2/A MOD/MODEL`) puis `EDIT` (`TUNE/FM AMT/PHASE`).
 - Le controle Prism `TUNE` utilise l'ID UI `PARAM_PRISM_COARSE` comme controle unifie: sans `SHIFT` le pas est `1 st`, avec `SHIFT` le pas est `0.01 st`; l'edition directe neutralise `PARAM_PRISM_FINE` a `0.5` et encode la valeur finale dans `PARAM_PRISM_COARSE`.
 
 ## Addendum 2026-07-26 - LINK choix discrets
 
-- Le point d'insertion UI de LINK garde le delta pour les params continus existants, mais applique les choix `CFG/TRACK`, `CFG/TYPE` et `COLORS/F Type` par valeur absolue de la master.
+- Le point d'insertion UI de LINK garde le delta pour les params continus existants, mais applique les choix `CFG/TRACK`, `CFG/TYPE` et `ENV/F Type` par valeur absolue de la master.
 ## Addendum 2026-07-26 - edition ROLL par step
 
 - En contexte STEP sequenceur, `STEP occupe maintenu + +` augmente le roll du step et `STEP occupe maintenu + -` le diminue jusqu'a `OFF`.
@@ -1384,7 +1384,7 @@ Le collage de track et l'application de Patch preflightent le budget avant toute
 # Addendum 2026-07-31 - surface Play External
 
 - CFG distingue `MIDI` et `External`; External expose le sélecteur d'entrée exacte avec la cardinalité de la variante, puis la page MIDI.
-- TONE réutilise Program/CC, PLAY/KEYBOARD/ARP émettent les notes MIDI et pilotent le gate audio; COLORS, MIX et VCA ciblent uniquement la lane dont la Play est owner.
+- TONE réutilise Program/CC, PLAY/KEYBOARD/ARP émettent les notes MIDI et pilotent le gate audio; ENV et MIX ciblent uniquement la lane dont la Play est owner.
 - La Special Input réservée affiche `USED Pn` dans son header et son CFG fixe. Un changement, paste ou restore conflictuel est refusé avec feedback, sans choisir une autre entrée.
 - Le snapshot Track inclut `external_input`; copy/paste, move, clear et changement de family libèrent ou revendiquent atomiquement via Z2.
 # Addendum 2026-07-31 - UI mute sans autorite audio
@@ -1397,7 +1397,7 @@ Le collage de track et l'application de Patch preflightent le budget avant toute
 
 - Note-off et all-notes-off ferment uniquement les notes de la track adressee; le panic global continue de parcourir toutes les Play Tracks.
 
-- Chaque Play Track expose directement CFG, MIDI, ARP et ses quatre pages PLAY selon ses capacites propres; l'armement live-rec cible la track active.
+- Chaque Play Track expose directement CFG, MIDI, MIDI FX (dont le modele ARP) et ses quatre pages PLAY selon ses capacites propres; l'armement live-rec cible la track active.
 # Addendum 2026-07-31 - entree MIDI FX, retrait du mode ARP UI
 
 - Le raccourci physique historique ARP ouvre directement la page temporaire `MIDI FX`; il ne cree plus de hall mode ARP, ne change pas le mode musical `SEQ/KEYBOARD` sous-jacent et ne possede aucun double-tap.

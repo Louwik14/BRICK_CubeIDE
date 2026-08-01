@@ -165,7 +165,7 @@ static void keyboard_input_lowcost_trigger_black_shortcut(uint8_t black_index)
             break;
 
         case 2U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_1); /* Env, internal COLORS ensemble */
+            keyboard_input_lowcost_nav_button(BTN_PARAM_1); /* Env ensemble */
             break;
 
         case 3U:

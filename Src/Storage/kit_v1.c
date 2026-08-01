@@ -210,7 +210,7 @@ static uint8_t kit_v1_resolve_loaded_asset(const kit_v1_asset_ref_t *asset,
 static uint8_t kit_v1_is_reapply_domain(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
 }
@@ -807,9 +807,6 @@ const char *kit_v1_result_label(kit_v1_result_t result)
         case KIT_V1_RESULT_ASSET_MISS: return "ASSET MISS";
         case KIT_V1_RESULT_APPLY_FAIL: return "ERROR";
         case KIT_V1_RESULT_VOICE_LIMITED: return "VOICE LIMITED";
-        case KIT_V1_RESULT_APPLY_TODO: return "APPLY TODO";
-        case KIT_V1_RESULT_RENAME_TODO: return "REN TODO";
-        case KIT_V1_RESULT_DELETE_TODO: return "DEL TODO";
         case KIT_V1_RESULT_RENAME_FAIL: return "RENAME FAIL";
         case KIT_V1_RESULT_DELETE_FAIL: return "DELETE FAIL";
         default: return "ERROR";

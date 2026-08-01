@@ -283,7 +283,7 @@ Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, top
 ### Suspect nécessitant confirmation produit
 
 - `backend_usb_host_send` et `backend_din_send` sont des stubs explicites. Ils ne sont pas classés comme dette fonctionnelle : la complétude produit n'est pas établie par cet audit.
-- Les aliases ARP conservés pour `TRACK_CAPABILITY_ARPEGGIATOR` et certaines vues historiques peuvent être une compatibilité de transition MIDI FX ; ne pas les retirer avant l'audit Z2/Z5.
+- L'ancien alias de capacité ARP a été supprimé lors de l'étape 3C1 après confirmation que `TRACK_CAPABILITY_MIDI_FX` est l'unique sémantique runtime; les vues historiques ARP restent à lire comme historique ou modèle MIDI FX.
 - Les wrappers `audio.h`/mixer historiques et paramètres physiques `PARAM_MIX_TRACKx_*` exigent une analyse de symboles/link map avant suppression, car certains représentent encore les lanes physiques.
 
 ### Historique documentaire obsolète

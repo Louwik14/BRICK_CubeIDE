@@ -5,26 +5,26 @@
 #include "Core/track_tone_sound_state.h"
 #include <stddef.h>
 
-static uint8_t param_backend_master_fx_type_slot(param_id_t id, uint8_t *out_slot)
+static uint8_t param_backend_macro_fx_type_slot(param_id_t id, uint8_t *out_slot)
 {
-    if ((id != PARAM_MASTER_FX1_TYPE)
-            && (id != PARAM_MASTER_FX2_TYPE)
-            && (id != PARAM_MASTER_FX3_TYPE)
-            && (id != PARAM_MASTER_FX4_TYPE))
+    if ((id != PARAM_MACRO_FX1_TYPE)
+            && (id != PARAM_MACRO_FX2_TYPE)
+            && (id != PARAM_MACRO_FX3_TYPE)
+            && (id != PARAM_MACRO_FX4_TYPE))
     {
         return 0U;
     }
     if (out_slot != NULL)
     {
-        *out_slot = (uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U);
+        *out_slot = (uint8_t)((id - PARAM_MACRO_FX1_TYPE) / 4U);
     }
     return 1U;
 }
 
-static float param_backend_normalize_master_fx_type(uint8_t track, param_id_t id, float value)
+static float param_backend_normalize_macro_fx_type(uint8_t track, param_id_t id, float value)
 {
     uint8_t slot = 0U;
-    if (param_backend_master_fx_type_slot(id, &slot) == 0U)
+    if (param_backend_macro_fx_type_slot(id, &slot) == 0U)
     {
         return value;
     }
@@ -53,7 +53,7 @@ static float param_backend_normalize_master_fx_type(uint8_t track, param_id_t id
 
     for (uint8_t other = 0U; other < slot; ++other)
     {
-        if ((uint8_t)(state->master_fx.type[other] + 0.5f) == type)
+        if ((uint8_t)(state->macro_fx.type[other] + 0.5f) == type)
         {
             return (float)FX_MASTER_MACRO_OFF;
         }
@@ -67,7 +67,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-            && !((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+            && !((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
                  && (id == PARAM_ENV_RETRIG_FILTER)))
     {
         return 0U;
@@ -106,7 +106,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
             && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
     {
-        effective_value = param_backend_normalize_master_fx_type(track, id, value);
+        effective_value = param_backend_normalize_macro_fx_type(track, id, value);
     }
 
     uint8_t applied = 0U;
@@ -119,7 +119,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
             && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
     {
-        applied = param_backend_apply_master_fx_track(ctx, track, id, effective_value, update_base_state);
+        applied = param_backend_apply_macro_fx_track(ctx, track, id, effective_value, update_base_state);
     }
     else if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))

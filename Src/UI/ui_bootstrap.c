@@ -23,10 +23,13 @@
 #include "ui_template_page.h"
 #include "lowcost_button_test_config.h"
 
+/* Keep the stable page-ID slot formerly occupied by the removed standalone UI. */
+static const ui_page_t g_ui_page_reserved_legacy_slot = { 0 };
+
 void ui_bootstrap_init(void)
 {
     ui_template_family_registry_init();
-    ui_page_template_colors_register_families();
+    ui_page_template_env_register_families();
     ui_page_template_cfg_register_families();
     ui_page_template_tone_register_families();
     ui_page_template_mod_register_families();
@@ -35,7 +38,6 @@ void ui_bootstrap_init(void)
     ui_page_template_seq_register_families();
     ui_page_template_mix_register_families();
     ui_page_template_play_register_families();
-    ui_page_template_vca_register_families();
 
     ui_page_manager_init();
 
@@ -47,7 +49,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_debug_hall);
     ui_page_manager_register(&g_ui_page_calibration);
     ui_page_manager_register(&g_ui_page_user_calibration);
-    ui_page_manager_register(&g_ui_page_template_colors);
+    ui_page_manager_register(&g_ui_page_template_env);
     ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_rec_cfg);
     ui_page_manager_register(&g_ui_page_template_tone);
@@ -58,7 +60,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_template_macro);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
-    ui_page_manager_register(&g_ui_page_template_vca);
+    ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
     ui_page_manager_register(&g_ui_page_audio_rec);
     ui_page_manager_register(&g_ui_page_rec_edit);
     ui_page_manager_register(&g_ui_page_patch_assign);

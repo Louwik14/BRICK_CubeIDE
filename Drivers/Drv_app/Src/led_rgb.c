@@ -276,7 +276,7 @@ static void led_apply_param_button_scene(led_id_t led,
     {
         uint8_t match_set = 0U;
         if ((led == led_remap_param_led_for_button(BTN_PARAM_1))
-                && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_COLORS)) != 0U))
+                && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_ENV)) != 0U))
         {
             match_set = 1U;
         }
@@ -315,7 +315,7 @@ static button_id_t led_macro_param_to_button(param_id_t param)
 
     switch (rule.domain)
     {
-        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
+        case TRACK_RUNTIME_PARAM_DOMAIN_ENV:
             return BTN_PARAM_1;
 
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
@@ -391,7 +391,7 @@ static void led_apply_route_destination_hall_scene(led_id_t led)
     led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
 }
 
-static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
+static void led_apply_macro_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
     if (hall >= UI_ACTIVE_TRACK_COUNT)
@@ -406,7 +406,7 @@ static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destina
         return;
     }
 
-    if (ui_core_runtime_bridge_get_master_fx_route_enabled(hall) == 0U)
+    if (ui_core_runtime_bridge_get_macro_fx_route_enabled(hall) == 0U)
     {
         led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
         return;
@@ -727,9 +727,9 @@ static void led_apply_fixed_scene(void)
             {
                 led_apply_audio_rec_hall_scene(hall);
             }
-            else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
+            else if (rout_context == UI_HALL_ROUT_CONTEXT_MACRO_FX)
             {
-                led_apply_master_fx_routing_hall_scene(hall, active_track);
+                led_apply_macro_fx_routing_hall_scene(hall, active_track);
             }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
             {

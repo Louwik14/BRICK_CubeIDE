@@ -262,12 +262,12 @@ static uint8_t ui_core_clipboard_resolve_template_family_from_button(button_id_t
 
     switch (button)
     {
-        case BTN_PARAM_1: *out_family = UI_TEMPLATE_FAMILY_COLORS; return 1U;
+        case BTN_PARAM_1: *out_family = UI_TEMPLATE_FAMILY_ENV; return 1U;
         case BTN_PARAM_2: *out_family = UI_TEMPLATE_FAMILY_TONE; return 1U;
         case BTN_PARAM_3: *out_family = UI_TEMPLATE_FAMILY_MOD; return 1U;
         case BTN_PARAM_4: *out_family = UI_TEMPLATE_FAMILY_MIX; return 1U;
         case BTN_PARAM_5: *out_family = UI_TEMPLATE_FAMILY_PLAY; return 1U;
-        case BTN_PARAM_6: *out_family = UI_TEMPLATE_FAMILY_VCA; return 1U;
+        case BTN_PARAM_6: *out_family = UI_TEMPLATE_FAMILY_ENV; return 1U;
         default: return 0U;
     }
 }

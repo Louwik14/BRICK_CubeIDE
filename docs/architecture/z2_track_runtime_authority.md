@@ -4,10 +4,10 @@
 
 - `track_topology` decrit une seule cible produit compile-time : 8 Play Tracks sur les deux variantes; Master, Looper, Input et FX comme identites Special fixes; 12 tracks Low-Cost et 14 Premium.
 - Low-Cost porte une entree physique, Premium exactement trois. Aucun descriptor ne publie Input4.
-- Les capacites structurelles sont `NOTES`, `AUDIO`, `MIDI`, `KEYBOARD`, `ARPEGGIATOR`, `AUTOMATION`, `MUTE` et `INPUT_RESERVATION`.
+- Les capacites structurelles sont `NOTES`, `AUDIO`, `MIDI`, `KEYBOARD`, `MIDI_FX`, `AUTOMATION`, `MUTE` et `INPUT_RESERVATION`.
 - `UI_TRACK_COUNT` et `SEQ_TRACK_COUNT` utilisent la capacite commune Low-Cost/Premium de 14 slots. `UI_ACTIVE_TRACK_COUNT` porte la cardinalite selectionnable, soit 12 Low-Cost et 14 Premium.
 - Le descriptor runtime publie le role et les capacites issus de `track_topology`; `track_runtime_has_capability()` est la garde effective. Le scheduler note, le clavier et l'ARP n'executent aucune note sur Special.
-- Le role topologique discrimine directement les ownerships: Master expose les effets globaux, FX les MacroFX; aucun adaptateur Master/FX ni chemin convertible Master ne subsiste.
+- Le role topologique discrimine directement les ownerships: Master expose les effets globaux, FX les MacroFX; aucun adaptateur fusionne ni chemin convertible Master ne subsiste.
 
 ## Autorité de polyphonie synth
 
@@ -214,7 +214,7 @@ Sorties de Z2:
 ## 12. Contrat de stabilite mix-target (runtime)
 - `track_runtime_refresh_all` preserve prioritairement le `mix_track_id` precedent de chaque track quand la lane reste disponible.
 - Les lanes fixes Input proto (`Input1..Input3` -> lanes mixer 0..2) sont reservees et ne peuvent plus etre allouees aux tracks non-Input; les engines/musical tracks prennent les lanes dynamiques restantes.
-- Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/COLORS) lors des changements family/type.
+- Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/ENV) lors des changements family/type.
 - Lorsqu'un rebind de lane reste necessaire, la migration/reconciliation du runtime per-lane est une etape explicite aval; Z2 ne garantit pas a lui seul la coherence du state DSP si cette passe n'est pas executee.
 
 ## 13. Contrat Sampler v0
@@ -294,14 +294,14 @@ Sorties de Z2:
 ## 19. Contrat p-lock / Macro
 - Source d'autorite p-lockable: `seq_param_iface_param_to_slot(track,set,param)` puis `seq_param_iface_param_is_supported(track,set,param)`, avec le set derive du domaine fourni par `track_runtime_get_param_rule()`.
 - Contrat produit: tout parametre p-lockable est assignable au Hall Mode Macro; Z3 consomme cette meme autorite et ne maintient pas de table d'exclusion MACRO separee.
-- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
-- Les anciens params `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine COLORS effectif et ne doivent plus recevoir de rule p-lock/macro.
+- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `ENV` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
+- Les anciens params de la page historique `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine ENV effectif et ne doivent plus recevoir de rule p-lock/macro.
 
 ## 20. Contrat Master et FX
 - Master et FX sont deux roles Special fixes traduits en identites runtime distinctes `SPECIAL_MASTER` et `SPECIAL_FX`; aucun couple UI partage ne les represente.
 - Leur binding reste `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; le role `MASTER` expose `CFG/SEQ/TONE`, le role `FX` expose `CFG/SEQ/TONE/MOD`.
-- Les params globaux reverb/delay/compresseur restent hors état track et sont visibles sur Master. Les `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` ne sont effectifs que sur FX; Z1 trouve cette Special par `track_topology` avant de lire son état TONE.
-- Aucun des deux roles n'expose `MIX`, `COLORS`, `VCA`, `PLAY`, `KEYBOARD` ou l'ARP musical. Le contexte `ROUT` UI-only reste disponible pour FX uniquement.
+- Les params globaux reverb/delay/compresseur restent hors état track et sont visibles sur Master. Les `PARAM_MACRO_FX1_*` a `PARAM_MACRO_FX4_*` ne sont effectifs que sur FX; Z1 trouve cette Special par `track_topology` avant de lire son état TONE.
+- Aucun des deux roles n'expose `MIX`, `ENV`, `PLAY`, `KEYBOARD` ou l'ARP musical. Le contexte `ROUT` UI-only reste disponible pour FX uniquement; VCA reste un backend mixer, pas un ensemble UI.
 
 ## 21. Contrat refresh local de track
 - `track_runtime_invalidate_track(track)` invalide uniquement la track cible; `track_runtime_invalidate_all()` reste reserve aux restore/load/init globaux.
@@ -309,7 +309,7 @@ Sorties de Z2:
 - `track_runtime_refresh_track(track)` ne fait full refresh que si un dirty global est pose et que l'appel n'est pas en IRQ.
 - `track_runtime_refresh_if_dirty()` ne lance pas de `track_runtime_refresh_all()` depuis l'IRQ audio; un dirty observe en IRQ est ignore pour le bloc courant et compte comme diagnostic.
 - Les instances Prism restent stables par track logique (`instance_id == track_id`); un refresh local ne reset que l'instance dont l'owner reel change.
-- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR` sont consommes par le DSP master.
+- Les params `PARAM_MACRO_FX1_*` a `PARAM_MACRO_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `FREEZE`, `STUTTER` et `COLOR` sont consommes par l'insert master-bus.
 
 ## 21. Contrat Drum Plaits direct
 
@@ -320,7 +320,7 @@ Sorties de Z2:
 - Le mapping TONE de `BD_ANALOG` est local au `track_runtime_type` effectif via `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
 - Les anciens IDs/types Drum ne sont plus conserves; un type numerique inconnu passe par la validation catalogue generique.
 - Les anciens IDs/types `TB3` et `DX7` ne sont plus conserves dans les enums UI/runtime et ne sont pas remappes au restore.
-- Aucune nouvelle autorite Drum n'est introduite: PLAY, TONE, COLORS, MIX, MOD et VCA restent resolus par les autorites track-runtime existantes.
+- Aucune nouvelle autorite Drum n'est introduite: PLAY, TONE, ENV, MIX et MOD restent resolus par les autorites track-runtime existantes; VCA reste sous l'autorite du mixer.
 
 ## 22. Contrat MIX p-lock/mod hors Master
 - Les params MIX track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2` sont autorises uniquement pour les tracks audio non-`Master` disposant d'une lane mixer effective.
@@ -337,7 +337,7 @@ Sorties de Z2:
 
 ## 24. Contrat retrait buffer master
 
-- L'ancienne family convertible `Master` et son type `Master/FX` sont supprimes.
+- L'ancienne family convertible `Master` est supprimee.
 - Le type runtime buffer master, son engine dedie et sa ressource param dediee sont retires.
 - Le XFade Looper est maintenant `PARAM_LOOPER_XFADE`, mappe dans les slots TONE de `Sampler/Looper`; son etat DSP reste `audio_xfade`.
 
@@ -441,7 +441,7 @@ Sorties de Z2:
 - La sortie du type Looper reset la prise, le reader, le cache et le Shifter de l'ancien owner avant toute reutilisation.
 # Addendum 2026-07-31 - autorite globale de reservation synth
 
-`synth_polyphony` est l'unique autorite du budget de 16 voix reservees. Elle maintient, en tableaux fixes et parcours bornes, l'activation par track, la cardinalite 1..8, les 16 owners physiques et les 16 etats de note/allocation globaux; aucune matrice de 64 etats par track ne subsiste. `track_runtime` active/libere la reservation lors des transitions de family/type et publie le slot de base resolu, jamais l'index logique de track; les changements Synth vers Synth conservent la cardinalite et les slots. Prism, Stack, Wave et Deluge consomment le mapping publie; DRUM/MD et BD Analog reservent une voix mono. Sampler, Multi, Clip, Looper, Input, MIDI et Master/FX restent hors budget.
+`synth_polyphony` est l'unique autorite du budget de 16 voix reservees. Elle maintient, en tableaux fixes et parcours bornes, l'activation par track, la cardinalite 1..8, les 16 owners physiques et les 16 etats de note/allocation globaux; aucune matrice de 64 etats par track ne subsiste. `track_runtime` active/libere la reservation lors des transitions de family/type et publie le slot de base resolu, jamais l'index logique de track; les changements Synth vers Synth conservent la cardinalite et les slots. Prism, Stack, Wave et Deluge consomment le mapping publie; DRUM/MD et BD Analog reservent une voix mono. Sampler, Multi, Clip, Looper, Input, MIDI, Master et FX restent hors budget.
 
 La liberation et la reutilisation passent par la meme autorite: note-off, reset moteur, reset filtre et purge de l'etat d'allocation precedent avant publication du slot libre. Panic purge les notes et releases de chaque slot reserve sans modifier les owners ni les cardinalites, afin que les tracks restent immediatement jouables.
 # Addendum 2026-07-31 - autorité de réservation External
@@ -463,7 +463,7 @@ La liberation et la reutilisation passent par la meme autorite: note-off, reset 
 
 - `TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX` et le domaine/ressource `MIDI_FX` sont explicites dans Z2.
 - La capacite est reservee aux huit Play Tracks note-capable effectivement liees; `Off`, `Sampler/Looper` et toutes les Special sont bloques.
-- L'ancien bit topologique ARP reste un alias temporaire du bit `MIDI_FX` tant que le moteur historique Z4 n'est pas retire.
+- La capacite topologique `MIDI_FX` est l'unique capacite du pipeline MIDI FX; ARP reste un modele de la chaine, pas une capacite ou un ensemble autonome.
 # Addendum 2026-08-01 - dispatcher terminal de notes commun
 
 Les sources clavier interne, MIDI entrant et sequenceur soumettent des evenements horodates au pipeline MIDI FX par identite de Play Track. Apres le slot 4, l'unique dispatcher terminal existant du scheduler conserve le routage moteur, polyphonie, MIDI et External; aucune seconde autorite de notes n'est creee.

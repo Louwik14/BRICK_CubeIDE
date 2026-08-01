@@ -21,7 +21,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bri
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1313:6:ui_core_runtime_bridge_apply_track_type_change	104	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1338:6:ui_core_runtime_bridge_restore_track_config_bulk	104	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1371:9:ui_core_runtime_bridge_handle_routing_event	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1416:9:ui_core_runtime_bridge_get_master_fx_route_enabled	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1416:9:ui_core_runtime_bridge_get_macro_fx_route_enabled	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1426:9:ui_core_runtime_bridge_get_looper_route_enabled	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1436:6:ui_core_runtime_bridge_set_looper_route_enabled	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1446:9:ui_core_runtime_bridge_get_active_looper_record_track	0	static

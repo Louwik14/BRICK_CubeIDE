@@ -6,7 +6,7 @@
 typedef enum
 {
     UI_HALL_ROUT_CONTEXT_NONE = 0,
-    UI_HALL_ROUT_CONTEXT_MASTER_FX,
+    UI_HALL_ROUT_CONTEXT_MACRO_FX,
     UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER
 } ui_hall_rout_context_t;
 

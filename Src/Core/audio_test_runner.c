@@ -84,7 +84,7 @@ typedef struct
     uint8_t filter_resonance;
     uint8_t delay;
     uint8_t reverb;
-    uint8_t master_fx;
+    uint8_t macro_fx;
     uint8_t master_gain_max;
     uint8_t musical;
     uint8_t fx_tail_test;
@@ -517,17 +517,17 @@ static void build_case(uint16_t index, audio_test_case_t *out)
         {
             out->notes[i] = 60U;
         }
-        out->master_fx = (variant == 2U) ? 1U : 0U;
+        out->macro_fx = (variant == 2U) ? 1U : 0U;
         out->master_gain_max = (variant == 4U) ? 1U : 0U;
         (void)snprintf(out->phase, sizeof(out->phase), "MASTER");
         (void)snprintf(out->name, sizeof(out->name), "%s",
             (variant == 0U) ? "MASTER_DRY"
-          : (variant == 1U) ? "MASTER_FX_BYPASS"
-          : (variant == 2U) ? "MASTER_FX_ACTIVE"
+          : (variant == 1U) ? "MACRO_FX_BYPASS"
+          : (variant == 2U) ? "MACRO_FX_ACTIVE"
           : (variant == 3U) ? "MASTER_GAIN_NOMINAL"
                             : "MASTER_GAIN_MAX");
         (void)snprintf(out->fx, sizeof(out->fx), "D0 R0 MFX%u",
-                       (unsigned)out->master_fx);
+                       (unsigned)out->macro_fx);
         (void)snprintf(out->master, sizeof(out->master), "%s",
                        (out->master_gain_max != 0U) ? "MAX" : "NOMINAL");
         return;
@@ -769,13 +769,13 @@ static uint8_t configure_current(void)
     param_set(PARAM_MIX_REVERB_DECAY, g_runner.current.reverb_decay);
     param_set(PARAM_MIX_REVERB_DAMP, g_runner.current.reverb_damping);
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
-    set_track_param(fx_track, PARAM_MASTER_FX1_TYPE,
-                    g_runner.current.master_fx ? 1.0f : 0.0f);
-    set_track_param(fx_track, PARAM_MASTER_FX1_LEVEL,
-                    g_runner.current.master_fx ? 127.0f : 0.0f);
-    set_track_param(fx_track, PARAM_MASTER_FX2_LEVEL, 0.0f);
-    set_track_param(fx_track, PARAM_MASTER_FX3_LEVEL, 0.0f);
-    set_track_param(fx_track, PARAM_MASTER_FX4_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MACRO_FX1_TYPE,
+                    g_runner.current.macro_fx ? 1.0f : 0.0f);
+    set_track_param(fx_track, PARAM_MACRO_FX1_LEVEL,
+                    g_runner.current.macro_fx ? 127.0f : 0.0f);
+    set_track_param(fx_track, PARAM_MACRO_FX2_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MACRO_FX3_LEVEL, 0.0f);
+    set_track_param(fx_track, PARAM_MACRO_FX4_LEVEL, 0.0f);
     param_registry_batch_end();
 
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(0U);
@@ -959,7 +959,7 @@ static uint32_t calibration_clip_count(
 {
     return track->soft_clip_count + track->filter_clip_count
         + track->insert_clip_count + global->final_clip_count
-        + global->master_fx_clamp_count + global->delay_clamp_count;
+        + global->macro_fx_clamp_count + global->delay_clamp_count;
 }
 
 static void collect_calibration_observation(void)
@@ -1225,10 +1225,10 @@ static void merge_global_snapshots(
     {
         out->final_clip_max_over = second->final_clip_max_over;
     }
-    out->master_fx_clamp_count += second->master_fx_clamp_count;
-    if (second->master_fx_clamp_max_over > out->master_fx_clamp_max_over)
+    out->macro_fx_clamp_count += second->macro_fx_clamp_count;
+    if (second->macro_fx_clamp_max_over > out->macro_fx_clamp_max_over)
     {
-        out->master_fx_clamp_max_over = second->master_fx_clamp_max_over;
+        out->macro_fx_clamp_max_over = second->macro_fx_clamp_max_over;
     }
     out->delay_clamp_count += second->delay_clamp_count;
     if (second->delay_clamp_max_over > out->delay_clamp_max_over)
@@ -1665,7 +1665,7 @@ void audio_test_runner_tick(void)
                     global_nonfinite_count(global_snapshot);
                 const uint8_t final_saturation =
                     (global_snapshot->final_clip_count != 0U)
-                    || (global_snapshot->master_fx_clamp_count != 0U)
+                    || (global_snapshot->macro_fx_clamp_count != 0U)
                     || (global_snapshot->delay_clamp_count != 0U)
                     || (return_over != 0U);
                 const uint8_t irq_overload =

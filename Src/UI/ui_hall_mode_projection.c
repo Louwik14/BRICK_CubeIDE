@@ -65,7 +65,7 @@ ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_
 
     if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
     {
-        return UI_HALL_ROUT_CONTEXT_MASTER_FX;
+        return UI_HALL_ROUT_CONTEXT_MACRO_FX;
     }
 
     return UI_HALL_ROUT_CONTEXT_NONE;

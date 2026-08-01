@@ -69,8 +69,14 @@ if (-not $trackState.Contains('track_state_topology_config(track)')) {
 if (-not $trackState.Contains('track_topology_is_play(track) == 0U')) {
     throw 'Track state does not protect Special identity mutations'
 }
-if (-not $trackRuntime.Contains('TRACK_CAPABILITY_ARPEGGIATOR')) {
-    throw 'Runtime UI availability is not topology-gated for ARP'
+if (-not $trackRuntime.Contains('TRACK_CAPABILITY_MIDI_FX')) {
+    throw 'Runtime UI availability is not topology-gated for MIDI FX'
+}
+if (-not $header.Contains('TRACK_CAPABILITY_MIDI_FX = (1U << 4)')) {
+    throw 'MIDI FX capability value changed'
+}
+if (-not $header.Contains('TRACK_CAPABILITY_AUTOMATION = (1U << 5)')) {
+    throw 'Capability bits after MIDI FX shifted'
 }
 if (-not $scheduler.Contains('track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U')) {
     throw 'Sequencer scheduler does not reject ordinary notes on Special tracks'

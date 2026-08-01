@@ -23,6 +23,39 @@ static uint8_t patch_sd_slot_is_valid(uint16_t slot)
     return (slot < PATCH_V1_SLOT_COUNT) ? 1U : 0U;
 }
 
+static uint8_t patch_sd_family_type_is_play_valid(uint8_t family, uint8_t type)
+{
+    switch ((ui_track_family_t)family)
+    {
+        case UI_TRACK_FAMILY_OFF:
+            return (type == (uint8_t)UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_SYNTH:
+            return ((type == (uint8_t)UI_TRACK_TYPE_PRISM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_WAVE)
+                    || (type == (uint8_t)UI_TRACK_TYPE_STACK)
+                    || (type == (uint8_t)UI_TRACK_TYPE_DELUGE)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_SAMPLER:
+            return ((type == (uint8_t)UI_TRACK_TYPE_RAM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_STREAM)
+                    || (type == (uint8_t)UI_TRACK_TYPE_MULTI)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_DRUM:
+            return ((type == (uint8_t)UI_TRACK_TYPE_DRUM_MD)
+                    || (type == (uint8_t)UI_TRACK_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_MIDI:
+            return (type == (uint8_t)UI_TRACK_TYPE_MIDI) ? 1U : 0U;
+
+        case UI_TRACK_FAMILY_EXTERNAL:
+            return (type == (uint8_t)UI_TRACK_TYPE_EXTERNAL) ? 1U : 0U;
+
+        default:
+            return 0U;
+    }
+}
+
 static uint32_t patch_sd_checksum(const uint8_t *data, uint32_t len)
 {
     uint32_t crc = 5381UL;
@@ -58,7 +91,8 @@ static uint8_t patch_sd_header_is_valid(const patch_sd_slot_header_t *hdr)
     return (uint8_t)((hdr->magic == PATCH_SD_FILE_MAGIC)
                      && (hdr->version == PATCH_SD_FILE_VERSION)
                      && (hdr->header_size == sizeof(patch_sd_slot_header_t))
-                     && (hdr->payload_size == sizeof(PatchSaveV1)));
+                     && (hdr->payload_size == sizeof(PatchSaveV1))
+                     && (patch_sd_family_type_is_play_valid(hdr->family, hdr->type) != 0U));
 }
 
 static void patch_sd_meta_store(uint16_t slot, const patch_sd_slot_header_t *hdr)

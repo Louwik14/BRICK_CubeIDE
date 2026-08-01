@@ -14,7 +14,7 @@
  * - Exécuter le mix final MAIN/CUE par bloc audio.
  *
  * Architecture:
- * - Appelé par: brick6_app_init.c, control_router.c, callback DSP principal.
+ * - Appelé par: brick6_app_init.c, callback DSP principal.
  * - Appelle: fx_chain/fx_pool via implémentation mixer.c.
  *
  * Contraintes temps réel:
