@@ -120,6 +120,7 @@ static uint8_t pattern_live_special_step_required_lock_count(const pattern_v1_sp
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
                                                             uint16_t *out_required);
+static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_block_t *seq);
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
                                             const PatternSaveV1 *snapshot,
@@ -554,6 +555,56 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
     return 1U;
 }
 
+static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_block_t *seq)
+{
+    if (seq == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    {
+        const uint8_t is_play = track_topology_is_play(track);
+        const pattern_v1_play_track_seq_t *const play = is_play ? &seq->play[track] : 0;
+        const pattern_v1_special_track_seq_t *const special = is_play ? 0 : pattern_live_special_seq(seq, track);
+        if ((is_play == 0U) && (special == 0))
+        {
+            return 0U;
+        }
+
+        for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
+        {
+            const uint8_t lock_count = is_play ? play->steps[step].lock_count : special->steps[step].lock_count;
+            const uint8_t lock_limit = is_play ? SEQ_PLAY_STEP_MAX_LOCKS : SEQ_SPECIAL_STEP_MAX_LOCKS;
+            if (lock_count > lock_limit)
+            {
+                return 0U;
+            }
+
+            for (uint8_t lock = 0U; lock < lock_count; ++lock)
+            {
+                const pattern_v1_plock_t *const plock = is_play
+                    ? &play->steps[step].locks[lock]
+                    : &special->steps[step].locks[lock];
+                param_id_t param = PARAM_COUNT;
+                if (seq_param_iface_slot_to_param(track,
+                                                  plock->set_id,
+                                                  plock->param_slot,
+                                                  &param) == 0U)
+                {
+                    return 0U;
+                }
+                if ((is_play == 0U) && (plock->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY))
+                {
+                    return 0U;
+                }
+            }
+        }
+    }
+
+    return 1U;
+}
+
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
                                             const PatternSaveV1 *snapshot,
@@ -754,6 +805,10 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
     uint16_t overflow_required = 0U;
     if (pattern_live_seq_block_validate_plock_budget(seq, &overflow_track, &overflow_required) == 0U)
     {        return 0U;
+    }
+    if (pattern_live_seq_block_validate_plock_slots(seq) == 0U)
+    {
+        return 0U;
     }
 
     seq_model_init_defaults();

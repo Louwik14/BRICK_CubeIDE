@@ -1002,6 +1002,10 @@ uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
     {
         return 0U;
     }
+    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
+    {
+        return 0U;
+    }
 
     if (present != 0U)
     {

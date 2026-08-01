@@ -747,6 +747,10 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     {
         return SEQ_PLOCK_OP_SET_NOT_PLOCKABLE;
     }
+    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
+    {
+        return SEQ_PLOCK_OP_INVALID;
+    }
 
     const uint32_t primask = seq_model_enter_critical();
 
