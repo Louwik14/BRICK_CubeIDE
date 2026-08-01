@@ -4,6 +4,8 @@
 
 Le scheduler utilise `track_runtime_supports_vca_gate()` pour les appels VCA communs. Pour `Sampler/Stream`, Note On déclenche le VCA et reconstruit le reader; en mode gate, Note Off déclenche la release mixer puis marque la voix Stream en `release_pending` afin que le reader reste rendu jusqu'à `mixer_track_vca_requires_source()==0`. Le mode launch/latched ignore Note Off comme avant. Les arrêts forcés restent immédiats via le chemin sampler/panic existant; `Sampler/Looper` reste hors de ce gate vocal.
 
+Pour `Sampler/Multi`, le scheduler laisse le runtime confirmer l'allocation de chaque voix avant de déclencher son gate VCA. Note Off décrémente le gate commun de la note et marque les voix correspondantes `release_pending`; le renderer conserve leurs sources jusqu'à la fin de la demande VCA. Les arrêts forcés et les voice steals ferment immédiatement les voix et neutralisent les gates résiduels.
+
 ## Contrat produit actuel
 
 Les huit Play Tracks sont des séquenceurs indépendants : chacune possède ses steps, ses quatre voix PLAY, ses p-locks, son scheduler, son clavier/MIDI FX et son état de live record. Les Special ont un modèle de séquence distinct, borné à l'automatisation non-PLAY et aux actions de leur rôle.

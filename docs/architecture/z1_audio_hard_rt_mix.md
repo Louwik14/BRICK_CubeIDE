@@ -6,6 +6,12 @@ La Special Master porte les traitements globaux reverb, delay et compresseur. La
 
 Le mix track-aware reste séparé des effets globaux. Le backend VCA du mixer et le backend ENV3 de modulation sont des cibles d'exécution légitimes de l'owner logique `ENV`, sans créer de familles audio supplémentaires.
 
+## Addendum 2026-08-02 - Sampler Multi dans le VCA commun
+
+`Sampler/Multi` reste une source polyphonique agrégée sur la lane mixer de sa track. Le VCA est déclenché une seule fois par voix acceptée, compté par le mixer, puis appliqué une seule fois sur la sortie Multi agrégée.
+
+En mode gate, Note Off décrémente le gate mixer de la note et marque chaque voix Multi correspondante `release_pending`. Chaque voix continue à rendre sa source tant que `mixer_track_vca_requires_source()` le demande; le renderer arrête et libère la voix uniquement lorsque le VCA commun n'a plus besoin de source. Les voix peuvent donc coexister pendant le release. EOF, underrun, steal, changement de sample/type, reset et panic restent des arrêts bornés et ferment aussi les gates orphelins. Le mode Multi courant ne supporte que le one-shot sans boucle ou la boucle forward; il n'introduit pas de contrat Shot/Rev/PingPong séparé.
+
 Le reste de ce fichier conserve l'audit hard-RT détaillé et les notes historiques de l'implémentation. Les mentions d'anciens owners, de chemins retirés ou de prototypes ne sont pas des contrats produit courants.
 
 ## Addendum 2026-08-02 - Stream dans le VCA commun

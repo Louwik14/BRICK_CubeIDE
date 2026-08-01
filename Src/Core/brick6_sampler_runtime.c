@@ -808,6 +808,19 @@ static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample
     return sample_audio_key_multi(multi_sample_id);
 }
 
+static void brick6_sampler_runtime_multi_release_voice_vca(
+    const brick6_sampler_voice_t *voice)
+{
+    uint8_t mix_track = 0U;
+    if ((voice != NULL)
+            && (voice->owner_track_id < SEQ_TRACK_COUNT)
+            && (track_runtime_get_mix_target_track(voice->owner_track_id,
+                                                    &mix_track) != 0U))
+    {
+        mixer_track_vca_note_off(mix_track, voice->note);
+    }
+}
+
 static void brick6_sampler_runtime_multi_release_voice_stream_owner(
     const brick6_sampler_voice_t *voice)
 {
@@ -850,6 +863,7 @@ static void brick6_sampler_runtime_multi_mark_voice_stream_owner_release(
         return;
     }
 
+    brick6_sampler_runtime_multi_release_voice_vca(voice);
     voice->stream_owner_release_pending = 1U;
     voice->stream_owner_release_generation = voice->trigger_order;
     voice->stream_owner_release_sample_id = voice->multi_sample_id;
@@ -2991,6 +3005,9 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
 
     const uint8_t stopped_track_id = voice->owner_track_id;
     const uint16_t stopped_multi_sample_id = voice->multi_sample_id;
+    /* Normal Note Off already made this a no-op; EOF, steal and forced stops
+     * also close a still-held mixer gate and cannot leave it stale. */
+    brick6_sampler_runtime_multi_release_voice_vca(voice);
     if ((reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE)
         || (reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL)
         || (reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE))
@@ -3051,6 +3068,14 @@ static void brick6_sampler_runtime_multi_stop_track(uint8_t track_id)
             brick6_sampler_runtime_multi_stop_voice(&g_sampler_multi_voice[i],
                                                     (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE);
         }
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track_id);
+    uint8_t mix_track = 0U;
+    if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)
+            && (track_runtime_get_mix_target_track(track_id, &mix_track) != 0U))
+    {
+        mixer_track_vca_all_notes_off(mix_track);
     }
 }
 
@@ -3854,6 +3879,12 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     }
     brick6_sampler_runtime_multi_prefetch_trigger(multi_voice);
 
+    uint8_t mix_track = 0U;
+    if (track_runtime_get_mix_target_track(track_id, &mix_track) != 0U)
+    {
+        mixer_track_vca_note_on(mix_track, note, velocity);
+    }
+
     g_brick6_sampler_runtime_diag.multi_instrument_id = instrument_id;
     g_brick6_sampler_runtime_diag.multi_sample_id = resolved.multi_sample_id;
     g_brick6_sampler_runtime_diag.multi_gain_applied =
@@ -3893,6 +3924,11 @@ void brick6_sampler_runtime_note_off_multi_track_note(uint8_t track_id, uint8_t 
             continue;
         }
 
+        uint8_t mix_track = 0U;
+        if (track_runtime_get_mix_target_track(track_id, &mix_track) != 0U)
+        {
+            mixer_track_vca_note_off(mix_track, note);
+        }
         voice->release_pending = 1U;
     }
 }
@@ -4201,14 +4237,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
         || (voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_MULTI))
     {
-        return;
-    }
-
-    if (voice->release_pending != 0U)
-    {
-        brick6_sampler_runtime_multi_stop_voice(
-            voice,
-            (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
         return;
     }
 
@@ -5946,6 +5974,14 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
         if ((multi_voice->active != 0U)
             && (multi_voice->owner_track_id == ctx->track_id))
         {
+            if ((multi_voice->release_pending != 0U)
+                    && (mixer_track_vca_requires_source(ctx->mix_track_id) == 0U))
+            {
+                brick6_sampler_runtime_multi_stop_voice(
+                    multi_voice,
+                    (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
+                continue;
+            }
             brick6_sampler_render_multi(multi_voice, out_l, out_r, frames);
         }
     }

@@ -272,8 +272,12 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
             mixer_track_filter_note_off(filter_track, note);
         }
     }
+    const uint8_t is_multi_sampler = (uint8_t)((ctx->engine
+            == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
     if ((track_runtime_supports_vca_gate(ctx) != 0U)
-            && (has_mix != 0U) && (is_poly_synth == 0U))
+            && (has_mix != 0U) && (is_poly_synth == 0U)
+            && (is_multi_sampler == 0U))
     {
         if (is_note_on != 0U)
         {

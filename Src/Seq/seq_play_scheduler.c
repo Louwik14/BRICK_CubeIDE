@@ -551,8 +551,12 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             mixer_track_filter_note_off(resolved.filter_track_id, note);
         }
     }
+    const uint8_t is_multi_sampler = (uint8_t)((resolved.descriptor.engine
+            == TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
     if ((is_poly_synth == 0U) && (resolved.supports_vca_gate != 0U)
-            && (resolved.has_mix_target != 0U))
+            && (resolved.has_mix_target != 0U)
+            && (is_multi_sampler == 0U))
     {
         if (is_note_on != 0U)
         {

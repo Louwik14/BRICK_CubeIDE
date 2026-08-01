@@ -4,7 +4,7 @@ Z2 définit le contrat unique entre la topologie produit et les capacités runti
 
 ## Capacité VCA Sampler
 
-`track_runtime_supports_vca_gate()` autorise `Sampler/Stream` lorsqu'il est bindé et audio-routable. `Sampler/Looper` reste explicitement exclu. Cette capacité pilote les paramètres VCA effectifs, la sous-page ENV/VCA et les appels communs du clavier et du scheduler vers le mixer.
+`track_runtime_supports_vca_gate()` autorise `Sampler/Stream` et `Sampler/Multi` lorsqu'ils sont bindés et audio-routables. `Sampler/Looper` reste explicitement exclu. Cette capacité pilote les paramètres VCA effectifs, la sous-page ENV/VCA et les appels communs du clavier et du scheduler vers le mixer. Multi conserve son ownership de voix dans `brick6_sampler_runtime`; le mixer reste l'autorité de fin du release commun de la track.
 
 ## Topologie produit
 
