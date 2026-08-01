@@ -103,7 +103,6 @@ sample_page_load_result_t sample_stream_backend_contiguous_load_page(
     const uint32_t lba = info->stream_safe.first_file_lba
                        + (uint32_t)(file_byte_offset / SAMPLE_STREAM_CONTIG_SECTOR_SIZE);
 
-    memset(g_sample_stream_contig_scratch, 0, sizeof(g_sample_stream_contig_scratch));
     const sd_block_device_result_t read_result =
         sd_block_device_read(lba, sector_count, g_sample_stream_contig_scratch);
     if (read_result != SD_BLOCK_DEVICE_OK)
