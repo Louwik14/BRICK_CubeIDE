@@ -2,6 +2,8 @@
 
 Z5 décrit la surface UI actuelle. La résolution se fait par contexte : ensemble demandé, track active, rôle topologique, famille/type et capacité runtime.
 
+Pour une Play Track `Sampler/Stream`, la capacité runtime rend visible la sous-page `ENV/VCA` et ses encodeurs ADSR/retrigger. Le `Looper` conserve son contrat de transport et n'expose pas d'ADSR VCA vocal; la page et les paramètres VCA restent résolus par les chemins ENV communs.
+
 ## Navigation par track
 
 `TRACK` puis `HALL 0..7` sélectionne les huit Play Tracks. Les Special sont sélectionnées uniquement lorsqu'elles existent dans la variante : Master, Looper, Input1..N et FX.

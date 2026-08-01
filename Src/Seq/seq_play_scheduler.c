@@ -642,9 +642,9 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         {
             brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);
         }
-        else if (resolved.supports_vca_gate == 0U)
+        else
         {
-            brick6_sampler_runtime_note_off(track);
+            brick6_sampler_runtime_note_off_note(track, note);
         }
     }
 }

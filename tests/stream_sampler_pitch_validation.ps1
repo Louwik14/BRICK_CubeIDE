@@ -25,7 +25,8 @@ foreach ($source in @($keyboard, $scheduler)) {
 }
 Require-Match $pipeline 'seq_play_scheduler_dispatch_terminal_note_to_channel' 'NoteFx lacks the shared terminal dispatcher'
 Require-Match $scheduler 'brick6_sampler_runtime_trigger_note_velocity\(track, note, velocity\)' 'Terminal dispatcher does not preserve the canonical note'
-Require-Match $trackRuntime 'track_runtime_ctx_is_sampler_clip_or_looper\(ctx\)[\s\S]*?return 0U;' 'Stream VCA contract changed in the pitch-only pass'
+Require-Match $trackRuntime 'track_runtime_ctx_is_sampler_clip_or_looper\(ctx\)[\s\S]*?TRACK_RUNTIME_TYPE_STREAM' 'Stream VCA capability is not distinguished from Looper'
+Require-Match $trackRuntime 'track_runtime_supports_vca_gate[\s\S]*?TRACK_RUNTIME_TYPE_STREAM' 'Stream VCA gate is not enabled'
 
 function To-Q16([double]$Ratio) {
     $bounded = [Math]::Max(0.03125, [Math]::Min(32.0, $Ratio))
@@ -79,4 +80,4 @@ $first = Pitch-Plan 59 0.0 48000 1.0 $false
 $second = Pitch-Plan 61 0.0 48000 1.0 $false
 if ($first.StepQ16 -eq $second.StepQ16) { throw 'Retrigger notes reuse one pitch ratio' }
 
-Write-Output 'stream_sampler_pitch_validation=PASS root=60 signed=yes endpoints=unified notes=0..127 clip_pitch=yes retrigger=yes timing=yes shifter=yes sample_rate=yes vca=unchanged'
+Write-Output 'stream_sampler_pitch_validation=PASS root=60 signed=yes endpoints=unified notes=0..127 clip_pitch=yes retrigger=yes timing=yes shifter=yes sample_rate=yes vca=common_gate'

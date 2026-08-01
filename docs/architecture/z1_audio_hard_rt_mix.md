@@ -8,6 +8,12 @@ Le mix track-aware reste séparé des effets globaux. Le backend VCA du mixer et
 
 Le reste de ce fichier conserve l'audit hard-RT détaillé et les notes historiques de l'implémentation. Les mentions d'anciens owners, de chemins retirés ou de prototypes ne sont pas des contrats produit courants.
 
+## Addendum 2026-08-02 - Stream dans le VCA commun
+
+`Sampler/Stream` est une source mono de notes soumise au même VCA mixer que `Sampler/RAM`; le `Looper` reste hors VCA vocal. Le renderer Stream ne contient pas d'ADSR : le mixer applique le VCA une seule fois sur la sortie externe.
+
+En mode gate, Note Off lance la release VCA et le Stream conserve son reader, ses demandes de pages et ses owners jusqu'à ce que `mixer_track_vca_requires_source()` retourne faux. Le reader/cache est alors arrêté par le chemin existant. EOF et underrun arrêtent immédiatement la source; panic, changement de sample/type et désactivation restent des arrêts forcés avec le declick existant. En mode launch/latched, Note Off reste ignoré.
+
 ## Addendum 2026-08-01 - audit Recorder/preroll apres activation WBWA
 
 - Les deux rings `multi_record_writer`, le preroll Looper et le ring AUDIO TEST 2 sont les buffers SDRAM partages IRQ/superloop identifies; ils restent dans l'overlay `SDRAM_RECORDER` non cacheable. Le pack PCM24 est hors IRQ et peut rester dans la SDRAM cacheable.

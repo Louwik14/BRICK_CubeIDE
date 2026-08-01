@@ -2,6 +2,10 @@
 
 Z2 définit le contrat unique entre la topologie produit et les capacités runtime. Le code de `track_topology`, `track_state` et `track_runtime` est l'autorité.
 
+## Capacité VCA Sampler
+
+`track_runtime_supports_vca_gate()` autorise `Sampler/Stream` lorsqu'il est bindé et audio-routable. `Sampler/Looper` reste explicitement exclu. Cette capacité pilote les paramètres VCA effectifs, la sous-page ENV/VCA et les appels communs du clavier et du scheduler vers le mixer.
+
 ## Topologie produit
 
 La topologie est compile-time et dépend de la variante :

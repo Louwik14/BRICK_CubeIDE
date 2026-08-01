@@ -1,5 +1,9 @@
 # Z4 - Seq / Clock / Scheduler
 
+## Addendum 2026-08-02 - Note Off Stream et VCA commun
+
+Le scheduler utilise `track_runtime_supports_vca_gate()` pour les appels VCA communs. Pour `Sampler/Stream`, Note On déclenche le VCA et reconstruit le reader; en mode gate, Note Off déclenche la release mixer puis marque la voix Stream en `release_pending` afin que le reader reste rendu jusqu'à `mixer_track_vca_requires_source()==0`. Le mode launch/latched ignore Note Off comme avant. Les arrêts forcés restent immédiats via le chemin sampler/panic existant; `Sampler/Looper` reste hors de ce gate vocal.
+
 ## Contrat produit actuel
 
 Les huit Play Tracks sont des séquenceurs indépendants : chacune possède ses steps, ses quatre voix PLAY, ses p-locks, son scheduler, son clavier/MIDI FX et son état de live record. Les Special ont un modèle de séquence distinct, borné à l'automatisation non-PLAY et aux actions de leur rôle.

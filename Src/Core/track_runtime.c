@@ -741,7 +741,8 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
         return 0U;
     }
 
-    if (track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U)
+    if ((track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U)
+            && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
     {
         return 0U;
     }

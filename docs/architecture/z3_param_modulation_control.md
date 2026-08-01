@@ -10,6 +10,8 @@ La chaîne d'écriture est :
 
 `UI / séquence / modulation / Macro → validation runtime → apply backend → base canonique → notification explicite`.
 
+Les cinq paramètres VCA (`PARAM_VCA_ATTACK/DECAY/SUSTAIN/RELEASE` et `PARAM_ENV_RETRIG_VCA`) restent dans le domaine `ENV`, avec `TRACK_RUNTIME_RESOURCE_MIX` comme ressource physique. Stream réutilise cette chaîne, `track_sound_state`, les p-locks ENV, la modulation, le clipboard, les snapshots et la persistence existants; aucun ID, champ ou backend Stream VCA supplémentaire n'est créé.
+
 Les transitions structurelles passent par les commandes dédiées et les snapshots ; elles ne sont pas déguisées en p-locks.
 
 ## Domaines actuels

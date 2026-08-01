@@ -89,7 +89,9 @@ foreach ($relativePath in @(
 }
 
 $support = Get-FunctionTail $runtime 'uint8_t track_runtime_supports_vca_gate'
-Assert-Contract ($support -match 'track_runtime_ctx_is_sampler_clip_or_looper') 'Stream/Looper VCA exclusion was removed'
+Assert-Contract ($support -match 'track_runtime_ctx_is_sampler_clip_or_looper') 'Sampler VCA capability rule is missing'
+Assert-Contract ($support -match 'TRACK_RUNTIME_TYPE_STREAM') 'Stream VCA gate is not enabled'
+Assert-Contract ($support -match 'TRACK_RUNTIME_TYPE_LOOPER') 'Looper VCA exclusion was removed'
 Assert-Contract ($support -match 'TRACK_RUNTIME_ENGINE_(DRUM|SAMPLER|PRISM|STACK|WAVE|DELUGE)') 'Supported engine VCA gate is incomplete'
 Assert-Contract ($support -match 'TRACK_RUNTIME_FAMILY_EXTERNAL') 'External VCA contract was changed unexpectedly'
 
