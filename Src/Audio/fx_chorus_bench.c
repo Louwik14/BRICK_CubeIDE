@@ -19,20 +19,18 @@
 #define CHORUS_BENCH_JUNO_DELAY 512U
 
 static float g_rate_hz = 48000.0f;
-/* Prototype delay RAM is kept in SDRAM on both products. */
-AUDIO_COLD_SDRAM static float g_micro[2][CHORUS_BENCH_MICRO_DELAY];
-AUDIO_COLD_SDRAM static float g_daisy[2][CHORUS_BENCH_MAX_DELAY];
-AUDIO_COLD_SDRAM static float g_juno[2][CHORUS_BENCH_JUNO_DELAY];
-static uint32_t g_micro_write;
-static uint32_t g_daisy_write[2];
-static uint32_t g_juno_write[2];
-static float g_micro_lfo;
-static float g_daisy_lfo[2];
-static float g_juno_lfo[2];
-static float g_juno_lp[2];
-static fx_chorus_bench_model_t g_model;
-static float g_dry_l[AUDIO_BLOCK_SIZE];
-static float g_dry_r[AUDIO_BLOCK_SIZE];
+/* One DTCM pool is reused because only one model can run at a time. */
+AUDIO_HOT static float g_chorus_delay_pool[2][CHORUS_BENCH_MAX_DELAY];
+AUDIO_HOT static uint32_t g_micro_write;
+AUDIO_HOT static uint32_t g_daisy_write[2];
+AUDIO_HOT static uint32_t g_juno_write[2];
+AUDIO_HOT static float g_micro_lfo;
+AUDIO_HOT static float g_daisy_lfo[2];
+AUDIO_HOT static float g_juno_lfo[2];
+AUDIO_HOT static float g_juno_lp[2];
+AUDIO_HOT static fx_chorus_bench_model_t g_model;
+AUDIO_HOT static float g_dry_l[AUDIO_BLOCK_SIZE];
+AUDIO_HOT static float g_dry_r[AUDIO_BLOCK_SIZE];
 
 static float clampf(float x, float lo, float hi)
 {
@@ -65,9 +63,7 @@ static void write_delay(float *buffer, uint32_t size, uint32_t *write, float val
 void fx_chorus_bench_init(float sample_rate)
 {
     g_rate_hz = (sample_rate > 1000.0f) ? sample_rate : 48000.0f;
-    memset(g_micro, 0, sizeof(g_micro));
-    memset(g_daisy, 0, sizeof(g_daisy));
-    memset(g_juno, 0, sizeof(g_juno));
+    memset(g_chorus_delay_pool, 0, sizeof(g_chorus_delay_pool));
     memset(g_juno_lp, 0, sizeof(g_juno_lp));
     g_micro_write = 0U;
     memset(g_daisy_write, 0, sizeof(g_daisy_write));
@@ -95,10 +91,10 @@ static void process_micro(float *left, float *right, uint32_t frames, float dept
         g_micro_lfo += hz / g_rate_hz;
         const float dl = base + (lfo * span);
         const float dr = base - (lfo * span);
-        g_micro[0][g_micro_write] = clampf(left[i], -1.2f, 1.2f);
-        g_micro[1][g_micro_write] = clampf(right[i], -1.2f, 1.2f);
-        left[i] = read_delay(g_micro[0], CHORUS_BENCH_MICRO_DELAY, g_micro_write, dl);
-        right[i] = read_delay(g_micro[1], CHORUS_BENCH_MICRO_DELAY, g_micro_write, dr);
+        g_chorus_delay_pool[0][g_micro_write] = clampf(left[i], -1.2f, 1.2f);
+        g_chorus_delay_pool[1][g_micro_write] = clampf(right[i], -1.2f, 1.2f);
+        left[i] = read_delay(g_chorus_delay_pool[0], CHORUS_BENCH_MICRO_DELAY, g_micro_write, dl);
+        right[i] = read_delay(g_chorus_delay_pool[1], CHORUS_BENCH_MICRO_DELAY, g_micro_write, dr);
         g_micro_write = (g_micro_write + 1U) % CHORUS_BENCH_MICRO_DELAY;
     }
 }
@@ -115,8 +111,8 @@ static void process_daisy(float *left, float *right, uint32_t frames, float dept
             float *sample = (ch == 0U) ? &left[i] : &right[i];
             const float lfo = tri(g_daisy_lfo[ch]);
             g_daisy_lfo[ch] += hz / g_rate_hz;
-            write_delay(g_daisy[ch], CHORUS_BENCH_MAX_DELAY, &g_daisy_write[ch], *sample);
-            const float delayed = read_delay(g_daisy[ch], CHORUS_BENCH_MAX_DELAY,
+            write_delay(g_chorus_delay_pool[ch], CHORUS_BENCH_MAX_DELAY, &g_daisy_write[ch], *sample);
+            const float delayed = read_delay(g_chorus_delay_pool[ch], CHORUS_BENCH_MAX_DELAY,
                                              g_daisy_write[ch], base + (lfo * span));
             *sample = (*sample + delayed) * 0.5f;
         }
@@ -136,10 +132,10 @@ static void process_juno(float *left, float *right, uint32_t frames, float depth
             float *sample = (ch == 0U) ? &left[i] : &right[i];
             const float lfo = tri(g_juno_lfo[ch]);
             g_juno_lfo[ch] += hz / g_rate_hz;
-            write_delay(g_juno[ch], CHORUS_BENCH_JUNO_DELAY, &g_juno_write[ch], *sample);
-            const float delayed_a = read_delay(g_juno[ch], CHORUS_BENCH_JUNO_DELAY,
+            write_delay(g_chorus_delay_pool[ch], CHORUS_BENCH_JUNO_DELAY, &g_juno_write[ch], *sample);
+            const float delayed_a = read_delay(g_chorus_delay_pool[ch], CHORUS_BENCH_JUNO_DELAY,
                                                g_juno_write[ch], base + (lfo * span));
-            const float delayed_b = read_delay(g_juno[ch], CHORUS_BENCH_JUNO_DELAY,
+            const float delayed_b = read_delay(g_chorus_delay_pool[ch], CHORUS_BENCH_JUNO_DELAY,
                                                g_juno_write[ch], base - (lfo * span));
             const float wet = (delayed_a + delayed_b) * 0.5f;
             g_juno_lp[ch] += lp * (wet - g_juno_lp[ch]);
