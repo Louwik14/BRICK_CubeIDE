@@ -136,6 +136,9 @@ if(WIN32)
     add_test(NAME multi_sampler_vca_lifecycle
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/multi_sampler_vca_lifecycle_validation.ps1)
+    add_test(NAME multi_polyphony_exhaustive
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/multi_polyphony_exhaustive_validation.ps1)
     add_test(NAME pattern_persistence_classification
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/pattern_persistence_classification_validation.ps1)
