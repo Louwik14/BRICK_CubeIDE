@@ -263,11 +263,6 @@ typedef struct
     float hpf;
     float lpf;
     float smear;
-    float digital_decay;
-    float digital_damp;
-    float digital_hpf;
-    float digital_lpf;
-    uint8_t model;
 } mixer_reverb_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
@@ -279,11 +274,6 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .hpf = 0.0f,
     .lpf = 0.0f,
     .smear = 1.0f,
-    .digital_decay = 0.50f,
-    .digital_damp = 0.70f,
-    .digital_hpf = 0.0f,
-    .digital_lpf = 0.0f,
-    .model = 0U,
 };
 
 static float mixer_reverb_predelay_ui_to_seconds(float v)
@@ -1482,18 +1472,12 @@ static void mixer_reverb_state_reset_defaults(void)
     g_reverb.hpf = 0.0f;
     g_reverb.lpf = 0.0f;
     g_reverb.smear = 1.0f;
-    g_reverb.digital_decay = 0.50f;
-    g_reverb.digital_damp = 0.70f;
-    g_reverb.digital_hpf = 0.0f;
-    g_reverb.digital_lpf = 0.0f;
-    g_reverb.model = 0U;
 }
 
 void mixer_reset_runtime_state(void)
 {
     mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
-    fx_reverb_global_set_model(g_reverb.model);
     fx_reverb_global_set_wet(g_reverb.wet);
     fx_reverb_global_set_size(g_reverb.size);
     fx_reverb_global_set_decay(g_reverb.decay);
@@ -1502,10 +1486,6 @@ void mixer_reset_runtime_state(void)
     fx_reverb_global_set_hpf(g_reverb.hpf);
     fx_reverb_global_set_lpf(g_reverb.lpf);
     fx_reverb_global_set_smear(g_reverb.smear);
-    fx_reverb_global_set_digital_decay(g_reverb.digital_decay);
-    fx_reverb_global_set_digital_damp(g_reverb.digital_damp);
-    fx_reverb_global_set_digital_hpf(g_reverb.digital_hpf);
-    fx_reverb_global_set_digital_lpf(g_reverb.digital_lpf);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
@@ -1792,12 +1772,6 @@ void mixer_set_reverb_wet(float wet)
     fx_reverb_global_set_wet(g_reverb.wet);
 }
 
-void mixer_set_reverb_model(uint8_t model)
-{
-    g_reverb.model = (model != 0U) ? 1U : 0U;
-    fx_reverb_global_set_model(g_reverb.model);
-}
-
 void mixer_set_reverb_size(float size)
 {
     g_reverb.size = clamp01(size);
@@ -1832,30 +1806,6 @@ void mixer_set_reverb_smear(float smear)
 {
     g_reverb.smear = clamp01(smear);
     fx_reverb_global_set_smear(g_reverb.smear);
-}
-
-void mixer_set_reverb_digital_decay(float decay)
-{
-    g_reverb.digital_decay = clamp01(decay);
-    fx_reverb_global_set_digital_decay(g_reverb.digital_decay);
-}
-
-void mixer_set_reverb_digital_damp(float damp)
-{
-    g_reverb.digital_damp = clamp01(damp);
-    fx_reverb_global_set_digital_damp(g_reverb.digital_damp);
-}
-
-void mixer_set_reverb_digital_hpf(float hpf)
-{
-    g_reverb.digital_hpf = clamp01(hpf);
-    fx_reverb_global_set_digital_hpf(g_reverb.digital_hpf);
-}
-
-void mixer_set_reverb_digital_lpf(float lpf)
-{
-    g_reverb.digital_lpf = clamp01(lpf);
-    fx_reverb_global_set_digital_lpf(g_reverb.digital_lpf);
 }
 
 void mixer_set_reverb_lpf(float lpf)

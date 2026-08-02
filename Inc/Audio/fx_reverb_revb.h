@@ -10,7 +10,6 @@ typedef struct fx_reverb_revb_t fx_reverb_revb_t;
 
 void fx_reverb_revb_global_init(float sample_rate);
 void fx_reverb_revb_global_reset(void);
-void fx_reverb_revb_global_set_model(uint8_t model);
 void fx_reverb_revb_global_set_wet(float wet);
 void fx_reverb_revb_global_set_size(float size);
 void fx_reverb_revb_global_set_decay(float decay);

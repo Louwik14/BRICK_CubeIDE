@@ -322,15 +322,10 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
 {
     switch (id)
     {
-        case PARAM_MIX_REVERB_MODEL:
         case PARAM_MIX_REVERB_WET:
         case PARAM_MIX_REVERB_SIZE:
         case PARAM_MIX_REVERB_DECAY:
         case PARAM_MIX_REVERB_PRED:
-        case PARAM_MIX_REVERB_DIGITAL_DECAY:
-        case PARAM_MIX_REVERB_DIGITAL_DAMP:
-        case PARAM_MIX_REVERB_DIGITAL_HPF:
-        case PARAM_MIX_REVERB_DIGITAL_LPF:
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
         case PARAM_MIX_REVERB_DAMP:
@@ -378,9 +373,14 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
         case PARAM_RESERVED_004:
         case PARAM_RESERVED_005:
         case PARAM_RESERVED_006:
+        case PARAM_RESERVED_007:
+        case PARAM_RESERVED_008:
+        case PARAM_RESERVED_009:
+        case PARAM_RESERVED_010:
         case PARAM_RESERVED_011:
         case PARAM_RESERVED_012:
         case PARAM_RESERVED_013:
+        case PARAM_RESERVED_015:
         case PARAM_RESERVED_018:
         case PARAM_RESERVED_019:
         case PARAM_RESERVED_020:

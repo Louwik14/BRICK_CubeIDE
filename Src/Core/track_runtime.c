@@ -1974,15 +1974,10 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_MIDI_FX;
             return rule;
 
-        case PARAM_MIX_REVERB_MODEL:
         case PARAM_MIX_REVERB_WET:
         case PARAM_MIX_REVERB_SIZE:
         case PARAM_MIX_REVERB_DECAY:
         case PARAM_MIX_REVERB_PRED:
-        case PARAM_MIX_REVERB_DIGITAL_DECAY:
-        case PARAM_MIX_REVERB_DIGITAL_DAMP:
-        case PARAM_MIX_REVERB_DIGITAL_HPF:
-        case PARAM_MIX_REVERB_DIGITAL_LPF:
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
         case PARAM_MIX_REVERB_DAMP:

@@ -48,7 +48,6 @@ static const char *const g_macro_fx_type_labels[] = {"OFF", "DRIVE", "CRUSH", "P
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
 static const char *const g_delay_type_labels[] = {"CLASSIC", "DUAL", NULL};
-static const char *const g_reverb_model_labels[] = {"MUTABLE", "DIGITAL", NULL};
 static const char *const g_delay_mode_labels[] = {"Normal", "PingPong", "Tap", "ClassicPP", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "PingPong", NULL};
 static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8", "16", "32", "64", NULL};
@@ -106,17 +105,17 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_RESERVED_005, "Reserved 005", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_RESERVED_006, "Reserved 006", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_decay),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_DAMP, "Damp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_damp),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_HPF, "HPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_hpf),
+    PARAM_DESC_EX(PARAM_RESERVED_007, "Reserved 007", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_RESERVED_008, "Reserved 008", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_RESERVED_009, "Reserved 009", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
-    PARAM_DESC_EX(PARAM_MIX_REVERB_DIGITAL_LPF, "LPF", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_digital_lpf),
+    PARAM_DESC_EX(PARAM_RESERVED_010, "Reserved 010", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_RESERVED_011, "Reserved 011", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_RESERVED_012, "Reserved 012", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_RESERVED_013, "Reserved 013", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_MIX_MUTE, "Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_model_labels, apply_mix_reverb_model),
+    PARAM_DESC_EX(PARAM_RESERVED_015, "Reserved 015", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_CFG_POLY_VOICES, "VOICES", PARAM_TYPE_INT, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_CFG_POLY_SPREAD, "SPREAD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
 

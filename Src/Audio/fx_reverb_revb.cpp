@@ -14,11 +14,8 @@ constexpr uint32_t kEngineBufferSize = 32768U;
 constexpr float kPredelayMaxSeconds = 0.090f;
 constexpr uint32_t kPredelayBufferSize = 4322U;
 constexpr uint32_t kTopologySamples48k = 23528U;
-constexpr uint32_t kDigitalTopologySamples48k = 13958U;
 static_assert(kTopologySamples48k + 10U < kEngineBufferSize,
               "48 kHz Mutable topology must fit the 32768-sample engine buffer");
-static_assert(kDigitalTopologySamples48k + 12U < kEngineBufferSize,
-              "48 kHz Digital topology must fit the shared 32768-sample engine buffer");
 
 AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
 AUDIO_WARM ALIGN32 static float g_revb_predelay_buffer[kPredelayBufferSize];
@@ -46,10 +43,6 @@ struct revb_global_state_t
     float predelay_lag_samples;
     float predelay_current_samples;
     uint32_t predelay_write;
-    uint32_t model_fade_remaining;
-    uint8_t model;
-    float last_out_l;
-    float last_out_r;
     uint8_t initialized;
 };
 
@@ -79,9 +72,7 @@ static void apply_params(void)
         return;
 
     const float diffusion = 0.45f + (0.45f * g_revb.size_current);
-    const float time = (g_revb.model == 0U)
-            ? (0.20f + (0.78f * g_revb.decay_current))
-            : (0.01f + (0.97f * g_revb.decay_current));
+    const float time = 0.20f + (0.78f * g_revb.decay_current);
     const float damping_arg = ((1.0f - g_revb.damp_current) * 50.0f) + 1.0f;
     const float damping_curve = clampf_local(log2f(damping_arg) / 5.7f, 0.0f, 1.0f);
     const float lp = (g_revb.damp_current <= 0.0f)
@@ -107,8 +98,8 @@ static void apply_params(void)
     g_revb.engine.set_smear_depth((g_revb.smear_current <= 0.0001f)
                                       ? 0.0f
                                       : (80.0f * g_revb.smear_current));
-    g_revb.engine.set_lfo1_freq((g_revb.model == 0U) ? lfo1_hz : 0.5f);
-    g_revb.engine.set_lfo2_freq((g_revb.model == 0U) ? lfo2_hz : 0.3f);
+    g_revb.engine.set_lfo1_freq(lfo1_hz);
+    g_revb.engine.set_lfo2_freq(lfo2_hz);
 
     g_revb.predelay_s = clampf_local(g_revb.predelay_s, 0.0f, kPredelayMaxSeconds);
     g_revb.predelay_lag_samples = clampf_local(g_revb.predelay_s * g_revb.sample_rate,
@@ -141,10 +132,6 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.damp = 0.70f;
     g_revb.hpf = 0.0f;
     g_revb.smear = 1.0f;
-    g_revb.model = 0U;
-    g_revb.model_fade_remaining = 0U;
-    g_revb.last_out_l = 0.0f;
-    g_revb.last_out_r = 0.0f;
     g_revb.wet_current = 0.0f;
     g_revb.size_current = g_revb.size;
     g_revb.decay_current = g_revb.decay;
@@ -159,17 +146,6 @@ void fx_reverb_revb_global_init(float sample_rate)
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.engine.Init(g_revb_engine_buffer);
     g_revb.initialized = 1U;
-    apply_params();
-}
-
-void fx_reverb_revb_global_set_model(uint8_t model)
-{
-    const uint8_t next = (model != 0U) ? 1U : 0U;
-    if(next == g_revb.model)
-        return;
-    fx_reverb_revb_global_reset();
-    g_revb.model = next;
-    g_revb.model_fade_remaining = AUDIO_BLOCK_SIZE;
     apply_params();
 }
 
@@ -287,22 +263,5 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     g_revb.wet_current = g_revb.wet;
     g_revb.predelay_current_samples = predelay_new;
 
-    if(g_revb.model == 0U)
-        g_revb.engine.Process(g_revb_predelayed, out_l, out_r, frames);
-    else
-        g_revb.engine.ProcessDigital(g_revb_predelayed, out_l, out_r, frames);
-
-    for(uint32_t i = 0U; i < frames; ++i)
-    {
-        if(g_revb.model_fade_remaining > 0U)
-        {
-            const float fade = 1.0f
-                    - ((float)g_revb.model_fade_remaining / (float)AUDIO_BLOCK_SIZE);
-            out_l[i] = (g_revb.last_out_l * (1.0f - fade)) + (out_l[i] * fade);
-            out_r[i] = (g_revb.last_out_r * (1.0f - fade)) + (out_r[i] * fade);
-            g_revb.model_fade_remaining--;
-        }
-        g_revb.last_out_l = out_l[i];
-        g_revb.last_out_r = out_r[i];
-    }
+    g_revb.engine.Process(g_revb_predelayed, out_l, out_r, frames);
 }

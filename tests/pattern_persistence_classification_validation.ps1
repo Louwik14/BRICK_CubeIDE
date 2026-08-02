@@ -33,9 +33,6 @@ if ($classification -notmatch 'return PATTERN_LIVE_PARAM_NOT_RELEVANT;') { throw
 
 $reserved = @($params.Keys | Where-Object { $_ -like 'PARAM_RESERVED_*' -and $params[$_] -lt $persistCount })
 $global = @(
-    'PARAM_MIX_REVERB_MODEL',
-    'PARAM_MIX_REVERB_DIGITAL_DECAY', 'PARAM_MIX_REVERB_DIGITAL_DAMP',
-    'PARAM_MIX_REVERB_DIGITAL_HPF', 'PARAM_MIX_REVERB_DIGITAL_LPF',
     'PARAM_MIX_REVERB_HPF', 'PARAM_MIX_REVERB_LPF',
     'PARAM_MIX_REVERB_DAMP', 'PARAM_MIX_REVERB_SMEAR',
     'PARAM_CFG_START', 'PARAM_CFG_TEMPO', 'PARAM_CFG_SYNC',
@@ -59,6 +56,10 @@ foreach ($name in $reserved) {
 }
 foreach ($name in $global) {
     if ($classification -notmatch [regex]::Escape("case ${name}:")) { throw "global ID is not explicit in Pattern classification: $name" }
+}
+
+if ($store -match 'PARAM_MIX_REVERB_MODEL|PARAM_MIX_REVERB_DIGITAL') {
+    throw 'Removed reverb parameters remain in the current parameter format'
 }
 
 foreach ($name in @('PARAM_MIX_MUTE', 'PARAM_CFG_POLY_VOICES', 'PARAM_CFG_POLY_SPREAD',

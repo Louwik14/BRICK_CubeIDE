@@ -3020,7 +3020,6 @@ static uint8_t ui_renderer_template_hpf_lpf_group_is_active(const ui_template_pa
         const param_id_t hpf = subpage->param_bank.params[slot];
         const param_id_t lpf = subpage->param_bank.params[slot + 1U];
         const uint8_t recognized = (uint8_t)(((hpf == PARAM_MIX_REVERB_HPF) && (lpf == PARAM_MIX_REVERB_LPF))
-                || ((hpf == PARAM_MIX_REVERB_DIGITAL_HPF) && (lpf == PARAM_MIX_REVERB_DIGITAL_LPF))
                 || ((hpf == PARAM_MIX_DELAY_HPF) && (lpf == PARAM_MIX_DELAY_LPF)));
         if((recognized != 0U)
                 && (ui_renderer_template_resolve_custom_widget(state, subpage, slot, hpf)

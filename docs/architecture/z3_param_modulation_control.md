@@ -28,11 +28,15 @@ Les transitions structurelles passent par les commandes dédiées et les snapsho
 
 ENV est le propriétaire logique unique des paramètres filtre, VCA, ENV3 et de leurs retriggers. Le paramètre peut utiliser une ressource interne différente : le VCA est appliqué au backend mixer et ENV3 au backend `mod_env3`. Cette différence d'exécution ne crée ni ensemble VCA ni domaine MIX/MOD autonome.
 
-Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. Cette classification inclut notamment `PARAM_MIX_REVERB_WET`, `PARAM_MIX_REVERB_SIZE`, `PARAM_MIX_REVERB_DECAY` et `PARAM_MIX_REVERB_PRED`. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
+Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. La surface Mutable unique comprend `PARAM_MIX_REVERB_WET`, `PARAM_MIX_REVERB_SIZE`, `PARAM_MIX_REVERB_DECAY`, `PARAM_MIX_REVERB_PRED`, `PARAM_MIX_REVERB_DAMP`, `PARAM_MIX_REVERB_HPF`, `PARAM_MIX_REVERB_LPF` et `PARAM_MIX_REVERB_SMEAR`. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
 
 `CFG_POLY_VOICES` et `CFG_POLY_SPREAD` appartiennent à CFG, sont appliqués par `synth_polyphony`, ne sont ni p-lockables ni modulables et ne sont pas une capacité PLAY.
 
 ## P-locks
+
+`SPREAD` reste une mise a jour legere de l'etat canonique de la track; son cout
+est borne par le nombre maximal de voix et ne declenche ni snapshot structurel,
+ni reconstruction de moteur, ni reset de filtre/VCA.
 
 Les sets courant sont `ENV`, `TONE`, `PLAY`, `MOD`, `MIDI_FX` et `MIX`. La résolution `set + slot ↔ param_id` est track-aware et vérifie le domaine, la capacité, le type de track et le statut effectif.
 

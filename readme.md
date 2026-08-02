@@ -35,7 +35,7 @@ Chaque Play Track est indépendante pour clavier, MIDI, MIDI FX, séquence, sche
 
 Les rôles sont fixes : `Master`, `Looper`, `Input` et `FX`.
 
-- `Master` porte les effets globaux reverb, delay et compresseur ;
+- `Master` porte l'unique reverb Mutable ainsi que les effets globaux delay et compresseur ;
 - `FX` porte exclusivement quatre slots MacroFX ;
 - Master et FX exposent `CFG`, `TONE` et leur séquence/action Special ; `ENV`, `MOD` et `MIX` y restent indisponibles ;
 - `Looper` porte son routage et ses contrôles de boucle ;

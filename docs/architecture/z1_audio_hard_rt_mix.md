@@ -71,6 +71,9 @@ En mode gate, Note Off lance la release VCA et le Stream conserve son reader, se
 
 ## Polyphonie synth interne
 
+L'ownership d'un slot reste indexe par la track logique; la lane mixer resolue
+est transportee separement pour l'ecriture et la configuration du bus.
+
 Prism, Stack, Wave et DELUGE disposent de 1 à 8 slots statiques. Chaque slot
 polyphonique possède moteur, filtre/keytrack, ENV FLT, ENV VCA et pan, puis les voix
 sont sommées en stéréo avant les inserts, gain, sends et routing communs.
@@ -181,7 +184,7 @@ sont sommées en stéréo avant les inserts, gain, sends et routing communs.
 
 ## Addendum 2026-07-29 - placement ITCM noyau REVB
 
-- Le hot path REVB global place en ITCM `fx_reverb_revb_global_process_send_mono_to_stereo_wet()` et les deux kernels exclusifs `mifx::Reverb::Process*()` via les macros centralisees `ITCM_TEXT` / `ITCM_TEXT_NAMED` de `Inc/Storage/memory_layout.h`.
+- Le hot path REVB global place en ITCM `fx_reverb_revb_global_process_send_mono_to_stereo_wet()` et le kernel Mutable `mifx::Reverb::Process()` via les macros centralisees `ITCM_TEXT` / `ITCM_TEXT_NAMED` de `Inc/Storage/memory_layout.h`.
 - Les buffers de delay, predelay, etats mutables, init/reset/setters et mapping parametres restent dans leurs regions existantes; aucun calcul sonore, parametre ou rendu n'est modifie.
 - Verification Release/Premium du 2026-07-29: `.itcm_text` occupe `0x488` octets (1160 B), soit 64 KiB - 1160 B = 64376 B restants, dans les deux variantes. La boucle DSP `mifx::Reverb::Process()` est hors ligne et resident en ITCM a `0x00000000`; le wrapper REVB est a `0x00000358`.
 - Le gain CPU doit etre mesure uniquement sur la machine avec le CPU Load global, reverb seule activee puis desactivee; aucune instrumentation DWT locale n'appartient a ce chemin.
@@ -548,7 +551,7 @@ Memoire:
 - Lanes externes mixer `g_external_track_l/r` dimensionnees `MIXER_MAX_TRACKS x AUDIO_BLOCK_SIZE`.
 
 Placement memoire valide pour la reverb SEND runtime:
-- `RevB` est l'unique backend reverb runtime compile; il selectionne exclusivement le modele Mutable ou Digital.
+- `RevB` est l'unique backend reverb runtime compile; il execute exclusivement la reverb Mutable.
 - `g_revb_engine_buffer[32768]` et le predelay RevB restent en D1 via `AUDIO_WARM`.
 - Les anciens buffers runtime Drumboy (feedback DTCM, predelay/surround RAM_D2), GVerb et Oliverb sont retires.
 - Le code dormant Mutable/Inspiration non compile n'appartient pas au backend SEND runtime et n'est pas concerne par ce retrait.
@@ -687,7 +690,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## 14.b Addendum - reverb send RevB unique
 
 - `RevB` est l'unique backend global send1 runtime compile; Drumboy, GVerb et Oliverb runtime sont retires.
-- `RevB` reste l'unique backend runtime; `MODEL` choisit exclusivement son kernel `MUTABLE/DIGITAL`.
+- `RevB` reste l'unique backend runtime et execute le kernel Mutable.
 - La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
 - `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
 - `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
@@ -1351,22 +1354,6 @@ Clarification START/END/LOOP live:
 - `SMEAR` lisse une profondeur AP1 de 0 a 80 samples. Une fois zero atteint, les deux operations `Interpolate/Write` AP1 sont omises dans la boucle sample afin que le cout IRQ mesure soit reellement different.
 - SIZE/DECAY/DAMP/HPF/LPF/SMEAR evoluent au block-rate, LVL rampe l'injection, et PRE-D crossfade les anciennes/nouvelles lectures. La courbe DECAY et le lien SIZE/diffusion/LFO restent inchanges.
 - `LVL=0` reste l'autorite hard-off: le mixer ne lance plus la reverb et le passage a zero efface hors chemin DSP la predelay et le tank, empechant toute ancienne queue de reparaitre.
-## Addendum 2026-07-30 - modele Digital Deluge
-
-- Le backend RevB partage maintenant son moteur et son buffer 32 768 entre `MUTABLE` et `DIGITAL`; un seul modele est execute par bloc. Digital transpose a 48 kHz le ratio Lexicon `29761/Fs`, ses douze lignes, excursions LFO et taps stereo.
-- Digital reprend les courbes Deluge DECAY/DAMP/HPF/LPF. LVL et PRE-D restent dans le wrapper commun.
-
-## Addendum 2026-07-31 - correction du tank Digital
-
-- Les all-pass modules `dap1a/dap2a` gardent le couplage croise du Deluge: lecture interpolee en tete de branche, puis ecriture unique depuis la branche opposee. Aucune ecriture all-pass locale ne doit interrompre cette boucle.
-- Les delais simples lisent le tap `length` du slot de garde Deluge et les deux branches utilisent leurs etats de damping independants `lp_1/lp_2`; la courbe DAMP reprend l'inversion `1-value` et le cas neutre a zero du code source pour les deux modeles.
-- Un changement de modele reset predelay, buffer, tank et filtres, puis la rampe LVL commune produit le fondu court. `LVL=0` conserve le hard-off sans appel backend.
-## Addendum 2026-07-30 - audit parametres reverb
-
-- La cause de la rupture DAMP Mutable etait une parenthese de mapping incorrecte puis une inversion omise: la division par `5.7` s'applique au resultat du logarithme et son argument utilise la convention Deluge `1-value`, commune a Mutable et Digital.
-- Les mises a jour LFO block-rate changent maintenant le coefficient de recurrence sans rappeler `Start()`: SIZE ne reinitialise plus la phase a chaque bloc. DECAY, SIZE, SMEAR, filtres wet stereo et valeurs specifiques Digital ont ete retraces jusqu'au kernel.
-- PRE-D ne fait deux lectures que pendant un vrai changement; une valeur stable revient a une lecture unique. LVL=0, reset de queue, rampe LVL et transition de modele restent inchanges.
-- Le PAN wet Digital est retire; les deux canaux sortent a leur niveau natif.
 # Addendum 2026-07-30 - integration silencieuse `DRUM / MD`
 
 - `brick6_audio_runtime` mappe `TRACK_RUNTIME_TYPE_DRUM_MD` vers

@@ -18,7 +18,6 @@ $kitBank = Get-Content -Raw (Join-Path $repo 'Inc\Storage\kit_sd_bank.h')
 $patchBank = Get-Content -Raw (Join-Path $repo 'Inc\Storage\patch_sd_bank.h')
 
 foreach ($globalParam in @(
-    'PARAM_MIX_REVERB_MODEL',
     'PARAM_MIX_DELAY_TYPE',
     'PARAM_COMP_MODEL'
 )) {
@@ -140,6 +139,9 @@ if (-not ($patternBank.Contains('#define PATTERN_VERSION    5U') -and
           $kitBank.Contains('#define KIT_SD_FILE_VERSION 3U') -and
           $patchBank.Contains('#define PATCH_SD_FILE_VERSION 3U'))) {
     throw 'Persistence versions changed unexpectedly'
+}
+if ($tonePage -match 'PARAM_MIX_REVERB_MODEL|PARAM_MIX_REVERB_DIGITAL|g_ui_template_tone_family_master_reverb_digital') {
+    throw 'Master TONE still exposes a reverb model selector or removed surface'
 }
 
 'special_track_role_validation=PASS matrix=master/fx:cfg+tone-only resolver=role-aware clipboard=master-global/fx-track macrofx=16 reverb-globals=4 formats=v5,v5,v3,v3'

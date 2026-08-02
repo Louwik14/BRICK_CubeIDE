@@ -128,6 +128,9 @@ if(WIN32)
     add_test(NAME pattern_persistence_classification
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/pattern_persistence_classification_validation.ps1)
+    add_test(NAME reverb_mutable_only
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/reverb_mutable_only_validation.ps1)
     add_test(NAME seq_play_scheduler_pair
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/seq_play_scheduler_pair_validation.ps1)
@@ -137,4 +140,7 @@ if(WIN32)
     add_test(NAME sample_stream_deadline
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/sample_stream_deadline_validation.ps1)
+    add_test(NAME synth_polyphony_boundary
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/synth_polyphony_boundary_validation.ps1)
 endif()

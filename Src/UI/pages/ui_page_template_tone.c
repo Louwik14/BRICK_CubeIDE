@@ -31,22 +31,10 @@ static const ui_template_family_t g_ui_template_tone_family_macro_fx = {
 
 static const ui_template_family_t g_ui_template_tone_family_master_reverb_mutable = {
     .family_title = "MASTER 1/3",
-    .nav_labels = { "REVERB 1", "REVERB 2", "REVERB 3", "-" },
-    .subpages = {
-        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
-        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF } } },
-        { .title = "REVERB 3", .param_bank = { .params = { PARAM_MIX_REVERB_SMEAR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-};
-
-static const ui_template_family_t g_ui_template_tone_family_master_reverb_digital = {
-    .family_title = "MASTER 1/3",
     .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
     .subpages = {
-        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_MODEL, PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_DIGITAL_DECAY, PARAM_MIX_REVERB_PRED } } },
-        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DIGITAL_DAMP, PARAM_MIX_REVERB_DIGITAL_HPF, PARAM_MIX_REVERB_DIGITAL_LPF, PARAM_COUNT } } },
+        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_MIX_REVERB_SMEAR } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -295,9 +283,7 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
     {
         if (subset == 0U)
         {
-            return (param_get(PARAM_MIX_REVERB_MODEL) >= 0.5f)
-                    ? &g_ui_template_tone_family_master_reverb_digital
-                    : &g_ui_template_tone_family_master_reverb_mutable;
+            return &g_ui_template_tone_family_master_reverb_mutable;
         }
         if (subset == 1U)
         {
@@ -1194,8 +1180,6 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     if ((id == PARAM_MIX_REVERB_HPF)
             || (id == PARAM_MIX_REVERB_LPF)
-            || (id == PARAM_MIX_REVERB_DIGITAL_HPF)
-            || (id == PARAM_MIX_REVERB_DIGITAL_LPF)
             || (id == PARAM_MIX_DELAY_HPF)
             || (id == PARAM_MIX_DELAY_LPF))
     {
