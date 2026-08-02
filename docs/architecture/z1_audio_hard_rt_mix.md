@@ -12,6 +12,12 @@ Le mix track-aware reste séparé des effets globaux. Le backend VCA du mixer et
 
 En mode gate, le Note Off tokenisé cible une seule occurrence; l'API forcée explicitement nommée `...note_all` ferme toutes les occurrences actives correspondant à la track et à la note. Le Note Off décrémente le gate mixer de la note et marque chaque voix Multi correspondante `release_pending`. Chaque voix continue à rendre sa source tant que `mixer_track_vca_requires_source()` le demande; le renderer arrête et libère la voix uniquement lorsque le VCA commun n'a plus besoin de source. Les voix peuvent donc coexister pendant le release. EOF, underrun, steal, changement de sample/type, reset et panic restent des arrêts bornés et ferment aussi les gates orphelins. Le mode Multi courant ne supporte que le one-shot sans boucle ou la boucle forward; il n'introduit pas de contrat Shot/Rev/PingPong séparé.
 
+## Addendum 2026-08-02 - Chemin de configuration polyphonique Multi final
+
+`VOICES` et `SPREAD` sont des paramètres CFG track-aware, éditables pour `Sampler/Multi` dans les bornes `1..8` et `0..1`. Leur autorité est le runtime Multi; les valeurs Synth restent dans le pool Synth séparé de 16 voix. Pattern, Snapshot, Patch et Kit restaurent ces valeurs par le setter canonique, tandis que `SPREAD` utilise l'Undo/Redo de valeur et que `VOICES` conserve le snapshot structurel nécessaire à une réduction de capacité.
+
+Les payloads Patch/Kit stockent une photographie de configuration générique `(family, type, poly_voice_count, poly_spread)`; leur format courant est modifiable sans migration historique. Le scheduler emploie le Note Off tokenisé pour apparier chaque occurrence; l'arrêt forcé global reste explicitement nommé `note_off_multi_track_note_all`.
+
 Le reste de ce fichier conserve l'audit hard-RT détaillé et les notes historiques de l'implémentation. Les mentions d'anciens owners, de chemins retirés ou de prototypes ne sont pas des contrats produit courants.
 
 ## Addendum 2026-08-02 - Stream dans le VCA commun
