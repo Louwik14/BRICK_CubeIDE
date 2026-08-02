@@ -8,6 +8,9 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
+#include "NoteFx/note_fx_event.h"
+
+#define SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA 128U
 
 typedef struct
 {
@@ -18,6 +21,8 @@ typedef struct
     uint8_t track_generation;
     uint8_t reserved;
     uint16_t sample_offset_in_block;
+    uint64_t sample_abs;
+    uint32_t generation;
     uint32_t event_token;
 } seq_play_scheduler_audio_event_t;
 
@@ -30,13 +35,44 @@ typedef struct
     uint32_t overdue_event_count;
     uint32_t offset_clamp_count;
     uint32_t stale_generation_drop_count;
+    uint16_t active_occurrence_count;
+    uint16_t max_active_occurrences;
+    uint32_t orphan_note_off_count;
+    uint32_t duplicate_note_on_count;
+    uint16_t half_events_last;
+    uint16_t half_events_high_water;
+    uint32_t half_quota_exhaustion_count;
+    uint32_t terminal_on_internal_admitted;
+    uint32_t terminal_on_internal_refused;
+    uint32_t terminal_on_midi_admitted;
+    uint32_t terminal_on_midi_refused;
+    uint32_t terminal_off_refused;
 } seq_play_scheduler_diag_t;
+
+typedef enum
+{
+    SEQ_PLAY_TRANSITION_MUTE_TRIGS = 0,
+    SEQ_PLAY_TRANSITION_RESUME_TRIGS,
+    SEQ_PLAY_TRANSITION_STOP_CLOSE,
+    SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL,
+    SEQ_PLAY_TRANSITION_PATTERN_REPLACE,
+    SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE,
+    SEQ_PLAY_TRANSITION_DESTINATION_REBIND,
+    SEQ_PLAY_TRANSITION_SOURCE_SWITCH
+} seq_play_transition_policy_t;
 
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
 void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t track_count);
+uint8_t seq_play_scheduler_transition_tracks(const seq_track_id_t *tracks,
+                                             uint8_t track_count,
+                                             seq_play_transition_policy_t policy);
+uint8_t seq_play_scheduler_transition_all(seq_play_transition_policy_t policy);
+void seq_play_scheduler_audio_begin_half(uint16_t event_quota);
+void seq_play_scheduler_audio_end_half(void);
+void seq_play_scheduler_terminal_reset(void);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.
@@ -67,6 +103,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
  * - does not change transport or timeline ownership.
  */
 void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t *event);
+note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_t *event);
 void seq_play_scheduler_dispatch_terminal_note(seq_track_id_t track, uint8_t note,
                                                uint8_t velocity, uint8_t is_note_on);
 void seq_play_scheduler_dispatch_terminal_note_to_channel(seq_track_id_t track,

@@ -80,6 +80,15 @@ rule RERUN_CMAKE
 
 
 #############################################
+# Rule for re-checking globbed directories.
+
+rule VERIFY_GLOBS
+  command = C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.cmake.win32_1.1.0.202409170845\tools\bin\cmake.exe -P C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\codec_audit_premium\CMakeFiles\VerifyGlobs.cmake
+  description = Re-checking globbed directories...
+  generator = 1
+
+
+#############################################
 # Rule for cleaning additional files.
 
 rule CLEAN_ADDITIONAL

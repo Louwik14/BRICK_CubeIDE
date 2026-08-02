@@ -16,7 +16,7 @@ La frame automatique IRQ de `process_half` est connue (1632 octets dans les `.su
 | `GLOBAL-002` (IRQ) | `NEEDS MEASUREMENT` | Frame `process_half` de 1632 octets et réserve minimale linker de 1024 octets confirmées ; dépassement MSP et marge cumulée inconnus. |
 | `Z1-001` | `CONFIRMED` | Capacité utile 255, échecs ignorés, aucune métrique/priorité, drain jusqu'à 255 commandes par appel IRQ. |
 | `Z1-002` | `CONFIRMED` | `g_slot`, overrides et état ARP sont réellement multi-écrivains main/IRQ sans sérialisation. |
-| `Z1-003` (nouveau) | `CONFIRMED` | Le budget NoteFx est par appel segmenté, pas par demi-buffer ; il peut être recréé jusqu'à 64 fois par IRQ. |
+| `Z1-003` (nouveau) | `CLOSED PARTIALLY — ÉTAPE 6` | Le budget NoteFx est désormais partagé sur 64 frames; le coût H743 et l'admission terminale restent à mesurer/traiter. |
 
 ## 2. Graphe réel producteurs → publication/file → consommateurs
 
@@ -145,7 +145,7 @@ Une préemption peut être incohérente : `release_slot()` incrémente generatio
 - `GLOBAL-002` IRQ : absence de budget MSP vérifié. Contrat minimal : seuil `.su` explicite plus callgraph IRQ conservateur et canari/high-water par variante avant tout déplacement de buffer.
 - `Z1-001` : une file unique sans classes de sûreté ni contrat de refus. Contrat minimal : compteur/high-water d'abord ; garantir qu'un Note On n'est accepté que si sa terminaison est garantie, rendre les échecs visibles, couvrir les 16 instances, puis fixer un quota par demi-buffer fondé sur mesure. Ne pas introduire une infrastructure de messages générale.
 - `Z1-002` : aucun owner unique du runtime NoteFx. Contrat minimal : `g_slot`, overrides et tokens appartiennent exclusivement à l'IRQ ; les mutations main nécessaires passent par une petite file fixe NoteFx et sont appliquées avant process. `note_fx_state` reste la base canonique hors runtime. Les sorties terminales sont émises uniquement par l'owner.
-- `Z1-003` : budget attaché à l'appel et non à la période hard-RT. Contrat minimal : créer le budget une fois dans `process_half` (ou contexte demi-buffer), le transmettre aux sous-segments et inclure cleanup/terminal dans la même comptabilité.
+- `Z1-003` : le budget est maintenant attaché à la période hard-RT de `process_half`; le coût H743 et l'admission terminale restent résiduels.
 
 ## 6. Ordre recommandé des futurs micro-patches
 
@@ -172,11 +172,32 @@ Une préemption peut être incohérente : `release_slot()` incrémente generatio
 
 ### `Z1-003` — budget NoteFx réinitialisé à chaque sous-segment audio
 
-- **Statut :** `CONFIRMED`.
+- **Statut :** `CLOSED PARTIALLY — ÉTAPE 6`.
 - **Preuve :** `process_half()` peut forcer 64 blocs d'une frame ; `process_audio_segment()` peut appeler `note_fx_pipeline_process()` à chaque frame ; `note_fx_engine_process()` recrée localement `uint8_t budget = 8` pour chacune des 8 tracks à chaque appel. `release_slot()` émet en plus hors de ce budget.
 - **Impact démontré :** le contrat annoncé par le symbole `NOTE_FX_MAX_EMISSIONS_PER_BLOCK` ne borne ni une demi-IRQ ni tous les chemins d'émission. La borne syntaxique normale est 4096 émissions par demi-buffer, plus releases ; le respect du deadline audio nécessite une mesure.
 - **Micro-contrat :** budget unique, fixe et transmis sur toute la durée du demi-buffer, releases comprises. Aucun bus et aucune préparation dual-core.
 
+## Addendum 2026-08-02 - fermeture partielle de Z1-002
+
+Le runtime NoteFx dispose maintenant d'une file locale fixe de 32 commandes;
+les overlays, configurations, sources main et transitions sont appliques par
+l'owner audio avant `note_fx_engine_process()`. Les sorties terminales de ce
+chemin restent emises par cet owner. Le budget partage par demi-buffer est
+maintenant ferme par l'etape 6; la validation H743 et l'admission terminale
+restent a mesurer/traiter.
+
+La chaîne de stages est également explicite: les continuations générées
+reprennent au slot suivant et le terminal est réservé au stage 4. Le retrait
+du premier-ARP ne change pas les limites de budget; celles-ci restent une
+dette de l'étape 6.
+
 ## 9. Limites de preuve
 
 Cet audit ne conclut ni à un underrun observé, ni à une corruption MSP, ni à un clic reproduit. Les fichiers `.su` présents peuvent provenir de révisions/options différentes ; seuls les artefacts Release/Premium concordants à 1632 octets ont été retenus. Les bornes en nombre d'itérations/commandes sont exactes au niveau source ; leurs coûts temporels restent à mesurer sur H743 avec les deux variantes.
+# Addendum 2026-08-02 - fermeture partielle de Z1-003
+
+`process_half()` ouvre un contexte NoteFx unique pour 64 frames. Les quotas
+On/Off, les continuations, les releases et les cleanups partagent ce contexte;
+la file owner est plafonnée à 32 commandes consommées par demi-buffer. Le test
+statique `tests/note_fx_budget_validation.ps1` vérifie l'absence du budget local
+par sous-segment et l'absence de release hors admission.

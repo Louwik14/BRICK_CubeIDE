@@ -241,7 +241,8 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
 
     if (track_state_get_midi_channel(track) != channel_1_16)
     {
-        note_fx_pipeline_cleanup_track(track);
+        (void)note_fx_pipeline_transition_track(
+            track, NOTE_FX_TRANSITION_DESTINATION_REBIND);
     }
     if (track_state_set_track_midi_channel(track, channel_1_16) == false)
     {

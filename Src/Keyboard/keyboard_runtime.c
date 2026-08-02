@@ -121,7 +121,8 @@ static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len
         memset(g_keyboard_runtime_midi_sustained_release[channel_zero_based], 0, sizeof(g_keyboard_runtime_midi_sustained_release[channel_zero_based]));
         g_keyboard_runtime_midi_sustain_down[channel_zero_based] = 0U;
     }
-    note_fx_pipeline_cleanup_all();
+    (void)note_fx_pipeline_transition_all(
+        NOTE_FX_TRANSITION_PANIC_CLOSE_ALL);
     keyboard_engine_midi_receive(msg, len);
 }
 
@@ -242,7 +243,8 @@ void keyboard_runtime_all_notes_off(void)
 {
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
-    note_fx_pipeline_cleanup_all();
+    (void)note_fx_pipeline_transition_all(
+        NOTE_FX_TRANSITION_PANIC_CLOSE_ALL);
 }
 
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)

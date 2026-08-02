@@ -5,6 +5,7 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_types.h"
+#include "Seq/seq_division_catalog.h"
 #include "ui_core.h"
 #include <stddef.h>
 #define PARAM_DESC_EX(_id, _name, _type, _min, _max, _step, _default, _display, _unit, _labels, _apply) \
@@ -79,12 +80,10 @@ static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NU
 static const char *const g_cfg_start_labels[] = {"DEFAULT", "TRIG", "ROLL 1/4", "ROLL 1/2", "ROLL 1", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
 static const char *const g_cfg_rec_len_labels[] = {"Overdub", "Pattern", NULL};
-static const char *const g_seq_div_labels[] = {"OFF", "1/2", "1/4", "1/8", NULL};
 static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", NULL};
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
 static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
-static const char *const g_midi_fx_rate_labels[] = {"1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T", "1/32T", NULL};
 static const char *const g_midi_fx_style_labels[] = {"ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
@@ -200,7 +199,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
     PARAM_DESC_EX(PARAM_CFG_METRO, "METRO", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_metro),
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, (float)SEQ_DEFAULT_LENGTH_STEPS, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
-    PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_seq_div_labels, apply_seq_div),
+    PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", seq_division_track_labels, apply_seq_div),
     PARAM_DESC_EX(PARAM_SEQ_QUANT, "QUANT", PARAM_TYPE_INT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "%", NULL, apply_seq_quant),
     PARAM_DESC_EX(PARAM_SEQ_SWING, "SWING", PARAM_TYPE_INT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "%", NULL, apply_seq_swing),
 
@@ -416,7 +415,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_EXTERNAL_INPUT, "INPUT", PARAM_TYPE_ENUM, 0.0f, (float)(TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_external_input_labels, NULL),
 
 #define PARAM_DESC_MIDI_FX_SLOT(_p1, _p2, _p3, _model) \
-    PARAM_DESC_EX((_p1), "PARAM1", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_midi_fx_rate_labels, NULL), \
+    PARAM_DESC_EX((_p1), "PARAM1", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", seq_division_arp_labels, NULL), \
     PARAM_DESC_EX((_p2), "PARAM2", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_midi_fx_style_labels, NULL), \
     PARAM_DESC_EX((_p3), "PARAM3", PARAM_TYPE_INT, 1.0f, 4.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \
     PARAM_DESC_EX((_model), "MODEL", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_midi_fx_model_labels, NULL)

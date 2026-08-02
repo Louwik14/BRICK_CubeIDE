@@ -108,6 +108,8 @@ static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *sched
     scheduler_event->track_generation = event->track_generation;
     scheduler_event->reserved = 0U;
     scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
+    scheduler_event->sample_abs = event->sample_abs;
+    scheduler_event->generation = event->generation;
     scheduler_event->event_token = event->event_token;
 }
 

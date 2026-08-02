@@ -30,6 +30,7 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_division_catalog.h"
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
@@ -299,39 +300,6 @@ static void ui_param_reset_stepped_encoder_accum(void)
     }
 }
 
-static uint8_t ui_param_seq_div_ui_to_runtime(float value)
-{
-    const uint8_t index = (uint8_t)(ui_param_clamp(value, 0.0f, 3.0f) + 0.5f);
-    switch (index)
-    {
-        case 1U:
-            return 2U;
-        case 2U:
-            return 4U;
-        case 3U:
-            return 8U;
-        case 0U:
-        default:
-            return 1U;
-    }
-}
-
-static float ui_param_seq_div_runtime_to_ui(uint8_t div)
-{
-    switch (div)
-    {
-        case 2U:
-            return 1.0f;
-        case 4U:
-            return 2.0f;
-        case 8U:
-            return 3.0f;
-        case 1U:
-        default:
-            return 0.0f;
-    }
-}
-
 static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param)
 {
     switch (param)
@@ -368,7 +336,7 @@ static uint8_t ui_param_get_seq_runtime_track_value(param_id_t param, uint8_t tr
             {
                 return 0U;
             }
-            *out_value = ui_param_seq_div_runtime_to_ui(value);
+            *out_value = (float)seq_division_track_div_to_ui(value);
             return 1U;
 
         case PARAM_SEQ_LENGTH:
@@ -407,7 +375,8 @@ static uint8_t ui_param_apply_seq_runtime_track_value(param_id_t param, uint8_t 
     switch (param)
     {
         case PARAM_SEQ_DIV:
-            seq_runtime_set_track_div(track, ui_param_seq_div_ui_to_runtime(value));
+            seq_runtime_set_track_div(track,
+                                       seq_division_track_div_from_ui((uint8_t)(ui_param_clamp(value, 0.0f, 3.0f) + 0.5f)));
             return 1U;
 
         case PARAM_SEQ_LENGTH:
@@ -837,11 +806,7 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
     param_store_set_active(PARAM_SEQ_LENGTH, seq_length);
     if (seq_runtime_get_track_div(active_track, &track_div) != 0U)
     {
-        param_store_set_active(PARAM_SEQ_DIV, (track_div == 1U) ? 0.0f
-                                                                 : (track_div == 2U) ? 1.0f
-                                                                 : (track_div == 4U) ? 2.0f
-                                                                 : (track_div == 8U) ? 3.0f
-                                                                 : 0.0f);
+        param_store_set_active(PARAM_SEQ_DIV, (float)seq_division_track_div_to_ui(track_div));
     }
     if (seq_runtime_get_track_quant(active_track, &track_quant) != 0U)
     {
@@ -1437,15 +1402,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
     float current_value = 0.0f;
-    uint8_t note_fx_slot = 0U;
-    uint8_t note_fx_param = 0U;
-    uint8_t displaced_arp_slot = NOTE_FX_SLOT_NONE;
-    if ((note_fx_state_param_map(param, &note_fx_slot, &note_fx_param) != 0U)
-            && (note_fx_param == 3U)
-            && ((uint8_t)(clamped + 0.5f) == NOTE_FX_MODEL_ARP))
-    {
-        displaced_arp_slot = note_fx_state_find_arp_slot(track, note_fx_slot);
-    }
 
     if ((param_registry_get_track_value(param, track, &current_value) != 0U)
             && (ui_param_value_is_same(current_value, clamped) != 0U))
@@ -1493,16 +1449,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
     }
     if (undo_v2_is_transaction_open() != 0U)
     {
-        if (displaced_arp_slot < NOTE_FX_SLOT_COUNT)
-        {
-            const param_id_t displaced_model = (param_id_t)(PARAM_MIDI_FX_S1_MODEL
-                + (displaced_arp_slot * NOTE_FX_PARAM_COUNT));
-            (void)undo_v2_record_param_change(displaced_model,
-                                              1U,
-                                              track,
-                                              (float)NOTE_FX_MODEL_ARP,
-                                              (float)NOTE_FX_MODEL_OFF);
-        }
         (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
     }
     return 1U;

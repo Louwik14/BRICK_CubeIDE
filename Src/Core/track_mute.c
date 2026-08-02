@@ -119,7 +119,6 @@ uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state
         if (muted != 0U)
         {
             seq_runtime_set_tracks_muted(&seq_track, 1U, 1U);
-            keyboard_engine_all_notes_off_for_track(track);
         }
         else
         {

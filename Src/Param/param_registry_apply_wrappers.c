@@ -10,6 +10,7 @@
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_division_catalog.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Storage/undo_v2.h"
@@ -48,19 +49,6 @@ static void apply_tone_live_track(param_id_t id, float value)
 {
     /* Explicit apply seam: live UI edits route to the track-aware mutation surface. */
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
-}
-
-static uint8_t seq_div_ui_to_runtime(float v)
-{
-    const uint8_t ui = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
-    switch (ui)
-    {
-        case 1U: return 2U;
-        case 2U: return 4U;
-        case 3U: return 8U;
-        case 0U:
-        default: return 1U;
-    }
 }
 
 static uint32_t delay_time_get_bpm_milli(void)
@@ -470,7 +458,8 @@ void apply_seq_div(float v)
     const uint8_t track = ui_get_active_track();
     if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) == 0U)
     {
-        seq_runtime_set_track_div(track, seq_div_ui_to_runtime(v));
+        seq_runtime_set_track_div(track,
+                                   seq_division_track_div_from_ui((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)));
     }
 }
 

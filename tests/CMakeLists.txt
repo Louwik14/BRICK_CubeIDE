@@ -43,6 +43,7 @@ add_executable(note_fx_runtime_test
     ../Src/NoteFx/note_fx_engine.c
     ../Src/NoteFx/note_fx_pipeline.c
     ../Src/NoteFx/note_fx_state.c
+    ../Src/Seq/seq_division_catalog.c
 )
 target_include_directories(note_fx_runtime_test PRIVATE stubs ../Inc)
 target_compile_definitions(note_fx_runtime_test PRIVATE BRICK6_VARIANT_LOWCOST=1)
@@ -121,6 +122,9 @@ if(WIN32)
     add_test(NAME note_fx_persistence
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_persistence_validation.ps1)
+    add_test(NAME note_fx_step10_consolidation
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step10_consolidation_validation.ps1)
     add_test(NAME env_ownership
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/env_ownership_validation.ps1)

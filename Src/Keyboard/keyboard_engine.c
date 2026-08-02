@@ -381,10 +381,12 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
 static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
                                                       uint8_t note,
                                                       uint8_t velocity,
-                                                      uint8_t is_note_on)
+                                                      uint8_t is_note_on,
+                                                      note_event_provenance_t provenance)
 {
-    (void)note_fx_pipeline_submit(owner_track, note, velocity, is_note_on,
-                                  seq_runtime_exec_get_audio_timeline_sample());
+    (void)note_fx_pipeline_submit_source(owner_track, note, velocity, is_note_on,
+                                         seq_runtime_exec_get_audio_timeline_sample(),
+                                         provenance);
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -424,7 +426,8 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
-        keyboard_engine_send_note_for_owner_track(track, note, velocity, is_note_on);
+        keyboard_engine_send_note_for_owner_track(track, note, velocity, is_note_on,
+                                                   NOTE_EVENT_SOURCE_KEY);
     }
 }
 
@@ -685,7 +688,8 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
         return;
     }
 
-    keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, 1U);
+    keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, 1U,
+                                      NOTE_EVENT_SOURCE_KEY);
 }
 
 void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
@@ -708,7 +712,8 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
         return;
     }
 
-    keyboard_engine_send_note_for_owner_track(owner_track, note, 0U, 0U);
+    keyboard_engine_send_note_for_owner_track(owner_track, note, 0U, 0U,
+                                      NOTE_EVENT_SOURCE_KEY);
 }
 
 void keyboard_engine_all_notes_off_for_track(uint8_t track)
@@ -828,12 +833,14 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
 
         if (is_note_on != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(track, note, velocity, 1U);
+            keyboard_engine_send_note_for_owner_track(track, note, velocity, 1U,
+                                                       NOTE_EVENT_SOURCE_MIDI);
             continue;
         }
         if (is_note_off != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(track, note, 0U, 0U);
+            keyboard_engine_send_note_for_owner_track(track, note, 0U, 0U,
+                                                       NOTE_EVENT_SOURCE_MIDI);
             continue;
         }
 

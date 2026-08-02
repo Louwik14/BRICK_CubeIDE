@@ -6,10 +6,16 @@
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
 
-static uint8_t note_fx_state_default_for_param(uint8_t param)
+static const uint8_t g_note_fx_model_defaults[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM_COUNT] =
 {
-    static const uint8_t defaults[NOTE_FX_PARAM_COUNT] = { 2U, 0U, 1U, NOTE_FX_MODEL_OFF };
-    return (param < NOTE_FX_PARAM_COUNT) ? defaults[param] : 0U;
+    { 2U, 0U, 1U, NOTE_FX_MODEL_OFF },
+    { 2U, 0U, 1U, NOTE_FX_MODEL_ARP },
+};
+
+static uint8_t note_fx_state_default_for_model(uint8_t model, uint8_t param)
+{
+    if (model >= NOTE_FX_MODEL_COUNT) model = NOTE_FX_MODEL_OFF;
+    return (param < NOTE_FX_PARAM_COUNT) ? g_note_fx_model_defaults[model][param] : 0U;
 }
 
 static uint8_t note_fx_state_clamp_value(uint8_t param, uint8_t value)
@@ -21,15 +27,32 @@ static uint8_t note_fx_state_clamp_value(uint8_t param, uint8_t value)
     return 0U;
 }
 
+uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state)
+{
+    if (state == 0) return 0U;
+
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        uint8_t model = note_fx_state_clamp_value(3U, state->value[slot][3U]);
+        state->value[slot][3U] = model;
+        for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT - 1U; ++param)
+        {
+            state->value[slot][param] = note_fx_state_clamp_value(param, state->value[slot][param]);
+        }
+    }
+    return 1U;
+}
+
 void note_fx_state_init(void)
 {
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
     {
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
         {
+            const uint8_t model = NOTE_FX_MODEL_OFF;
             for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT; ++param)
             {
-                g_note_fx_state[track].value[slot][param] = note_fx_state_default_for_param(param);
+                g_note_fx_state[track].value[slot][param] = note_fx_state_default_for_model(model, param);
             }
         }
     }
@@ -62,22 +85,6 @@ uint8_t note_fx_state_get_param(uint8_t track, param_id_t id, float *out_value)
     return 1U;
 }
 
-uint8_t note_fx_state_find_arp_slot(uint8_t track, uint8_t except_slot)
-{
-    if (track >= NOTE_FX_TRACK_COUNT)
-    {
-        return NOTE_FX_SLOT_NONE;
-    }
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        if ((slot != except_slot) && (g_note_fx_state[track].value[slot][3] == NOTE_FX_MODEL_ARP))
-        {
-            return slot;
-        }
-    }
-    return NOTE_FX_SLOT_NONE;
-}
-
 uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
 {
     uint8_t slot = 0U;
@@ -89,18 +96,8 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
     }
 
     uint8_t raw = note_fx_state_clamp_value(param, (uint8_t)(value + 0.5f));
-    if (param == 3U)
-    {
-        if (raw == NOTE_FX_MODEL_ARP)
-        {
-            const uint8_t previous = note_fx_state_find_arp_slot(track, slot);
-            if (previous < NOTE_FX_SLOT_COUNT)
-            {
-                g_note_fx_state[track].value[previous][3] = NOTE_FX_MODEL_OFF;
-            }
-        }
-    }
     g_note_fx_state[track].value[slot][param] = raw;
+    (void)note_fx_state_normalize_track(&g_note_fx_state[track]);
     return 1U;
 }
 
@@ -120,19 +117,7 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     {
         return 0U;
     }
-    uint8_t arp_seen = 0U;
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT; ++param)
-        {
-            uint8_t value = note_fx_state_clamp_value(param, state->value[slot][param]);
-            if ((param == 3U) && (value == NOTE_FX_MODEL_ARP))
-            {
-                if (arp_seen != 0U) value = NOTE_FX_MODEL_OFF;
-                else arp_seen = 1U;
-            }
-            g_note_fx_state[track].value[slot][param] = value;
-        }
-    }
+    g_note_fx_state[track] = *state;
+    (void)note_fx_state_normalize_track(&g_note_fx_state[track]);
     return 1U;
 }

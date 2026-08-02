@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "NoteFx/note_fx_pipeline.h"
+#include "NoteFx/note_fx_event.h"
 #include "NoteFx/note_fx_state.h"
 
 static uint32_t g_terminal_count;
@@ -23,6 +25,18 @@ void seq_play_scheduler_dispatch_terminal_note_to_channel(uint8_t track,
     ++g_terminal_count;
 }
 
+note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_t *event)
+{
+    if ((event == NULL) || (event->stage != NOTE_EVENT_STAGE_TERMINAL))
+    {
+        return NOTE_EVENT_RESULT_DROPPED_POLICY;
+    }
+    seq_play_scheduler_dispatch_terminal_note_to_channel(
+        event->track, event->destination_id, event->note, event->velocity,
+        event->kind == NOTE_EVENT_KIND_ON);
+    return NOTE_EVENT_RESULT_ACCEPTED;
+}
+
 int main(void)
 {
     note_fx_state_init();
@@ -31,12 +45,18 @@ int main(void)
     assert(note_fx_pipeline_apply_runtime_param(0U, 1U, 3U, NOTE_FX_MODEL_ARP));
     assert(note_fx_pipeline_apply_runtime_param(0U, 2U, 3U, NOTE_FX_MODEL_OFF));
     assert(note_fx_pipeline_release_runtime_param(0U, 2U, 3U));
-    assert(note_fx_pipeline_submit(0U, 60U, 100U, 1U, 0U));
-    assert(g_terminal_count == 0U);
+    assert(note_fx_pipeline_submit_source(0U, 60U, 100U, 1U, 0U,
+                                          NOTE_EVENT_SOURCE_KEY)
+           == NOTE_EVENT_RESULT_ACCEPTED);
+    note_fx_pipeline_process(0U, 1U, 65536U);
+    assert(g_terminal_count == 1U);
 
     assert(note_fx_pipeline_release_runtime_param(0U, 1U, 3U));
-    assert(note_fx_pipeline_submit(0U, 64U, 100U, 1U, 0U));
-    assert(g_terminal_count == 1U);
+    assert(note_fx_pipeline_submit_source(0U, 64U, 100U, 1U, 0U,
+                                          NOTE_EVENT_SOURCE_KEY)
+           == NOTE_EVENT_RESULT_ACCEPTED);
+    note_fx_pipeline_process(0U, 1U, 65536U);
+    assert(g_terminal_count == 3U);
 
     note_fx_track_state_t restored = {0};
     restored.value[0][0] = 99U;

@@ -1,8 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:15:16:note_fx_state_clamp_value	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:24:6:note_fx_state_init	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:38:9:note_fx_state_param_map	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:52:9:note_fx_state_get_param	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:65:9:note_fx_state_find_arp_slot	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:81:9:note_fx_state_set_param	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:107:9:note_fx_state_capture_track	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:117:9:note_fx_state_restore_track	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:21:16:note_fx_state_clamp_value	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:30:9:note_fx_state_normalize_track	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:46:6:note_fx_state_init	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:61:9:note_fx_state_param_map	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:75:9:note_fx_state_get_param	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:88:9:note_fx_state_set_param	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:104:9:note_fx_state_capture_track	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:114:9:note_fx_state_restore_track	8	static

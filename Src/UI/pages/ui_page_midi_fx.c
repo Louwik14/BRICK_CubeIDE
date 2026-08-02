@@ -2,6 +2,7 @@
 
 #include "Core/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
+#include "Seq/seq_division_catalog.h"
 #include "ui_template_page.h"
 
 #include <stdio.h>
@@ -108,7 +109,6 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
                                                        char *out_value,
                                                        uint32_t out_value_len)
 {
-    static const char *const rate_labels[] = { "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T", "1/32T" };
     static const char *const style_labels[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
     static const char *const names[] = { "RATE", "STYLE", "RANGE", "MODEL" };
     const uint8_t page_slot = g_ui_template_midi_fx_state.active_subpage;
@@ -134,7 +134,7 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     }
     if (slot == 0U)
     {
-        (void)snprintf(out_value, out_value_len, "%s", rate_labels[(uint8_t)value & 7U]);
+        (void)snprintf(out_value, out_value_len, "%s", seq_division_arp_label((uint8_t)value));
     }
     else if (slot == 1U)
     {

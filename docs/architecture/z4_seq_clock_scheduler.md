@@ -432,7 +432,7 @@ Etat live-rec runtime:
 Etat scheduler audio (`seq_play_scheduler.c`):
 - `g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP]` (`seq_play_scheduler_evt_t`: `due_sample_time`, `track`, `note`, `velocity`, `type`, `audio_dispatched`, `generation`, `event_token`).
 - `g_seq_play_event_count`, `g_seq_play_generation`.
-- `g_seq_play_active_event_token[track][note]`: autorite locale d'occurrence active pour l'application note-on/note-off du scheduler.
+- `g_seq_play_active_occurrence[track][occurrence]`: ledger runtime borne par occurrence et generation pour l'application note-on/note-off du scheduler.
 - Ecriture: `seq_play_scheduler_push`, `seq_play_scheduler_clear`, compaction dans `seq_play_scheduler_audio_collect_block_events`.
 - Lecture: collecte bloc et apply event.
 
@@ -456,8 +456,8 @@ Flux nominal prouve:
 
 3. Progression temporelle
 - Interne: `seq_runtime_exec_drive_internal_steps_for_block` produit les pulses strictement dans la timeline audio absolue.
-- Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_exec_drive_external_steps_for_block` les consomme dans le domaine audio bloc.
-- Dette explicite: ces pulses externes pending ne portent pas encore leur timestamp sample d'arrivee; les markers boundary externes restent donc cales sur `block_start_sample`.
+- Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_exec_drive_external_steps_for_block` les consomme dans le domaine audio bloc avec une borne fixe de quatre pulses.
+- Ces pulses externes pending ne portent pas leur timestamp sample d'arrivee; les markers boundary externes restent cales sur `block_start_sample`. Au-delà de la borne, le surplus est coalescé, compté et rephase le playhead sans rejouer les boundaries intermédiaires.
 - L'avance step (interne/externe) converge sur `seq_runtime_exec_process_step_pulse_at_sample_q16`.
 
 4. Detection boundary / advance pattern
@@ -509,6 +509,7 @@ Contraintes CPU/ordre:
   - application des events dans le meme bloc audio en ordre d'offset.
 - `seq_runtime_process_core` reste requis pour transport, supervision bridge externe et etats transport.
 - En source interne comme externe, la regularite des steps depend de la cadence audio bloc (pas du jitter superloop).
+- Le sample d'application est propagé explicitement au seam audio; la timeline déjà avancée en fin de bloc n'est jamais utilisée pour retimer un événement.
 
 Memoire/statique:
 - Stockage modele/plocks et queues integralement statiques, sans allocation dynamique runtime.
@@ -1315,7 +1316,7 @@ Le moteur MIDI FX recoit explicitement les dates absolues et `samples_per_step_q
 Les evenements du scheduler entrent dans MIDI FX au seam d'application audio, tandis que live et MIDI entrant enregistrent d'abord leur evenement source puis empruntent le meme pipeline. Le moteur publie sa prochaine echeance afin que Z1 decoupe le bloc sans rattrapage ni horloge parallele. L'ancien moteur et son tick milliseconde ont ete supprimes.
 # Addendum 2026-08-01 - securite de cycle de vie MIDI FX
 
-Clear/Stop/Panic invalident les generations MIDI FX et liberent les sorties. Le mute suspend la piste apres cleanup; l'unmute la rearme sans rejouer les sources manquees. Les changements et chargements de Pattern nettoient avant mutation.
+Clear/Stop/Panic invalident les generations MIDI FX et liberent les sorties. Le mute bloque les nouveaux trigs sans cleanup ni generation; les Note Off possedes restent traites et l'unmute ne rejoue aucune source manquee. Les changements et chargements de Pattern nettoient avant mutation.
 # Addendum 2026-08-01 - ordre boundary MIDI FX
 
 Les locks MIDI FX font partie des locks non-PLAY appliques/restaures au boundary avant la planification et la soumission des notes sources. Apparition, remplacement et disparition d'un lock passent par le meme overlay; la restauration de base ne rejoue aucun evenement manque.
@@ -1323,3 +1324,84 @@ Les locks MIDI FX font partie des locks non-PLAY appliques/restaures au boundary
 
 - Les commandes All Notes Off MIDI et le panic clavier nettoient aussi les sources, sorties et echeances MIDI FX avant de poursuivre leur fermeture terminale.
 - La liberation d'un p-lock MODEL restaure uniquement son overlay et reprojette l'unique ARP effectif depuis les autres locks puis les bases.
+# Addendum 2026-08-02 - contrat canonique NoteFx
+
+Le seam scheduler/audio/NoteFx utilise `note_event_t`
+(`Inc/NoteFx/note_fx_event.h`), un evenement fixe en sample absolu portant
+provenance, stage, token source, occurrence et generation. Le scheduler
+conserve `sample_abs` lors de la projection audio; l'application n'utilise pas
+la fin du bloc comme timestamp. Les sources clavier et MIDI utilisent le
+constructeur borne `note_fx_pipeline_submit_source()`, les notes PLAY
+fournissent leur token et generation scheduler, et le terminal recoit le meme
+evenement complet via `seq_play_scheduler_dispatch_terminal_event()`. Les
+bases NoteFx restent les seules donnees persistables; tokens, occurrences,
+generations et stages sont runtime-only.
+# Addendum 2026-08-02 - identite des occurrences NoteFx
+
+Les sources ARP sont indexees par `source_token + generation`, jamais par la
+hauteur seule. Chaque sortie generee possede un `occurrence_id` et son Off
+recherche cette occurrence exacte. Le ledger scheduler et le garde de sortie
+sont des tables fixes d'occurrences; un Off orphelin ou stale est compte et ne
+modifie aucune autre note de meme hauteur. La paire scheduler On/Off reste
+reservee atomiquement comme defini dans `push_note_pair()`.
+
+# Addendum 2026-08-02 - owner runtime et transitions NoteFx
+
+Les mutations de configuration, overlays runtime, sources clavier/MIDI et
+transitions passent par une file fixe de 32 commandes dans
+`note_fx_pipeline`. La file est videe par l'owner audio avant
+`note_fx_engine_process`; le scheduler dispose d'un seam audio direct pour
+les evenements deja dans ce domaine. Les transitions utilisent des politiques
+explicites: STOP/PANIC/model/pattern/destination ferment et invalident, tandis
+que `MUTE_TRIGS` bloque les nouveaux Note On du scheduler sans fermer,
+purger ou regenerer les occurrences actives. Les Note Off possedes restent
+admissibles pendant le mute.
+
+Les contrats Program et gate restent des projections Z4/scheduler et mixer;
+ils ne declenchent plus de fermeture implicite du runtime NoteFx lors d'un
+simple mute de trigs.
+
+# Addendum 2026-08-02 - chaine NoteFx a quatre stages
+
+Chaque source entre au stage 0 puis traverse exactement les slots `[0..3]`.
+Un slot OFF transmet l'événement au stage suivant; un slot ARP possède la
+source, puis ses Note On/Off générés portent `stage = slot + 1`. La continuation
+réutilise le même dispatcher jusqu'au stage 4, qui est le seul chemin terminal.
+Le runtime n'effectue plus de scan « premier ARP » et le state canonique peut
+décrire plusieurs ARP aux positions voulues. Le fan-out reste nul dans les
+modèles disponibles et la capacité de chaque stage reste fixe.
+# Addendum 2026-08-02 - budget NoteFx par demi-buffer
+
+`process_half()` ouvre un budget NoteFx unique pour ses 64 frames et le ferme
+après le dernier sous-segment. Les émissions générées sont admises avec un
+quota On de 8 par track et une réserve Off de 32; les continuations de stages,
+les releases et les cleanups consomment cette même comptabilité. La file de
+commandes owner est limitée à 32 commandes consommées par demi-buffer. Les
+refus de classe et le high-water d'émissions sont exposés dans les diagnostics;
+aucun budget n'est recréé par deadline d'une frame.
+# Addendum 2026-08-02 - admission terminale NoteFx
+
+Le terminal conserve un ledger fixe par occurrence et génération. Une Note On
+tente séparément le moteur interne et les destinations MIDI; un refus de l'un
+ne bloque pas l'autre. Une Note Off relit le masque admis et ne ferme que ces
+destinations. La file USB réserve 16 places aux Off, tandis que le garde-fou
+conserve ce masque pour les fermetures et le panic. Les compteurs terminal
+exposent les admissions et refus par classe.
+# Addendum 2026-08-02 - protocole de transitions scheduler
+
+Les transitions scheduler sont maintenant nommées et séparées: MUTE_TRIGS et
+RESUME_TRIGS ne ferment ni ne purgent les occurrences, tandis que STOP_CLOSE,
+PANIC_CLOSE_ALL, PATTERN_REPLACE, MODEL_RECONFIGURE, DESTINATION_REBIND et
+SOURCE_SWITCH partagent une frontière destructive explicite. Une reconfiguration
+de modèle ou de destination suspend ensuite la track jusqu'à sa reprise;
+l'unmute ne rejoue aucun événement supprimé. Les commandes NoteFx identiques
+sont coalescées dans la file owner afin de rendre les doubles transitions
+idempotentes.
+
+# Addendum 2026-08-02 - catalogue des divisions musicales
+
+`Seq/seq_division_catalog` est l'autorité unique des divisions persistées et
+des cadences ARP: labels, sous-ensembles UI, ratios Q16 et conversions sont
+centralisés. `samples_per_step_q16` reste la source temporelle; les indices
+persistés du séquenceur et de NoteFx ne changent pas et aucun label n'est
+stocké dans le runtime.

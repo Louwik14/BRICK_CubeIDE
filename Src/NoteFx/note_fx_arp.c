@@ -10,26 +10,41 @@ void note_fx_arp_init(note_fx_arp_t *arp, uint32_t seed)
     arp->random_state = (seed != 0U) ? seed : 0x6D2B79F5U;
 }
 
-uint8_t note_fx_arp_note_on(note_fx_arp_t *arp, uint8_t note, uint8_t velocity)
+uint8_t note_fx_arp_note_on(note_fx_arp_t *arp, uint8_t note, uint8_t velocity,
+                            uint32_t source_token, uint32_t source_generation)
 {
-    if ((arp == 0) || (note > 127U)) return 0U;
+    if ((arp == 0) || (note > 127U) || (source_token == 0U)
+            || (source_generation == 0U)) return 0U;
     for (uint8_t i = 0U; i < arp->count; ++i) {
-        if (arp->note[i] == note) { arp->velocity[i] = velocity; return 1U; }
+        if ((arp->source_token[i] == source_token)
+                && (arp->source_generation[i] == source_generation)) {
+            arp->note[i] = note;
+            arp->velocity[i] = velocity;
+            return 1U;
+        }
     }
     if (arp->count >= NOTE_FX_ARP_MAX_SOURCES) return 0U;
     if (arp->count == 0U) { arp->phase = 0U; arp->cursor = 0U; arp->direction = 1; }
     arp->note[arp->count] = note;
-    arp->velocity[arp->count++] = velocity;
+    arp->velocity[arp->count] = velocity;
+    arp->source_token[arp->count] = source_token;
+    arp->source_generation[arp->count] = source_generation;
+    arp->count++;
     return 1U;
 }
 
-uint8_t note_fx_arp_note_off(note_fx_arp_t *arp, uint8_t note)
+uint8_t note_fx_arp_note_off(note_fx_arp_t *arp, uint32_t source_token,
+                             uint32_t source_generation)
 {
-    if (arp == 0) return 0U;
+    if ((arp == 0) || (source_token == 0U) || (source_generation == 0U)) return 0U;
     for (uint8_t i = 0U; i < arp->count; ++i) {
-        if (arp->note[i] == note) {
+        if ((arp->source_token[i] == source_token)
+                && (arp->source_generation[i] == source_generation)) {
             for (uint8_t j = i + 1U; j < arp->count; ++j) {
-                arp->note[j - 1U] = arp->note[j]; arp->velocity[j - 1U] = arp->velocity[j];
+                arp->note[j - 1U] = arp->note[j];
+                arp->velocity[j - 1U] = arp->velocity[j];
+                arp->source_token[j - 1U] = arp->source_token[j];
+                arp->source_generation[j - 1U] = arp->source_generation[j];
             }
             --arp->count;
             return 1U;
@@ -76,6 +91,8 @@ uint8_t note_fx_arp_next(note_fx_arp_t *arp, note_fx_arp_style_t style,
     if (out > 127U) out = arp->note[idx];
     *note = (uint8_t)out; *velocity = arp->velocity[idx];
     arp->last_source_note = arp->note[idx];
+    arp->last_source_token = arp->source_token[idx];
+    arp->last_source_generation = arp->source_generation[idx];
     arp->cursor = rank;
     return 1U;
 }

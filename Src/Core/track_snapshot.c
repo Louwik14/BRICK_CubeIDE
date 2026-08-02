@@ -112,7 +112,8 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
         return;
     }
 
-    note_fx_pipeline_cleanup_track(track);
+    (void)note_fx_pipeline_transition_track(
+        track, NOTE_FX_TRANSITION_MODEL_RECONFIGURE);
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);

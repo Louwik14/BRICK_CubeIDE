@@ -61,12 +61,12 @@ if ($keyboardEngine.Contains('g_keyboard_engine_group_note_track')) {
 if (-not $scheduler.Contains('TRACK_CAPABILITY_NOTES')) {
     throw 'Scheduler note capability guard missing.'
 }
-if ($scheduler.Contains('g_seq_play_active_event_token[SEQ_TRACK_COUNT]') -or
-    -not $scheduler.Contains('g_seq_play_active_event_token[TRACK_TOPOLOGY_PLAY_TRACK_COUNT]')) {
-    throw 'Scheduler note ownership is still allocated for Special tracks.'
+if ($scheduler.Contains('g_seq_play_active_event_token') -or
+    -not $scheduler.Contains('g_seq_play_active_occurrence[TRACK_TOPOLOGY_PLAY_TRACK_COUNT]')) {
+    throw 'Scheduler note ownership is not identity-scoped.'
 }
-if (-not $outputGuard.Contains('note_counts[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U]')) {
-    throw 'Output note guard is still allocated for Special tracks.'
+if (-not $outputGuard.Contains('record[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES]')) {
+    throw 'Output occurrence guard is not fixed and track-scoped.'
 }
 if (-not $runtimeHeader.Contains('active_locks_special[TRACK_TOPOLOGY_SPECIAL_TRACK_COUNT][SEQ_SPECIAL_STEP_MAX_LOCKS]')) {
     throw 'Special active automation locks are not bounded to 16.'

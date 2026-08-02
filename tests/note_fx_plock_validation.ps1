@@ -12,8 +12,8 @@ if (($iface -notmatch 'g_seq_param_midi_fx_slot_to_id\[SEQ_PARAM_MIDI_FX_SLOT_CO
 if ($iface -notmatch 'note_fx_pipeline_apply_runtime_param') { throw 'locks do not reach runtime overlay' }
 if ($iface -notmatch 'note_fx_pipeline_release_runtime_param') { throw 'base restore is missing' }
 if ($ui -notmatch 'TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX') { throw 'UI p-lock routing missing' }
-if (($pipeline -notmatch 'g_note_fx_runtime_arp_slot') -or
-    ($pipeline -notmatch 'value\[3\] == NOTE_FX_MODEL_ARP.*slot != arp_slot')) {
-    throw 'unique ARP runtime enforcement missing'
+if ($pipeline -match 'g_note_fx_runtime_arp_slot' -or
+    $pipeline -match 'value\[3\] == NOTE_FX_MODEL_ARP.*slot != arp_slot') {
+    throw 'pipeline still collapses multiple ARP slots'
 }
-Write-Output 'note_fx_plock_validation=PASS set=yes mapping=16 runtime_overlay=yes restore=yes model_cleanup=yes ui_feedback_path=yes'
+Write-Output 'note_fx_plock_validation=PASS set=yes mapping=16 runtime_overlay=yes restore=yes multi_stage_arp=yes ui_feedback_path=yes'

@@ -1244,6 +1244,38 @@ static void midi_send(midi_dest_t dest, const uint8_t *msg, size_t len) {
   }
 }
 
+static bool midi_usb_channel_voice_can_admit(bool is_note_off)
+{
+  const uint32_t primask = midi_enter_critical();
+  const uint16_t reserve = is_note_off ? 0U : MIDI_NOTE_OFF_RESERVE;
+  const uint16_t limit = (uint16_t)(MIDI_USB_TX_QUEUE_LEN - reserve);
+  const bool immediate = !midi_in_isr() && usb_device_ready()
+      && (midi_usb_tx_count == 0U);
+  const bool admitted = immediate || (midi_usb_tx_count < limit);
+  midi_exit_critical(primask);
+  return admitted;
+}
+
+static bool midi_usb_force_note_off(uint8_t ch, uint8_t note, uint8_t vel)
+{
+  const midi_usb_packet_t packet = {
+    .bytes = {
+      (uint8_t)((MIDI_USB_CABLE << 4) | 0x08U),
+      (uint8_t)(0x80U | (ch & 0x0FU)),
+      (uint8_t)(note & 0x7FU),
+      (uint8_t)(vel & 0x7FU)
+    }
+  };
+  if (!usb_tx_queue_push_front_realtime(&packet))
+    return false;
+  ++midi_tx_stats.tx_mb_drops;
+  if (midi_in_isr())
+    midi_usb_request_deferred_flush_from_isr();
+  else
+    midi_usb_try_flush();
+  return true;
+}
+
 /* ====================================================================== */
 /*                             API MIDI                                   */
 /* ====================================================================== */
@@ -1288,6 +1320,56 @@ void midi_note_on(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel) {
 void midi_note_off(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel) {
   uint8_t msg[3] = { (uint8_t)(0x80U | (ch & 0x0FU)), (uint8_t)(note & 0x7FU), (uint8_t)(vel & 0x7FU) };
   midi_send(dest, msg, 3U);
+}
+
+uint8_t midi_note_on_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel)
+{
+  uint8_t admission = 0U;
+  if ((dest == MIDI_DEST_UART) || (dest == MIDI_DEST_BOTH))
+  {
+    midi_note_on(MIDI_DEST_UART, ch, note, vel);
+    admission |= MIDI_ADMISSION_UART;
+  }
+  if ((dest == MIDI_DEST_USB) || (dest == MIDI_DEST_BOTH))
+  {
+    if (midi_usb_channel_voice_can_admit(false))
+    {
+      midi_note_on(MIDI_DEST_USB, ch, note, vel);
+      admission |= MIDI_ADMISSION_USB;
+    }
+    else
+    {
+      ++midi_tx_stats.note_on_admission_refused;
+    }
+  }
+  return admission;
+}
+
+uint8_t midi_note_off_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel)
+{
+  uint8_t admission = 0U;
+  if ((dest == MIDI_DEST_UART) || (dest == MIDI_DEST_BOTH))
+  {
+    midi_note_off(MIDI_DEST_UART, ch, note, vel);
+    admission |= MIDI_ADMISSION_UART;
+  }
+  if ((dest == MIDI_DEST_USB) || (dest == MIDI_DEST_BOTH))
+  {
+    if (midi_usb_channel_voice_can_admit(true))
+    {
+      midi_note_off(MIDI_DEST_USB, ch, note, vel);
+      admission |= MIDI_ADMISSION_USB;
+    }
+    else if (midi_usb_force_note_off(ch, note, vel))
+    {
+      admission |= MIDI_ADMISSION_USB;
+    }
+    else
+    {
+      ++midi_tx_stats.note_off_admission_refused;
+    }
+  }
+  return admission;
 }
 
 /**

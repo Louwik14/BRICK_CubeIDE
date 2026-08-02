@@ -1450,3 +1450,9 @@ Coûts RAM representatifs (pages physiques de 16384 octets):
 | 48000 | 192000 B | 12 pages | 384000 B | 24 pages |
 
 Tailles finales observees dans l'objet Release Low-Cost: `sampler_ram_slot_t = 752 B`, `brick6_sampler_voice_t = 888 B`, `g_sampler_ram_mono_discard = 256 B`; le tableau des 14 voix RAM fait 12432 B. Les pages et la compatibilite du pool restent inchangees. Le gain IRQ attendu est qualitatif: moins de lectures SDRAM et aucun transfert L/R pour une source mono; la mesure cycles/IRQ reelle reste a faire sur materiel.
+# Addendum 2026-08-02 - consolidation NoteFx hard-RT
+
+Le chemin audio conserve un owner NoteFx unique, des emissions bornees par
+demi-buffer et un rattrapage de clock externe limite et compte. Les sources,
+transitions et admissions terminales restent fixes et sans allocation
+dynamique; les structures persistantes ne contiennent aucun etat runtime.

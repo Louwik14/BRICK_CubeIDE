@@ -2,21 +2,64 @@
 #define NOTE_FX_PIPELINE_H
 
 #include <stdint.h>
+#include "NoteFx/note_fx_event.h"
+#include "NoteFx/note_fx_state.h"
+
+#define NOTE_FX_HALF_BUFFER_FRAMES 64U
+#define NOTE_FX_HALF_ON_QUOTA_PER_TRACK 8U
+#define NOTE_FX_HALF_OFF_RESERVE 32U
+#define NOTE_FX_HALF_EMISSION_BUDGET \
+    ((NOTE_FX_TRACK_COUNT * NOTE_FX_HALF_ON_QUOTA_PER_TRACK) \
+     + NOTE_FX_HALF_OFF_RESERVE)
+#define NOTE_FX_HALF_COMMAND_QUOTA 32U
 
 void note_fx_pipeline_init(void);
-uint8_t note_fx_pipeline_submit(uint8_t track, uint8_t note, uint8_t velocity,
-                                uint8_t is_note_on, uint64_t sample_time);
+typedef struct
+{
+    uint32_t accepted;
+    uint32_t rejected;
+    uint32_t stale;
+    uint16_t command_high_water;
+    uint32_t command_drop_count;
+    uint32_t stage_emissions[5];
+    uint32_t continuation_drop_count;
+    uint32_t budget_on_drop_count;
+    uint32_t budget_off_drop_count;
+    uint16_t half_emissions_last;
+    uint16_t half_emissions_high_water;
+    uint8_t max_stage_reached;
+} note_fx_pipeline_diag_t;
+
+typedef enum
+{
+    NOTE_FX_TRANSITION_MUTE_TRIGS = 0,
+    NOTE_FX_TRANSITION_STOP_CLOSE,
+    NOTE_FX_TRANSITION_PANIC_CLOSE_ALL,
+    NOTE_FX_TRANSITION_MODEL_RECONFIGURE,
+    NOTE_FX_TRANSITION_PATTERN_REPLACE,
+    NOTE_FX_TRANSITION_DESTINATION_REBIND
+} note_fx_transition_policy_t;
+
+note_fx_pipeline_diag_t note_fx_pipeline_diag(uint8_t track);
+note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event);
+/* Audio-owner seam: only the audio execution domain may call this directly. */
+note_fx_result_t note_fx_pipeline_submit_audio(const note_fx_event_t *event);
+note_fx_result_t note_fx_pipeline_submit_source(uint8_t track, uint8_t note,
+                                                 uint8_t velocity, uint8_t is_note_on,
+                                                 uint64_t sample_time,
+                                                 note_event_provenance_t provenance);
 void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                               uint32_t samples_per_step_q16);
+void note_fx_pipeline_begin_audio_half(uint16_t frames);
+void note_fx_pipeline_end_audio_half(void);
 uint16_t note_fx_pipeline_frames_until_deadline(uint64_t block_start,
                                                 uint16_t max_frames);
-void note_fx_pipeline_cleanup_track(uint8_t track);
-void note_fx_pipeline_cleanup_all(void);
-void note_fx_pipeline_suspend_track(uint8_t track, uint8_t suspended);
-void note_fx_pipeline_before_model_change(uint8_t track);
-void note_fx_pipeline_on_base_param_change(uint8_t track);
+uint8_t note_fx_pipeline_sync_track(uint8_t track);
 void note_fx_pipeline_reset_runtime_overrides(uint8_t track);
 void note_fx_pipeline_reset_all_runtime_overrides(void);
+uint8_t note_fx_pipeline_transition_track(uint8_t track,
+                                          note_fx_transition_policy_t policy);
+uint8_t note_fx_pipeline_transition_all(note_fx_transition_policy_t policy);
 uint8_t note_fx_pipeline_apply_runtime_param(uint8_t track, uint8_t slot,
                                              uint8_t param, uint8_t value);
 uint8_t note_fx_pipeline_release_runtime_param(uint8_t track, uint8_t slot,

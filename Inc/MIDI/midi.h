@@ -49,6 +49,10 @@ typedef enum {
   MIDI_DEST_BOTH       /**< Envoi sur les deux sorties */
 } midi_dest_t;
 
+#define MIDI_ADMISSION_UART 0x01U
+#define MIDI_ADMISSION_USB  0x02U
+#define MIDI_NOTE_OFF_RESERVE 16U
+
 typedef enum {
   MIDI_CLOCK_MODE_SLAVE = 0,
   MIDI_CLOCK_MODE_MASTER
@@ -66,6 +70,8 @@ typedef struct {
   volatile uint32_t rt_other_enq_fallback;  /**< Realtime mis en file (réservé) */
   volatile uint32_t tx_mb_drops;            /**< Messages perdus (file pleine) */
   volatile uint32_t usb_not_ready_drops;    /**< Messages perdus (USB non prêt) */
+  volatile uint32_t note_on_admission_refused;
+  volatile uint32_t note_off_admission_refused;
 } midi_tx_stats_t;
 
 extern midi_tx_stats_t midi_tx_stats;
@@ -177,6 +183,8 @@ void midi_clock_on_timer_tick(void);
 
 void midi_note_on(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
 void midi_note_off(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
+uint8_t midi_note_on_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
+uint8_t midi_note_off_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
 void midi_poly_aftertouch(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t pressure);
 void midi_cc(midi_dest_t dest, uint8_t ch, uint8_t cc, uint8_t val);
 void midi_program_change(midi_dest_t dest, uint8_t ch, uint8_t program);

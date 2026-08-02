@@ -22,7 +22,7 @@ foreach ($contract in @(
 
 foreach ($contract in @(
     'track_snapshot_collect_restore_tracks',
-    'note_fx_pipeline_cleanup_track',
+    'note_fx_pipeline_reset_runtime_overrides',
     'mod_lfo_v1_all_notes_off',
     'track_snapshot_runtime_neutralize_note_state',
     'mixer_track_filter_all_notes_off',

@@ -27,7 +27,9 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/md_model.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/metronome_runtime.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sampler.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")

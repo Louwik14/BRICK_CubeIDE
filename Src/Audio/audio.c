@@ -31,6 +31,8 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "NoteFx/note_fx_pipeline.h"
 
 #include <string.h>
@@ -86,7 +88,7 @@ static audio_seq_diag_t g_audio_seq_diag;
    Hardware layer only: calls float engine
    ============================================================ */
 
-static void audio_apply_seq_event_at_sample(seq_runtime_audio_event_t *event,
+static void audio_apply_seq_event_at_sample(const seq_runtime_audio_event_t *event,
                                             uint64_t event_sample_time)
 {
     if (event == NULL)
@@ -106,8 +108,11 @@ static void audio_apply_seq_event_at_sample(seq_runtime_audio_event_t *event,
     }
     else
     {
-        event->sample_offset_in_block = 0U;
-        seq_runtime_audio_apply_event(event);
+        seq_runtime_audio_event_t applied_event = *event;
+        /* The application seam owns the actual integer sample after offset conversion. */
+        applied_event.sample_offset_in_block = 0U;
+        applied_event.sample_abs = event_sample_time;
+        seq_runtime_audio_apply_event(&applied_event);
     }
 }
 static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
@@ -259,6 +264,8 @@ static void process_half(uint32_t half_index)
 
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traite. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
+    note_fx_pipeline_begin_audio_half(AUDIO_FRAMES_PER_HALF);
+    seq_play_scheduler_audio_begin_half(SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA);
 
     uint16_t segment_count = 0U;
     uint16_t half_event_count = 0U;
@@ -301,6 +308,9 @@ static void process_half(uint32_t half_index)
     {
         g_audio_seq_diag.max_subsegments_per_half = segment_count;
     }
+
+    note_fx_pipeline_end_audio_half();
+    seq_play_scheduler_audio_end_half();
 
     dcache_clean_by_addr_aligned(tx, half_bytes);
 }

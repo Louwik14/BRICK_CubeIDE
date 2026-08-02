@@ -367,6 +367,21 @@ note_event_t {
 
 Le scheduler alloue le token source et reserve la paire; le runtime NoteFx alloue les occurrences generees seulement apres reservation de leur fermeture; le terminal ne rederive jamais une identite depuis la hauteur. La generation est incrementee par track pour transition et globalement pour reset complet. Wrap-around doit eviter zero et rejeter tout record dont generation ne correspond pas.
 
+### Implementation de l'etape 1
+
+Le contrat est implemente dans `Inc/NoteFx/note_fx_event.h` sous le type
+`note_event_t` (alias `note_fx_event_t`). Les seams scheduler, runtime audio,
+clavier/MIDI, pipeline NoteFx et terminal transportent `sample_abs`,
+`source_token`, `occurrence_id`, `generation`, `provenance` et `stage`.
+`note_fx_pipeline_submit()` accepte uniquement un evenement canonique valide;
+les sources live passent par `note_fx_pipeline_submit_source()`, qui applique
+les valeurs par defaut runtime sans les persister. Le scheduler conserve le
+sample absolu de l'evenement planifie au lieu de reconstruire l'horodatage a la
+fin du bloc. Les resultats bornes sont `ACCEPTED`, `REJECTED_CAPACITY`,
+`REJECTED_STALE`, `REJECTED_DESTINATION` et `DROPPED_POLICY`.
+Les compteurs bornes `note_fx_pipeline_diag_t` exposent les admissions,
+refus et stale par track.
+
 ## 7. Identite et cycle de vie des occurrences
 
 Cycle nominal:
@@ -385,6 +400,15 @@ Sur STOP/panic/model change/pattern change: `close_active(scope, sample)` emet l
 Les tables de compatibilite par `[track][note]` et par voix sont supprimees du chemin NoteFx. Une table pitch peut rester une projection UI/diagnostic non normative, mais ne peut ni admettre ni fermer une occurrence.
 
 La regle de cycle ci-dessus a une exception produit obligatoire: `MUTE_TRIGS` ne ferme ni ne purge les occurrences actives. Il bloque les nouveaux trigs STEP et leurs derivations futures, mais laisse leurs echeances et Note Off traverser. Seules les politiques STOP/PANIC/reconfiguration appellent `close_active()`.
+
+### Implementation de l'etape 2
+
+Les sources ARP sont maintenant possedees par `source_token` et
+`source_generation`; deux Note On de meme hauteur restent distincts et un
+Note Off stale ne ferme aucune source. Les sorties generees portent leur
+`occurrence_id` propre et conservent le token source. Le scheduler et le
+`seq_output_guard` utilisent des ledgers fixes par occurrence, avec fermeture
+exacte token+generation et compteurs d'orphelins, doublons et high-water.
 
 ## 8. Horloge, timestamps et deadlines
 
@@ -515,6 +539,7 @@ Aucune commande ne transporte un pointeur vers un état mutable et aucune API n'
 - callbacks directs d'anciens chemins ARP et branches de retour au terminal qui contournent stage;
 - routines de cleanup dupliquées une fois la commande de transition commune prouvée;
 - tests regex qui ne vérifient plus le contrat courant.
+- tables locales de labels/conversions musicales remplacées par `Seq/seq_division_catalog`.
 
 À conserver avec justification: `note_fx_arp_t` comme algorithme de parcours temporairement interne, quatre slots et 16 positions p-lock, `seq_play_scheduler_push_note_pair()` atomique, files MIDI RX/TX distinctes, compteur de charge IRQ existant, et bases NoteFx persistées séparément du runtime.
 
@@ -576,6 +601,8 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Documentation:** sections 8 et z4.
 - **Commit:** `fix: use application sample for note fx deadlines`.
 
+Résultat Étape 3: le seam audio projette maintenant `event_sample_time` dans `sample_abs` avant l'appel scheduler/NoteFx; les pulses internes utilisent leur sample Q16 résolu. Le rattrapage externe est borné à `SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK = 4`; le surplus est coalescé, compté dans `external_pulses_coalesced` et rephase le playhead/generation sans rejouer les boundaries intermédiaires. Les diagnostics runtime exposent aussi le maximum de pulses traités par bloc.
+
 ### Étape 4 — Propriété runtime et commandes de transition
 
 - **Objectif:** donner un owner unique au runtime NoteFx.
@@ -594,6 +621,8 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Documentation:** sections 12-13, z1.
 - **Commit:** `refactor: serialize note fx runtime transitions`.
 
+Résultat Étape 4: les mutations main/UI passent par une file fixe NoteFx de 32 commandes, appliquée par l'owner audio avant `note_fx_engine_process()`. Les transitions sont explicites et idempotentes; `MUTE_TRIGS` ne ferme ni ne purge les occurrences, et les Note Off possédés restent admissibles. Le seam source main est différé dans la même file, tandis que le scheduler utilise le seam audio direct de l'owner.
+
 ### Étape 5 — Chaîne fixe des quatre slots
 
 - **Objectif:** exécuter `[0..3]` dans l'ordre et router les sorties au stage suivant.
@@ -610,6 +639,8 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Fin:** test comportemental prouve la chaîne et l'absence de boucle.
 - **Documentation:** sections 3/9 et plan Euclid seulement cité, non édité.
 - **Commit:** `refactor: execute midi fx slots as ordered stages`.
+
+Résultat Étape 5: les quatre slots NoteFx sont maintenant parcourus comme des stages `[0..3]`; un événement OFF ou ON généré reprend au stage suivant, et seul le stage 4 appelle le terminal. La contrainte historique d'un premier ARP unique a été retirée du state/runtime. Les continuations restent fixes et bornées; aucun graphe dynamique ni fan-out produit n'est introduit.
 
 ### Étape 6 — Files, quotas et budgets hard real-time
 
@@ -629,6 +660,14 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Documentation:** z1/z4 et section 10.
 - **Commit:** `perf: bound note event work per audio half-buffer`.
 
+Résultat Étape 6: le pipeline NoteFx ouvre maintenant un contexte unique par
+demi-buffer audio de 64 frames. Les émissions générées ont un quota On par
+track (8), une réserve Off (32) et les commandes sont plafonnées à 32 par
+demi-buffer; les continuations, releases et cleanups passent par la même
+admission. Les refus On/Off sont comptés par track et le high-water global est
+exposé dans les diagnostics. Le moteur ne recrée plus de budget dans chaque
+sous-segment et aucune release ne contourne l'admission.
+
 ### Étape 7 — Terminal, admission et saturation
 
 - **Objectif:** fermer les refus MIDI/moteur et préserver l'identité au terminal.
@@ -646,6 +685,13 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Fin:** le terminal explique chaque admission/refus et n'introduit aucune note pendante.
 - **Documentation:** sections 11/18, z4.
 - **Commit:** `refactor: make note terminal admission explicit`.
+
+Résultat Étape 7: le terminal possède maintenant un ledger fixe par
+`(track, occurrence_id, generation)` avec admission interne et MIDI séparées.
+Les Note On ne sont conservés que si au moins une destination est admise;
+les Note Off ciblent uniquement les destinations effectivement admises. La
+file MIDI réserve 16 places aux Off et les refus par destination sont comptés;
+le garde-fou conserve le masque MIDI pour les fermetures et le panic.
 
 ### Étape 8 — Transport, mute, panic et pattern
 
@@ -665,6 +711,15 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Documentation:** sections 12/16 et architecture transitions.
 - **Commit:** `fix: unify note fx transition cleanup`.
 
+Résultat Étape 8: les transitions scheduler disposent maintenant d'un
+protocole explicite pour MUTE/UNMUTE, STOP, PANIC, remplacement de pattern,
+reconfiguration modèle, rebinding destination et changement de source. Le
+mute ne suspend que les nouveaux trigs et conserve les occurrences actives;
+les politiques destructives passent par la fermeture et la génération du
+scheduler. Les commandes de transition NoteFx identiques sont coalescées,
+ce qui rend les doubles actions idempotentes et empêche un retrigger à
+l'unmute.
+
 ### Étape 9 — Catalogue musical et validation des paramètres
 
 - **Objectif:** une autorité de divisions et defaults par modèle sans changement de formats.
@@ -681,6 +736,14 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Fin:** revue des ordinals et tests persistence verts.
 - **Documentation:** z4, z6 et section 14; ne pas modifier Euclid.
 - **Commit:** `refactor: centralize musical division conversions`.
+
+Résultat Étape 9: le catalogue `seq_division_catalog` porte désormais les
+labels des sous-ensembles séquenceur/ARP, les ratios Q16 et les conversions de
+division aux frontières UI/runtime. Les ordinals persistés restent inchangés;
+le moteur NoteFx et les pages MIDI FX n'ont plus de tables locales. Les
+defaults NoteFx sont déclarés par modèle et les restores passent par une
+normalisation centrale bornée. Les validations catalogue, persistence, p-lock
+et les builds Release Low-Cost/Premium sont verts.
 
 ### Étape 10 — Suppression, tests et consolidation
 
@@ -699,6 +762,14 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 - **Fin:** registre D-001..D-019 fermé, D-020 explicitement hors domaine, docs cohérentes.
 - **Documentation:** ce plan et audits Z1/Z4; Euclid reste inchangé jusqu'au réaudit.
 - **Commit:** `chore: consolidate note fx scheduler cleanup`.
+
+Résultat Étape 10: les wrappers historiques de transition/cleanup ont été
+retirés au profit des politiques explicites et du sync owner; le chemin actif
+ne contient plus de ledger pitch-only, de first-ARP, de terminal FX direct ou
+d'allocation dynamique. La validation de consolidation couvre aussi les
+admissions MIDI indépendantes, le backlog clock borné et l'exclusion du runtime
+des snapshots. La matrice de scripts et les builds Release Low-Cost/Premium
+restent verts.
 
 ## 16. Matrice de validations
 
@@ -778,7 +849,7 @@ Il n'y a aucune dette active qualifiée `CONSERVER`. Les compromis intentionnels
 - owner audio unique et commandes bornées plutôt qu'un RTOS/IPC;
 - limite globale de polyphonie inchangée;
 - bases NoteFx persistées dans Pattern/Project/snapshots, runtime reconstruit;
-- table ARP de parcours conservée comme algorithme interne jusqu'à l'étape 10, sans lui laisser l'ownership du pipeline.
+- table ARP de parcours conservée comme algorithme interne, sans lui laisser l'ownership du pipeline.
 
 ## 19. Éléments hors domaine
 

@@ -433,7 +433,7 @@ D1 mÃ©lange :
 | `g_ui_template_family_registry` | 9 200 B | `ui_template_page.c` | registry UI templates | dÃ©plaÃ§able SDRAM/D3 | UI metadata |
 | `g_max_buffer` | 8 192 B | `hall_calibration.c` | calibration hall max | SDRAM/D3 possible | non audio |
 | `g_min_buffer` | 8 192 B | `hall_calibration.c` | calibration hall min | SDRAM/D3 possible | non audio |
-| `g_seq_play_active_event_token` | 7 168 B | `seq_play_scheduler.c` | anti doublons note events | garder interne | audio apply event |
+| `g_seq_play_active_occurrence` | ledger borne | `seq_play_scheduler.c` | ownership note par occurrence/generation | garder interne | audio apply event |
 | `g_ui_clipboard` | 6 232 B | `ui_core_clipboard.c` | clipboard UI | dÃ©plaÃ§able SDRAM/D3 | UI only |
 | `g_wav_catalog` | 6 208 B | `wav_loader.c` | catalogue WAV | dÃ©plaÃ§able SDRAM/D3 | storage/UI |
 | `g_seq_play_events` | 6 144 B | `seq_play_scheduler.c` | queue scheduler events | garder interne | collect/apply audio-block |

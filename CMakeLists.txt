@@ -227,7 +227,7 @@ list(APPEND SRC_SAMPLER_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
 )
 
-file(GLOB SRC_SEQ_SRC
+file(GLOB SRC_SEQ_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/*.cpp"
 )

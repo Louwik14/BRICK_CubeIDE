@@ -68,6 +68,8 @@ typedef struct
     uint8_t track_generation;
     uint8_t reserved;
     uint16_t sample_offset_in_block;
+    uint64_t sample_abs;
+    uint32_t generation;
     uint32_t event_token;
 } seq_runtime_audio_event_t;
 
@@ -77,6 +79,8 @@ typedef struct
     uint32_t internal_non_audio_step_pulse_count;
     uint32_t internal_step_burst_block_count;
     uint16_t max_internal_step_pulses_per_block;
+    uint32_t external_pulses_coalesced;
+    uint16_t max_external_pulses_per_block;
 } seq_runtime_diag_t;
 
 /*

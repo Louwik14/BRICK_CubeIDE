@@ -132,3 +132,12 @@ Sont refusés : version non courante, checksum invalide, rôle absent, identité
 ## Historique utile
 
 Les références V1 dans les noms de structures/API sont conservées comme interfaces techniques. Pattern/Project v5, Kit/Patch v3, une migration MIX physique ou une persistence granular ne sont pas des formats alternatifs ; ils ne doivent pas être présentés comme des chemins de restore concurrents.
+
+# Addendum 2026-08-02 - normalisation NoteFx et divisions
+
+Les bases NoteFx persistables conservent leurs ordinals et leurs formats. Les
+defaults sont déclarés par modèle et chaque capture/restauration passe par la
+normalisation bornée de `note_fx_state`; tokens, générations, phases, files et
+autres états runtime restent exclus. Les labels et conversions de division
+séquenceur/ARP proviennent du catalogue `Seq/seq_division_catalog`, sans
+seconde table dans les pages UI ou le moteur.

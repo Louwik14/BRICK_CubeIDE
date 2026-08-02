@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:65:13:multi_voice_dsp_reset_slot.part.0	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:96:6:multi_voice_dsp_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:101:6:multi_voice_dsp_reset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:109:25:multi_voice_dsp_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:116:31:multi_voice_dsp_get_const	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:123:9:multi_voice_dsp_find_slot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:145:9:multi_voice_dsp_acquire	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:194:9:multi_voice_dsp_release	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c:215:9:multi_voice_dsp_validate_ownership	16	static
