@@ -38,6 +38,9 @@ namespace mifx {
 
     class Reverb {
     public:
+        static constexpr float kLongDelay2ModulationSamples = 54.42177f;
+        static constexpr float kLongDelay1ModulationSamples = 43.53742f;
+
         Reverb() {}
 
         ~Reverb() {}
@@ -106,7 +109,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f * smear_depth_, krt);
+                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -118,7 +121,7 @@ namespace mifx {
                 *left += (wet - *left) * amount;
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f * smear_depth_, krt);
+                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -192,7 +195,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f * smear_depth_, krt);
+                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -205,7 +208,7 @@ namespace mifx {
                 *left = one_pole(lp_l_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f * smear_depth_, krt);
+                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -252,10 +255,6 @@ namespace mifx {
             lp_coefficient_ = lp;
         }
 
-        inline void set_smear_depth(float depth) {
-            smear_depth_ = (depth < 0.0f) ? 0.0f : ((depth > 1.0f) ? 1.0f : depth);
-        }
-
         inline void Clear() {
             engine_.Clear();
             lp_decay_1_ = 0.0f;
@@ -292,7 +291,6 @@ namespace mifx {
         float lp_r_ = 0.f;
         float hp_coefficient_ = 0.f;
         float lp_coefficient_ = 1.f;
-        float smear_depth_ = 1.0f;
 
         static inline float one_pole(float& state, float input, float coefficient) {
             state += coefficient * (input - state);

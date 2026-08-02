@@ -83,7 +83,6 @@ void mixer_set_reverb_damp(float damp);
 void mixer_set_reverb_pre_delay(float pre_delay);
 void mixer_set_reverb_hpf(float hpf);
 void mixer_set_reverb_lpf(float lpf);
-void mixer_set_reverb_smear(float smear);
 void mixer_set_delay_type(uint8_t type);
 void mixer_set_delay_mode(uint8_t mode);
 void mixer_set_delay_time(float time_s);

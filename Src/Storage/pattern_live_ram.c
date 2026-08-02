@@ -329,7 +329,6 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
         case PARAM_MIX_REVERB_DAMP:
-        case PARAM_MIX_REVERB_SMEAR:
         case PARAM_CFG_START:
         case PARAM_CFG_TEMPO:
         case PARAM_CFG_SYNC:
@@ -381,6 +380,7 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
         case PARAM_RESERVED_012:
         case PARAM_RESERVED_013:
         case PARAM_RESERVED_015:
+        case PARAM_RESERVED_175:
         case PARAM_RESERVED_018:
         case PARAM_RESERVED_019:
         case PARAM_RESERVED_020:

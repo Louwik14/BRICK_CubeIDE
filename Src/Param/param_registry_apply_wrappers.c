@@ -116,7 +116,6 @@ void apply_mix_reverb_damp(float v) { mixer_set_reverb_damp(clamp_value(v, 0.0f,
 void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_smear(float v) { mixer_set_reverb_smear(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
 void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
 void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }

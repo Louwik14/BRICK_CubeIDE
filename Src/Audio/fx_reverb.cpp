@@ -24,7 +24,6 @@ typedef struct
     float predelay_s;
     float hpf;
     float lpf;
-    float smear;
 } fx_reverb_global_state_t;
 
 static fx_reverb_global_state_t g_reverb_global = {
@@ -37,7 +36,6 @@ static fx_reverb_global_state_t g_reverb_global = {
     .predelay_s = 0.045f,
     .hpf = 0.0f,
     .lpf = 0.0f,
-    .smear = 1.0f,
 };
 
 AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
@@ -54,7 +52,6 @@ static void fx_reverb_global_apply_params(void)
     fx_reverb_revb_global_set_predelay(g_reverb_global.predelay_s);
     fx_reverb_revb_global_set_hpf(g_reverb_global.hpf);
     fx_reverb_revb_global_set_lpf(g_reverb_global.lpf);
-    fx_reverb_revb_global_set_smear(g_reverb_global.smear);
 }
 
 void fx_reverb_global_init(float sample_rate)
@@ -107,12 +104,6 @@ void fx_reverb_global_set_hpf(float hpf)
 void fx_reverb_global_set_lpf(float lpf)
 {
     g_reverb_global.lpf = fx_reverb_clamp01(lpf);
-    fx_reverb_global_apply_params();
-}
-
-void fx_reverb_global_set_smear(float smear)
-{
-    g_reverb_global.smear = fx_reverb_clamp01(smear);
     fx_reverb_global_apply_params();
 }
 

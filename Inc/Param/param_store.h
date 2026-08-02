@@ -198,7 +198,7 @@ enum {
     PARAM_MIX_DELAY_LPF,
     PARAM_MIX_DELAY_FBW,
     PARAM_MIX_REVERB_DAMP,
-    PARAM_MIX_REVERB_SMEAR,
+    PARAM_RESERVED_175,
     PARAM_MIX_DELAY_MOD,
     PARAM_MIX_DELAY_MOD_RATE,
     PARAM_MIX_DELAY_REV,
@@ -372,6 +372,7 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
         case PARAM_RESERVED_012:
         case PARAM_RESERVED_013:
         case PARAM_RESERVED_015:
+        case PARAM_RESERVED_175:
         case PARAM_RESERVED_018:
         case PARAM_RESERVED_019:
         case PARAM_RESERVED_020:
@@ -422,7 +423,7 @@ PARAM_STORE_STATIC_ASSERT(PARAM_DRUM_MD_MODEL == 21, "Drum MD parameter IDs chan
 PARAM_STORE_STATIC_ASSERT(PARAM_DRUM_MD_P1 == 22, "Drum MD parameter IDs changed");
 PARAM_STORE_STATIC_ASSERT(PARAM_DRUM_MD_P8 == 29, "Drum MD parameter IDs changed");
 PARAM_STORE_STATIC_ASSERT(PARAM_MIX_REVERB_DAMP == 174, "Reverb parameter IDs changed");
-PARAM_STORE_STATIC_ASSERT(PARAM_MIX_REVERB_SMEAR == 175, "Reverb parameter IDs changed");
+PARAM_STORE_STATIC_ASSERT(PARAM_RESERVED_175 == 175, "Reserved parameter ID changed");
 PARAM_STORE_STATIC_ASSERT(PARAM_COUNT == 323, "Parameter count changed");
 PARAM_STORE_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 307, "Persistent parameter count changed");
 #undef PARAM_STORE_STATIC_ASSERT

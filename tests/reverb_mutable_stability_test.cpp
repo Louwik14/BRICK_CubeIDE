@@ -15,7 +15,7 @@ static float damping_to_lp(float damping)
     return 1.0f - bounded;
 }
 
-static int run_case(float damping, float smear)
+static int run_case(float damping)
 {
     constexpr size_t kFrames = 131072U;
     std::vector<float> delay(32768U, 0.0f);
@@ -32,7 +32,6 @@ static int run_case(float damping, float smear)
     reverb.set_time(1.0f);
     reverb.set_lp(damping_to_lp(damping));
     reverb.set_output_filters(0.0f, 1.0f);
-    reverb.set_smear_depth(smear);
     reverb.Process(input.data(), left.data(), right.data(), kFrames);
 
     float peak = 0.0f;
@@ -54,14 +53,14 @@ static int run_case(float damping, float smear)
 
 int main()
 {
-    if(run_case(1.0f, 1.0f) != 0)
+    if(run_case(1.0f) != 0)
     {
-        std::fprintf(stderr, "Mutable reverb exceeded finite bounded response at max DAMP/SMEAR\n");
+        std::fprintf(stderr, "Mutable reverb exceeded finite bounded response at max DAMP\n");
         return 1;
     }
-    if(run_case(0.0f, 0.0f) != 0)
+    if(run_case(0.0f) != 0)
     {
-        std::fprintf(stderr, "Mutable reverb failed at minimum DAMP/SMEAR\n");
+        std::fprintf(stderr, "Mutable reverb failed at minimum DAMP\n");
         return 1;
     }
     return 0;

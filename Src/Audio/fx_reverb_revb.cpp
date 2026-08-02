@@ -32,14 +32,12 @@ struct revb_global_state_t
     float lpf;
     float damp;
     float hpf;
-    float smear;
     float wet_current;
     float size_current;
     float decay_current;
     float damp_current;
     float hpf_current;
     float lpf_current;
-    float smear_current;
     float predelay_lag_samples;
     float predelay_current_samples;
     uint32_t predelay_write;
@@ -95,7 +93,6 @@ static void apply_params(void)
                                       (g_revb.lpf_current <= 0.0f)
                                               ? 1.0f
                                               : (lp_fc / (1.0f + lp_fc)));
-    g_revb.engine.set_smear_depth(clampf_local(g_revb.smear_current, 0.0f, 1.0f));
     g_revb.engine.set_lfo1_freq(lfo1_hz);
     g_revb.engine.set_lfo2_freq(lfo2_hz);
 
@@ -129,14 +126,12 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.lpf = 0.0f;
     g_revb.damp = 0.70f;
     g_revb.hpf = 0.0f;
-    g_revb.smear = 1.0f;
     g_revb.wet_current = 0.0f;
     g_revb.size_current = g_revb.size;
     g_revb.decay_current = g_revb.decay;
     g_revb.damp_current = g_revb.damp;
     g_revb.hpf_current = g_revb.hpf;
     g_revb.lpf_current = g_revb.lpf;
-    g_revb.smear_current = g_revb.smear;
     g_revb.predelay_lag_samples = 0.0f;
     g_revb.predelay_write = 0U;
     g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
@@ -198,11 +193,6 @@ void fx_reverb_revb_global_set_lpf(float lpf)
     g_revb.lpf = clamp01_local(lpf);
 }
 
-void fx_reverb_revb_global_set_smear(float smear)
-{
-    g_revb.smear = clamp01_local(smear);
-}
-
 ITCM_TEXT_NAMED("fx_reverb_revb_global")
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
                                                            float *out_l,
@@ -228,9 +218,6 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     g_revb.damp_current += (g_revb.damp - g_revb.damp_current) * block_smooth;
     g_revb.hpf_current += (g_revb.hpf - g_revb.hpf_current) * block_smooth;
     g_revb.lpf_current += (g_revb.lpf - g_revb.lpf_current) * block_smooth;
-    g_revb.smear_current += (g_revb.smear - g_revb.smear_current) * block_smooth;
-    if((g_revb.smear == 0.0f) && (g_revb.smear_current < 0.0001f))
-        g_revb.smear_current = 0.0f;
     apply_params();
 
     const float wet_step = (g_revb.wet - g_revb.wet_current) / (float)frames;

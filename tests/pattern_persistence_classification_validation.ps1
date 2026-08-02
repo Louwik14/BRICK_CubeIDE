@@ -34,7 +34,7 @@ if ($classification -notmatch 'return PATTERN_LIVE_PARAM_NOT_RELEVANT;') { throw
 $reserved = @($params.Keys | Where-Object { $_ -like 'PARAM_RESERVED_*' -and $params[$_] -lt $persistCount })
 $global = @(
     'PARAM_MIX_REVERB_HPF', 'PARAM_MIX_REVERB_LPF',
-    'PARAM_MIX_REVERB_DAMP', 'PARAM_MIX_REVERB_SMEAR',
+    'PARAM_MIX_REVERB_DAMP',
     'PARAM_CFG_START', 'PARAM_CFG_TEMPO', 'PARAM_CFG_SYNC',
     'PARAM_CFG_REC_LEN', 'PARAM_CFG_METRO',
     'PARAM_MIX_SEND0_FX', 'PARAM_MIX_SEND1_FX',

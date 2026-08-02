@@ -263,7 +263,6 @@ typedef struct
     float pre_delay;
     float hpf;
     float lpf;
-    float smear;
 } mixer_reverb_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
@@ -274,7 +273,6 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .pre_delay = 0.50f,
     .hpf = 0.0f,
     .lpf = 0.0f,
-    .smear = 1.0f,
 };
 
 static float mixer_reverb_predelay_ui_to_seconds(float v)
@@ -1472,7 +1470,6 @@ static void mixer_reverb_state_reset_defaults(void)
     g_reverb.pre_delay = 0.50f;
     g_reverb.hpf = 0.0f;
     g_reverb.lpf = 0.0f;
-    g_reverb.smear = 1.0f;
 }
 
 void mixer_reset_runtime_state(void)
@@ -1486,7 +1483,6 @@ void mixer_reset_runtime_state(void)
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
     fx_reverb_global_set_hpf(g_reverb.hpf);
     fx_reverb_global_set_lpf(g_reverb.lpf);
-    fx_reverb_global_set_smear(g_reverb.smear);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
@@ -1801,12 +1797,6 @@ void mixer_set_reverb_hpf(float hpf)
 {
     g_reverb.hpf = clamp01(hpf);
     fx_reverb_global_set_hpf(g_reverb.hpf);
-}
-
-void mixer_set_reverb_smear(float smear)
-{
-    g_reverb.smear = clamp01(smear);
-    fx_reverb_global_set_smear(g_reverb.smear);
 }
 
 void mixer_set_reverb_lpf(float lpf)

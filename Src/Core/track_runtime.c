@@ -1981,7 +1981,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
         case PARAM_MIX_REVERB_DAMP:
-        case PARAM_MIX_REVERB_SMEAR:
         case PARAM_MIX_DELAY_TYPE:
         case PARAM_MIX_DELAY_TIME:
         case PARAM_MIX_DELAY_PINGPONG:

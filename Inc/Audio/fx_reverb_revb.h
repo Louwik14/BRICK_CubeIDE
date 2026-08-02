@@ -17,7 +17,6 @@ void fx_reverb_revb_global_set_damp(float damp);
 void fx_reverb_revb_global_set_predelay(float predelay_s);
 void fx_reverb_revb_global_set_hpf(float hpf);
 void fx_reverb_revb_global_set_lpf(float lpf);
-void fx_reverb_revb_global_set_smear(float smear);
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
                                                             float *out_l,
                                                             float *out_r,

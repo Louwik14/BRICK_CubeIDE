@@ -34,7 +34,7 @@ static const ui_template_family_t g_ui_template_tone_family_master_reverb_mutabl
     .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
     .subpages = {
         { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
-        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_MIX_REVERB_SMEAR } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },

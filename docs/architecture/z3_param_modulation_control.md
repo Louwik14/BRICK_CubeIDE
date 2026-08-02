@@ -28,7 +28,7 @@ Les transitions structurelles passent par les commandes dédiées et les snapsho
 
 ENV est le propriétaire logique unique des paramètres filtre, VCA, ENV3 et de leurs retriggers. Le paramètre peut utiliser une ressource interne différente : le VCA est appliqué au backend mixer et ENV3 au backend `mod_env3`. Cette différence d'exécution ne crée ni ensemble VCA ni domaine MIX/MOD autonome.
 
-Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. La surface Mutable unique comprend `PARAM_MIX_REVERB_WET`, `PARAM_MIX_REVERB_SIZE`, `PARAM_MIX_REVERB_DECAY`, `PARAM_MIX_REVERB_PRED`, `PARAM_MIX_REVERB_DAMP`, `PARAM_MIX_REVERB_HPF`, `PARAM_MIX_REVERB_LPF` et `PARAM_MIX_REVERB_SMEAR`. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
+Les paramètres Master globaux reverb, delay et compresseur sont classés explicitement comme globals. La surface Mutable unique comprend `PARAM_MIX_REVERB_WET`, `PARAM_MIX_REVERB_SIZE`, `PARAM_MIX_REVERB_DECAY`, `PARAM_MIX_REVERB_PRED`, `PARAM_MIX_REVERB_DAMP`, `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF`. La modulation interne des longs délais Mutable reste une constante du backend, sans paramètre produit. Les paramètres MacroFX sont `TONE` mais sont valides uniquement pour le rôle topologique FX. `MIX` ne possède pas les MacroFX.
 
 `CFG_POLY_VOICES` et `CFG_POLY_SPREAD` appartiennent à CFG, sont appliqués par `synth_polyphony`, ne sont ni p-lockables ni modulables et ne sont pas une capacité PLAY.
 
@@ -69,7 +69,7 @@ La projection des quatre pots utilise `param_macro_set_amount()` et `param_macro
 
 ## IDs réservés et granular
 
-Les IDs `PARAM_RESERVED_000` à `PARAM_RESERVED_005` sont conservés pour stabilité. Les réserves `006`, `011..013`, `018..020` et `030..037` couvrent également des ordinaux sans ownership produit. Elles ont des descriptors neutres et sont inertes.
+Les IDs `PARAM_RESERVED_000` à `PARAM_RESERVED_005` sont conservés pour stabilité. Les réserves `006`, `011..013`, `018..020`, `030..037` et `175` couvrent également des ordinaux sans ownership produit. Elles ont des descriptors neutres et sont inertes; l'ancien ordinal du contrôle Mutable supprimé est `PARAM_RESERVED_175`.
 
 Le granular produit est supprimé : pas de famille, capacité, page, p-lock, modulation, backend compilé ou slot FX actif. Les six premiers ordinaux ne sont pas compactés dans cette passe afin de ne pas déplacer les IDs suivants.
 

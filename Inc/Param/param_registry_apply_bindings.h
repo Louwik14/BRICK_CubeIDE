@@ -81,7 +81,6 @@ void apply_mix_reverb_damp(float v);
 void apply_mix_reverb_hpf(float v);
 void apply_mix_reverb_lpf(float v);
 void apply_mix_reverb_pred(float v);
-void apply_mix_reverb_smear(float v);
 void apply_mix_reverb_size(float v);
 void apply_mix_reverb_wet(float v);
 void apply_mix_delay_feedback(float v);
