@@ -32,6 +32,10 @@ typedef struct
     uint16_t page_count;
     uint32_t total_frames;
     uint32_t data_offset;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
     uint8_t valid;
     uint8_t fully_loaded;

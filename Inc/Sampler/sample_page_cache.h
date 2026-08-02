@@ -31,16 +31,19 @@ typedef struct
 {
     sample_audio_key_t key;
     uint16_t sample_id;
-    uint16_t reserved;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
     uint32_t page_index;
     uint32_t start_frame;
     uint32_t frame_count;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     float *data;
     volatile sample_page_state_t state;
     uint16_t pin_count;
     uint16_t use_count;
     uint16_t window_pin_count;
-    uint16_t reserved2;
+    uint16_t reserved;
     uint32_t generation;
     uint32_t last_touch;
 } sample_page_desc_t;
@@ -52,13 +55,23 @@ typedef struct
     uint32_t start_frame;
     uint32_t page_index;
     uint32_t page_generation;
+    sample_audio_key_t key;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint32_t slot_index;
 } sample_page_span_t;
 
 typedef struct
 {
+    sample_audio_key_t key;
     uint32_t page_index;
     uint32_t page_generation;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint32_t slot_index;
 } sample_page_ref_t;
 
@@ -83,6 +96,9 @@ typedef struct
     uint32_t frame_count;
     uint32_t start_frame;
     uint32_t page_index;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     sample_page_block_status_t status;
 } sample_page_block_t;
 
@@ -93,6 +109,10 @@ typedef struct
     wav_info_t info;
     uint32_t total_frames;
     uint32_t data_offset;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
     uint8_t raw_pcm24;
 } sample_page_stream_info_t;
@@ -105,6 +125,10 @@ typedef struct
     uint32_t page_index;
     uint32_t start_frame;
     uint32_t frame_count;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     float *frames_interleaved;
 } sample_page_load_target_t;
 

@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_audio_format.h"
 #include "Sampler/sample_play_plan.h"
 
 #ifdef __cplusplus
@@ -31,6 +32,9 @@ typedef struct
     char name[MULTI_SAMPLE_POOL_NAME_MAX];
     char index_path[MULTI_SAMPLE_POOL_PATH_MAX];
     volatile multi_sample_instrument_state_t state;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     uint8_t note_min;
     uint8_t note_max;
     uint16_t sample_count;
@@ -50,6 +54,10 @@ typedef struct
     uint16_t channels;
     uint16_t bits_per_sample;
     uint16_t block_align;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint32_t loop_begin;
     uint32_t loop_end;
     uint8_t root_note;

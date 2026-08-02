@@ -47,6 +47,10 @@ typedef struct
     wav_info_t info;
     uint32_t total_frames;
     uint32_t data_offset;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     float *cache;
     uint32_t cache_capacity_frames;
     uint32_t cache_window_start_frame;
@@ -65,6 +69,10 @@ typedef struct
     uint32_t page_index;
     uint32_t slot_index;
     uint32_t generation;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint8_t valid;
     uint8_t acquired;
 } sample_stream_page_handle_t;
@@ -75,6 +83,10 @@ typedef struct
     uint32_t start_frame;
     uint32_t frame_count;
     uint32_t offset_frames;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint8_t valid;
 } sample_stream_span_t;
 
@@ -82,6 +94,9 @@ typedef struct
 {
     uint16_t sample_id;
     uint32_t frame_pos;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     sample_stream_page_handle_t current_page;
     sample_stream_span_t current_span;
     uint8_t valid;
@@ -114,6 +129,8 @@ typedef struct
     const float *r;
     uint32_t frames;
     uint32_t frame_stride;
+    sample_audio_format_t format;
+    uint32_t frames_per_page;
     uint8_t is_mono;
     sample_cache_block_status_t status;
 } sample_cache_block_t;
@@ -126,6 +143,8 @@ typedef struct
     uint32_t frame_stride;
     uint32_t start_frame;
     uint32_t backing_page_index;
+    sample_audio_format_t format;
+    uint32_t frames_per_page;
     uint8_t is_mono;
     uint8_t page_acquired;
 } sample_cache_span_t;

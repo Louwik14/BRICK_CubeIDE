@@ -35,6 +35,10 @@ typedef struct
     uint32_t source_region_begin;
     float source_position;
     float source_step;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint8_t is_mono;
     sample_kernel_type_t kernel_type;
     sample_audio_segment_status_t status;
@@ -42,6 +46,10 @@ typedef struct
 
 typedef struct
 {
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     sample_page_ref_t current_page_ref;
     sample_page_ref_t neighbor_page_ref;
     const float *current_base;
@@ -62,6 +70,10 @@ typedef struct
     uint8_t cache_voice_valid;
     uint16_t sample_id;
     sample_audio_key_t key;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     float position;
     float step;
     uint32_t frame_pos;

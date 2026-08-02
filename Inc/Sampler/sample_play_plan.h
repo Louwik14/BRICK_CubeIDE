@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/sample_audio_key.h"
+#include "Sampler/sample_audio_format.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,6 +61,10 @@ typedef struct
     uint16_t channels;
     uint16_t bits_per_sample;
     uint16_t block_align;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint16_t root_note;
     int16_t fine_tune_cents;
     uint32_t region_begin;
@@ -84,6 +89,10 @@ typedef struct
 {
     sample_audio_key_t key;
     uint16_t sample_id;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint32_t start_frame;
     uint32_t region_begin;
     uint32_t region_end;
@@ -133,6 +142,9 @@ typedef struct
     uint32_t page_end;
     uint32_t page_count;
     uint32_t first_page;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     uint8_t reverse;
     uint8_t valid;
 } sample_play_plan_page_span_t;

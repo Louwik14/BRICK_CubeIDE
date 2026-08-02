@@ -30,6 +30,10 @@ typedef struct
 typedef struct
 {
     sample_audio_key_t key;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     uint32_t current_frame;
     uint32_t end_frame;
     uint32_t step_q16;

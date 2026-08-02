@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_audio_format.h"
 #include "Sampler/multi_sample_pool.h"
 
 #ifdef __cplusplus
@@ -44,6 +45,9 @@ typedef struct
     uint32_t sample_rate;
     uint16_t channels;
     uint16_t bits_per_sample;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     uint32_t data_offset;
     uint32_t data_size;
     uint32_t loop_begin;
@@ -86,6 +90,9 @@ typedef struct
     uint32_t sample_rate;
     uint16_t channels;
     uint16_t bits_per_sample;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     uint32_t data_offset;
     uint32_t data_size;
     uint32_t loop_begin;
@@ -106,6 +113,9 @@ typedef struct
     uint16_t sample_count;
     uint16_t zone_count;
     uint32_t string_bytes;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
     const multi_sample_index_sample_t *samples;
     const multi_sample_index_zone_t *zones;
     const char *strings;

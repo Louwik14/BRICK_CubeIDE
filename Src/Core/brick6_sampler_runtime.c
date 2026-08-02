@@ -70,6 +70,10 @@ typedef struct
     uint32_t loop_frames;
     uint32_t fade_in_frames;
     uint32_t fade_out_frames;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint32_t registration_epoch;
     float step_signed;
     uint32_t ram_step_q16;
     uint8_t reverse;
