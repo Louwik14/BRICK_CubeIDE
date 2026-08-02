@@ -7,6 +7,7 @@
  */
 #define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
+#include "Storage/memory_layout.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -35,6 +36,7 @@
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 512U
+#define SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY SAMPLER_MULTI_MAX_GLOBAL_VOICES
 
 
 
@@ -95,11 +97,12 @@ static uint32_t g_seq_play_next_event_token;
 /*
  * Runtime-only occurrence token, retained at the scheduler's active-note
  * guard. It is distinct from note pitch and from persisted step data. The
- * one-token-per-pitch mirror remains a compatibility guard for this pass; the
- * Multi ownership pass must transport the event token into a
- * brick6_sampler_multi_voice_handle_t so identical pitches cannot alias.
+ * The bounded token list is the scheduler-side occurrence mirror. Multi
+ * receives the same token and resolves it to its (voice index, generation)
+ * handle before closing a voice.
  */
-static uint32_t g_seq_play_active_event_token[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
+SEQ_STATE_D2 static uint32_t g_seq_play_active_event_token[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U]
+                                                            [SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY];
 static uint8_t g_seq_play_track_generation[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static uint8_t g_seq_play_track_suspended[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
@@ -134,6 +137,12 @@ static void seq_play_scheduler_push_note_retrigs(uint64_t note_on_sample_time,
                                                  uint8_t note,
                                                  uint8_t velocity);
 static uint32_t seq_play_scheduler_alloc_event_token(void);
+static uint8_t seq_play_scheduler_active_token_add(seq_track_id_t track,
+                                                   uint8_t note,
+                                                   uint32_t token);
+static uint8_t seq_play_scheduler_active_token_remove(seq_track_id_t track,
+                                                      uint8_t note,
+                                                      uint32_t token);
 static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent);
 static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
                                                     uint8_t voice,
@@ -185,6 +194,53 @@ static uint32_t seq_play_scheduler_alloc_event_token(void)
         g_seq_play_next_event_token = 1U;
     }
     return g_seq_play_next_event_token;
+}
+
+static uint8_t seq_play_scheduler_active_token_add(seq_track_id_t track,
+                                                   uint8_t note,
+                                                   uint32_t token)
+{
+    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U) || (token == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY; ++i)
+    {
+        if (g_seq_play_active_event_token[track][note][i] == token)
+        {
+            return 1U;
+        }
+    }
+    for (uint8_t i = 0U; i < SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY; ++i)
+    {
+        if (g_seq_play_active_event_token[track][note][i] == 0U)
+        {
+            g_seq_play_active_event_token[track][note][i] = token;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t seq_play_scheduler_active_token_remove(seq_track_id_t track,
+                                                      uint8_t note,
+                                                      uint32_t token)
+{
+    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U) || (token == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY; ++i)
+    {
+        if (g_seq_play_active_event_token[track][note][i] == token)
+        {
+            g_seq_play_active_event_token[track][note][i] = 0U;
+            return 1U;
+        }
+    }
+    return 0U;
 }
 
 static uint8_t seq_play_scheduler_program_value_decode(float value, uint8_t *out_program_0_127)
@@ -501,20 +557,21 @@ static param_id_t seq_play_scheduler_param_for_play_kind(seq_play_scheduler_play
     return seq_play_scheduler_param_note(0U);
 }
 
-static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
-                                                uint8_t note,
-                                                uint8_t velocity,
-                                                uint8_t is_note_on)
+static uint8_t seq_play_scheduler_emit_engine_note(seq_track_id_t track,
+                                                 uint8_t note,
+                                                 uint8_t velocity,
+                                                 uint8_t is_note_on,
+                                                 uint32_t event_token)
 {
     track_runtime_resolved_track_t resolved;
     if (track_runtime_resolve_track(track, &resolved) == 0U)
     {
-        return;
+        return 0U;
     }
 
     if (resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
     {
-        return;
+        return 0U;
     }
 
     if (is_note_on != 0U)
@@ -640,15 +697,26 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         {
             if (is_note_on != 0U)
             {
-                (void)brick6_sampler_runtime_trigger_multi_track_note_velocity(track, note, velocity);
+                return brick6_sampler_runtime_trigger_multi_track_note_velocity_token(
+                    track,
+                    note,
+                    velocity,
+                    event_token);
             }
             else
             {
-                /* The current sampler entry point is pitch-based; the token
-                 * is still retained above for the exact runtime hand-off. */
-                brick6_sampler_runtime_note_off_multi_track_note(track, note);
+                if (event_token == 0U)
+                {
+                    brick6_sampler_runtime_note_off_multi_track_note(track, note);
+                }
+                else
+                {
+                    brick6_sampler_runtime_note_off_multi_track_note_token(track,
+                                                                            note,
+                                                                            event_token);
+                }
             }
-            return;
+            return 1U;
         }
 
         if (is_note_on != 0U)
@@ -660,6 +728,8 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             brick6_sampler_runtime_note_off_note(track, note);
         }
     }
+
+    return 1U;
 }
 
 static void seq_play_scheduler_emit_midi_note_raw(const seq_play_scheduler_audio_event_t *event)
@@ -704,7 +774,7 @@ void seq_play_scheduler_dispatch_terminal_note_to_channel(seq_track_id_t track,
         midi_note_off(MIDI_DEST_BOTH, channel, note, 0U);
         seq_output_guard_note_off_seen(track, note);
     }
-    seq_play_scheduler_emit_engine_note(track, note, velocity, is_note_on);
+    seq_play_scheduler_emit_engine_note(track, note, velocity, is_note_on, 0U);
 }
 
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
@@ -867,29 +937,34 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
 
         for (uint8_t note = 0U; note < 128U; ++note)
         {
-            uint32_t token = 0U;
-            primask = seq_play_scheduler_enter_critical();
-            token = g_seq_play_active_event_token[track][note];
-            g_seq_play_active_event_token[track][note] = 0U;
-            seq_play_scheduler_exit_critical(primask);
-
-            if (token == 0U)
+            for (uint8_t token_index = 0U;
+                 token_index < SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY;
+                 ++token_index)
             {
-                continue;
-            }
+                uint32_t token = 0U;
+                primask = seq_play_scheduler_enter_critical();
+                token = g_seq_play_active_event_token[track][note][token_index];
+                g_seq_play_active_event_token[track][note][token_index] = 0U;
+                seq_play_scheduler_exit_critical(primask);
 
-            const seq_play_scheduler_audio_event_t forced_off = {
-                .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                .track = track,
-                .note = note,
-                .velocity = 0U,
-                .track_generation = g_seq_play_track_generation[track],
-                .reserved = 0U,
-                .sample_offset_in_block = 0U,
-                .event_token = token,
-            };
-            seq_play_scheduler_emit_midi_note_raw(&forced_off);
-            seq_play_scheduler_emit_engine_note(track, note, 0U, 0U);
+                if (token == 0U)
+                {
+                    continue;
+                }
+
+                const seq_play_scheduler_audio_event_t forced_off = {
+                    .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                    .track = track,
+                    .note = note,
+                    .velocity = 0U,
+                    .track_generation = g_seq_play_track_generation[track],
+                    .reserved = 0U,
+                    .sample_offset_in_block = 0U,
+                    .event_token = token,
+                };
+                seq_play_scheduler_emit_midi_note_raw(&forced_off);
+                seq_play_scheduler_emit_engine_note(track, note, 0U, 0U, token);
+            }
         }
     }
 
@@ -1434,16 +1509,44 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     {
         if (valid_note_key != 0U)
         {
-            if (g_seq_play_active_event_token[event->track][event->note] != event->event_token)
+            if (seq_play_scheduler_active_token_remove(event->track,
+                                                       event->note,
+                                                       event->event_token) == 0U)
             {
                 return;
             }
-            g_seq_play_active_event_token[event->track][event->note] = 0U;
         }
     }
     else if (valid_note_key != 0U)
     {
-        g_seq_play_active_event_token[event->track][event->note] = event->event_token;
+        if (seq_play_scheduler_active_token_add(event->track,
+                                                event->note,
+                                                event->event_token) == 0U)
+        {
+            return;
+        }
+    }
+
+    track_runtime_resolved_track_t resolved;
+    const uint8_t is_multi_sampler =
+        (track_runtime_resolve_track(event->track, &resolved) != 0U)
+        && (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI);
+    if (is_multi_sampler != 0U)
+    {
+        /* Multi owns its occurrence token directly; the legacy NoteFx path
+         * has no per-output token contract and must not collapse identical notes. */
+        if (seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
+                                                 event->note,
+                                                 event->velocity,
+                                                 is_note_on,
+                                                 event->event_token) == 0U)
+        {
+            (void)seq_play_scheduler_active_token_remove(event->track,
+                                                         event->note,
+                                                         event->event_token);
+        }
+        return;
     }
 
     const uint64_t sample_time = seq_runtime_exec_get_audio_timeline_sample();

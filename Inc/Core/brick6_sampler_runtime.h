@@ -162,15 +162,30 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                            uint8_t note,
                                                            uint8_t velocity,
                                                            float gain);
+uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_id,
+                                                                 uint16_t instrument_id,
+                                                                 uint8_t note,
+                                                                 uint8_t velocity,
+                                                                 float gain,
+                                                                 uint32_t event_token);
 uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity(uint8_t track_id,
                                                                   uint8_t note,
                                                                   uint8_t velocity);
+uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity_token(uint8_t track_id,
+                                                                       uint8_t note,
+                                                                       uint8_t velocity,
+                                                                       uint32_t event_token);
+void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t count);
+uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id);
 /*
  * Current scheduler compatibility surface. The implementation still accepts
  * [track, note] here; the exact Multi Note Off contract is the runtime handle
  * above and is introduced by the ownership step without changing persistence.
  */
 void brick6_sampler_runtime_note_off_multi_track_note(uint8_t track_id, uint8_t note);
+void brick6_sampler_runtime_note_off_multi_track_note_token(uint8_t track_id,
+                                                            uint8_t note,
+                                                            uint32_t event_token);
 void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off(uint8_t track_id);
 void brick6_sampler_runtime_stop(uint8_t track_id);
