@@ -16,7 +16,7 @@ Une seule validation reste rouge : `hall_lowcost_integration_validation.ps1` att
 | Ordre Special | Low-Cost : Play 1..8, Input1, Looper, FX, Master. Premium : Input2 puis Input3 en slots 13 et 14. Les constantes et descripteurs topology portent l'ordre. | Conforme |
 | Capacités Special | Identité, capacités, mute et binding sont résolus par rôle topologique, pas par position. Master/FX restent des rôles fixes. | Conforme |
 | Remapping storage | Pattern, Project et Kit construisent une bijection bornée `role + ordinal`; config, sound, mix, séquences/actions, routes, globals trackés, Note FX, Multi et locks Macro sont normalisés avant application. Identité absente ou dupliquée : refus sans mutation. | Conforme |
-| Ordre CFG | Catalogue explicite `Off -> Synth -> Drum -> MIDI -> External -> Sampler`, wrap bidirectionnel; Input1..3 exclus. L'enum persisté reste `0..8` dans son ordre historique. | Conforme |
+| Ordre CFG | Catalogue explicite borné `Off -> Synth -> Drum -> MIDI -> External -> Sampler`, sans wrap aux limites; les familles indisponibles sont sautées et Input1..3 exclus. L'enum persisté reste `0..8` dans son ordre historique. | Conforme |
 | TONE Master | Résolution effective par rôle; pages reverb, delay et compresseur accessibles. Clipboard global via `param_get/param_set` et undo snapshot. | Conforme |
 | TONE FX | Résolution effective par rôle; quatre MacroFX et seize paramètres. Clipboard track-aware via le registre track et undo snapshot. | Conforme |
 | Surfaces interdites | Master/FX quittent le calcul de masque après TONE : aucun ENV, MOD ou MIX et aucun template vide. L'ancien MOD FX n'est plus exposé. | Conforme |

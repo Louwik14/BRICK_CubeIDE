@@ -330,11 +330,21 @@ ui_track_family_t ui_track_catalog_cfg_family_step(
     {
         if (direction > 0)
         {
-            position = (position + 1U < order_count) ? (uint8_t)(position + 1U) : 0U;
+            if (position + 1U >= order_count)
+            {
+                return current;
+            }
+
+            position = (uint8_t)(position + 1U);
         }
         else
         {
-            position = (position == 0U) ? (uint8_t)(order_count - 1U) : (uint8_t)(position - 1U);
+            if (position == 0U)
+            {
+                return current;
+            }
+
+            position = (uint8_t)(position - 1U);
         }
 
         const ui_track_family_t candidate = ui_track_catalog_cfg_family_order_at(position);

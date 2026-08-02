@@ -24,6 +24,16 @@ int main(void)
     ui_track_config_t configs[UI_TRACK_COUNT];
     set_play_configs(configs);
 
+    assert(UI_TRACK_FAMILY_OFF == 0);
+    assert(UI_TRACK_FAMILY_INPUT1 == 1);
+    assert(UI_TRACK_FAMILY_INPUT2 == 2);
+    assert(UI_TRACK_FAMILY_INPUT3 == 3);
+    assert(UI_TRACK_FAMILY_SYNTH == 4);
+    assert(UI_TRACK_FAMILY_DRUM == 5);
+    assert(UI_TRACK_FAMILY_MIDI == 6);
+    assert(UI_TRACK_FAMILY_SAMPLER == 7);
+    assert(UI_TRACK_FAMILY_EXTERNAL == 8);
+
     assert(ui_track_catalog_cfg_family_order_count() == 6U);
     for (uint8_t index = 0U; index < 6U; ++index)
     {
@@ -39,7 +49,7 @@ int main(void)
         current = ui_track_catalog_cfg_family_step(current, 1, 0U, configs);
         assert(current == expected[index]);
     }
-    assert(ui_track_catalog_cfg_family_step(current, 1, 0U, configs) == UI_TRACK_FAMILY_OFF);
+    assert(ui_track_catalog_cfg_family_step(current, 1, 0U, configs) == UI_TRACK_FAMILY_SAMPLER);
 
     current = UI_TRACK_FAMILY_OFF;
     for (int8_t index = 4; index >= 0; --index)
@@ -47,7 +57,7 @@ int main(void)
         current = ui_track_catalog_cfg_family_step(current, -1, 0U, configs);
         assert(current == expected[index]);
     }
-    assert(ui_track_catalog_cfg_family_step(current, -1, 0U, configs) == UI_TRACK_FAMILY_SAMPLER);
+    assert(ui_track_catalog_cfg_family_step(current, -1, 0U, configs) == UI_TRACK_FAMILY_OFF);
 
     configs[0].family = UI_TRACK_FAMILY_EXTERNAL;
     configs[0].type = UI_TRACK_TYPE_EXTERNAL;
@@ -57,12 +67,21 @@ int main(void)
         configs[track].type = UI_TRACK_TYPE_STREAM;
     }
     assert(ui_track_catalog_cfg_family_step(UI_TRACK_FAMILY_EXTERNAL, 1, 0U, configs)
-           == UI_TRACK_FAMILY_OFF);
+           == UI_TRACK_FAMILY_SAMPLER);
     assert(ui_track_catalog_cfg_family_step(UI_TRACK_FAMILY_OFF, -1, 0U, configs)
-           == UI_TRACK_FAMILY_EXTERNAL);
+           == UI_TRACK_FAMILY_OFF);
     assert(ui_track_catalog_cfg_family_step(UI_TRACK_FAMILY_INPUT1, 1, 0U, configs)
            == UI_TRACK_FAMILY_INPUT1);
     assert(!ui_track_catalog_family_is_available(0U, UI_TRACK_FAMILY_INPUT1, configs));
+
+    configs[8].family = UI_TRACK_FAMILY_SYNTH;
+    configs[8].type = UI_TRACK_TYPE_PRISM;
+    assert(ui_track_catalog_family_is_available(8U, UI_TRACK_FAMILY_SYNTH, configs));
+    assert(!ui_track_catalog_family_is_available(8U, UI_TRACK_FAMILY_OFF, configs));
+    assert(ui_track_catalog_cfg_family_step(UI_TRACK_FAMILY_SYNTH, 1, 8U, configs)
+           == UI_TRACK_FAMILY_SYNTH);
+    assert(ui_track_catalog_cfg_family_step(UI_TRACK_FAMILY_SYNTH, -1, 8U, configs)
+           == UI_TRACK_FAMILY_SYNTH);
 
     return 0;
 }

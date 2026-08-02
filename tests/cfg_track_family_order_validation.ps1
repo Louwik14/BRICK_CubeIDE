@@ -48,14 +48,27 @@ foreach ($helper in @(
 )) {
     if (-not $catalogHeader.Contains($helper) -or -not $catalog.Contains($helper)) { throw "Missing CFG order helper: $helper" }
 }
-if ($catalog -notmatch 'direction > 0[\s\S]*position = \(position == 0U\)') {
+if ($catalog -notmatch 'direction > 0[\s\S]*position \+ 1U >= order_count[\s\S]*else[\s\S]*position == 0U') {
     throw 'CFG family navigation does not implement both directions'
 }
-if ($catalog -notmatch 'position \+ 1U < order_count[\s\S]*: 0U') {
-    throw 'CFG family navigation has no forward wrap'
+if ($catalog -notmatch 'position \+ 1U >= order_count[\s\S]*return current') {
+    throw 'CFG family navigation does not clamp at the forward limit'
 }
-if ($catalog -notmatch 'position == 0U[\s\S]*order_count - 1U') {
-    throw 'CFG family navigation has no reverse wrap'
+if ($catalog -notmatch 'position == 0U[\s\S]*return current') {
+    throw 'CFG family navigation does not clamp at the reverse limit'
+}
+if ($catalog -match 'order_count - 1U\) : 0U|position == 0U\) \? \(uint8_t\)\(order_count - 1U\)') {
+    throw 'CFG family navigation still wraps between order limits'
+}
+if ($catalog -notmatch 'ui_track_catalog_family_is_available\(track, candidate, track_configs\)') {
+    throw 'CFG family navigation does not skip unavailable families'
+}
+if (-not $catalog.Contains('if (track_topology_is_play(track) == 0U)')) {
+    throw 'CFG family catalog does not preserve Special track isolation'
+}
+$uiCore = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_core.c')
+if ($uiCore -notmatch 'if \(track_topology_is_play\(track\) == 0U\)[\s\S]*return false;') {
+    throw 'Special tracks are not protected from family mutation'
 }
 $cfgStepper = [regex]::Match($uiParam, '(?s)static float ui_param_step_cfg_track\(.*?\n\}\n\nstatic float ui_param_step_cfg_track_type').Groups[0].Value
 if ($cfgStepper.Contains('candidate = (int16_t)(candidate + direction)') -or
@@ -69,4 +82,4 @@ if ($registry -notmatch 'g_track_family_labels\[\].*Off.*Input1.*Synth.*Drum.*MI
     throw 'Canonical enum labels are missing or reordered'
 }
 
-'cfg_track_family_order_validation=PASS enum=0,1,2,3,4,5,6,7,8 order=Off-Synth-Drum-MIDI-External-Sampler inputs=excluded wrap=both labels=enum persistence=unchanged'
+'cfg_track_family_order_validation=PASS enum=0,1,2,3,4,5,6,7,8 order=Off-Synth-Drum-MIDI-External-Sampler inputs=excluded clamp=both unavailable=skipped special=fixed labels=enum persistence=unchanged'
