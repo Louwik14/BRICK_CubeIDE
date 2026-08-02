@@ -244,6 +244,44 @@ uint8_t multi_sample_pool_set_index_path(uint16_t instrument_id, const char *pat
                                   path);
 }
 
+uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
+                                                sample_audio_format_t format)
+{
+    if ((multi_sample_instrument_id_valid(instrument_id) == 0U)
+        || (g_multi_instruments[instrument_id].used == 0U)
+        || (sample_audio_format_is_valid(format) == 0U))
+    {
+        return 0U;
+    }
+
+    multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
+    if (instrument->sample_count != 0U)
+    {
+        const uint32_t end_sample = (uint32_t)instrument->first_sample_id
+                                    + instrument->sample_count;
+        for (uint32_t sample_id = instrument->first_sample_id;
+             (sample_id < end_sample) && (sample_id < g_multi_sample_count);
+             ++sample_id)
+        {
+            const multi_sample_desc_t *const sample = &g_multi_samples[sample_id];
+            if ((sample->format != format)
+                || (sample->stride_floats
+                    != sample_audio_format_stride_floats(format))
+                || (sample->frames_per_page
+                    != sample_audio_format_frames_per_page(format)))
+            {
+                return 0U;
+            }
+        }
+    }
+
+    instrument->format = format;
+    instrument->stride_floats =
+        (uint16_t)sample_audio_format_stride_floats(format);
+    instrument->frames_per_page = sample_audio_format_frames_per_page(format);
+    return 1U;
+}
+
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
 {
     if ((multi_sample_instrument_id_valid(instrument_id) == 0U)
@@ -451,6 +489,7 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     multi_sample_desc_t *const sample = &g_multi_samples[sample_id];
     memset(sample, 0, sizeof(*sample));
     sample->multi_sample_id = sample_id;
+    sample->instrument_id = instrument_id;
     sample->total_frames = total_frames;
     sample->root_note = root_note;
     sample->vel_low = vel_low;
@@ -492,12 +531,32 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     }
 
     multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
+    const sample_audio_format_t format = sample_audio_format_from_channels(channels);
+    if ((sample_audio_format_is_valid(format) == 0U)
+        || (g_multi_instruments[sample->instrument_id].used == 0U))
+    {
+        return 0U;
+    }
+    const multi_sample_instrument_t *const instrument =
+        &g_multi_instruments[sample->instrument_id].desc;
+    if ((sample_audio_format_is_valid(instrument->format) != 0U)
+        && (instrument->format != format))
+    {
+        return 0U;
+    }
     sample->data_offset = data_offset;
     sample->data_size = data_size;
     sample->sample_rate = sample_rate;
     sample->channels = channels;
     sample->bits_per_sample = bits_per_sample;
+    sample->format = format;
+    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
+    sample->frames_per_page = sample_audio_format_frames_per_page(format);
     sample->block_align = (uint16_t)((channels * bits_per_sample) / 8U);
+    if (sample_audio_format_is_valid(instrument->format) == 0U)
+    {
+        (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
+    }
     return (sample->block_align != 0U) ? 1U : 0U;
 }
 
@@ -553,7 +612,12 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
 
     const multi_sample_desc_t *const sample =
         multi_sample_pool_get_sample(resolved.multi_sample_id);
-    if ((sample == 0) || (sample->total_frames == 0U))
+    const multi_sample_instrument_t *const instrument =
+        multi_sample_pool_get_instrument(instrument_id);
+    if ((sample == 0) || (instrument == 0) || (sample->total_frames == 0U)
+        || (sample->format != instrument->format)
+        || (sample->stride_floats != instrument->stride_floats)
+        || (sample->frames_per_page != instrument->frames_per_page))
     {
         return 0U;
     }
@@ -568,9 +632,9 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     out_source->channels = sample->channels;
     out_source->bits_per_sample = sample->bits_per_sample;
     out_source->block_align = sample->block_align;
-    out_source->format = sample_audio_format_from_channels(sample->channels);
-    out_source->stride_floats = (uint16_t)sample_audio_format_stride_floats(out_source->format);
-    out_source->frames_per_page = sample_audio_format_frames_per_page(out_source->format);
+    out_source->format = sample->format;
+    out_source->stride_floats = sample->stride_floats;
+    out_source->frames_per_page = sample->frames_per_page;
     out_source->registration_epoch = 0U;
     out_source->root_note = resolved.root_note;
     out_source->fine_tune_cents = 0;
@@ -617,7 +681,10 @@ uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
     }
 
     const multi_sample_desc_t *const sample = &g_multi_samples[zone->multi_sample_id];
-    if ((sample->vel_low > zone->vel_low) || (sample->vel_high < zone->vel_high))
+    if ((sample->vel_low > zone->vel_low) || (sample->vel_high < zone->vel_high)
+        || (sample->format != instrument->format)
+        || (sample->stride_floats != instrument->stride_floats)
+        || (sample->frames_per_page != instrument->frames_per_page))
     {
         return 0U;
     }

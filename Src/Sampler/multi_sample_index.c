@@ -7,7 +7,7 @@
 
 #include "ff.h"
 
-#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE (52U)
+#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE (64U)
 #define MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE   (8U)
 
 typedef struct
@@ -25,7 +25,10 @@ typedef struct
     uint32_t file_size;
     uint32_t crc32;
     char instrument_name[MULTI_SAMPLE_POOL_NAME_MAX];
-    uint8_t reserved[20];
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    uint8_t reserved[8];
 } multi_sample_index_header_t;
 
 SDRAM_MULTI_LOAD static multi_sample_index_sample_t
@@ -154,6 +157,46 @@ static uint8_t multi_index_path_bytes_valid(const char *path, uint16_t len)
     return 1U;
 }
 
+static uint8_t multi_index_sample_format_valid(const multi_sample_index_sample_t *sample,
+                                               sample_audio_format_t expected_format)
+{
+    if ((sample == 0) || (sample_audio_format_is_valid(sample->format) == 0U)
+        || ((expected_format != SAMPLE_AUDIO_FORMAT_INVALID)
+            && (sample->format != expected_format))
+        || (sample_audio_format_matches_channels(sample->format, sample->channels) == 0U)
+        || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
+        || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format)))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t multi_index_format_contract_valid(const multi_sample_index_t *idx)
+{
+    if ((idx == 0) || (idx->sample_count == 0U))
+    {
+        return 1U;
+    }
+
+    if ((idx->samples == 0)
+        || (sample_audio_format_is_valid(idx->format) == 0U)
+        || (idx->stride_floats != sample_audio_format_stride_floats(idx->format))
+        || (idx->frames_per_page != sample_audio_format_frames_per_page(idx->format)))
+    {
+        return 0U;
+    }
+
+    for (uint16_t i = 0U; i < idx->sample_count; ++i)
+    {
+        if (multi_index_sample_format_valid(&idx->samples[i], idx->format) == 0U)
+        {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
 static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *src,
                                             multi_sample_index_t *out)
 {
@@ -202,6 +245,20 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
         g_index_samples[i].sample_rate = src->samples[i].sample_rate;
         g_index_samples[i].channels = src->samples[i].channels;
         g_index_samples[i].bits_per_sample = src->samples[i].bits_per_sample;
+        g_index_samples[i].format = sample_audio_format_from_channels(g_index_samples[i].channels);
+        if (sample_audio_format_is_valid(g_index_samples[i].format) == 0U)
+        {
+            return 0U;
+        }
+        if ((sample_audio_format_is_valid(src->samples[i].format) != 0U)
+            && (src->samples[i].format != g_index_samples[i].format))
+        {
+            return 0U;
+        }
+        g_index_samples[i].stride_floats =
+            (uint16_t)sample_audio_format_stride_floats(g_index_samples[i].format);
+        g_index_samples[i].frames_per_page =
+            sample_audio_format_frames_per_page(g_index_samples[i].format);
         g_index_samples[i].data_offset = src->samples[i].data_offset;
         g_index_samples[i].data_size = src->samples[i].data_size;
         g_index_samples[i].loop_begin = src->samples[i].loop_begin;
@@ -215,6 +272,17 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
         g_index_samples[i].wav_mtime = src->samples[i].wav_mtime;
         memcpy(&g_index_strings[string_bytes], src->samples[i].relative_path, path_len);
         string_bytes += path_len;
+
+        if (i == 0U)
+        {
+            out->format = g_index_samples[i].format;
+            out->stride_floats = g_index_samples[i].stride_floats;
+            out->frames_per_page = g_index_samples[i].frames_per_page;
+        }
+        else if (g_index_samples[i].format != out->format)
+        {
+            return 0U;
+        }
     }
 
     for (uint16_t i = 0U; i < src->zone_count; ++i)
@@ -245,6 +313,9 @@ static void multi_index_encode_header(const multi_sample_index_header_t *header,
     multi_index_put_le32(&out[36], header->file_size);
     multi_index_put_le32(&out[40], header->crc32);
     memcpy(&out[44], header->instrument_name, MULTI_SAMPLE_POOL_NAME_MAX);
+    multi_index_put_le16(&out[76], (uint16_t)header->format);
+    multi_index_put_le16(&out[78], header->stride_floats);
+    multi_index_put_le32(&out[80], header->frames_per_page);
 }
 
 static void multi_index_decode_header(const uint8_t *in, multi_sample_index_header_t *header)
@@ -263,6 +334,9 @@ static void multi_index_decode_header(const uint8_t *in, multi_sample_index_head
     header->file_size = multi_index_get_le32(&in[36]);
     header->crc32 = multi_index_get_le32(&in[40]);
     memcpy(header->instrument_name, &in[44], MULTI_SAMPLE_POOL_NAME_MAX);
+    header->format = (sample_audio_format_t)multi_index_get_le16(&in[76]);
+    header->stride_floats = multi_index_get_le16(&in[78]);
+    header->frames_per_page = multi_index_get_le32(&in[80]);
 }
 
 static void multi_index_encode_sample(const multi_sample_index_sample_t *sample, uint8_t *out)
@@ -275,17 +349,20 @@ static void multi_index_encode_sample(const multi_sample_index_sample_t *sample,
     multi_index_put_le32(&out[12], sample->sample_rate);
     multi_index_put_le16(&out[16], sample->channels);
     multi_index_put_le16(&out[18], sample->bits_per_sample);
-    multi_index_put_le32(&out[20], sample->data_offset);
-    multi_index_put_le32(&out[24], sample->data_size);
-    multi_index_put_le32(&out[28], sample->loop_begin);
-    multi_index_put_le32(&out[32], sample->loop_end);
-    out[36] = sample->root_note;
-    out[37] = sample->vel_low;
-    out[38] = sample->vel_high;
-    out[39] = sample->has_loop;
-    out[40] = sample->metadata_flags;
-    multi_index_put_le32(&out[44], sample->wav_size);
-    multi_index_put_le32(&out[48], sample->wav_mtime);
+    multi_index_put_le16(&out[20], (uint16_t)sample->format);
+    multi_index_put_le16(&out[22], sample->stride_floats);
+    multi_index_put_le32(&out[24], sample->frames_per_page);
+    multi_index_put_le32(&out[28], sample->data_offset);
+    multi_index_put_le32(&out[32], sample->data_size);
+    multi_index_put_le32(&out[36], sample->loop_begin);
+    multi_index_put_le32(&out[40], sample->loop_end);
+    out[44] = sample->root_note;
+    out[45] = sample->vel_low;
+    out[46] = sample->vel_high;
+    out[47] = sample->has_loop;
+    out[48] = sample->metadata_flags;
+    multi_index_put_le32(&out[52], sample->wav_size);
+    multi_index_put_le32(&out[56], sample->wav_mtime);
 }
 
 static void multi_index_decode_sample(const uint8_t *in,
@@ -298,17 +375,20 @@ static void multi_index_decode_sample(const uint8_t *in,
     sample->sample_rate = multi_index_get_le32(&in[12]);
     sample->channels = multi_index_get_le16(&in[16]);
     sample->bits_per_sample = multi_index_get_le16(&in[18]);
-    sample->data_offset = multi_index_get_le32(&in[20]);
-    sample->data_size = multi_index_get_le32(&in[24]);
-    sample->loop_begin = multi_index_get_le32(&in[28]);
-    sample->loop_end = multi_index_get_le32(&in[32]);
-    sample->root_note = in[36];
-    sample->vel_low = in[37];
-    sample->vel_high = in[38];
-    sample->has_loop = in[39];
-    sample->metadata_flags = in[40];
-    sample->wav_size = multi_index_get_le32(&in[44]);
-    sample->wav_mtime = multi_index_get_le32(&in[48]);
+    sample->format = (sample_audio_format_t)multi_index_get_le16(&in[20]);
+    sample->stride_floats = multi_index_get_le16(&in[22]);
+    sample->frames_per_page = multi_index_get_le32(&in[24]);
+    sample->data_offset = multi_index_get_le32(&in[28]);
+    sample->data_size = multi_index_get_le32(&in[32]);
+    sample->loop_begin = multi_index_get_le32(&in[36]);
+    sample->loop_end = multi_index_get_le32(&in[40]);
+    sample->root_note = in[44];
+    sample->vel_low = in[45];
+    sample->vel_high = in[46];
+    sample->has_loop = in[47];
+    sample->metadata_flags = in[48];
+    sample->wav_size = multi_index_get_le32(&in[52]);
+    sample->wav_mtime = multi_index_get_le32(&in[56]);
 }
 
 static void multi_index_encode_zone(const multi_sample_index_zone_t *zone, uint8_t *out)
@@ -385,6 +465,9 @@ static uint8_t multi_index_make_header(const multi_sample_index_t *idx,
                                 * MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE);
     header->file_size = header->strings_offset + idx->string_bytes;
     memcpy(header->instrument_name, idx->instrument_name, MULTI_SAMPLE_POOL_NAME_MAX);
+    header->format = idx->format;
+    header->stride_floats = idx->stride_floats;
+    header->frames_per_page = idx->frames_per_page;
     header->crc32 = multi_index_crc_header_tables(idx, header);
     return 1U;
 }
@@ -570,6 +653,9 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
         out->sample_count = header.sample_count;
         out->zone_count = header.zone_count;
         out->string_bytes = header.string_bytes;
+        out->format = header.format;
+        out->stride_floats = header.stride_floats;
+        out->frames_per_page = header.frames_per_page;
         out->samples = g_index_samples;
         out->zones = g_index_zones;
         out->strings = g_index_strings;
@@ -710,6 +796,11 @@ uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
         return 0U;
     }
 
+    if (multi_index_format_contract_valid(idx) == 0U)
+    {
+        return 0U;
+    }
+
     for (uint16_t i = 0U; i < idx->sample_count; ++i)
     {
         const multi_sample_index_sample_t *const sample = &idx->samples[i];
@@ -761,6 +852,10 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
     const multi_sample_index_t *idx,
     uint16_t instrument_id)
 {
+    if ((idx != 0) && (multi_index_format_contract_valid(idx) == 0U))
+    {
+        return MULTI_SAMPLE_INDEX_FORMAT_MISMATCH;
+    }
     if ((idx == 0) || (multi_sample_index_validate(idx) == 0U)
         || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
@@ -775,6 +870,13 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
         == 0U)
     {
         return MULTI_SAMPLE_INDEX_POOL_FAIL;
+    }
+    if ((idx->sample_count != 0U)
+        && (multi_sample_pool_set_instrument_format(instrument_id,
+                                                    idx->format)
+            == 0U))
+    {
+        return MULTI_SAMPLE_INDEX_FORMAT_MISMATCH;
     }
 
     for (uint16_t i = 0U; i < idx->sample_count; ++i)

@@ -319,12 +319,17 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return g_multi_load_diag.last_error;
     }
 
-    if (multi_sample_index_apply_to_pool(&index, instrument_id) != MULTI_SAMPLE_INDEX_OK)
+    const multi_sample_index_result_t apply_result =
+        multi_sample_index_apply_to_pool(&index, instrument_id);
+    if (apply_result != MULTI_SAMPLE_INDEX_OK)
     {
-        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_POOL_FAIL;
+        g_multi_load_diag.last_error =
+            (apply_result == MULTI_SAMPLE_INDEX_FORMAT_MISMATCH)
+                ? MULTI_SAMPLE_LOAD_FORMAT_MISMATCH
+                : MULTI_SAMPLE_LOAD_POOL_FAIL;
         (void)multi_sample_pool_set_state(instrument_id, MULTI_SAMPLE_INSTRUMENT_ERROR);
         g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
-        return MULTI_SAMPLE_LOAD_POOL_FAIL;
+        return g_multi_load_diag.last_error;
     }
     (void)multi_sample_pool_set_index_path(instrument_id, index_path);
 

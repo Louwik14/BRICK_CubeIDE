@@ -6004,6 +6004,25 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
     return 0U;
 }
 
+static uint8_t brick6_sampler_runtime_multi_voice_format_compatible(
+    const brick6_sampler_voice_t *voice)
+{
+    if (voice == NULL)
+    {
+        return 0U;
+    }
+
+    const multi_sample_instrument_t *const instrument =
+        multi_sample_pool_get_instrument(voice->multi_instrument_id);
+    return ((instrument != NULL)
+            && (sample_audio_format_is_valid(instrument->format) != 0U)
+            && (voice->play_plan.format == instrument->format)
+            && (voice->play_plan.stride_floats == instrument->stride_floats)
+            && (voice->play_plan.frames_per_page == instrument->frames_per_page))
+        ? 1U
+        : 0U;
+}
+
 void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
                                              float *out_l,
                                              float *out_r,
@@ -6158,6 +6177,13 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
         if ((multi_voice->active != 0U)
             && (multi_voice->owner_track_id == ctx->track_id))
         {
+            if (brick6_sampler_runtime_multi_voice_format_compatible(multi_voice) == 0U)
+            {
+                brick6_sampler_runtime_multi_stop_voice(
+                    multi_voice,
+                    (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
+                continue;
+            }
             if ((multi_voice->release_pending != 0U)
                     && (mixer_track_vca_requires_source(ctx->mix_track_id) == 0U))
             {

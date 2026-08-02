@@ -1235,6 +1235,10 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
     item->sample.sample_rate = info.sample_rate;
     item->sample.channels = info.channels;
     item->sample.bits_per_sample = info.bits_per_sample;
+    item->sample.format = sample_audio_format_from_channels(info.channels);
+    item->sample.stride_floats =
+        (uint16_t)sample_audio_format_stride_floats(item->sample.format);
+    item->sample.frames_per_page = sample_audio_format_frames_per_page(item->sample.format);
     item->sample.data_offset = info.data_offset;
     item->sample.data_size = info.data_size - (info.data_size % info.block_align);
     item->sample.wav_size = (uint32_t)fno->fsize;
