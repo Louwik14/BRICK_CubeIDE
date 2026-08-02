@@ -44,7 +44,6 @@
 #include "Mod/mod_matrix.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
-#include "Storage/undo_v2.h"
 #include "pages/ui_page_template_play.h"
 #include "stm32h7xx_hal.h"
 
@@ -73,8 +72,6 @@ static ui_param_state_t g_ui_param = {
 };
 static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
 static uint8_t g_ui_param_bank_track = 0xFFU;
-static uint8_t g_ui_param_encoder_edit_group_active = 0U;
-static uint32_t g_ui_param_encoder_edit_group_key = 0U;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
 
@@ -94,9 +91,6 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
                                          param_id_t param,
                                          uint8_t *out_set_id,
                                          seq_param_slot_t *out_param_slot);
-static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx);
-static uint32_t ui_param_get_active_undo_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track);
-static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, uint8_t active_track);
 static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, float *out_min, float *out_max);
 static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t active_track);
 static uint8_t ui_param_resolve_play_context(param_id_t param,
@@ -835,17 +829,11 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
 
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx)
 {
-    g_ui_param_encoder_edit_group_key = ui_param_make_encoder_group_gesture_key(ctx);
-    g_ui_param_encoder_edit_group_active = 1U;
+    (void)ctx;
 }
 
 void ui_param_end_encoder_edit_group(void)
 {
-    if (undo_v2_is_transaction_open() != 0U)
-    {
-        (void)undo_v2_commit_transaction();
-    }
-    g_ui_param_encoder_edit_group_active = 0U;
 }
 
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param)
@@ -972,76 +960,6 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
     }
 
     return 1U;
-}
-
-static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track)
-{
-    const uint32_t hall_mode = (uint32_t)ui_get_hall_mode();
-    return 0x10000000UL
-        | (hall_mode << 28)
-        | ((uint32_t)active_track << 20)
-        | ((uint32_t)param << 4)
-        | (uint32_t)(encoder & 0x0FU);
-}
-
-static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx)
-{
-    uint32_t key = 0x20000000UL | (((uint32_t)ui_get_hall_mode() & 0x0FU) << 24);
-
-    if ((ctx == 0) || (ctx->valid == 0U))
-    {
-        return key;
-    }
-
-    key ^= ((uint32_t)ctx->active_track & 0x0FU) << 20;
-    for (uint8_t encoder = 0U; encoder < 4U; ++encoder)
-    {
-        key ^= ((uint32_t)ctx->bank.params[encoder] & 0x03FFUL) << (encoder * 5U);
-    }
-
-    return key;
-}
-
-static uint32_t ui_param_get_active_undo_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track)
-{
-    if (g_ui_param_encoder_edit_group_active != 0U)
-    {
-        return g_ui_param_encoder_edit_group_key;
-    }
-
-    return ui_param_make_gesture_key(encoder, param, active_track);
-}
-
-static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, uint8_t active_track)
-{
-    if ((undo_v2_is_transaction_open() != 0U) || (undo_v2_param_is_undoable(param) == 0U))
-    {
-        return;
-    }
-
-    (void)undo_v2_begin_transaction(UNDO_V2_TX_KIND_PARAM,
-                                    UNDO_V2_SOURCE_ENCODER,
-                                    ui_param_get_active_undo_gesture_key(encoder, param, active_track),
-                                    UNDO_V2_TX_MODE_DELTA);
-}
-
-static uint8_t ui_param_begin_structural_undo(uint8_t encoder, param_id_t param, uint8_t track)
-{
-    if ((param != PARAM_CFG_TRACK) && (param != PARAM_CFG_TRACK_TYPE)
-            && (param != PARAM_CFG_POLY_VOICES)) return 0U;
-    if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_ENCODER,
-            ui_param_make_gesture_key(encoder, param, track)) != UNDO_V2_STATUS_OK) return 0U;
-    if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
-    { undo_v2_cancel_transaction(); return 0U; }
-    return 1U;
-}
-
-static void ui_param_finish_structural_undo(uint8_t started, uint8_t applied)
-{
-    if (started == 0U) return;
-    if ((applied == 0U) || (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK))
-    { undo_v2_cancel_transaction(); return; }
-    (void)undo_v2_commit_transaction();
 }
 
 static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, float *out_min, float *out_max)
@@ -1307,7 +1225,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             return 1U;
         }
 
-        ui_param_ensure_undo_transaction(encoder, param, track);
         if (ui_param_apply_seq_runtime_track_value(param, track, clamped) == 0U)
         {
             return 0U;
@@ -1316,10 +1233,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         if (update_active_mirror != 0U)
         {
             param_store_set_active(param, clamped);
-        }
-        if (undo_v2_is_transaction_open() != 0U)
-        {
-            (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
         }
         return 1U;
     }
@@ -1335,12 +1248,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             return 1U;
         }
 
-        ui_param_ensure_undo_transaction(encoder, param, track);
         param_set(param, clamped);
-        if (undo_v2_is_transaction_open() != 0U)
-        {
-            (void)undo_v2_record_param_change(param, 0U, 0U, before, clamped);
-        }
         return 1U;
     }
 
@@ -1362,8 +1270,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             }
             return 1U;
         }
-
-        ui_param_ensure_undo_transaction(encoder, param, track);
 
         const param_registry_track_edit_cmd_t fine_cmd = {
             .id = ui_param_prism_fine_for_tune(param),
@@ -1402,10 +1308,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             param_store_set_active(param, clamped);
             param_store_set_active(ui_param_prism_fine_for_tune(param), 0.5f);
         }
-        if (undo_v2_is_transaction_open() != 0U)
-        {
-            (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
-        }
         return 1U;
     }
 
@@ -1423,8 +1325,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         }
         return 1U;
     }
-
-    ui_param_ensure_undo_transaction(encoder, param, track);
 
     const param_registry_track_edit_cmd_t edit_cmd = {
         .id = param,
@@ -1456,10 +1356,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
     if (update_active_mirror != 0U)
     {
         param_store_set_active(param, clamped);
-    }
-    if (undo_v2_is_transaction_open() != 0U)
-    {
-        (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
     }
     return 1U;
 }
@@ -1754,23 +1650,11 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
     seq_plock_entry_t prior_entries[SEQ_STEPS_PER_PAGE];
     seq_value16_t target_values[SEQ_STEPS_PER_PAGE];
     uint8_t had_prior_entry[SEQ_STEPS_PER_PAGE];
-    uint8_t prior_trig[SEQ_STEPS_PER_PAGE];
-    const uint32_t gesture_key = ui_param_get_active_undo_gesture_key(encoder, param, active_track);
-
-    if (undo_v2_begin_transaction(UNDO_V2_TX_KIND_PLOCK,
-                                  UNDO_V2_SOURCE_ENCODER,
-                                  gesture_key,
-                                  UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
-    {
-        return 1U;
-    }
-
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
 
         float source_value = base_track_value;
-        prior_trig[i] = seq_model_get_trig(param_track, step);
         had_prior_entry[i] = seq_edit_step_plock_find(param_track, step, set_id, param_slot, &prior_entries[i]);
         if (had_prior_entry[i] != 0U)
         {
@@ -1788,9 +1672,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
     uint8_t applied_count = 0U;
     for (; applied_count < held_count; ++applied_count)
     {
-        const uint8_t before_present = had_prior_entry[applied_count];
-        const uint16_t before_value16 = (before_present != 0U) ? prior_entries[applied_count].value16 : 0U;
-        const uint8_t before_flags = (before_present != 0U) ? prior_entries[applied_count].flags : 0U;
         const seq_plock_op_status_t status = seq_edit_step_plock_upsert(param_track,
                                                                         held_steps[applied_count],
                                                                         set_id,
@@ -1803,46 +1684,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             if ((param_track != held_track) && (seq_model_get_trig(held_track, held_steps[applied_count]) == 0U))
             {
                 seq_model_set_trig(held_track, held_steps[applied_count], 1U);
-            }
-            const undo_v2_status_t undo_status =
-                undo_v2_record_plock_change(param_track,
-                                            held_steps[applied_count],
-                                            set_id,
-                                            param_slot,
-                                            before_present,
-                                            before_value16,
-                                            before_flags,
-                                            prior_trig[applied_count],
-                                            1U,
-                                            target_values[applied_count],
-                                            0U,
-                                            seq_model_get_trig(param_track, held_steps[applied_count]));
-            if (undo_status != UNDO_V2_STATUS_OK)
-            {
-                uint8_t rollback_count = (uint8_t)(applied_count + 1U);
-                while (rollback_count > 0U)
-                {
-                    rollback_count--;
-                    if (had_prior_entry[rollback_count] != 0U)
-                    {
-                        (void)seq_model_step_plock_upsert(param_track,
-                                                          held_steps[rollback_count],
-                                                          set_id,
-                                                          param_slot,
-                                                          prior_entries[rollback_count].value16,
-                                                          prior_entries[rollback_count].flags);
-                    }
-                    else
-                    {
-                        (void)seq_model_step_plock_delete(param_track,
-                                                          held_steps[rollback_count],
-                                                          set_id,
-                                                          param_slot);
-                    }
-                }
-
-                undo_v2_cancel_transaction();
-                return 1U;
             }
             continue;
         }
@@ -1868,11 +1709,9 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             }
         }
 
-        undo_v2_cancel_transaction();
         return 1U;
     }
 
-    (void)undo_v2_commit_transaction();
     ui_param_note_user_value_flash(encoder,
                                    param,
                                    param_track,
@@ -2082,7 +1921,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         {
             return 0U;
         }
-        const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
         const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
         if (structural_applied != 0U)
         {
@@ -2091,11 +1929,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-        }
-        ui_param_finish_structural_undo(structural_undo, structural_applied);
-        if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
-        {
-            (void)undo_v2_commit_transaction();
         }
         return 1U;
     }
@@ -2107,7 +1940,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         {
             return 0U;
         }
-        const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
         const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
         if (structural_applied != 0U)
         {
@@ -2116,11 +1948,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                            edit_track,
                                            value,
                                            UI_PARAM_VALUE_FLASH_DIRECT);
-        }
-        ui_param_finish_structural_undo(structural_undo, structural_applied);
-        if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
-        {
-            (void)undo_v2_commit_transaction();
         }
         return 1U;
     }
@@ -2147,17 +1974,11 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
             if ((param == PARAM_CFG_POLY_VOICES) && (delta > 0))
                 ui_core_feedback_set("VOICE MAX", HAL_GetTick());
             const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
-            if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
-            {
-                (void)undo_v2_commit_transaction();
-            }
             return applied;
         }
     }
 
-    const uint8_t structural_undo = ui_param_begin_structural_undo(encoder, param, edit_track);
     uint8_t source_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
-    ui_param_finish_structural_undo(structural_undo, source_applied);
     if (source_applied != 0U)
     {
         ui_param_note_user_value_flash(encoder,
@@ -2167,9 +1988,5 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        UI_PARAM_VALUE_FLASH_DIRECT);
     }
     (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
-    if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
-    {
-        (void)undo_v2_commit_transaction();
-    }
     return 1U;
 }

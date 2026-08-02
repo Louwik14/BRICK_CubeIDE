@@ -78,5 +78,8 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
 void seq_edit_clear_steps(seq_track_id_t track,
                           const seq_step_id_t *steps,
                           uint8_t step_count);
+void seq_edit_clear_steps_without_undo(seq_track_id_t track,
+                                       const seq_step_id_t *steps,
+                                       uint8_t step_count);
 
 #endif /* SEQ_EDIT_H */

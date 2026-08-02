@@ -229,6 +229,25 @@ static uint16_t undo_v2_snapshot_alloc(void)
     return index;
 }
 
+static uint8_t undo_v2_snapshot_has_effective_change(const undo_v2_snapshot_payload_t *payload)
+{
+    if ((payload == 0) || (payload->before_valid == 0U) || (payload->after_valid == 0U))
+    {
+        return 1U;
+    }
+
+    if (memcmp(&payload->before_snapshot,
+               &payload->after_snapshot,
+               sizeof(payload->before_snapshot)) != 0)
+    {
+        return 1U;
+    }
+
+    return (memcmp(payload->before_note_fx,
+                   payload->after_note_fx,
+                   sizeof(payload->before_note_fx)) != 0) ? 1U : 0U;
+}
+
 static void undo_v2_discard_oldest_committed(void)
 {
     if (undo_v2_history_total_count() == 0U)
@@ -677,18 +696,8 @@ void undo_v2_clear_all(void)
 
 uint8_t undo_v2_param_is_undoable(param_id_t param_id)
 {
-    switch (param_id)
-    {
-        case PARAM_CFG_TRACK:
-        case PARAM_CFG_TRACK_TYPE:
-        case PARAM_CFG_MIDI_CH:
-        case PARAM_CFG_MIDI_SRC:
-        case PARAM_CFG_POLY_VOICES:
-            return 0U;
-
-        default:
-            return (param_id < PARAM_COUNT) ? 1U : 0U;
-    }
+    (void)param_id;
+    return 0U;
 }
 
 undo_v2_status_t undo_v2_begin_transaction(undo_v2_tx_kind_t kind,
@@ -776,6 +785,16 @@ undo_v2_status_t undo_v2_commit_transaction(void)
     }
 
     if ((tx->mode == UNDO_V2_TX_MODE_DELTA) && (tx->payload_count == 0U))
+    {
+        undo_v2_cancel_transaction();
+        undo_v2_set_status(UNDO_V2_STATUS_OK);
+        return g_undo_v2_runtime.last_status;
+    }
+
+    if ((tx->mode == UNDO_V2_TX_MODE_SNAPSHOT)
+        && (tx->kind == UNDO_V2_TX_KIND_SNAPSHOT)
+        && (tx->payload_index < UNDO_V2_MAX_SNAPSHOTS)
+        && (undo_v2_snapshot_has_effective_change(&g_undo_v2_snapshots[tx->payload_index]) == 0U))
     {
         undo_v2_cancel_transaction();
         undo_v2_set_status(UNDO_V2_STATUS_OK);

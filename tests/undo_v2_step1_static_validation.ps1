@@ -5,6 +5,9 @@ $undo = Get-Content -Raw (Join-Path $repo 'Src\Storage\undo_v2.c')
 $undoHeader = Get-Content -Raw (Join-Path $repo 'Inc\Storage\undo_v2.h')
 $edit = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_edit.c')
 $clipboard = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_core_clipboard.c')
+$uiParam = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_param.c')
+$liveRec = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_live_rec_session.c')
+$applyWrappers = Get-Content -Raw (Join-Path $repo 'Src\Param\param_registry_apply_wrappers.c')
 $functional = Get-Content -Raw (Join-Path $repo 'tests\undo_v2_functional_test.c')
 
 foreach ($required in @(
@@ -22,19 +25,36 @@ foreach ($required in @(
     }
 }
 
-# Step 1 freezes the producer inventory. These checks intentionally describe the
-# current snapshot implementation; producer removal belongs to Step 2.
+if ($uiParam.Contains('undo_v2_') -or
+    $liveRec.Contains('undo_v2_') -or
+    $applyWrappers.Contains('undo_v2_') -or
+    $clipboard.Contains('undo_v2_')) {
+    throw 'Non-structural Undo producer remains in UI, live recording, parameter wrappers or Track/Page clipboard'
+}
+
+if ($edit.Contains('undo_v2_begin_transaction') -or
+    $edit.Contains('undo_v2_record_plock_change') -or
+    $edit.Contains('undo_v2_record_param_change') -or
+    $edit.Contains('seq_model_set_step_roll(track, step') -and $edit.Contains('undo_v2_begin_snapshot_transaction')) {
+    throw 'Non-structural seq_edit producer remains undoable'
+}
+
 foreach ($required in @(
     'seq_edit_begin_snapshot_undo',
     'seq_edit_finish_snapshot_undo',
-    'seq_edit_clear_steps',
     'seq_edit_paste_steps',
-    'ui_core_clipboard_begin_snapshot_undo',
-    'ui_core_clipboard_finish_snapshot_undo'
+    'seq_edit_clear_steps',
+    'seq_edit_clear_steps_without_undo',
+    'undo_v2_snapshot_has_effective_change',
+    'return 0U;'
 )) {
-    if (-not $edit.Contains($required) -and -not $clipboard.Contains($required)) {
-        throw "Step 1 producer inventory changed unexpectedly: $required"
+    if (-not ($edit.Contains($required) -or $undo.Contains($required) -or $liveRec.Contains($required))) {
+        throw "Missing Step 2 producer contract: $required"
     }
+}
+
+if ($undo -notmatch 'uint8_t undo_v2_param_is_undoable\(param_id_t param_id\)[\s\S]{0,120}return 0U;') {
+    throw 'Parameter Undo gate is still enabled'
 }
 
 if ($functional -notmatch 'test_play_step_round_trip' -or
@@ -52,4 +72,4 @@ if ($functional -notmatch 'SEQ_PLAY_STEP_MAX_LOCKS' -or
     throw 'Play/Special step payload coverage is incomplete'
 }
 
-'undo_v2_step1_static_validation=PASS producer_inventory=baseline functional_matrix=registered variants=lowcost,premium'
+'undo_v2_step2_static_validation=PASS structural_only=yes non_structural_producers=removed no_op_guard=yes variants=lowcost,premium'

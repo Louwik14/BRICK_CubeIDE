@@ -111,10 +111,8 @@ if (-not $clipboard.Contains('rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED'
     -not $clipboard.Contains('param_registry_apply_track_value(target, track, value)')) {
     throw 'Clipboard does not separate global Master writes from track-aware FX writes'
 }
-if (-not $clipboard.Contains('undo_v2_begin_snapshot_transaction') -or
-    -not $clipboard.Contains('undo_v2_capture_snapshot_before') -or
-    -not $clipboard.Contains('undo_v2_capture_snapshot_after')) {
-    throw 'Clipboard clear/paste is not covered by snapshot undo/redo'
+if ($clipboard.Contains('undo_v2_')) {
+    throw 'Track/ensemble/page clipboard still creates Undo entries'
 }
 
 foreach ($reverbParam in @(
