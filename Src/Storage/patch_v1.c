@@ -227,8 +227,17 @@ static patch_v1_result_t patch_v1_capture_payload(uint8_t track,
     memset(out_track, 0, sizeof(*out_track));
     out_track->family = (uint8_t)ui_get_track_family(track);
     out_track->type = (uint8_t)ui_get_track_type(track);
-    out_track->synth_voice_count = (out_track->family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
-        ? synth_polyphony_get_voice_count(track) : 1U;
+    if (out_track->family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+    {
+        out_track->poly_voice_count = synth_polyphony_get_voice_count(track);
+        out_track->poly_spread = synth_polyphony_get_spread(track);
+    }
+    else if ((out_track->family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+             && (out_track->type == (uint8_t)UI_TRACK_TYPE_MULTI))
+    {
+        out_track->poly_voice_count = brick6_sampler_runtime_get_multi_voice_count(track);
+        out_track->poly_spread = brick6_sampler_runtime_get_multi_spread(track);
+    }
     memcpy(&out_track->sound, sound, sizeof(out_track->sound));
     memcpy(&out_track->tone, tone, sizeof(out_track->tone));
     patch_v1_capture_sampler_asset(tone, &out_track->asset);
@@ -359,7 +368,7 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
     }
     if (patch->track.family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
     {
-        uint8_t requested = patch->track.synth_voice_count;
+        uint8_t requested = patch->track.poly_voice_count;
         if (requested < 1U) requested = 1U;
         if (requested > SYNTH_POLYPHONY_MAX_VOICES) requested = SYNTH_POLYPHONY_MAX_VOICES;
         while ((applied_voice_count < requested) && (available > 0U))
@@ -368,6 +377,17 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
             available--;
         }
         if (applied_voice_count < requested) voice_limited = 1U;
+    }
+    else if ((patch->track.family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+             && (patch->track.type == (uint8_t)UI_TRACK_TYPE_MULTI))
+    {
+        applied_voice_count = patch->track.poly_voice_count;
+        if (applied_voice_count < 1U) applied_voice_count = 1U;
+        if (applied_voice_count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+        {
+            applied_voice_count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+            voice_limited = 1U;
+        }
     }
 
     uint8_t family[UI_TRACK_COUNT];
@@ -393,9 +413,22 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
     }
     track_runtime_invalidate_all();
     track_runtime_refresh_all();
-    if (patch->track.family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+    if ((patch->track.family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+            || ((patch->track.family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+                && (patch->track.type == (uint8_t)UI_TRACK_TYPE_MULTI)))
     {
-        (void)synth_polyphony_set_voice_count(target, applied_voice_count);
+        if (param_registry_apply_track_value(PARAM_CFG_POLY_VOICES,
+                                              target,
+                                              (float)applied_voice_count) == 0U)
+        {
+            return PATCH_V1_RESULT_APPLY_FAIL;
+        }
+        if (param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD,
+                                              target,
+                                              patch->track.poly_spread) == 0U)
+        {
+            return PATCH_V1_RESULT_APPLY_FAIL;
+        }
     }
 
     track_sound_state_t *const dst_sound = track_sound_state_get(target);

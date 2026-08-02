@@ -357,17 +357,27 @@ static uint8_t kit_v1_resolve_voice_budget(KitSaveV1 *kit)
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         kit_v1_track_payload_t *const payload = &kit->tracks[track];
-        requested[track] = payload->synth_voice_count;
+        requested[track] = payload->poly_voice_count;
         if ((payload->family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
                 || (payload->family == (uint8_t)UI_TRACK_FAMILY_DRUM))
         {
             if (remaining == 0U) return 0U;
-            payload->synth_voice_count = 1U;
+            payload->poly_voice_count = 1U;
             remaining--;
+        }
+        else if ((payload->family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+                 && (payload->type == (uint8_t)UI_TRACK_TYPE_MULTI))
+        {
+            if (payload->poly_voice_count < 1U) payload->poly_voice_count = 1U;
+            if (payload->poly_voice_count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+            {
+                payload->poly_voice_count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+                limited = 1U;
+            }
         }
         else
         {
-            payload->synth_voice_count = 0U;
+            payload->poly_voice_count = 0U;
         }
     }
 
@@ -378,12 +388,12 @@ static uint8_t kit_v1_resolve_voice_budget(KitSaveV1 *kit)
         uint8_t target = requested[track];
         if (target < 1U) target = 1U;
         if (target > SYNTH_POLYPHONY_MAX_VOICES) target = SYNTH_POLYPHONY_MAX_VOICES;
-        while ((payload->synth_voice_count < target) && (remaining > 0U))
+        while ((payload->poly_voice_count < target) && (remaining > 0U))
         {
-            payload->synth_voice_count++;
+            payload->poly_voice_count++;
             remaining--;
         }
-        if (payload->synth_voice_count < target) limited = 1U;
+        if (payload->poly_voice_count < target) limited = 1U;
     }
     return (uint8_t)(limited + 1U);
 }
@@ -522,14 +532,22 @@ static uint8_t kit_v1_transition_reapply(void *ctx_ptr)
     const KitSaveV1 *const kit = (const KitSaveV1 *)ctx_ptr;
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (kit->tracks[track].family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+        if ((kit->tracks[track].family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+                || ((kit->tracks[track].family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+                    && (kit->tracks[track].type == (uint8_t)UI_TRACK_TYPE_MULTI)))
         {
-            if (synth_polyphony_set_voice_count(track,
-                                                kit->tracks[track].synth_voice_count) == 0U)
+            if (param_registry_apply_track_value(PARAM_CFG_POLY_VOICES,
+                                                  track,
+                                                  (float)kit->tracks[track].poly_voice_count) == 0U)
             {
                 return 0U;
             }
-            synth_polyphony_set_spread(track, kit->tracks[track].synth_spread);
+            if (param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD,
+                                                  track,
+                                                  kit->tracks[track].poly_spread) == 0U)
+            {
+                return 0U;
+            }
         }
     }
     return (kit_v1_restore_loaded_kit_state(kit) == KIT_V1_RESULT_OK) ? 1U : 0U;
@@ -578,10 +596,17 @@ kit_v1_result_t kit_v1_capture_current(KitSaveV1 *out_kit)
 
         dst->family = (uint8_t)family;
         dst->type = (uint8_t)type;
-        dst->synth_voice_count = (family == UI_TRACK_FAMILY_SYNTH)
-            ? synth_polyphony_get_voice_count(track) : 0U;
-        dst->synth_spread = (family == UI_TRACK_FAMILY_SYNTH)
-            ? synth_polyphony_get_spread(track) : 0.0f;
+        if (family == UI_TRACK_FAMILY_SYNTH)
+        {
+            dst->poly_voice_count = synth_polyphony_get_voice_count(track);
+            dst->poly_spread = synth_polyphony_get_spread(track);
+        }
+        else if ((family == UI_TRACK_FAMILY_SAMPLER)
+                 && (type == UI_TRACK_TYPE_MULTI))
+        {
+            dst->poly_voice_count = brick6_sampler_runtime_get_multi_voice_count(track);
+            dst->poly_spread = brick6_sampler_runtime_get_multi_spread(track);
+        }
         track_topology_identity_t identity = {
             .role = (uint8_t)TRACK_TOPOLOGY_ROLE_UNUSED,
             .ordinal = 0U

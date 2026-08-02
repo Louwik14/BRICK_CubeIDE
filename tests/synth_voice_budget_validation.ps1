@@ -74,7 +74,7 @@ foreach ($required in @(
     'kit_v1_resolve_voice_budget',
     'KIT_V1_RESULT_VOICE_LIMITED',
     'synth_polyphony_set_voice_count(track',
-    'synth_voice_count'
+    'poly_voice_count'
 )) { if (-not ($kit.Contains($required) -or $kitH.Contains($required))) { throw "Missing Kit voice contract: $required" } }
 if (-not $poly.Contains('__DMB();')) { throw 'Synth pool publication has no IRQ ordering barrier' }
 

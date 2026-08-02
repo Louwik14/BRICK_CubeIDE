@@ -80,9 +80,10 @@ Require-Text $snapshotHeader 'float poly_spread;' 'Track snapshot does not carry
 Require-Text $snapshot 'out_snapshot->poly_spread = synth_polyphony_get_spread(track);' 'Track snapshot does not capture Synth SPREAD'
 Require-Text $snapshot 'out_snapshot->poly_spread = brick6_sampler_runtime_get_multi_spread(track);' 'Track snapshot does not capture Multi SPREAD'
 Require-Text $snapshot 'param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD' 'Track snapshot does not restore SPREAD canonically'
-Require-Text $kitHeader 'float synth_spread;' 'Kit payload does not carry SPREAD'
-Require-Text $kit 'dst->synth_spread = (family == UI_TRACK_FAMILY_SYNTH)' 'Kit capture does not carry SPREAD'
-Require-Text $kit 'synth_polyphony_set_spread(track, kit->tracks[track].synth_spread);' 'Kit restore does not carry SPREAD'
+Require-Text $kitHeader 'float poly_spread;' 'Kit payload does not carry generic SPREAD'
+Require-Text $kit 'dst->poly_spread = synth_polyphony_get_spread(track);' 'Kit capture does not carry Synth SPREAD'
+Require-Text $kit 'dst->poly_spread = brick6_sampler_runtime_get_multi_spread(track);' 'Kit capture does not carry Multi SPREAD'
+Require-Text $kit 'param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD' 'Kit restore does not carry SPREAD canonically'
 
 Require-Text (Read-RepoFile 'Src\Storage\pattern_sd_bank.c') '#define PATTERN_VERSION    5U' 'Pattern version changed unexpectedly'
 Require-Text (Read-RepoFile 'Inc\Storage\project_v1.h') '#define PROJECT_V1_FILE_VERSION    5U' 'Project version changed unexpectedly'
