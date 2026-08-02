@@ -515,7 +515,7 @@ uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step)
         return 0U;
     }
 
-    return ((s->trig != 0U) || (s->lock_count != 0U)) ? 1U : 0U;
+    return (s->trig != 0U) ? 1U : 0U;
 }
 
 seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step)
