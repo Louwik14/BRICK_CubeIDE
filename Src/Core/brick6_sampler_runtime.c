@@ -1420,8 +1420,22 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     clip->shifter_correction = pitch_plan.shifter_correction;
 
     memset(&play_plan, 0, sizeof(play_plan));
+    sample_resolved_source_t stream_source;
+    sample_resolved_source_init(&stream_source);
+    if (sample_cache_resolve_classic_source(clip->sample_id, &stream_source) == 0U)
+    {
+        if (use_shifter != 0U)
+        {
+            brick6_sampler_runtime_clip_release_slot(track_id);
+        }
+        return 0U;
+    }
     play_plan.sample_id = clip->sample_id;
     play_plan.key = sample_audio_key_classic(clip->sample_id);
+    play_plan.format = stream_source.format;
+    play_plan.stride_floats = stream_source.stride_floats;
+    play_plan.frames_per_page = stream_source.frames_per_page;
+    play_plan.registration_epoch = stream_source.registration_epoch;
     play_plan.start_frame = region_begin;
     play_plan.region_begin = region_begin;
     play_plan.region_end = region_end;
@@ -5934,6 +5948,52 @@ uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id)
             && (brick6_sampler_runtime_ram_slot_valid(voice, &ram) != 0U)
             && (ram != NULL)
             && (ram->format == SAMPLER_RAM_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
+}
+
+uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track_id);
+    if ((ctx == NULL)
+        || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+        || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
+    {
+        return 0U;
+    }
+
+    if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
+    {
+        const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+        const brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+        return ((clip->state == (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)
+                && (clip->use_shifter_engine == 0U)
+                && (voice->active != 0U)
+                && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+                && (voice->sample != NULL)
+                && (voice->sample->channels == 1U)) ? 1U : 0U;
+    }
+
+    if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
+    {
+        uint8_t active_voice = 0U;
+        for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+        {
+            const brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
+            if ((voice->active == 0U) || (voice->owner_track_id != track_id))
+            {
+                continue;
+            }
+
+            active_voice = 1U;
+            if (sample_audio_format_or_stereo(voice->play_plan.format)
+                != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
+            {
+                return 0U;
+            }
+        }
+        return active_voice;
+    }
+
+    return 0U;
 }
 
 void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
