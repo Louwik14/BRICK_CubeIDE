@@ -82,6 +82,7 @@ static void multi_voice_dsp_reset_slot(multi_voice_dsp_slot_t *slot)
     slot->keytrack_ratio = 1.0f;
     slot->keytrack_ratio_target = 1.0f;
     slot->filter_retrigger_hard = 1U;
+    slot->vca_retrigger_hard = 1U;
     slot->current_note = 60U;
     multi_voice_dsp_init_filter(slot,
                                 MULTI_VOICE_DSP_FORMAT_MONO,

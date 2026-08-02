@@ -76,8 +76,8 @@ typedef struct multi_voice_dsp_slot_t
     uint8_t vca_gate;
     uint8_t vca_enabled;
     uint8_t filter_retrigger_hard;
+    uint8_t vca_retrigger_hard;
     uint8_t current_note;
-    uint8_t reserved[1U];
 } multi_voice_dsp_slot_t;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)

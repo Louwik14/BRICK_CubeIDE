@@ -1513,6 +1513,11 @@ static void mixer_multi_filter_sync_config(uint32_t track_id,
     env_adsr_set_decay(&slot->filter_env, source->filter_env.decay);
     env_adsr_set_sustain(&slot->filter_env, source->filter_env.sustain);
     env_adsr_set_release(&slot->filter_env, source->filter_env.release);
+    env_adsr_set_attack(&slot->vca_env, source->vca_env.attack);
+    env_adsr_set_decay(&slot->vca_env, source->vca_env.decay);
+    env_adsr_set_sustain(&slot->vca_env, source->vca_env.sustain);
+    env_adsr_set_release(&slot->vca_env, source->vca_env.release);
+    slot->vca_retrigger_hard = source->vca_retrigger_hard;
     slot->filter_config_version = source->config_version;
     if (previous_type != slot->filter_type)
     {
@@ -1622,6 +1627,9 @@ void mixer_multi_filter_note_on(uint32_t track_id,
                           * clampf_local(slot->keytrack, 0.0f, 1.0f);
     slot->keytrack_ratio_target = exp2f(semitones * (1.0f / 12.0f));
     env_adsr_retrigger(&slot->filter_env, slot->filter_retrigger_hard != 0U);
+    slot->vca_enabled = 1U;
+    slot->vca_gate = 1U;
+    env_adsr_retrigger(&slot->vca_env, slot->vca_retrigger_hard != 0U);
 }
 
 void mixer_multi_filter_note_off(struct multi_voice_dsp_slot_t *slot)
@@ -1629,7 +1637,19 @@ void mixer_multi_filter_note_off(struct multi_voice_dsp_slot_t *slot)
     if (slot != NULL)
     {
         env_adsr_gate_off(&slot->filter_env);
+        slot->vca_gate = 0U;
+        env_adsr_gate_off(&slot->vca_env);
     }
+}
+
+uint8_t mixer_multi_voice_vca_requires_source(
+    const struct multi_voice_dsp_slot_t *slot)
+{
+    if ((slot == NULL) || (slot->vca_enabled == 0U))
+    {
+        return 0U;
+    }
+    return (env_adsr_stage(&slot->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
 }
 
 void mixer_multi_filter_process(uint32_t track_id,
@@ -1670,53 +1690,63 @@ void mixer_multi_filter_process(uint32_t track_id,
                                           slot->eq_high_target_db,
                                           MIXER_FILTER_BLOCK_SMOOTH);
 
-    if ((slot->filter_type == MIXER_TRACK_FILTER_OFF)
-        && (((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
-             && (slot->filter.stereo.biquad.bypass_xfade_remaining == 0U))
-            || ((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO)
-                && (slot->filter.mono.biquad.bypass_xfade_remaining == 0U))))
+    const uint8_t filter_is_off =
+        (slot->filter_type == MIXER_TRACK_FILTER_OFF) ? 1U : 0U;
+    const uint8_t filter_bypass_complete =
+        ((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
+         && (slot->filter.stereo.biquad.bypass_xfade_remaining == 0U))
+        || ((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO)
+            && (slot->filter.mono.biquad.bypass_xfade_remaining == 0U));
+    if ((filter_is_off == 0U) || (filter_bypass_complete == 0U))
     {
-        return;
-    }
-
-    if (slot->filter_type == MIXER_TRACK_FILTER_EQ3)
-    {
-        for (uint32_t offset = 0U; offset < frames; offset += MIXER_FILTER_UPDATE_PERIOD)
+        if (slot->filter_type == MIXER_TRACK_FILTER_EQ3)
         {
-            uint32_t chunk = frames - offset;
-            if (chunk > MIXER_FILTER_UPDATE_PERIOD)
+            for (uint32_t offset = 0U; offset < frames; offset += MIXER_FILTER_UPDATE_PERIOD)
             {
-                chunk = MIXER_FILTER_UPDATE_PERIOD;
-            }
-            if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
-            {
-                fx_dj_eq3_set_gains_db(&slot->filter.stereo.eq3,
-                                       slot->eq_low_db,
-                                       slot->eq_mid_db,
-                                       slot->eq_high_db);
-                fx_dj_eq3_process_block(&slot->filter.stereo.eq3,
-                                        &left[offset],
-                                        &right[offset],
-                                        chunk);
-            }
-            else
-            {
-                fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
-                                            slot->eq_low_db,
-                                            slot->eq_mid_db,
-                                            slot->eq_high_db);
-                fx_dj_eq3_mono_process_block(&slot->filter.mono.eq3,
-                                             &left[offset],
-                                             chunk);
+                uint32_t chunk = frames - offset;
+                if (chunk > MIXER_FILTER_UPDATE_PERIOD)
+                {
+                    chunk = MIXER_FILTER_UPDATE_PERIOD;
+                }
+                if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
+                {
+                    fx_dj_eq3_set_gains_db(&slot->filter.stereo.eq3,
+                                           slot->eq_low_db,
+                                           slot->eq_mid_db,
+                                           slot->eq_high_db);
+                    fx_dj_eq3_process_block(&slot->filter.stereo.eq3,
+                                            &left[offset],
+                                            &right[offset],
+                                            chunk);
+                }
+                else
+                {
+                    fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
+                                                slot->eq_low_db,
+                                                slot->eq_mid_db,
+                                                slot->eq_high_db);
+                    fx_dj_eq3_mono_process_block(&slot->filter.mono.eq3,
+                                                 &left[offset],
+                                                 chunk);
+                }
             }
         }
-        return;
+        else if ((mixer_track_filter_type_is_biquad(slot->filter_type) != 0U)
+                 || (slot->filter_type == MIXER_TRACK_FILTER_OFF))
+        {
+            mixer_multi_filter_process_biquad(slot, left, right, frames);
+        }
     }
 
-    if ((mixer_track_filter_type_is_biquad(slot->filter_type) != 0U)
-        || (slot->filter_type == MIXER_TRACK_FILTER_OFF))
+    if (slot->vca_enabled != 0U)
     {
-        mixer_multi_filter_process_biquad(slot, left, right, frames);
+        for (uint32_t frame = 0U; frame < frames; ++frame)
+        {
+            const float vca = (float)env_adsr_process_step(&slot->vca_env)
+                            * (1.0f / 32767.0f);
+            left[frame] *= vca;
+            right[frame] *= vca;
+        }
     }
 }
 
@@ -2441,6 +2471,7 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
 
     env_adsr_set_attack(&g_track_filters[track_id].vca_env,
                         mixer_track_filter_time_s_to_peaks(attack_s, g_track_filters[track_id].sample_rate));
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
 }
 
 void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
@@ -2450,6 +2481,7 @@ void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
 
     env_adsr_set_decay(&g_track_filters[track_id].vca_env,
                        mixer_track_filter_time_s_to_peaks(decay_s, g_track_filters[track_id].sample_rate));
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
 }
 
 void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
@@ -2459,6 +2491,7 @@ void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
 
     env_adsr_set_sustain(&g_track_filters[track_id].vca_env,
                          mixer_track_filter_sustain_to_peaks(sustain));
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
 }
 
 void mixer_set_track_vca_release(uint32_t track_id, float release_s)
@@ -2468,6 +2501,7 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
 
     env_adsr_set_release(&g_track_filters[track_id].vca_env,
                          mixer_track_filter_time_s_to_peaks(release_s, g_track_filters[track_id].sample_rate));
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
 }
 
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
@@ -2476,6 +2510,7 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
         return;
 
     g_track_filters[track_id].vca_enabled = (enabled != 0U) ? 1U : 0U;
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
     if (enabled == 0U)
     {
         g_track_filters[track_id].vca_note_active = 0U;
@@ -2493,6 +2528,7 @@ void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard)
         return;
 
     g_track_filters[track_id].vca_retrigger_hard = (hard != 0U) ? 1U : 0U;
+    mixer_track_filter_touch_config(&g_track_filters[track_id]);
 }
 
 void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
@@ -3245,10 +3281,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float gain_l = gain_cur * pan_l * mute_gain_cur;
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
                             : 1.0f;
                     if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                     {
                         g_track_filters[t].vca_env_value = vca_gain;
@@ -3297,10 +3335,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float gain_l = gain_cur * pan_l * mute_gain_cur;
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
                             : 1.0f;
                     if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                             && (g_track_filters[t].vca_enabled != 0U))
                     {
                         g_track_filters[t].vca_env_value = vca_gain;

@@ -139,6 +139,8 @@ void mixer_multi_filter_note_on(uint32_t track_id,
                                 struct multi_voice_dsp_slot_t *slot,
                                 uint8_t midi_note);
 void mixer_multi_filter_note_off(struct multi_voice_dsp_slot_t *slot);
+uint8_t mixer_multi_voice_vca_requires_source(
+    const struct multi_voice_dsp_slot_t *slot);
 void mixer_multi_filter_process(uint32_t track_id,
                                 struct multi_voice_dsp_slot_t *slot,
                                 float *left,
