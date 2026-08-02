@@ -46,6 +46,10 @@ audio IRQ
 
 `note_fx_engine_source()` recherche le premier slot ARP du track. Un evenement sans ARP va au terminal; un evenement retenu par ARP est emis plus tard directement au terminal. Les slots 1 a 4 existent dans `note_fx_track_state_t`, la page UI, les p-locks et la persistence, mais ne forment pas encore une chaine d'execution.
 
+Le mute de piste concerne ici l'origine sequenceur: il bloque les nouveaux STEP au point d'entree scheduler, sans fermer les occurrences deja admises. Les FX qui en derivent peuvent terminer les owned et echeances existantes, mais ne doivent plus produire de nouveaux On depuis cette source mutee. Les sources clavier et MIDI live restent soumises a leurs regles propres.
+
+Le terminal post-FX admet independamment le moteur interne et MIDI externe. `MIDI_DEST_BOTH` est une projection de routage, pas une admission atomique; chaque destination possede son resultat et son ledger.
+
 ### 3.2 Donnees existantes et pertes
 
 | Couche | Donnees presentes | Perte ou limite verifiee |
@@ -79,13 +83,13 @@ La demi-zone audio est de 64 frames. `audio.c` peut la fragmenter jusqu'a 64 sou
 5. Un evenement stale est rejete avant tout effet terminal.
 6. Les sources clavier, STEP, MIDI externe et ARP utilisent le meme contrat, avec une provenance differente.
 7. Les quatre slots sont traverses dans l'ordre `[0,1,2,3]`; un fan-out reprend au stage suivant et ne reboucle pas.
-8. Chaque stage peut transmettre, transformer, supprimer, fan-out borné ou differer, mais ne peut pas depasser sa capacite fixe.
-9. Un seul owner audio applique et mute l'etat runtime NoteFx; les autres contextes publient des commandes bornées.
-10. STOP, mute, panic, changement de pattern, changement de modele et changement de source sont idempotents et utilisent le meme protocole de fermeture.
-11. Les Note Off dus et les fermetures de transition sont prioritaires sur les nouveaux On.
-12. Les quotas sont fixes, mesures sur une demi-zone audio, et incluent les releases, le terminal et les refus.
-13. Toute saturation refuse une occurrence complete, compte le refus et ne prolonge pas silencieusement une note.
-14. MIDI externe et moteur local reçoivent le meme flux terminal; la polyphonie globale reste l'autorite des moteurs.
+8. Chaque stage peut transmettre, transformer, supprimer, fan-out borne ou differer, mais ne peut pas depasser sa capacite fixe.
+9. Un seul owner audio applique l'etat runtime NoteFx; il applique des politiques de transition distinctes et ne ferme pas systematiquement les notes.
+10. `MUTE_TRIGS` bloque uniquement les nouveaux trigs du sequenceur, conserve les occurrences actives et leurs echeances; STOP, PANIC et les reconfigurations destructives utilisent des politiques propres et idempotentes.
+11. Les Note Off dus et les fermetures possedees sont prioritaires sur les nouveaux On, y compris pendant `MUTE_TRIGS`.
+12. Les quotas sont fixes, mesures sur une demi-zone audio, et incluent releases, terminal, refus par destination et rattrapage de clock externe.
+13. Une saturation de source/stage/fermeture refuse une occurrence complete; une admission terminale reussit independamment par destination et ne cree un Off que pour une destination admise.
+14. MIDI externe et moteur local recoivent le meme evenement terminal mais ont chacun un resultat d'admission et un ledger; la polyphonie globale reste l'autorite des moteurs.
 15. Les bases NoteFx persistent; phase, deadlines, tokens, owned et files runtime ne persistent jamais.
 16. Aucun chemin audio/IRQ n'alloue dynamiquement, ne logge vers un stockage lent ou ne depend d'un lock non borne.
 
@@ -171,8 +175,8 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 
 - **Verdict:** `REFONDRE`; **sévérité:** `CRITIQUE`.
 - **Preuve:** `docs/audits/z1_hard_rt_debt_audit.md` confirme `g_slot`, overrides, tokens et ARP écrits depuis clavier/UI/restore/paramètres et IRQ audio sans file. `note_fx_pipeline_sync_track()` configure quatre slots successivement; `release_slot()` modifie owned, generation, ARP et deadline pendant que process peut les parcourir.
-- **Conséquences:** double Off, On créé dans une configuration partielle, phase ou deadline incohérente, lecture d'un snapshot non transactionnel.
-- **Solution:** bases NoteFx canonique hors runtime; commandes fixes vers un owner audio unique; apply transactionnel d'un track avant traitement; snapshots de diagnostic en lecture.
+- **Conséquences:** double Off, On créé dans une configuration partielle, phase ou deadline incohérente, lecture d'un snapshot non transactionnel. Un mute de trigs ne doit pas retirer les possessions déjà admises.
+- **Solution:** bases NoteFx canonique hors runtime; commandes fixes vers un owner audio unique; apply transactionnel d'un track avant traitement; snapshots de diagnostic en lecture; politiques explicites `MUTE_TRIGS`, `STOP_CLOSE`, `PANIC_CLOSE_ALL`, `MODEL_RECONFIGURE`, `PATTERN_REPLACE` et `DESTINATION_REBIND`.
 - **Alternatives rejetées:** section critique autour de tout le traitement audio; RTOS; allocation dynamique; double owner par modèle.
 - **Dépendances:** D-008, D-009, D-011.
 - **Tests:** interleavings injectés entre chaque écriture; p-lock/restore/cleanup concurrents; aucun runtime dans snapshot.
@@ -183,12 +187,12 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 
 - **Verdict:** `REFONDRE`; **sévérité:** `HAUTE`.
 - **Preuve:** cleanup existe dans `seq_play_scheduler_clear`, `clear_tracks`, `suspend/resume`, `seq_output_guard_panic`, `keyboard_runtime`, `ui_core`, `track_snapshot`, `param_registry` et `note_fx_pipeline`. `clear()` nettoie NoteFx et efface tokens mais ne force pas les Off non-ARP; `clear_tracks()` a une boucle distincte de forced Off.
-- **Conséquences:** STOP, panic, changement de source, mute, changement de modèle et changement de pattern n'ont pas la même idempotence ni les mêmes generations.
-- **Solution:** une commande de transition par scope (track/all), close->invalidate->purge->reset, réutilisée par tous les appelants; transitions ne mutent pas directement `g_slot`.
+- **Conséquences:** STOP, panic, changement de source, mute, changement de modèle et changement de pattern n'ont pas la même idempotence ni les mêmes generations. Le mute normal doit rester non destructif.
+- **Solution:** une commande `transition_apply(scope, policy)` par scope. `MUTE_TRIGS` bloque les nouveaux events STEP et leurs dérivés, conserve les ledgers et échéances et laisse passer leurs Off; les autres politiques appliquent, selon leur contrat, close->invalidate->purge->reset. Les transitions ne mutent pas directement `g_slot`.
 - **Alternatives rejetées:** appeler davantage de routines existantes; centraliser dans UI; utiliser `All Notes Off` comme remplacement universel.
 - **Dépendances:** D-003, D-007, D-015.
 - **Tests:** matrice des transitions section 16, double appel, événement ancien après chaque transition.
-- **Risque:** double fermeture MIDI historique.
+- **Risque:** double fermeture MIDI historique; le mute ne doit jamais appeler ce chemin de fermeture destructive.
 - **Étape:** 8.
 
 ### D-009 — Sample d'application remplacé par la fin de bloc
@@ -208,11 +212,11 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 - **Verdict:** `CORRIGER`; **sévérité:** `CRITIQUE`.
 - **Preuve:** `z4_scheduler_clock_midi_debt_audit.md:37,91-95,126-130` confirme pending `uint16_t` jusqu'à 65535, sans timestamp, consommé sans quota et rattrapé au sample de début de bloc.
 - **Conséquences:** coût non borné par demi-buffer, pulses regroupés au même sample, scheduler/NoteFx alimentés en rafale, dérive de phase externe.
-- **Solution:** budget fixe de rattrapage par demi-buffer/bloc, timestamp monotone ou politique explicite de coalescence/rejet compte, et deadline musicale cohérente.
+- **Solution:** budget fixe et petit de rattrapage par demi-buffer/bloc. Sous la limite, traiter quelques clocks normalement; au-delà, abandonner ou coalescer le surplus, incrémenter un compteur, avancer les compteurs logiques sans exécuter chaque boundary intermédiaire, puis reprendre au prochain boundary cohérent. Utiliser un Song Position Pointer seulement s'il est effectivement reçu et supporté; sinon ne pas inventer de position absolue.
 - **Alternatives rejetées:** traiter intégralement le backlog; utiliser `HAL_GetTick`; ajouter un timer dans NoteFx.
 - **Dépendances:** D-009, D-011.
 - **Tests:** rafale F8, backlog à 0/1/max, pause superloop, START/CONTINUE/STOP/source switch.
-- **Risque:** choix produit de drop/rephase à faire valider, sans modifier le FSM hors scope.
+- **Risque:** les valeurs exactes de la petite borne et la politique de coalescence doivent être mesurées sur H743; la règle produit d'absence de rafale est déjà figée, sans modifier le FSM hors scope.
 - **Étape:** 3 puis 6.
 
 ### D-011 — Budget NoteFx recréé par sous-segment et releases hors quota
@@ -232,7 +236,7 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 - **Verdict:** `REFONDRE`; **sévérité:** `HAUTE`.
 - **Preuve:** `g_seq_play_events[512]` est compacte puis recherchée par scans complets dans `audio_collect_block_events()` (`Src/Seq/seq_play_scheduler.c:1258-1380`). `push()` est `void` et ne distingue que drop générique; les événements au même sample sont départagés par type, sans contrat complet pour occurrences.
 - **Conséquences:** coût de scan et compactage dépend du backlog; program change, On, Off et transitions se disputent la capacité; high-water existe mais pas de quotas par classe ni réservation terminale.
-- **Solution:** conserver des files séparées si la mesure le justifie: pairs différées, commandes non-note, et sorties Off; ajouter quotas, high-water, ordre `(sample, priorité Off, occurrence_id)` et coût maximal documenté.
+- **Solution:** conserver des files séparées si la mesure le justifie: paires différées, commandes non-note, sorties Off et pending clocks. Ajouter quotas, high-water, ordre `(sample, priorité Off, occurrence_id)`, compteur de clocks abandonnées/coalescées et coût maximal documenté; aucune boucle ne traite l'intégralité d'un backlog dans une demi-zone.
 - **Alternatives rejetées:** file universelle sans classe; tri dynamique; scan non borné jusqu'à 65535.
 - **Dépendances:** D-010, D-011, D-013.
 - **Tests:** 0/1/2 places, dense 8 tracks, ordre même sample, saturation et stale.
@@ -244,11 +248,11 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 - **Verdict:** `REFONDRE`; **sévérité:** `CRITIQUE`.
 - **Preuve:** `midi.c:164-183,321-343,717-720` utilise TX 128 et drop les channel-voice pleins; `midi_note_on/off()` sont `void` (`:1265-1290`). Seuls realtime clock/transport ont une insertion frontale prioritaire.
 - **Conséquences:** On peut être compté actif alors que son paquet est perdu; Off ou panic peut être perdu; la reconnexion peut transmettre des paquets anciens; `MIDI_DEST_BOTH` ne fournit pas un acquittement par destination.
-- **Solution:** admission locale par destination avec capacité réservée aux Off, retour d'enqueue jusqu'au terminal, compteur de refus, purge générationnée sur déconnexion et politique déterministe de saturation.
+- **Solution:** admission indépendante par destination avec capacité réservée aux Off, retour d'enqueue jusqu'au terminal, compteur de refus par destination, purge générationnée de la seule destination MIDI sur déconnexion et politique déterministe de saturation. Un refus MIDI ne refuse jamais l'interne, et inversement.
 - **Alternatives rejetées:** considérer `void` comme succès; envoyer davantage de All Notes Off; changer le débit USB hors chantier.
 - **Dépendances:** D-004, D-008.
 - **Tests:** TX 127/128, USB non-idle/deconnecte/reconnecte, On/Off/panic/clock mélangés.
-- **Risque:** les deux destinations ne peuvent pas être déclarées atomiques si l'une refuse; l'API doit exposer ce fait.
+- **Risque:** les deux destinations ne sont pas atomiques ensemble par décision produit; l'API doit exposer le masque d'admission réel et ne fermer que les destinations admises.
 - **Étape:** 7.
 
 ### D-014 — Admission moteur ignorée et APIs internes pitch-based
@@ -256,7 +260,7 @@ Chaque entrée fournit la preuve actuelle, le traitement, les alternatives rejet
 - **Verdict:** `REFONDRE`; **sévérité:** `HAUTE`.
 - **Preuve:** `seq_play_scheduler_emit_engine_note()` appelle plusieurs APIs `void`; l'admission Sampler Multi est castée/ignorée (`Src/Seq/seq_play_scheduler.c:637-661`). Les moteurs Stack, Wave, Deluge, Drum et VCA utilisent encore note/voix sans occurrence NoteFx.
 - **Conséquences:** un On refuse ou vole une voix sans retour; un Off peut agir sur la voix la plus récente de même hauteur; le terminal ne sait pas si une fermeture est due.
-- **Solution:** dispatcher terminal reçoit une admission logique et transmet un handle fixe aux moteurs qui le supportent; la polyphonie décide l'admission, NoteFx ne redéfinit pas la limite.
+- **Solution:** dispatcher terminal reçoit une admission logique indépendante et transmet un résultat/handle fixe à chaque destination; la polyphonie décide l'admission interne, NoteFx ne redéfinit pas la limite. Le ledger conserve `admitted_internal` et `admitted_midi` ou un masque équivalent.
 - **Alternatives rejetées:** nouvelle polyphonie dans NoteFx; supprimer les refus moteurs; transformer tous les moteurs en graphes d'événements.
 - **Dépendances:** D-004, D-003.
 - **Tests:** moteur plein, retrigger même pitch, sampler multi, fermeture après steal, aucune NoteFx ne change le quota global.
@@ -376,9 +380,11 @@ reserve pair -> source On accepted -> stage 0
 
 Un On refuse si l'un des elements necessaires manque: paire scheduler, source table, fan-out table, budget, destination ledger ou fermeture terminale. Un Off sans record correspondant est stale et compte, sans effet. Un retrigger cree une nouvelle occurrence; il ne remplace pas l'ancienne.
 
-Sur STOP/mute/panic/model change/pattern change: `close_active(scope, sample)` emet les Off encore possedes avec priorite, marque les records fermes, incremente generation, purge les files du scope, puis reset les phases/deadlines. L'operation est idempotente: second appel ne reemet aucun Off pour la meme occurrence.
+Sur STOP/panic/model change/pattern change: `close_active(scope, sample)` emet les Off encore possedes avec priorite, marque les records fermes, incremente generation, purge les files du scope, puis reset les phases/deadlines. Pour `MUTE_TRIGS`, aucune fermeture, purge ou invalidation des occurrences actives n'est autorisee: seules les nouvelles sources STEP sont bloquees. L'operation est idempotente.
 
 Les tables de compatibilite par `[track][note]` et par voix sont supprimees du chemin NoteFx. Une table pitch peut rester une projection UI/diagnostic non normative, mais ne peut ni admettre ni fermer une occurrence.
+
+La regle de cycle ci-dessus a une exception produit obligatoire: `MUTE_TRIGS` ne ferme ni ne purge les occurrences actives. Il bloque les nouveaux trigs STEP et leurs derivations futures, mais laisse leurs echeances et Note Off traverser. Seules les politiques STOP/PANIC/reconfiguration appellent `close_active()`.
 
 ## 8. Horloge, timestamps et deadlines
 
@@ -438,9 +444,13 @@ Conserver les files qui ont une responsabilité distincte, mais les doter de cla
 | MIDI TX/RX | conserver séparées | TX reserve fermetures, RX policy existante instrumentée |
 | Stack | hors refonte NoteFx | son contrat Z1 reste à fermer, sans file universelle |
 
-Les Note Off dus sont drainés avant nouveaux On. Si la capacité restante ne garantit pas On+Off, l'occurrence entière est refusée, `saturation_count` et `dropped_occurrence_count` sont incrémentés, et aucun Off artificiel n'est généré pour un On non accepté. Les releases de transition consomment la réserve Off et ne sont pas silencieusement abandonnées.
+Les Note Off dus sont drainés avant nouveaux On. Si la capacité restante ne garantit pas On+Off à la source, au stage ou dans une file de fermeture, l'occurrence entière est refusée, `saturation_count` et `dropped_occurrence_count` sont incrémentés, et aucun Off artificiel n'est généré. Au terminal, l'admission interne et MIDI est indépendante: une destination peut être refusée sans refuser l'autre, et les releases consomment la réserve Off de chaque destination admise.
+
+Saturation et admission terminale sont independantes par destination: une reservation de fermeture MIDI concerne le ledger MIDI uniquement; elle ne reserve pas et ne bloque pas l'interne. Les Note Off dus des deux destinations gardent la priorite, mais ne sont emis que pour les destinations dont le On a ete admis. Les clocks externes pending ont une classe separee: rattrapage limite, surplus abandonne/coalesce, compteur obligatoire, jamais de drain integral.
 
 ### 10.2 Budget hard real-time
+
+Le rattrapage de clock externe partage ce budget. Une petite borne fixe de clocks peut etre executee normalement; tout surplus est abandonne ou coalesce, compte, et repercute dans les compteurs logiques/phase sans executer chaque step intermediaire. Aucun backlog important ne peut etre rejoue en rafale au meme sample ou monopoliser une demi-zone.
 
 Le budget est créé une fois par demi-buffer de 64 frames, transmis aux sous-segments, et inclut scans, stages, continuations, terminal, releases et commandes de transition. Mesures H743 requises pour Low-Cost et Premium:
 
@@ -462,23 +472,28 @@ Le terminal reste un point unique et identifiable. Il reçoit l'événement comp
 4. mettre à jour le ledger seulement selon le résultat local;
 5. incrémenter les diagnostics de refus.
 
-MIDI et moteur ne doivent pas être appelés depuis un FX. Le canal MIDI est une projection de `destination_id`. Une destination peut refuser sans que l'autre soit déclarée acceptée silencieusement; la politique doit soit admettre indépendamment avec ledgers indépendants, soit refuser l'occurrence complète avant émission. La limite globale de polyphonie reste dans `synth_polyphony`/moteur et n'est pas redéfinie par NoteFx.
+MIDI et moteur ne doivent pas être appelés depuis un FX. Le canal MIDI est une projection de `destination_id`. L'admission est obligatoirement indépendante: un refus d'une destination ne refuse jamais l'autre. Le ledger conserve le masque réel, les Off ciblent uniquement les destinations admises, et si les deux refusent l'occurrence est entièrement refusée sans Off artificiel. La limite globale de polyphonie reste dans `synth_polyphony`/moteur et n'est pas redéfinie par NoteFx.
+
+Admission terminale normative: moteur interne et MIDI externe sont independants. `BOTH` ne signifie pas "les deux doivent accepter"; il demande deux tentatives separees. Le ledger conserve au minimum `admitted_internal` et `admitted_midi`. Les quatre cas sont fixes: interne oui/MIDI non = son interne et Off interne seulement; interne non/MIDI oui = MIDI et Off MIDI seulement; oui/oui = les deux; non/non = occurrence entierement refusee, sans Off artificiel. Une deconnexion ou saturation MIDI ne purge jamais le ledger interne. Un panic ferme chaque destination selon son admission reelle.
 
 ## 12. Transitions et cleanup
 
-| Transition | close | purge/generation | reprise |
-|---|---|---|---|
-| PLAY/START | aucune note préexistante; reset runtime si STOP antérieur | nouvelle generation, deadlines rebase | scheduling normal |
-| STOP | close all puis panic terminal | purge scheduler, NoteFx, pending steps | aucune |
-| CONTINUE | close seulement si état précédent l'exige | rebase sample absolu conservé | reprend sans rejouer les sources manquées |
-| mute | close track, suspend stage | purge track, generation track | unmute réarme, phase définie et ne rejoue pas |
-| panic/All Notes Off | close all idempotent | purge sources/files et counters | état silencieux |
-| pattern/load | close scope avant mutation | generation puis restore bases, runtime reconstruit | scheduling après commit |
-| modèle FX/slot reset | close track/slot avant config | generation slot, defaults par modèle | stage reprend phase définie |
-| changement MIDI channel/role | close track | invalide destination et purge | rebind explicite |
-| source clock | close notes puis change source | purge pending/stale | continue re-anchor monotone |
+Le contrat commun est `transition_apply(scope, policy)` ou l'equivalent conforme aux conventions du depot. La politique est obligatoire et distingue au minimum `MUTE_TRIGS`, `STOP_CLOSE`, `PANIC_CLOSE_ALL`, `MODEL_RECONFIGURE`, `PATTERN_REPLACE` et `DESTINATION_REBIND`; il est interdit qu'une routine ferme systematiquement les notes pour tous les scopes.
+
+| Transition | Nouveaux Note On | Occurrences actives | Note Off dus | Purge/generation | Reprise |
+|---|---|---|---|---|---|
+| MUTE_TRIGS | bloques pour les trigs sequenceur | conservees | toujours traites | aucune purge destructive, generation active conservee | prochain trig futur |
+| UNMUTE | autorises | inchangees | toujours traites | aucun retrigger | prochain trig futur |
+| STOP | bloques | fermees selon STOP | forces si necessaire | purge scheduler/NoteFx/pending et nouvelle generation | nouveau START/CONTINUE defini |
+| PANIC | bloques | fermees immediatement | forces par destination admise | purge complete | etat silencieux |
+| pattern/load | bloques pendant transaction | fermees avant remplacement | forces par destination admise | generation puis restore bases | nouveau pattern |
+| modele FX/slot reset | bloques pour le slot | owned du slot fermees | forces par destination admise | generation slot, defaults | nouveau modele |
+| changement MIDI channel/role | bloques pendant transition | fermees si destination rebind | forces par destination admise | purge destination/stale | rebind explicite |
+| source clock | bloques pendant transition | fermees si necessaire au rebind temporel | garanties | purge pending/stale et reancrage borne | nouvelle clock |
 
 Les routines publiques actuelles deviennent des façades de commande vers ce protocole; elles ne doivent plus chacune émettre un sous-ensemble différent de fermetures.
+
+Correction normative de la ligne MUTE: `MUTE_TRIGS` bloque les nouveaux Note On provenant des trigs du sequenceur, conserve les occurrences actives, ne purge pas leurs ledgers ni leur generation, et laisse leurs Note Off normaux traverser. UNMUTE ne rejoue aucun trig manque et ne retrigger aucune note; il reprend au prochain trig futur. La politique NoteFx ne bloque pas les entrees clavier et MIDI live; toute suppression deja definie au niveau de leur source reste inchangee et doit etre testee separement.
 
 ## 13. Autorités de données et runtime
 
@@ -546,6 +561,7 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 3 — Horloge, timestamps et deadlines
 
 - **Objectif:** aligner tous les événements sur le sample d'application monotone.
+- **Politique clock externe figée:** autoriser seulement un petit rattrapage fixe, déterminé après mesure H743. Au-delà, abandonner ou coalescer le surplus, compter chaque clock abandonnée/coalescée, avancer les compteurs logiques disponibles sans exécuter tous les boundaries, puis reprendre au prochain boundary cohérent. Ne jamais rejouer un backlog important en rafale.
 - **Dettes:** D-009, D-010 partiellement.
 - **Fichiers/symboles:** `audio_apply_seq_event_at_sample`, `seq_runtime_exec`, `seq_play_scheduler_audio_apply_event`, NoteFx deadline.
 - **Changements:** propager sample explicite; définir frontière Q16/entier; borner catch-up external clock.
@@ -563,6 +579,7 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 4 — Propriété runtime et commandes de transition
 
 - **Objectif:** donner un owner unique au runtime NoteFx.
+- **Politique de transition figée:** l'owner applique `MUTE_TRIGS` sans close/purge/generation des occurrences actives; il bloque uniquement les nouvelles sources STEP et laisse les Off possédés traverser. STOP, PANIC, model/pattern change et destination rebind gardent leurs politiques destructives propres.
 - **Dettes:** D-007, D-008 partiellement.
 - **Fichiers/symboles:** pipeline/engine runtime, param interface, restore, UI cleanup, seq mute bridge.
 - **Changements:** commande fixe, apply transactionnel par track, snapshot de lecture, close/invalidate/purge commun.
@@ -597,9 +614,10 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 6 — Files, quotas et budgets hard real-time
 
 - **Objectif:** rendre capacité et coût déterministes sur demi-buffer.
+- **Clock externe:** le backlog pending est une classe budgétée distincte; quelques clocks peuvent être exécutées normalement, le surplus est abandonné/coalescé et compté. Aucun drain intégral du pending dans une demi-zone.
 - **Dettes:** D-011, D-012, D-010 résiduel.
 - **Fichiers/symboles:** audio, scheduler queues, NoteFx continuation/commands, diagnostics.
-- **Changements:** budget demi-buffer, quotas classes, réserve Off, high-water et refus complets; conserver files séparées justifiées.
+- **Changements:** budget demi-buffer, quotas classes, réserve Off, high-water, refus complets aux niveaux source/stage et refus indépendants par destination; conserver files séparées justifiées.
 - **Invariants:** Off prioritaire; aucun On sans fermeture; coût borné par 64 frames.
 - **Hors périmètre:** Stack Z1 global et modifications de polyphonie.
 - **Dépendances:** Étapes 1-5.
@@ -614,10 +632,11 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 7 — Terminal, admission et saturation
 
 - **Objectif:** fermer les refus MIDI/moteur et préserver l'identité au terminal.
+- **Admission figée:** les destinations interne et MIDI sont tentées indépendamment. Le ledger porte deux résultats; le refus d'une destination ne bloque jamais l'autre et les Off ciblent uniquement les destinations admises.
 - **Dettes:** D-004, D-013, D-014.
 - **Fichiers/symboles:** terminal scheduler, output guard, `midi.c`, adapters moteurs nécessaires.
-- **Changements:** API d'admission, ledger par destination, réserve Off TX, retour moteur, refus complet déterministe.
-- **Invariants:** même événement terminal pour destinations; aucun guard actif sans admission locale; Off possédé.
+- **Changements:** API d'admission indépendante, ledger par destination, réserve Off TX, retour moteur et refus déterministe par destination.
+- **Invariants:** même événement terminal pour les deux tentatives; aucun guard actif sans admission locale; Off uniquement vers les destinations admises.
 - **Hors périmètre:** changement de limite globale polyphonique et nouveau transport MIDI.
 - **Dépendances:** Étapes 1-6.
 - **Tests automatisés:** moteur plein, TX plein/non-idle, internal+external, panic.
@@ -631,13 +650,14 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 8 — Transport, mute, panic et pattern
 
 - **Objectif:** unifier toutes les transitions et purger l'obsolète.
+- **Mute de trigs:** remplacer le close/purge actuel du mute par un blocage des nouveaux trigs STEP. Les occurrences actives, deadlines et Note Off restent possédés; UNMUTE ne rejoue rien et reprend au prochain trig futur. STOP/PANIC/model/pattern/destination restent séparés et destructifs lorsqu'ils le nécessitent.
 - **Dettes:** D-008, D-015.
 - **Fichiers/symboles:** scheduler clear/suspend/resume, output guard panic, runtime transport, pattern/snapshot/model callbacks.
-- **Changements:** protocole scope close->generation->purge->reset, idempotence, source clock et role/channel.
+- **Changements:** protocole `transition_apply(scope, policy)`; MUTE_TRIGS = blocage des nouveaux trigs sans close/purge/generation active; STOP/PANIC/model/pattern/source/destination appliquent leur politique destructive propre, avec idempotence.
 - **Invariants:** zéro occurrence pendante après chaque transition; aucun événement stale terminal.
 - **Hors périmètre:** migrations de formats, Live Record.
 - **Dépendances:** Étapes 1-7.
-- **Tests automatisés:** STOP, CONTINUE, mute/resume, panic différé, pattern/model change.
+- **Tests automatisés:** STOP, CONTINUE, MUTE_TRIGS/UNMUTE non destructifs, Off possédé pendant mute, panic différé, pattern/model/source change.
 - **Tests manuels:** notes actives sur chaque transition et double action.
 - **Instrumentation:** forced close, stale purge, pending queue after transition.
 - **Recherches négatives:** aucune routine de cleanup concurrente non deleguée; aucune purge sans generation.
@@ -665,6 +685,7 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 ### Étape 10 — Suppression, tests et consolidation
 
 - **Objectif:** retirer les anciennes abstractions et fermer la matrice complète.
+- **Recherches finales obligatoires:** absence de cleanup destructif appelé par le mute, absence de retrigger à l'unmute, absence de statut `BOTH` exigeant les deux admissions, refus MIDI indépendant de l'interne, et absence de boucle drainant un backlog clock arbitraire.
 - **Dettes:** D-018, D-019; vérification de tous les autres IDs.
 - **Fichiers/symboles:** anciens helpers, tests, docs Z1/Z4/architecture, plans de build.
 - **Changements:** suppressions prouvées, tests comportementaux, docs corrigées, recherches négatives.
@@ -692,7 +713,7 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 | 7 | saturation Off prioritaire | Off dus drainés avant On |
 | 8 | STOP notes actives | zéro owned/ledger |
 | 9 | panic événements différés | purge + Off idempotents |
-| 10 | mute/reprise | close, suspend, reprise sans replay |
+| 10 | MUTE_TRIGS/reprise | nouveaux STEP bloques, occurrences conservees, reprise sans replay |
 | 11 | pattern pending | generation stale rejetée |
 | 12 | modèle pendant lecture | close avant defaults/config |
 | 13 | clavier | même contrat terminal |
@@ -716,7 +737,33 @@ Chaque étape est autonome et committable. L'agent d'exécution doit relire les 
 
 Les tests de chaque étape doivent identifier les numéros concernés. Les builds requis sont toujours Release Low-Cost et Release Premium; ne pas lancer TestPremium.
 
+### 16.1 Validations produit obligatoires
+
+| # | Scénario | Oracle |
+|---:|---|---|
+| 31 | accord long avant MUTE_TRIGS | aucun close; accord et enveloppe terminent normalement |
+| 32 | nouveaux STEP pendant mute | aucun nouveau On sequenceur ni derivé FX |
+| 33 | Off possédé pendant mute | Off traversant, ledger conservé jusqu'à fermeture |
+| 34 | UNMUTE | aucun retrigger ni replay; prochain trig futur seulement |
+| 35 | clavier/MIDI live pendant mute | comportement de source actuel conservé, pas de blocage implicite |
+| 36 | double mute/unmute et panic sous mute | idempotence; panic ferme toutes destinations admises |
+| 37 | interne admis + MIDI refusé | interne seul, Off interne seul |
+| 38 | interne refusé + MIDI admis | MIDI seul, Off MIDI seul |
+| 39 | interne/MIDI admis | deux ledgers et deux Off |
+| 40 | interne/MIDI refusés | occurrence refusée, aucun Off artificiel |
+| 41 | déconnexion avant/après On MIDI | interne indépendant; ledger MIDI purgé selon politique |
+| 42 | MIDI plein, interne disponible | interne continue |
+| 43 | moteur saturé, MIDI disponible | MIDI continue |
+| 44 | backlog clock 1/petit/limite/supérieur/très grand | rattrapage limité; surplus compté et jamais rejoué en rafale |
+| 45 | START/CONTINUE/STOP avec backlog | compteurs/phase cohérents, reprise sans rafale |
+| 46 | Song Position Pointer supporté | recalage seulement depuis position réellement reçue |
+| 47 | pause traitement principal | budget demi-buffer respecté, abandon/coalescence observable |
+
+Les scénarios 1-30 restent applicables. La ligne historique `mute/reprise` du tableau précédent est interprétée par cette sous-matrice normative: elle ne signifie pas close/suspend destructif.
+
 ## 17. Instrumentation et mesures
+
+Les diagnostics doivent séparer `admitted_internal`, `admitted_midi`, Off prioritaires par destination, refus MIDI, refus moteur, déconnexion/purge MIDI, clocks abandonnées et clocks coalescées. Ils doivent aussi compter les trigs bloqués par MUTE_TRIGS et vérifier qu'aucun owned actif n'est supprimé par ce seul motif.
 
 Ajouter seulement des compteurs fixes, compile-time disableables, lus hors chemin chaud: high-water par file, émissions/Off prioritaires par demi-buffer, saturation/drop, stale, deadline dépassée, cycles max et max sous-segments. Réutiliser `audio_seq_diag`/indicateur de charge IRQ quand possible. Ne pas imprimer depuis IRQ, ne pas écrire SD/USB depuis IRQ, ne pas ajouter de trace à taille dynamique.
 
@@ -765,4 +812,8 @@ Le plan Euclid pourra être réaudité sur le nouveau HEAD seulement lorsque:
 9. Les fichiers/symboles à réinspecter sont au minimum `Inc/NoteFx/*`, `Src/NoteFx/*`, `Src/Seq/seq_play_scheduler.c`, `Src/Seq/seq_runtime_exec.c`, `Src/Audio/audio.c`, `Src/Seq/seq_output_guard.c`, `Src/MIDI/midi.c`, `Src/Param/param_registry_catalog.c`, `Src/Seq/seq_param_iface.c`, persistence/snapshots et tests.
 10. Une recherche négative confirme l'absence du miroir pitch-only, du premier-ARP, des appels FX directs au terminal, des budgets par sous-segment et de tout runtime persisté.
 
-Les constats Euclid rendus obsolètes seront au minimum: paire scheduler non atomique, premier ARP implicite, sample de fin de bloc, multi-écrivain runtime et budget recréé par sous-segment. Les contraintes Euclid encore à valider après nettoyage seront sa capacité/fan-out H743, ses defaults/paramètres de modèle et ses règles produit propres. `docs/plan_midi_fx_euclid.md` doit rester inchangé jusqu'à ce réaudit.
+11. Les validations produit démontrent que MUTE_TRIGS ne ferme ni ne purge, qu'UNMUTE ne retrigger rien, que les sources live restent distinctes et que chaque transition destructive est explicitement choisie.
+12. Les quatre combinaisons d'admission interne/MIDI et les cas de déconnexion sont testés avec des ledgers indépendants.
+13. Le retard clock externe est testé avec une petite borne mesurée, abandon/coalescence compté, recalage fondé uniquement sur les informations MIDI réellement reçues et aucune rafale.
+
+Les constats Euclid rendus obsolètes seront au minimum: paire scheduler non atomique, premier ARP implicite, sample de fin de bloc, multi-écrivain runtime, budget recréé par sous-segment et politique de mute destructif. Les contraintes Euclid encore à valider après nettoyage seront sa capacité/fan-out H743, ses defaults/paramètres de modèle et ses règles produit propres. `docs/plan_midi_fx_euclid.md` doit rester inchangé jusqu'à ce réaudit.
