@@ -1503,6 +1503,10 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     voice->use_slice = 0U;
     voice->use_segment_cursor = 1U;
     voice->play_plan = play_plan;
+    voice->format = play_plan.format;
+    voice->stride_floats = play_plan.stride_floats;
+    voice->frames_per_page = play_plan.frames_per_page;
+    voice->registration_epoch = play_plan.registration_epoch;
     voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     voice->last_out_l = 0.0f;
     voice->last_out_r = 0.0f;
@@ -3941,6 +3945,10 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     multi_voice->use_segment_cursor = 1U;
     multi_voice->release_pending = 0U;
     multi_voice->play_plan = common_plan;
+    multi_voice->format = common_plan.format;
+    multi_voice->stride_floats = common_plan.stride_floats;
+    multi_voice->frames_per_page = common_plan.frames_per_page;
+    multi_voice->registration_epoch = common_plan.registration_epoch;
     multi_voice->last_out_l = 0.0f;
     multi_voice->last_out_r = 0.0f;
     multi_voice->last_out_valid = 0U;
@@ -5968,8 +5976,8 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
                 && (clip->use_shifter_engine == 0U)
                 && (voice->active != 0U)
                 && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
-                && (voice->sample != NULL)
-                && (voice->sample->channels == 1U)) ? 1U : 0U;
+                && (sample_audio_format_or_stereo(voice->format)
+                    == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
     }
 
     if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
