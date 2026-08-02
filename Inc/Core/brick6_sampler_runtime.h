@@ -180,11 +180,10 @@ uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id);
 void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread);
 float brick6_sampler_runtime_get_multi_spread(uint8_t track_id);
 /*
- * Current scheduler compatibility surface. The implementation still accepts
- * [track, note] here; the exact Multi Note Off contract is the runtime handle
- * above and is introduced by the ownership step without changing persistence.
+ * Explicit forced-stop surface: closes every active Multi occurrence matching
+ * [track, note]. The normal scheduler path must use the tokenized API below.
  */
-void brick6_sampler_runtime_note_off_multi_track_note(uint8_t track_id, uint8_t note);
+void brick6_sampler_runtime_note_off_multi_track_note_all(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off_multi_track_note_token(uint8_t track_id,
                                                             uint8_t note,
                                                             uint32_t event_token);

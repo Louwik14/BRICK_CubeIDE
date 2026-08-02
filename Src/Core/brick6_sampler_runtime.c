@@ -3907,7 +3907,7 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     {
         if (event_token == 0U)
         {
-            brick6_sampler_runtime_note_off_multi_track_note(track_id, note);
+            brick6_sampler_runtime_note_off_multi_track_note_all(track_id, note);
         }
         else
         {
@@ -4363,7 +4363,7 @@ void brick6_sampler_runtime_note_off_multi_track_note_token(uint8_t track_id,
     }
 }
 
-void brick6_sampler_runtime_note_off_multi_track_note(uint8_t track_id, uint8_t note)
+void brick6_sampler_runtime_note_off_multi_track_note_all(uint8_t track_id, uint8_t note)
 {
     if ((track_id >= SEQ_TRACK_COUNT) || (note > 127U))
     {

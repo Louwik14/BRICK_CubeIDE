@@ -757,7 +757,7 @@ static uint8_t seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             {
                 if (event_token == 0U)
                 {
-                    brick6_sampler_runtime_note_off_multi_track_note(track, note);
+                    brick6_sampler_runtime_note_off_multi_track_note_all(track, note);
                 }
                 else
                 {

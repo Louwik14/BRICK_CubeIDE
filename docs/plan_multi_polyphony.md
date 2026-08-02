@@ -33,7 +33,7 @@ Le page-cache à HEAD expose `SAMPLE_PAGE_CACHE_MAX_VOICES = 16` et réserve `SA
 Le chemin séquenceur est `seq_play_scheduler_emit_local_note()` dans `Src/Seq/seq_play_scheduler.c` :
 
 1. `track_runtime_resolve_track()` fournit le type, l'instance, le mix target et le filter target.
-2. Pour `TRACK_RUNTIME_TYPE_MULTI`, le scheduler appelle `brick6_sampler_runtime_trigger_multi_track_note_velocity()` pour Note On et `brick6_sampler_runtime_note_off_multi_track_note()` pour Note Off.
+2. Pour `TRACK_RUNTIME_TYPE_MULTI`, le scheduler appelle `brick6_sampler_runtime_trigger_multi_track_note_velocity_token()` pour Note On et `brick6_sampler_runtime_note_off_multi_track_note_token()` pour Note Off.
 3. Pour un Note On, `brick6_sampler_runtime_trigger_multi_note_velocity()` vérifie le track sampler, l'instrument prêt, puis appelle `multi_sample_pool_resolve()` pour choisir la zone selon note/vélocité.
 4. Le sample est obtenu par `multi_sample_pool_get_sample()` ; la page 0 doit être `SAMPLE_PAGE_READY`.
 5. `brick6_sampler_runtime_multi_alloc_voice()` alloue une case libre ou vole une voix.
@@ -370,7 +370,7 @@ Chaque étape est autonome. Un agent exécutant « uniquement l'étape N » s'ar
 
 **Hors périmètre.** Pool DSP, filtre/VCA par voix, UI, p-lock/MOD, cache, mono/stéréo, implémentation des setters `VOICES/SPREAD`, Stream/RAM.
 
-**Fichiers et symboles.** `brick6_sampler_voice_t`, `g_sampler_multi_voice`, `brick6_sampler_runtime_trigger_multi_note_velocity()`, `brick6_sampler_runtime_note_off_multi_track_note()`, `brick6_sampler_runtime_multi_stop_voice()`, `trigger_order`, `release_pending`, `seq_play_scheduler_emit_local_note()`.
+**Fichiers et symboles.** `brick6_sampler_voice_t`, `g_sampler_multi_voice`, `brick6_sampler_runtime_trigger_multi_note_velocity()`, `brick6_sampler_runtime_note_off_multi_track_note_token()`, `brick6_sampler_runtime_note_off_multi_track_note_all()`, `brick6_sampler_runtime_multi_stop_voice()`, `trigger_order`, `release_pending`, `seq_play_scheduler_emit_local_note()`.
 
 **Modifications attendues.** Écrire le contrat de handle/génération et les transitions ; identifier l'endroit où le scheduler conserve le token runtime non persistant ; décider explicitement one-shot naturel, loop, reverse/ping-pong actuellement désactivés, steal, panic, transport stop, changement d'instrument et réutilisation de génération. Figer le plafond global Multi à 8, sans changer le budget synth de 16. Ne pas changer le comportement audio dans cette étape.
 
@@ -418,7 +418,7 @@ Chaque étape est autonome. Un agent exécutant « uniquement l'étape N » s'ar
 
 **Hors périmètre.** Traitement filtre/VCA audio effectif, ordre mixer, UI, p-lock/MOD, nouveaux modes de lecture.
 
-**Fichiers et symboles.** `brick6_sampler_runtime_trigger_multi_note_velocity()`, `brick6_sampler_runtime_note_off_multi_track_note()`, `brick6_sampler_runtime_multi_stop_voice()`, `brick6_sampler_runtime_multi_stop_track()`, `brick6_sampler_runtime_stop_multi_instrument()`, `brick6_sampler_runtime_reset_track()`, `brick6_sampler_runtime_stop_transport_clips()`.
+**Fichiers et symboles.** `brick6_sampler_runtime_trigger_multi_note_velocity()`, `brick6_sampler_runtime_note_off_multi_track_note_token()`, `brick6_sampler_runtime_note_off_multi_track_note_all()`, `brick6_sampler_runtime_multi_stop_voice()`, `brick6_sampler_runtime_multi_stop_track()`, `brick6_sampler_runtime_stop_multi_instrument()`, `brick6_sampler_runtime_reset_track()`, `brick6_sampler_runtime_stop_transport_clips()`.
 
 **Modifications attendues.** Réserver/libérer slot DSP atomiquement avec la voix, transporter generation dans les handles runtime non persistants, appliquer `clamp(VOICES, 1, 8)` par piste et le pool global partagé de 8, corriger le Note Off des notes identiques, voler la plus ancienne voix de la piste à sa limite, appliquer la politique globale de vol ou de refus à saturation, invalider les handles sur steal/panic/stop/instrument change, et préserver owner Stream et pages jusqu'à la fin du reader ou jusqu'à VCA IDLE selon le contrat. Une réduction de `VOICES` évince déterministiquement les voix excédentaires ; une augmentation conserve les voix actives et ouvre la capacité aux prochains Note On.
 

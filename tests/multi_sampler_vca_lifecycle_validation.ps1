@@ -22,7 +22,7 @@ Assert-Contract ($keyboard -match 'is_multi_sampler[\s\S]*?is_multi_sampler == 0
 Assert-Contract ($scheduler -match 'is_multi_sampler[\s\S]*?is_multi_sampler == 0U') 'Scheduler must bypass the track VCA before Multi allocation'
 Assert-Contract ($sampler -match 'multi_voice_dsp_acquire\([\s\S]*?mixer_multi_filter_note_on\(mix_track, dsp_state, note\)') 'Accepted Multi voices do not initialize per-voice filter/VCA state'
 
-$noteOff = $sampler.Substring($sampler.IndexOf('void brick6_sampler_runtime_note_off_multi_track_note'))
+$noteOff = $sampler.Substring($sampler.IndexOf('void brick6_sampler_runtime_note_off_multi_track_note_all'))
 Assert-Contract ($noteOff -match 'mixer_multi_filter_note_off\(multi_voice_dsp_get\(voice->dsp_slot\)\)[\s\S]*?release_pending = 1U') 'Multi Note Off does not close the per-voice gate and retain the source'
 
 $renderMulti = $sampler.Substring($sampler.IndexOf('void brick6_sampler_runtime_render_multi_track'))

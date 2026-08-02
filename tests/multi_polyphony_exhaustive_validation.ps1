@@ -47,6 +47,8 @@ Require-Match $contract 'voice_index[\s\S]*generation' 'Multi handle does not ca
 Require-Match $dsp 'handle\.generation != 0U' 'Multi handle does not require a non-zero generation'
 Require-Match $dsp 'owner_voice_index == handle\.voice_index[\s\S]*owner_generation == handle\.generation' 'DSP release is not generation-safe'
 Require-Match $runtime 'brick6_sampler_runtime_note_off_multi_track_note_token' 'Token Note Off API is missing'
+Require-Match $runtime 'brick6_sampler_runtime_note_off_multi_track_note_all' 'Explicit forced-stop Note Off API is missing'
+Forbid-Match $runtime 'brick6_sampler_runtime_note_off_multi_track_note\(' 'Ambiguous Multi Note Off API remains'
 Require-Match $runtime 'voice->event_token != event_token' 'Token Note Off does not reject stale or unrelated occurrences'
 Require-Match $runtime 'sample_stream_manager_release_owner[\s\S]*generation' 'Stream owner release is not generation-keyed'
 Require-Match $runtime 'brick6_sampler_runtime_multi_release_dsp_slot' 'Multi teardown does not release DSP ownership'

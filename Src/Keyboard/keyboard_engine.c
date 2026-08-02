@@ -314,7 +314,7 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
             }
             else
             {
-                brick6_sampler_runtime_note_off_multi_track_note(track, note);
+                brick6_sampler_runtime_note_off_multi_track_note_all(track, note);
             }
             return;
         }

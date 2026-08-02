@@ -711,7 +711,7 @@ Points factuels observes:
 
 - Le scheduler PLAY conserve son modele existant `V1..V4`: chaque sous-page PLAY correspond a un slot note/vel/len/mictim distinct, stocke comme p-lock PLAY sur le step.
 - Pour une track resolue `Sampler/Multi`, `seq_play_scheduler_emit_engine_note()` route NOTE ON vers `brick6_sampler_runtime_trigger_multi_track_note_velocity(track,note,velocity)`.
-- Le NOTE OFF planifie par la duree PLAY route vers `brick6_sampler_runtime_note_off_multi_track_note(track,note)` afin de reutiliser le lifecycle release/VCA Multi.
+- Le NOTE OFF planifie par la duree PLAY route vers `brick6_sampler_runtime_note_off_multi_track_note_token(track,note,event_token)` afin de reutiliser le lifecycle release/VCA Multi sans fermer les occurrences identiques.
 - Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Stream selon contrat).
 - Aucun FatFs, malloc, cache/streaming ou import Multi n'est ajoute au scheduler; le trigger Multi reste le meme seam RAM/page-cache que le clavier.
 
