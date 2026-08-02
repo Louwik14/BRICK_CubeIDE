@@ -13,9 +13,12 @@ constexpr float kDefaultSampleRate = 48000.0f;
 constexpr uint32_t kEngineBufferSize = 32768U;
 constexpr float kPredelayMaxSeconds = 0.090f;
 constexpr uint32_t kPredelayBufferSize = 4322U;
-constexpr uint32_t kTopologySamples48k = 23528U;
-static_assert(kTopologySamples48k + 10U < kEngineBufferSize,
-              "48 kHz Mutable topology must fit the 32768-sample engine buffer");
+constexpr uint32_t kNormalTopologySamples = 23528U;
+constexpr uint32_t kMaxTopologySamples = 32758U;
+static_assert(kNormalTopologySamples + 9U + 1U <= kEngineBufferSize,
+              "NORMAL topology plus separators and interpolation guard must fit");
+static_assert(kMaxTopologySamples + 9U + 1U <= kEngineBufferSize,
+              "MAX topology plus separators and interpolation guard must fit");
 
 AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
 AUDIO_WARM ALIGN32 static float g_revb_predelay_buffer[kPredelayBufferSize];
@@ -42,7 +45,7 @@ struct revb_global_state_t
     float predelay_current_samples;
     uint32_t predelay_write;
     uint8_t initialized;
-    uint8_t mutable_geometry;
+    uint8_t max_tank_geometry;
 };
 
 static revb_global_state_t g_revb;
@@ -136,7 +139,7 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.predelay_write = 0U;
     g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
     g_revb.initialized = 0U;
-    g_revb.mutable_geometry = 0U;
+    g_revb.max_tank_geometry = 0U;
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.engine.Init(g_revb_engine_buffer);
     g_revb.initialized = 1U;
@@ -178,13 +181,13 @@ void fx_reverb_revb_global_set_damp(float damp)
     g_revb.damp = clamp01_local(damp);
 }
 
-void fx_reverb_revb_global_set_mutable(uint8_t enabled)
+void fx_reverb_revb_global_set_tank_size(uint8_t max_size)
 {
-    const uint8_t next = (enabled != 0U) ? 1U : 0U;
-    if(g_revb.mutable_geometry == next)
+    const uint8_t next = (max_size != 0U) ? 1U : 0U;
+    if(g_revb.max_tank_geometry == next)
         return;
-    g_revb.mutable_geometry = next;
-    g_revb.engine.set_mutable_geometry(next != 0U);
+    g_revb.max_tank_geometry = next;
+    g_revb.engine.set_max_tank_geometry(next != 0U);
 }
 
 void fx_reverb_revb_global_set_predelay(float predelay_s)

@@ -100,7 +100,7 @@ void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1
 void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_damp(float v) { mixer_set_reverb_damp(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_mutable(float v) { mixer_set_reverb_mutable((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
+void apply_mix_reverb_tank_size(float v) { mixer_set_reverb_tank_size((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
 void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_spectral_position(float v) { mixer_set_reverb_spectral_position(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_spectral_width(float v) { mixer_set_reverb_spectral_width(clamp_value(v, 0.0f, 1.0f)); }

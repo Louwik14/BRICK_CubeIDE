@@ -24,7 +24,7 @@ typedef struct
     float predelay_s;
     float low_cut_hz;
     float high_cut_hz;
-    uint8_t mutable_geometry;
+    uint8_t max_tank_geometry;
 } fx_reverb_global_state_t;
 
 static fx_reverb_global_state_t g_reverb_global = {
@@ -37,7 +37,7 @@ static fx_reverb_global_state_t g_reverb_global = {
     .predelay_s = 0.045f,
     .low_cut_hz = 20.0f,
     .high_cut_hz = 20000.0f,
-    .mutable_geometry = 0U,
+    .max_tank_geometry = 0U,
 };
 
 AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
@@ -51,7 +51,7 @@ static void fx_reverb_global_apply_params(void)
     fx_reverb_revb_global_set_size(g_reverb_global.size);
     fx_reverb_revb_global_set_decay(g_reverb_global.decay);
     fx_reverb_revb_global_set_damp(g_reverb_global.damp);
-    fx_reverb_revb_global_set_mutable(g_reverb_global.mutable_geometry);
+    fx_reverb_revb_global_set_tank_size(g_reverb_global.max_tank_geometry);
     fx_reverb_revb_global_set_predelay(g_reverb_global.predelay_s);
     fx_reverb_revb_global_set_filter_hz(g_reverb_global.low_cut_hz,
                                         g_reverb_global.high_cut_hz);
@@ -92,11 +92,11 @@ void fx_reverb_global_set_damp(float damp)
     fx_reverb_global_apply_params();
 }
 
-void fx_reverb_global_set_mutable(uint8_t enabled)
+void fx_reverb_global_set_tank_size(uint8_t max_size)
 {
-    g_reverb_global.mutable_geometry = (enabled != 0U) ? 1U : 0U;
+    g_reverb_global.max_tank_geometry = (max_size != 0U) ? 1U : 0U;
     if(g_reverb_global.backend_valid != 0U)
-        fx_reverb_revb_global_set_mutable(g_reverb_global.mutable_geometry);
+        fx_reverb_revb_global_set_tank_size(g_reverb_global.max_tank_geometry);
 }
 
 void fx_reverb_global_set_predelay(float predelay_s)

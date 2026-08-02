@@ -29,7 +29,6 @@
 #pragma once
 
 #include <type_traits>
-#include <cmath>
 
 #include "stmlib/stmlib.h"
 
@@ -43,6 +42,15 @@ namespace mifx {
     public:
         static constexpr float kLongDelay2ModulationSamples = 54.42177f;
         static constexpr float kLongDelay1ModulationSamples = 43.53742f;
+        static constexpr float kMaxTankScale = 1.3924996f;
+        static constexpr int32_t kMaxTankDelay1Length = 6821;
+        static constexpr int32_t kMaxTankDelay2Length = 9566;
+        static_assert(226 + 324 + 483 + 799 + 3307 + 4077 + 6821 + 3826 + 3329 + 9566 + 9 + 1 <= 32768,
+                      "MAX tank topology plus interpolation guard must fit the engine buffer");
+        static_assert((4854.4219f + kLongDelay1ModulationSamples) * kMaxTankScale < kMaxTankDelay1Length,
+                      "MAX del1 interpolation must stay within its reservation");
+        static_assert((6815.2383f + kLongDelay2ModulationSamples) * kMaxTankScale < kMaxTankDelay2Length,
+                      "MAX del2 interpolation must stay within its reservation");
 
         Reverb() {}
 
@@ -58,13 +66,13 @@ namespace mifx {
 
         ITCM_TEXT_NAMED("mifx_reverb_process_stereo")
         void Process(float *left, float *right, size_t size) {
-            if (mutable_geometry_) ProcessStereoTopology<true>(left, right, size);
+            if (max_tank_geometry_) ProcessStereoTopology<true>(left, right, size);
             else ProcessStereoTopology<false>(left, right, size);
         }
 
-        template<bool MutableGeometry>
+        template<bool MaxTankGeometry>
         void ProcessStereoTopology(float *left, float *right, size_t size) {
-            // Mutable's Griesinger topology
+            // Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
             // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
             typedef E::Reserve<163,
@@ -77,10 +85,10 @@ namespace mifx {
                             E::Reserve < 2748,
                             E::Reserve < 2391,
                             E::Reserve < 6870> > > > > > > > > > TbdMemory;
-            typedef E::Reserve<150, E::Reserve<214, E::Reserve<319, E::Reserve<527,
-                    E::Reserve<2182, E::Reserve<2690, E::Reserve<4501, E::Reserve<2525,
-                    E::Reserve<2197, E::Reserve<6312> > > > > > > > > > MutableMemory;
-            typedef typename std::conditional<MutableGeometry, MutableMemory, TbdMemory>::type Memory;
+            typedef E::Reserve<226, E::Reserve<324, E::Reserve<483, E::Reserve<799,
+                    E::Reserve<3307, E::Reserve<4077, E::Reserve<6821, E::Reserve<3826,
+                    E::Reserve<3329, E::Reserve<9566> > > > > > > > > > MaxTankMemory;
+            typedef typename std::conditional<MaxTankGeometry, MaxTankMemory, TbdMemory>::type Memory;
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -122,8 +130,8 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, MutableGeometry ? 6261.0f : 6815.2383f, LFO_2,
-                              MutableGeometry ? 50.0f : kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, MaxTankGeometry ? 6815.2383f * kMaxTankScale : 6815.2383f, LFO_2,
+                              MaxTankGeometry ? kLongDelay2ModulationSamples * kMaxTankScale : kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -131,13 +139,12 @@ namespace mifx {
                 c.WriteAllPass(dap1b, -kap);
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
-                if (!std::isfinite(wet)) wet = 0.0f;
 
                 *left += (wet - *left) * amount;
 
                 c.Load(apout);
-                c.Interpolate(del1, MutableGeometry ? 4460.0f : 4854.4219f, LFO_1,
-                              MutableGeometry ? 40.0f : kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, MaxTankGeometry ? 4854.4219f * kMaxTankScale : 4854.4219f, LFO_1,
+                              MaxTankGeometry ? kLongDelay1ModulationSamples * kMaxTankScale : kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -145,7 +152,6 @@ namespace mifx {
                 c.WriteAllPass(dap2b, kap);
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
-                if (!std::isfinite(wet)) wet = 0.0f;
 
                 *right += (wet - *right) * amount;
 
@@ -159,13 +165,13 @@ namespace mifx {
 
         ITCM_TEXT_NAMED("mifx_reverb_process_mono")
         void Process(const float* in, float *left, float *right, size_t size) {
-            if (mutable_geometry_) ProcessMonoTopology<true>(in, left, right, size);
+            if (max_tank_geometry_) ProcessMonoTopology<true>(in, left, right, size);
             else ProcessMonoTopology<false>(in, left, right, size);
         }
 
-        template<bool MutableGeometry>
+        template<bool MaxTankGeometry>
         void ProcessMonoTopology(const float* in, float *left, float *right, size_t size) {
-            // Mutable's Griesinger topology
+            // Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
             // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
             typedef E::Reserve<163,
@@ -178,10 +184,10 @@ namespace mifx {
                             E::Reserve < 2748,
                             E::Reserve < 2391,
                             E::Reserve < 6870> > > > > > > > > > TbdMemory;
-            typedef E::Reserve<150, E::Reserve<214, E::Reserve<319, E::Reserve<527,
-                    E::Reserve<2182, E::Reserve<2690, E::Reserve<4501, E::Reserve<2525,
-                    E::Reserve<2197, E::Reserve<6312> > > > > > > > > > MutableMemory;
-            typedef typename std::conditional<MutableGeometry, MutableMemory, TbdMemory>::type Memory;
+            typedef E::Reserve<226, E::Reserve<324, E::Reserve<483, E::Reserve<799,
+                    E::Reserve<3307, E::Reserve<4077, E::Reserve<6821, E::Reserve<3826,
+                    E::Reserve<3329, E::Reserve<9566> > > > > > > > > > MaxTankMemory;
+            typedef typename std::conditional<MaxTankGeometry, MaxTankMemory, TbdMemory>::type Memory;
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -222,8 +228,8 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, MutableGeometry ? 6261.0f : 6815.2383f, LFO_2,
-                              MutableGeometry ? 50.0f : kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, MaxTankGeometry ? 6815.2383f * kMaxTankScale : 6815.2383f, LFO_2,
+                              MaxTankGeometry ? kLongDelay2ModulationSamples * kMaxTankScale : kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -231,14 +237,13 @@ namespace mifx {
                 c.WriteAllPass(dap1b, -kap);
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
-                if (!std::isfinite(wet)) wet = 0.0f;
 
                 wet -= one_pole(hp_l_, wet, hp_coefficient_);
                 *left = one_pole(lp_l_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, MutableGeometry ? 4460.0f : 4854.4219f, LFO_1,
-                              MutableGeometry ? 40.0f : kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, MaxTankGeometry ? 4854.4219f * kMaxTankScale : 4854.4219f, LFO_1,
+                              MaxTankGeometry ? kLongDelay1ModulationSamples * kMaxTankScale : kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -246,7 +251,6 @@ namespace mifx {
                 c.WriteAllPass(dap2b, kap);
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
-                if (!std::isfinite(wet)) wet = 0.0f;
 
                 wet -= one_pole(hp_r_, wet, hp_coefficient_);
                 *right = one_pole(lp_r_, wet, lp_coefficient_);
@@ -268,9 +272,8 @@ namespace mifx {
         }
 
         inline void set_time(float reverb_time) {
-            reverb_time_ = 0.01f + (0.97f * ((reverb_time < 0.0f)
-                    ? 0.0f
-                    : ((reverb_time > 1.0f) ? 1.0f : reverb_time)));
+            reverb_time_ = (reverb_time < 0.0f) ? 0.0f
+                    : ((reverb_time > 0.98f) ? 0.98f : reverb_time);
         }
 
         inline void set_diffusion(float diffusion) {
@@ -278,17 +281,17 @@ namespace mifx {
         }
 
         inline void set_lp(float lp) {
-            lp_ = (lp < 0.0f) ? 0.0f : ((lp > 1.0f) ? 1.0f : lp);
+            lp_ = lp;
         }
 
         inline void set_output_filters(float hp, float lp) {
-            hp_coefficient_ = (hp < 0.0f) ? 0.0f : ((hp > 1.0f) ? 1.0f : hp);
-            lp_coefficient_ = (lp < 0.0f) ? 0.0f : ((lp > 1.0f) ? 1.0f : lp);
+            hp_coefficient_ = hp;
+            lp_coefficient_ = lp;
         }
 
-        inline void set_mutable_geometry(bool enabled) {
-            if (mutable_geometry_ != enabled) {
-                mutable_geometry_ = enabled;
+        inline void set_max_tank_geometry(bool enabled) {
+            if (max_tank_geometry_ != enabled) {
+                max_tank_geometry_ = enabled;
                 Clear();
             }
         }
@@ -329,11 +332,10 @@ namespace mifx {
         float lp_r_ = 0.f;
         float hp_coefficient_ = 0.f;
         float lp_coefficient_ = 1.f;
-        bool mutable_geometry_ = false;
+        bool max_tank_geometry_ = false;
 
         static inline float one_pole(float& state, float input, float coefficient) {
             state += coefficient * (input - state);
-            if (!std::isfinite(state)) state = 0.0f;
             return state;
         }
 

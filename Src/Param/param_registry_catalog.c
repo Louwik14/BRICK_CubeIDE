@@ -39,6 +39,7 @@
                   (_apply))
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
+static const char *const g_reverb_tank_size_labels[] = {"NORMAL", "MAX", NULL};
 static const char *const g_comp_model_labels[] = {"OFF", "DELUGE", "BRICK", NULL};
 static const char *const g_comp_detect_labels[] = {"PEAK", "RMS", NULL};
 static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
@@ -279,7 +280,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_DELAY_SPECTRAL_WIDTH, "WIDTH", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_spectral_width),
     PARAM_DESC_EX(PARAM_MIX_DELAY_FBW, "FBW", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_mix_delay_feedback_width),
     PARAM_DESC_EX(PARAM_MIX_REVERB_DAMP, "Damp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_damp),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_MUTABLE, "MUTABLE", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_mix_reverb_mutable),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_TANK_SIZE, "TANK SIZE", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_tank_size_labels, apply_mix_reverb_tank_size),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD, "MOD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_mod),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD_RATE, "M.RATE", PARAM_TYPE_FLOAT, 0.01f, 12.0f, 0.01f, 0.25f, PARAM_DISPLAY_FLOAT, "Hz", NULL, apply_mix_delay_mod_rate),
     PARAM_DESC_EX(PARAM_MIX_DELAY_REV, "REV", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_rev),

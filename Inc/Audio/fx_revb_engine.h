@@ -29,7 +29,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 #include "stmlib/stmlib.h"
@@ -93,7 +92,7 @@ namespace mifx {
         }
 
         static inline T Compress(float value) {
-            return std::isfinite(value) ? value : 0.0f;
+            return value;
         }
     };
 
@@ -223,7 +222,6 @@ namespace mifx {
 
             inline void Lp(float &state, float coefficient) {
                 state += coefficient * (accumulator_ - state);
-                if (!std::isfinite(state)) state = 0.0f;
                 accumulator_ = state;
             }
 
