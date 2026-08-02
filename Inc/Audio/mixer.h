@@ -52,6 +52,8 @@ typedef enum
     MIXER_TRACK_FILTER_BP_BI
 } mixer_track_filter_type_t;
 
+struct multi_voice_dsp_slot_t;
+
 typedef enum
 {
     MIXER_ROUTE_NONE = 0,
@@ -133,6 +135,15 @@ uint8_t mixer_track_vca_requires_source(uint32_t track_id);
 float mixer_get_track_vca_env_value(uint32_t track_id);
 float mixer_get_track_filter_env_value(uint32_t track_id);
 float mixer_prepare_track_filter_env_source(uint32_t track_id, uint32_t frames);
+void mixer_multi_filter_note_on(uint32_t track_id,
+                                struct multi_voice_dsp_slot_t *slot,
+                                uint8_t midi_note);
+void mixer_multi_filter_note_off(struct multi_voice_dsp_slot_t *slot);
+void mixer_multi_filter_process(uint32_t track_id,
+                                struct multi_voice_dsp_slot_t *slot,
+                                float *left,
+                                float *right,
+                                uint32_t frames);
 /* Track filter gate; Multi per-voice filter state is a separate contract. */
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
@@ -146,6 +157,10 @@ void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_stereo(uint32_t track_id, const float *left, const float *right, uint32_t frames);
+void mixer_submit_external_multi_stereo(uint32_t track_id,
+                                        const float *left,
+                                        const float *right,
+                                        uint32_t frames);
 uint8_t mixer_begin_external_mono_native(uint32_t track_id,
                                          uint32_t frames,
                                          float **out_mono);

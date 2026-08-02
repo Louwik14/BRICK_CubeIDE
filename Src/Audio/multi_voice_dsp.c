@@ -75,6 +75,14 @@ static void multi_voice_dsp_reset_slot(multi_voice_dsp_slot_t *slot)
     slot->format = (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO;
     slot->filter_type = MIXER_TRACK_FILTER_OFF;
     slot->sample_rate = MULTI_VOICE_DSP_DEFAULT_SAMPLE_RATE;
+    slot->cutoff_hz = 16000.0f;
+    slot->cutoff_target_hz = 16000.0f;
+    slot->cutoff_mod_hz = 16000.0f;
+    slot->cutoff_mod_target_hz = 16000.0f;
+    slot->keytrack_ratio = 1.0f;
+    slot->keytrack_ratio_target = 1.0f;
+    slot->filter_retrigger_hard = 1U;
+    slot->current_note = 60U;
     multi_voice_dsp_init_filter(slot,
                                 MULTI_VOICE_DSP_FORMAT_MONO,
                                 slot->sample_rate);

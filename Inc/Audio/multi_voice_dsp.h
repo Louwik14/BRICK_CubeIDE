@@ -2,8 +2,8 @@
  * @file multi_voice_dsp.h
  * @brief Static per-voice DSP storage for the Multi sampler.
  *
- * This pool owns state only. Rendering and mixer publication are deliberately
- * left to later Multi polyphony steps.
+ * This pool owns the per-voice filter state and its runtime ownership data.
+ * VCA state remains reserved for the later per-voice VCA step.
  */
 
 #pragma once
@@ -23,7 +23,7 @@ extern "C" {
 #define MULTI_VOICE_DSP_SLOT_COUNT BRICK6_SAMPLER_MULTI_MAX_VOICES
 #define MULTI_VOICE_DSP_SLOT_INDEX_INVALID UINT8_MAX
 #define MULTI_VOICE_DSP_DEFAULT_SAMPLE_RATE (48000.0f)
-#define MULTI_VOICE_DSP_SLOT_SIZE_BYTES (544U)
+#define MULTI_VOICE_DSP_SLOT_SIZE_BYTES (608U)
 
 typedef enum
 {
@@ -45,7 +45,7 @@ typedef union
     } mono;
 } multi_voice_dsp_filter_state_t;
 
-typedef struct
+typedef struct multi_voice_dsp_slot_t
 {
     multi_voice_dsp_filter_state_t filter;
     env_adsr_t filter_env;
@@ -53,14 +53,31 @@ typedef struct
     uint32_t owner_generation;
     float sample_rate;
     float cutoff_hz;
+    float cutoff_target_hz;
+    float cutoff_mod_hz;
+    float cutoff_mod_target_hz;
     float resonance;
+    float resonance_target;
+    float eg_amount;
+    float keytrack;
+    float keytrack_ratio;
+    float keytrack_ratio_target;
+    float eq_low_db;
+    float eq_low_target_db;
+    float eq_mid_db;
+    float eq_mid_target_db;
+    float eq_high_db;
+    float eq_high_target_db;
+    uint32_t filter_config_version;
     mixer_track_filter_type_t filter_type;
     uint8_t owner_voice_index;
     uint8_t state;
     uint8_t format;
     uint8_t vca_gate;
     uint8_t vca_enabled;
-    uint8_t reserved[3U];
+    uint8_t filter_retrigger_hard;
+    uint8_t current_note;
+    uint8_t reserved[1U];
 } multi_voice_dsp_slot_t;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
