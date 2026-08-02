@@ -79,12 +79,11 @@ void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t 
 void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level);
 void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot);
 void mixer_set_reverb_wet(float wet);
-void mixer_set_reverb_size(float size);
-void mixer_set_reverb_decay(float decay);
-void mixer_set_reverb_damp(float damp);
-void mixer_set_reverb_pre_delay(float pre_delay);
-void mixer_set_reverb_spectral_position(float position);
-void mixer_set_reverb_spectral_width(float width);
+void mixer_set_reverb_room_size(float room_size);
+void mixer_set_reverb_damping(float damping);
+void mixer_set_reverb_width(float width);
+void mixer_set_reverb_hpf(float hpf);
+void mixer_set_reverb_lpf(float lpf);
 void mixer_set_delay_type(uint8_t type);
 void mixer_set_delay_mode(uint8_t mode);
 void mixer_set_delay_time(float time_s);

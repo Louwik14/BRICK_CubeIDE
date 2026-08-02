@@ -97,12 +97,11 @@ void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_s
 void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
 void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_damp(float v) { mixer_set_reverb_damp(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_spectral_position(float v) { mixer_set_reverb_spectral_position(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_spectral_width(float v) { mixer_set_reverb_spectral_width(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_room_size(float v) { mixer_set_reverb_room_size(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_damping(float v) { mixer_set_reverb_damping(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_width(float v) { mixer_set_reverb_width(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
 void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
 void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }

@@ -8,11 +8,11 @@ extern "C" {
 
 void fx_reverb_global_init(float sample_rate);
 void fx_reverb_global_set_wet(float wet);
-void fx_reverb_global_set_size(float size);
-void fx_reverb_global_set_decay(float decay);
-void fx_reverb_global_set_damp(float damp);
-void fx_reverb_global_set_predelay(float predelay_s);
-void fx_reverb_global_set_filter_hz(float low_cut_hz, float high_cut_hz);
+void fx_reverb_global_set_room_size(float room_size);
+void fx_reverb_global_set_damping(float damping);
+void fx_reverb_global_set_width(float width);
+void fx_reverb_global_set_hpf(float hpf);
+void fx_reverb_global_set_lpf(float lpf);
 uint8_t fx_reverb_global_is_active(void);
 void fx_reverb_global_process_block(float *in_l,
                                     float *in_r,

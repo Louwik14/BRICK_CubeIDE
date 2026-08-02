@@ -755,9 +755,8 @@ static uint8_t configure_current(void)
     param_set(PARAM_MIX_DELAY_FEEDBACK, g_runner.current.delay_feedback);
     param_set(PARAM_MIX_DELAY_TIME, g_runner.current.delay_time);
     param_set(PARAM_MIX_REVERB_WET, g_runner.current.reverb_mix);
-    param_set(PARAM_MIX_REVERB_SIZE, g_runner.current.reverb_size);
-    param_set(PARAM_MIX_REVERB_DECAY, g_runner.current.reverb_decay);
-    param_set(PARAM_MIX_REVERB_DAMP, g_runner.current.reverb_damping);
+    param_set(PARAM_MIX_REVERB_ROOM_SIZE, g_runner.current.reverb_size);
+    param_set(PARAM_MIX_REVERB_DAMPING, g_runner.current.reverb_damping);
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
     param_registry_batch_end();
 

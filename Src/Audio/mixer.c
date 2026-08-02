@@ -280,39 +280,29 @@ typedef enum
 static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 static float g_delay_diag_volume;
 static float g_delay_diag_reverb_send;
-#define MIXER_REVERB_PREDELAY_MAX_S 0.090f
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
 #define MIXER_EQ3_NUM_STAGES 3U
 typedef struct
 {
     float wet;
-    float size;
-    float decay;
-    float damp;
-    float pre_delay;
-    float spectral_position;
-    float spectral_width;
+    float room_size;
+    float damping;
+    float width;
+    float hpf;
+    float lpf;
 } mixer_reverb_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .wet = 0.0f,
-    .size = 0.0f,
-    .decay = 0.50f,
-    .damp = 0.70f,
-    .pre_delay = 0.50f,
-    .spectral_position = 0.50f,
-    .spectral_width = 1.0f,
+    .room_size = 0.60f,
+    .damping = 0.72f,
+    .width = 1.0f,
+    .hpf = 0.0f,
+    .lpf = 1.0f,
 };
 
 static float g_delay_spectral_position = 0.50f;
 static float g_delay_spectral_width = 1.0f;
-
-static float mixer_reverb_predelay_ui_to_seconds(float v)
-{
-    const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
-    return clamped * MIXER_REVERB_PREDELAY_MAX_S;
-}
-
 
 static int32_t mixer_looper_float_to_pcm24(float sample)
 {
@@ -1820,24 +1810,13 @@ static float clamp_pan(float pan)
 static void mixer_reverb_state_reset_defaults(void)
 {
     g_reverb.wet = 0.0f;
-    g_reverb.size = 0.0f;
-    g_reverb.decay = 0.50f;
-    g_reverb.damp = 0.70f;
-    g_reverb.pre_delay = 0.50f;
-    g_reverb.spectral_position = 0.50f;
-    g_reverb.spectral_width = 1.0f;
+    g_reverb.room_size = 0.60f;
+    g_reverb.damping = 0.72f;
+    g_reverb.width = 1.0f;
+    g_reverb.hpf = 0.0f;
+    g_reverb.lpf = 1.0f;
     g_delay_spectral_position = 0.50f;
     g_delay_spectral_width = 1.0f;
-}
-
-static void mixer_apply_reverb_spectral_window(void)
-{
-    spectral_window_result_t result;
-    spectral_window_calculate(g_reverb.spectral_position,
-                              g_reverb.spectral_width,
-                              spectral_window_reverb_limits(),
-                              &result);
-    fx_reverb_global_set_filter_hz(result.low_cut_hz, result.high_cut_hz);
 }
 
 static void mixer_apply_delay_spectral_window(void)
@@ -1856,11 +1835,11 @@ void mixer_reset_runtime_state(void)
     mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_reverb_global_set_wet(g_reverb.wet);
-    fx_reverb_global_set_size(g_reverb.size);
-    fx_reverb_global_set_decay(g_reverb.decay);
-    fx_reverb_global_set_damp(g_reverb.damp);
-    fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
-    mixer_apply_reverb_spectral_window();
+    fx_reverb_global_set_room_size(g_reverb.room_size);
+    fx_reverb_global_set_damping(g_reverb.damping);
+    fx_reverb_global_set_width(g_reverb.width);
+    fx_reverb_global_set_hpf(g_reverb.hpf);
+    fx_reverb_global_set_lpf(g_reverb.lpf);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     mixer_apply_delay_spectral_window();
@@ -2148,40 +2127,34 @@ void mixer_set_reverb_wet(float wet)
     fx_reverb_global_set_wet(g_reverb.wet);
 }
 
-void mixer_set_reverb_size(float size)
+void mixer_set_reverb_room_size(float room_size)
 {
-    g_reverb.size = clamp01(size);
-    fx_reverb_global_set_size(g_reverb.size);
+    g_reverb.room_size = clamp01(room_size);
+    fx_reverb_global_set_room_size(g_reverb.room_size);
 }
 
-void mixer_set_reverb_decay(float decay)
+void mixer_set_reverb_damping(float damping)
 {
-    g_reverb.decay = clamp01(decay);
-    fx_reverb_global_set_decay(g_reverb.decay);
+    g_reverb.damping = clamp01(damping);
+    fx_reverb_global_set_damping(g_reverb.damping);
 }
 
-void mixer_set_reverb_damp(float damp)
+void mixer_set_reverb_width(float width)
 {
-    g_reverb.damp = clamp01(damp);
-    fx_reverb_global_set_damp(g_reverb.damp);
+    g_reverb.width = clamp01(width);
+    fx_reverb_global_set_width(g_reverb.width);
 }
 
-void mixer_set_reverb_pre_delay(float pre_delay)
+void mixer_set_reverb_hpf(float hpf)
 {
-    g_reverb.pre_delay = clamp01(pre_delay);
-    fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
+    g_reverb.hpf = clamp01(hpf);
+    fx_reverb_global_set_hpf(g_reverb.hpf);
 }
 
-void mixer_set_reverb_spectral_position(float position)
+void mixer_set_reverb_lpf(float lpf)
 {
-    g_reverb.spectral_position = clamp01(position);
-    mixer_apply_reverb_spectral_window();
-}
-
-void mixer_set_reverb_spectral_width(float width)
-{
-    g_reverb.spectral_width = clamp01(width);
-    mixer_apply_reverb_spectral_window();
+    g_reverb.lpf = clamp01(lpf);
+    fx_reverb_global_set_lpf(g_reverb.lpf);
 }
 
 void mixer_set_delay_type(uint8_t type)

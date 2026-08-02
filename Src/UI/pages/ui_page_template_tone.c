@@ -23,8 +23,8 @@ static const ui_template_family_t g_ui_template_tone_family_master_reverb = {
     .family_title = "MASTER 1/3",
     .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
     .subpages = {
-        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
-        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_SPECTRAL_POSITION, PARAM_MIX_REVERB_SPECTRAL_WIDTH, PARAM_MIX_REVERB_DAMP, PARAM_COUNT } } },
+        { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_ROOM_SIZE, PARAM_MIX_REVERB_DAMPING, PARAM_MIX_REVERB_WIDTH } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -1124,9 +1124,7 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     (void)slot;
 
-    if ((id == PARAM_MIX_REVERB_SPECTRAL_POSITION)
-            || (id == PARAM_MIX_REVERB_SPECTRAL_WIDTH)
-            || (id == PARAM_MIX_DELAY_SPECTRAL_POSITION)
+    if ((id == PARAM_MIX_DELAY_SPECTRAL_POSITION)
             || (id == PARAM_MIX_DELAY_SPECTRAL_WIDTH))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;

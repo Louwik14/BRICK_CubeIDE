@@ -1819,12 +1819,11 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             return rule;
 
         case PARAM_MIX_REVERB_WET:
-        case PARAM_MIX_REVERB_SIZE:
-        case PARAM_MIX_REVERB_DECAY:
-        case PARAM_MIX_REVERB_PRED:
-        case PARAM_MIX_REVERB_SPECTRAL_POSITION:
-        case PARAM_MIX_REVERB_SPECTRAL_WIDTH:
-        case PARAM_MIX_REVERB_DAMP:
+        case PARAM_MIX_REVERB_ROOM_SIZE:
+        case PARAM_MIX_REVERB_DAMPING:
+        case PARAM_MIX_REVERB_WIDTH:
+        case PARAM_MIX_REVERB_HPF:
+        case PARAM_MIX_REVERB_LPF:
         case PARAM_MIX_DELAY_TYPE:
         case PARAM_MIX_DELAY_TIME:
         case PARAM_MIX_DELAY_PINGPONG:

@@ -241,12 +241,11 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
     switch (id)
     {
         case PARAM_MIX_REVERB_WET:
-        case PARAM_MIX_REVERB_SIZE:
-        case PARAM_MIX_REVERB_DECAY:
-        case PARAM_MIX_REVERB_PRED:
-        case PARAM_MIX_REVERB_SPECTRAL_POSITION:
-        case PARAM_MIX_REVERB_SPECTRAL_WIDTH:
-        case PARAM_MIX_REVERB_DAMP:
+        case PARAM_MIX_REVERB_ROOM_SIZE:
+        case PARAM_MIX_REVERB_DAMPING:
+        case PARAM_MIX_REVERB_WIDTH:
+        case PARAM_MIX_REVERB_HPF:
+        case PARAM_MIX_REVERB_LPF:
         case PARAM_RESERVED_175:
         case PARAM_CFG_START:
         case PARAM_CFG_TEMPO:

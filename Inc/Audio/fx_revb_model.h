@@ -38,9 +38,6 @@ namespace mifx {
 
     class Reverb {
     public:
-        static constexpr float kLongDelay2ModulationSamples = 54.42177f;
-        static constexpr float kLongDelay1ModulationSamples = 43.53742f;
-
         Reverb() {}
 
         ~Reverb() {}
@@ -58,16 +55,16 @@ namespace mifx {
             // Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
             // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
-            typedef E::Reserve<163,
-                    E::Reserve<233,
-                            E::Reserve < 347,
-                            E::Reserve < 574,
-                            E::Reserve < 2375,
-                            E::Reserve < 2928,
-                            E::Reserve < 4899,
-                            E::Reserve < 2748,
-                            E::Reserve < 2391,
-                            E::Reserve < 6870> > > > > > > > > > Memory;
+            typedef E::Reserve<150,
+                    E::Reserve<214,
+                            E::Reserve < 319,
+                            E::Reserve < 527,
+                            E::Reserve < 2182,
+                            E::Reserve < 2690,
+                            E::Reserve < 4501,
+                            E::Reserve < 2525,
+                            E::Reserve < 2197,
+                            E::Reserve < 6312> > > > > > > > > > Memory;
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -85,7 +82,6 @@ namespace mifx {
             const float krt = reverb_time_;
             const float amount = amount_;
             const float gain = input_gain_;
-
             float lp_1 = lp_decay_1_;
             float lp_2 = lp_decay_2_;
 
@@ -109,7 +105,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, 6261.0f, LFO_2, 50.0f, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -121,7 +117,7 @@ namespace mifx {
                 *left += (wet - *left) * amount;
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, 4460.0f, LFO_1, 40.0f, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -170,8 +166,6 @@ namespace mifx {
             const float kap = diffusion_;
             const float klp = lp_;
             const float krt = reverb_time_;
-            const float gain = input_gain_;
-
             float lp_1 = lp_decay_1_;
             float lp_2 = lp_decay_2_;
 
@@ -180,7 +174,7 @@ namespace mifx {
                 float apout = 0.0f;
                 engine_.Start(&c);
 
-                c.Read(*in, gain);
+                c.Read(*in);
                 in++;
                 // Diffuse through 4 allpasses.
                 c.Read(ap1 TAIL, kap);
@@ -195,7 +189,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, 6261.0f, LFO_2, 50.0f, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -204,21 +198,21 @@ namespace mifx {
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
 
-                wet -= one_pole(hp_l_, wet, hp_coefficient_);
-                *left = one_pole(lp_l_, wet, lp_coefficient_);
+                wet -= one_pole(hp_r_, wet, hp_coefficient_);
+                *right = one_pole(lp_r_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, 4460.0f, LFO_1, 40.0f, krt);
                 c.Lp(lp_2, klp);
-                c.Read(dap2a TAIL, kap);
-                c.WriteAllPass(dap2a, -kap);
-                c.Read(dap2b TAIL, -kap);
-                c.WriteAllPass(dap2b, kap);
+                c.Read(dap2a TAIL, -kap);
+                c.WriteAllPass(dap2a, kap);
+                c.Read(dap2b TAIL, kap);
+                c.WriteAllPass(dap2b, -kap);
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
 
-                wet -= one_pole(hp_r_, wet, hp_coefficient_);
-                *right = one_pole(lp_r_, wet, lp_coefficient_);
+                wet -= one_pole(hp_l_, wet, hp_coefficient_);
+                *left = one_pole(lp_l_, wet, lp_coefficient_);
 
                 ++left;
                 ++right;
@@ -232,17 +226,12 @@ namespace mifx {
             amount_ = amount;
         }
 
-        inline void set_input_gain(float input_gain) {
-            input_gain_ = input_gain;
-        }
-
         inline void set_time(float reverb_time) {
-            reverb_time_ = (reverb_time < 0.0f) ? 0.0f
-                    : ((reverb_time > 0.98f) ? 0.98f : reverb_time);
+            reverb_time_ = reverb_time;
         }
 
         inline void set_diffusion(float diffusion) {
-            diffusion_ = (diffusion < 0.0f) ? 0.0f : ((diffusion > 0.9f) ? 0.9f : diffusion);
+            diffusion_ = diffusion;
         }
 
         inline void set_lp(float lp) {
@@ -264,20 +253,12 @@ namespace mifx {
             lp_r_ = 0.0f;
         }
 
-        void set_lfo1_freq(float f) {
-            engine_.SetLFOFrequency(LFO_1, f / 48000.0f);
-        }
-
-        void set_lfo2_freq(float f) {
-            engine_.SetLFOFrequency(LFO_2, f / 48000.0f);
-        }
-
     private:
         typedef FxEngine<32768, FORMAT_32_BIT> E;
         E engine_;
 
         float amount_ = 0.f;
-        float input_gain_ = 0.f;
+        float input_gain_ = 0.2f;
         float reverb_time_ = 0.f;
         float diffusion_ = 0.f;
         float lp_ = 0.f;

@@ -2947,8 +2947,8 @@ static uint8_t ui_renderer_template_spectral_window_group_is_active(const ui_tem
     {
         const param_id_t position = subpage->param_bank.params[slot];
         const param_id_t width = subpage->param_bank.params[slot + 1U];
-        const uint8_t recognized = (uint8_t)(((position == PARAM_MIX_REVERB_SPECTRAL_POSITION) && (width == PARAM_MIX_REVERB_SPECTRAL_WIDTH))
-                || ((position == PARAM_MIX_DELAY_SPECTRAL_POSITION) && (width == PARAM_MIX_DELAY_SPECTRAL_WIDTH)));
+        const uint8_t recognized = (uint8_t)((position == PARAM_MIX_DELAY_SPECTRAL_POSITION)
+                && (width == PARAM_MIX_DELAY_SPECTRAL_WIDTH));
         if((recognized != 0U)
                 && (ui_renderer_template_resolve_custom_widget(state, subpage, slot, position)
                         == UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP)
@@ -2978,8 +2978,7 @@ static void ui_renderer_template_draw_spectral_window_group(const ui_param_seq_p
     const int y = UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y;
     const int w = (UI_TEMPLATE_FRAME_W * 2) - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD);
     const int h = UI_TEMPLATE_CARD_WIDGET_H;
-    const spectral_window_limits_t limits = (position_id == PARAM_MIX_REVERB_SPECTRAL_POSITION)
-        ? spectral_window_reverb_limits() : spectral_window_delay_limits();
+    const spectral_window_limits_t limits = spectral_window_delay_limits();
     spectral_window_result_t result;
     spectral_window_calculate(position, width_value, limits, &result);
     const float left_edge = spectral_window_log_position(result.low_cut_hz, limits);
