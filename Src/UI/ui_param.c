@@ -34,6 +34,7 @@
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/brick6_sampler_multi_contract.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
@@ -1066,7 +1067,16 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     }
     else if (param == PARAM_CFG_POLY_VOICES)
     {
-        *out_max = (float)synth_polyphony_get_available_for_track(track);
+        if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
+                && (ui_get_track_type(track) == UI_TRACK_TYPE_MULTI))
+        {
+            *out_min = 1.0f;
+            *out_max = (float)BRICK6_SAMPLER_MULTI_MAX_VOICES;
+        }
+        else
+        {
+            *out_max = (float)synth_polyphony_get_available_for_track(track);
+        }
     }
     else if (param == PARAM_MOD_MATRIX_DEST)
     {
