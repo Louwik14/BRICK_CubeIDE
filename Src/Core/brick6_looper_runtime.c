@@ -820,6 +820,11 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
     state->current_page_ref.page_index = span.page_index;
     state->current_page_ref.page_generation = span.page_generation;
     state->current_page_ref.slot_index = span.slot_index;
+    state->current_page_ref.key = span.key;
+    state->current_page_ref.format = span.format;
+    state->current_page_ref.stride_floats = span.stride_floats;
+    state->current_page_ref.frames_per_page = span.frames_per_page;
+    state->current_page_ref.registration_epoch = span.registration_epoch;
     state->current_base = span.frames_interleaved;
     state->current_start_frame = span.start_frame;
     state->current_frame_count = span.frame_count;

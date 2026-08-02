@@ -760,6 +760,16 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
             continue;
         }
 
+        if ((pending->format != target.format)
+            || (pending->stride_floats != target.stride_floats)
+            || (pending->frames_per_page != target.frames_per_page)
+            || ((pending->registration_epoch != 0U)
+                && (pending->registration_epoch != target.registration_epoch)))
+        {
+            sample_stream_manager_drop_pending_slot(pending, SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+            continue;
+        }
+
         const sample_stream_priority_t priority =
             (sample_stream_priority_t)pending->priority;
         if (priority > SAMPLE_STREAM_PRIORITY_URGENT)
@@ -1529,6 +1539,22 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_CANCEL);
+            return;
+        }
+
+        if ((sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
+            || (target.format != stream_info.format)
+            || (target.stride_floats != stream_info.stride_floats)
+            || (target.frames_per_page != stream_info.frames_per_page)
+            || ((target.registration_epoch != 0U)
+                && (target.registration_epoch != stream_info.registration_epoch)))
+        {
+            (void)sample_page_cache_set_page_state_key(target.key,
+                                                       target.page_index,
+                                                       SAMPLE_PAGE_ERROR);
+            sample_stream_manager_clear_pending_key(target.key,
+                                                    target.page_index,
+                                                    SAMPLE_STREAM_PENDING_REASON_ORPHAN);
             return;
         }
 

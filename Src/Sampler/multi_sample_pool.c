@@ -442,6 +442,11 @@ uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
     }
 
     multi_sample_instrument_slot_t *const slot = &g_multi_instruments[instrument_id];
+    if ((slot->used != 0U)
+        && ((slot->desc.sample_count != 0U) || (slot->desc.zone_count != 0U)))
+    {
+        (void)multi_sample_pool_clear_instrument(instrument_id);
+    }
     memset(slot, 0, sizeof(*slot));
     slot->used = 1U;
     slot->desc.id = instrument_id;

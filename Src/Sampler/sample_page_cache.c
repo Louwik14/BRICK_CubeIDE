@@ -1192,11 +1192,13 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
         || (page->page_index != ref->page_index)
         || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
         || (page->data == 0)
-        || ((sample_audio_format_is_valid(ref->format) != 0U) && (page->format != ref->format))
+        || (sample_audio_key_equal(&ref->key, &key) == 0U)
+        || (sample_audio_format_is_valid(ref->format) == 0U)
+        || (page->format != ref->format)
         || ((ref->registration_epoch != 0U)
             && (page->registration_epoch != ref->registration_epoch))
-        || ((sample_audio_format_is_valid(ref->format) != 0U)
-            && (sample_audio_key_equal(&ref->key, &key) == 0U)))
+        || (ref->stride_floats != page->stride_floats)
+        || (ref->frames_per_page != page->frames_per_page))
     {
         sample_page_cache_unlock(primask);
         return 0U;
@@ -1259,9 +1261,13 @@ void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample
     if ((sample_audio_key_equal(&page->key, &key) == 0U)
         || (page->page_index != ref->page_index)
         || (page->generation != ref->page_generation)
-        || ((sample_audio_format_is_valid(ref->format) != 0U) && (page->format != ref->format))
+        || (sample_audio_key_equal(&ref->key, &key) == 0U)
+        || (sample_audio_format_is_valid(ref->format) == 0U)
+        || (page->format != ref->format)
         || ((ref->registration_epoch != 0U)
-            && (page->registration_epoch != ref->registration_epoch)))
+            && (page->registration_epoch != ref->registration_epoch))
+        || (ref->stride_floats != page->stride_floats)
+        || (ref->frames_per_page != page->frames_per_page))
     {
         sample_page_cache_unlock(primask);
         return;

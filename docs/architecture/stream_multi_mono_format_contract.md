@@ -1,5 +1,28 @@
 # Contrat de format Stream/Multi
 
+## Etat livrÃ© aprÃ¨s l'Ã©tape 8
+
+Le contrat est maintenant raccordÃ© aux chemins Stream et Multi. Une page
+logique reste un slot physique statique de 16 Kio. Le pool compte 1280 pages :
+1024 pages de slot, 128 pages de fenÃªtre voix et 128 pages de marge.
+
+Le prÃ©socle Multi consomme 2 pages mono ou 4 pages stÃ©rÃ©o pour 8192 frames ;
+la fenÃªtre suit la mÃªme gÃ©omÃ©trie et le budget Multi est de 512 pages. Les
+refs vÃ©rifient key, page, gÃ©nÃ©ration, format, stride, frames/page et epoch.
+Les pending et targets sont comparÃ©s Ã  la description courante avant de
+remplir une page.
+
+Les chemins stop, steal, owner release et libÃ©ration diffÃ©rÃ©e nettoient les
+pins et les pending ; le relancement d'un Multi interrompu nettoie son pool.
+Le reader Looper conserve Ã©galement la ref complÃ¨te. Le rendu mono reste natif
+dans le mixer : le buffer droit de compatibilitÃ© est un discard de bloc, sans
+accumulation L/R pour un instrument Multi mono. Le chemin stÃ©rÃ©o conserve son
+comportement.
+
+Les dettes non couvertes sont le filtre/VCA par voice Multi, la vraie
+interpolation, le mono-tail natif, l'optimisation des pages voisines et la
+mesure IRQ rÃ©elle sur matÃ©riel.
+
 Ce contrat est introduit par l’étape 1 du plan `docs/plan_stream_multi_mono.md`.
 Il ne modifie encore aucun décodage ni aucun chemin audio.
 
