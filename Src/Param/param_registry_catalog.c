@@ -69,10 +69,10 @@ static const char *const g_deluge_model_labels[] = {
 };
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
-static const char *const g_track_family_labels[] = {"Off", "Input1", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
+static const char *const g_track_family_labels[] = {"Off", "-", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
 static const char *const g_external_input_labels[] = {"Input 1", NULL};
 #else
-static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
+static const char *const g_track_family_labels[] = {"Off", "-", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
 static const char *const g_external_input_labels[] = {"Input 1", "Input 2", "Input 3", NULL};
 #endif
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
@@ -188,7 +188,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
-    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U), 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
+    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),

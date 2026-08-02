@@ -27,7 +27,7 @@ void engine_lane_authority_count(const ui_track_config_t *configs,
 
     for (uint8_t track = 0U; track < config_count; ++track)
     {
-        if (track_topology_is_play(track) == 0U)
+        if (track_topology_is_active(track) == 0U)
         {
             continue;
         }

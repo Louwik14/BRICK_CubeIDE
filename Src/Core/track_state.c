@@ -15,7 +15,7 @@ static ui_track_config_t track_state_default_config(void)
 {
     ui_track_config_t config = {
         .family = UI_TRACK_FAMILY_OFF,
-        .type = UI_TRACK_TYPE_AUDIO,
+        .type = UI_TRACK_TYPE_NONE,
     };
 
     return config;
@@ -23,40 +23,8 @@ static ui_track_config_t track_state_default_config(void)
 
 static ui_track_config_t track_state_topology_config(uint8_t track)
 {
-    ui_track_config_t config = track_state_default_config();
-    track_topology_descriptor_t descriptor;
-    if (track_topology_get_descriptor(track, &descriptor) == 0U)
-    {
-        return config;
-    }
-
-    switch ((track_topology_role_t)descriptor.role)
-    {
-        case TRACK_TOPOLOGY_ROLE_LOOPER:
-        case TRACK_TOPOLOGY_ROLE_INPUT:
-        case TRACK_TOPOLOGY_ROLE_PLAY:
-        case TRACK_TOPOLOGY_ROLE_UNUSED:
-        default:
-            break;
-    }
-
-    return config;
-}
-
-static void track_state_normalize_play_config(ui_track_config_t *config)
-{
-    if (config == NULL)
-    {
-        return;
-    }
-
-    if (((config->family >= UI_TRACK_FAMILY_INPUT1)
-                && (config->family <= UI_TRACK_FAMILY_INPUT3)))
-    {
-        *config = track_state_default_config();
-        return;
-    }
-
+    (void)track;
+    return track_state_default_config();
 }
 
 static void track_state_normalize_config(ui_track_config_t *config)
@@ -75,12 +43,6 @@ static void track_state_normalize_config(ui_track_config_t *config)
         return;
     }
 
-}
-
-static uint8_t track_state_family_is_unavailable_input(ui_track_family_t family)
-{
-    return (uint8_t)(((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT3))
-                     && (ui_track_catalog_family_is_input(family) == false));
 }
 
 static void track_state_bump_revision(uint8_t track)
@@ -189,7 +151,7 @@ bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    if (track_topology_is_play(track) == 0U)
+    if (track_topology_is_active(track) == 0U)
     {
         return false;
     }
@@ -202,7 +164,7 @@ bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
 
     if (family == UI_TRACK_FAMILY_OFF)
     {
-        next_config.type = UI_TRACK_TYPE_AUDIO;
+        next_config.type = UI_TRACK_TYPE_NONE;
     }
     else if (!ui_track_catalog_type_is_available(track, family, next_config.type, next_configs))
     {
@@ -243,7 +205,7 @@ bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
     }
 
 
-    if (track_topology_is_play(track) == 0U)
+    if (track_topology_is_active(track) == 0U)
     {
         return false;
     }
@@ -267,7 +229,7 @@ bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
     track_state_normalize_config(&next_config);
     if (family == UI_TRACK_FAMILY_OFF)
     {
-        next_config.type = UI_TRACK_TYPE_AUDIO;
+        next_config.type = UI_TRACK_TYPE_NONE;
     }
 
     next_configs[track] = next_config;
@@ -325,7 +287,7 @@ uint8_t track_state_get_external_input(uint8_t track)
 bool track_state_set_external_input(uint8_t track, uint8_t input)
 {
     if ((track >= UI_TRACK_COUNT)
-            || (track_topology_is_play(track) == 0U)
+            || (track_topology_is_active(track) == 0U)
             || (track_input_ownership_set_external_input(
                     track, input, g_track_configs) == 0U))
     {
@@ -374,7 +336,7 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (track_topology_is_play(track) == 0U)
+        if (track_topology_is_active(track) == 0U)
         {
             next_configs[track] = track_state_topology_config(track);
             continue;
@@ -390,10 +352,10 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
             return false;
         }
 
-        if ((fam == UI_TRACK_FAMILY_OFF) || (track_state_family_is_unavailable_input(fam) != 0U))
+        if (fam == UI_TRACK_FAMILY_OFF)
         {
             next_configs[track].family = UI_TRACK_FAMILY_OFF;
-            next_configs[track].type = UI_TRACK_TYPE_AUDIO;
+            next_configs[track].type = UI_TRACK_TYPE_NONE;
         }
         else
         {
@@ -402,7 +364,6 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
                 .type = typ
             };
             track_state_normalize_config(&normalized);
-            track_state_normalize_play_config(&normalized);
             if ((normalized.family != UI_TRACK_FAMILY_OFF)
                     && !ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
             {
@@ -422,28 +383,9 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
         next_sources[track] = src;
     }
 
-    uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
-
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (track_topology_is_play(track) == 0U)
-        {
-            continue;
-        }
-        const ui_track_family_t fam = next_configs[track].family;
-        if (ui_track_catalog_family_is_input(fam))
-        {
-            input_family_count[(uint8_t)fam]++;
-            if (input_family_count[(uint8_t)fam] > 1U)
-            {
-                return false;
-            }
-        }
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if (track_topology_is_play(track) == 0U)
+        if (track_topology_is_active(track) == 0U)
         {
             continue;
         }

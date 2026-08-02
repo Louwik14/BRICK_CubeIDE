@@ -44,7 +44,7 @@ static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
 
-static void ui_hall_mode_flow_leave_lowcost_special_page(void);
+static void ui_hall_mode_flow_leave_lowcost_modal_page(void);
 
 static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
 {
@@ -68,7 +68,7 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
 
 static void ui_hall_mode_flow_open_midi_fx(void)
 {
-    ui_hall_mode_flow_leave_lowcost_special_page();
+    ui_hall_mode_flow_leave_lowcost_modal_page();
     ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
 }
 
@@ -90,7 +90,7 @@ static void ui_hall_mode_flow_close_lowcost_rec(void)
     ui_navigation_request_page_with_availability(return_page);
 }
 
-static void ui_hall_mode_flow_leave_lowcost_special_page(void)
+static void ui_hall_mode_flow_leave_lowcost_modal_page(void)
 {
     if (ui_page_patch_assign_is_open() != 0U)
     {
@@ -112,7 +112,7 @@ static void ui_hall_mode_flow_leave_lowcost_special_page(void)
 
 static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
 {
-    ui_hall_mode_flow_leave_lowcost_special_page();
+    ui_hall_mode_flow_leave_lowcost_modal_page();
     const ui_event_t event = {
         .type = UI_EVENT_BUTTON_PRESS,
         .id = (uint8_t)button,
@@ -155,12 +155,12 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_page_kit_assign_close();
                 return 1U;
             }
-            if (track_topology_is_play(ui_get_active_track()) == 0U)
+            if (track_topology_is_active(ui_get_active_track()) == 0U)
             {
                 ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_special_page();
+            ui_hall_mode_flow_leave_lowcost_modal_page();
             ui_page_kit_assign_open();
             return 1U;
 
@@ -170,12 +170,12 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_page_patch_assign_close();
                 return 1U;
             }
-            if (track_topology_is_play(ui_get_active_track()) == 0U)
+            if (track_topology_is_active(ui_get_active_track()) == 0U)
             {
                 ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_special_page();
+            ui_hall_mode_flow_leave_lowcost_modal_page();
             if (ui_macro_overlay_is_active() != 0U)
             {
                 ui_macro_overlay_on_hall_mode_changed();
@@ -191,7 +191,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_page_settings_close_to_return_page();
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_special_page();
+            ui_hall_mode_flow_leave_lowcost_modal_page();
             ui_page_settings_open_sample_browser(ui_page_get_id());
             return 1U;
 
@@ -201,7 +201,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_hall_mode_flow_close_lowcost_rec();
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_special_page();
+            ui_hall_mode_flow_leave_lowcost_modal_page();
             g_lowcost_rec_return_page = ui_page_get_id();
             g_lowcost_rec_return_mode = ui_get_hall_mode();
             g_lowcost_rec_return_valid = 1U;
@@ -251,7 +251,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
 
     if (target_mode != UI_HALL_MODE_AUDIO_REC)
     {
-        ui_hall_mode_flow_leave_lowcost_special_page();
+        ui_hall_mode_flow_leave_lowcost_modal_page();
     }
 
     const uint32_t last_tap = mode_tap_ms[target_mode];
@@ -298,7 +298,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
         g_kit_pending.active = 0U;
-        ui_hall_mode_flow_leave_lowcost_special_page();
+        ui_hall_mode_flow_leave_lowcost_modal_page();
         ui_page_template_tone_open_global_master();
         return;
     }
@@ -312,7 +312,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     {
         hall_note_suppressed[hall] = 1U;
         g_kit_pending.active = 0U;
-        if (track_topology_is_play(ui_get_active_track()) == 0U)
+        if (track_topology_is_active(ui_get_active_track()) == 0U)
         {
             g_patch_pending.active = 0U;
             ui_core_feedback_set("TRACK ONLY", now_ms);
@@ -341,7 +341,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     {
         hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
-        if (track_topology_is_play(ui_get_active_track()) == 0U)
+        if (track_topology_is_active(ui_get_active_track()) == 0U)
         {
             g_kit_pending.active = 0U;
             ui_core_feedback_set("TRACK ONLY", now_ms);
@@ -505,7 +505,7 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                    && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
     cfg_tap_ms[hall] = now_ms;
 
-    if (track_topology_is_play(hall) == 0U)
+    if (track_topology_is_active(hall) == 0U)
     {
         if (set_active_track != 0)
         {

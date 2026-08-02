@@ -13,20 +13,17 @@
 typedef enum
 {
     UI_TRACK_FAMILY_OFF = 0,
-    UI_TRACK_FAMILY_INPUT1,
-    UI_TRACK_FAMILY_INPUT2,
-    UI_TRACK_FAMILY_INPUT3,
-    UI_TRACK_FAMILY_SYNTH,
-    UI_TRACK_FAMILY_DRUM,
-    UI_TRACK_FAMILY_MIDI,
-    UI_TRACK_FAMILY_SAMPLER,
-    UI_TRACK_FAMILY_EXTERNAL,
+    UI_TRACK_FAMILY_SYNTH = 4,
+    UI_TRACK_FAMILY_DRUM = 5,
+    UI_TRACK_FAMILY_MIDI = 6,
+    UI_TRACK_FAMILY_SAMPLER = 7,
+    UI_TRACK_FAMILY_EXTERNAL = 8,
     UI_TRACK_FAMILY_COUNT
 } ui_track_family_t;
 
 typedef enum
 {
-    UI_TRACK_TYPE_AUDIO = 0,
+    UI_TRACK_TYPE_NONE = 0,
     UI_TRACK_TYPE_RAM,
     UI_TRACK_TYPE_PRISM,
     UI_TRACK_TYPE_DRUM_MD,
@@ -148,7 +145,6 @@ ui_track_family_t ui_get_track_family(uint8_t track);
 ui_track_type_t ui_get_track_type(uint8_t track);
 bool ui_set_track_family(uint8_t track, ui_track_family_t family);
 bool ui_set_track_type(uint8_t track, ui_track_type_t type);
-bool ui_track_family_is_input(ui_track_family_t family);
 bool ui_track_family_is_engine(ui_track_family_t family);
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type);

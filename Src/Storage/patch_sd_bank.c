@@ -28,7 +28,7 @@ static uint8_t patch_sd_family_type_is_play_valid(uint8_t family, uint8_t type)
     switch ((ui_track_family_t)family)
     {
         case UI_TRACK_FAMILY_OFF:
-            return (type == (uint8_t)UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
+            return (type == (uint8_t)UI_TRACK_TYPE_NONE) ? 1U : 0U;
 
         case UI_TRACK_FAMILY_SYNTH:
             return ((type == (uint8_t)UI_TRACK_TYPE_PRISM)

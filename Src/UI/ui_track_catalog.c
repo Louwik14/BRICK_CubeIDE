@@ -45,7 +45,6 @@ bool ui_track_catalog_cfg_family_order_index(ui_track_family_t family, uint8_t *
 
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
-    static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO };
     static const ui_track_type_t k_synth_types[] = {
         UI_TRACK_TYPE_PRISM,
         UI_TRACK_TYPE_WAVE,
@@ -72,28 +71,6 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
 
     switch (family)
     {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
-            return k_input_types;
-
-        case UI_TRACK_FAMILY_INPUT2:
-#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 1U
-            *out_count = 0U;
-            return 0;
-#else
-            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
-            return k_input_types;
-#endif
-
-        case UI_TRACK_FAMILY_INPUT3:
-#if UI_AUDIO_INPUT_RESOURCE_COUNT <= 2U
-            *out_count = 0U;
-            return 0;
-#else
-            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
-            return k_input_types;
-#endif
-
         case UI_TRACK_FAMILY_SYNTH:
             *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
             return k_synth_types;
@@ -119,39 +96,6 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
             *out_count = 0U;
             return 0;
     }
-}
-
-static uint8_t ui_track_catalog_input_family_index(ui_track_family_t family, uint8_t *out_index)
-{
-    uint8_t index = 0U;
-
-    if (out_index == 0)
-    {
-        return 0U;
-    }
-
-    switch (family)
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            index = 0U;
-            break;
-        case UI_TRACK_FAMILY_INPUT2:
-            index = 1U;
-            break;
-        case UI_TRACK_FAMILY_INPUT3:
-            index = 2U;
-            break;
-        default:
-            return 0U;
-    }
-
-    if (index >= UI_AUDIO_INPUT_RESOURCE_COUNT)
-    {
-        return 0U;
-    }
-
-    *out_index = index;
-    return 1U;
 }
 
 static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
@@ -196,12 +140,6 @@ static uint8_t ui_track_catalog_count_sampler_clip_tracks(uint8_t track,
     return count;
 }
 
-bool ui_track_catalog_family_is_input(ui_track_family_t family)
-{
-    uint8_t index = 0U;
-    return (ui_track_catalog_input_family_index(family, &index) != 0U);
-}
-
 bool ui_track_catalog_family_is_engine(ui_track_family_t family)
 {
     return (family == UI_TRACK_FAMILY_SYNTH)
@@ -215,11 +153,6 @@ bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_trac
             || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
         return false;
-    }
-
-    if (ui_track_catalog_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO))
-    {
-        return true;
     }
 
     uint8_t type_count = 0U;
@@ -252,17 +185,6 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return false;
     }
 
-    if (track_topology_is_play(track) == 0U)
-    {
-        return (track_configs[track].family == family)
-                && (track_configs[track].type == type);
-    }
-
-    if (ui_track_catalog_family_is_input(family))
-    {
-        return false;
-    }
-
     if (family != UI_TRACK_FAMILY_OFF)
     {
         if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_STREAM))
@@ -290,20 +212,9 @@ bool ui_track_catalog_family_is_available(uint8_t track,
         return false;
     }
 
-    if (track_topology_is_play(track) == 0U)
-    {
-        return (track_topology_is_special(track) != 0U)
-                && (track_configs[track].family == family);
-    }
-
     if (family == UI_TRACK_FAMILY_OFF)
     {
         return true;
-    }
-
-    if (ui_track_catalog_family_is_input(family))
-    {
-        return false;
     }
 
     return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
@@ -442,12 +353,12 @@ ui_track_type_t ui_track_catalog_type_from_family_index(ui_track_family_t family
             || (track_configs == 0)
             || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
-        return UI_TRACK_TYPE_AUDIO;
+        return UI_TRACK_TYPE_NONE;
     }
 
     if (family == UI_TRACK_FAMILY_OFF)
     {
-        return UI_TRACK_TYPE_AUDIO;
+        return UI_TRACK_TYPE_NONE;
     }
 
     uint8_t catalog_count = 0U;
@@ -485,7 +396,7 @@ ui_track_type_t ui_track_catalog_first_available_type(ui_track_family_t family,
     const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
     if ((catalog == 0) || (catalog_count == 0U))
     {
-        return UI_TRACK_TYPE_AUDIO;
+        return UI_TRACK_TYPE_NONE;
     }
 
     for (uint8_t i = 0U; i < catalog_count; ++i)
@@ -496,7 +407,7 @@ ui_track_type_t ui_track_catalog_first_available_type(ui_track_family_t family,
         }
     }
 
-    return UI_TRACK_TYPE_AUDIO;
+    return UI_TRACK_TYPE_NONE;
 }
 
 ui_track_type_t ui_track_catalog_default_type_for_family(ui_track_family_t family)
@@ -508,7 +419,7 @@ ui_track_type_t ui_track_catalog_default_type_for_family(ui_track_family_t famil
         return catalog[0];
     }
 
-    return UI_TRACK_TYPE_AUDIO;
+    return UI_TRACK_TYPE_NONE;
 }
 
 const char *ui_track_catalog_family_display_name(ui_track_family_t family)
@@ -517,23 +428,6 @@ const char *ui_track_catalog_family_display_name(ui_track_family_t family)
     {
         case UI_TRACK_FAMILY_OFF:
             return "Off";
-
-        case UI_TRACK_FAMILY_INPUT1:
-            return "Input1";
-
-        case UI_TRACK_FAMILY_INPUT2:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "Track";
-#else
-            return "Input2";
-#endif
-
-        case UI_TRACK_FAMILY_INPUT3:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "Track";
-#else
-            return "Input3";
-#endif
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
@@ -557,23 +451,6 @@ const char *ui_track_catalog_family_short_name(ui_track_family_t family)
     {
         case UI_TRACK_FAMILY_OFF:
             return "Off";
-
-        case UI_TRACK_FAMILY_INPUT1:
-            return "In1";
-
-        case UI_TRACK_FAMILY_INPUT2:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "---";
-#else
-            return "In2";
-#endif
-
-        case UI_TRACK_FAMILY_INPUT3:
-#if defined(BRICK6_VARIANT_LOWCOST)
-            return "---";
-#else
-            return "In3";
-#endif
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";
@@ -600,8 +477,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
 
     switch (type)
     {
-        case UI_TRACK_TYPE_AUDIO:
-            return "Audio";
+        case UI_TRACK_TYPE_NONE:
+            return "-";
 
         case UI_TRACK_TYPE_RAM:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Sampler";
@@ -644,8 +521,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
     switch (type)
     {
-        case UI_TRACK_TYPE_AUDIO:
-            return "Aud";
+        case UI_TRACK_TYPE_NONE:
+            return "---";
 
         case UI_TRACK_TYPE_RAM:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Smp";

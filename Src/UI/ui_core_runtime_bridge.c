@@ -4,6 +4,7 @@
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/engine_lane_authority.h"
+#include "Core/track_input_ownership.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -1046,17 +1047,13 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 #error "UI proto wired input count cannot exceed product input resource count"
 #endif
 
-    track_enable(0U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT1) > 0U);
-#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 1U
-    track_enable(1U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT2) > 0U);
-#else
-    track_enable(1U, 0U);
-#endif
-#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 2U
-    track_enable(2U, track_state_count_tracks_with_family(UI_TRACK_FAMILY_INPUT3) > 0U);
-#else
-    track_enable(2U, 0U);
-#endif
+    for (uint8_t input = 0U; input < 3U; ++input)
+    {
+        uint8_t owner = TRACK_INPUT_OWNER_NONE;
+        const uint8_t enabled = (uint8_t)((input < UI_AUDIO_INPUT_PROTO_WIRED_COUNT)
+            && (track_input_ownership_get_external_owner(input, &owner) != 0U));
+        track_enable(input, enabled);
+    }
     engine_lane_usage_t engine_usage;
     engine_lane_authority_count(track_state_get_configs(), UI_TRACK_COUNT, &engine_usage);
     track_enable(3U, engine_usage.total_tracks > 0U);

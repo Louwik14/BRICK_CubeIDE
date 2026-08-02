@@ -35,13 +35,11 @@ static const char k_header[] =
     "delay_return_peak_l,delay_return_peak_l_dbfs,delay_return_peak_r,delay_return_peak_r_dbfs,delay_return_rms_l,delay_return_rms_l_dbfs,delay_return_rms_r,delay_return_rms_r_dbfs,"
     "reverb_return_peak_l,reverb_return_peak_l_dbfs,reverb_return_peak_r,reverb_return_peak_r_dbfs,reverb_return_rms_l,reverb_return_rms_l_dbfs,reverb_return_rms_r,reverb_return_rms_r_dbfs,"
     "post_returns_peak_l,post_returns_peak_l_dbfs,post_returns_peak_r,post_returns_peak_r_dbfs,post_returns_rms_l,post_returns_rms_l_dbfs,post_returns_rms_r,post_returns_rms_r_dbfs,"
-    "macro_fx_in_peak_l,macro_fx_in_peak_l_dbfs,macro_fx_in_peak_r,macro_fx_in_peak_r_dbfs,macro_fx_in_rms_l,macro_fx_in_rms_l_dbfs,macro_fx_in_rms_r,macro_fx_in_rms_r_dbfs,"
-    "macro_fx_out_peak_l,macro_fx_out_peak_l_dbfs,macro_fx_out_peak_r,macro_fx_out_peak_r_dbfs,macro_fx_out_rms_l,macro_fx_out_rms_l_dbfs,macro_fx_out_rms_r,macro_fx_out_rms_r_dbfs,"
     "post_preview_peak_l,post_preview_peak_l_dbfs,post_preview_peak_r,post_preview_peak_r_dbfs,post_preview_rms_l,post_preview_rms_l_dbfs,post_preview_rms_r,post_preview_rms_r_dbfs,"
     "post_master_gain_peak_l,post_master_gain_peak_l_dbfs,post_master_gain_peak_r,post_master_gain_peak_r_dbfs,post_master_gain_rms_l,post_master_gain_rms_l_dbfs,post_master_gain_rms_r,post_master_gain_rms_r_dbfs,"
     "pre_pcm24_peak_l,pre_pcm24_peak_l_dbfs,pre_pcm24_peak_r,pre_pcm24_peak_r_dbfs,pre_pcm24_rms_l,pre_pcm24_rms_l_dbfs,pre_pcm24_rms_r,pre_pcm24_rms_r_dbfs,"
     "dma_main_peak_l,dma_main_peak_l_dbfs,dma_main_peak_r,dma_main_peak_r_dbfs,dma_main_rms_l,dma_main_rms_l_dbfs,dma_main_rms_r,dma_main_rms_r_dbfs,"
-    "final_clip_count,final_clip_max_over,macro_fx_clamp_count,macro_fx_clamp_max_over,"
+    "final_clip_count,final_clip_max_over,"
     "delay_clamp_count,delay_clamp_max_over,irq_valid,irq_current_permille,"
     "irq_average_permille,irq_peak_permille,irq_overrun_count,"
     "delay_send,reverb_send,delay_mix,delay_feedback,delay_time_index,"
@@ -609,14 +607,12 @@ static uint8_t format_request(uint32_t row_sequence, uint32_t *out_length)
         }
     }
     if (appendf(&offset,
-                ",%lu,%.9g,%lu,%.9g,%lu,%.9g,%lu,%lu,%lu,%lu,%lu,"
+                ",%lu,%.9g,%lu,%.9g,%lu,%lu,%lu,%lu,%lu,"
                 "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
                 "%.9g,%.9g,%u,%u,%lu,%lu,%u,%u,%u,"
                 "%.9g,%.9g,%.9g,%u",
                 (unsigned long)r->global_diag.final_clip_count,
                 r->global_diag.final_clip_max_over,
-                (unsigned long)r->global_diag.macro_fx_clamp_count,
-                r->global_diag.macro_fx_clamp_max_over,
                 (unsigned long)r->global_diag.delay_clamp_count,
                 r->global_diag.delay_clamp_max_over,
                 (unsigned long)r->cpu.counter_valid,
@@ -652,7 +648,6 @@ static uint8_t format_request(uint32_t row_sequence, uint32_t *out_length)
         + r->track_diag.filter_clip_count
         + r->track_diag.insert_clip_count
         + r->global_diag.final_clip_count
-        + r->global_diag.macro_fx_clamp_count
         + r->global_diag.delay_clamp_count;
     if (appendf(&offset,
                 ",%s,%s,%s,%u,%u,%u,%.9g,%.9g,%u,%s,%u,"

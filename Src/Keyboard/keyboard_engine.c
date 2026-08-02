@@ -42,8 +42,8 @@ static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 #define KEYBOARD_ENGINE_MONO_HELD_MAX 8U
 static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
 static uint8_t g_kbd_rec_note_stack_count[128U];
-static uint8_t g_kbd_rec_track_note_channel[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
-static uint8_t g_kbd_rec_track_note_count[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
+static uint8_t g_kbd_rec_track_note_channel[TRACK_TOPOLOGY_TRACK_COUNT][128U];
+static uint8_t g_kbd_rec_track_note_count[TRACK_TOPOLOGY_TRACK_COUNT][128U];
 
 typedef struct
 {
@@ -214,7 +214,7 @@ static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
 
 static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on)
 {
-    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -512,7 +512,7 @@ static void keyboard_engine_live_rec_push_track_channel(uint8_t owner_track,
                                                         uint8_t note,
                                                         uint8_t channel)
 {
-    if ((owner_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
+    if ((owner_track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U))
     {
         return;
     }
@@ -528,7 +528,7 @@ static uint8_t keyboard_engine_live_rec_pop_track_channel(uint8_t owner_track,
                                                           uint8_t note,
                                                           uint8_t fallback_channel)
 {
-    if ((owner_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
+    if ((owner_track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U))
     {
         return fallback_channel;
     }
@@ -667,7 +667,7 @@ void keyboard_engine_note_off(uint8_t note)
 
 void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity)
 {
-    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -694,7 +694,7 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
 
 void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
 {
-    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -718,7 +718,7 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
 
 void keyboard_engine_all_notes_off_for_track(uint8_t track)
 {
-    if ((track >= UI_TRACK_COUNT) || (track_topology_is_play(track) == 0U))
+    if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
         return;
     }

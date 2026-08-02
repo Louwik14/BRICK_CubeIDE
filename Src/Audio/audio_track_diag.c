@@ -77,8 +77,6 @@ static uint8_t g_global_stage_state[AUDIO_GLOBAL_DIAG_STAGE_COUNT];
 static uint8_t g_global_active_tracks;
 static volatile uint32_t g_global_final_clips;
 static float g_global_final_clip_max_over;
-static volatile uint32_t g_global_macro_fx_clamps;
-static float g_global_macro_fx_clamp_max_over;
 static volatile uint32_t g_global_delay_clamps;
 static float g_global_delay_clamp_max_over;
 
@@ -334,12 +332,6 @@ void audio_global_diag_report_final_pcm24(float input, float clipped)
                                    &g_global_final_clip_max_over);
 }
 
-void audio_global_diag_report_macro_fx_clamp(float input, float clipped)
-{
-    audio_global_diag_report_clamp(input, clipped, &g_global_macro_fx_clamps,
-                                   &g_global_macro_fx_clamp_max_over);
-}
-
 void audio_global_diag_report_delay_clamp(float input, float clipped)
 {
     audio_global_diag_report_clamp(input, clipped, &g_global_delay_clamps,
@@ -365,13 +357,10 @@ static void audio_global_diag_publish(void)
     g_global_slot.value.active_audio_tracks = g_global_active_tracks;
     g_global_slot.value.final_clip_count = g_global_final_clips;
     g_global_slot.value.final_clip_max_over = g_global_final_clip_max_over;
-    g_global_slot.value.macro_fx_clamp_count = g_global_macro_fx_clamps;
-    g_global_slot.value.macro_fx_clamp_max_over = g_global_macro_fx_clamp_max_over;
     g_global_slot.value.delay_clamp_count = g_global_delay_clamps;
     g_global_slot.value.delay_clamp_max_over = g_global_delay_clamp_max_over;
     g_global_slot.value.delay_clamp_available = 1U;
     g_global_slot.value.reverb_clamp_available = 0U;
-    g_global_slot.value.macro_fx_clamp_available = 1U;
     g_global_slot.value.final_clip_available = 1U;
     g_global_slot.sequence++;
 }
@@ -533,8 +522,6 @@ void audio_global_diag_reset(void)
     g_global_active_tracks = 0U;
     g_global_final_clips = 0U;
     g_global_final_clip_max_over = 0.0f;
-    g_global_macro_fx_clamps = 0U;
-    g_global_macro_fx_clamp_max_over = 0.0f;
     g_global_delay_clamps = 0U;
     g_global_delay_clamp_max_over = 0.0f;
     if (primask == 0U)

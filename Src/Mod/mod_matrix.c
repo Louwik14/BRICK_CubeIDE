@@ -115,8 +115,6 @@ static ui_track_family_t mod_matrix_ui_family_from_ctx(const track_runtime_ctx_t
 
     switch ((track_runtime_family_t)ctx->family)
     {
-        case TRACK_RUNTIME_FAMILY_INPUT:
-            return UI_TRACK_FAMILY_INPUT1;
         case TRACK_RUNTIME_FAMILY_SYNTH:
             return UI_TRACK_FAMILY_SYNTH;
         case TRACK_RUNTIME_FAMILY_SAMPLER:
@@ -138,7 +136,7 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
 {
     if (ctx == NULL)
     {
-        return UI_TRACK_TYPE_AUDIO;
+        return UI_TRACK_TYPE_NONE;
     }
 
     switch ((track_runtime_type_t)ctx->type)
@@ -161,16 +159,15 @@ static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_runtime_ctx_t *ct
             return UI_TRACK_TYPE_EXTERNAL;
         case TRACK_RUNTIME_TYPE_STREAM:
             return UI_TRACK_TYPE_STREAM;
-            return UI_TRACK_TYPE_AUDIO;
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
             return UI_TRACK_TYPE_DRUM_BD_ANALOG;
         case TRACK_RUNTIME_TYPE_LOOPER:
             return UI_TRACK_TYPE_LOOPER;
         case TRACK_RUNTIME_TYPE_MULTI:
             return UI_TRACK_TYPE_MULTI;
-        case TRACK_RUNTIME_TYPE_AUDIO:
+        case TRACK_RUNTIME_TYPE_NONE:
         default:
-            return UI_TRACK_TYPE_AUDIO;
+            return UI_TRACK_TYPE_NONE;
     }
 }
 

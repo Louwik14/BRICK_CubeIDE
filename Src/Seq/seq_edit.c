@@ -721,7 +721,7 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
     {
         return 0U;
     }
-    if (track_topology_is_play(held_track) == 0U)
+    if (track_topology_is_active(held_track) == 0U)
     {
         return 0U;
     }

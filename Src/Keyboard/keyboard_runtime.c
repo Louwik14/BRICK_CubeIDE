@@ -247,15 +247,6 @@ void keyboard_runtime_all_notes_off(void)
         NOTE_FX_TRANSITION_PANIC_CLOSE_ALL);
 }
 
-uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
-{
-    const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t family = ui_get_track_family(active_track);
-    const ui_track_type_t type = ui_get_track_type(active_track);
-    return ((ui_track_family_is_input(family) != 0U)
-            && (type == UI_TRACK_TYPE_AUDIO)) ? 1U : 0U;
-}
-
 void keyboard_runtime_sync_track_focus_context(void)
 {
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();

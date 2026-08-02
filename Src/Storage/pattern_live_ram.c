@@ -28,7 +28,7 @@
 #define PATTERN_PER_BANK   16U
 
 #if (UI_TRACK_COUNT != SEQ_TRACK_COUNT)
-#error "pattern_live_ram requires UI_TRACK_COUNT == SEQ_TRACK_COUNT for track config/role restore."
+#error "pattern_live_ram requires UI_TRACK_COUNT == SEQ_TRACK_COUNT."
 #endif
 
 typedef struct
@@ -217,10 +217,8 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
 
 static uint8_t pattern_live_param_is_storable_for_track(uint8_t track, param_id_t id)
 {
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    return (uint8_t)((track_topology_is_active(track) != 0U)
-            && ((track_topology_is_play(track) != 0U)
-                || (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)));
+    (void)id;
+    return track_topology_is_active(track);
 }
 
 static uint8_t pattern_live_is_track_scoped_param(param_id_t id)

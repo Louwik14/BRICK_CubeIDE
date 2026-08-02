@@ -126,7 +126,7 @@
 - Le runner est servi par la superloop hors IRQ, y compris après une sortie de page, afin qu'une annulation attende l'écriture éventuellement engagée puis restaure le snapshot sans dépendre du tick UI.
 - `audio_test_runner_tick()` est cadencé par la superloop hors IRQ. La machine conserve le chemin simple `PREPARE -> CONFIGURE -> NOTE_ON -> WARMUP -> MEASURE -> CAPTURE -> NOTE_OFF -> WRITE -> NEXT -> RESTORE`; les cas FX insèrent après `NOTE_OFF` deux fenêtres `FX_TAIL_EARLY/FX_TAIL_LATE`, sans écriture SD, avant les deux écritures `FX_ACTIVE` puis `FX_TAIL`.
 - Le writer FatFs reste un service superloop séparé; le runner attend son acquittement durable pendant le silence avant de configurer le cas suivant.
-- Catalogue déterministe: 69 cas moteurs, 8 filtres, 7 sommes de tracks, 5 cas master simples et 6 cas FX dédiés, soit 95 tests et 102 lignes CSV. Les 69 cas moteurs gardent 300 ms de warmup et mesurent 1 s; les 19 cas simples filtres/somme/master gardent 300/500 ms. Les six cas FX dédiés et la somme 12 tracks avec delay+reverb font chacun 1 s de warmup + 2 s `FX_ACTIVE` + 3 s `FX_TAIL`. Minimum temporel: 149,9 s avec l'avertissement initial; estimation affichée: 2 min 45 s, avec une plage pratique d'environ 155 à 180 s selon les reconfigurations et `f_sync` SD.
+- Le catalogue de diagnostic courant borne ses sommes à huit pistes. Les cas et durées exacts sont définis par `audio_test_runner.c`; ce diagnostic n'ajoute aucune identité de piste au produit.
 
 ## Addendum 2026-07-29 - boot codec borne et identique cold/warm/GDB
 

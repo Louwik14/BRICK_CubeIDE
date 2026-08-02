@@ -42,11 +42,6 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
     {
         return KIT_V1_LABEL_OFF;
     }
-    if (ui_track_family_is_input(family) != false)
-    {
-        return KIT_V1_LABEL_IN;
-    }
-
     switch (family)
     {
         case UI_TRACK_FAMILY_SYNTH:
@@ -855,7 +850,7 @@ const char *kit_v1_label_code_short_name(uint8_t label_code)
         case KIT_V1_LABEL_ST: return "ST";
         case KIT_V1_LABEL_ML: return "ML";
         case KIT_V1_LABEL_LP: return "LP";
-        case KIT_V1_LABEL_IN: return "IN";
+        case KIT_V1_LABEL_RESERVED_7: return "---";
         case KIT_V1_LABEL_FX: return "FX";
         case KIT_V1_LABEL_BD: return "BD";
         case KIT_V1_LABEL_SN: return "SN";

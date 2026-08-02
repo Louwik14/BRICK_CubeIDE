@@ -309,7 +309,7 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
     out_snapshot->config.family = UI_TRACK_FAMILY_OFF;
-    out_snapshot->config.type = UI_TRACK_TYPE_AUDIO;
+    out_snapshot->config.type = UI_TRACK_TYPE_NONE;
     out_snapshot->external_input = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
@@ -371,7 +371,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
             && (options->source_track != target_track))
     {
         family[options->source_track] = (uint8_t)UI_TRACK_FAMILY_OFF;
-        type[options->source_track] = (uint8_t)UI_TRACK_TYPE_AUDIO;
+        type[options->source_track] = (uint8_t)UI_TRACK_TYPE_NONE;
     }
 
     const ui_track_family_t target_family =

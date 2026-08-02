@@ -31,22 +31,6 @@ static const ui_template_family_t g_ui_template_cfg_family = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_cfg_special_family = {
-    .family_title = "CFG",
-    .nav_labels = { "IDENT", "-", "-", "-" },
-    .subpages = {
-        { .title = "IDENTITY", .param_bank = { .params = {
-            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = {
-            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = {
-            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = {
-            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-};
-
 static const ui_template_family_t g_ui_template_cfg_synth_family = {
     .family_title = "CFG",
     .nav_labels = { "MAIN", "MIDI", "-", "-" },
@@ -205,11 +189,6 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
-    if (track_topology_is_special(active_track) != 0U)
-    {
-        return &g_ui_template_cfg_special_family;
-    }
-
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;

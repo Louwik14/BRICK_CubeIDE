@@ -62,7 +62,6 @@ typedef struct
 typedef enum
 {
     TRACK_RUNTIME_FAMILY_OFF = 0,
-    TRACK_RUNTIME_FAMILY_INPUT,
     TRACK_RUNTIME_FAMILY_SYNTH,
     TRACK_RUNTIME_FAMILY_SAMPLER,
     TRACK_RUNTIME_FAMILY_DRUM,
@@ -73,7 +72,7 @@ typedef enum
 
 typedef enum
 {
-    TRACK_RUNTIME_TYPE_AUDIO = 0,
+    TRACK_RUNTIME_TYPE_NONE = 0,
     TRACK_RUNTIME_TYPE_RAM,
     TRACK_RUNTIME_TYPE_PRISM,
     TRACK_RUNTIME_TYPE_DRUM_MD,
@@ -165,7 +164,6 @@ typedef struct
     uint8_t flags;
     uint8_t midi_channel_1_16;
     uint16_t ui_ensemble_mask;
-    track_topology_role_t topology_role;
     uint16_t topology_capabilities;
 } track_runtime_descriptor_t;
 

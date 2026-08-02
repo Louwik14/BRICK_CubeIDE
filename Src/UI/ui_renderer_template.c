@@ -1804,56 +1804,6 @@ static void ui_renderer_template_draw_cfg_piano_icon(int x, int y, int w, int h)
     }
 }
 
-static void ui_renderer_template_draw_cfg_input_icon(int x, int y, int w, int h)
-{
-    static const char *const input[29] = {
-        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWBBBBBBBWWWWWWWWWWWW",
-        "WWWWWWWWWWWBWWWWWBWWWWWWWWWWWW",
-        "WWWWWWWWWWWBWWWWWBWWWWWWWWWWWW",
-        "WWWWWWWWWWBBBBBBBBBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWWWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWWWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWWBWWBWWWWWWWWWWW",
-        "WWWWWWWWWWBWWWBWWWBWWWWWWWWWWW",
-        "WWWWWWWWWWBBWWWWWBBWWWWWWWWWWW",
-        "WWWWWWWWWWWBBWWWBBWWWWWWWWWWWW",
-        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
-        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
-    };
-    const int icon_w = 30;
-    const int icon_h = 29;
-    const int icon_x = x + ((w - icon_w) / 2);
-    const int icon_y = y + ((h - icon_h) / 2);
-
-    for (uint8_t row = 0U; row < 29U; ++row)
-    {
-        for (uint8_t col = 0U; col < 30U; ++col)
-        {
-            if (input[row][col] == 'B')
-            {
-                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
-            }
-        }
-    }
-}
-
 static void ui_renderer_template_draw_cfg_external_icon(int x, int y, int w, int h)
 {
     static const char *const external[29] = {
@@ -2315,15 +2265,6 @@ static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_
     return (ui_track_family_t)family;
 }
 
-static uint8_t ui_renderer_template_cfg_input_index(ui_track_family_t family)
-{
-    if ((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT3))
-    {
-        return (uint8_t)((uint8_t)family - (uint8_t)UI_TRACK_FAMILY_INPUT1 + 1U);
-    }
-    return 0U;
-}
-
 static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                           ui_template_custom_widget_kind_t kind,
                                                           int x,
@@ -2373,16 +2314,9 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
     const ui_track_family_t family = ui_renderer_template_cfg_visible_family(plock_frame_ctx);
     if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
     {
-        const uint8_t input_index = ui_renderer_template_cfg_input_index(family);
         if (family == UI_TRACK_FAMILY_OFF)
         {
             return ui_renderer_template_draw_filter_big_text(x, y, w, h, "OFF", &FONT_OFF_COMPACT);
-        }
-        if (input_index != 0U)
-        {
-            char label[6];
-            (void)snprintf(label, sizeof(label), "In%u", (unsigned int)input_index);
-            return ui_renderer_template_draw_filter_big_text(x, y, w, h, label, &FONT_OFF_COMPACT);
         }
         if (family == UI_TRACK_FAMILY_SYNTH)
         {
@@ -2436,16 +2370,8 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
                 ui_renderer_template_draw_cfg_external_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_AUDIO:
-            {
-                const uint8_t input_index = ui_renderer_template_cfg_input_index(family);
-                if (input_index != 0U)
-                {
-                    ui_renderer_template_draw_cfg_input_icon(x, y, w, h);
-                    return 1U;
-                }
+            case UI_TRACK_TYPE_NONE:
                 break;
-            }
 
             case UI_TRACK_TYPE_RAM:
                 ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);

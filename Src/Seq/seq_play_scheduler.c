@@ -90,8 +90,8 @@ typedef struct
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
 static uint16_t g_seq_play_event_count;
 static uint8_t g_seq_play_generation;
-static uint8_t g_seq_play_midi_program_valid[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
-static uint8_t g_seq_play_midi_program_last[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+static uint8_t g_seq_play_midi_program_valid[TRACK_TOPOLOGY_TRACK_COUNT];
+static uint8_t g_seq_play_midi_program_last[TRACK_TOPOLOGY_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
 static uint32_t g_seq_play_next_event_token;
 static uint8_t g_seq_play_audio_half_active;
@@ -125,11 +125,11 @@ typedef struct
 } seq_terminal_admission_t;
 
 SEQ_STATE_D2 static seq_play_active_occurrence_t
-    g_seq_play_active_occurrence[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY];
-static uint8_t g_seq_play_track_generation[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
-static uint8_t g_seq_play_track_suspended[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+    g_seq_play_active_occurrence[TRACK_TOPOLOGY_TRACK_COUNT][SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY];
+static uint8_t g_seq_play_track_generation[TRACK_TOPOLOGY_TRACK_COUNT];
+static uint8_t g_seq_play_track_suspended[TRACK_TOPOLOGY_TRACK_COUNT];
 static seq_terminal_admission_t
-    g_seq_terminal_admission[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
+    g_seq_terminal_admission[TRACK_TOPOLOGY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
 static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
     PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
 };
@@ -167,7 +167,7 @@ static uint8_t seq_play_scheduler_active_occurrence_add(seq_track_id_t track,
                                                          uint32_t token,
                                                          uint32_t generation)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
             || (token == 0U) || (generation == 0U))
         return 0U;
 
@@ -207,7 +207,7 @@ static uint8_t seq_play_scheduler_active_occurrence_remove(seq_track_id_t track,
                                                             uint32_t token,
                                                             uint32_t generation)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
             || (token == 0U) || (generation == 0U))
         return 0U;
 
@@ -231,7 +231,7 @@ static int16_t seq_play_scheduler_terminal_find(seq_track_id_t track,
                                                  uint32_t occurrence_id,
                                                  uint32_t generation)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT)
             || (occurrence_id == 0U) || (generation == 0U))
         return -1;
     for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
@@ -248,7 +248,7 @@ static int16_t seq_play_scheduler_terminal_find(seq_track_id_t track,
 
 static int16_t seq_play_scheduler_terminal_free(seq_track_id_t track)
 {
-    if (track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track >= TRACK_TOPOLOGY_TRACK_COUNT)
         return -1;
     for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
     {
@@ -279,7 +279,7 @@ static void seq_play_scheduler_next_generation(void)
 
 static void seq_play_scheduler_next_track_generation(seq_track_id_t track)
 {
-    if (track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track >= TRACK_TOPOLOGY_TRACK_COUNT)
         return;
     ++g_seq_play_track_generation[track];
     if (g_seq_play_track_generation[track] == 0U)
@@ -332,7 +332,7 @@ static void seq_play_scheduler_emit_midi_program(seq_track_id_t track, uint8_t p
     const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
     midi_program_change(MIDI_DEST_BOTH, channel, program_0_127);
 
-    if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track < TRACK_TOPOLOGY_TRACK_COUNT)
     {
         g_seq_play_midi_program_valid[track] = 1U;
         g_seq_play_midi_program_last[track] = program_0_127;
@@ -349,7 +349,7 @@ static void seq_play_scheduler_send_program_if_needed(seq_track_id_t track,
         return;
     }
 
-    if (track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track >= TRACK_TOPOLOGY_TRACK_COUNT)
     {
         return;
     }
@@ -428,7 +428,7 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint32_t event_token)
 {
     const uint32_t primask = seq_play_scheduler_enter_critical();
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (g_seq_play_track_suspended[track] != 0U))
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (g_seq_play_track_suspended[track] != 0U))
     {
         seq_play_scheduler_exit_critical(primask);
         return;
@@ -464,7 +464,7 @@ static uint8_t seq_play_scheduler_push_note_pair(uint64_t note_on_sample_time,
                                                  uint8_t velocity)
 {
     const uint32_t primask = seq_play_scheduler_enter_critical();
-    if ((target_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if ((target_track >= TRACK_TOPOLOGY_TRACK_COUNT)
             || (g_seq_play_track_suspended[target_track] != 0U))
     {
         seq_play_scheduler_exit_critical(primask);
@@ -841,7 +841,7 @@ static void seq_play_scheduler_dispatch_terminal_owned(seq_track_id_t track,
 note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_t *event)
 {
     if (!note_event_is_valid(event)
-            || (event->track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            || (event->track >= TRACK_TOPOLOGY_TRACK_COUNT)
             || (event->stage != NOTE_EVENT_STAGE_TERMINAL))
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
 
@@ -1048,7 +1048,7 @@ void seq_play_scheduler_init(void)
     g_seq_play_audio_half_used = 0U;
     g_seq_play_audio_half_high_water = 0U;
     g_seq_play_diag = (seq_play_scheduler_diag_t){0};
-    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         g_seq_play_midi_program_valid[track] = 0U;
         g_seq_play_midi_program_last[track] = 0U;
@@ -1057,7 +1057,7 @@ void seq_play_scheduler_init(void)
     memset(g_seq_terminal_admission, 0, sizeof(g_seq_terminal_admission));
     g_seq_play_diag.active_occurrence_count = 0U;
     memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
-    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         g_seq_play_track_generation[track] = 1U;
     }
@@ -1079,7 +1079,7 @@ void seq_play_scheduler_clear(void)
     memset(g_seq_play_active_occurrence, 0, sizeof(g_seq_play_active_occurrence));
     g_seq_play_diag.active_occurrence_count = 0U;
     memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
-    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         seq_play_scheduler_next_track_generation(track);
     }
@@ -1092,11 +1092,11 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
     if ((tracks == NULL) || (track_count == 0U))
         return;
 
-    uint8_t clear_track[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+    uint8_t clear_track[TRACK_TOPOLOGY_TRACK_COUNT];
     memset(clear_track, 0, sizeof(clear_track));
     for (uint8_t i = 0U; i < track_count; ++i)
     {
-        if (tracks[i] < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+        if (tracks[i] < TRACK_TOPOLOGY_TRACK_COUNT)
         {
             (void)note_fx_pipeline_transition_track(
                 tracks[i], NOTE_FX_TRANSITION_STOP_CLOSE);
@@ -1105,14 +1105,14 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
     }
 
     uint32_t primask = seq_play_scheduler_enter_critical();
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         if (clear_track[track] != 0U)
             seq_play_scheduler_next_track_generation(track);
     }
     seq_play_scheduler_exit_critical(primask);
 
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         if (clear_track[track] == 0U)
             continue;
@@ -1155,7 +1155,7 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
     for (uint16_t read_index = 0U; read_index < g_seq_play_event_count; ++read_index)
     {
         const seq_play_scheduler_evt_t event = g_seq_play_events[read_index];
-        if ((event.track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT) && (clear_track[event.track] != 0U))
+        if ((event.track < TRACK_TOPOLOGY_TRACK_COUNT) && (clear_track[event.track] != 0U))
             continue;
         if (write_index != read_index)
             g_seq_play_events[write_index] = event;
@@ -1175,7 +1175,7 @@ void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t tra
     for (uint8_t i = 0U; i < track_count; ++i)
     {
         const seq_track_id_t track = tracks[i];
-        if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+        if (track < TRACK_TOPOLOGY_TRACK_COUNT)
         {
             g_seq_play_track_suspended[track] = 1U;
         }
@@ -1194,7 +1194,7 @@ void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t trac
     for (uint8_t i = 0U; i < track_count; ++i)
     {
         const seq_track_id_t track = tracks[i];
-        if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+        if (track < TRACK_TOPOLOGY_TRACK_COUNT)
         {
             g_seq_play_track_suspended[track] = 0U;
         }
@@ -1239,7 +1239,7 @@ uint8_t seq_play_scheduler_transition_all(seq_play_transition_policy_t policy)
             || policy == SEQ_PLAY_TRANSITION_RESUME_TRIGS)
     {
         for (seq_track_id_t track = 0U;
-             track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+             track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
         {
             const seq_track_id_t one_track = track;
             (void)seq_play_scheduler_transition_tracks(
@@ -1252,7 +1252,7 @@ uint8_t seq_play_scheduler_transition_all(seq_play_transition_policy_t policy)
             || (policy == SEQ_PLAY_TRANSITION_DESTINATION_REBIND))
     {
         for (seq_track_id_t track = 0U;
-             track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+             track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
         {
             const seq_track_id_t one_track = track;
             seq_play_scheduler_suspend_tracks(&one_track, 1U);
@@ -1300,7 +1300,7 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
                                                        seq_play_scheduler_play_context_t *out_context)
 {
     if ((out_context == NULL)
-            || (scheduler_track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            || (scheduler_track >= TRACK_TOPOLOGY_TRACK_COUNT)
             || (seq_model_is_step_editable_index(scheduler_step) == 0U))
     {
         return 0U;
@@ -1355,7 +1355,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
 
     if (track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U)
     {
-        if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+        if (track < TRACK_TOPOLOGY_TRACK_COUNT)
         {
         }
         return;
@@ -1393,7 +1393,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     const uint64_t track_step_span_q16 = seq_play_scheduler_track_step_span_samples_q16(track, samples_per_step_q16);
     const uint8_t step_roll = play_context.source_roll;
     uint8_t track_quant = 0U;
-    if (track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track < TRACK_TOPOLOGY_TRACK_COUNT)
     {
         /* Projection read: quant is a runtime mirror applied to note timing, not an authority. */
         (void)seq_runtime_get_track_quant(track, &track_quant);
@@ -1511,7 +1511,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         uint8_t program_0_127 = 0U;
         if (seq_play_scheduler_program_value_decode(program_f, &program_0_127) != 0U)
         {
-            if ((track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            if ((track < TRACK_TOPOLOGY_TRACK_COUNT)
                     && ((g_seq_play_midi_program_valid[track] == 0U)
                         || (g_seq_play_midi_program_last[track] != program_0_127)))
             {
@@ -1604,7 +1604,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
                 stale_generation_count++;
                 continue;
             }
-            if ((candidate->track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+            if ((candidate->track >= TRACK_TOPOLOGY_TRACK_COUNT)
                     || (candidate->track_generation != g_seq_play_track_generation[candidate->track])
                     || ((g_seq_play_track_suspended[candidate->track] != 0U)
                         && (candidate->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)))
@@ -1748,7 +1748,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
         return;
     }
 
-    if ((event->track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if ((event->track >= TRACK_TOPOLOGY_TRACK_COUNT)
             || (event->generation != g_seq_play_generation)
             || (event->track_generation != g_seq_play_track_generation[event->track])
             || ((g_seq_play_track_suspended[event->track] != 0U)
@@ -1768,7 +1768,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     {
         return;
     }
-    const uint8_t valid_note_key = ((event->track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT) && (event->note < 128U)) ? 1U : 0U;
+    const uint8_t valid_note_key = ((event->track < TRACK_TOPOLOGY_TRACK_COUNT) && (event->note < 128U)) ? 1U : 0U;
 
     if (is_note_on == 0U)
     {
@@ -1854,7 +1854,7 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
     /* Post-commit seam: transport start re-seeds scheduler-side program state only. */
     track_runtime_refresh_all();
 
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         track_runtime_descriptor_t descriptor;
         if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
@@ -1875,7 +1875,7 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 {
-    if (track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if (track >= TRACK_TOPOLOGY_TRACK_COUNT)
         return;
 
     (void)seq_play_scheduler_transition_tracks(

@@ -125,7 +125,7 @@ static ui_track_config_t ui_core_get_default_track_config(void)
 {
     ui_track_config_t config = {
         .family = UI_TRACK_FAMILY_OFF,
-        .type = UI_TRACK_TYPE_AUDIO,
+        .type = UI_TRACK_TYPE_NONE,
     };
 
     return config;
@@ -134,11 +134,6 @@ static ui_track_config_t ui_core_get_default_track_config(void)
 static const ui_track_config_t *ui_core_get_track_configs(void)
 {
     return track_state_get_configs();
-}
-
-bool ui_track_family_is_input(ui_track_family_t family)
-{
-    return ui_track_catalog_family_is_input(family);
 }
 
 bool ui_track_family_is_engine(ui_track_family_t family)
@@ -952,7 +947,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    if (track_topology_is_play(track) == 0U)
+    if (track_topology_is_active(track) == 0U)
     {
         return false;
     }
@@ -1064,7 +1059,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
-    if (track_topology_is_play(track) == 0U)
+    if (track_topology_is_active(track) == 0U)
     {
         return false;
     }

@@ -87,11 +87,6 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
         return TRACK_RUNTIME_FAMILY_EXTERNAL;
     }
 
-    if (ui_track_catalog_family_is_input(family) != 0)
-    {
-        return TRACK_RUNTIME_FAMILY_INPUT;
-    }
-
     return TRACK_RUNTIME_FAMILY_OTHER;
 }
 
@@ -99,8 +94,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 {
     switch (type)
     {
-        case UI_TRACK_TYPE_AUDIO:
-            return TRACK_RUNTIME_TYPE_AUDIO;
+        case UI_TRACK_TYPE_NONE:
+            return TRACK_RUNTIME_TYPE_NONE;
 
         case UI_TRACK_TYPE_RAM:
             return TRACK_RUNTIME_TYPE_RAM;
@@ -201,8 +196,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 {
     uint8_t flags = 0U;
 
-    if ((family == TRACK_RUNTIME_FAMILY_INPUT)
-            || (family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+    if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
             || (family == TRACK_RUNTIME_FAMILY_SYNTH)
             || (family == TRACK_RUNTIME_FAMILY_SAMPLER)
             || (family == TRACK_RUNTIME_FAMILY_DRUM))
@@ -540,8 +534,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
 
     track_topology_descriptor_t topology;
-    if ((track_topology_get_descriptor(ctx->track_id, &topology) == 0U)
-            || (topology.category == (uint8_t)TRACK_TOPOLOGY_CATEGORY_UNUSED))
+    if (track_topology_get_descriptor(ctx->track_id, &topology) == 0U)
     {
         return 0U;
     }
@@ -775,12 +768,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
     if (family == TRACK_RUNTIME_FAMILY_OFF)
     {
         track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_TRACK_OFF);
-        return;
-    }
-
-    if (family == TRACK_RUNTIME_FAMILY_INPUT)
-    {
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_AUDIO_TRACK, ctx->track_id);
         return;
     }
 
@@ -1517,7 +1504,6 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
     out_descriptor->flags = ctx->flags;
     out_descriptor->midi_channel_1_16 = track_runtime_get_midi_channel_1_16(track);
     out_descriptor->ui_ensemble_mask = track_runtime_compute_ui_ensemble_mask(ctx);
-    out_descriptor->topology_role = (track_topology_role_t)topology.role;
     out_descriptor->topology_capabilities = topology.capabilities;
     return 1U;
 }

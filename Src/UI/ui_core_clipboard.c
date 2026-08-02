@@ -388,30 +388,6 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
     return track_snapshot_apply(track, &snapshot);
 }
 
-static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboard_t *cb)
-{
-    if (cb == 0)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)ui_track_family_is_input(cb->snapshot.config.family);
-}
-
-static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
-{
-    for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT3; ++family)
-    {
-        if (ui_track_family_is_input(family)
-                && (ui_count_tracks_with_family(family) == 0U))
-        {
-            return family;
-        }
-    }
-
-    return UI_TRACK_FAMILY_COUNT;
-}
-
 static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 {
     ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
@@ -421,46 +397,16 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
     }
 
     const uint8_t source_track = cb->source_track;
-    const uint8_t source_track_valid = (source_track < UI_TRACK_COUNT) ? 1U : 0U;
-    const uint8_t source_equals_target = (uint8_t)((source_track_valid != 0U) && (source_track == track));
-
-    ui_track_family_t target_family = cb->snapshot.config.family;
-    uint8_t clear_source_after_success = 0U;
-
-    if ((source_equals_target == 0U)
-            && (source_track_valid != 0U)
-            && (ui_core_clipboard_track_is_input_exclusive(cb) != 0U))
-    {
-        const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
-        if (free_input != UI_TRACK_FAMILY_COUNT)
-        {
-            target_family = free_input;
-        }
-        else
-        {
-            clear_source_after_success = 1U;
-        }
-    }
 
     const track_snapshot_apply_options_t options = {
-        .has_family_override = (target_family != cb->snapshot.config.family) ? 1U : 0U,
-        .family_override = target_family,
-        .clear_source_track = clear_source_after_success,
+        .has_family_override = 0U,
+        .family_override = cb->snapshot.config.family,
+        .clear_source_track = 0U,
         .source_track = source_track
     };
     if (track_snapshot_apply_ex(track, &cb->snapshot, &options) == 0U)
     {
         return 0U;
-    }
-
-    if ((clear_source_after_success != 0U) && (source_equals_target == 0U))
-    {
-        if (ui_core_clipboard_clear_track(source_track) == 0U)
-        {
-            return 0U;
-        }
-
-        cb->source_track = track;
     }
 
     ui_edit_context_sync_active_track(0U);

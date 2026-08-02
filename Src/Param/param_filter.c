@@ -184,12 +184,7 @@ uint8_t param_filter_is_param(param_id_t id)
 
 static uint8_t filter_mod_locked_for_active_track(void)
 {
-    const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t family = ui_get_track_family(active_track);
-    const ui_track_type_t type = ui_get_track_type(active_track);
-
-    return (ui_track_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO)) ? 1U : 0U;
-
+    return 0U;
 }
 
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)

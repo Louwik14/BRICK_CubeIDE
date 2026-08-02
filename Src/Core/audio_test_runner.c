@@ -41,7 +41,7 @@
 #define AUDIO_TEST_FX_TAIL_LATE_MS 2000U
 #define AUDIO_TEST_FX_TAIL_TOTAL_MS \
     (AUDIO_TEST_FX_TAIL_EARLY_MS + AUDIO_TEST_FX_TAIL_LATE_MS)
-#define AUDIO_TEST_ENGINE_TRACKS 12U
+#define AUDIO_TEST_ENGINE_TRACKS SEQ_TRACK_COUNT
 #define AUDIO_TEST_NOTE_MAX 12U
 #define AUDIO_TEST_CAL_PRISM_MODELS 39U
 #define AUDIO_TEST_CAL_STACK_MODELS 13U
@@ -459,13 +459,12 @@ static void build_case(uint16_t index, audio_test_case_t *out)
     }
     if (index < 15U)
     {
-        static const uint8_t counts[5] = { 1U, 2U, 4U, 8U, 12U };
-        static const uint8_t musical[12] = {
-            48U, 55U, 60U, 64U, 67U, 71U,
-            74U, 79U, 52U, 59U, 62U, 76U
+        static const uint8_t counts[5] = { 1U, 2U, 4U, 8U, 8U };
+        static const uint8_t musical[8] = {
+            48U, 55U, 60U, 64U, 67U, 71U, 74U, 79U
         };
         const uint8_t variant = (uint8_t)(index - 8U);
-        out->track_count = (variant < 5U) ? counts[variant] : 12U;
+        out->track_count = (variant < 5U) ? counts[variant] : SEQ_TRACK_COUNT;
         out->musical = (variant == 5U) ? 1U : 0U;
         out->coherent_sum = (variant < 5U) ? 1U : 0U;
         out->delay = (variant == 6U) ? 1U : 0U;
@@ -492,13 +491,13 @@ static void build_case(uint16_t index, audio_test_case_t *out)
           : (variant == 1U) ? "MASTER_2TRACKS_COHERENT"
           : (variant == 2U) ? "MASTER_4TRACKS_COHERENT"
           : (variant == 3U) ? "MASTER_8TRACKS_COHERENT"
-          : (variant == 4U) ? "MASTER_12TRACKS_COHERENT"
-          : (variant == 5U) ? "MASTER_12TRACKS_MUSICAL"
-                            : "MASTER_12TRACKS_DELAY_REVERB");
+          : (variant == 4U) ? "MASTER_8TRACKS_COHERENT_REPEAT"
+          : (variant == 5U) ? "MASTER_8TRACKS_MUSICAL"
+                            : "MASTER_8TRACKS_DELAY_REVERB");
         (void)snprintf(out->sources, sizeof(out->sources), "%s",
             (variant < 5U) ? "IDENTICAL_ENGINE_NOTE_PHASE"
-          : (variant == 5U) ? "12TRACK_MUSICAL_NOTES"
-                            : "12TRACK_BOTH_FX_SENDS");
+          : (variant == 5U) ? "8TRACK_MUSICAL_NOTES"
+                            : "8TRACK_BOTH_FX_SENDS");
         if (variant == 6U)
         {
             (void)snprintf(out->fx, sizeof(out->fx), "D1 R1");
@@ -509,9 +508,9 @@ static void build_case(uint16_t index, audio_test_case_t *out)
     if (index < 20U)
     {
         const uint8_t variant = (uint8_t)(index - 15U);
-        out->track_count = 12U;
-        out->note_count = 12U;
-        out->voice_count = 12U;
+        out->track_count = SEQ_TRACK_COUNT;
+        out->note_count = SEQ_TRACK_COUNT;
+        out->voice_count = SEQ_TRACK_COUNT;
         for (uint8_t i = 0U; i < out->track_count; ++i)
         {
             out->notes[i] = 60U;
@@ -535,7 +534,7 @@ static void build_case(uint16_t index, audio_test_case_t *out)
     out->delay = ((variant == 0U) || (variant == 1U)
                   || (variant == 4U) || (variant == 5U)) ? 1U : 0U;
     out->reverb = (variant >= 2U) ? 1U : 0U;
-    out->track_count = (variant == 5U) ? 12U : 1U;
+    out->track_count = (variant == 5U) ? SEQ_TRACK_COUNT : 1U;
     out->note_count = out->track_count;
     out->voice_count = out->track_count;
     for (uint8_t i = 0U; i < out->track_count; ++i)
@@ -717,7 +716,7 @@ static uint8_t configure_current(void)
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         family[track] = (uint8_t)UI_TRACK_FAMILY_OFF;
-        type[track] = (uint8_t)UI_TRACK_TYPE_AUDIO;
+        type[track] = (uint8_t)UI_TRACK_TYPE_NONE;
         midi_channel[track] = (uint8_t)(track + 1U);
         midi_source[track] = (uint8_t)UI_TRACK_MIDI_SRC_INT;
     }
@@ -943,7 +942,7 @@ static uint32_t calibration_clip_count(
 {
     return track->soft_clip_count + track->filter_clip_count
         + track->insert_clip_count + global->final_clip_count
-        + global->macro_fx_clamp_count + global->delay_clamp_count;
+        + global->delay_clamp_count;
 }
 
 static void collect_calibration_observation(void)
@@ -1208,11 +1207,6 @@ static void merge_global_snapshots(
     if (second->final_clip_max_over > out->final_clip_max_over)
     {
         out->final_clip_max_over = second->final_clip_max_over;
-    }
-    out->macro_fx_clamp_count += second->macro_fx_clamp_count;
-    if (second->macro_fx_clamp_max_over > out->macro_fx_clamp_max_over)
-    {
-        out->macro_fx_clamp_max_over = second->macro_fx_clamp_max_over;
     }
     out->delay_clamp_count += second->delay_clamp_count;
     if (second->delay_clamp_max_over > out->delay_clamp_max_over)
@@ -1649,7 +1643,6 @@ void audio_test_runner_tick(void)
                     global_nonfinite_count(global_snapshot);
                 const uint8_t final_saturation =
                     (global_snapshot->final_clip_count != 0U)
-                    || (global_snapshot->macro_fx_clamp_count != 0U)
                     || (global_snapshot->delay_clamp_count != 0U)
                     || (return_over != 0U);
                 const uint8_t irq_overload =

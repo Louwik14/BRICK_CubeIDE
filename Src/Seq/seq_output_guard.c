@@ -37,7 +37,7 @@ typedef struct
 
 typedef struct
 {
-    seq_output_guard_record_t record[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
+    seq_output_guard_record_t record[TRACK_TOPOLOGY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
     uint32_t orphan_off_count;
     uint32_t duplicate_close_count;
 } seq_output_guard_state_t;
@@ -67,7 +67,7 @@ uint8_t seq_output_guard_note_on_seen_mask(seq_track_id_t track, uint8_t note,
                                            uint32_t occurrence_id, uint32_t generation,
                                            uint8_t midi_dest_mask)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
             || (occurrence_id == 0U) || (generation == 0U))
         return 0U;
 
@@ -102,7 +102,7 @@ uint8_t seq_output_guard_note_on_seen_mask(seq_track_id_t track, uint8_t note,
 uint8_t seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note,
                                        uint32_t occurrence_id, uint32_t generation)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
             || (occurrence_id == 0U) || (generation == 0U))
         return 0U;
 
@@ -122,7 +122,7 @@ uint8_t seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note,
 }
 uint8_t seq_output_guard_is_note_active_on_track(seq_track_id_t track, uint8_t note)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT) || (note >= 128U))
+    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U))
         return 0U;
     for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
     {
@@ -137,7 +137,7 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 {
     if ((channel_zero_based >= 16U) || (note >= 128U))
         return 0U;
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         if (track_runtime_get_midi_channel_zero_based(track) != channel_zero_based)
             continue;
@@ -151,7 +151,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
     (void)seq_play_scheduler_transition_all(
         SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL);
     synth_polyphony_panic();
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {
         const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
         for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)

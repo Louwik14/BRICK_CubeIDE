@@ -42,11 +42,6 @@ track_mute_kind_t track_mute_get_kind(uint8_t track)
         return TRACK_MUTE_KIND_NONE;
     }
 
-    switch (descriptor.topology_role)
-    {
-        default: break;
-    }
-
     if (descriptor.family == TRACK_RUNTIME_FAMILY_MIDI)
     {
         return TRACK_MUTE_KIND_MIDI;

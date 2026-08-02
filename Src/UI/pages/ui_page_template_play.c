@@ -120,8 +120,7 @@ void ui_page_template_play_register_families(void)
         const ui_track_family_t track_family = (ui_track_family_t)family;
         if ((ui_track_family_is_engine(track_family) == 0U)
                 && (track_family != UI_TRACK_FAMILY_MIDI)
-                && (track_family != UI_TRACK_FAMILY_EXTERNAL)
-                && (ui_track_family_is_input(track_family) == 0U))
+                && (track_family != UI_TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
@@ -133,11 +132,6 @@ void ui_page_template_play_register_families(void)
             {
                 continue;
             }
-            if (ui_track_family_is_input(track_family) != 0U)
-            {
-                continue;
-            }
-
             ui_template_family_register(UI_TEMPLATE_FAMILY_PLAY,
                                         track_family,
                                         track_type,

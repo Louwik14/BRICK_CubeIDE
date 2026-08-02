@@ -41,8 +41,6 @@ typedef enum
     AUDIO_GLOBAL_DIAG_DELAY_RETURN,
     AUDIO_GLOBAL_DIAG_REVERB_RETURN,
     AUDIO_GLOBAL_DIAG_POST_RETURNS,
-    AUDIO_GLOBAL_DIAG_MACRO_FX_IN,
-    AUDIO_GLOBAL_DIAG_MACRO_FX_OUT,
     AUDIO_GLOBAL_DIAG_POST_PREVIEW,
     AUDIO_GLOBAL_DIAG_POST_MASTER_GAIN,
     AUDIO_GLOBAL_DIAG_PRE_PCM24,
@@ -71,14 +69,12 @@ typedef struct
     uint8_t _pad[3];
     uint32_t final_clip_count;
     float final_clip_max_over;
-    uint32_t macro_fx_clamp_count;
-    float macro_fx_clamp_max_over;
     uint32_t delay_clamp_count;
     float delay_clamp_max_over;
     uint8_t delay_clamp_available;
     uint8_t reverb_clamp_available;
-    uint8_t macro_fx_clamp_available;
     uint8_t final_clip_available;
+    uint8_t _clamp_pad;
 } audio_global_diag_snapshot_t;
 
 #if BRICK_TEST_BUILD
@@ -128,7 +124,6 @@ void audio_global_diag_measure_three(audio_global_diag_stage_t stage1,
                                      const float *right3,
                                      uint32_t frames);
 void audio_global_diag_report_final_pcm24(float input, float clipped);
-void audio_global_diag_report_macro_fx_clamp(float input, float clipped);
 void audio_global_diag_report_delay_clamp(float input, float clipped);
 void audio_global_diag_end_block(uint32_t frames);
 void audio_global_diag_reset(void);
@@ -163,7 +158,6 @@ uint8_t audio_track_diag_read_coherent(uint8_t logical_track,
 #define audio_global_diag_measure_sample(...) ((void)0)
 #define audio_global_diag_measure_three(...) ((void)0)
 #define audio_global_diag_report_final_pcm24(...) ((void)0)
-#define audio_global_diag_report_macro_fx_clamp(...) ((void)0)
 #define audio_global_diag_report_delay_clamp(...) ((void)0)
 #define audio_global_diag_end_block(...) ((void)0)
 #define audio_global_diag_reset() ((void)0)
