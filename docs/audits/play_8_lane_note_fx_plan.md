@@ -21,12 +21,13 @@ Ce document est un audit et un plan. Aucun firmware n’est modifié par cette m
 
 ### 2.1 Séquence et interface
 
-- Chaque Play Track possède toujours huit lanes PLAY indépendantes.
-- `PLAY 1/2` affiche les lanes 1 à 4.
-- `PLAY 2/2` affiche les lanes 5 à 8.
-- Les deux pages sont toujours accessibles sur un Play Track, quel que soit le moteur, le réglage `VOICES` ou la disponibilité momentanée du pool DSP.
+- Chaque Play Track possède un seul ensemble PLAY et huit sous-pages de lane.
+- `PLAY 1/2` regroupe les sous-pages des lanes 1 à 4.
+- `PLAY 2/2` regroupe les sous-pages des lanes 5 à 8.
+- Les huit sous-pages sont toujours accessibles sur une Play Track, quel que soit le moteur, le réglage `VOICES` ou la disponibilité momentanée du pool DSP.
+- Il ne s’agit pas de deux ensembles PLAY ni de pages affichant quatre lanes simultanément.
+- Chaque sous-page de lane conserve `NOTE`, `VEL`, `LEN` et `MICTIM`.
 - Les Specials ne reçoivent ni notes PLAY ni MIDI FX.
-- Chaque lane conserve `NOTE`, `VEL`, `LEN` et `MICTIM`.
 - Un step reste limité à 32 p-locks PLAY : huit lanes × quatre paramètres.
 - La page de séquence et la page PLAY sont deux notions distinctes : la première reste liée aux pages de longueur du pattern, la seconde devient une projection UI permanente des huit lanes.
 
@@ -37,11 +38,11 @@ Ce document est un audit et un plan. Aucun firmware n’est modifié par cette m
 - Une baisse de capacité limite les admissions futures et libère/termine les notes actives selon le chemin de transition déjà existant.
 - Une hausse de capacité permet de nouvelles admissions, sans réécriture des steps.
 - Un changement vers MIDI/External rebinde la destination sans filtrer les lanes stockées.
-- Si le pool global est momentanément insuffisant, les événements sont admis dans l’ordre déterministe des lanes jusqu’à la capacité disponible. Les suivants sont refusés sans token et sans Note Off ultérieur. Aucun vol de voix aléatoire ne doit être introduit dans cette admission ; le stealing interne éventuel du moteur reste une responsabilité séparée.
+- Si la capacité de destination est inférieure au groupe, une réduction musicale volontaire retient les premières sorties dans l’ordre stable des lanes/sources. Cette réduction est distincte d’un refus technique : si la queue ne peut pas réserver le groupe retenu en entier, tout le groupe retenu est refusé sans token ni Note Off. Aucun vol de voix aléatoire ne doit être introduit dans cette admission ; le stealing interne éventuel du moteur reste une responsabilité séparée.
 
 ### 2.3 Routage final
 
-Sans FX séquentiel, toutes les lanes sont soumises au point d’entrée commun puis la destination applique sa capacité. En mono local, la règle produit proposée est lane 1 prioritaire ; les lanes 2 à 8 restent séquencées et observables, mais ne sont pas rendues simultanément. En polyphonie locale, les lanes 1 à `N` sont admises, avec `N` égal à la capacité effective de la destination.
+Sans FX séquentiel, toutes les lanes sont soumises au point d’entrée commun puis la destination applique sa capacité. En mono local, la destination joue la première sortie survivante dans l’ordre stable des lanes/sources après NoteFx. Sans FX qui modifie ou supprime les notes, la lane 1 reste donc naturellement prioritaire. En polyphonie locale, les premières sorties survivantes jusqu’à `N` sont retenues, avec `N` égal à la capacité effective de la destination.
 
 Avec ARP, les huit sources peuvent entrer dans le groupe ARP. L’ARP les sérialise ensuite selon son contrat et sa capacité de sortie, y compris lorsque la destination finale est mono. Une entrée MIDI ou External ne doit pas être réduite par le pool de voix du synthé local ; elle suit la capacité de sa propre destination.
 
@@ -49,7 +50,7 @@ Avec ARP, les huit sources peuvent entrer dans le groupe ARP. L’ARP les séria
 
 | Couche | État actuel | Autorité / point d’entrée |
 |---|---|---|
-| UI PLAY | Quatre sous-pages `V1` à `V4`, masquées par la capacité runtime | `Src/UI/pages/ui_page_template_play.c`, `ui_page_template_play_subpage_enabled()` |
+| UI PLAY | Un ensemble PLAY, quatre sous-pages actuellement (`V1` à `V4`), masquées par la capacité runtime | `Src/UI/pages/ui_page_template_play.c`, `ui_page_template_play_subpage_enabled()` |
 | Paramètres | 16 paramètres PLAY : quatre paramètres pour chacune des voix 1 à 4 | `Inc/Param/param_store.h`, `Src/Param/param_registry_catalog.c` |
 | Mapping compact | 16 slots PLAY, offsets compacts et état runtime par slot | `Src/Seq/seq_param_iface.c`, `Inc/Seq/seq_types.h` |
 | Modèle séquence | 64 steps, chaque step porte une liste compacte de p-locks ; aucune note-array dédiée | `Inc/Seq/seq_model.h`, `Src/Seq/seq_model.c` |
@@ -118,17 +119,24 @@ L’ARP doit conserver cette identité au lieu de dédupliquer uniquement par ha
 
 ## 5. Admission terminale et tokens
 
-L’admission doit être placée après NoteFx et avant l’appel au moteur local ou à la sortie MIDI. Une note refusée ne réserve aucun token et ne génère aucun Note Off. Une note admise réserve son couple Note On/Note Off de façon atomique, comme dans le scheduler actuel.
+L’admission doit être placée après NoteFx et avant l’appel au moteur local ou à la sortie MIDI. Elle comporte deux décisions distinctes :
+
+1. la capacité de destination applique une réduction musicale volontaire et retient `N` sorties survivantes dans l’ordre stable des lanes/sources ;
+2. le scheduler réserve atomiquement le groupe retenu : `N` notes admises impliquent une réservation unique de `2 × N` places, puis l’émission du groupe complet.
+
+Si la queue ne peut pas contenir les `2 × N` places, tout le groupe retenu est refusé. Il n’y a ni accord partiel, ni Note On, ni token, ni Note Off à nettoyer. Cette défaillance technique de queue ne doit jamais être confondue avec la réduction musicale selon la capacité de destination. La réservation atomique des couples préserve `Z4-002`. Les sorties successives générées par l’ARP peuvent conserver leur réservation individuelle, puisqu’elles ne constituent pas une émission simultanée du même groupe terminal.
 
 | Destination | Capacité de référence | Sans FX séquentiel | Avec ARP | Token / Note Off |
 |---|---:|---|---|---|
-| Synth mono | 1 | Lane 1 prioritaire | ARP sérialise | Uniquement pour les sorties admises, identité source complète |
-| Synth local poly | `N` effectif, 1..8, éventuellement réduit par le pool global | Lanes 1..`N` | ARP puis admission simultanée | Réservation atomique par sortie ; dépassement refusé sans orphan |
+| Synth mono | 1 | Première sortie survivante dans l’ordre stable lane/source | ARP sérialise | Réservation du groupe retenu ; uniquement pour la sortie admise |
+| Synth local poly | `N` effectif, 1..8, éventuellement réduit par le pool global | Premières sorties survivantes jusqu’à `N` | ARP puis admission simultanée | Réservation unique de `2 × N` places ; groupe refusé sans orphan si insuffisant |
 | Sampler/Drum/autre local | Contrat propre au moteur ; ne pas déduire automatiquement du synth `VOICES` | Selon le contrat, projection mono si moteur mono | ARP ou contrat propre | Pair exact par identité de sortie |
 | MIDI | 8 lanes, sous réserve du contrat explicite du périphérique/canal | Les 8 | Toutes les sorties ARP admissibles | Identité lane/source conservée jusqu’au Note Off |
 | External | 8 sorties MIDI ; gate local séparé de la capacité synth | Les 8 côté MIDI | Toutes les sorties ARP admissibles | Pas de plafonnement par le pool synth local |
 
-Le mono doit avoir une règle déclarée et testable. Le scheduler ne doit plus allouer d’abord un token pour ensuite découvrir que le moteur ne peut pas accepter la note. Le token actuel indexé par `[track][note]` doit devenir une table bornée d’événements actifs, un slot par note admise, ou une structure équivalente capable de représenter plusieurs occurrences de même hauteur. Les compteurs de `seq_output_guard` peuvent rester count-based pour le panic, mais ils ne remplacent pas cette identité.
+Le mono doit avoir une règle déclarée et testable : une Probability qui supprime la lane 1 laisse la première sortie survivante, par exemple la lane 2, devenir la note mono. Les événements doivent préserver la lane/source d’origine, l’ordre stable et l’ordre déterministe des enfants générés par un FX.
+
+Le scheduler ne doit plus allouer d’abord un token pour ensuite découvrir que le moteur ne peut pas accepter la note. Le token actuel indexé par `[track][note]` doit devenir une table bornée d’événements actifs, un slot par note admise, ou une structure équivalente capable de représenter plusieurs occurrences de même hauteur. Les compteurs de `seq_output_guard` peuvent rester count-based pour le panic, mais ils ne remplacent pas cette identité. La réservation de queue et la création de tokens doivent être atomiques pour le groupe retenu.
 
 ## 6. Modifications de données et d’exécution
 
@@ -150,7 +158,7 @@ Le nombre maximal d’événements produits par un step croît linéairement :
 2 × 8 × (1 + nombre de retriggers par lane)
 ```
 
-La capacité de queue actuelle de 512 doit être auditée avec les retriggers et les événements MIDI éventuels. Si elle est insuffisante, augmenter explicitement la capacité ou définir une admission bornée ; ne jamais tronquer un Note On sans supprimer atomiquement son Note Off associé.
+La capacité de queue actuelle de 512 doit être auditée avec les retriggers et les événements MIDI éventuels. Pour chaque groupe retenu, le scheduler doit d’abord vérifier et réserver les `2 × N` places en une seule opération. Si cette réservation échoue, il refuse le groupe complet : aucun Note On partiel, aucun token et aucun Note Off orphelin. Cette règle est distincte de la réduction musicale préalable par capacité de destination.
 
 Le scheduler doit porter lane, groupe et source jusqu’à NoteFx. Les sorties ARP doivent ensuite être traitées comme de nouvelles identités de sortie, avec une relation vers leur source.
 
@@ -204,81 +212,81 @@ L’empreinte exacte dépend de l’insertion des IDs, de l’alignement et des 
 
 ## 7. Plan atomique par étapes
 
-Chaque étape ci-dessous doit être traitée comme une PR ou un commit isolé. Le passage à l’étape suivante se fait uniquement après les tests de l’étape et le `Go étape X` explicite du responsable.
+Chaque étape ci-dessous doit être traitée comme une PR ou un commit isolé. Le passage à l’étape suivante se fait uniquement après les tests de l’étape et le `Go étape X` explicite du responsable. L’ordre évite tout état intermédiaire dans lequel huit notes pourraient atteindre un moteur sans le contrat d’admission final.
 
-### Étape 1 — Canonicaliser huit lanes et deux pages PLAY
+### Étape 1 — Modèle huit lanes, paramètres et persistance
 
-**Objectif.** Rendre V1..V8 permanentes dans le paramétrage, le mapping et l’UI.
+**Objectif.** Rendre V1..V8 canoniques de bout en bout dans le modèle, les paramètres, la persistance, le clipboard et l’undo, sans encore permettre leur émission vers les moteurs.
 
-**Fichiers probables.** `Inc/Param/param_store.h`, `Src/Param/param_registry_catalog.c`, `Inc/Seq/seq_types.h`, `Src/Seq/seq_param_iface.c`, `Inc/UI/ui_template_page.h`, `Src/UI/pages/ui_page_template_play.c`, `Src/Core/track_runtime.c` et les renderer/UI mappings correspondants.
+**Fichiers probables.** `Inc/Param/param_store.h`, `Src/Param/param_registry_catalog.c`, `Inc/Seq/seq_types.h`, `Src/Seq/seq_param_iface.c`, `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `Inc/Storage/project_v1.h`, `Src/Seq/seq_clipboard.c`, `Src/UI/ui_core_clipboard.c`, `Inc/Storage/undo_v2.h`, `Src/Storage/undo_v2.c`, snapshots track et tests associés.
 
-**Autorisé.** Ajouter les IDs/descripteurs V5..V8, étendre les slots, introduire la distinction validité séquence/capacité runtime, exposer PLAY 1/2 et PLAY 2/2.
+**Autorisé.** Ajouter les IDs/descripteurs V5..V8, étendre les slots et payloads, introduire la distinction validité séquence/capacité runtime, mettre à jour les scopes de copie, snapshots et deltas.
 
-**Interdit.** Modifier le scheduler, NoteFx, les moteurs, les Specials ou les valeurs de `VOICES`.
+**Interdit.** Émettre V5..V8 vers les moteurs, modifier le scheduler terminal, NoteFx, l’ARP, le clavier, le live record, les Specials ou la capacité DSP.
 
-**Tests.** Registry/mapping 32 slots, deux pages visibles sur mono et poly, Special sans PLAY, p-locks V5..V8 acceptés indépendamment de `VOICES`.
+**Tests.** Registry/mapping 32 slots, round-trip Pattern/Project, snapshot/clipboard/undo, p-locks 0..31, et vérification que les lanes restent stockées quand `VOICES` vaut mono.
 
-### Étape 2 — Persistance, clipboard, undo et live record
+### Étape 2 — UI PLAY permanente
 
-**Objectif.** Rendre les huit lanes éditables, copiables, undoables et enregistrables.
+**Objectif.** Exposer le contrat UI exact : un seul ensemble PLAY, `PLAY 1/2` pour les lanes 1 à 4 et `PLAY 2/2` pour les lanes 5 à 8, sans afficher quatre lanes simultanément.
 
-**Fichiers probables.** `Src/Seq/seq_live_rec_capture.c`, `Inc/Seq/seq_live_rec_capture.h`, `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `Inc/Storage/project_v1.h`, `Src/Seq/seq_clipboard.c`, `Src/UI/ui_core_clipboard.c`, `Inc/Storage/undo_v2.h`, `Src/Storage/undo_v2.c`, snapshots track et tests associés.
+**Fichiers probables.** `Inc/UI/ui_template_page.h`, `Src/UI/pages/ui_page_template_play.c`, `Src/UI/ui_template_page.c`, renderer/UI mappings correspondants et navigation.
 
-**Autorisé.** Étendre les payloads et la version courante, les scopes de copie, les pending live record et les associations par lane/source.
+**Autorisé.** Ajouter les huit sous-pages permanentes, chacune avec `NOTE`, `VEL`, `LEN`, `MICTIM`, et rendre les pages accessibles sur toute Play Track.
 
-**Interdit.** Changer le routage terminal, l’ARP ou la capacité DSP.
+**Interdit.** Masquer une sous-page selon `VOICES`, créer deux ensembles PLAY, modifier le scheduler, NoteFx, les moteurs, les Specials ou les valeurs de `VOICES`.
 
-**Tests.** Round-trip Pattern/Project, snapshot/clipboard/undo, p-locks 0..31, capture de huit lanes et deux notes identiques simultanées.
+**Tests.** Huit sous-pages visibles sur mono, poly, MIDI et External, réparties entre `PLAY 1/2` et `PLAY 2/2`, Special sans PLAY.
 
-### Étape 3 — Transport groupé de huit notes vers NoteFx
+### Étape 3 — Transport groupé, admission terminale et tokens
 
-**Objectif.** Faire sortir les huit lanes du scheduler avec un contexte de groupe et une identité de source.
+**Objectif.** Implémenter atomiquement le transport groupé, l’admission post-NoteFx et les tokens, sans état intermédiaire où huit notes atteignent un moteur mono sans limitation.
 
-**Fichiers probables.** `Src/Seq/seq_play_scheduler.c`, `Inc/NoteFx/note_fx_pipeline.h`, `Src/NoteFx/note_fx_pipeline.c`, `Inc/NoteFx/note_fx_engine.h`, `Src/NoteFx/note_fx_engine.c`.
+**Fichiers probables.** `Src/Seq/seq_play_scheduler.c`, `Inc/NoteFx/note_fx_pipeline.h`, `Src/NoteFx/note_fx_pipeline.c`, `Inc/NoteFx/note_fx_engine.h`, `Src/NoteFx/note_fx_engine.c`, `Src/Seq/seq_output_guard.c`, `Inc/Core/synth_polyphony.h` et interfaces de destination.
 
-**Autorisé.** API batch bornée, `group_id`, `lane_id`, source et tokens source, extension des contextes de quatre à huit items.
+**Autorisé.** API batch bornée, `group_id`, `lane_id`, source, ordre stable, table bornée d’événements actifs, sélection selon la capacité de destination, réservation unique de `2 × N` places et cleanup par génération/mute/panic.
 
-**Interdit.** Modifier la politique mono/poly terminale ou ajouter des modèles FX.
+**Interdit.** Laisser passer une émission partielle, créer un token avant la réservation complète, augmenter le pool DSP, modifier l’ARP ou ajouter des modèles FX.
 
-**Tests.** Huit notes au même sample, p-locks et retriggers, clavier et scheduler sur le même pipeline, groupe vide/complet, génération et suspend.
+**Tests.** Huit notes au même sample, mono/poly, Probability supprimant la première lane, groupe retenu entièrement refusé sur queue insuffisante, aucun Note On partiel, aucun Note Off orphelin, notes identiques, overflow pair, génération/suspend et vérification de `Z4-002`.
 
-### Étape 4 — Admission terminale et identité des tokens
+### Étape 4 — ARP group-aware
 
-**Objectif.** Décider l’acceptation après NoteFx et supprimer les orphan Note Off.
-
-**Fichiers probables.** `Src/Seq/seq_play_scheduler.c`, `Src/Seq/seq_output_guard.c`, `Src/NoteFx/note_fx_pipeline.c`, `Src/NoteFx/note_fx_engine.c`, `Inc/Core/synth_polyphony.h` et les interfaces de destination.
-
-**Autorisé.** Table bornée d’événements actifs, admission par destination, réservation atomique des couples, nettoyage par génération/mute/panic.
-
-**Interdit.** Augmenter le pool DSP, modifier l’algorithme de polyphonie ou introduire du stealing dans l’admission.
-
-**Tests.** Notes identiques sur huit lanes, overflow pair, pool global insuffisant, Note Off tardif, mute/panic, génération invalide, vérification de `Z4-002`.
-
-### Étape 5 — ARP et FX séquentiels group-aware
-
-**Objectif.** Faire respecter l’identité des sources et sorties lorsque ARP/Hold séquentialise un groupe.
+**Objectif.** Faire respecter l’identité exacte des sources et sorties lorsque ARP/Hold séquentialise un groupe.
 
 **Fichiers probables.** `Inc/NoteFx/note_fx_arp.h`, `Src/NoteFx/note_fx_arp.c`, `Src/NoteFx/note_fx_engine.c` et tests NoteFx.
 
-**Autorisé.** Identifiants de source/sortie, association exacte Note On/Off, conservation de l’ordre lane, traitement des huit sources et des doublons.
+**Autorisé.** Identifiants source/sortie, distinction des doublons de hauteur, association exacte Note On/Off, conservation de l’ordre lane et ordre déterministe des enfants générés.
 
 **Interdit.** Reconcevoir l’ARP, ajouter Harmony/Voicing ou modifier le stockage.
 
 **Tests.** ARP Hold, ordre up/down/updown/random, huit sources identiques, retrigger, arrêt/reset, budget de huit émissions par bloc et cleanup.
 
-### Étape 6 — Politiques mono/poly, moteurs et destinations
+### Étape 5 — Clavier et live recording
 
-**Objectif.** Appliquer le contrat final selon la destination et les transitions.
+**Objectif.** Faire passer les accords complets par NoteFx et capturer huit lanes avec des identités Note On/Off correctes.
+
+**Fichiers probables.** `Src/Keyboard/keyboard_engine.c`, `Src/Seq/seq_live_rec_capture.c`, `Inc/Seq/seq_live_rec_capture.h` et tests clavier/live record.
+
+**Autorisé.** Propager groupe, lane, source et ordre stable depuis le clavier, étendre les candidates de capture à huit et apparier deux occurrences de même hauteur par identité.
+
+**Interdit.** Introduire une voie de sortie contournant NoteFx, filtrer la capture par `VOICES`, modifier les politiques terminales ou l’ARP.
+
+**Tests.** Accord clavier complet, capture de huit lanes, deux notes identiques simultanées, Note Off exact, mute/panic et changement de génération.
+
+### Étape 6 — Politiques par destination et transitions
+
+**Objectif.** Appliquer le contrat mono/poly, MIDI/External et les changements de moteur ou de `VOICES`.
 
 **Fichiers probables.** `Src/Core/track_runtime.c`, `Src/Seq/seq_play_scheduler.c`, `Src/Seq/seq_output_guard.c`, `Src/Audio/*` concernés et sorties MIDI/External.
 
-**Autorisé.** Règle lane 1 en mono, admission 1..N en local poly, routage MIDI/External, libération sûre lors des changements de moteur/VOICES.
+**Autorisé.** Première sortie survivante en mono, admission des premières sorties jusqu’à `N` en poly, routage MIDI/External, libération sûre lors des changements de moteur/`VOICES`.
 
 **Interdit.** Déplacer la capacité dans la séquence, augmenter `SYNTH_POLYPHONY_MAX_VOICES`, ajouter des tracks ou modifier les Specials.
 
-**Tests.** Mono, poly 2/4/8, pool global limité, Sampler/Drum/Multi, MIDI, External, changement de moteur/VOICES pendant note active, Pattern inchangé.
+**Tests.** Mono, poly 2/4/8, pool global limité, Sampler/Drum/Multi, MIDI, External, changement de moteur/`VOICES` pendant note active, Pattern inchangé.
 
-### Étape 7 — Validation et livraison
+### Étape 7 — Validation finale et livraison
 
 **Objectif.** Fermer les invariants, mesurer la mémoire et documenter le résultat.
 
@@ -293,16 +301,19 @@ Chaque étape ci-dessous doit être traitée comme une PR ou un commit isolé. L
 ## 8. Validation minimale avant intégration
 
 - Paramètres V1..V8 présents dans le registry, le mapping et les p-locks.
-- PLAY 1/2 et PLAY 2/2 visibles sur mono, poly, MIDI et External.
+- Un seul ensemble PLAY expose huit sous-pages, réparties entre `PLAY 1/2` (lanes 1..4) et `PLAY 2/2` (lanes 5..8), sur mono, poly, MIDI et External.
 - Specials toujours dépourvus de PLAY/MIDI FX.
 - Un Pattern contenant huit lanes survit à un changement de `VOICES` et de moteur.
 - Pattern/Project, snapshot, clipboard et undo restaurent les valeurs et p-locks des lanes 1..8.
 - Live record capture huit lanes et apparie deux occurrences de même hauteur.
 - Un step de huit notes atteint NoteFx avec un groupe et huit identités de source.
-- Sans FX : mono lane 1, poly lanes 1..N, MIDI/External huit sorties selon leur contrat.
+- Sans FX : mono première sortie survivante dans l’ordre lane/source (donc lane 1 naturellement), poly premières sorties survivantes jusqu’à `N`, MIDI/External huit sorties selon leur contrat.
+- Probability supprimant la première lane : la lane suivante survivante est jouée par le moteur mono.
+- L’ordre stable lane/source est conservé après NoteFx, y compris pour les enfants générés par un FX.
 - Avec ARP/Hold : toutes les sources admissibles entrent dans ARP, les sorties ferment exactement les notes qu’elles ont ouvertes.
 - Les notes identiques simultanées ne se volent pas leurs tokens.
-- Un dépassement de queue ou de pool ne produit jamais un Note On sans son Note Off correspondant, ni un Note Off pour une note refusée.
+- Queue insuffisante pour le groupe retenu : le groupe admis est entièrement refusé, sans accord partiel, sans Note On partiel, sans token et sans Note Off orphelin.
+- Un dépassement de pool ne produit jamais un Note On sans son Note Off correspondant, ni un Note Off pour une note refusée.
 - Mute, panic, suspend, changement de génération et changement de destination nettoient toutes les identités actives.
 - Les retriggers restent bornés et l’émission Note On/Off reste atomique.
 - Builds Release LowCost et Premium verts ; aucun build TestPremium requis pour cette mission.
