@@ -3,6 +3,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 $header = Get-Content -Raw (Join-Path $repo 'Inc\Seq\seq_step_snapshot.h')
 $source = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_step_snapshot.c')
 $clipboard = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_clipboard.c')
+$model = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_model.c')
 $cmake = Get-Content -Raw (Join-Path $repo 'tests\CMakeLists.txt')
 
 foreach ($required in @(
@@ -45,6 +46,13 @@ if ($clipboard.Contains('seq_clipboard_lock_t') -or $clipboard.Contains('seq_cli
 }
 if (-not $cmake.Contains('../Src/Seq/seq_step_snapshot.c')) {
     throw 'Host functional tests do not compile the canonical codec'
+}
+if (($source -notmatch 'seq_model_get_track_plock_count\(track\)') -or
+    ($source -match 'for \(seq_step_id_t step = 0U; step < \(seq_step_id_t\)SEQ_MAX_STEPS')) {
+    throw 'Single-step snapshot capacity validation still scans all 64 steps'
+}
+if ($model -notmatch 'capacity - free_count') {
+    throw 'Sequence model does not expose its constant-time p-lock usage count'
 }
 
 'undo_v2_step3_static_validation=PASS canonical_codec=yes clipboard_shared=yes play_special_separated=yes dynamic_allocations=no'

@@ -1486,7 +1486,7 @@ uint8_t ui_core_runtime_bridge_request_undo(ui_core_runtime_bridge_feedback_fn f
     {
         if (feedback != 0)
         {
-            feedback((pattern_live_last_voice_limited() != 0U) ? "VOICE LIMITED" : "UNDO");
+            feedback("UNDO");
         }
     }
     else if (feedback != 0)

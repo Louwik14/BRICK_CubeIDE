@@ -76,12 +76,7 @@ static uint8_t seq_step_snapshot_has_duplicate_lock(const seq_step_snapshot_t *s
 
 static uint32_t seq_step_snapshot_track_lock_count(seq_track_id_t track)
 {
-    uint32_t count = 0U;
-    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-    {
-        count += seq_model_step_plock_count(track, step);
-    }
-    return count;
+    return seq_model_get_track_plock_count(track);
 }
 
 static uint8_t seq_step_snapshot_validate_capacity(seq_track_id_t track,
@@ -234,7 +229,8 @@ uint8_t seq_step_snapshot_capture_list(seq_track_id_t track,
         return 0U;
     }
 
-    memset(out_list, 0, sizeof(*out_list));
+    out_list->count = 0U;
+    memset(out_list->reserved, 0, sizeof(out_list->reserved));
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         if ((seq_model_is_step_editable_index(steps[i]) == 0U)
@@ -242,7 +238,7 @@ uint8_t seq_step_snapshot_capture_list(seq_track_id_t track,
                                                steps[i],
                                                &out_list->entries[i].snapshot) == 0U))
         {
-            memset(out_list, 0, sizeof(*out_list));
+            out_list->count = 0U;
             return 0U;
         }
 
@@ -250,7 +246,7 @@ uint8_t seq_step_snapshot_capture_list(seq_track_id_t track,
         {
             if (out_list->entries[j].step == steps[i])
             {
-                memset(out_list, 0, sizeof(*out_list));
+                out_list->count = 0U;
                 return 0U;
             }
         }

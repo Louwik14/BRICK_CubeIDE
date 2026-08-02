@@ -10,7 +10,7 @@ if ($patternH -notmatch 'note_fx_track_state_t note_fx\[NOTE_FX_TRACK_COUNT\]') 
 if ($patternC -notmatch 'note_fx_state_capture_track' -or $patternC -notmatch 'note_fx_state_restore_track') { throw 'Pattern capture/restore incomplete' }
 if ($snapshotH -notmatch 'note_fx_track_state_t note_fx') { throw 'Track snapshot lacks MIDI FX' }
 if ($snapshotC -notmatch 'note_fx_state_capture_track' -or $snapshotC -notmatch 'note_fx_state_restore_track') { throw 'Track clipboard capture/restore incomplete' }
-if ($undo -notmatch 'note_fx_state_restore_track') { throw 'Undo/Redo restore missing' }
+if ($undo -match 'note_fx_state_(capture|restore)_track') { throw 'MIDI FX leaked into structural step Undo/Redo' }
 if ($paramH -notmatch '#define PARAM_PERSIST_COUNT PARAM_MIDI_FX_S1_PARAM1') { throw 'Patch/Kit exclusion boundary changed' }
 if ($patternH -match 'note_fx_engine|phase|token|owned') { throw 'runtime MIDI FX leaked into Pattern' }
-Write-Output 'note_fx_persistence_validation=PASS pattern=yes project=via_pattern track_snapshot=yes clipboard=yes undo=yes patch_kit=excluded runtime=excluded'
+Write-Output 'note_fx_persistence_validation=PASS pattern=yes project=via_pattern track_snapshot=yes clipboard=yes undo=excluded patch_kit=excluded runtime=excluded'

@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chorus_bench.c:46:14:read_delay	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chorus_bench.c:63:6:fx_chorus_bench_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chorus_bench.c:77:9:fx_chorus_bench_is_model	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chorus_bench.c:147:6:fx_chorus_bench_process	72	static

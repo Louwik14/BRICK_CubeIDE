@@ -197,6 +197,52 @@ static void test_special_round_trip(void)
            "Special redo restores only Special p-locks");
 }
 
+static void test_complete_role_payloads(void)
+{
+    const seq_track_id_t special_track = TRACK_TOPOLOGY_MASTER_TRACK_INDEX;
+    seq_step_snapshot_t before;
+    seq_step_snapshot_t after;
+
+    test_init_model();
+    seq_model_set_trig(0U, 4U, 1U);
+    seq_model_set_step_roll(0U, 4U, (uint8_t)SEQ_STEP_ROLL_1_48);
+    for (uint8_t slot = 0U; slot < SEQ_PARAM_PLAY_SLOT_COUNT; ++slot)
+    {
+        EXPECT(seq_model_step_plock_upsert(0U, 4U, (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                           slot, (seq_value16_t)(0x3000U + slot),
+                                           (uint8_t)(0x60U + slot)) == SEQ_PLOCK_OP_CREATED,
+               "every compact Play note/velocity/length/microtiming slot is captured");
+    }
+    EXPECT(seq_step_snapshot_capture(0U, 4U, &before) != 0U,
+           "complete Play payload captures");
+    seq_model_step_plock_clear(0U, 4U);
+    seq_model_set_trig(0U, 4U, 0U);
+    EXPECT(seq_step_snapshot_apply(0U, 4U, &before) != 0U,
+           "complete Play payload restores");
+    EXPECT(seq_step_snapshot_capture(0U, 4U, &after) != 0U
+           && seq_step_snapshot_equal(&before, &after) != 0U,
+           "complete Play payload and flags round-trip exactly");
+
+    seq_model_set_special_action(special_track, 6U, (uint8_t)SEQ_SPECIAL_ACTION_TRIGGER);
+    for (uint8_t slot = 0U; slot < SEQ_SPECIAL_STEP_MAX_LOCKS; ++slot)
+    {
+        EXPECT(seq_model_step_plock_upsert(special_track, 6U,
+                                           (uint8_t)SEQ_PLOCK_SET_ENV, slot,
+                                           (seq_value16_t)(0x5000U + slot),
+                                           (uint8_t)(0x80U + slot)) == SEQ_PLOCK_OP_CREATED,
+               "full Special p-lock payload is accepted");
+    }
+    EXPECT(seq_step_snapshot_capture(special_track, 6U, &before) != 0U,
+           "full Special payload captures");
+    seq_model_step_plock_clear(special_track, 6U);
+    seq_model_set_special_action(special_track, 6U, (uint8_t)SEQ_SPECIAL_ACTION_NONE);
+    EXPECT(seq_step_snapshot_apply(special_track, 6U, &before) != 0U,
+           "full Special payload restores");
+    EXPECT(seq_step_snapshot_capture(special_track, 6U, &after) != 0U
+           && seq_step_snapshot_equal(&before, &after) != 0U,
+           "full Special payload and flags round-trip exactly");
+}
+
 static void test_copy_paste_scope(seq_step_id_t count)
 {
     seq_step_id_t steps[SEQ_MAX_STEPS];
@@ -226,6 +272,50 @@ static void test_copy_paste_scope(seq_step_id_t count)
     EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK, "Paste redo succeeds");
     EXPECT(seq_model_step_plock_count(0U, (seq_step_id_t)(count - 1U)) == 1U,
            "Paste redo restores complete scope");
+}
+
+static void test_copy_paste_resolves_actual_targets(void)
+{
+    const seq_step_id_t source_steps[2] = { 1U, 5U };
+    const seq_step_id_t destination_anchor[1] = { 20U };
+    seq_step_id_t paste_targets[SEQ_MAX_STEPS];
+    uint8_t paste_target_count = 0U;
+    seq_clipboard_paste_result_t result;
+
+    test_init_model();
+    test_fill_play_step_light(0U, source_steps[0], 1U);
+    test_fill_play_step_light(0U, source_steps[1], 5U);
+    EXPECT(seq_clipboard_copy(0U, source_steps, 2U) != 0U,
+           "sparse source Copy succeeds");
+    EXPECT(seq_clipboard_collect_paste_targets(0U,
+                                               destination_anchor,
+                                               1U,
+                                               paste_targets,
+                                               (uint8_t)SEQ_MAX_STEPS,
+                                               &paste_target_count) != 0U,
+           "Paste target planning succeeds");
+    EXPECT(paste_target_count == 2U,
+           "Paste target planning follows the clipboard scope, not destination count");
+    EXPECT((paste_targets[0] == 20U) && (paste_targets[1] == 24U),
+           "Paste target planning preserves sparse source offsets");
+
+    test_begin_capture_commit(0U, paste_targets, paste_target_count);
+    EXPECT(seq_clipboard_paste(0U, destination_anchor, 1U, &result) != 0U,
+           "Paste with a smaller destination scope succeeds");
+    test_finish_capture_commit();
+    EXPECT((seq_model_get_trig(0U, 20U) != 0U)
+           && (seq_model_get_trig(0U, 24U) != 0U),
+           "Paste mutates every planned target");
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK,
+           "Paste with a smaller destination scope undoes as one transaction");
+    EXPECT((seq_model_step_is_empty(0U, 20U) != 0U)
+           && (seq_model_step_is_empty(0U, 24U) != 0U),
+           "Undo restores every actual Paste target");
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK,
+           "Paste with a smaller destination scope redoes as one transaction");
+    EXPECT((seq_model_get_trig(0U, 20U) != 0U)
+           && (seq_model_get_trig(0U, 24U) != 0U),
+           "Redo restores every actual Paste target");
 }
 
 static void test_depth_and_branching(void)
@@ -266,6 +356,42 @@ static void test_depth_and_branching(void)
     test_finish_capture_commit();
     EXPECT(undo_v2_redo() == UNDO_V2_STATUS_ERR_NO_TX,
            "new structural action invalidates Redo branch");
+}
+
+static void test_ninth_action_eviction_and_alternation(void)
+{
+    test_init_model();
+    for (uint8_t i = 0U; i < 9U; ++i)
+    {
+        const seq_step_id_t step = i;
+        test_begin_capture_commit(0U, &step, 1U);
+        seq_model_set_trig(0U, step, 1U);
+        test_finish_capture_commit();
+    }
+    for (uint8_t i = 0U; i < 8U; ++i)
+    {
+        EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK,
+               "eight retained actions undo after ninth-action eviction");
+    }
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_NO_TX,
+           "ninth action evicts exactly the oldest transaction");
+    EXPECT(seq_model_get_trig(0U, 0U) != 0U,
+           "evicted oldest action remains applied");
+    for (seq_step_id_t step = 1U; step < 9U; ++step)
+    {
+        EXPECT(seq_model_get_trig(0U, step) == 0U,
+               "every retained action was undone");
+    }
+
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK, "alternating Redo succeeds");
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "alternating Undo succeeds");
+    for (uint8_t i = 0U; i < 8U; ++i)
+    {
+        EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK,
+               "all retained actions redo after alternation");
+    }
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_ERR_NO_TX,
+           "Redo depth remains eight after alternation");
 }
 
 static void test_pool_near_capacity(void)
@@ -320,6 +446,42 @@ static void test_noop_and_atomic_failure(void)
            "locked-track restore fails atomically");
     EXPECT(seq_model_get_track_length(0U) == 1U,
            "failed restore leaves unrelated current state unchanged");
+
+    test_init_model();
+    test_fill_play_step(0U, 0U, 1U);
+    test_begin_capture_commit(0U, &failure_step, 1U);
+    seq_model_step_plock_clear(0U, 0U);
+    seq_model_set_trig(0U, 0U, 0U);
+    test_finish_capture_commit();
+    for (seq_step_id_t step = 1U; step <= 32U; ++step)
+    {
+        test_fill_play_step(0U, step, step);
+    }
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_APPLY_FAILED,
+           "insufficient p-lock capacity rejects Undo before mutation");
+    EXPECT(seq_model_step_is_empty(0U, 0U) != 0U,
+           "capacity failure leaves the target step unchanged");
+    EXPECT(seq_model_step_plock_count(0U, 1U) == SEQ_PLAY_STEP_MAX_LOCKS,
+           "capacity failure leaves non-target steps unchanged");
+}
+
+static void test_history_invalidation(void)
+{
+    test_init_model();
+    const seq_step_id_t step = 0U;
+    test_begin_capture_commit(0U, &step, 1U);
+    seq_model_set_trig(0U, step, 1U);
+    test_finish_capture_commit();
+    undo_v2_invalidate_history();
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_NO_TX,
+           "Pattern or Project replacement invalidates prior Undo history");
+
+    undo_v2_set_capture_suspended(1U);
+    undo_v2_invalidate_history();
+    EXPECT(undo_v2_begin_sequence_transaction(0U, &step, 1U)
+               == UNDO_V2_STATUS_ERR_INVALID_ARG,
+           "history invalidation preserves Monkey Test capture suspension");
+    undo_v2_set_capture_suspended(0U);
 }
 
 int main(void)
@@ -327,13 +489,17 @@ int main(void)
     undo_v2_init();
     test_play_step_round_trip();
     test_special_round_trip();
+    test_complete_role_payloads();
     test_step_snapshot_codec();
     test_copy_paste_scope(1U);
     test_copy_paste_scope(SEQ_STEPS_PER_PAGE);
     test_copy_paste_scope(SEQ_MAX_STEPS);
+    test_copy_paste_resolves_actual_targets();
     test_pool_near_capacity();
     test_depth_and_branching();
+    test_ninth_action_eviction_and_alternation();
     test_noop_and_atomic_failure();
+    test_history_invalidation();
     if (g_failures != 0)
     {
         fprintf(stderr, "undo_v2_functional_test: %d failure(s)\\n", g_failures);

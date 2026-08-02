@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:30:28:seq_division_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:35:13:seq_division_arp_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:40:9:seq_division_track_div_from_ui	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:46:9:seq_division_track_div_to_ui	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:58:9:seq_division_is_track_div	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c:63:10:seq_division_period_samples	0	static

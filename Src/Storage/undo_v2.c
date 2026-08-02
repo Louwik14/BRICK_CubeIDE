@@ -41,6 +41,26 @@ UI_SDRAM static undo_v2_sequence_transaction_t g_undo_v2_transactions[UNDO_V2_MA
 UI_SDRAM static seq_step_snapshot_list_t g_undo_v2_pending_snapshot;
 UI_SDRAM static seq_step_snapshot_t g_undo_v2_exchange_step;
 
+static uint8_t undo_v2_copy_snapshot_list(seq_step_snapshot_list_t *destination,
+                                          const seq_step_snapshot_list_t *source)
+{
+    if ((destination == 0) || (source == 0)
+            || (source->count > (uint8_t)SEQ_STEP_SNAPSHOT_MAX_STEPS))
+    {
+        return 0U;
+    }
+
+    destination->count = source->count;
+    memset(destination->reserved, 0, sizeof(destination->reserved));
+    if (source->count != 0U)
+    {
+        memcpy(destination->entries,
+               source->entries,
+               (size_t)source->count * sizeof(source->entries[0]));
+    }
+    return 1U;
+}
+
 static void undo_v2_set_status(undo_v2_status_t status)
 {
     g_undo_v2_runtime.last_status = status;
@@ -77,13 +97,14 @@ static void undo_v2_release_transaction(undo_v2_sequence_transaction_t *transact
 {
     if (transaction != 0)
     {
-        memset(transaction, 0, sizeof(*transaction));
+        transaction->used = 0U;
+        transaction->snapshot.count = 0U;
     }
 }
 
 static void undo_v2_clear_pending(void)
 {
-    memset(&g_undo_v2_pending_snapshot, 0, sizeof(g_undo_v2_pending_snapshot));
+    g_undo_v2_pending_snapshot.count = 0U;
     g_undo_v2_runtime.pending_track = 0U;
     memset(&g_undo_v2_runtime.pending_track_identity,
            0,
@@ -184,8 +205,10 @@ static undo_v2_status_t undo_v2_exchange_transaction(
         return UNDO_V2_STATUS_ERR_APPLY_FAILED;
     }
 
-    memset(&g_undo_v2_pending_snapshot, 0, sizeof(g_undo_v2_pending_snapshot));
     g_undo_v2_pending_snapshot.count = transaction->snapshot.count;
+    memset(g_undo_v2_pending_snapshot.reserved,
+           0,
+           sizeof(g_undo_v2_pending_snapshot.reserved));
     for (uint8_t i = 0U; i < transaction->snapshot.count; ++i)
     {
         const seq_step_id_t step = transaction->snapshot.entries[i].step;
@@ -205,8 +228,12 @@ static undo_v2_status_t undo_v2_exchange_transaction(
     }
 
     /* The current image becomes the sole persistent image for the next swap. */
-    transaction->snapshot = g_undo_v2_pending_snapshot;
-    memset(&g_undo_v2_pending_snapshot, 0, sizeof(g_undo_v2_pending_snapshot));
+    if (undo_v2_copy_snapshot_list(&transaction->snapshot,
+                                   &g_undo_v2_pending_snapshot) == 0U)
+    {
+        return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+    }
+    g_undo_v2_pending_snapshot.count = 0U;
 
     return UNDO_V2_STATUS_OK;
 }
@@ -222,6 +249,15 @@ void undo_v2_clear_all(void)
     memset(g_undo_v2_transactions, 0, sizeof(g_undo_v2_transactions));
     memset(&g_undo_v2_pending_snapshot, 0, sizeof(g_undo_v2_pending_snapshot));
     memset(&g_undo_v2_exchange_step, 0, sizeof(g_undo_v2_exchange_step));
+    undo_v2_set_status(UNDO_V2_STATUS_OK);
+}
+
+void undo_v2_invalidate_history(void)
+{
+    const uint8_t capture_suspended = g_undo_v2_runtime.capture_suspended;
+    memset(&g_undo_v2_runtime, 0, sizeof(g_undo_v2_runtime));
+    g_undo_v2_runtime.capture_suspended = capture_suspended;
+    g_undo_v2_pending_snapshot.count = 0U;
     undo_v2_set_status(UNDO_V2_STATUS_OK);
 }
 
@@ -290,11 +326,18 @@ undo_v2_status_t undo_v2_commit_sequence_transaction(void)
 
     const uint8_t slot = undo_v2_history_tail_index();
     undo_v2_sequence_transaction_t *const transaction = &g_undo_v2_transactions[slot];
-    memset(transaction, 0, sizeof(*transaction));
     transaction->used = 1U;
     transaction->track = g_undo_v2_runtime.pending_track;
+    transaction->reserved = 0U;
     transaction->track_identity = g_undo_v2_runtime.pending_track_identity;
-    transaction->snapshot = g_undo_v2_pending_snapshot;
+    if (undo_v2_copy_snapshot_list(&transaction->snapshot,
+                                   &g_undo_v2_pending_snapshot) == 0U)
+    {
+        undo_v2_release_transaction(transaction);
+        undo_v2_cancel_transaction();
+        undo_v2_set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
+        return g_undo_v2_runtime.last_status;
+    }
     g_undo_v2_runtime.tx_open = 0U;
     g_undo_v2_runtime.undo_count++;
     undo_v2_clear_pending();

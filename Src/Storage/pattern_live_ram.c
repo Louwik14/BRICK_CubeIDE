@@ -1127,6 +1127,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
     pattern_live_apply_linked_kit_for_snapshot(pattern);
     g_apply_in_progress = 0U;
+    undo_v2_invalidate_history();
     return 1U;
 }
 

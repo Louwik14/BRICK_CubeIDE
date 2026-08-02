@@ -976,9 +976,18 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
         return 0U;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track,
-                                                              dest_steps,
-                                                              dest_count);
+    seq_step_id_t paste_targets[SEQ_MAX_STEPS];
+    uint8_t paste_target_count = 0U;
+    const uint8_t targets_resolved =
+        seq_clipboard_collect_paste_targets(track,
+                                            dest_steps,
+                                            dest_count,
+                                            paste_targets,
+                                            (uint8_t)SEQ_MAX_STEPS,
+                                            &paste_target_count);
+    const uint8_t undo_started = ((targets_resolved != 0U) && (paste_target_count != 0U))
+        ? seq_edit_begin_snapshot_undo(track, paste_targets, paste_target_count)
+        : 0U;
     const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
     seq_edit_finish_snapshot_undo(undo_started);
     return ok;

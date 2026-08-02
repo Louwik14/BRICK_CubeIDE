@@ -8,6 +8,8 @@ $clipboard = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_core_clipboard.c')
 $uiParam = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_param.c')
 $liveRec = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_live_rec_session.c')
 $applyWrappers = Get-Content -Raw (Join-Path $repo 'Src\Param\param_registry_apply_wrappers.c')
+$patternLive = Get-Content -Raw (Join-Path $repo 'Src\Storage\pattern_live_ram.c')
+$runtimeBridge = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_core_runtime_bridge.c')
 $functional = Get-Content -Raw (Join-Path $repo 'tests\undo_v2_functional_test.c')
 $production = (Get-ChildItem @((Join-Path $repo 'Src'), (Join-Path $repo 'Inc')) -Recurse -File |
     Where-Object { $_.Extension -in @('.c', '.h') } |
@@ -18,6 +20,7 @@ foreach ($required in @(
     'undo_v2_commit_sequence_transaction',
     'undo_v2_undo',
     'undo_v2_redo',
+    'undo_v2_invalidate_history',
     'UNDO_V2_MAX_TRANSACTIONS 8U',
     'seq_step_snapshot_can_apply_list',
     'undo_v2_exchange_transaction'
@@ -25,6 +28,13 @@ foreach ($required in @(
     if (-not ($undo.Contains($required) -or $undoHeader.Contains($required) -or $functional.Contains($required))) {
         throw "Missing Undo/Redo functional contract symbol: $required"
     }
+}
+
+if ($patternLive -notmatch 'pattern_live_apply_snapshot[\s\S]*undo_v2_invalidate_history\(\)[\s\r\n]*;[\s\r\n]*return 1U;') {
+    throw 'Successful Pattern/Project snapshot application does not centrally invalidate Undo history'
+}
+if ($runtimeBridge -match 'undo_v2_undo\(\)[\s\S]{0,240}pattern_live_last_voice_limited') {
+    throw 'Structural Undo still reports legacy Pattern voice-limit feedback'
 }
 
 if ($uiParam.Contains('undo_v2_') -or
@@ -41,10 +51,16 @@ if ($edit.Contains('undo_v2_begin_transaction') -or
     throw 'Non-structural seq_edit producer remains undoable'
 }
 
+if (($edit -notmatch 'seq_clipboard_collect_paste_targets[\s\S]*seq_edit_begin_snapshot_undo\(track, paste_targets, paste_target_count\)') -or
+    ($edit -match 'seq_edit_begin_snapshot_undo\(track,[\s\r\n]*dest_steps,[\s\r\n]*dest_count\)')) {
+    throw 'Paste Undo does not capture the exact clipboard-derived destination steps'
+}
+
 foreach ($required in @(
     'seq_edit_begin_snapshot_undo',
     'seq_edit_finish_snapshot_undo',
     'seq_edit_paste_steps',
+    'seq_clipboard_collect_paste_targets',
     'seq_edit_clear_steps',
     'seq_edit_clear_steps_without_undo',
     'undo_v2_begin_sequence_transaction',
@@ -73,6 +89,13 @@ foreach ($forbidden in @(
     if ($undo.Contains($forbidden)) {
         throw "Legacy global Undo payload remains: $forbidden"
     }
+}
+
+if (($undo -notmatch 'undo_v2_copy_snapshot_list') -or
+    ($undo -match 'transaction->snapshot\s*=\s*g_undo_v2_pending_snapshot') -or
+    ($undo -match 'memset\(transaction,\s*0,\s*sizeof\(\*transaction\)\)') -or
+    ($undo -match 'undo_v2_clear_pending\(void\)[\s\S]{0,180}memset\(&g_undo_v2_pending_snapshot')) {
+    throw 'Single-step Undo still copies or clears the complete fixed-capacity transaction'
 }
 
 foreach ($forbidden in @(

@@ -23,7 +23,7 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
 
-//Firmware product variant
+//No help, variable specified on the command line.
 BRICK6_VARIANT:STRING=premium
 
 //Include diagnostic-only firmware features
@@ -55,8 +55,7 @@ CMAKE_ASM_FLAGS_RELEASE:STRING=-O3 -DNDEBUG
 //Flags used by the ASM compiler during RELWITHDEBINFO builds.
 CMAKE_ASM_FLAGS_RELWITHDEBINFO:STRING=-O2 -g -DNDEBUG
 
-//Choose the type of build, options are: None Debug Release RelWithDebInfo
-// MinSizeRel ...
+//No help, variable specified on the command line.
 CMAKE_BUILD_TYPE:STRING=Release
 
 //A wrapper around 'ar' adding the appropriate '--plugin' option
@@ -227,7 +226,7 @@ CMAKE_STRIP:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32c
 CMAKE_TAPI:FILEPATH=CMAKE_TAPI-NOTFOUND
 
 //No help, variable specified on the command line.
-CMAKE_TOOLCHAIN_FILE:UNINITIALIZED=cmake/gcc-arm-none-eabi
+CMAKE_TOOLCHAIN_FILE:FILEPATH=cmake/gcc-arm-none-eabi.cmake
 
 //If this value is on, makefiles will be generated without the
 // .SILENT directive, and all commands will be echoed to the console

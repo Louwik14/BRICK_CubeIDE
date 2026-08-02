@@ -47,6 +47,26 @@ static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t s
     return 1U;
 }
 
+static uint8_t seq_clipboard_resolve_target_step(
+    const seq_step_snapshot_entry_t *source,
+    seq_step_id_t dest_anchor,
+    seq_step_id_t *out_step)
+{
+    if ((source == 0) || (out_step == 0))
+    {
+        return 0U;
+    }
+
+    const seq_step_id_t target_step = (seq_step_id_t)(dest_anchor + source->step);
+    if (seq_model_is_step_editable_index(target_step) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_step = target_step;
+    return 1U;
+}
+
 void seq_clipboard_init(void)
 {
     memset(&g_seq_clipboard, 0, sizeof(g_seq_clipboard));
@@ -102,6 +122,58 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
     return 1U;
 }
 
+uint8_t seq_clipboard_collect_paste_targets(seq_track_id_t target_track,
+                                            const seq_step_id_t *dest_steps,
+                                            uint8_t dest_count,
+                                            seq_step_id_t *out_steps,
+                                            uint8_t max_steps,
+                                            uint8_t *out_count)
+{
+    if (out_count != 0)
+    {
+        *out_count = 0U;
+    }
+
+    if ((out_count == 0)
+        || (out_steps == 0)
+        || (max_steps == 0U)
+        || (g_seq_clipboard.valid == 0U)
+        || (seq_clipboard_track_is_valid(target_track) == 0U)
+        || (track_topology_identity_is_compatible(target_track,
+                                                  &g_seq_clipboard.source_identity) == 0U)
+        || (dest_steps == 0)
+        || (dest_count == 0U))
+    {
+        return 0U;
+    }
+
+    seq_step_id_t dest_anchor = 0U;
+    if (seq_clipboard_find_min_step(dest_steps, dest_count, &dest_anchor) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
+    {
+        seq_step_id_t target_step = 0U;
+        if (seq_clipboard_resolve_target_step(&g_seq_clipboard.steps.entries[i],
+                                              dest_anchor,
+                                              &target_step) == 0U)
+        {
+            continue;
+        }
+        if (count >= max_steps)
+        {
+            return 0U;
+        }
+        out_steps[count++] = target_step;
+    }
+
+    *out_count = count;
+    return 1U;
+}
+
 uint8_t seq_clipboard_paste(seq_track_id_t target_track,
                             const seq_step_id_t *dest_steps,
                             uint8_t dest_count,
@@ -135,8 +207,8 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
     {
         const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
 
-        const seq_step_id_t target_step = (seq_step_id_t)(dest_anchor + src->step);
-        if (seq_model_is_step_editable_index(target_step) == 0U)
+        seq_step_id_t target_step = 0U;
+        if (seq_clipboard_resolve_target_step(src, dest_anchor, &target_step) == 0U)
         {
             result.trunc = 1U;
             continue;

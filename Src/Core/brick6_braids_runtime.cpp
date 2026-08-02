@@ -105,7 +105,7 @@ typedef struct
 
 AUDIO_HOT static brick6_braids_runtime_instance_t
     g_braids_runtime[BRICK6_BRAIDS_MAX_INSTANCES];
-SEQ_STATE_D2 static brick6_braids_runtime_instance_t
+AUDIO_HOT static brick6_braids_runtime_instance_t
     g_braids_poly_d2[BRICK6_BRAIDS_VOICE_INSTANCE_COUNT - BRICK6_BRAIDS_MAX_INSTANCES];
 
 static float brick6_braids_runtime_clamp(float value, float lo, float hi)

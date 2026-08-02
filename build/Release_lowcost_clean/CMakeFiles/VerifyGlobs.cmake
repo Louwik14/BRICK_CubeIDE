@@ -60,3 +60,38 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release_lowcost_clean/CMakeFiles/cmake.verify_globs")
 endif()
+
+# SRC_SEQ_SRC at CMakeLists.txt:230 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_edit.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_led.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_mute_bridge.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_output_guard.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_param_iface.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_play_scheduler.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime_exec.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release_lowcost_clean/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_SEQ_SRC at CMakeLists.txt:230 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release_lowcost_clean/CMakeFiles/cmake.verify_globs")
+endif()

@@ -127,6 +127,7 @@ uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
+uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
 uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step);
 void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action);
 void seq_model_toggle_special_action(seq_track_id_t track, seq_step_id_t step);

@@ -86,7 +86,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_ru
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3713:6:brick6_sampler_runtime_set_multi_spread	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3730:7:brick6_sampler_runtime_get_multi_spread	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4338:6:brick6_sampler_runtime_note_off_multi_track_note_token	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4366:6:brick6_sampler_runtime_note_off_multi_track_note	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4366:6:brick6_sampler_runtime_note_off_multi_track_note_all	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4390:6:brick6_sampler_runtime_note_off	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4446:6:brick6_sampler_runtime_stop	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3893:9:brick6_sampler_runtime_trigger_multi_note_velocity_token	496	static

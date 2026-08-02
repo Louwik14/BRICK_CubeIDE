@@ -20,6 +20,7 @@ typedef enum
 
 void undo_v2_init(void);
 void undo_v2_clear_all(void);
+void undo_v2_invalidate_history(void);
 
 undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
                                                     const seq_step_id_t *steps,

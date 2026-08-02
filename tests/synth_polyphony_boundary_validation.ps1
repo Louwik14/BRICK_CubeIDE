@@ -48,19 +48,12 @@ Require-Text $scheduler 'mixer_track_poly_note_on(track, resolved.mix_track_id, 
 Require-Text $outputGuard 'mixer_track_poly_note_off(track, voice, note)' `
     'Sequencer release guard does not release the logical poly slot'
 
-Require-Text $ui '&& (param != PARAM_CFG_POLY_VOICES)) return 0U;' `
-    'SPREAD still starts a structural snapshot transaction'
-Forbid-Text $ui '&& (param != PARAM_CFG_POLY_VOICES)`n            && (param != PARAM_CFG_POLY_SPREAD)' `
-    'SPREAD remains on the structural undo path'
-
-Require-Text $undo 'case PARAM_CFG_POLY_VOICES:' `
-    'VOICES undoability contract is missing'
-Forbid-Text $undo 'case PARAM_CFG_POLY_SPREAD:' `
-    'SPREAD remains excluded from value undo'
-Require-Text $ui 'ui_param_ensure_undo_transaction(encoder, param, track);' `
-    'SPREAD does not enter the value undo transaction'
-Require-Text $undo 'param_registry_apply_track_value(delta->param_id, delta->track, value)' `
-    'Undo/Redo does not restore track-aware CFG values canonically'
+Forbid-Text $ui 'undo_v2_' `
+    'Polyphony UI still produces Undo transactions'
+Forbid-Text $undo 'PARAM_CFG_POLY_VOICES' `
+    'VOICES leaked into structural step Undo'
+Forbid-Text $undo 'PARAM_CFG_POLY_SPREAD' `
+    'SPREAD leaked into structural step Undo'
 
 foreach ($scenario in @(@(1, 4, 8), @(8, 2, 8))) {
     if (($scenario.Count -ne 3) -or ($scenario[0] -lt 1) -or ($scenario[2] -gt 8)) {
@@ -73,4 +66,4 @@ foreach ($spread in 0.0, 0.5, 1.0) {
     }
 }
 
-'synth_polyphony_boundary_validation=PASS logical_track_mix_lane_split=explicit voices=1>4>8,8>2>8 spread=0>0.5>1 undoable_non_structural=SPREAD'
+'synth_polyphony_boundary_validation=PASS logical_track_mix_lane_split=explicit voices=1>4>8,8>2>8 spread=0>0.5>1 undo=excluded'

@@ -667,6 +667,20 @@ uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track)
     return (seq_model_track_is_valid(track) != 0U) ? seq_model_pool_capacity(track) : 0U;
 }
 
+uint16_t seq_model_get_track_plock_count(seq_track_id_t track)
+{
+    if (seq_model_track_is_valid(track) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t primask = seq_model_enter_critical();
+    const uint16_t capacity = seq_model_pool_capacity(track);
+    const uint16_t free_count = g_seq_project.free_count[track];
+    seq_model_exit_critical(primask);
+    return (free_count <= capacity) ? (uint16_t)(capacity - free_count) : 0U;
+}
+
 uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step)
 {
     const seq_step_t *const s = seq_model_get_step_const(track, step);

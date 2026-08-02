@@ -79,6 +79,7 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_play_scheduler.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_runtime_exec.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_transport_fsm.c"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")

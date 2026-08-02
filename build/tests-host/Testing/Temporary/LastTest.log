@@ -1,3 +1,67 @@
-Start testing: Aug 01 14:36 Paris, Madrid (heure d’été)
+Start testing: Aug 02 19:04 Paris, Madrid (heure d’été)
 ----------------------------------------------------------
-End testing: Aug 01 14:36 Paris, Madrid (heure d’été)
+10/38 Testing: undo_v2_functional_premium
+10/38 Test: undo_v2_functional_premium
+Command: "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/undo_v2_functional_test_premium.exe"
+Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
+"undo_v2_functional_premium" start time: Aug 02 19:04 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+undo_v2_functional_test=PASS
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"undo_v2_functional_premium" end time: Aug 02 19:04 Paris, Madrid (heure d’été)
+"undo_v2_functional_premium" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/38 Testing: undo_v2_functional_lowcost
+11/38 Test: undo_v2_functional_lowcost
+Command: "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/undo_v2_functional_test_lowcost.exe"
+Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
+"undo_v2_functional_lowcost" start time: Aug 02 19:04 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+undo_v2_functional_test=PASS
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"undo_v2_functional_lowcost" end time: Aug 02 19:04 Paris, Madrid (heure d’été)
+"undo_v2_functional_lowcost" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/38 Testing: undo_v2_step5_static
+12/38 Test: undo_v2_step5_static
+Command: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/undo_v2_step1_static_validation.ps1"
+Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
+"undo_v2_step5_static" start time: Aug 02 19:04 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+undo_v2_step5_static_validation=PASS structural_api=simplified legacy_symbols=removed variants=lowcost,premium
+<end of output>
+Test time =   0.96 sec
+----------------------------------------------------------
+Test Passed.
+"undo_v2_step5_static" end time: Aug 02 19:04 Paris, Madrid (heure d’été)
+"undo_v2_step5_static" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/38 Testing: undo_v2_step3_static
+13/38 Test: undo_v2_step3_static
+Command: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/undo_v2_step3_static_validation.ps1"
+Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
+"undo_v2_step3_static" start time: Aug 02 19:04 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+undo_v2_step3_static_validation=PASS canonical_codec=yes clipboard_shared=yes play_special_separated=yes dynamic_allocations=no
+<end of output>
+Test time =   0.48 sec
+----------------------------------------------------------
+Test Passed.
+"undo_v2_step3_static" end time: Aug 02 19:04 Paris, Madrid (heure d’été)
+"undo_v2_step3_static" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 02 19:04 Paris, Madrid (heure d’été)

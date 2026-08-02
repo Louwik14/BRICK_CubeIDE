@@ -39,8 +39,8 @@ Require-Text $patchHeader 'uint8_t poly_voice_count;' 'Patch payload is not gene
 Require-Text $kitHeader 'float poly_spread;' 'Kit payload is not generic'
 Require-Text $patch 'UI_TRACK_TYPE_MULTI' 'Patch Multi routing is missing'
 Require-Text $kit 'SAMPLER_MULTI_MAX_VOICES_PER_TRACK' 'Kit Multi budget isolation is missing'
-Require-Text $undo 'case PARAM_CFG_POLY_VOICES:' 'VOICES structural undo contract is missing'
-Forbid-Text $undo 'case PARAM_CFG_POLY_SPREAD:' 'SPREAD remains structural/non-undoable'
+Forbid-Text $undo 'PARAM_CFG_POLY_VOICES' 'VOICES leaked into structural step Undo'
+Forbid-Text $undo 'PARAM_CFG_POLY_SPREAD' 'SPREAD leaked into structural step Undo'
 Require-Text $runtimeHeader 'SAMPLER_MULTI_MAX_VOICES_PER_TRACK (BRICK6_SAMPLER_MULTI_MAX_VOICES)' 'Multi cap is not frozen at eight'
 Require-Text $runtime 'brick6_sampler_runtime_multi_reindex_spread(track_id)' 'Multi spread ranks are not reindexed'
 Require-Text $scheduler 'brick6_sampler_runtime_note_off_multi_track_note_token' 'Scheduler does not use tokenized Note Off'
@@ -55,4 +55,4 @@ foreach ($spread in 0.0, 0.5, 1.0) {
     if (($spread -lt 0.0) -or ($spread -gt 1.0)) { throw 'SPREAD scenario outside 0..1' }
 }
 
-'multi_polyphony_final_validation=PASS cfg=voices+spread edit_bounds=1..8/0..1 persistence=pattern+snapshot+patch+kit undo=voices_structural/spread_value synth_pool=isolated_multi_pool=8 noteoff=tokenized_forced_all'
+'multi_polyphony_final_validation=PASS cfg=voices+spread edit_bounds=1..8/0..1 persistence=pattern+snapshot+patch+kit undo=excluded synth_pool=isolated_multi_pool=8 noteoff=tokenized_forced_all'
