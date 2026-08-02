@@ -54,8 +54,7 @@ namespace mifx {
         void Process(float *left, float *right, size_t size) {
             // Mutable's Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
-            // Modulation is applied in the loop of the first diffuser AP for additional
-            // smearing; and to the two long delays for a slow shimmer/chorus effect.
+            // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
             typedef E::Reserve<163,
                     E::Reserve<233,
                             E::Reserve < 347,
@@ -92,12 +91,6 @@ namespace mifx {
                 float apout = 0.0f;
                 engine_.Start(&c);
 
-                // Smear AP1 inside the loop.
-                if (smear_depth_ > 0.0f) {
-                    c.Interpolate(ap1, 10.884354f, LFO_1, smear_depth_, 1.0f);
-                    c.Write(ap1, 109, 0.0f);
-                }
-
                 c.Read(*left + *right, gain);
 
                 // Diffuse through 4 allpasses.
@@ -113,7 +106,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f, krt);
+                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f * smear_depth_, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -125,7 +118,7 @@ namespace mifx {
                 *left += (wet - *left) * amount;
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f, krt);
+                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f * smear_depth_, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -148,8 +141,7 @@ namespace mifx {
         void Process(const float* in, float *left, float *right, size_t size) {
             // Mutable's Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
-            // Modulation is applied in the loop of the first diffuser AP for additional
-            // smearing; and to the two long delays for a slow shimmer/chorus effect.
+            // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
             typedef E::Reserve<163,
                     E::Reserve<233,
                             E::Reserve < 347,
@@ -185,12 +177,6 @@ namespace mifx {
                 float apout = 0.0f;
                 engine_.Start(&c);
 
-                // Smear AP1 inside the loop.
-                if (smear_depth_ > 0.0f) {
-                    c.Interpolate(ap1, 10.884354f, LFO_1, smear_depth_, 1.0f);
-                    c.Write(ap1, 109, 0.0f);
-                }
-
                 c.Read(*in, gain);
                 in++;
                 // Diffuse through 4 allpasses.
@@ -206,7 +192,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f, krt);
+                c.Interpolate(del2, 6815.2383f, LFO_2, 54.42177f * smear_depth_, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -219,7 +205,7 @@ namespace mifx {
                 *left = one_pole(lp_l_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f, krt);
+                c.Interpolate(del1, 4854.4219f, LFO_1, 43.53742f * smear_depth_, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -248,7 +234,9 @@ namespace mifx {
         }
 
         inline void set_time(float reverb_time) {
-            reverb_time_ = reverb_time;
+            reverb_time_ = 0.01f + (0.97f * ((reverb_time < 0.0f)
+                    ? 0.0f
+                    : ((reverb_time > 1.0f) ? 1.0f : reverb_time)));
         }
 
         inline void set_diffusion(float diffusion) {
@@ -265,7 +253,7 @@ namespace mifx {
         }
 
         inline void set_smear_depth(float depth) {
-            smear_depth_ = depth;
+            smear_depth_ = (depth < 0.0f) ? 0.0f : ((depth > 1.0f) ? 1.0f : depth);
         }
 
         inline void Clear() {
@@ -304,7 +292,7 @@ namespace mifx {
         float lp_r_ = 0.f;
         float hp_coefficient_ = 0.f;
         float lp_coefficient_ = 1.f;
-        float smear_depth_ = 80.0f * (48000.0f / 44100.0f);
+        float smear_depth_ = 1.0f;
 
         static inline float one_pole(float& state, float input, float coefficient) {
             state += coefficient * (input - state);

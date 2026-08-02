@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(brick6_filter_tests C)
+project(brick6_filter_tests C CXX)
 
 enable_testing()
 
@@ -13,6 +13,17 @@ target_include_directories(filter_tpt_modulation_test PRIVATE ../Inc ../Inc/Audi
 target_link_libraries(filter_tpt_modulation_test PRIVATE m)
 
 add_test(NAME filter_tpt_modulation COMMAND filter_tpt_modulation_test)
+
+add_executable(reverb_mutable_stability_test
+    reverb_mutable_stability_test.cpp
+)
+target_include_directories(reverb_mutable_stability_test PRIVATE
+    ../Inc
+    ../mutable_instruments
+    ../mutable_instruments/stmlib
+)
+target_link_libraries(reverb_mutable_stability_test PRIVATE m)
+add_test(NAME reverb_mutable_stability COMMAND reverb_mutable_stability_test)
 
 add_executable(common_modulation_test
     common_modulation_main.c

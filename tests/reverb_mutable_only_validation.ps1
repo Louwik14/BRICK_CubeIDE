@@ -38,6 +38,12 @@ foreach ($param in @(
 if ($revb -notmatch 'g_revb\.engine\.Process\(' -or $revb -notmatch 'fx_reverb_revb_global_reset') {
     throw 'Mutable backend process/reset contract is incomplete'
 }
+if ($model -match 'Interpolate\(ap1' -or $model -match 'Write\(ap1,\s*109') {
+    throw 'Mutable AP1 smear injection diverges from the stable Deluge implementation'
+}
+if ($model -notmatch '0\.01f\s*\+\s*\(0\.97f') {
+    throw 'Mutable decay range is not aligned to Deluge 0.01..0.98'
+}
 if ($reverb -notmatch 'g_reverb_global\.wet > 0\.0f' -or $reverb -notmatch 'fx_reverb_revb_global_process_send_mono_to_stereo_wet') {
     throw 'Mutable bypass/process contract is incomplete'
 }

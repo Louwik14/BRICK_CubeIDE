@@ -707,6 +707,30 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La mesure DWT locale reverb est retiree; le seul point de mesure de charge IRQ reste `cpu_load`.
 - Les sources Mutable/Inspiration dormantes (`clouds/*`, `rings/*`, `braids/*`, `plaits/*`, `stmlib/*`, `Inspiration/*`) ne sont pas supprimees par ce retrait car elles peuvent servir d'autres ports ou references non-runtime.
 
+## 14.c Addendum 2026-08-02 - alignement Mutable sur Deluge stable
+
+La référence Deluge utilisée pour l'audit est `Inspiration/DelugeFirmware-main`, commit
+`8907d5b37492cb2749b79a0f3ae1f767bc1336f4` (`stable`). Le code Deluge fonctionne à
+44,1 kHz; BRICK fonctionne à 48 kHz et conserve les durées physiques en adaptant les
+longueurs et offsets du réseau par `48000 / 44100`.
+
+| Élément | Deluge | BRICK avant correction | Impact possible | Décision |
+|---|---|---|---|---|
+| DAMP | `0..1`, `lp = 1 - clamp(log2((1-DAMP)*50+1)/5.7)` | Même formule, `lp` lissé par bloc | DAMP=1 produit `lp=1` (pas d'atténuation fréquentielle), mais ce n'est pas une divergence | Conserver, borne mathématique `lp 0..1` |
+| DECAY | `0.01..0.98` via `setRoomSize()` | `0.20..0.98` | Courbe et valeur reçue divergentes, sans gain supplémentaire | Aligner sur `0.01..0.98` |
+| Diffusion / SIZE | Width Deluge `0.1..0.9` | SIZE BRICK `0.45..0.9` | Adaptation de surface volontaire: SIZE est le contrôle produit de diffusion | Conserver |
+| AP1 SMEAR | Les deux écritures AP1 sont désactivées dans la référence stable | Lecture interpolée AP1 puis écriture secondaire à chaque sample | La même énergie est réinjectée dans le tank; avec `lp=1`, la queue croît jusqu'à l'Inf | Supprimer l'injection AP1 |
+| SMEAR | Pas de contrôle AP1 actif; modulation des deux longs delays fixe | SMEAR pilotait l'injection AP1 instable | Première divergence démontrée de la boucle | Mapper SMEAR `0..1` sur la profondeur de modulation des longs delays |
+| Longs delays | `6261/4460`, modulation `50/40` à 44,1 kHz | `6815.2383/4854.4219`, `54.42177/43.53742` à 48 kHz | Écart de sample rate légitime | Conserver l'adaptation |
+| Feedback | Allpasses bornés, écriture delay sans gain additionnel; `time <= 0.98` | Même ordre, mais AP1 SMEAR ajoutait une écriture hors pipeline | Gain de boucle supérieur à 1 uniquement avec l'injection AP1 | Réaligner le bloc AP1 |
+| Types / état | Float, buffers effacés, états LP/HP persistants | Float, reset engine/predelay et états persistants | Aucun overflow de type ni état non initialisé démontré | Aucun changement |
+
+Les bornes finales sont `DAMP=0..1`, `DECAY=0..1` côté paramètre, avec `DECAY`
+projeté vers `reverb_time=0.01..0.98`. `Wet`, `SIZE`, `PreD`, `HPF`, `LPF` et
+`SMEAR` restent bornés à `0..1`. Le test déterministe impulse/queue à `DAMP=1`,
+`DECAY=1`, `SIZE=1` et `SMEAR=1` doit rester fini et sous le seuil de crête défini;
+l'ancienne écriture AP1 échoue cet invariant.
+
 ## 15. Addendum - retrait COLORS/CRUNCH
 
 - La page `COLORS/CRUNCH` est retiree du produit.

@@ -89,15 +89,13 @@ static void apply_params(void)
     g_revb.engine.set_amount(1.0f);
     g_revb.engine.set_input_gain(1.0f);
     g_revb.engine.set_diffusion(clampf_local(diffusion, 0.0f, 0.95f));
-    g_revb.engine.set_time(clampf_local(time, 0.0f, 0.98f));
+    g_revb.engine.set_time(clampf_local(time, 0.0f, 1.0f));
     g_revb.engine.set_lp(clampf_local(lp, 0.0f, 1.0f));
     g_revb.engine.set_output_filters(hp_fc / (1.0f + hp_fc),
                                       (g_revb.lpf_current <= 0.0f)
                                               ? 1.0f
                                               : (lp_fc / (1.0f + lp_fc)));
-    g_revb.engine.set_smear_depth((g_revb.smear_current <= 0.0001f)
-                                      ? 0.0f
-                                      : (80.0f * g_revb.smear_current));
+    g_revb.engine.set_smear_depth(clampf_local(g_revb.smear_current, 0.0f, 1.0f));
     g_revb.engine.set_lfo1_freq(lfo1_hz);
     g_revb.engine.set_lfo2_freq(lfo2_hz);
 
