@@ -98,6 +98,35 @@ if(CMAKE_CROSSCOMPILING)
 endif()
 add_test(NAME synth_polyphony_budget COMMAND synth_polyphony_budget_test)
 
+set(UNDO_V2_FUNCTIONAL_SOURCES
+    undo_v2_functional_test.c
+    ../Src/Storage/undo_v2.c
+    ../Src/Seq/seq_model.c
+    ../Src/Seq/seq_clipboard.c
+    ../Src/Core/track_topology.c
+)
+
+foreach(UNDO_VARIANT IN ITEMS premium lowcost)
+    set(UNDO_TARGET undo_v2_functional_test_${UNDO_VARIANT})
+    add_executable(${UNDO_TARGET} ${UNDO_V2_FUNCTIONAL_SOURCES})
+    target_include_directories(${UNDO_TARGET} PRIVATE stubs ../Inc)
+    target_compile_options(${UNDO_TARGET} PRIVATE -ffunction-sections -fdata-sections)
+    target_link_options(${UNDO_TARGET} PRIVATE -Wl,--gc-sections)
+    target_link_libraries(${UNDO_TARGET} PRIVATE m)
+    if(UNDO_VARIANT STREQUAL lowcost)
+        target_compile_definitions(${UNDO_TARGET} PRIVATE BRICK6_VARIANT_LOWCOST=1)
+    else()
+        target_compile_definitions(${UNDO_TARGET} PRIVATE BRICK6_VARIANT_PREMIUM=1)
+    endif()
+    add_test(NAME undo_v2_functional_${UNDO_VARIANT} COMMAND ${UNDO_TARGET})
+endforeach()
+
+if(WIN32)
+    add_test(NAME undo_v2_step1_static
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/undo_v2_step1_static_validation.ps1)
+endif()
+
 add_executable(cfg_track_family_order_test
     cfg_track_family_order_test.c
     ../Src/UI/ui_track_catalog.c
