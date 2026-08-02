@@ -103,6 +103,7 @@ set(UNDO_V2_FUNCTIONAL_SOURCES
     ../Src/Storage/undo_v2.c
     ../Src/Seq/seq_model.c
     ../Src/Seq/seq_clipboard.c
+    ../Src/Seq/seq_step_snapshot.c
     ../Src/Core/track_topology.c
 )
 
@@ -125,6 +126,9 @@ if(WIN32)
     add_test(NAME undo_v2_step2_static
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/undo_v2_step1_static_validation.ps1)
+    add_test(NAME undo_v2_step3_static
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/undo_v2_step3_static_validation.ps1)
 endif()
 
 add_executable(cfg_track_family_order_test

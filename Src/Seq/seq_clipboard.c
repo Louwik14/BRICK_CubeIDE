@@ -6,39 +6,18 @@
  * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
  */
 #include "Seq/seq_clipboard.h"
+#include "Seq/seq_step_snapshot.h"
 
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Core/track_runtime.h"
-#include "Seq/seq_param_iface.h"
-
-typedef struct
-{
-    uint8_t set_id;
-    seq_param_slot_t param_slot;
-    seq_value16_t value16;
-    uint8_t flags;
-} seq_clipboard_lock_t;
-
-typedef struct
-{
-    uint8_t used;
-    seq_step_id_t offset;
-    uint8_t trig;
-    uint8_t roll;
-    uint8_t action;
-    uint8_t lock_count;
-    seq_clipboard_lock_t locks[SEQ_STEP_MAX_LOCKS];
-} seq_clipboard_step_t;
 
 typedef struct
 {
     uint8_t valid;
     track_topology_identity_t source_identity;
     seq_step_id_t source_anchor;
-    uint8_t step_count;
-    seq_clipboard_step_t steps[SEQ_MAX_STEPS];
+    seq_step_snapshot_list_t steps;
 } seq_clipboard_state_t;
 
 UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
@@ -66,35 +45,6 @@ static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t s
 
     *out_min = min_step;
     return 1U;
-}
-
-static void seq_clipboard_paste_locks(seq_track_id_t target_track,
-                                      seq_step_id_t target_step,
-                                      const seq_clipboard_lock_t *locks,
-                                      uint8_t lock_count,
-                                      seq_clipboard_paste_result_t *result)
-{
-    track_runtime_refresh_track(target_track);
-    for (uint8_t l = 0U; l < lock_count; ++l)
-    {
-        const seq_clipboard_lock_t *const lock = &locks[l];
-        if (seq_param_iface_slot_is_supported(target_track, lock->set_id, lock->param_slot) == 0U)
-        {
-            result->partial = 1U;
-            continue;
-        }
-
-        const seq_plock_op_status_t status = seq_model_step_plock_upsert(target_track,
-                                                                          target_step,
-                                                                          lock->set_id,
-                                                                          lock->param_slot,
-                                                                          lock->value16,
-                                                                          lock->flags);
-        if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
-        {
-            result->partial = 1U;
-        }
-    }
 }
 
 void seq_clipboard_init(void)
@@ -129,54 +79,24 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
     g_seq_clipboard.valid = 1U;
     if (track_topology_get_identity(track, &g_seq_clipboard.source_identity) == 0U)
     {
+        g_seq_clipboard.valid = 0U;
         return 0U;
     }
     g_seq_clipboard.source_anchor = source_anchor;
 
-    for (uint8_t i = 0U; i < step_count; ++i)
-    {
-        const seq_step_id_t step = steps[i];
-        if (seq_model_is_step_editable_index(step) == 0U)
-        {
-            continue;
-        }
-
-        seq_clipboard_step_t *const dst = &g_seq_clipboard.steps[g_seq_clipboard.step_count];
-        dst->used = 1U;
-        dst->offset = (seq_step_id_t)(step - source_anchor);
-        dst->trig = seq_model_get_trig(track, step);
-        dst->roll = seq_model_get_step_roll(track, step);
-        dst->action = seq_model_get_special_action(track, step);
-
-        const uint8_t lock_count = seq_model_step_plock_count(track, step);
-        for (uint8_t l = 0U; l < lock_count; ++l)
-        {
-            if (dst->lock_count >= seq_model_get_step_lock_limit(track))
-            {
-                break;
-            }
-
-            seq_plock_entry_t entry;
-            if (seq_model_step_plock_get_at(track, step, l, &entry) == 0U)
-            {
-                continue;
-            }
-
-            seq_clipboard_lock_t *const lock = &dst->locks[dst->lock_count];
-            lock->set_id = entry.set_id;
-            lock->param_slot = entry.param_slot;
-            lock->value16 = entry.value16;
-            lock->flags = entry.flags;
-            dst->lock_count++;
-        }
-
-        g_seq_clipboard.step_count++;
-    }
-
-    if (g_seq_clipboard.step_count == 0U)
+    if (seq_step_snapshot_capture_list(track,
+                                       steps,
+                                       step_count,
+                                       &g_seq_clipboard.steps) == 0U)
     {
         g_seq_clipboard.valid = 0U;
         return 0U;
+    }
+
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
+    {
+        g_seq_clipboard.steps.entries[i].step =
+            (seq_step_id_t)(g_seq_clipboard.steps.entries[i].step - source_anchor);
     }
 
     return 1U;
@@ -211,33 +131,22 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         return 0U;
     }
 
-    for (uint8_t i = 0U; i < g_seq_clipboard.step_count; ++i)
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
     {
-        const seq_clipboard_step_t *const src = &g_seq_clipboard.steps[i];
-        if (src->used == 0U)
-        {
-            continue;
-        }
+        const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
 
-        const seq_step_id_t target_step = (seq_step_id_t)(dest_anchor + src->offset);
+        const seq_step_id_t target_step = (seq_step_id_t)(dest_anchor + src->step);
         if (seq_model_is_step_editable_index(target_step) == 0U)
         {
             result.trunc = 1U;
             continue;
         }
 
-        if (track_topology_is_play(target_track) != 0U)
+        if (seq_step_snapshot_apply(target_track, target_step, &src->snapshot) == 0U)
         {
-            seq_model_set_trig(target_track, target_step, src->trig);
-            seq_model_set_step_roll(target_track, target_step, src->roll);
+            result.partial = 1U;
+            continue;
         }
-        else
-        {
-            seq_model_set_special_action(target_track, target_step, src->action);
-        }
-        seq_model_step_plock_clear(target_track, target_step);
-
-        seq_clipboard_paste_locks(target_track, target_step, src->locks, src->lock_count, &result);
 
         result.pasted_steps++;
     }

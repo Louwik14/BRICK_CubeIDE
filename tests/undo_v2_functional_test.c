@@ -8,6 +8,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_step_snapshot.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/undo_v2.h"
 
@@ -220,6 +221,80 @@ static void test_fill_play_step_light(seq_track_id_t track, seq_step_id_t step, 
            "Play step p-lock is accepted");
 }
 
+static void test_step_snapshot_codec(void)
+{
+    const seq_track_id_t special_track = TRACK_TOPOLOGY_MASTER_TRACK_INDEX;
+    const seq_step_id_t page_steps[SEQ_STEPS_PER_PAGE] = {
+        0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U,
+        8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U
+    };
+    seq_step_snapshot_t play_snapshot;
+    seq_step_snapshot_t restored_snapshot;
+    seq_step_snapshot_t special_snapshot;
+    seq_step_snapshot_list_t page_snapshot;
+
+    test_init_model();
+    test_fill_play_step(0U, 3U, 7U);
+    EXPECT(seq_step_snapshot_capture(0U, 3U, &play_snapshot) != 0U,
+           "Play snapshot captures the complete maximum step");
+    seq_model_step_plock_clear(0U, 3U);
+    seq_model_set_trig(0U, 3U, 0U);
+    EXPECT(seq_step_snapshot_apply(0U, 3U, &play_snapshot) != 0U,
+           "Play snapshot applies atomically");
+    EXPECT(seq_step_snapshot_capture(0U, 3U, &restored_snapshot) != 0U,
+           "restored Play step can be recaptured");
+    EXPECT(seq_step_snapshot_equal(&play_snapshot, &restored_snapshot) != 0U,
+           "Play snapshot round-trip preserves every field and p-lock flag");
+
+    seq_model_set_special_action(special_track, 2U, (uint8_t)SEQ_SPECIAL_ACTION_TRIGGER);
+    EXPECT(seq_model_step_plock_upsert(special_track, 2U,
+                                       (uint8_t)SEQ_PLOCK_SET_ENV, 0U,
+                                       0x3456U, 0xA5U) == SEQ_PLOCK_OP_CREATED,
+           "Special snapshot source accepts its p-lock");
+    EXPECT(seq_step_snapshot_capture(special_track, 2U, &special_snapshot) != 0U,
+           "Special snapshot captures without Play payload");
+    EXPECT(special_snapshot.role == (uint8_t)SEQ_STEP_SNAPSHOT_ROLE_SPECIAL,
+           "Special snapshot carries its role");
+    EXPECT(special_snapshot.trig == 0U && special_snapshot.roll == 0U,
+           "Special snapshot contains no Play trig or roll");
+    EXPECT(seq_step_snapshot_validate_for_track(special_track, &special_snapshot) != 0U,
+           "Special snapshot validates on a Special track");
+    special_snapshot.locks[0].set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    EXPECT(seq_step_snapshot_validate_for_track(special_track, &special_snapshot) == 0U,
+           "Special snapshot rejects Play p-locks");
+
+    test_init_model();
+    for (seq_step_id_t step = 0U; step < SEQ_STEPS_PER_PAGE; ++step)
+    {
+        test_fill_play_step_light(0U, step, step);
+    }
+    EXPECT(seq_step_snapshot_capture_list(0U, page_steps, SEQ_STEPS_PER_PAGE,
+                                          &page_snapshot) != 0U,
+           "snapshot codec captures an explicit page list");
+    for (seq_step_id_t step = 0U; step < SEQ_STEPS_PER_PAGE; ++step)
+    {
+        seq_model_step_plock_clear(0U, step);
+        seq_model_set_trig(0U, step, 0U);
+    }
+    EXPECT(seq_step_snapshot_apply_list(0U, &page_snapshot) != 0U,
+           "snapshot codec restores an explicit page atomically");
+    EXPECT(seq_model_step_plock_count(0U, SEQ_STEPS_PER_PAGE - 1U) == 1U,
+           "page restore preserves its final step");
+
+    test_init_model();
+    for (seq_step_id_t step = 0U; step < SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK / SEQ_PLAY_STEP_MAX_LOCKS; ++step)
+    {
+        test_fill_play_step(0U, step, step);
+    }
+    EXPECT(seq_step_snapshot_capture(0U, 0U, &play_snapshot) != 0U,
+           "full-pool source step captures before capacity failure");
+    EXPECT(seq_step_snapshot_apply(0U, SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK / SEQ_PLAY_STEP_MAX_LOCKS,
+                                  &play_snapshot) == 0U,
+           "codec rejects restore when the p-lock pool has no capacity");
+    EXPECT(seq_model_step_is_empty(0U, SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK / SEQ_PLAY_STEP_MAX_LOCKS) != 0U,
+           "capacity rejection leaves the target step unchanged");
+}
+
 static void test_begin_capture_commit(void)
 {
     EXPECT(undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_BUTTON, 1U) == UNDO_V2_STATUS_OK,
@@ -417,6 +492,7 @@ int main(void)
     undo_v2_init();
     test_play_step_round_trip();
     test_special_round_trip();
+    test_step_snapshot_codec();
     test_copy_paste_scope(1U);
     test_copy_paste_scope(SEQ_STEPS_PER_PAGE);
     test_copy_paste_scope(SEQ_MAX_STEPS);

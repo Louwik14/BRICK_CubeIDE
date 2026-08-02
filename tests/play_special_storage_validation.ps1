@@ -6,6 +6,7 @@ $pattern = Get-Content -Raw (Join-Path $repo 'Src\Storage\pattern_live_ram.c')
 $snapshotHeader = Get-Content -Raw (Join-Path $repo 'Inc\Core\track_snapshot.h')
 $snapshot = Get-Content -Raw (Join-Path $repo 'Src\Core\track_snapshot.c')
 $seqClipboard = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_clipboard.c')
+$seqSnapshot = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_step_snapshot.c')
 $uiClipboard = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_core_clipboard.c')
 $edit = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_edit.c')
 $undo = Get-Content -Raw (Join-Path $repo 'Src\Storage\undo_v2.c')
@@ -52,7 +53,8 @@ if (-not ($snapshot.Contains('seq_model_get_special_action') -and
 }
 if (-not ($seqClipboard.Contains('source_identity') -and
           $seqClipboard.Contains('track_topology_identity_is_compatible') -and
-          $seqClipboard.Contains('src->action'))) {
+          $seqClipboard.Contains('seq_step_snapshot_apply') -and
+          $seqSnapshot.Contains('seq_model_set_special_action(track, step, snapshot->action)'))) {
     throw 'Sequence clipboard does not reject incompatible roles or paste Special actions'
 }
 if (-not ($uiClipboard.Contains('track_snapshot_apply_ex') -and

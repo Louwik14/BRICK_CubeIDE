@@ -9,6 +9,7 @@ $projectBank = Get-Content -Raw (Join-Path $root 'Src\Storage\project_sd_bank.c'
 $model = Get-Content -Raw (Join-Path $root 'Src\Seq\seq_model.c')
 $edit = Get-Content -Raw (Join-Path $root 'Src\Seq\seq_edit.c')
 $clipboard = Get-Content -Raw (Join-Path $root 'Src\Seq\seq_clipboard.c')
+$snapshot = Get-Content -Raw (Join-Path $root 'Src\Seq\seq_step_snapshot.c')
 $undo = Get-Content -Raw (Join-Path $root 'Src\Storage\undo_v2.c')
 
 function Assert-Storage([bool]$condition, [string]$message) {
@@ -25,7 +26,7 @@ Assert-Storage ($pattern -match 'seq_param_iface_slot_to_param\(track') 'pattern
 Assert-Storage ($pattern -match 'pattern_live_seq_block_validate_plock_slots\(seq\)[\s\S]*seq_model_init_defaults\(\)') 'pattern slot validation is not before model mutation'
 Assert-Storage ($model -match 'seq_param_iface_slot_is_supported\(track, set_id, param_slot\)') 'model p-lock writes accept invalid compact slots'
 Assert-Storage ($edit -match 'seq_param_iface_slot_is_supported\(track, set_id, param_slot\)') 'Undo/Redo p-lock apply accepts invalid compact slots'
-Assert-Storage ($clipboard -match 'seq_param_iface_slot_is_supported\(target_track, lock->set_id, lock->param_slot\)') 'clipboard paste does not validate compact slots'
+Assert-Storage ($snapshot -match 'seq_param_iface_slot_is_supported\(track, lock->set_id, lock->param_slot\)') 'clipboard paste does not validate compact slots'
 Assert-Storage ($undo -match 'seq_param_iface_is_param_supported\(track, set_id, param_slot\)') 'Undo/Redo recording does not validate compact slots'
 
 Write-Output 'seq_compact_storage_validation=PASS pattern=compact-v5 project=compact-v5 load_validation=yes clipboard=yes undo_redo=yes legacy_rejected=yes'
