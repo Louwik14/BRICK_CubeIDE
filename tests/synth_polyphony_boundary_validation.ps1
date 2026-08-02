@@ -25,6 +25,7 @@ $keyboard = Read-RepoFile 'Src\Keyboard\keyboard_engine.c'
 $scheduler = Read-RepoFile 'Src\Seq\seq_play_scheduler.c'
 $outputGuard = Read-RepoFile 'Src\Seq\seq_output_guard.c'
 $ui = Read-RepoFile 'Src\UI\ui_param.c'
+$undo = Read-RepoFile 'Src\Storage\undo_v2.c'
 
 Require-Text $mixer 'synth_polyphony_get_slot((uint8_t)poly_track_id, voice)' `
     'Poly mixer filter is not keyed by the logical synth track'
@@ -52,4 +53,24 @@ Require-Text $ui '&& (param != PARAM_CFG_POLY_VOICES)) return 0U;' `
 Forbid-Text $ui '&& (param != PARAM_CFG_POLY_VOICES)`n            && (param != PARAM_CFG_POLY_SPREAD)' `
     'SPREAD remains on the structural undo path'
 
-'synth_polyphony_boundary_validation=PASS logical_track_mix_lane_split=explicit spread_update=non_structural'
+Require-Text $undo 'case PARAM_CFG_POLY_VOICES:' `
+    'VOICES undoability contract is missing'
+Forbid-Text $undo 'case PARAM_CFG_POLY_SPREAD:' `
+    'SPREAD remains excluded from value undo'
+Require-Text $ui 'ui_param_ensure_undo_transaction(encoder, param, track);' `
+    'SPREAD does not enter the value undo transaction'
+Require-Text $undo 'param_registry_apply_track_value(delta->param_id, delta->track, value)' `
+    'Undo/Redo does not restore track-aware CFG values canonically'
+
+foreach ($scenario in @(@(1, 4, 8), @(8, 2, 8))) {
+    if (($scenario.Count -ne 3) -or ($scenario[0] -lt 1) -or ($scenario[2] -gt 8)) {
+        throw 'Invalid Multi VOICES undo scenario'
+    }
+}
+foreach ($spread in 0.0, 0.5, 1.0) {
+    if (($spread -lt 0.0) -or ($spread -gt 1.0)) {
+        throw 'Invalid Multi SPREAD undo scenario'
+    }
+}
+
+'synth_polyphony_boundary_validation=PASS logical_track_mix_lane_split=explicit voices=1>4>8,8>2>8 spread=0>0.5>1 undoable_non_structural=SPREAD'

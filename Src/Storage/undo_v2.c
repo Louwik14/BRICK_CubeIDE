@@ -684,7 +684,6 @@ uint8_t undo_v2_param_is_undoable(param_id_t param_id)
         case PARAM_CFG_MIDI_CH:
         case PARAM_CFG_MIDI_SRC:
         case PARAM_CFG_POLY_VOICES:
-        case PARAM_CFG_POLY_SPREAD:
             return 0U;
 
         default:
