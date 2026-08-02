@@ -189,7 +189,8 @@ enum
     MIXER_EXTERNAL_FORMAT_MONO_NATIVE = 1U,
     MIXER_EXTERNAL_FORMAT_STEREO = 2U,
     MIXER_EXTERNAL_FORMAT_POLY_STEREO = 3U,
-    MIXER_EXTERNAL_FORMAT_MULTI_STEREO = 4U
+    MIXER_EXTERNAL_FORMAT_MULTI_STEREO = 4U,
+    MIXER_EXTERNAL_FORMAT_MULTI_MONO = 5U
 };
 
 static mixer_track_filter_t *mixer_poly_filter(uint32_t poly_track_id, uint8_t voice)
@@ -1156,7 +1157,8 @@ static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
                 || ((ext_format != MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
                     && (ext_format != MIXER_EXTERNAL_FORMAT_STEREO)
                     && (ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                    && (ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO))))
+                    && (ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                    && (ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO))))
     {
         plan.ext_enabled = 0U;
         plan.ext_format = MIXER_EXTERNAL_FORMAT_NONE;
@@ -1174,7 +1176,9 @@ static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
 
     if (plan.hw_enabled != 0U)
     {
-        if ((plan.ext_enabled != 0U) && (plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE))
+        if ((plan.ext_enabled != 0U)
+            && ((plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
         {
             plan.source_kind = MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO;
         }
@@ -1199,7 +1203,9 @@ static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
         return plan;
     }
 
-    if ((plan.ext_enabled != 0U) && (plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE))
+    if ((plan.ext_enabled != 0U)
+            && ((plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
     {
         plan.source_kind = MIXER_LANE_SOURCE_EXT_MONO_NATIVE;
         if (mixer_track_supports_mono_native_path(track, filter) != 0U)
@@ -2819,6 +2825,35 @@ void __attribute__((used)) mixer_submit_external_multi_stereo(uint32_t track_id,
     g_external_track_enabled[track_id] = 1U;
 }
 
+void __attribute__((used)) mixer_submit_external_multi_mono(uint32_t track_id,
+                                                            const float *mono,
+                                                            uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))
+    {
+        return;
+    }
+
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    if (g_external_track_enabled[track_id] != 0U)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        g_external_track_mono[track_id][i] = mono[i];
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MULTI_MONO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
 uint8_t __attribute__((used)) mixer_begin_external_mono_native(uint32_t track_id,
                                                                uint32_t frames,
                                                                float **out_mono)
@@ -3217,6 +3252,9 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         const uint8_t diag_lane = ((diag_enabled != 0U)
             && (audio_track_diag_is_selected_mix_track((uint8_t)t) != 0U)) ? 1U : 0U;
         const uint8_t is_mono_native_lane = (lane_plan.exec_kind == MIXER_LANE_EXEC_MONO_NATIVE) ? 1U : 0U;
+        const uint8_t multi_prefiltered =
+            ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)
+             || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_STEREO)) ? 1U : 0U;
 
         if (is_mono_native_lane != 0U)
         {
@@ -3224,18 +3262,27 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             {
                 audio_track_diag_set_lane_active(1U);
                 audio_track_diag_set_filter_active(
-                    g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF);
+                    (multi_prefiltered == 0U)
+                        && (g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF));
                 audio_track_diag_measure_mono(AUDIO_TRACK_DIAG_ENG,
                                               g_external_track_mono[t],
                                               frames);
             }
-            const mixer_lane_buffers_t buffers = mixer_lane_run_mono_native_path(t,
-                                                                                 mt,
-                                                                                 &g_track_filters[t],
-                                                                                 frames,
-                                                                                 ext_mono_l,
-                                                                                 ext_mono_r,
-                                                                                 diag_lane);
+            mixer_lane_buffers_t buffers = {0};
+            if (multi_prefiltered != 0U)
+            {
+                buffers.mono = g_external_track_mono[t];
+            }
+            else
+            {
+                buffers = mixer_lane_run_mono_native_path(t,
+                                                           mt,
+                                                           &g_track_filters[t],
+                                                           frames,
+                                                           ext_mono_l,
+                                                           ext_mono_r,
+                                                           diag_lane);
+            }
             mono = buffers.mono;
         }
         else
@@ -3253,11 +3300,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             {
                 audio_track_diag_set_lane_active(1U);
                 audio_track_diag_set_filter_active(
-                    g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF);
+                    (multi_prefiltered == 0U)
+                        && (g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF));
                 audio_track_diag_measure_stereo(AUDIO_TRACK_DIAG_ENG, L, R, frames);
             }
             if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO))
+                && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO))
                 mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames, diag_lane);
         }
 
@@ -3282,11 +3331,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
                             : 1.0f;
                     if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
                             && (g_track_filters[t].vca_enabled != 0U))
                     {
                         g_track_filters[t].vca_env_value = vca_gain;
@@ -3336,11 +3387,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
                     const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
                             && (g_track_filters[t].vca_enabled != 0U))
                             ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
                             : 1.0f;
                     if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                             && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
                             && (g_track_filters[t].vca_enabled != 0U))
                     {
                         g_track_filters[t].vca_env_value = vca_gain;

@@ -85,6 +85,7 @@ typedef struct
     uint8_t release_pending;
     uint8_t vca_note_released;
     uint8_t dsp_slot;
+    uint8_t spread_index;
     uint8_t stream_owner_release_pending;
     uint16_t stream_owner_release_sample_id;
     sample_play_plan_t play_plan;
@@ -158,6 +159,7 @@ typedef struct
     float gain;
     uint8_t loop_enabled;
     uint8_t voice_count;
+    float spread;
 } brick6_sampler_multi_track_state_t;
 
 typedef struct
@@ -241,6 +243,18 @@ static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id);
 static uint32_t brick6_sampler_runtime_multi_active_count(void);
 static uint32_t brick6_sampler_runtime_multi_active_count_for_track(uint8_t track_id);
+static uint8_t brick6_sampler_runtime_multi_voice_limit(uint8_t track_id);
+static uint8_t brick6_sampler_runtime_multi_voice_occupied(
+    const brick6_sampler_voice_t *voice);
+static void brick6_sampler_runtime_multi_assign_spread_index(
+    brick6_sampler_voice_t *voice,
+    uint8_t track_id);
+static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id);
+static void brick6_sampler_runtime_multi_apply_spread(
+    const brick6_sampler_voice_t *voice,
+    float *left,
+    float *right,
+    uint32_t frames);
 static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count);
 static float brick6_sampler_runtime_velocity_gain(uint8_t velocity);
 static uint32_t brick6_sampler_runtime_ratio_to_q16(float ratio);
@@ -574,6 +588,7 @@ static void brick6_sampler_runtime_multi_track_reset(uint8_t track_id)
     g_sampler_multi_track_state[track_id].gain = 1.0f;
     g_sampler_multi_track_state[track_id].loop_enabled = 0U;
     g_sampler_multi_track_state[track_id].voice_count = 1U;
+    g_sampler_multi_track_state[track_id].spread = 0.0f;
 }
 
 static void brick6_sampler_runtime_diag_note_trigger(uint8_t track_id,
@@ -2513,6 +2528,7 @@ void brick6_sampler_runtime_init(void)
         g_sampler_multi_voice[i].ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
         g_sampler_multi_voice[i].ram_step_q16 = BRICK6_SAMPLER_Q16_ONE;
         g_sampler_multi_voice[i].dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
+        g_sampler_multi_voice[i].spread_index = BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID;
         sample_stream_manager_active_state_reset(&g_sampler_multi_voice[i].stream_state);
         sample_stream_manager_active_state_reset(&g_sampler_multi_voice[i].loop_stream_state);
     }
@@ -3122,6 +3138,7 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
     sample_voice_reader_stop(&voice->reader);
     voice->active = 0U;
     brick6_sampler_runtime_multi_release_dsp_slot(voice);
+    voice->spread_index = BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID;
     voice->position = 0.0f;
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
@@ -3339,6 +3356,7 @@ static void brick6_sampler_runtime_multi_release_inactive_stream_owners(void)
             if (mixer_multi_voice_vca_requires_source(dsp_state) == 0U)
             {
                 brick6_sampler_runtime_multi_release_dsp_slot(voice);
+                voice->spread_index = BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID;
                 voice->trigger_order = 0U;
                 voice->release_pending = 0U;
                 voice->vca_note_released = 0U;
@@ -3414,6 +3432,118 @@ void brick6_sampler_runtime_service(void)
         }
     }
     brick6_sampler_runtime_multi_release_inactive_stream_owners();
+}
+
+static uint8_t brick6_sampler_runtime_multi_voice_occupied(
+    const brick6_sampler_voice_t *voice)
+{
+    return ((voice != NULL)
+            && ((voice->active != 0U)
+                || (voice->dsp_slot != MULTI_VOICE_DSP_SLOT_INDEX_INVALID))
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)) ? 1U : 0U;
+}
+
+static void brick6_sampler_runtime_multi_assign_spread_index(
+    brick6_sampler_voice_t *voice,
+    uint8_t track_id)
+{
+    uint8_t used[SAMPLER_MULTI_MAX_VOICES_PER_TRACK] = { 0U };
+    if ((voice == NULL) || (track_id >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+    {
+        const brick6_sampler_voice_t *const candidate = &g_sampler_multi_voice[i];
+        if ((candidate == voice)
+            || (brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
+            || (candidate->owner_track_id != track_id)
+            || (candidate->spread_index >= SAMPLER_MULTI_MAX_VOICES_PER_TRACK))
+        {
+            continue;
+        }
+        used[candidate->spread_index] = 1U;
+    }
+
+    voice->spread_index = 0U;
+    while ((voice->spread_index < SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+           && (used[voice->spread_index] != 0U))
+    {
+        voice->spread_index++;
+    }
+    if (voice->spread_index >= SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+    {
+        voice->spread_index = 0U;
+    }
+}
+
+static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id)
+{
+    uint8_t assigned[SAMPLER_MULTI_MAX_GLOBAL_VOICES] = { 0U };
+    if (track_id >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    const uint8_t count = brick6_sampler_runtime_multi_voice_limit(track_id);
+    for (uint8_t rank = 0U; rank < count; ++rank)
+    {
+        brick6_sampler_voice_t *oldest = NULL;
+        uint8_t oldest_index = 0U;
+        for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+        {
+            brick6_sampler_voice_t *const candidate = &g_sampler_multi_voice[i];
+            if ((assigned[i] != 0U)
+                || (brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
+                || (candidate->owner_track_id != track_id))
+            {
+                continue;
+            }
+            if ((oldest == NULL) || (candidate->trigger_order < oldest->trigger_order))
+            {
+                oldest = candidate;
+                oldest_index = i;
+            }
+        }
+        if (oldest == NULL)
+        {
+            break;
+        }
+        oldest->spread_index = rank;
+        assigned[oldest_index] = 1U;
+    }
+}
+
+static void brick6_sampler_runtime_multi_apply_spread(
+    const brick6_sampler_voice_t *voice,
+    float *left,
+    float *right,
+    uint32_t frames)
+{
+    if ((voice == NULL) || (left == NULL) || (right == NULL) || (frames == 0U)
+        || (voice->owner_track_id >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    const uint8_t count = brick6_sampler_runtime_multi_voice_limit(voice->owner_track_id);
+    const float spread = g_sampler_multi_track_state[voice->owner_track_id].spread;
+    if ((count <= 1U) || (spread <= 0.0f) || (voice->spread_index >= count))
+    {
+        return;
+    }
+
+    const float position = ((((float)voice->spread_index / (float)(count - 1U))
+                             * 2.0f) - 1.0f) * spread;
+    const float pan_for_mix = -position;
+    const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+    const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+    for (uint32_t frame = 0U; frame < frames; ++frame)
+    {
+        left[frame] *= pan_l;
+        right[frame] *= pan_r;
+    }
 }
 
 static uint32_t brick6_sampler_runtime_multi_active_count(void)
@@ -3564,11 +3694,35 @@ void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t coun
             oldest,
             (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL);
     }
+    brick6_sampler_runtime_multi_reindex_spread(track_id);
 }
 
 uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id)
 {
     return brick6_sampler_runtime_multi_voice_limit(track_id);
+}
+
+void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread)
+{
+    if (track_id >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+    if (spread < 0.0f)
+    {
+        spread = 0.0f;
+    }
+    else if (spread > 1.0f)
+    {
+        spread = 1.0f;
+    }
+    g_sampler_multi_track_state[track_id].spread = spread;
+}
+
+float brick6_sampler_runtime_get_multi_spread(uint8_t track_id)
+{
+    return (track_id < SEQ_TRACK_COUNT)
+        ? g_sampler_multi_track_state[track_id].spread : 0.0f;
 }
 
 static uint8_t brick6_sampler_runtime_oneshot_voice_is_stealable(uint8_t track_id)
@@ -4086,6 +4240,7 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     multi_voice->multi_instrument_id = instrument_id;
     multi_voice->multi_sample_id = resolved.multi_sample_id;
     multi_voice->owner_track_id = track_id;
+    brick6_sampler_runtime_multi_assign_spread_index(multi_voice, track_id);
     multi_voice->sample = NULL;
     multi_voice->position = (float)common_plan.start_frame;
     multi_voice->active = 1U;
@@ -6193,11 +6348,16 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
 
     if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
     {
+        if (g_sampler_multi_track_state[track_id].spread > 0.0f)
+        {
+            return 0U;
+        }
         uint8_t active_voice = 0U;
         for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
         {
             const brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
-            if ((voice->active == 0U) || (voice->owner_track_id != track_id))
+            if ((brick6_sampler_runtime_multi_voice_occupied(voice) == 0U)
+                || (voice->owner_track_id != track_id))
             {
                 continue;
             }
@@ -6415,6 +6575,10 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
                                        voice_l,
                                        voice_r,
                                        frames);
+            brick6_sampler_runtime_multi_apply_spread(multi_voice,
+                                                      voice_l,
+                                                      voice_r,
+                                                      frames);
             for (uint32_t frame = 0U; frame < frames; ++frame)
             {
                 out_l[frame] += voice_l[frame];

@@ -177,6 +177,8 @@ uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity_token(uint8_t t
                                                                        uint32_t event_token);
 void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t count);
 uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id);
+void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread);
+float brick6_sampler_runtime_get_multi_spread(uint8_t track_id);
 /*
  * Current scheduler compatibility surface. The implementation still accepts
  * [track, note] here; the exact Multi Note Off contract is the runtime handle

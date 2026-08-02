@@ -149,10 +149,19 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
                                                        sampler_tmp_l,
                                                        sampler_tmp_r,
                                                        frames);
-            mixer_submit_external_multi_stereo(ctx->mix_track_id,
-                                               sampler_tmp_l,
-                                               sampler_tmp_r,
-                                               frames);
+            if (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) != 0U)
+            {
+                mixer_submit_external_multi_mono(ctx->mix_track_id,
+                                                 sampler_tmp_l,
+                                                 frames);
+            }
+            else
+            {
+                mixer_submit_external_multi_stereo(ctx->mix_track_id,
+                                                   sampler_tmp_l,
+                                                   sampler_tmp_r,
+                                                   frames);
+            }
             sampler_tracks++;
             continue;
         }
