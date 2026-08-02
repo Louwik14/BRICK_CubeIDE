@@ -10,6 +10,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "audio_float.h"
 #include "memory_layout.h"
+#include "Audio/fx_chorus_bench.h"
 
 #define FX_MASTER_MACRO_SLOT_COUNT 4U
 #define FX_MASTER_MACRO_SAMPLE_RATE_DEFAULT 48000.0f
@@ -139,6 +140,9 @@ static uint8_t fxmm_type_is_active(uint8_t type)
         case FX_MASTER_MACRO_STUTTER:
         case FX_MASTER_MACRO_FREEZE:
         case FX_MASTER_MACRO_COLOR:
+        case FX_MASTER_MACRO_CHORUS_MICRO:
+        case FX_MASTER_MACRO_CHORUS_DAISY:
+        case FX_MASTER_MACRO_CHORUS_JUNO:
             return 1U;
         default:
             return 0U;
@@ -812,6 +816,21 @@ static void fxmm_process_slot(fx_master_macro_slot_state_t *slot,
         return;
     }
 
+    if ((type >= FX_MASTER_MACRO_CHORUS_MICRO)
+            && (type <= FX_MASTER_MACRO_CHORUS_JUNO))
+    {
+        if (level_raw <= 0.0f)
+        {
+            slot->wet = 0.0f;
+            return;
+        }
+        fx_chorus_bench_process(left, right, frames,
+                                (fx_chorus_bench_model_t)(type - FX_MASTER_MACRO_CHORUS_MICRO + 1U),
+                                target_wet, a, b);
+        slot->wet = target_wet;
+        return;
+    }
+
     if ((fxmm_type_is_unique_history(type) != 0U) && (slot_index != stutter_owner_slot))
     {
         slot->wet = 0.0f;
@@ -1147,6 +1166,7 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     const float bpm_milli = (float)fxmm_get_bpm_milli();
     uint8_t stutter_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
     uint8_t freeze_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
+    uint8_t chorus_owner_slot = FX_MASTER_MACRO_STUTTER_OWNER_NONE;
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
         const uint8_t type = fxmm_u7(state->macro_fx.type[slot]);
@@ -1158,6 +1178,12 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
         {
             freeze_owner_slot = slot;
         }
+        if ((type >= FX_MASTER_MACRO_CHORUS_MICRO)
+                && (type <= FX_MASTER_MACRO_CHORUS_JUNO)
+                && (chorus_owner_slot == FX_MASTER_MACRO_STUTTER_OWNER_NONE))
+        {
+            chorus_owner_slot = slot;
+        }
     }
     if (g_stutter.owner_slot != stutter_owner_slot)
     {
@@ -1168,6 +1194,13 @@ void fx_master_macro_process_block(float *left, float *right, uint32_t frames)
     for (uint8_t slot = 0U; slot < FX_MASTER_MACRO_SLOT_COUNT; ++slot)
     {
         const uint8_t type = fxmm_u7(state->macro_fx.type[slot]);
+        if ((type >= FX_MASTER_MACRO_CHORUS_MICRO)
+                && (type <= FX_MASTER_MACRO_CHORUS_JUNO)
+                && (slot != chorus_owner_slot))
+        {
+            g_slots[slot].wet = 0.0f;
+            continue;
+        }
         fxmm_process_slot(&g_slots[slot],
                           slot,
                           type,

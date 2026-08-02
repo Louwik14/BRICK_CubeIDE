@@ -369,6 +369,9 @@ static void ui_page_template_tone_macro_fx_labels(uint8_t fx_type,
         { "SIZE", "RATE" },
         { "TIME", "HOLD" },
         { "AMT", "FOCUS" },
+        { "DEPTH", "RATE" },
+        { "DEPTH", "RATE" },
+        { "DEPTH", "RATE" },
     };
 
     if ((out_a == NULL) || (out_b == NULL))
@@ -1394,7 +1397,7 @@ static void ui_page_template_tone_macro_fx_format_value(uint8_t fx_type,
         return;
     }
 
-    if ((fx_type == FX_MASTER_MACRO_OFF) || (fx_type > FX_MASTER_MACRO_COLOR))
+    if (fx_type == FX_MASTER_MACRO_OFF)
     {
         (void)snprintf(out, out_len, "---");
         return;
@@ -1402,6 +1405,12 @@ static void ui_page_template_tone_macro_fx_format_value(uint8_t fx_type,
 
     switch (fx_type)
     {
+        case FX_MASTER_MACRO_CHORUS_MICRO:
+        case FX_MASTER_MACRO_CHORUS_DAISY:
+        case FX_MASTER_MACRO_CHORUS_JUNO:
+            ui_page_template_tone_macro_fx_format_percent(raw, 100U, out, out_len);
+            break;
+
         case FX_MASTER_MACRO_DRIVE:
             if (slot == 2U)
             {
