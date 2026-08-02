@@ -219,6 +219,14 @@ typedef struct
 static AUDIO_HOT brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 static AUDIO_HOT brick6_sampler_voice_t
     g_sampler_multi_voice[SAMPLER_MULTI_MAX_GLOBAL_VOICES];
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
+               "Multi runtime pool must remain globally capped at eight voices");
+_Static_assert(sizeof(brick6_sampler_voice_t) == 992U,
+               "Sampler voice size changed; remeasure DTCM before accepting it");
+_Static_assert(sizeof(g_sampler_multi_voice) == 7936U,
+               "Multi sampler voice pool size changed; remeasure DTCM before accepting it");
+#endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
 static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
