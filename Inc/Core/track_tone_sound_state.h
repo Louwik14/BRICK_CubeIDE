@@ -46,13 +46,6 @@ typedef struct
     } looper;
     struct
     {
-        float type[4];
-        float level[4];
-        float macro_a[4];
-        float macro_b[4];
-    } macro_fx;
-    struct
-    {
         float edit[2];
         float fine[2];
         float coarse[2];
@@ -120,11 +113,7 @@ typedef struct
     } md;
 } track_tone_sound_state_t;
 
-_Static_assert(offsetof(track_tone_sound_state_t, macro_fx) == 100U,
-               "MacroFX state offset changed");
-_Static_assert(sizeof(((track_tone_sound_state_t *)0)->macro_fx) == 64U,
-               "MacroFX state size changed");
-_Static_assert(sizeof(track_tone_sound_state_t) == 524U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 460U,
                "track tone state layout changed");
 
 void track_tone_sound_state_init(void);

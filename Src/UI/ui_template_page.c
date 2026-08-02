@@ -287,7 +287,7 @@ uint8_t ui_template_family_get_effective_scope_count(ui_template_family_id_t fam
     }
 
     return (uint8_t)(((family_id == UI_TEMPLATE_FAMILY_TONE)
-            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)) ? 3U : 1U);
+            && (ui_page_template_tone_is_global_master() != 0U)) ? 3U : 1U);
 }
 
 static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)

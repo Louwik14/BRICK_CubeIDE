@@ -2,7 +2,6 @@
 
 #include <string.h>
 
-#include "Audio/fx_master_macro.h"
 #include "Core/track_runtime.h"
 #include "Core/track_sound_state.h"
 #include "Keyboard/keyboard_engine.h"
@@ -29,7 +28,6 @@ static uint8_t track_mute_resolve_mix_target(uint8_t track, uint8_t *out_mix_tra
 void track_mute_init(void)
 {
     memset(g_track_mute_state, 0, sizeof(g_track_mute_state));
-    fx_master_macro_set_mute(0U);
 }
 
 track_mute_kind_t track_mute_get_kind(uint8_t track)
@@ -46,8 +44,6 @@ track_mute_kind_t track_mute_get_kind(uint8_t track)
 
     switch (descriptor.topology_role)
     {
-        case TRACK_TOPOLOGY_ROLE_MASTER: return TRACK_MUTE_KIND_NONE;
-        case TRACK_TOPOLOGY_ROLE_FX: return TRACK_MUTE_KIND_FX;
         default: break;
     }
 
@@ -106,12 +102,6 @@ uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state
     if ((update_base_state != 0U) && (sound_state != NULL))
     {
         sound_state->mix_mute = (float)muted;
-    }
-
-    if (kind == TRACK_MUTE_KIND_FX)
-    {
-        fx_master_macro_set_mute(muted);
-        return 1U;
     }
 
     if ((kind == TRACK_MUTE_KIND_AUDIO)

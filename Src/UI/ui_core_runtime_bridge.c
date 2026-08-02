@@ -59,7 +59,6 @@ typedef struct
     ui_core_runtime_bridge_post_sync_fn post_sync;
 } ui_core_runtime_bridge_track_transition_ctx_t;
 
-static uint8_t g_macro_fx_route_enabled[UI_TRACK_COUNT];
 static uint8_t g_looper_route_enabled[UI_TRACK_COUNT][UI_TRACK_COUNT];
 static uint8_t g_active_looper_record_track = 0xFFU;
 static uint8_t g_looper_take_track = 0xFFU;
@@ -162,16 +161,6 @@ static uint8_t ui_core_runtime_bridge_track_is_sampler_looper(uint8_t track)
 
     return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_SAMPLER)
             && (track_state_get_type(track) == UI_TRACK_TYPE_LOOPER));
-}
-
-static uint8_t ui_core_runtime_bridge_track_is_macro_fx(uint8_t track)
-{
-    if (track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    return track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX);
 }
 
 static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *ev,
@@ -1374,11 +1363,10 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
                                                     uint8_t track_select_armed,
                                                     ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note)
 {
-    const uint8_t is_macro_fx = ui_core_runtime_bridge_track_is_macro_fx(active_track);
     const uint8_t is_sampler_looper = ui_core_runtime_bridge_track_is_sampler_looper(active_track);
 
     if ((ev == 0)
-            || ((is_macro_fx == 0U) && (is_sampler_looper == 0U))
+            || (is_sampler_looper == 0U)
             || (ui_page_get_id() != UI_PAGE_MIDI_FX)
             || (track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
@@ -1397,11 +1385,7 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if (is_macro_fx != 0U)
-    {
-        g_macro_fx_route_enabled[hall] = (g_macro_fx_route_enabled[hall] == 0U) ? 1U : 0U;
-    }
-    else if (is_sampler_looper != 0U)
+    if (is_sampler_looper != 0U)
     {
         g_looper_route_enabled[active_track][hall] =
             (g_looper_route_enabled[active_track][hall] == 0U) ? 1U : 0U;
@@ -1411,16 +1395,6 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
         suppress_hall_note(hall);
     }
     return 1U;
-}
-
-uint8_t ui_core_runtime_bridge_get_macro_fx_route_enabled(uint8_t track)
-{
-    if (track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    return g_macro_fx_route_enabled[track];
 }
 
 uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, uint8_t source_track)

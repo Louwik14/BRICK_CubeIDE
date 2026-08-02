@@ -32,10 +32,6 @@ static ui_track_config_t track_state_topology_config(uint8_t track)
 
     switch ((track_topology_role_t)descriptor.role)
     {
-        case TRACK_TOPOLOGY_ROLE_MASTER:
-        case TRACK_TOPOLOGY_ROLE_FX:
-            break;
-
         case TRACK_TOPOLOGY_ROLE_LOOPER:
         case TRACK_TOPOLOGY_ROLE_INPUT:
         case TRACK_TOPOLOGY_ROLE_PLAY:

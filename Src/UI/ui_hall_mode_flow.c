@@ -8,6 +8,7 @@
 #include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_settings.h"
+#include "pages/ui_page_template_tone.h"
 #include "ui_core_feedback.h"
 #include "ui_core_navigation_bridge.h"
 #include "ui_hall_mode_contract.h"
@@ -156,7 +157,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             }
             if (track_topology_is_play(ui_get_active_track()) == 0U)
             {
-                ui_core_feedback_set("PLAY TRACK ONLY", now_ms);
+                ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
             }
             ui_hall_mode_flow_leave_lowcost_special_page();
@@ -171,7 +172,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             }
             if (track_topology_is_play(ui_get_active_track()) == 0U)
             {
-                ui_core_feedback_set("PLAY TRACK ONLY", now_ms);
+                ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
             }
             ui_hall_mode_flow_leave_lowcost_special_page();
@@ -244,10 +245,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             ui_core_navigation_bridge_open_rec_cfg_page();
             return 1U;
 
-        case 15U:
-            ui_page_settings_open(ui_page_get_id());
-            return 1U;
-
         default:
             return 0U;
     }
@@ -296,6 +293,16 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         return;
     }
 
+    if (hall == 15U)
+    {
+        hall_note_suppressed[hall] = 1U;
+        g_patch_pending.active = 0U;
+        g_kit_pending.active = 0U;
+        ui_hall_mode_flow_leave_lowcost_special_page();
+        ui_page_template_tone_open_global_master();
+        return;
+    }
+
     if (ui_hall_mode_flow_handle_lowcost_shift_step(hall, now_ms, mode_tap_ms, hall_note_suppressed) != 0U)
     {
         return;
@@ -308,7 +315,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         if (track_topology_is_play(ui_get_active_track()) == 0U)
         {
             g_patch_pending.active = 0U;
-            ui_core_feedback_set("PLAY TRACK ONLY", now_ms);
+            ui_core_feedback_set("TRACK ONLY", now_ms);
             return;
         }
         if ((g_patch_pending.active != 0U)
@@ -337,7 +344,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         if (track_topology_is_play(ui_get_active_track()) == 0U)
         {
             g_kit_pending.active = 0U;
-            ui_core_feedback_set("PLAY TRACK ONLY", now_ms);
+            ui_core_feedback_set("TRACK ONLY", now_ms);
             return;
         }
         if ((g_kit_pending.active != 0U)

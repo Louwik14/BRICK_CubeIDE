@@ -16,7 +16,6 @@
 #include <string.h>
 
 #include "Audio/drum_synth.h"
-#include "Audio/fx_master_macro.h"
 #include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
@@ -551,7 +550,6 @@ void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
     synth_polyphony_init();
-    fx_master_macro_init(48000.0f);
     metronome_runtime_init();
 }
 
@@ -631,29 +629,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     if (track_count > 0U)
     {
         const uint8_t diag_enabled = audio_track_diag_is_enabled();
-        fx_master_macro_diag_state_t macro_fx_diag;
-        if (diag_enabled != 0U)
-        {
-            fx_master_macro_get_diag_state(&macro_fx_diag);
-            audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_MACRO_FX_IN,
-                                             tracks[0].L, tracks[0].R, frames);
-            if (macro_fx_diag.active_mask == 0U)
-            {
-                audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_MACRO_FX_IN,
-                                                  AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-            }
-        }
-        fx_master_macro_process_block(tracks[0].L, tracks[0].R, frames);
-        if (diag_enabled != 0U)
-        {
-            audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_MACRO_FX_OUT,
-                                             tracks[0].L, tracks[0].R, frames);
-            if (macro_fx_diag.active_mask == 0U)
-            {
-                audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_MACRO_FX_OUT,
-                                                  AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-            }
-        }
         const uint8_t preview_active = sd_preview_is_active();
         (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
         if (diag_enabled != 0U)

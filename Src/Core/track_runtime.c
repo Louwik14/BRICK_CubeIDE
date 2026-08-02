@@ -404,13 +404,6 @@ static const param_id_t g_track_runtime_tone_slots_midi[] = {
     PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4
 };
 
-static const param_id_t g_track_runtime_tone_slots_macro_fx[] = {
-    PARAM_MACRO_FX1_TYPE, PARAM_MACRO_FX1_LEVEL, PARAM_MACRO_FX1_A, PARAM_MACRO_FX1_B,
-    PARAM_MACRO_FX2_TYPE, PARAM_MACRO_FX2_LEVEL, PARAM_MACRO_FX2_A, PARAM_MACRO_FX2_B,
-    PARAM_MACRO_FX3_TYPE, PARAM_MACRO_FX3_LEVEL, PARAM_MACRO_FX3_A, PARAM_MACRO_FX3_B,
-    PARAM_MACRO_FX4_TYPE, PARAM_MACRO_FX4_LEVEL, PARAM_MACRO_FX4_A, PARAM_MACRO_FX4_B
-};
-
 static const param_id_t g_track_runtime_tone_slots_drum_bd_analog[] = {
     PARAM_DRUM_TRX_BD_PITCH,
     PARAM_DRUM_TRX_BD_DECAY,
@@ -442,8 +435,6 @@ _Static_assert((sizeof(g_track_runtime_tone_slots_multi) / sizeof(g_track_runtim
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "MULTI TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_midi) / sizeof(g_track_runtime_tone_slots_midi[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "MIDI TONE slots exceed compact capacity");
-_Static_assert((sizeof(g_track_runtime_tone_slots_macro_fx) / sizeof(g_track_runtime_tone_slots_macro_fx[0]))
-                   <= SEQ_PARAM_TONE_SLOT_COUNT, "MACRO FX TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_drum_bd_analog) / sizeof(g_track_runtime_tone_slots_drum_bd_analog[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "DRUM BD TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_drum_md) / sizeof(g_track_runtime_tone_slots_drum_md[0]))
@@ -508,11 +499,6 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_EXTERNAL:
             *out_table = g_track_runtime_tone_slots_midi;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_midi) / sizeof(g_track_runtime_tone_slots_midi[0]));
-            return 1U;
-
-        case TRACK_RUNTIME_TYPE_SPECIAL_FX:
-            *out_table = g_track_runtime_tone_slots_macro_fx;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_macro_fx) / sizeof(g_track_runtime_tone_slots_macro_fx[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
@@ -581,15 +567,6 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
 
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
-    if (topology.role == (uint8_t)TRACK_TOPOLOGY_ROLE_MASTER)
-    {
-        return mask;
-    }
-    if (topology.role == (uint8_t)TRACK_TOPOLOGY_ROLE_FX)
-    {
-        return mask;
-    }
-
     if (!(((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
             && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_LOOPER)))
     {
@@ -822,9 +799,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
     if ((family != TRACK_RUNTIME_FAMILY_SYNTH)
             && (family != TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (family != TRACK_RUNTIME_FAMILY_DRUM)
-            && (family != TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-            && (family != TRACK_RUNTIME_FAMILY_SPECIAL_FX))
+            && (family != TRACK_RUNTIME_FAMILY_DRUM))
     {
         track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
         return;
@@ -858,30 +833,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
          */
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, ctx->track_id);
         allocator->drum_used++;
-        return;
-    }
-
-    if (family == TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-    {
-        if (type == TRACK_RUNTIME_TYPE_SPECIAL_MASTER)
-        {
-            track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
-            return;
-        }
-
-        track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
-        return;
-    }
-
-    if (family == TRACK_RUNTIME_FAMILY_SPECIAL_FX)
-    {
-        if (type == TRACK_RUNTIME_TYPE_SPECIAL_FX)
-        {
-            track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
-            return;
-        }
-
-        track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
         return;
     }
 
@@ -970,17 +921,6 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
     const ui_track_type_t ui_type = config.type;
     track_runtime_family_t family = track_runtime_family_from_ui(config.family);
     track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
-    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
-    {
-        family = TRACK_RUNTIME_FAMILY_SPECIAL_MASTER;
-        type = TRACK_RUNTIME_TYPE_SPECIAL_MASTER;
-    }
-    else if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
-    {
-        family = TRACK_RUNTIME_FAMILY_SPECIAL_FX;
-        type = TRACK_RUNTIME_TYPE_SPECIAL_FX;
-    }
-
     memset(ctx, 0, sizeof(*ctx));
     ctx->track_id = track;
     ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
@@ -1437,9 +1377,7 @@ uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capabilit
             return (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND) ? 1U : 0U;
 
         case TRACK_CAPABILITY_MUTE:
-            return (uint8_t)((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                    && ((track_runtime_family_t)ctx->family != TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-                    && ((track_runtime_family_t)ctx->family != TRACK_RUNTIME_FAMILY_SPECIAL_FX));
+            return (uint8_t)(ctx->bind_state == TRACK_RUNTIME_BIND_BOUND);
 
         case TRACK_CAPABILITY_INPUT_RESERVATION:
             return (uint8_t)(((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
@@ -1768,26 +1706,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DELUGE_WIDTH:
         case PARAM_DELUGE_PHASE:
         case PARAM_DELUGE_RETRIG:
-        case PARAM_MACRO_FX1_TYPE:
-        case PARAM_MACRO_FX1_LEVEL:
-        case PARAM_MACRO_FX1_A:
-        case PARAM_MACRO_FX1_B:
-        case PARAM_MACRO_FX2_TYPE:
-        case PARAM_MACRO_FX2_LEVEL:
-        case PARAM_MACRO_FX2_A:
-        case PARAM_MACRO_FX2_B:
-        case PARAM_MACRO_FX3_TYPE:
-        case PARAM_MACRO_FX3_LEVEL:
-        case PARAM_MACRO_FX3_A:
-        case PARAM_MACRO_FX3_B:
-        case PARAM_MACRO_FX4_TYPE:
-        case PARAM_MACRO_FX4_LEVEL:
-        case PARAM_MACRO_FX4_A:
-        case PARAM_MACRO_FX4_B:
-            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
-            rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
-            return rule;
-
         case PARAM_MIDI_PROGRAM:
         case PARAM_MIDI_CC1_1:
         case PARAM_MIDI_CC1_2:
@@ -2094,14 +2012,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
-            if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U
-                    && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
-                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX)
-                    && (param >= PARAM_MACRO_FX1_TYPE)
-                    && (param <= PARAM_MACRO_FX4_B))
-            {
-                return TRACK_RUNTIME_PARAM_ALLOWED;
-            }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
@@ -2174,9 +2084,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_MIX:
-            if ((ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX))
+            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

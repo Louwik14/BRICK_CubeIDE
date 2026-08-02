@@ -281,8 +281,6 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
             || (track_runtime_is_audio_routable(track) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
     {
@@ -1012,7 +1010,6 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 || (dest == PARAM_LOOPER_GRAIN)
                 || (dest == PARAM_SAMPLER_SAMPLE)
                 || (dest == PARAM_SAMPLER_CLIP_SEARCH)
-                || ((dest >= PARAM_MACRO_FX1_TYPE) && (dest <= PARAM_MACRO_FX4_B))
                 || (dest == PARAM_DRUM_MD_MODEL)
                 || (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_MD)
                     && (dest >= PARAM_DRUM_TRX_BD_PITCH)
@@ -1137,8 +1134,6 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_MASTER)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
                     || (track_runtime_is_audio_routable(ctx->track_id) == 0U)
                     || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
             {

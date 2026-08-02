@@ -61,13 +61,6 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->looper.stretch = param_registry[PARAM_LOOPER_STRETCH].default_value;
     state->looper.pitch = param_registry[PARAM_LOOPER_PITCH].default_value;
     state->looper.grain = param_registry[PARAM_LOOPER_GRAIN].default_value;
-    for (uint8_t slot = 0U; slot < 4U; ++slot)
-    {
-        state->macro_fx.type[slot] = param_registry[(param_id_t)(PARAM_MACRO_FX1_TYPE + (slot * 4U))].default_value;
-        state->macro_fx.level[slot] = param_registry[(param_id_t)(PARAM_MACRO_FX1_LEVEL + (slot * 4U))].default_value;
-        state->macro_fx.macro_a[slot] = param_registry[(param_id_t)(PARAM_MACRO_FX1_A + (slot * 4U))].default_value;
-        state->macro_fx.macro_b[slot] = param_registry[(param_id_t)(PARAM_MACRO_FX1_B + (slot * 4U))].default_value;
-    }
     state->prism.edit[0] = TRACK_TONE_PRISM_DEFAULT_EDIT;
     state->prism.fine[0] = TRACK_TONE_PRISM_DEFAULT_FINE;
     state->prism.coarse[0] = TRACK_TONE_PRISM_DEFAULT_COARSE;

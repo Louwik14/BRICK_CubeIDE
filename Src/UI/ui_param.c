@@ -24,7 +24,6 @@
 #include "param_registry.h"
 #include "ui_core.h"
 #include "ui_track_catalog.h"
-#include "Audio/fx_master_macro.h"
 #include "buttons.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
@@ -96,16 +95,6 @@ static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t a
 static uint8_t ui_param_resolve_play_context(param_id_t param,
                                              uint8_t active_track,
                                              ui_page_template_play_context_t *out_context);
-static uint8_t ui_param_macro_fx_quantize_edit(uint8_t track,
-                                                param_id_t param,
-                                                float current_value,
-                                                int16_t delta,
-                                                float *out_value);
-static uint8_t ui_param_macro_fx_step_type(uint8_t track,
-                                            param_id_t param,
-                                            float current_value,
-                                            int16_t delta,
-                                            float *out_value);
 static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         param_id_t param,
                                         float value,
@@ -311,9 +300,7 @@ static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param)
 
 static uint8_t ui_param_seq_runtime_track_is_valid(uint8_t track)
 {
-    return (uint8_t)((track < SEQ_TRACK_COUNT)
-            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) == 0U)
-            && (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) == 0U));
+    return (uint8_t)(track < SEQ_TRACK_COUNT);
 }
 
 static uint8_t ui_param_get_seq_runtime_track_value(param_id_t param, uint8_t track, float *out_value)
@@ -452,6 +439,7 @@ static float ui_param_step_cfg_track_type(float current_value,
     return (float)candidate;
 }
 
+#if 0
 static uint8_t ui_param_macro_fx_type_slot_from_param(param_id_t param, uint8_t *out_slot)
 {
     if ((param != PARAM_MACRO_FX1_TYPE)
@@ -669,6 +657,7 @@ static uint8_t ui_param_macro_fx_quantize_edit(uint8_t track,
     *out_value = ui_param_macro_fx_step_to_raw((uint8_t)step, count);
     return 1U;
 }
+#endif
 
 
 /**
@@ -926,9 +915,7 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
 
 static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT)
-            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
-            || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
+    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -1089,9 +1076,7 @@ static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint
 {
     if ((param >= PARAM_COUNT)
             || (active_track >= SEQ_TRACK_COUNT)
-            || (ui_param_is_track_scoped(param) == 0U)
-            || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
-            || (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
+            || (ui_param_is_track_scoped(param) == 0U))
     {
         return 0U;
     }
@@ -1568,9 +1553,7 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        if ((track == active_track)
-                || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
-                || (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U))
+        if (track == active_track)
         {
             continue;
         }
@@ -1645,7 +1628,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         return 1U;
     }
 
-    const float delta_value = (float)delta * edit_step;
     const float base_track_value = ui_param_get_active_track_value(param, active_track);
     seq_plock_entry_t prior_entries[SEQ_STEPS_PER_PAGE];
     seq_value16_t target_values[SEQ_STEPS_PER_PAGE];
@@ -1661,11 +1643,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
         }
 
-        float next_value = source_value + delta_value;
-        if (ui_param_macro_fx_quantize_edit(param_track, param, source_value, delta, &next_value) == 0U)
-        {
-            next_value = ui_param_apply_delta_value(param, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
-        }
+        const float next_value = ui_param_apply_delta_value(param, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
         target_values[i] = seq_param_iface_encode_param_value(param, next_value);
     }
 
@@ -1770,16 +1748,6 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                   min_value,
                                                   max_value,
                                                   button_down(BTN_SHIFT) != 0U);
-    if (ui_param_macro_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
-    {
-        next_value = ui_param_apply_delta_value(param,
-                                                source_value,
-                                                delta,
-                                                edit_step,
-                                                min_value,
-                                                max_value,
-                                                button_down(BTN_SHIFT) != 0U);
-    }
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
 
     if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
@@ -1954,20 +1922,13 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     const float source_current_value = value;
     {
-        if (ui_param_macro_fx_step_type(edit_track, param, source_current_value, delta, &value) != 0U)
-        {
-            /* MacroFX TYPE has slot-level availability constraints for unique FX resources. */
-        }
-        else if (ui_param_macro_fx_quantize_edit(edit_track, param, source_current_value, delta, &value) == 0U)
-        {
-            value = ui_param_apply_delta_value(param,
-                                               source_current_value,
-                                               delta,
-                                               edit_step,
-                                               min_value,
-                                               max_value,
-                                               ctx->shift_down);
-        }
+        value = ui_param_apply_delta_value(param,
+                                           source_current_value,
+                                           delta,
+                                           edit_step,
+                                           min_value,
+                                           max_value,
+                                           ctx->shift_down);
 
         if (ui_param_value_is_same(value, source_current_value) != 0U)
         {

@@ -84,7 +84,6 @@ typedef struct
     uint8_t filter_resonance;
     uint8_t delay;
     uint8_t reverb;
-    uint8_t macro_fx;
     uint8_t master_gain_max;
     uint8_t musical;
     uint8_t fx_tail_test;
@@ -517,17 +516,15 @@ static void build_case(uint16_t index, audio_test_case_t *out)
         {
             out->notes[i] = 60U;
         }
-        out->macro_fx = (variant == 2U) ? 1U : 0U;
         out->master_gain_max = (variant == 4U) ? 1U : 0U;
         (void)snprintf(out->phase, sizeof(out->phase), "MASTER");
         (void)snprintf(out->name, sizeof(out->name), "%s",
             (variant == 0U) ? "MASTER_DRY"
-          : (variant == 1U) ? "MACRO_FX_BYPASS"
-          : (variant == 2U) ? "MACRO_FX_ACTIVE"
+          : (variant == 1U) ? "MASTER_DRY_REPEAT"
+          : (variant == 2U) ? "MASTER_DRY_REFERENCE"
           : (variant == 3U) ? "MASTER_GAIN_NOMINAL"
                             : "MASTER_GAIN_MAX");
-        (void)snprintf(out->fx, sizeof(out->fx), "D0 R0 MFX%u",
-                       (unsigned)out->macro_fx);
+        (void)snprintf(out->fx, sizeof(out->fx), "D0 R0");
         (void)snprintf(out->master, sizeof(out->master), "%s",
                        (out->master_gain_max != 0U) ? "MAX" : "NOMINAL");
         return;
@@ -713,16 +710,10 @@ static uint8_t configure_current(void)
     uint8_t midi_source[UI_TRACK_COUNT];
     ui_track_family_t engine_family;
     ui_track_type_t engine_type;
-    uint8_t fx_track = 0U;
     if (engine_family_type(g_runner.current.engine, &engine_family, &engine_type) == 0U)
     {
         return 0U;
     }
-    if (track_topology_find_special(TRACK_TOPOLOGY_ROLE_FX, 0U, &fx_track) == 0U)
-    {
-        return 0U;
-    }
-
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         family[track] = (uint8_t)UI_TRACK_FAMILY_OFF;
@@ -769,13 +760,6 @@ static uint8_t configure_current(void)
     param_set(PARAM_MIX_REVERB_DECAY, g_runner.current.reverb_decay);
     param_set(PARAM_MIX_REVERB_DAMP, g_runner.current.reverb_damping);
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
-    set_track_param(fx_track, PARAM_MACRO_FX1_TYPE,
-                    g_runner.current.macro_fx ? 1.0f : 0.0f);
-    set_track_param(fx_track, PARAM_MACRO_FX1_LEVEL,
-                    g_runner.current.macro_fx ? 127.0f : 0.0f);
-    set_track_param(fx_track, PARAM_MACRO_FX2_LEVEL, 0.0f);
-    set_track_param(fx_track, PARAM_MACRO_FX3_LEVEL, 0.0f);
-    set_track_param(fx_track, PARAM_MACRO_FX4_LEVEL, 0.0f);
     param_registry_batch_end();
 
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(0U);

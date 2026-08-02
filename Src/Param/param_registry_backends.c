@@ -1,6 +1,5 @@
 #include "Param/param_registry_backends.h"
 
-#include "Audio/fx_master_macro.h"
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
@@ -1365,6 +1364,8 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
     return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
 }
 
+/* MacroFX track backend removed with the former fixed FX track. */
+#if 0
 uint8_t param_backend_apply_macro_fx_track(const track_runtime_ctx_t *ctx,
                                             uint8_t track,
                                             param_id_t id,
@@ -1410,6 +1411,7 @@ uint8_t param_backend_apply_macro_fx_track(const track_runtime_ctx_t *ctx,
             return 0U;
     }
 }
+#endif
 
 uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                                       uint8_t track,

@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include "pages/ui_page_template_tone.h"
 
-#include "Audio/fx_master_macro.h"
 #include "Audio/md_model.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_deluge_runtime.h"
@@ -13,10 +12,13 @@
 #include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
+#include "ui_page_manager.h"
 #include "ui_template_page.h"
 
 static uint8_t g_ui_template_tone_subset = 0U;
+static uint8_t g_ui_template_tone_global_master = 0U;
 
+#if 0
 static const ui_template_family_t g_ui_template_tone_family_macro_fx = {
     .family_title = "TONE",
     .nav_labels = { "FX1", "FX2", "FX3", "FX4" },
@@ -28,6 +30,7 @@ static const ui_template_family_t g_ui_template_tone_family_macro_fx = {
     },
     .default_subpage = 0U,
 };
+#endif
 
 static const ui_template_family_t g_ui_template_tone_family_master_reverb_mutable = {
     .family_title = "MASTER 1/3",
@@ -279,7 +282,7 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
 {
     const uint8_t subset = (scope_index == UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT)
             ? g_ui_template_tone_subset : scope_index;
-    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+    if (g_ui_template_tone_global_master != 0U)
     {
         if (subset == 0U)
         {
@@ -296,10 +299,6 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         if (model == 1U) return &g_ui_template_tone_family_master_comp_deluge;
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
-    }
-    if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
-    {
-        return &g_ui_template_tone_family_macro_fx;
     }
     if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_DELUGE))
@@ -324,6 +323,11 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
 
 static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
 {
+    if (g_ui_template_tone_global_master != 0U)
+    {
+        return ui_page_template_tone_resolve_for_track(
+            ui_get_active_track(), UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
+    }
     return ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
@@ -341,7 +345,6 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget(uint8_t slot,
                                                                                  const ui_template_subpage_t *subpage,
                                                                                  param_id_t id);
-static uint8_t ui_page_template_tone_macro_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro);
 
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
@@ -353,6 +356,7 @@ static ui_template_page_state_t g_ui_template_tone_state = {
     .has_visited = 0U,
 };
 
+#if 0
 static void ui_page_template_tone_macro_fx_labels(uint8_t fx_type,
                                                          const char **out_a,
                                                          const char **out_b)
@@ -397,6 +401,7 @@ static uint8_t ui_page_template_tone_macro_fx_u7(float value)
     }
     return (uint8_t)(value + 0.5f);
 }
+#endif
 
 #define UI_PRISM_PARAM_LABEL_COUNT param_prism_label_count()
 
@@ -1194,15 +1199,6 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         return UIW_WIDGET_ENUM_TEXT;
     }
 
-    uint8_t fx_type = 0U;
-    uint8_t macro = 0U;
-    if ((ui_page_template_tone_macro_fx_type_for_param(id, &fx_type, &macro) != 0U)
-            && (fx_type == (uint8_t)FX_MASTER_MACRO_STUTTER)
-            && (macro == 1U))
-    {
-        return UIW_WIDGET_SWITCH;
-    }
-
     if (ui_page_template_tone_prism_kind_for_param(id, labels, NULL, &kind) == 0U)
     {
         if ((id == PARAM_PRISM_EDIT) || (id == PARAM_PRISM_OSC2_EDIT))
@@ -1291,6 +1287,7 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
+#if 0
 static uint8_t ui_page_template_tone_macro_fx_type_for_param(param_id_t id, uint8_t *out_fx_type, uint8_t *out_macro)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -1543,6 +1540,7 @@ static void ui_page_template_tone_macro_fx_format_value(uint8_t fx_type,
     }
 }
 
+#endif
 static uint8_t ui_page_template_tone_deluge_param_text(param_id_t id,
                                                        float value,
                                                        char *out_name,
@@ -1934,77 +1932,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
-    if ((track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_FX) == 0U)
-            || (slot < 1U)
-            || (slot > 3U)
-            || (g_ui_template_tone_state.active_subpage >= 4U))
-    {
-        return 0U;
-    }
-
-    const param_id_t type_param = (param_id_t)(PARAM_MACRO_FX1_TYPE + (g_ui_template_tone_state.active_subpage * 4U));
-    const param_id_t value_param = (param_id_t)(type_param + slot);
-    if (id != value_param)
-    {
-        return 0U;
-    }
-
-    float fx_type_value = 0.0f;
-    const char *label_a = "A";
-    const char *label_b = "B";
-
-    (void)param_registry_get_track_value(type_param, active_track, &fx_type_value);
-    ui_page_template_tone_macro_fx_labels((uint8_t)(fx_type_value + 0.5f), &label_a, &label_b);
-
-    if ((out_name != NULL) && (out_name_len > 0U))
-    {
-        if (slot == 1U)
-        {
-            (void)snprintf(out_name, out_name_len, "LVL");
-        }
-        else
-        {
-            (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? label_a : label_b);
-        }
-    }
-
-    if ((out_value != NULL) && (out_value_len > 0U))
-    {
-        const uint8_t raw_value = ui_page_template_tone_macro_fx_u7(value);
-        if (slot == 1U)
-        {
-            const uint8_t fx_type = (uint8_t)(fx_type_value + 0.5f);
-            if (fx_type == (uint8_t)FX_MASTER_MACRO_STUTTER)
-            {
-                (void)snprintf(out_value, out_value_len, "%s", (raw_value == 0U) ? "OFF" : "ON");
-            }
-            else if (fx_type == (uint8_t)FX_MASTER_MACRO_FREEZE)
-            {
-                if (raw_value == 0U)
-                {
-                    (void)snprintf(out_value, out_value_len, "OFF");
-                }
-                else
-                {
-                    ui_page_template_tone_macro_fx_format_percent(raw_value, 100U, out_value, out_value_len);
-                }
-            }
-            else
-            {
-                ui_page_template_tone_macro_fx_format_percent(raw_value, 100U, out_value, out_value_len);
-            }
-        }
-        else
-        {
-            ui_page_template_tone_macro_fx_format_value((uint8_t)(fx_type_value + 0.5f),
-                                                         slot,
-                                                         raw_value,
-                                                         out_value,
-                                                         out_value_len);
-        }
-    }
-
-    return 1U;
+    return 0U;
 }
 
 static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, param_id_t p0, param_id_t p1, param_id_t p2, param_id_t p3)
@@ -2146,10 +2074,22 @@ void ui_page_template_tone_open_primary(void)
     ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
 }
 
+void ui_page_template_tone_open_global_master(void)
+{
+    ui_page_set(UI_PAGE_TEMPLATE_TONE);
+    g_ui_template_tone_global_master = 1U;
+    ui_page_template_tone_open_primary();
+}
+
+uint8_t ui_page_template_tone_is_global_master(void)
+{
+    return g_ui_template_tone_global_master;
+}
+
 void ui_page_template_tone_toggle_subset(void)
 {
     const uint8_t active_track = ui_get_active_track();
-    if (track_topology_is_role(active_track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
+    if (g_ui_template_tone_global_master != 0U)
     {
         g_ui_template_tone_subset = (uint8_t)((g_ui_template_tone_subset + 1U) % 3U);
         g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
@@ -2173,6 +2113,12 @@ static void ui_page_template_tone_enter(void)
 {
     ui_page_template_tone_sync_drum_family();
     ui_template_page_enter();
+}
+
+static void ui_page_template_tone_leave(void)
+{
+    ui_template_page_leave();
+    g_ui_template_tone_global_master = 0U;
 }
 
 static void ui_page_template_tone_handle_event(const ui_event_t *ev)
@@ -2205,7 +2151,7 @@ static void ui_page_template_tone_render(void)
 
 const ui_page_t g_ui_page_template_tone = {
     .enter = ui_page_template_tone_enter,
-    .leave = ui_template_page_leave,
+    .leave = ui_page_template_tone_leave,
     .handle_event = ui_page_template_tone_handle_event,
     .tick = ui_page_template_tone_tick,
     .sync_active_context = ui_page_template_tone_sync_active_context,

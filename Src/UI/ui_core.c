@@ -1162,40 +1162,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         return;
     }
 
-    track_topology_descriptor_t topology;
-    if ((track_topology_get_descriptor(track, &topology) != 0U)
-            && (topology.category == (uint8_t)TRACK_TOPOLOGY_CATEGORY_SPECIAL))
-    {
-        switch ((track_topology_role_t)topology.role)
-        {
-            case TRACK_TOPOLOGY_ROLE_MASTER:
-                (void)snprintf(out, out_len, "Master");
-                return;
-            case TRACK_TOPOLOGY_ROLE_LOOPER:
-                (void)snprintf(out, out_len, "Looper");
-                return;
-            case TRACK_TOPOLOGY_ROLE_INPUT:
-            {
-                uint8_t owner = TRACK_INPUT_OWNER_NONE;
-                if (track_input_ownership_get_external_owner(topology.physical_input_index, &owner) != 0U)
-                {
-                    (void)snprintf(out, out_len, "USED P%u", (unsigned int)(owner + 1U));
-                }
-                else
-                {
-                    (void)snprintf(out, out_len, "Input %u",
-                                   (unsigned int)(topology.physical_input_index + 1U));
-                }
-                return;
-            }
-            case TRACK_TOPOLOGY_ROLE_FX:
-                (void)snprintf(out, out_len, "FX");
-                return;
-            default:
-                break;
-        }
-    }
-
     const ui_track_config_t config = ui_get_track_config(track);
 
     if (config.family == UI_TRACK_FAMILY_OFF)

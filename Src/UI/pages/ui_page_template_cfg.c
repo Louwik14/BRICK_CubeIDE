@@ -240,48 +240,11 @@ static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
                                                        char *out_value,
                                                        uint32_t out_value_len)
 {
-    const uint8_t active_track = ui_get_active_track();
-    track_topology_descriptor_t topology;
-    if ((slot == 0U)
-            && (track_topology_get_descriptor(active_track, &topology) != 0U)
-            && (topology.category == (uint8_t)TRACK_TOPOLOGY_CATEGORY_SPECIAL))
-    {
-        const char *role = "SPECIAL";
-        switch ((track_topology_role_t)topology.role)
-        {
-            case TRACK_TOPOLOGY_ROLE_MASTER: role = "MASTER"; break;
-            case TRACK_TOPOLOGY_ROLE_LOOPER: role = "LOOPER"; break;
-            case TRACK_TOPOLOGY_ROLE_INPUT: role = "INPUT"; break;
-            case TRACK_TOPOLOGY_ROLE_FX: role = "FX"; break;
-            default: break;
-        }
-        if ((out_name != NULL) && (out_name_len > 0U))
-        {
-            (void)snprintf(out_name, out_name_len, "ROLE");
-        }
-        if ((out_value != NULL) && (out_value_len > 0U))
-        {
-            if (topology.role == (uint8_t)TRACK_TOPOLOGY_ROLE_INPUT)
-            {
-                uint8_t owner = TRACK_INPUT_OWNER_NONE;
-                if (track_input_ownership_get_external_owner(topology.physical_input_index, &owner) != 0U)
-                {
-                    (void)snprintf(out_value, out_value_len, "USED P%u", (unsigned int)(owner + 1U));
-                }
-                else
-                {
-                    (void)snprintf(out_value, out_value_len, "INPUT %u",
-                                   (unsigned int)(topology.physical_input_index + 1U));
-                }
-            }
-            else
-            {
-                (void)snprintf(out_value, out_value_len, "%s", role);
-            }
-        }
-        return 1U;
-    }
-
+    (void)slot;
+    (void)out_name;
+    (void)out_name_len;
+    (void)out_value;
+    (void)out_value_len;
     return 0U;
 }
 

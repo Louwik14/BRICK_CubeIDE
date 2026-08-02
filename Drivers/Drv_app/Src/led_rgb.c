@@ -395,30 +395,6 @@ static void led_apply_route_destination_hall_scene(led_id_t led)
     led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
 }
 
-static void led_apply_macro_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
-{
-    const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_ACTIVE_TRACK_COUNT)
-    {
-        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
-        return;
-    }
-
-    if (hall == destination_track)
-    {
-        led_apply_route_destination_hall_scene(led);
-        return;
-    }
-
-    if (ui_core_runtime_bridge_get_macro_fx_route_enabled(hall) == 0U)
-    {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
-        return;
-    }
-
-    led_layer_set(LED_LAYER_UI, led, 0U, LED_FIXED_LIGHT_BLUE_G, LED_FIXED_LIGHT_BLUE_B);
-}
-
 static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
@@ -537,13 +513,7 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
 
     if (hall < UI_ACTIVE_TRACK_COUNT)
     {
-        if (track_topology_is_special(hall) != 0U)
-        {
-            r = LED_FIXED_VIOLET_R;
-            g = LED_FIXED_VIOLET_G;
-            b = LED_FIXED_VIOLET_B;
-        }
-        else if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
+        if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
         {
             r = LED_FIXED_DARK_BLUE_R;
             g = LED_FIXED_DARK_BLUE_G;
@@ -736,10 +706,6 @@ static void led_apply_fixed_scene(void)
             else if (hall_mode == UI_HALL_MODE_AUDIO_REC)
             {
                 led_apply_audio_rec_hall_scene(hall);
-            }
-            else if (rout_context == UI_HALL_ROUT_CONTEXT_MACRO_FX)
-            {
-                led_apply_macro_fx_routing_hall_scene(hall, active_track);
             }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
             {

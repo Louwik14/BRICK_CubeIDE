@@ -1,66 +1,8 @@
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry_runtime_state.h"
 
-#include "Audio/fx_master_macro.h"
 #include "Core/track_tone_sound_state.h"
 #include <stddef.h>
-
-static uint8_t param_backend_macro_fx_type_slot(param_id_t id, uint8_t *out_slot)
-{
-    if ((id != PARAM_MACRO_FX1_TYPE)
-            && (id != PARAM_MACRO_FX2_TYPE)
-            && (id != PARAM_MACRO_FX3_TYPE)
-            && (id != PARAM_MACRO_FX4_TYPE))
-    {
-        return 0U;
-    }
-    if (out_slot != NULL)
-    {
-        *out_slot = (uint8_t)((id - PARAM_MACRO_FX1_TYPE) / 4U);
-    }
-    return 1U;
-}
-
-static float param_backend_normalize_macro_fx_type(uint8_t track, param_id_t id, float value)
-{
-    uint8_t slot = 0U;
-    if (param_backend_macro_fx_type_slot(id, &slot) == 0U)
-    {
-        return value;
-    }
-
-    uint8_t type = 0U;
-    if (value > 0.0f)
-    {
-        type = (uint8_t)(value + 0.5f);
-    }
-    if (type >= (uint8_t)FX_MASTER_MACRO_TYPE_COUNT)
-    {
-        type = (uint8_t)FX_MASTER_MACRO_COLOR;
-    }
-
-    if ((type != (uint8_t)FX_MASTER_MACRO_STUTTER)
-            && (type != (uint8_t)FX_MASTER_MACRO_FREEZE))
-    {
-        return (float)type;
-    }
-
-    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    if (state == NULL)
-    {
-        return (float)type;
-    }
-
-    for (uint8_t other = 0U; other < slot; ++other)
-    {
-        if ((uint8_t)(state->macro_fx.type[other] + 0.5f) == type)
-        {
-            return (float)FX_MASTER_MACRO_OFF;
-        }
-    }
-
-    return (float)type;
-}
 
 uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
@@ -104,24 +46,12 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
         }
     }
 
-    float effective_value = value;
-    if ((track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
-            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
-    {
-        effective_value = param_backend_normalize_macro_fx_type(track, id, value);
-    }
+    const float effective_value = value;
 
     uint8_t applied = 0U;
     if (uses_mix_backend != 0U)
     {
         applied = param_backend_apply_mix_track(ctx, track, id, effective_value, update_base_state);
-    }
-    else if ((track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_FX) != 0U)
-            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SPECIAL_FX)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SPECIAL_FX))
-    {
-        applied = param_backend_apply_macro_fx_track(ctx, track, id, effective_value, update_base_state);
     }
     else if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))

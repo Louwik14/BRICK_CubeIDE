@@ -46,10 +46,8 @@ typedef struct
 typedef enum
 {
     TRACK_TOPOLOGY_ROLE_PLAY = 0,
-    TRACK_TOPOLOGY_ROLE_MASTER,
     TRACK_TOPOLOGY_ROLE_LOOPER,
     TRACK_TOPOLOGY_ROLE_INPUT,
-    TRACK_TOPOLOGY_ROLE_FX,
     TRACK_TOPOLOGY_ROLE_UNUSED
 } track_topology_role_t;
 typedef enum
