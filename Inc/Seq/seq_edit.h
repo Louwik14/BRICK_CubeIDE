@@ -53,14 +53,6 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
                                                   seq_param_slot_t param_slot);
-uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
-                                        seq_step_id_t step,
-                                        uint8_t set_id,
-                                        seq_param_slot_t param_slot,
-                                        uint8_t present,
-                                        seq_value16_t value16,
-                                        uint8_t flags,
-                                        uint8_t trig_active);
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_edit_step_plock_count(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_edit_step_plock_get_at(seq_track_id_t track,

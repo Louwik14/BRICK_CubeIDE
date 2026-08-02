@@ -9,6 +9,9 @@ $uiParam = Get-Content -Raw (Join-Path $repo 'Src\UI\ui_param.c')
 $liveRec = Get-Content -Raw (Join-Path $repo 'Src\Seq\seq_live_rec_session.c')
 $applyWrappers = Get-Content -Raw (Join-Path $repo 'Src\Param\param_registry_apply_wrappers.c')
 $functional = Get-Content -Raw (Join-Path $repo 'tests\undo_v2_functional_test.c')
+$production = (Get-ChildItem @((Join-Path $repo 'Src'), (Join-Path $repo 'Inc')) -Recurse -File |
+    Where-Object { $_.Extension -in @('.c', '.h') } |
+    ForEach-Object { Get-Content -Raw $_.FullName }) -join "`n"
 
 foreach ($required in @(
     'undo_v2_begin_sequence_transaction',
@@ -59,10 +62,43 @@ foreach ($forbidden in @(
     'undo_v2_record_plock_change',
     'undo_v2_begin_snapshot_transaction',
     'undo_v2_capture_snapshot_before',
-    'undo_v2_capture_snapshot_after'
+    'undo_v2_capture_snapshot_after',
+    'undo_v2_source_t',
+    'UNDO_V2_SOURCE_',
+    'gesture_key',
+    'pending_begin_tick',
+    'begin_tick',
+    'end_tick'
 )) {
     if ($undo.Contains($forbidden)) {
         throw "Legacy global Undo payload remains: $forbidden"
+    }
+}
+
+foreach ($forbidden in @(
+    'undo_v2_record_param_change',
+    'undo_v2_record_plock_change',
+    'undo_v2_record_step_change',
+    'undo_v2_begin_snapshot_transaction',
+    'undo_v2_param_is_undoable',
+    'undo_v2_get_last_status',
+    'undo_v2_is_apply_in_progress',
+    'undo_v2_is_transaction_open',
+    'undo_v2_is_undo_available',
+    'undo_v2_is_redo_available'
+)) {
+    if ($production.Contains($forbidden)) {
+        throw "Legacy Undo API remains in production: $forbidden"
+    }
+}
+
+foreach ($required in @(
+    'undo_v2_begin_sequence_transaction(seq_track_id_t track',
+    'undo_v2_commit_sequence_transaction',
+    'undo_v2_set_capture_suspended'
+)) {
+    if (-not $undoHeader.Contains($required)) {
+        throw "Simplified structural Undo API is incomplete: $required"
     }
 }
 
@@ -76,9 +112,9 @@ if ($functional -notmatch 'test_play_step_round_trip' -or
 }
 
 if ($functional -notmatch 'SEQ_PLAY_STEP_MAX_LOCKS' -or
-    $functional -notmatch 'flags' -or
+    $functional -notmatch 'SEQ_STEP_ROLL_1_32' -or
     $functional -notmatch 'SEQ_SPECIAL_ACTION_TRIGGER') {
     throw 'Play/Special step payload coverage is incomplete'
 }
 
-'undo_v2_step4_static_validation=PASS structural_ring=8 global_pattern_snapshot=removed exchange=yes variants=lowcost,premium'
+'undo_v2_step5_static_validation=PASS structural_api=simplified legacy_symbols=removed variants=lowcost,premium'

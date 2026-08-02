@@ -17,14 +17,9 @@
 typedef struct
 {
     uint8_t used;
-    uint8_t committed;
     uint8_t track;
     uint8_t reserved;
-    undo_v2_source_t source;
     track_topology_identity_t track_identity;
-    uint32_t gesture_key;
-    uint32_t begin_tick;
-    uint32_t end_tick;
     seq_step_snapshot_list_t snapshot;
 } undo_v2_sequence_transaction_t;
 
@@ -38,9 +33,6 @@ typedef struct
     uint8_t capture_suspended;
     uint8_t pending_track;
     track_topology_identity_t pending_track_identity;
-    undo_v2_source_t pending_source;
-    uint32_t pending_gesture_key;
-    uint32_t pending_begin_tick;
     undo_v2_status_t last_status;
 } undo_v2_runtime_t;
 
@@ -96,9 +88,6 @@ static void undo_v2_clear_pending(void)
     memset(&g_undo_v2_runtime.pending_track_identity,
            0,
            sizeof(g_undo_v2_runtime.pending_track_identity));
-    g_undo_v2_runtime.pending_source = UNDO_V2_SOURCE_NONE;
-    g_undo_v2_runtime.pending_gesture_key = 0U;
-    g_undo_v2_runtime.pending_begin_tick = 0U;
 }
 
 static void undo_v2_purge_redo_history(void)
@@ -236,15 +225,12 @@ void undo_v2_clear_all(void)
     undo_v2_set_status(UNDO_V2_STATUS_OK);
 }
 
-undo_v2_status_t undo_v2_begin_sequence_transaction(undo_v2_source_t source,
-                                                    uint32_t gesture_key,
-                                                    seq_track_id_t track,
+undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
                                                     const seq_step_id_t *steps,
                                                     uint8_t step_count)
 {
     if ((g_undo_v2_runtime.tx_open != 0U)
             || (undo_v2_capture_allowed() == 0U)
-            || (source == UNDO_V2_SOURCE_NONE)
             || (track_topology_is_active(track) == 0U)
             || (steps == 0)
             || (step_count == 0U)
@@ -268,9 +254,6 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(undo_v2_source_t source,
     }
 
     g_undo_v2_runtime.pending_track = track;
-    g_undo_v2_runtime.pending_source = source;
-    g_undo_v2_runtime.pending_gesture_key = gesture_key;
-    g_undo_v2_runtime.pending_begin_tick = engine_tick_count;
     g_undo_v2_runtime.tx_open = 1U;
     undo_v2_set_status(UNDO_V2_STATUS_OK);
     return g_undo_v2_runtime.last_status;
@@ -309,13 +292,8 @@ undo_v2_status_t undo_v2_commit_sequence_transaction(void)
     undo_v2_sequence_transaction_t *const transaction = &g_undo_v2_transactions[slot];
     memset(transaction, 0, sizeof(*transaction));
     transaction->used = 1U;
-    transaction->committed = 1U;
     transaction->track = g_undo_v2_runtime.pending_track;
-    transaction->source = g_undo_v2_runtime.pending_source;
     transaction->track_identity = g_undo_v2_runtime.pending_track_identity;
-    transaction->gesture_key = g_undo_v2_runtime.pending_gesture_key;
-    transaction->begin_tick = g_undo_v2_runtime.pending_begin_tick;
-    transaction->end_tick = engine_tick_count;
     transaction->snapshot = g_undo_v2_pending_snapshot;
     g_undo_v2_runtime.tx_open = 0U;
     g_undo_v2_runtime.undo_count++;
@@ -376,31 +354,6 @@ undo_v2_status_t undo_v2_redo(void)
     }
     undo_v2_set_status(status);
     return g_undo_v2_runtime.last_status;
-}
-
-undo_v2_status_t undo_v2_get_last_status(void)
-{
-    return g_undo_v2_runtime.last_status;
-}
-
-uint8_t undo_v2_is_apply_in_progress(void)
-{
-    return g_undo_v2_runtime.apply_in_progress;
-}
-
-uint8_t undo_v2_is_transaction_open(void)
-{
-    return g_undo_v2_runtime.tx_open;
-}
-
-uint8_t undo_v2_is_undo_available(void)
-{
-    return (g_undo_v2_runtime.undo_count != 0U) ? 1U : 0U;
-}
-
-uint8_t undo_v2_is_redo_available(void)
-{
-    return (g_undo_v2_runtime.redo_count != 0U) ? 1U : 0U;
 }
 
 void undo_v2_set_capture_suspended(uint8_t suspended)

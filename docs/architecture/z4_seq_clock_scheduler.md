@@ -823,7 +823,7 @@ Audit code reel effectue avant conception du resolver:
   - ce chemin reste stockage/edition explicite, pas lecture playback.
 - Persistence / undo:
   - `pattern_live_ram` capture tous les p-locks par `count/get_at` et restaure par `clear/upsert`;
-  - `undo_v2` enregistre des deltas p-lock et les applique via `seq_edit_step_plock_apply_state`;
+  - `undo_v2` enregistre uniquement les mutations structurelles de steps via le snapshot canonique complet; une édition individuelle de p-lock n'ajoute aucune entrée;
 
 Chemins caches ou facilement oubliables:
 - les visuels de step (`seq_model_get_step_content/visual/state` puis `seq_led`) lisent les sets de locks sans appeler explicitement une API nommee playback;
@@ -832,7 +832,7 @@ Chemins caches ou facilement oubliables:
 - les chemins live-rec/capture lisent les p-locks PLAY pour choisir une voix et ne doivent pas etre confondus avec la lecture scheduler.
 
 Conclusion d'audit pour les etapes suivantes:
-- les chemins UI, live-rec, clipboard, undo, persistence, LED/visual et base PLAY doivent etre classes explicitement avant toute migration et ne doivent pas etre bascules automatiquement vers une source master.
+- les chemins UI, live-rec, clipboard, undo, persistence, LED/visual et base PLAY doivent etre classes explicitement avant toute migration et ne doivent pas etre bascules automatiquement vers une source master; le clipboard Track/parametres et le live-rec restent hors Undo.
 
 
 Classification cible avant conception des resolvers:
@@ -841,7 +841,7 @@ Classification cible avant conception des resolvers:
   - `seq_play_scheduler` pour la lecture playback des p-locks PLAY qui produisent notes, velocity, length et microtiming;
   - `seq_model_step_plock_upsert/delete/clear` et tout le stockage `seq_model`;
   - `pattern_live_ram` capture/apply Pattern/Project;
-  - `undo_v2` deltas p-lock et snapshots;
+  - `undo_v2` snapshots canoniques complets des steps pour les mutations structurelles;
   - `seq_clipboard` copy/paste/clear de steps;
   - `seq_edit` clear/toggle/quick-note/LENGTH low-cost et wrappers d'ecriture p-lock;
   - `ui_param_try_apply_seq_plock` et `ui_param_try_apply_live_rec_plock`;
@@ -1228,7 +1228,7 @@ Correction:
 
 
 - `seq_edit_track_sequence_is_locked()` est le garde d'edition utilisateur pour la sequence Pattern d'une track.
-- Les chemins d'edition steps, rolls, p-locks, paste/clear de steps, live-rec PLAY, undo snapshot et parametres runtime de sequence (`LENGTH`, `DIV`, `QUANT`, `SWING`) consultent ce garde avant toute ecriture Pattern.
+- Les chemins d'edition steps, rolls, p-locks, paste/clear de steps, live-rec PLAY, undo structurel et parametres runtime de sequence (`LENGTH`, `DIV`, `QUANT`, `SWING`) consultent ce garde avant toute ecriture Pattern. L'Undo structurel est limite a huit niveaux, identiques en Low-Cost et Premium, et restaure tout le contenu du step vise.
 - Le verrou ne modifie pas `seq_model`, ne supprime aucune donnee locale et ne participe pas a la persistence; Pattern/Project restore restent des chemins de chargement, pas des edits utilisateur.
 
 ## Addendum 2026-07-29 - base Matrix temporaire des p-locks

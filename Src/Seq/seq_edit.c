@@ -81,30 +81,12 @@ uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
     return 0U;
 }
 
-static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
-                                               seq_track_id_t track,
-                                               seq_step_id_t step,
-                                               uint8_t extra)
-{
-    return (0x20000000UL
-        | ((uint32_t)op << 24)
-        | ((uint32_t)track << 16)
-        | ((uint32_t)step << 8)
-        | (uint32_t)extra);
-}
-
-static uint8_t seq_edit_begin_snapshot_undo(uint8_t op,
-                                            seq_track_id_t track,
+static uint8_t seq_edit_begin_snapshot_undo(seq_track_id_t track,
                                             const seq_step_id_t *steps,
                                             uint8_t step_count)
 {
     if ((steps == 0) || (step_count == 0U)
-            || (undo_v2_begin_sequence_transaction(UNDO_V2_SOURCE_BUTTON,
-                                                    seq_edit_make_undo_gesture_key(op,
-                                                                                   track,
-                                                                                   steps[0],
-                                                                                   step_count),
-                                                    track,
+            || (undo_v2_begin_sequence_transaction(track,
                                                     steps,
                                                     step_count) != UNDO_V2_STATUS_OK))
     {
@@ -472,7 +454,7 @@ static void seq_edit_apply_short_action(uint8_t hall)
         return;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, &step, 1U);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track, &step, 1U);
     if (track_topology_is_play(track) == 0U)
     {
         seq_model_toggle_special_action(track, step);
@@ -562,7 +544,7 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
         return 0U;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(1U, track, &step, 1U);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track, &step, 1U);
     if (track_topology_is_play(track) != 0U)
     {
         seq_model_toggle_trig(track, step);
@@ -950,45 +932,6 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
     return status;
 }
 
-uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
-                                        seq_step_id_t step,
-                                        uint8_t set_id,
-                                        seq_param_slot_t param_slot,
-                                        uint8_t present,
-                                        seq_value16_t value16,
-                                        uint8_t flags,
-                                        uint8_t trig_active)
-{
-    if (seq_edit_track_sequence_is_locked(track) != 0U)
-    {
-        return 0U;
-    }
-    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
-    {
-        return 0U;
-    }
-
-    if (present != 0U)
-    {
-        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
-        if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
-        {
-            return 0U;
-        }
-    }
-    else
-    {
-        const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param_slot);
-        if ((status != SEQ_PLOCK_OP_DELETED) && (status != SEQ_PLOCK_OP_NOT_FOUND))
-        {
-            return 0U;
-        }
-    }
-
-    seq_model_set_trig(track, step, (trig_active != 0U) ? 1U : 0U);
-    return 1U;
-}
-
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
     if (seq_edit_track_sequence_is_locked(track) != 0U)
@@ -1033,8 +976,7 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
         return 0U;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(6U,
-                                                              track,
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track,
                                                               dest_steps,
                                                               dest_count);
     const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
@@ -1083,8 +1025,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
         return;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(7U,
-                                                              track,
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track,
                                                               steps,
                                                               step_count);
     seq_edit_clear_steps_impl(track, steps, step_count);

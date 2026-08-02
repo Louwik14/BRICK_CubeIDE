@@ -35,6 +35,10 @@ Décision Looper : `ARM`, `LEN`, `PLAY` et `XFADE` sont p-lockables ; `STRETCH`,
 
 Les limites musicales ne changent pas : 64 steps par track, 32 locks maximum par step Play, 16 locks maximum par step Special, mêmes pools Play/Special et aucune allocation dynamique.
 
+## Undo structurel
+
+`undo_v2` ne capture plus de `PatternSaveV1` ni d'état global. Il conserve huit transactions dans les deux variantes; chaque transaction cible une seule track et restaure le contenu complet des steps concernés, avec séparation stricte Play/Special. Pose, suppression, Clear et Paste de steps sont undoables; l'édition individuelle d'un p-lock, les paramètres, le clipboard Track et le clipboard de paramètres ne le sont pas. Un chargement ou changement d'identité Pattern/Project invalide l'historique, sans modifier le format persistant.
+
 ## Mesure finale RAM_D2
 
 Le budget isolé des anciens états/mappings p-lock était de 80 573 B :

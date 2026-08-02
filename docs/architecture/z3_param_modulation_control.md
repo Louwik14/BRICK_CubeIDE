@@ -63,7 +63,7 @@ La persistence utilise la classification explicite de `pattern_live` : global, t
 
 Les formats courants sont Pattern v4, Project v4, Patch v3 et Kit v3. Les snapshots agrégés réappliquent les paramètres par leurs symboles et leurs règles actuelles ; Patch reste Play-only.
 
-Le clipboard et l'undo opèrent par intersection d'IDs compatibles avec le domaine et le scope. TONE Master lit et écrit directement les globals canoniques ; TONE FX conserve les seize valeurs MacroFX dans `track_tone_sound_state.macro_fx` de la Special FX résolue. Ils capturent les valeurs canoniques et les locks autorisés, jamais les états audio transitoires. Les scènes Macro/locks Project utilisent l'API scène/lock courante ; les anciens noms d'API persistence contenant `V1` restent inchangés.
+Le clipboard opère par intersection d'IDs compatibles avec le domaine et le scope, sans produire d'entrée Undo. L'Undo est limité aux mutations structurelles de steps et restaure avec chaque step son contenu complet, y compris les p-locks canoniques; l'édition individuelle d'un paramètre ou d'un p-lock reste non undoable. TONE Master lit et écrit directement les globals canoniques ; TONE FX conserve les seize valeurs MacroFX dans `track_tone_sound_state.macro_fx` de la Special FX résolue. Les scènes Macro/locks Project utilisent l'API scène/lock courante ; les anciens noms d'API persistence contenant `V1` restent inchangés.
 
 La projection des quatre pots utilise `param_macro_set_amount()` et `param_macro_sync_scene_sources()` ; les sources de scène sont synchronisées sans recréer une banque Macro parallèle.
 

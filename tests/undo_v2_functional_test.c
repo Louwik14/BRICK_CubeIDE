@@ -9,14 +9,12 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_step_snapshot.h"
-#include "Storage/pattern_live_ram.h"
 #include "Storage/undo_v2.h"
 
 volatile uint32_t engine_tick_count;
 
 static int g_failures;
 static seq_track_id_t g_locked_track = 0xFFU;
-static note_fx_track_state_t g_note_fx[NOTE_FX_TRACK_COUNT];
 
 #define EXPECT(condition, message) \
     do \
@@ -38,160 +36,8 @@ static void test_init_model(void)
     seq_model_init_defaults();
     seq_clipboard_init();
     undo_v2_clear_all();
-    memset(g_note_fx, 0, sizeof(g_note_fx));
     g_locked_track = 0xFFU;
     engine_tick_count++;
-}
-
-static uint8_t test_capture_pattern(PatternSaveV1 *out)
-{
-    if (out == NULL)
-    {
-        return 0U;
-    }
-
-    memset(out, 0, sizeof(*out));
-    for (seq_track_id_t track = 0U;
-         track < (seq_track_id_t)track_topology_get_logical_track_count();
-         ++track)
-    {
-        track_topology_get_identity(track, &out->track_cfg.identity[track]);
-        if (track_topology_is_play(track) != 0U)
-        {
-            pattern_v1_play_track_seq_t *const dst = &out->seq.play[track];
-            track_topology_get_identity(track, &dst->identity);
-            dst->length_steps = seq_model_get_track_length(track);
-            dst->ui_page = seq_model_get_track_page(track);
-            for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-            {
-                pattern_v1_play_step_t *const step_dst = &dst->steps[step];
-                step_dst->trig = seq_model_get_trig(track, step);
-                step_dst->roll = seq_model_get_step_roll(track, step);
-                seq_plock_entry_t locks[SEQ_PLAY_STEP_MAX_LOCKS];
-                uint8_t count = 0U;
-                if (seq_model_step_plock_collect(track, step, locks,
-                                                 SEQ_PLAY_STEP_MAX_LOCKS, &count) == 0U)
-                {
-                    return 0U;
-                }
-                step_dst->lock_count = count;
-                for (uint8_t i = 0U; i < count; ++i)
-                {
-                    step_dst->locks[i].set_id = locks[i].set_id;
-                    step_dst->locks[i].param_slot = locks[i].param_slot;
-                    step_dst->locks[i].value16 = locks[i].value16;
-                    step_dst->locks[i].flags = locks[i].flags;
-                }
-            }
-        }
-        else
-        {
-            const uint8_t special_index = (uint8_t)(track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT);
-            pattern_v1_special_track_seq_t *const dst = &out->seq.special[special_index];
-            track_topology_get_identity(track, &dst->identity);
-            dst->length_steps = seq_model_get_track_length(track);
-            dst->ui_page = seq_model_get_track_page(track);
-            for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-            {
-                pattern_v1_special_step_t *const step_dst = &dst->steps[step];
-                step_dst->action = seq_model_get_special_action(track, step);
-                seq_plock_entry_t locks[SEQ_SPECIAL_STEP_MAX_LOCKS];
-                uint8_t count = 0U;
-                if (seq_model_step_plock_collect(track, step, locks,
-                                                 SEQ_SPECIAL_STEP_MAX_LOCKS, &count) == 0U)
-                {
-                    return 0U;
-                }
-                step_dst->lock_count = count;
-                for (uint8_t i = 0U; i < count; ++i)
-                {
-                    step_dst->locks[i].set_id = locks[i].set_id;
-                    step_dst->locks[i].param_slot = locks[i].param_slot;
-                    step_dst->locks[i].value16 = locks[i].value16;
-                    step_dst->locks[i].flags = locks[i].flags;
-                }
-            }
-        }
-    }
-    return 1U;
-}
-
-static uint8_t test_apply_pattern(const PatternSaveV1 *snapshot)
-{
-    if (snapshot == NULL)
-    {
-        return 0U;
-    }
-
-    for (seq_track_id_t track = 0U;
-         track < (seq_track_id_t)track_topology_get_logical_track_count();
-         ++track)
-    {
-        if (test_track_is_valid(track) == 0U)
-        {
-            return 0U;
-        }
-        if (track_topology_identity_is_compatible(track, &snapshot->track_cfg.identity[track]) == 0U)
-        {
-            return 0U;
-        }
-        const uint8_t count = track_topology_is_play(track)
-            ? snapshot->seq.play[track].steps[0].lock_count
-            : snapshot->seq.special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT].steps[0].lock_count;
-        (void)count;
-    }
-
-    for (seq_track_id_t track = 0U;
-         track < (seq_track_id_t)track_topology_get_logical_track_count();
-         ++track)
-    {
-        const uint8_t is_play = track_topology_is_play(track);
-        const uint8_t length = is_play
-            ? snapshot->seq.play[track].length_steps
-            : snapshot->seq.special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT].length_steps;
-        const uint8_t page = is_play
-            ? snapshot->seq.play[track].ui_page
-            : snapshot->seq.special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT].ui_page;
-        seq_model_set_track_length(track, length);
-        seq_model_set_track_page(track, page);
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-        {
-            seq_model_step_plock_clear(track, step);
-            if (is_play != 0U)
-            {
-                const pattern_v1_play_step_t *const src = &snapshot->seq.play[track].steps[step];
-                seq_model_set_trig(track, step, src->trig);
-                seq_model_set_step_roll(track, step, src->roll);
-                for (uint8_t i = src->lock_count; i > 0U; --i)
-                {
-                    const pattern_v1_plock_t *const lock = &src->locks[i - 1U];
-                    if (seq_model_step_plock_upsert(track, step, lock->set_id,
-                                                    lock->param_slot, lock->value16,
-                                                    lock->flags) < SEQ_PLOCK_OP_CREATED)
-                    {
-                        return 0U;
-                    }
-                }
-            }
-            else
-            {
-                const pattern_v1_special_step_t *const src =
-                    &snapshot->seq.special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT].steps[step];
-                seq_model_set_special_action(track, step, src->action);
-                for (uint8_t i = src->lock_count; i > 0U; --i)
-                {
-                    const pattern_v1_plock_t *const lock = &src->locks[i - 1U];
-                    if (seq_model_step_plock_upsert(track, step, lock->set_id,
-                                                    lock->param_slot, lock->value16,
-                                                    lock->flags) < SEQ_PLOCK_OP_CREATED)
-                    {
-                        return 0U;
-                    }
-                }
-            }
-        }
-    }
-    return 1U;
 }
 
 static void test_fill_play_step(seq_track_id_t track, seq_step_id_t step, uint8_t seed)
@@ -300,9 +146,7 @@ static void test_begin_capture_commit(seq_track_id_t track,
                                       const seq_step_id_t *steps,
                                       uint8_t step_count)
 {
-    EXPECT(undo_v2_begin_sequence_transaction(UNDO_V2_SOURCE_BUTTON,
-                                               1U,
-                                               track,
+    EXPECT(undo_v2_begin_sequence_transaction(track,
                                                steps,
                                                step_count) == UNDO_V2_STATUS_OK,
            "sequence transaction begins and captures the before image");
@@ -367,7 +211,7 @@ static void test_copy_paste_scope(seq_step_id_t count)
         test_fill_play_step_light(0U, i, (uint8_t)i);
     }
     EXPECT(seq_clipboard_copy(0U, steps, count) != 0U, "Copy succeeds");
-    EXPECT(undo_v2_is_undo_available() == 0U, "Copy alone creates no Undo");
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_NO_TX, "Copy alone creates no Undo");
     for (seq_step_id_t i = 0U; i < count; ++i)
     {
         seq_model_step_plock_clear(0U, i);
@@ -394,17 +238,16 @@ static void test_depth_and_branching(void)
         seq_model_set_trig(0U, i, 1U);
         test_finish_capture_commit();
     }
-    EXPECT(undo_v2_is_undo_available() != 0U, "eight structural actions are available");
     for (uint8_t i = 0U; i < 8U; ++i)
     {
         EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "successive Undo succeeds");
     }
-    EXPECT(undo_v2_is_undo_available() == 0U, "exactly eight Undo levels are exposed");
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_NO_TX, "exactly eight Undo levels are exposed");
     for (uint8_t i = 0U; i < 8U; ++i)
     {
         EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK, "successive Redo succeeds");
     }
-    EXPECT(undo_v2_is_redo_available() == 0U, "exactly eight Redo levels are exposed");
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_ERR_NO_TX, "exactly eight Redo levels are exposed");
 
     test_init_model();
     const seq_step_id_t branch_step = 0U;
@@ -413,13 +256,15 @@ static void test_depth_and_branching(void)
     test_finish_capture_commit();
     EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "branch setup Undo succeeds");
     seq_model_step_plock_upsert(0U, 0U, (uint8_t)SEQ_PLOCK_SET_PLAY, 0U, 0x7777U, 1U);
-    EXPECT(undo_v2_is_redo_available() != 0U,
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK,
            "non-undoable step content edit preserves Redo");
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK,
+           "restoring the undone structural state succeeds");
     const seq_step_id_t next_branch_step = 1U;
     test_begin_capture_commit(0U, &next_branch_step, 1U);
     seq_model_set_trig(0U, 1U, 1U);
     test_finish_capture_commit();
-    EXPECT(undo_v2_is_redo_available() == 0U,
+    EXPECT(undo_v2_redo() == UNDO_V2_STATUS_ERR_NO_TX,
            "new structural action invalidates Redo branch");
 }
 
@@ -460,7 +305,7 @@ static void test_noop_and_atomic_failure(void)
     const seq_step_id_t noop_step = 0U;
     test_begin_capture_commit(0U, &noop_step, 1U);
     test_finish_capture_commit();
-    EXPECT(undo_v2_is_undo_available() == 0U,
+    EXPECT(undo_v2_undo() == UNDO_V2_STATUS_ERR_NO_TX,
            "an action without an effective mutation is not recorded");
 
     test_init_model();
@@ -496,44 +341,6 @@ int main(void)
     }
     puts("undo_v2_functional_test=PASS");
     return 0;
-}
-
-/* Host doubles for the current firmware dependencies. The tested Undo code and
- * the sequencer model/clipboard remain the production implementations. */
-uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
-{
-    return test_capture_pattern(out_pattern);
-}
-
-uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport)
-{
-    (void)resume_transport;
-    return test_apply_pattern(pattern);
-}
-
-uint8_t note_fx_state_capture_track(uint8_t track, note_fx_track_state_t *out_state)
-{
-    if ((track >= NOTE_FX_TRACK_COUNT) || (out_state == NULL))
-    {
-        return 0U;
-    }
-    *out_state = g_note_fx[track];
-    return 1U;
-}
-
-uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *state)
-{
-    if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL))
-    {
-        return 0U;
-    }
-    g_note_fx[track] = *state;
-    return 1U;
-}
-
-void note_fx_pipeline_reset_runtime_overrides(uint8_t track)
-{
-    (void)track;
 }
 
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
@@ -638,27 +445,4 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     (void)track;
     (void)value;
     return 1U;
-}
-
-uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
-                                        seq_step_id_t step,
-                                        uint8_t set_id,
-                                        seq_param_slot_t param_slot,
-                                        uint8_t present,
-                                        seq_value16_t value16,
-                                        uint8_t flags,
-                                        uint8_t trig_active)
-{
-    if (present == 0U)
-    {
-        return (seq_model_step_plock_delete(track, step, set_id, param_slot)
-                    == SEQ_PLOCK_OP_DELETED
-                || seq_model_step_plock_find(track, step, set_id, param_slot, NULL) == 0U) ? 1U : 0U;
-    }
-    if (trig_active != 0U)
-    {
-        seq_model_set_trig(track, step, 1U);
-    }
-    return (seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags)
-                >= SEQ_PLOCK_OP_CREATED) ? 1U : 0U;
 }

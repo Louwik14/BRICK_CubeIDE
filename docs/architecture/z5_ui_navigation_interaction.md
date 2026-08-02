@@ -79,7 +79,7 @@ Les scopes sont explicites :
 
 Le collage par ensemble/page utilise l'intersection des `param_id` compatibles ; il ne dépend pas d'un layout strict. Le collage d'une track valide `role + ordinal`, famille/type, capacités et ressources exclusives avant mutation. Une track `External` conserve exactement son entrée physique ; un conflit est refusé sans substitution automatique.
 
-Le scope TONE Master agrège les pages reverb, delay et compresseur et manipule leurs globals par `param_get/param_set`; son undo/redo utilise le snapshot global Pattern. Le scope TONE FX couvre les seize paramètres des quatre MacroFX et reste track-aware sur l'index de la Special FX. Un collage sans intersection compatible est refusé.
+Le scope TONE Master agrège les pages reverb, delay et compresseur et manipule leurs globals par `param_get/param_set`; les paramètres et le clipboard Track ne créent pas d'entrée Undo. Le scope TONE FX couvre les seize paramètres des quatre MacroFX et reste track-aware sur l'index de la Special FX. Un collage sans intersection compatible est refusé.
 
 Les overlays de scène utilisent le même feedback visuel de lock que l'édition p-lock ; ils ne créent pas un indicateur distinct par ancienne banque Macro.
 
