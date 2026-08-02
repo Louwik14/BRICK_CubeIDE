@@ -14,7 +14,6 @@ void fx_reverb_revb_global_set_wet(float wet);
 void fx_reverb_revb_global_set_size(float size);
 void fx_reverb_revb_global_set_decay(float decay);
 void fx_reverb_revb_global_set_damp(float damp);
-void fx_reverb_revb_global_set_tank_size(uint8_t max_size);
 void fx_reverb_revb_global_set_predelay(float predelay_s);
 void fx_reverb_revb_global_set_filter_hz(float low_cut_hz, float high_cut_hz);
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,

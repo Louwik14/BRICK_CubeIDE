@@ -1834,7 +1834,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_DELAY_FEEDBACK:
         case PARAM_MIX_DELAY_SPECTRAL_POSITION:
         case PARAM_MIX_DELAY_SPECTRAL_WIDTH:
-        case PARAM_MIX_REVERB_TANK_SIZE:
         case PARAM_MIX_DELAY_FBW:
         case PARAM_MIX_DELAY_MOD:
         case PARAM_MIX_DELAY_MOD_RATE:

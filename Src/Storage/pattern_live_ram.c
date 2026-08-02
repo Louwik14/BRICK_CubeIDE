@@ -247,7 +247,7 @@ static pattern_live_param_class_t pattern_live_classify_param(param_id_t id)
         case PARAM_MIX_REVERB_SPECTRAL_POSITION:
         case PARAM_MIX_REVERB_SPECTRAL_WIDTH:
         case PARAM_MIX_REVERB_DAMP:
-        case PARAM_MIX_REVERB_TANK_SIZE:
+        case PARAM_RESERVED_175:
         case PARAM_CFG_START:
         case PARAM_CFG_TEMPO:
         case PARAM_CFG_SYNC:

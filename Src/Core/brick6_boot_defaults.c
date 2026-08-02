@@ -28,5 +28,4 @@ void brick6_boot_apply_param_defaults(void)
     param_reset(PARAM_MIX_REVERB_SPECTRAL_POSITION);
     param_reset(PARAM_MIX_REVERB_SPECTRAL_WIDTH);
     param_reset(PARAM_MIX_REVERB_DAMP);
-    param_reset(PARAM_MIX_REVERB_TANK_SIZE);
 }

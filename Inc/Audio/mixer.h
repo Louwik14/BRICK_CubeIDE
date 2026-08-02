@@ -82,7 +82,6 @@ void mixer_set_reverb_wet(float wet);
 void mixer_set_reverb_size(float size);
 void mixer_set_reverb_decay(float decay);
 void mixer_set_reverb_damp(float damp);
-void mixer_set_reverb_tank_size(uint8_t max_size);
 void mixer_set_reverb_pre_delay(float pre_delay);
 void mixer_set_reverb_spectral_position(float position);
 void mixer_set_reverb_spectral_width(float width);

@@ -12,13 +12,12 @@ namespace
 constexpr float kDefaultSampleRate = 48000.0f;
 constexpr uint32_t kEngineBufferSize = 32768U;
 constexpr float kPredelayMaxSeconds = 0.090f;
+constexpr float kSizeSmooth = 0.125f;
+constexpr float kDiffusionSmooth = 0.010f;
 constexpr uint32_t kPredelayBufferSize = 4322U;
 constexpr uint32_t kNormalTopologySamples = 23528U;
-constexpr uint32_t kMaxTopologySamples = 32758U;
 static_assert(kNormalTopologySamples + 9U + 1U <= kEngineBufferSize,
-              "NORMAL topology plus separators and interpolation guard must fit");
-static_assert(kMaxTopologySamples + 9U + 1U <= kEngineBufferSize,
-              "MAX topology plus separators and interpolation guard must fit");
+              "RevB topology plus separators and interpolation guard must fit");
 
 AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
 AUDIO_WARM ALIGN32 static float g_revb_predelay_buffer[kPredelayBufferSize];
@@ -37,6 +36,7 @@ struct revb_global_state_t
     float high_cut_hz;
     float wet_current;
     float size_current;
+    float diffusion_size_current;
     float decay_current;
     float damp_current;
     float low_cut_current_hz;
@@ -45,7 +45,6 @@ struct revb_global_state_t
     float predelay_current_samples;
     uint32_t predelay_write;
     uint8_t initialized;
-    uint8_t max_tank_geometry;
 };
 
 static revb_global_state_t g_revb;
@@ -73,7 +72,7 @@ static void apply_params(void)
     if(g_revb.initialized == 0U)
         return;
 
-    const float diffusion = 0.45f + (0.45f * g_revb.size_current);
+    const float diffusion = 0.45f + (0.45f * g_revb.diffusion_size_current);
     const float time = 0.20f + (0.78f * g_revb.decay_current);
     const float damping_arg = ((1.0f - g_revb.damp_current) * 50.0f) + 1.0f;
     const float damping_curve = clampf_local(log2f(damping_arg) / 5.7f, 0.0f, 1.0f);
@@ -131,6 +130,7 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.high_cut_hz = 20000.0f;
     g_revb.wet_current = 0.0f;
     g_revb.size_current = g_revb.size;
+    g_revb.diffusion_size_current = g_revb.size;
     g_revb.decay_current = g_revb.decay;
     g_revb.damp_current = g_revb.damp;
     g_revb.low_cut_current_hz = g_revb.low_cut_hz;
@@ -139,7 +139,6 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.predelay_write = 0U;
     g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
     g_revb.initialized = 0U;
-    g_revb.max_tank_geometry = 0U;
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.engine.Init(g_revb_engine_buffer);
     g_revb.initialized = 1U;
@@ -179,15 +178,6 @@ void fx_reverb_revb_global_set_decay(float decay)
 void fx_reverb_revb_global_set_damp(float damp)
 {
     g_revb.damp = clamp01_local(damp);
-}
-
-void fx_reverb_revb_global_set_tank_size(uint8_t max_size)
-{
-    const uint8_t next = (max_size != 0U) ? 1U : 0U;
-    if(g_revb.max_tank_geometry == next)
-        return;
-    g_revb.max_tank_geometry = next;
-    g_revb.engine.set_max_tank_geometry(next != 0U);
 }
 
 void fx_reverb_revb_global_set_predelay(float predelay_s)
@@ -230,12 +220,16 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    const float block_smooth = 0.125f;
-    g_revb.size_current += (g_revb.size - g_revb.size_current) * block_smooth;
-    g_revb.decay_current += (g_revb.decay - g_revb.decay_current) * block_smooth;
-    g_revb.damp_current += (g_revb.damp - g_revb.damp_current) * block_smooth;
-    g_revb.low_cut_current_hz += (g_revb.low_cut_hz - g_revb.low_cut_current_hz) * block_smooth;
-    g_revb.high_cut_current_hz += (g_revb.high_cut_hz - g_revb.high_cut_current_hz) * block_smooth;
+    g_revb.size_current += (g_revb.size - g_revb.size_current) * kSizeSmooth;
+    /* Time-varying all-pass coefficients are not energy preserving. Keep the
+     * existing SIZE response for the LFOs, but slew the diffusion coefficient
+     * slowly enough that loop decay dominates coefficient-change pumping. */
+    g_revb.diffusion_size_current +=
+            (g_revb.size - g_revb.diffusion_size_current) * kDiffusionSmooth;
+    g_revb.decay_current += (g_revb.decay - g_revb.decay_current) * kSizeSmooth;
+    g_revb.damp_current += (g_revb.damp - g_revb.damp_current) * kSizeSmooth;
+    g_revb.low_cut_current_hz += (g_revb.low_cut_hz - g_revb.low_cut_current_hz) * kSizeSmooth;
+    g_revb.high_cut_current_hz += (g_revb.high_cut_hz - g_revb.high_cut_current_hz) * kSizeSmooth;
     apply_params();
 
     const float wet_step = (g_revb.wet - g_revb.wet_current) / (float)frames;

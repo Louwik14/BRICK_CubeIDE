@@ -2166,11 +2166,6 @@ void mixer_set_reverb_damp(float damp)
     fx_reverb_global_set_damp(g_reverb.damp);
 }
 
-void mixer_set_reverb_tank_size(uint8_t max_size)
-{
-    fx_reverb_global_set_tank_size(max_size);
-}
-
 void mixer_set_reverb_pre_delay(float pre_delay)
 {
     g_reverb.pre_delay = clamp01(pre_delay);
