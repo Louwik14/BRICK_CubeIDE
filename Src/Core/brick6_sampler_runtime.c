@@ -4122,6 +4122,73 @@ void brick6_sampler_runtime_get_health_snapshot(
         g_brick6_sampler_runtime_diag.multi_invalid_instrument_id;
 }
 
+static void brick6_sampler_runtime_mix_reader_segment(const sample_audio_segment_t *segment,
+                                                      float gain,
+                                                      const float *fade_gain,
+                                                      uint32_t fade_count,
+                                                      float *out_l,
+                                                      float *out_r,
+                                                      uint32_t out_offset,
+                                                      float *out_last_l,
+                                                      float *out_last_r)
+{
+    if ((segment == NULL) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
+    {
+        return;
+    }
+
+    /* Mono readers select L once per segment; the legacy stereo output buffers
+       remain the voice-level insertion point until the mixer-native step. */
+    switch (segment->kernel_type)
+    {
+        case SAMPLE_KERNEL_REV_1X:
+            sample_voice_reader_mix_rev_1x(segment,
+                                           gain,
+                                           fade_gain,
+                                           fade_count,
+                                           out_l,
+                                           out_r,
+                                           out_offset,
+                                           out_last_l,
+                                           out_last_r);
+            break;
+        case SAMPLE_KERNEL_PITCH_FWD_LINEAR:
+            sample_voice_reader_mix_pitch_fwd_linear(segment,
+                                                     gain,
+                                                     fade_gain,
+                                                     fade_count,
+                                                     out_l,
+                                                     out_r,
+                                                     out_offset,
+                                                     out_last_l,
+                                                     out_last_r);
+            break;
+        case SAMPLE_KERNEL_PITCH_REV_LINEAR:
+            sample_voice_reader_mix_pitch_rev_linear(segment,
+                                                     gain,
+                                                     fade_gain,
+                                                     fade_count,
+                                                     out_l,
+                                                     out_r,
+                                                     out_offset,
+                                                     out_last_l,
+                                                     out_last_r);
+            break;
+        case SAMPLE_KERNEL_FWD_1X:
+        default:
+            sample_voice_reader_mix_fwd_1x(segment,
+                                           gain,
+                                           fade_gain,
+                                           fade_count,
+                                           out_l,
+                                           out_r,
+                                           out_offset,
+                                           out_last_l,
+                                           out_last_r);
+            break;
+    }
+}
+
 static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
                                                         float *out_l,
                                                         float *out_r,
@@ -4167,22 +4234,15 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
                 fade_ptr = fade_buf;
                 fade_count = segment.frames;
             }
-            if (segment.kernel_type == SAMPLE_KERNEL_REV_1X)
-            {
-                sample_voice_reader_mix_rev_1x(&segment, render_gain, fade_ptr, fade_count, out_l, out_r, produced, &last_l, &last_r);
-            }
-            else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
-            {
-                sample_voice_reader_mix_pitch_fwd_linear(&segment, render_gain, fade_ptr, fade_count, out_l, out_r, produced, &last_l, &last_r);
-            }
-            else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-            {
-                sample_voice_reader_mix_pitch_rev_linear(&segment, render_gain, fade_ptr, fade_count, out_l, out_r, produced, &last_l, &last_r);
-            }
-            else
-            {
-                sample_voice_reader_mix_fwd_1x(&segment, render_gain, fade_ptr, fade_count, out_l, out_r, produced, &last_l, &last_r);
-            }
+            brick6_sampler_runtime_mix_reader_segment(&segment,
+                                                      render_gain,
+                                                      fade_ptr,
+                                                      fade_count,
+                                                      out_l,
+                                                      out_r,
+                                                      produced,
+                                                      &last_l,
+                                                      &last_r);
             brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
         }
         else
@@ -4223,54 +4283,15 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
                                                                voice->fade_out_frames);
             }
             (void)brick6_sampler_runtime_apply_start_fade(voice, fade_buf, segment.frames);
-            if (segment.kernel_type == SAMPLE_KERNEL_REV_1X)
-            {
-                sample_voice_reader_mix_rev_1x(&segment,
-                                               render_gain,
-                                               fade_buf,
-                                               segment.frames,
-                                               out_l,
-                                               out_r,
-                                               produced,
-                                               &last_l,
-                                               &last_r);
-            }
-            else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
-            {
-                sample_voice_reader_mix_pitch_fwd_linear(&segment,
-                                                         render_gain,
-                                                         fade_buf,
-                                                         segment.frames,
-                                                         out_l,
-                                                         out_r,
-                                                         produced,
-                                                         &last_l,
-                                                         &last_r);
-            }
-            else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-            {
-                sample_voice_reader_mix_pitch_rev_linear(&segment,
-                                                         render_gain,
-                                                         fade_buf,
-                                                         segment.frames,
-                                                         out_l,
-                                                         out_r,
-                                                         produced,
-                                                         &last_l,
-                                                         &last_r);
-            }
-            else
-            {
-                sample_voice_reader_mix_fwd_1x(&segment,
-                                               render_gain,
-                                               fade_buf,
-                                               segment.frames,
-                                               out_l,
-                                               out_r,
-                                               produced,
-                                               &last_l,
-                                               &last_r);
-            }
+            brick6_sampler_runtime_mix_reader_segment(&segment,
+                                                      render_gain,
+                                                      fade_buf,
+                                                      segment.frames,
+                                                      out_l,
+                                                      out_r,
+                                                      produced,
+                                                      &last_l,
+                                                      &last_r);
             brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
         }
 
@@ -4386,30 +4407,15 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
             fade_ptr = fade_buf;
             fade_count = segment.frames;
         }
-        if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
-        {
-            sample_voice_reader_mix_pitch_fwd_linear(&segment,
-                                                     render_gain,
-                                                     fade_ptr,
-                                                     fade_count,
-                                                     out_l,
-                                                     out_r,
-                                                     produced,
-                                                     &last_l,
-                                                     &last_r);
-        }
-        else
-        {
-            sample_voice_reader_mix_fwd_1x(&segment,
-                                           render_gain,
-                                           fade_ptr,
-                                           fade_count,
-                                           out_l,
-                                           out_r,
-                                           produced,
-                                           &last_l,
-                                           &last_r);
-        }
+        brick6_sampler_runtime_mix_reader_segment(&segment,
+                                                  render_gain,
+                                                  fade_ptr,
+                                                  fade_count,
+                                                  out_l,
+                                                  out_r,
+                                                  produced,
+                                                  &last_l,
+                                                  &last_r);
         brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
 
         const float position_before_commit = voice->reader.position;
