@@ -28,6 +28,9 @@
 
 #pragma once
 
+#include <type_traits>
+#include <cmath>
+
 #include "stmlib/stmlib.h"
 
 #include "Storage/memory_layout.h"
@@ -55,6 +58,12 @@ namespace mifx {
 
         ITCM_TEXT_NAMED("mifx_reverb_process_stereo")
         void Process(float *left, float *right, size_t size) {
+            if (mutable_geometry_) ProcessStereoTopology<true>(left, right, size);
+            else ProcessStereoTopology<false>(left, right, size);
+        }
+
+        template<bool MutableGeometry>
+        void ProcessStereoTopology(float *left, float *right, size_t size) {
             // Mutable's Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
             // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
@@ -67,7 +76,11 @@ namespace mifx {
                             E::Reserve < 4899,
                             E::Reserve < 2748,
                             E::Reserve < 2391,
-                            E::Reserve < 6870> > > > > > > > > > Memory;
+                            E::Reserve < 6870> > > > > > > > > > TbdMemory;
+            typedef E::Reserve<150, E::Reserve<214, E::Reserve<319, E::Reserve<527,
+                    E::Reserve<2182, E::Reserve<2690, E::Reserve<4501, E::Reserve<2525,
+                    E::Reserve<2197, E::Reserve<6312> > > > > > > > > > MutableMemory;
+            typedef typename std::conditional<MutableGeometry, MutableMemory, TbdMemory>::type Memory;
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -109,7 +122,8 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, MutableGeometry ? 6261.0f : 6815.2383f, LFO_2,
+                              MutableGeometry ? 50.0f : kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -117,11 +131,13 @@ namespace mifx {
                 c.WriteAllPass(dap1b, -kap);
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
+                if (!std::isfinite(wet)) wet = 0.0f;
 
                 *left += (wet - *left) * amount;
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, MutableGeometry ? 4460.0f : 4854.4219f, LFO_1,
+                              MutableGeometry ? 40.0f : kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -129,6 +145,7 @@ namespace mifx {
                 c.WriteAllPass(dap2b, kap);
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
+                if (!std::isfinite(wet)) wet = 0.0f;
 
                 *right += (wet - *right) * amount;
 
@@ -142,6 +159,12 @@ namespace mifx {
 
         ITCM_TEXT_NAMED("mifx_reverb_process_mono")
         void Process(const float* in, float *left, float *right, size_t size) {
+            if (mutable_geometry_) ProcessMonoTopology<true>(in, left, right, size);
+            else ProcessMonoTopology<false>(in, left, right, size);
+        }
+
+        template<bool MutableGeometry>
+        void ProcessMonoTopology(const float* in, float *left, float *right, size_t size) {
             // Mutable's Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
             // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
@@ -154,7 +177,11 @@ namespace mifx {
                             E::Reserve < 4899,
                             E::Reserve < 2748,
                             E::Reserve < 2391,
-                            E::Reserve < 6870> > > > > > > > > > Memory;
+                            E::Reserve < 6870> > > > > > > > > > TbdMemory;
+            typedef E::Reserve<150, E::Reserve<214, E::Reserve<319, E::Reserve<527,
+                    E::Reserve<2182, E::Reserve<2690, E::Reserve<4501, E::Reserve<2525,
+                    E::Reserve<2197, E::Reserve<6312> > > > > > > > > > MutableMemory;
+            typedef typename std::conditional<MutableGeometry, MutableMemory, TbdMemory>::type Memory;
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -195,7 +222,8 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6815.2383f, LFO_2, kLongDelay2ModulationSamples, krt);
+                c.Interpolate(del2, MutableGeometry ? 6261.0f : 6815.2383f, LFO_2,
+                              MutableGeometry ? 50.0f : kLongDelay2ModulationSamples, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -203,12 +231,14 @@ namespace mifx {
                 c.WriteAllPass(dap1b, -kap);
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
+                if (!std::isfinite(wet)) wet = 0.0f;
 
                 wet -= one_pole(hp_l_, wet, hp_coefficient_);
                 *left = one_pole(lp_l_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, 4854.4219f, LFO_1, kLongDelay1ModulationSamples, krt);
+                c.Interpolate(del1, MutableGeometry ? 4460.0f : 4854.4219f, LFO_1,
+                              MutableGeometry ? 40.0f : kLongDelay1ModulationSamples, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, kap);
                 c.WriteAllPass(dap2a, -kap);
@@ -216,6 +246,7 @@ namespace mifx {
                 c.WriteAllPass(dap2b, kap);
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
+                if (!std::isfinite(wet)) wet = 0.0f;
 
                 wet -= one_pole(hp_r_, wet, hp_coefficient_);
                 *right = one_pole(lp_r_, wet, lp_coefficient_);
@@ -243,16 +274,23 @@ namespace mifx {
         }
 
         inline void set_diffusion(float diffusion) {
-            diffusion_ = diffusion;
+            diffusion_ = (diffusion < 0.0f) ? 0.0f : ((diffusion > 0.9f) ? 0.9f : diffusion);
         }
 
         inline void set_lp(float lp) {
-            lp_ = lp;
+            lp_ = (lp < 0.0f) ? 0.0f : ((lp > 1.0f) ? 1.0f : lp);
         }
 
         inline void set_output_filters(float hp, float lp) {
-            hp_coefficient_ = hp;
-            lp_coefficient_ = lp;
+            hp_coefficient_ = (hp < 0.0f) ? 0.0f : ((hp > 1.0f) ? 1.0f : hp);
+            lp_coefficient_ = (lp < 0.0f) ? 0.0f : ((lp > 1.0f) ? 1.0f : lp);
+        }
+
+        inline void set_mutable_geometry(bool enabled) {
+            if (mutable_geometry_ != enabled) {
+                mutable_geometry_ = enabled;
+                Clear();
+            }
         }
 
         inline void Clear() {
@@ -291,9 +329,11 @@ namespace mifx {
         float lp_r_ = 0.f;
         float hp_coefficient_ = 0.f;
         float lp_coefficient_ = 1.f;
+        bool mutable_geometry_ = false;
 
         static inline float one_pole(float& state, float input, float coefficient) {
             state += coefficient * (input - state);
+            if (!std::isfinite(state)) state = 0.0f;
             return state;
         }
 

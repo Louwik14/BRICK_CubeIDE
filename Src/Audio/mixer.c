@@ -2166,6 +2166,11 @@ void mixer_set_reverb_damp(float damp)
     fx_reverb_global_set_damp(g_reverb.damp);
 }
 
+void mixer_set_reverb_mutable(uint8_t enabled)
+{
+    fx_reverb_global_set_mutable(enabled);
+}
+
 void mixer_set_reverb_pre_delay(float pre_delay)
 {
     g_reverb.pre_delay = clamp01(pre_delay);

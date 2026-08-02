@@ -78,6 +78,7 @@ void apply_midi_cc3_4(float v);
 void apply_midi_program(float v);
 void apply_mix_reverb_decay(float v);
 void apply_mix_reverb_damp(float v);
+void apply_mix_reverb_mutable(float v);
 void apply_mix_reverb_spectral_position(float v);
 void apply_mix_reverb_spectral_width(float v);
 void apply_mix_reverb_pred(float v);

@@ -42,6 +42,7 @@ struct revb_global_state_t
     float predelay_current_samples;
     uint32_t predelay_write;
     uint8_t initialized;
+    uint8_t mutable_geometry;
 };
 
 static revb_global_state_t g_revb;
@@ -85,7 +86,7 @@ static void apply_params(void)
 
     g_revb.engine.set_amount(1.0f);
     g_revb.engine.set_input_gain(1.0f);
-    g_revb.engine.set_diffusion(clampf_local(diffusion, 0.0f, 0.95f));
+    g_revb.engine.set_diffusion(clampf_local(diffusion, 0.0f, 0.90f));
     g_revb.engine.set_time(clampf_local(time, 0.0f, 1.0f));
     g_revb.engine.set_lp(clampf_local(lp, 0.0f, 1.0f));
     g_revb.engine.set_output_filters(hp_fc / (1.0f + hp_fc),
@@ -135,6 +136,7 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.predelay_write = 0U;
     g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
     g_revb.initialized = 0U;
+    g_revb.mutable_geometry = 0U;
     memset(g_revb_predelay_buffer, 0, sizeof(g_revb_predelay_buffer));
     g_revb.engine.Init(g_revb_engine_buffer);
     g_revb.initialized = 1U;
@@ -174,6 +176,15 @@ void fx_reverb_revb_global_set_decay(float decay)
 void fx_reverb_revb_global_set_damp(float damp)
 {
     g_revb.damp = clamp01_local(damp);
+}
+
+void fx_reverb_revb_global_set_mutable(uint8_t enabled)
+{
+    const uint8_t next = (enabled != 0U) ? 1U : 0U;
+    if(g_revb.mutable_geometry == next)
+        return;
+    g_revb.mutable_geometry = next;
+    g_revb.engine.set_mutable_geometry(next != 0U);
 }
 
 void fx_reverb_revb_global_set_predelay(float predelay_s)

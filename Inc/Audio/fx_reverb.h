@@ -11,6 +11,7 @@ void fx_reverb_global_set_wet(float wet);
 void fx_reverb_global_set_size(float size);
 void fx_reverb_global_set_decay(float decay);
 void fx_reverb_global_set_damp(float damp);
+void fx_reverb_global_set_mutable(uint8_t enabled);
 void fx_reverb_global_set_predelay(float predelay_s);
 void fx_reverb_global_set_filter_hz(float low_cut_hz, float high_cut_hz);
 uint8_t fx_reverb_global_is_active(void);
