@@ -62,7 +62,8 @@ Require-Text $macro 'case TRACK_RUNTIME_PARAM_DOMAIN_CFG:' 'Macro lock interface
 Require-Text $mod 'if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)' 'Modulation catalog has no CFG guard'
 Require-Text $ui 'case TRACK_RUNTIME_PARAM_DOMAIN_CFG:' 'UI sequence resolver has no CFG guard'
 Forbid-Text $ui 'if (param == PARAM_CFG_POLY_VOICES) return 0U;' 'Stale VOICES-only UI guard remains'
-Require-Text $ui '&& (param != PARAM_CFG_POLY_SPREAD)) return 0U;' 'Structural undo does not cover SPREAD'
+Require-Text $ui '&& (param != PARAM_CFG_POLY_VOICES)) return 0U;' 'Structural undo guard changed unexpectedly'
+Forbid-Text $ui '&& (param != PARAM_CFG_POLY_SPREAD)) return 0U;' 'SPREAD remains on the structural undo path'
 
 Require-Text $registry 'if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))' 'Polyphony IDs are not handled together'
 Require-Text $registry 'return param_apply_non_filter_track_value_rt_fast(id, track, clamped);' 'RT apply path changed unexpectedly'

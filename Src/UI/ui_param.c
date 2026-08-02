@@ -1062,8 +1062,7 @@ static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, 
 static uint8_t ui_param_begin_structural_undo(uint8_t encoder, param_id_t param, uint8_t track)
 {
     if ((param != PARAM_CFG_TRACK) && (param != PARAM_CFG_TRACK_TYPE)
-            && (param != PARAM_CFG_POLY_VOICES)
-            && (param != PARAM_CFG_POLY_SPREAD)) return 0U;
+            && (param != PARAM_CFG_POLY_VOICES)) return 0U;
     if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_ENCODER,
             ui_param_make_gesture_key(encoder, param, track)) != UNDO_V2_STATUS_OK) return 0U;
     if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
