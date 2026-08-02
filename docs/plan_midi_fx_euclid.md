@@ -18,7 +18,7 @@ source clavier / MIDI / STEP
 
 Chaque slot conserve un état fixe. Un FX génératif publie des événements dans le même contrat que les événements entrants ; les événements différés reprennent la chaîne au slot suivant. Le terminal reste unique et devient le futur point de capture post-FX.
 
-L'implémentation recommandée pour cette première version est : `LENGTH` de 1 à 64, `PULSE` de 0 à `LENGTH`, masque déterministe pré-calculé, notes strictement actives, durée d'une occurrence égale à une position `DIV`, et paramètres Euclid non p-lockables tant que les règles de changement de cycle ne sont pas stabilisées. Une seule instance `EUCLID` est autorisée par piste ; l'instance `ARP` existante reste unique. Cet encadrement permet `ARP -> EUCLID` et `EUCLID -> ARP` sans file ni fan-out non borné.
+L'implémentation recommandée pour cette première version est : `LENGTH` de 1 à 64, `PULSE` de 0 à `LENGTH`, masque déterministe pré-calculé, notes strictement actives, durée d'une occurrence égale à une position `DIV`, et paramètres Euclid non p-lockables. Plusieurs slots `EUCLID` peuvent être chaînés : chaque instance possède sa phase, son masque, sa mémoire de notes et ses sorties bornées. Les quatre slots physiques constituent la borne structurelle ; la faisabilité de quatre instances simultanées doit être validée par mesure H743, avec refus atomique des occurrences au-delà du budget. L'unicité actuelle de l'ARP ne doit pas être copiée à EUCLID.
 
 L'audit est statique. Aucun code fonctionnel, aucune structure persistée et aucun build n'est modifié par cette passe.
 
@@ -29,13 +29,13 @@ Les décisions suivantes sont suffisamment étayées par le code actuel pour êt
 | Sujet | Décision v1 | Justification / autorité |
 |---|---|---|
 | Disponibilité | Seulement sur les pistes autorisées par `TRACK_CAPABILITY_MIDI_FX` et `TRACK_CAPABILITY_NOTES` | `Inc/Core/track_topology.h:52-59`, `Src/Core/track_topology.c:5-16`, `Src/Core/track_runtime.c:1466-1485` |
-| Modèle | `OFF = 0`, `ARP = 1`, `EUCLID = 2` ; un seul EUCLID par piste | L'ID est une extension append-only de `note_fx_model_t`; l'ARP est déjà rendu unique par `note_fx_state.c:65-78` |
+| Modèle | `OFF = 0`, `ARP = 1`, `EUCLID = 2` ; plusieurs EUCLID sont autorisés, au plus un par slot physique | L'ID est une extension append-only de `note_fx_model_t`; l'unicité ARP actuelle (`note_fx_state.c:65-78`) est une contrainte propre à ARP, pas une règle générale |
 | Paramètres | Slot Euclid : `LENGTH | PULSE | DIV | MODEL` | La banque fixe de quatre paramètres est dans `Src/UI/pages/ui_page_midi_fx.c:9-28` et `NOTE_FX_PARAM_COUNT` vaut 4 (`Inc/NoteFx/note_fx_state.h:8-10`) |
-| LENGTH | Entier 1..64, défaut 16 | 64 est la longueur maximale du pattern (`SEQ_MAX_STEPS`) et un masque de 64 bits ne coûte que 8 octets ; le domaine existant est déjà entier/enum |
-| PULSE | Entier 0..LENGTH, défaut 4 | `0` fournit explicitement un cycle silencieux ; l'invariant est vérifiable à chaque entrée, restauration et override |
+| LENGTH | Entier 1..64, défaut Euclid 16 | 64 est la longueur maximale du pattern (`SEQ_MAX_STEPS`) et un masque de 64 bits ne coûte que 8 octets ; le domaine existant est déjà entier/enum |
+| PULSE | Entier 0..LENGTH, défaut Euclid 4 | `0` fournit explicitement un cycle silencieux ; l'invariant est vérifiable à chaque entrée, restauration et override |
 | Correction | Si `LENGTH` devient inférieur à `PULSE`, appliquer `PULSE = min(PULSE, LENGTH)` et enregistrer la valeur effectivement appliquée | Aucun setter MIDI FX actuel ne garantit une relation entre deux paramètres (`Src/NoteFx/note_fx_state.c:15-22`); l'implémentation doit fermer cette lacune |
-| DIV | Domaine musical partagé avec les divisions existantes, conversion en période Q16 au runtime | Les divisions ne doivent pas être redéfinies dans Euclid ; le code actuel duplique déjà une table ARP locale (`Src/NoteFx/note_fx_engine.c:100-106`) et des labels séquence (`Src/Param/param_registry_catalog.c:82`, `:203`) |
-| Note courte | Une note n'est rejouée que tant que son Note On n'a pas reçu de Note Off | C'est la seule sémantique qui ne transforme pas silencieusement un jeu live en latch et elle correspond à l'ARP actuel (`Src/NoteFx/note_fx_engine.c:75-87`) |
+| DIV | Domaine musical partagé avec les divisions existantes, défaut Euclid `1/16`, conversion en période Q16 au runtime | Les divisions ne doivent pas être redéfinies dans Euclid ; le code actuel duplique déjà une table ARP locale (`Src/NoteFx/note_fx_engine.c:100-106`) et des labels séquence (`Src/Param/param_registry_catalog.c:82`, `:203`) |
+| Note courte | Une note n'est rejouée que tant que son Note On n'a pas reçu le Note Off correspondant | La durée d'entrée détermine le nombre de pulses alimentés ; une note courte peut ne produire aucun pulse. Cela ne transforme pas silencieusement le jeu live en latch et reste compatible avec l'ARP actuel (`Src/NoteFx/note_fx_engine.c:75-87`) |
 | Accord | Toutes les notes actives de l'instance sont rejouées ensemble sur un pulse, dans l'ordre stable d'entrée | L'ARP accepte déjà au plus 16 sources (`Inc/NoteFx/note_fx_arp.h:6-20`); Euclid reprend cette borne sans déduplication par occurrence |
 | Note Off généré | Off à `NoteOn + période(DIV)`, avec Off avant On au même sample | La durée d'entrée ne suffit pas pour un FX qui retrigger une note tenue ; la paire doit être autonome et différée |
 | Phase | Position 0 au premier matériau actif après `PLAY`; incrément une fois par position ; reset sur STOP, clear de pattern, changement de modèle, mute/panic | Le runtime séquence possède une timeline partagée et un nettoyage transport (`Src/Seq/seq_runtime_exec.c:407-430`, `Src/Seq/seq_play_scheduler.c:809-822`) |
@@ -44,7 +44,7 @@ Les décisions suivantes sont suffisamment étayées par le code actuel pour êt
 | Format | Pas de nouveau chemin de stockage ; les 4 octets de slot, le snapshot et `PatternSaveV1` restent l'autorité | `PatternSaveV1` contient déjà `note_fx[8]` (`Inc/Storage/pattern_live_ram.h:92-100`) ; l'ajout d'un enum ne change pas la forme |
 | Live Record futur | Aucun changement dans cette passe ; le terminal commun est le point de capture à documenter | Le terminal actuel est `note_fx_pipeline_terminal` (`Src/NoteFx/note_fx_pipeline.c:15-25`) |
 
-Le choix `PULSE = 0` est intentionnel : il est utile pour désactiver le rendu sans changer de modèle et évite d'introduire une convention cachée `PULSE >= 1`. Il ne doit produire ni Note On ni Note Off, mais les notes entrantes restent suivies tant que le slot est actif.
+Le choix `PULSE = 0` est intentionnel : il est utile pour désactiver le rendu sans changer de modèle et évite d'introduire une convention cachée `PULSE >= 1`. Il ne doit produire ni Note On ni Note Off, mais les notes entrantes restent suivies tant que le slot est actif. Une note longue peut donc être retrigger plusieurs fois ; une note courte qui ne chevauche aucune position active ne produit rien ; un accord reste disponible tant que chaque note est maintenue. Il n'y a ni latch implicite de la dernière note/du dernier accord, ni traitement spécial des notes STEP.
 
 ## 3. Cartographie de l'existant
 
@@ -54,7 +54,9 @@ Le choix `PULSE = 0` est intentionnel : il est utile pour désactiver le rendu s
 - Le mapping paramètre -> slot/paramètre est arithmétique (`Src/NoteFx/note_fx_state.c:38-49`). Toute extension doit préserver cet ordre, les 16 positions de p-lock `SEQ_PLOCK_SET_MIDI_FX` (`Src/Seq/seq_param_iface.c:99-115`, `:184-213`) et l'assertion `SEQ_PARAM_MIDI_FX_SLOT_COUNT == 16` (`Inc/Seq/seq_types.h:27-42`).
 - L'état de base MIDI FX est hors du tableau `PARAM_PERSIST_COUNT`, qui s'arrête à `PARAM_MIDI_FX_S1_PARAM1` (`Inc/Param/param_store.h:427-432`). Il est néanmoins persisté séparément dans `PatternSaveV1`, capturé/restauré par `pattern_live.c` et dans les snapshots de piste (`Inc/Storage/pattern_live_ram.h:92-100`, `Inc/Core/track_snapshot.h:46-67`).
 - `note_fx_state_set_param()` clamp les valeurs indépendamment et force `OFF` pour une valeur de modèle inconnue (`Src/NoteFx/note_fx_state.c:15-22`, `:81-104`). Il n'effectue aucune normalisation inter-paramètres et ne connaît que l'unicité ARP.
-- Les valeurs par défaut actuelles sont `{2, 0, 1, OFF}` (`Src/NoteFx/note_fx_state.c:9-13`) : elles signifient aujourd'hui `RATE=1/16`, `STYLE=ORDER`, `RANGE=1`. Pour EUCLID, le même tableau de quatre octets doit recevoir une normalisation par modèle ; la valeur `2` devient `LENGTH=16`, `0` devient `PULSE=4` pour le slot EUCLID, et `1` reste l'index DIV convenu. Cette projection doit être centralisée, pas dispersée dans l'UI.
+- Les valeurs par défaut actuelles sont `{2, 0, 1, OFF}` (`Src/NoteFx/note_fx_state.c:9-13`) et correspondent à `RATE=1/16`, `STYLE=ORDER`, `RANGE=1` pour ARP. Elles ne doivent jamais être réinterprétées comme des valeurs Euclid. Lors d'un changement de modèle, une autorité centrale du type `note_fx_apply_model_defaults(slot, model)` charge explicitement les défauts du modèle cible : ARP `RATE=1/16, STYLE=ORDER, RANGE=1`, EUCLID `LENGTH=16, PULSE=4, DIV=1/16`, et la politique définie pour OFF. Cette fonction est utilisée par l'API, l'UI, les changements de modèle par override, les resets, restaurations invalides, Undo/Redo, clipboard et chargements ; elle ne crée aucun stockage par modèle.
+
+La V1 ne conserve pas les réglages propres à un modèle lorsqu'il est quitté. Le scénario est donc `ARP personnalisé -> EUCLID = 16/4/1/16 -> ARP = défauts ARP`, et non une restauration des anciens RATE/STYLE/RANGE. Les quatre valeurs génériques du slot restent l'unique stockage de base ; un changement de modèle les remplace par les défauts de la cible. Une valeur persistée avec modèle EUCLID est seulement clampée/normalisée comme valeur EUCLID ; une combinaison de modèle inconnue ou de payload invalide retombe sur `OFF` et ses défauts.
 
 ### 3.2 Pipeline d'événements
 
@@ -89,6 +91,8 @@ Le runtime ARP comporte, par slot, 16 sorties possédées, une génération, un 
 - L'Undo paramètre passe par `param_registry_apply_track_value()` (`Src/Storage/undo_v2.c:373-423`); l'Undo snapshot stocke déjà les `note_fx_track_state_t` (`Inc/Storage/undo_v2.h:100-108`). Le changement de modèle ARP note aussi le slot déplacé dans l'UI (`Src/UI/ui_param.c:1494-1507`).
 - Le clipboard de piste capture/restaure `track_snapshot_t` (`Src/UI/ui_core_clipboard.c:409-433`, `:459-511`). Le clipboard de page/ensemble lit les paramètres par ID (`Src/UI/ui_core_clipboard.c:514-555`). Les mêmes chemins suffisent après ajout de la validation EUCLID.
 
+Le domaine MIDI FX rend aujourd'hui tous ses paramètres p-lockables (`Src/Seq/seq_param_iface.c:436-462`), mais la V1 Euclid doit ajouter un refus central et track-aware pour `LENGTH`, `PULSE` et `DIV`, utilisable par l'autorité p-lock et par l'application runtime, pas seulement par l'UI. Le modèle peut conserver le comportement p-lockable existant si le système l'exige ; un changement de modèle vers ou depuis EUCLID charge toutefois les défauts de la cible. Aucun override runtime partiel de L/P/DIV ne doit être accepté. Un p-lock historique ou invalide sur ces paramètres est ignoré ou normalisé sans effet partiel. Leur éventuelle activation fera l'objet d'un chantier séparé.
+
 ### 3.6 Recherche obligatoire et résultats négatifs
 
 Recherches effectuées dans `Src`, `Inc`, `tests` et `docs` :
@@ -108,7 +112,7 @@ Recherches effectuées dans `Src`, `Inc`, `tests` et `docs` :
 | Cible | État actuel | Écart à fermer |
 |---|---|---|
 | Quatre slots ordonnés | Un seul ARP recherché, indépendamment de sa position | Introduire un passage slot par slot et un contexte de continuation |
-| EUCLID modèle 2 | Enum ne contient que OFF/ARP | Ajouter ID, labels, clamping et unicité Euclid |
+| EUCLID modèle 2 | Enum ne contient que OFF/ARP | Ajouter ID, labels, clamping et état indépendant par slot ; ne pas imposer l'unicité actuelle de l'ARP |
 | Trois paramètres EUCLID | Descripteurs génériques RATE/STYLE/RANGE | Descripteurs par modèle, domaine `LEN/PULS/DIV` dans la banque inchangée |
 | Notes maintenues et accords | ARP sait mémoriser 16 notes mais par hauteur seulement | État EUCLID fixe avec hauteur, vélocité, source/token et compte d'activité |
 | Notes courtes | Aucun contrat hors ARP | Documenter et tester strictement actif ; pas de latch implicite |
@@ -116,8 +120,21 @@ Recherches effectuées dans `Src`, `Inc`, `tests` et `docs` :
 | Note Off exact | token/generation internes, terminal et output guard essentiellement par hauteur | Faire traverser l'identité d'occurrence jusqu'au terminal et fermer exactement une occurrence |
 | Horloge DIV unique | table ARP et domaine séquence distincts | créer une table/catalogue musical canonique et des conversions |
 | Phase transport | cleanup général existe ; Euclid n'existe pas | définir reset, suspension, pattern change et reconfiguration |
-| P-lock | MIDI FX entierement p-lockable par domaine | refuser explicitement les 3 paramètres EUCLID en v1, ou implémenter un contrat complet ultérieurement |
+| P-lock | MIDI FX entièrement p-lockable par domaine | refuser explicitement les 3 paramètres EUCLID en v1 dans l'autorité track-aware ; le modèle conserve son comportement existant |
 | Live Record post-FX | capture actuelle en amont/chemins séparés, pas de capture terminale | conserver le terminal commun comme seam ; hors chantier |
+
+### Classement des écarts et dettes
+
+| Problème | Classe | Traitement dans ce plan |
+|---|---|---|
+| Les quatre slots ne s'exécutent pas dans leur ordre et les sorties différées vont directement au terminal | Bloquant Euclid | Étape 1 : chaîne ordonnée, continuation au slot suivant, terminal unique |
+| L'identité de source/occurrence est perdue avant le terminal | Bloquant Euclid | Étape 5 : token, génération et fermeture exacte des paires |
+| Il n'existe qu'une recherche implicite du premier ARP | Bloquant Euclid pour la chaîne générique | Étape 1 : dispatch par index de slot ; l'unicité ARP reste sa propre règle |
+| Défauts génériques de paire scheduler Z4-002 et horodatage NoteFx Z4-004 | Dette générale révélée par Euclid | Correction minimale seulement si nécessaire à l'atomicité et au sample des paires Euclid ; le reste reste séparé |
+| Multi-écriture runtime NoteFx et budget recréé par sous-segment (Z1-002/Z1-003) | Dette générale révélée par Euclid | Fermer seulement le propriétaire/file et le budget requis par Euclid ; ne pas refondre toute la politique Z1 |
+| Acquittement USB/moteur et politique globale de polyphonie | Hors chantier | Le terminal et l'autorité de destination restent responsables ; Euclid borne ses propres événements |
+| HARMONY, GATE et PROBABILITY absents | Hors chantier | Décrire leurs contrats futurs, sans implémenter ni leur inventer des IDs |
+| Capture Live Record post-FX | Hors chantier | Préserver le seam terminal uniquement |
 
 ## 5. Sémantique recommandée des notes entrantes
 
@@ -183,8 +200,8 @@ Le chemin chaud ne fait pas de division musicale et ne recalcule pas Bjorklund. 
 | `STOP` | fermer chaque sortie, vider les sources, invalider les échéances et remettre phase/motif à l'état initial |
 | `CONTINUE` après STOP | même état propre qu'un nouveau départ, phase 0 ; aucune note stale ne survit |
 | changement de pattern | cleanup de tous les slots de la piste avant restauration ; phase 0 |
-| changement de modèle | fermeture immédiate, purge du runtime du slot, puis configuration du nouveau modèle |
-| `OFF` | fermeture et purge du slot ; les trois valeurs restent stockées pour une prochaine sélection |
+| changement de modèle | fermeture immédiate, purge du runtime du slot, puis `note_fx_apply_model_defaults(slot, model)` pour le modèle cible |
+| `OFF` | fermeture et purge du slot ; appliquer les défauts OFF ; aucune valeur du modèle quitté n'est conservée pour une prochaine sélection |
 | changement `LENGTH/PULSE/DIV` base autorisé | fermer les occurrences, normaliser, reconstruire le masque et repartir phase 0 |
 | p-lock EUCLID v1 | refus avant exécution ; aucun effet partiel |
 | mute | suspendre et purger ; pas d'avancement de phase |
@@ -195,6 +212,8 @@ Le chemin chaud ne fait pas de division musicale et ne recalcule pas Bjorklund. 
 | note relâchée à l'arrêt | supprimer la source ; aucun Note Off généré si aucune occurrence n'est active |
 
 Le changement de paramètre en direct doit être traité comme une transition transactionnelle : snapshot des sorties, émission de leurs Off, changement de valeurs, normalisation `PULSE <= LENGTH`, reconstruction du masque, publication du nouveau runtime. Il ne faut jamais laisser une occurrence utiliser une ancienne échéance avec une nouvelle génération.
+
+Le changement de modèle suit la même transition, mais ajoute l'initialisation explicite des valeurs : `OFF -> ARP` charge les défauts ARP, `OFF -> EUCLID` charge `16/4/1/16`, `ARP -> EUCLID` ne conserve aucun RATE/STYLE/RANGE, et `EUCLID -> ARP` recharge les défauts ARP. Un changement de modèle par p-lock, s'il reste autorisé par le contrat existant, applique les défauts du modèle cible à l'overlay runtime et les réapplique au retour à la base ; il ne peut pas injecter simultanément L/P/DIV. Reset, chargement invalide, Undo/Redo et clipboard appellent la même autorité de défauts.
 
 ### 6.3 Masque et algorithme
 
@@ -212,6 +231,8 @@ L'implémentation doit :
 - fournir une fonction de test pure `euclid_build_mask(length, pulse)` indépendante de l'audio.
 
 Le calcul direct par `floor(i * PULSE / LENGTH)` serait suffisant mais donnerait une orientation implicite et une division par position si mal placé. Le masque pré-calculé est préférable : 8 octets par slot, soit 256 octets pour 32 slots, coût négligeable face aux buffers existants.
+
+Chaque occurrence EUCLID dure exactement une position `DIV` : son échéance est `Note On + période(DIV)`. Ce n'est pas un legato implicite. Si un Note Off et le prochain Note On tombent au même sample, l'Off est émis avant l'On. Un futur `GATE` placé après Euclid pourra modifier cette durée s'il conserve les identités d'occurrence ; un `GATE` placé avant agit sur la matière entrante et ne change pas la durée des occurrences Euclid. Un changement de DIV ferme d'abord les occurrences existantes, puis repart avec la nouvelle période et la phase définie par la transition. Aucun ancien Off ne peut couper l'occurrence nouvelle.
 
 ## 7. Architecture des Note On/Off
 
@@ -261,7 +282,7 @@ Le terminal futur devra offrir une surcharge ou un contexte qui conserve l'ident
 
 ### 7.4 Interaction avec le moteur local et MIDI externe
 
-Le nombre d'entrées Euclid n'est pas limité par `VOICES` au moment du stockage. L'admission terminale reste responsable de la capacité de destination : au plus 8 voix synth prévues par le chantier de polyphonie, tandis qu'une sortie MIDI externe peut conserver jusqu'à la limite explicitement définie du contrat MIDI FX. La réduction doit être stable et se faire avant l'appel moteur ; elle ne doit jamais produire un On sans Off.
+Le nombre d'entrées et d'occurrences Euclid n'est pas limité par `VOICES` au moment du stockage ou du fan-out. Euclid possède seulement ses bornes internes ; l'admission terminale appartient au moteur interne, à l'autorité globale de polyphonie du HEAD courant ou à la sortie MIDI externe. La réduction éventuelle de destination doit être stable et se faire avant l'appel moteur ; elle ne doit jamais produire un On sans Off. Euclid ne redéfinit ni ne modifie la limite globale de huit voix synth du chantier de polyphonie.
 
 Les appels existants `midi_note_on/off()` et `seq_play_scheduler_emit_engine_note()` ne retournent pas d'acquittement suffisant (`docs/audits/z4_scheduler_clock_midi_debt_audit.md`, sections Z4-002/Z4-003). L'étape d'intégration doit donc fermer les couples au niveau du contrat local avant le terminal et instrumenter les drops ; elle ne doit pas prétendre que l'acceptation USB ou moteur est garantie.
 
@@ -273,6 +294,10 @@ L'API future doit porter explicitement `slot_index` et continuer l'événement v
 
 L'architecture ne doit pas devenir un graphe général : quatre appels séquentiels, fan-out maximal fixe et retour terminal unique suffisent. L'ordre `[0,1,2,3]` est l'ordre produit. Aucun modèle ne doit rechercher un slot par type comme le fait actuellement l'ARP à `note_fx_engine.c:68-71`.
 
+`EUCLID -> EUCLID` est techniquement propre si chaque instance possède son propre `phase`, `mask`, tableau de 16 sources et tableau de sorties. Le premier Euclid publie des occurrences normales ; le second ne voit que les occurrences strictement actives qu'il reçoit. Il ne réutilise ni la phase ni le masque du premier. Avec des DIV différents, plusieurs occurrences amont peuvent être actives simultanément : le second applique alors sa borne de 16 sources, refuse les nouvelles occurrences au-delà de cette borne et incrémente sa saturation. Une note peut donc disparaître par refus borné, mais jamais créer une file ou un fan-out infini.
+
+La recommandation est d'autoriser plusieurs Euclid, jusqu'aux quatre slots physiques, sans règle produit « un seul générateur par piste ». Cette autorisation reste conditionnée à la validation du budget H743 ; si la mesure échoue, une limite inférieure devra être introduite explicitement dans une décision de capacité mesurée, et non déduite de l'unicité ARP. Chaque slot garde au plus 16 sources, produit au plus 16 occurrences par pulse et réserve chaque paire complète. Le dispatch conserve un quota par piste et par demi-buffer ; la saturation refuse l'occurrence complète après traitement des Off échus.
+
 ### 8.2 Matrice des combinaisons demandées
 
 Les modèles HARMONY, GATE et PROBABILITY n'existent pas encore dans le HEAD. Les lignes ci-dessous définissent le contrat à préserver pour leur arrivée ; elles ne constituent pas une extension de cette passe.
@@ -281,14 +306,14 @@ Les modèles HARMONY, GATE et PROBABILITY n'existent pas encore dans le HEAD. Le
 |---|---|---|---|
 | `ARP -> EUCLID` | ARP séquence les notes entrantes ; EUCLID pulse la note actuellement sortie par ARP | Supporté après chaîne et identités ; les notes ARP courtes peuvent disparaître avant le pulse Euclid suivant | Contrat strict-actif explicite ; vérifier fan-out limité à 16 |
 | `EUCLID -> ARP` | EUCLID produit un accord rythmique ; ARP sérialise les notes reçues | Supporté après réinjection par stage | Vérifier qu'un Off Euclid ferme la source correspondante ARP sans vider les autres |
-| `HARMONY -> EUCLID` | Harmony produit un groupe enfant ; Euclid rejoue le groupe actif | Modèle absent ; compatible seulement si Harmony porte parent/child IDs | Cap à 16 notes et admission locale à 8 voix |
+| `HARMONY -> EUCLID` | Harmony produit un groupe enfant ; Euclid rejoue le groupe actif | Modèle absent ; compatible seulement si Harmony porte parent/child IDs | Cap Euclid à 16 sources ; la destination décide ensuite sa capacité |
 | `EUCLID -> HARMONY` | Euclid produit des parents ; Harmony produit des enfants à fermer par parent | Modèle absent ; contrat possible | Risque de multiplication ; cap d'enfants obligatoire, Off parent/enfants atomiques |
 | `GATE -> EUCLID` | Gate laisse passer/supprime des sources avant mémoire Euclid | Modèle absent ; aucune hypothèse dans Euclid | Tester suppression avant pulse et absence d'entrée zombie |
 | `EUCLID -> GATE` | Gate filtre les On/Off Euclid en conservant les tokens | Modèle absent ; doit être un filtre d'événements, pas un moteur direct | Tester Off garanti même si Gate supprime un On |
 | `PROBABILITY -> EUCLID` | Probability décide quelles sources alimentent Euclid | Modèle absent ; compatible si la décision est stable par occurrence | Tester drop avant pulse et répétabilité sous seed |
 | `EUCLID -> PROBABILITY` | Probability décide chaque occurrence produite | Modèle absent ; le token doit survivre au drop | Tester qu'un On refusé n'a pas d'Off et qu'un On accepté en a exactement un |
 
-La validation v1 doit également refuser explicitement une seconde instance EUCLID sur la même piste. Elle ne doit pas l'activer silencieusement ou prendre le premier slot comme le code ARP actuel.
+La validation v1 doit accepter une seconde instance EUCLID et vérifier qu'elle possède un état indépendant. Elle ne doit ni la désactiver silencieusement ni prendre le premier slot comme le code ARP actuel ; seule une saturation de bornes ou un budget H743 mesuré peut refuser une occurrence ou justifier une limite de capacité documentée.
 
 ### 8.3 Futur point de capture post-FX
 
@@ -302,26 +327,29 @@ Le point à préserver est `note_fx_pipeline_terminal()` avant son adaptation fi
 |---|---:|
 | Pistes | 8 Play, aucune Special/audio pure |
 | Slots | 4 par piste |
-| EUCLID actif | 0 ou 1 par piste |
+| EUCLID actif | 0..4 par piste, un par slot ; autorisation finale conditionnée à la mesure H743 |
 | ARP actif | 0 ou 1 par piste, convention existante |
-| Sources mémorisées par EUCLID | 16 |
-| Notes produites par pulse | 16 avant admission de destination |
-| Active outputs simultanées par EUCLID | 16 |
+| Sources suivies par EUCLID | 16 par instance |
+| Notes produites par pulse et par EUCLID | 16 avant admission de destination |
+| Active outputs simultanées par EUCLID | 16, avec refus des occurrences au-delà de la capacité |
 | LENGTH | 1..64 |
 | PULSE | 0..LENGTH |
 | Masque | 64 bits |
 | Profondeur de chaîne | 4 slots, pas de récursion externe |
 | Allocations | aucune dynamique |
 
-La borne `16` est cohérente avec `NOTE_FX_MAX_OUTPUTS` et `NOTE_FX_ARP_MAX_SOURCES`. La borne de synthèse à 8 ne doit pas être injectée dans la mémoire musicale Euclid ; elle appartient à l'admission locale et au chantier de polyphonie.
+La borne `16` est cohérente avec `NOTE_FX_MAX_OUTPUTS` et `NOTE_FX_ARP_MAX_SOURCES`. La borne de synthèse à 8 ne doit pas être injectée dans la mémoire musicale Euclid ; elle appartient à l'admission de destination et au chantier de polyphonie.
 
 ### 9.2 Coût estimatif à mesurer
 
 - Masques : 32 slots × 8 octets = 256 octets.
 - Sources Euclid : 32 slots × 16 entrées × au moins 4 octets (note, vélocité, validité, index) avant alignement ; prévoir le token et la génération dans le budget exact `sizeof`.
 - Sorties actives : 32 slots × 16 identités, avec échéance 64 bits et token 32 bits ; mesurer en D2/DTCM selon le placement actuel de NoteFx.
-- Au pulse maximal, un slot peut publier 16 On et programmer 16 Off. Un track avec ARP + EUCLID doit être borné par un quota partagé ; le budget historique de 8 émissions par track et appel (`note_fx_engine.c:113-127`) est insuffisant et ne doit pas être simplement multiplié sans mesure.
-- Le plan d'implémentation doit retenir un budget par demi-buffer, pas par sous-segment. Toute émission refusée doit suivre une politique déterministe : fermer d'abord les occurrences échues, puis refuser l'occurrence complète On+Off restante.
+- Au pulse maximal, un slot peut publier 16 On et programmer 16 Off. Deux Euclid chaînés peuvent donc traiter jusqu'à 32 sources/occurrences par frontière, et quatre slots Euclid jusqu'à 64 sources/occurrences logiques et 128 transitions On/Off par pulse et par piste avant les drops de capacité. Pour 8 pistes, l'enveloppe syntaxique maximale est 1024 transitions par pulse ; elle ne constitue pas une preuve de faisabilité temps réel.
+- Un track avec quatre EUCLID doit être mesuré avec la division la plus rapide autorisée et `PULSE=LENGTH`. Le budget historique de 8 émissions par track et appel (`note_fx_engine.c:113-127`) est insuffisant et ne doit pas être simplement multiplié sans mesure. La recommandation reste d'autoriser les quatre slots, avec un quota fixe par piste et demi-buffer ; si la mesure H743 échoue, une limite inférieure de générateurs devra être introduite et justifiée par les cycles/high-water observés.
+- Le plan d'implémentation doit retenir un budget par demi-buffer, pas par sous-segment. Toute émission refusée suit la même politique : traiter d'abord les Off échus, ne jamais accepter un On sans réservation de son Off, refuser l'occurrence complète, incrémenter la saturation et ne jamais allouer dynamiquement.
+
+Cette politique est identique pour une instance, deux Euclid chaînés, quatre slots et huit pistes : aucun cache chaud, pool dynamique, file sans borne ou capacité variable par échauffement ne participe à la décision. La destination peut ensuite refuser/réduire selon ses propres règles, mais Euclid ne transforme jamais ce refus en On partiel.
 
 Les coûts réels doivent être mesurés sur H743 dans les builds `Release Low-Cost` et `Release Premium`. `TestPremium` n'est pas requis.
 
@@ -335,18 +363,20 @@ Les coûts réels doivent être mesurés sur H743 dans les builds `Release Low-C
 4. Aucun Off d'une génération précédente ne peut fermer une occurrence nouvelle.
 5. Une sortie générée traverse tous les slots suivants et n'appelle jamais directement un moteur.
 6. `PULSE=0` ne produit aucun événement.
-7. Le nombre de sources, sorties, événements différés et profondeur de chaîne est borné par des constantes compilées.
-8. Les événements d'un même sample sont ordonnés Off avant On pour une même identité/hauteur.
-9. Le runtime phase/mask/active outputs n'est ni persisté ni copié dans Pattern, Project, clipboard ou Undo.
-10. Le changement de modèle, de pattern, de piste, de mute, de transport ou de paramètre ferme avant d'invalider.
-11. La division musicale possède une seule table canonique.
-12. Les pistes sans capacités adéquates ne peuvent ni exposer ni modifier les paramètres MIDI FX.
-13. Une saturation refuse une occurrence complète, sans Note Off orphelin.
-14. Le terminal commun est le seul point qui atteint MIDI et moteurs et reste identifiable pour le futur Live Record.
+7. Chaque instance EUCLID possède une phase, un masque, une mémoire de sources et des sorties indépendants ; une piste peut en avoir jusqu'à quatre, un par slot.
+8. Le nombre de sources, sorties, événements différés, fan-out et profondeur de chaîne est borné par des constantes compilées.
+9. Les événements d'un même sample sont ordonnés Off avant On pour une même identité/hauteur.
+10. Le runtime phase/mask/active outputs n'est ni persisté ni copié dans Pattern, Project, clipboard ou Undo.
+11. Le changement de modèle, de pattern, de piste, de mute, de transport ou de paramètre ferme avant d'invalider et recharge les défauts du modèle cible.
+12. La division musicale possède une seule table canonique.
+13. Les pistes sans capacités adéquates ne peuvent ni exposer ni modifier les paramètres MIDI FX.
+14. Une saturation refuse une occurrence complète, incrémente un compteur et n'émet jamais de Note Off orphelin.
+15. Euclid ne décide pas de la polyphonie globale de la destination ; le terminal et les moteurs conservent leur autorité.
+16. Le terminal commun est le seul point qui atteint MIDI et moteurs et reste identifiable pour le futur Live Record.
 
 ### Risques à traiter par les étapes
 
-Les risques confirmés ou plausibles sont : notes pendantes lors d'un reset/stop, anciens Off par hauteur, re-déclenchements qui se chevauchent, accord modifié pendant un pulse, note courte sans pulse, saturation de 16 sources, explosion `EUCLID -> HARMONY` future, ordre de slots actuellement faux, changement de modèle pendant lecture, changement DIV sous une occurrence active, dérive due à une seconde horloge, budget recréé par sous-segment, incohérence UI/runtime/persistance, et événement généré qui contourne les slots suivants.
+Les risques confirmés ou plausibles sont : notes pendantes lors d'un reset/stop, anciens Off par hauteur, re-déclenchements qui se chevauchent, accord modifié pendant un pulse, note courte sans pulse, saturation de 16 sources par instance, multiplication bornée mais coûteuse de `EUCLID -> EUCLID`, explosion `EUCLID -> HARMONY` future, ordre de slots actuellement faux, changement de modèle pendant lecture, valeurs ARP accidentellement réinterprétées en EUCLID, changement DIV sous une occurrence active, dérive due à une seconde horloge, budget recréé par sous-segment, incohérence UI/runtime/persistance, p-lock L/P/DIV accepté par le mauvais chemin, et événement généré qui contourne les slots suivants.
 
 Chaque risque doit avoir au moins un test dans la matrice de la section 12. Un compteur de drop ou de saturation est recommandé pour le diagnostic, mais ne remplace pas l'invariant de fermeture.
 
@@ -361,6 +391,8 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 **Fichiers et symboles probablement concernés.** `Inc/NoteFx/note_fx_engine.h`, `Src/NoteFx/note_fx_engine.c`, `Inc/NoteFx/note_fx_pipeline.h`, `Src/NoteFx/note_fx_pipeline.c`, `Src/Audio/audio.c`, `Src/Seq/seq_play_scheduler.c`, éventuellement `Inc/Seq/seq_play_scheduler.h`; `note_fx_engine_source`, `note_fx_engine_process`, `note_fx_pipeline_terminal`, `note_fx_pipeline_submit`, `note_fx_pipeline_frames_until_deadline`.
 
 **Changements précis attendus.** Ajouter `stage/next_slot`, source/parent identity et une continuation bornée ; faire passer chaque événement dans les slots 0..3 ; faire transiter les sorties différées au stage suivant ; conserver un seul terminal ; transmettre le sample d'application réel ; introduire un owner unique de la mutation runtime ou une file fixe de commandes si l'audit Z1 reste applicable.
+
+Cette étape ne traite que les prérequis Euclid. La correction de propriété/file et d'horodatage est incluse seulement si elle est nécessaire aux événements Euclid ; les dettes Z1/Z4 générales, l'acquittement USB et la polyphonie globale restent hors chantier selon le classement de la section 4.
 
 **Invariants à préserver.** Sources clavier et scheduler convergent ; OFF traverse la même chaîne que ON ; aucun appel moteur depuis un slot ; 4 slots maximum ; pas d'allocation ; cleanup idempotent ; `OFF` est transparent.
 
@@ -384,7 +416,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Fichiers et symboles probablement concernés.** `Inc/NoteFx/note_fx_state.h`, `Src/NoteFx/note_fx_state.c`, `Inc/Param/param_store.h`, `Src/Param/param_registry_catalog.c`, `Src/Param/param_registry.c`, `Inc/Seq/seq_types.h`, `Src/Seq/seq_param_iface.c`, `Inc/Seq/seq_param_iface.h`, catalogue partagé à créer sous `Inc/Seq`/`Src/Seq`.
 
-**Changements précis attendus.** Ajouter l'ID enum EUCLID append-only ; labels et domaines `LENGTH 1..64`, `PULSE 0..64`, DIV canonique ; normaliser par slot et modèle ; appliquer `PULSE=min(PULSE,LENGTH)` dans set/restore/runtime override ; empêcher une seconde instance EUCLID ; préserver les 16 positions p-lock et les IDs persistants existants.
+**Changements précis attendus.** Ajouter l'ID enum EUCLID append-only ; labels et domaines `LENGTH 1..64`, `PULSE 0..64`, DIV canonique ; normaliser par slot et modèle ; appliquer `PULSE=min(PULSE,LENGTH)` dans set/restore ; introduire `note_fx_apply_model_defaults(slot, model)` ou l'équivalent central ; autoriser plusieurs EUCLID, un par slot, sans stockage par modèle ; préserver les 16 positions p-lock et les IDs persistants existants.
 
 **Invariants à préserver.** Aucun ID réservé réutilisé ; `PARAM_COUNT` et offsets cohérents ; valeurs inconnues -> OFF ou valeur sûre ; seules pistes MIDI FX + notes autorisées ; ARP reste unique ; les valeurs de slot restent quatre octets.
 
@@ -392,7 +424,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Dépendances.** Étape 1 pour le modèle générique et le reset de slot.
 
-**Validations ciblées.** Tests de clamp, défauts, second EUCLID, changement OFF/ARP/EUCLID, restauration snapshot ; assertions param/p-lock ; script de persistance existant.
+**Validations ciblées.** Tests de clamp, défauts `16/4/1/16`, deux puis quatre EUCLID, changement `OFF/ARP/EUCLID` dans les deux sens, restauration snapshot ; assertions param/p-lock ; script de persistance existant.
 
 **Recherches négatives.** Vérifier qu'il n'existe qu'une table de divisions, qu'aucun domaine DIV concurrent n'est ajouté et qu'aucun runtime `phase/mask/owned` n'entre dans une structure de Pattern.
 
@@ -456,7 +488,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Fichiers et symboles probablement concernés.** `Inc/NoteFx/note_fx_engine.h`, `Src/NoteFx/note_fx_engine.c`, `Src/NoteFx/note_fx_pipeline.c`, `Src/Seq/seq_play_scheduler.c`, `Src/Seq/seq_output_guard.c`, éventuellement nouveau module de queue fixe `Src/NoteFx`.
 
-**Changements précis attendus.** Token d'occurrence et génération par On/Off ; échéance `On + DIV`; ordre Off/On au même sample ; réservation atomique du couple ; file différée fixe ; reprise au `next_slot`; terminal enrichi de l'identité ; admission locale stable à 8 voix synth et borne MIDI explicite.
+**Changements précis attendus.** Token d'occurrence et génération par On/Off ; échéance `On + DIV`; ordre Off/On au même sample ; réservation atomique du couple ; file différée fixe ; reprise au `next_slot`; terminal enrichi de l'identité ; bornes Euclid indépendantes de `VOICES` ; admission finale laissée au moteur, à l'autorité globale de polyphonie et à la sortie MIDI externe.
 
 **Invariants à préserver.** zéro note pendante, zéro Off obsolète, aucun doublon incontrôlé, aucun On sans Off accepté, aucun callback direct moteur/MIDI, quota par demi-buffer et non par sous-segment.
 
@@ -464,7 +496,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Dépendances.** Étapes 1 et 4 ; dépend des bornes de la section 9.
 
-**Validations ciblées.** pulse dense, P=L, changement DIV avec occurrences actives, saturation de file à 0/1/2 places, même note répétée, ARP avant/après, absence d'Off tardif après model/mute/panic, point terminal unique.
+**Validations ciblées.** pulse dense, P=L, deux et quatre Euclid chaînés, changement DIV avec occurrences actives, saturation de file à 0/1/2 places, même note répétée, ARP avant/après, absence d'Off tardif après model/mute/panic, point terminal unique.
 
 **Recherches négatives.** `midi_note_on`, `midi_note_off`, `*_runtime_note_on/off` absents des modules Euclid ; aucune file non bornée ; aucun token basé uniquement sur hauteur.
 
@@ -480,7 +512,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Fichiers et symboles probablement concernés.** `Src/UI/pages/ui_page_midi_fx.c`, `Src/Param/param_registry_catalog.c`, `Src/UI/ui_param.c`, `Src/UI/ui_renderer_template.c` si le nom de descriptor est rendu directement, tests UI statiques existants.
 
-**Changements précis attendus.** Labels et valeurs par modèle ; clamp visuel ; modèle EUCLID ; affichage `-` quand OFF ; invalidation après changement de modèle/paramètre ; encoder inactif pour les trois params quand OFF ; conservation des quatre subpages et de l'ordre imposé.
+**Changements précis attendus.** Labels et valeurs par modèle ; afficher les defaults réellement chargés après un changement (`LEN=16`, `PULS=4`, `DIV=1/16` pour EUCLID) ; ne jamais afficher une réinterprétation brute ARP ; clamp visuel ; modèle EUCLID ; affichage `-` quand OFF ; invalidation après changement de modèle/paramètre ; encoder inactif pour les trois params quand OFF ; conservation des quatre subpages et de l'ordre imposé.
 
 **Invariants à préserver.** ARP conserve RATE/STYLE/RANGE ; aucune page supplémentaire ; page inaccessible sur Special/looper non admissible ; UI ne devient jamais l'autorité runtime.
 
@@ -504,7 +536,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Fichiers et symboles probablement concernés.** `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `Inc/Core/track_snapshot.h`, `Src/Core/track_snapshot.c`, `Inc/Storage/undo_v2.h`, `Src/Storage/undo_v2.c`, `Src/UI/ui_core_clipboard.c`, `Src/Seq/seq_param_iface.c`, tests `note_fx_*`.
 
-**Changements précis attendus.** Normaliser au capture/restore/default ; conserver seulement les quatre octets de base ; ne jamais sérialiser runtime ; faire enregistrer les valeurs effectivement clampées dans Undo ; conserver duplication et clipboard de track/page ; rendre `seq_param_iface_is_param_plockable()` faux pour les trois paramètres EUCLID et fournir une réponse stable au p-lock refusé ; ne pas modifier le format V1 si aucun `sizeof` ne change.
+**Changements précis attendus.** Normaliser au capture/restore/default ; charger les défauts du modèle cible à chaque changement de modèle ; conserver seulement les quatre octets de base ; ne jamais sérialiser runtime ; faire enregistrer les valeurs effectivement clampées dans Undo ; conserver duplication et clipboard de track/page ; rendre le refus track-aware de `LENGTH/PULSE/DIV` EUCLID stable dans l'autorité p-lock et runtime, tout en conservant le comportement autorisé du MODEL ; ne pas modifier le format V1 si aucun `sizeof` ne change.
 
 **Invariants à préserver.** Pattern/Project/snapshot/clipboard/Undo restaurent le même état de base ; runtime est nettoyé avant restauration ; aucun p-lock partiellement appliqué ; aucune compatibilité historique ajoutée.
 
@@ -524,11 +556,11 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 ### Étape 8 — Interactions, budgets et validation finale
 
-**Objectif.** Fermer les interactions multi-FX, la capacité des pistes et les preuves de non-régression avant livraison.
+**Objectif.** Fermer les interactions multi-FX, le comportement de plusieurs Euclid, les budgets internes et les preuves de non-régression avant livraison.
 
 **Fichiers et symboles probablement concernés.** tests `note_fx_runtime_test.c`, nouveaux tests Euclid/chain, scripts `note_fx_pipeline_validation.ps1`, `note_fx_plock_validation.ps1`, `note_fx_persistence_validation.ps1`, `tests/CMakeLists.txt`, instrumentation NoteFx/audio, documentation d'architecture concernée.
 
-**Changements précis attendus.** Ajouter les tests de matrice, diagnostics de saturation/overflow, mesures de cycles et high-water par demi-buffer, vérification 8 pistes × 4 slots, validation capacité synth 8 et sortie MIDI, et correction uniquement des écarts découverts dans le périmètre Euclid.
+**Changements précis attendus.** Ajouter les tests de matrice, `EUCLID -> EUCLID` à 2 et 4 slots, diagnostics de saturation/overflow, mesures de cycles et high-water par demi-buffer avec 16 notes, `PULSE=LENGTH` et DIV la plus rapide, vérification 8 pistes × 4 slots, puis correction uniquement des écarts découverts dans le périmètre Euclid. La mesure observe l'autorité globale de polyphonie sans la modifier.
 
 **Invariants à préserver.** Aucun refactor opportuniste ; aucun changement Special/Master/Slave ; aucun TestPremium ; builds Release Low-Cost et Release Premium obligatoires.
 
@@ -536,7 +568,7 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 **Dépendances.** Étapes 1 à 7.
 
-**Validations ciblées.** Toute la matrice section 12, tests host, scripts statiques et tests manuels matériel sur les deux variantes.
+**Validations ciblées.** Toute la matrice section 12, tests host, scripts statiques et tests manuels matériel sur les deux variantes ; si quatre instances dépassent le budget mesuré, enregistrer la borne inférieure justifiée et sa politique de refus dans la documentation avant le commit.
 
 **Recherches négatives.** `git diff` limité aux fichiers de l'étape ; absence de code fonctionnel non lié ; absence de push ; absence de modifications dans le worktree hors scope.
 
@@ -550,29 +582,29 @@ Chaque étape part du HEAD courant, ne modifie pas les changements parallèles, 
 
 | # | Cas | Attendu automatisé | Attendu matériel / diagnostic |
 |---:|---|---|---|
-| 1 | Note tenue, E(3,8), E(5,16), E(1,1) | masque et On/Off répétés exactement | phase stable, aucun jitter hors tolérance |
-| 2 | Accord tenu de 2, 8 et 16 notes | toutes les notes actives par pulse, ordre stable | aucun double/voix pendante |
-| 3 | Nouvelle note pendant cycle | pulse suivant utilise l'ensemble courant | changement audible au boundary défini |
-| 4 | Relâchement avant pulse suivant | note absente du prochain pulse, Off exact | aucune note fantôme |
+| 1 | Note longue chevauchant plusieurs pulses | même source retriggerée à chaque bit actif, Off à chaque échéance | phase stable, aucun jitter hors tolérance |
+| 2 | Note courte ne chevauchant aucun pulse | zéro occurrence générée, aucune note mémorisée après Off | aucune note fantôme |
+| 3 | Note courte chevauchant exactement un pulse | une paire On/Off exacte | absence de latch audible |
+| 4 | Accord tenu puis partiellement relâché | les notes encore actives restent au pulse suivant, la note relâchée disparaît | aucun double/voix pendante |
 | 5 | `PULSE=0` | zéro On/Off généré | silence sans erreur |
 | 6 | `PULSE=LENGTH` | On à chaque position, exactement L pulses/cycle | densité stable |
 | 7 | baisse de LENGTH sous PULSE | PULSE clampé à LENGTH, Undo reflète la valeur réelle | aucune transition pendante |
-| 8 | changement DIV pendant lecture | reconfiguration ferme puis repart phase 0 ; pas de p-lock v1 | pas de double retrigger |
-| 9 | changement modèle pendant lecture | Off complet, runtime purgé, nouveau modèle propre | aucune note bloquée |
-| 10 | STOP, PLAY, CONTINUE, panic | reset phase/sources/sorties conforme | aucun son/MIDI stale |
-| 11 | changement pattern | ancien track generation éliminé, nouveau motif propre | pas de note du pattern précédent |
-| 12 | mute et solo | suspend/cleanup existant réutilisé | cycle arrêté sous mute, reprise déterministe |
-| 13 | ARP avant/après Euclid | stage order réel, fan-out borné | note courte ARP documentée |
-| 14 | Harmony avant/après Euclid | test contractuel désactivé tant que modèle absent ; test d'intégration après modèle | parent/enfant exacts |
-| 15 | Gate avant/après Euclid | même condition : contrat future, pas de chemin implicite | Off conservés malgré suppression |
-| 16 | Probability avant/après Euclid | même condition : seed/occurrence stable | drops sans Off orphelin |
-| 17 | quatre slots actifs | chaque stage observé une fois, ordre stable | aucune boucle/récursion |
-| 18 | huit pistes Play | bornes mémoire/émissions/phase par piste | mesure H743 sous deadline |
-| 19 | sauvegarde/rechargement | modèle et valeurs normalisées identiques, runtime non persisté | replay propre |
-| 20 | duplication, clipboard, Undo/Redo | base et p-locks autorisés cohérents ; Euclid L/P/DIV p-lock refusés | UI synchronisée |
-| 21 | absence de notes pendantes | invariant token/occurrence après tous les resets | panic et compteur zéro |
-| 22 | capacités de piste | Special, Master, looper exclu et audio pur refusés | aucune page/paramètre Euclid exposé |
-| 23 | point post-FX | callback terminal reçoit chaque événement normal avec track/stage/token | seam identifiable sans modifier Live Record |
+| 8 | changement DIV avec occurrences actives | Off complet puis nouvelle période ; aucun p-lock L/P/DIV accepté | pas de double retrigger |
+| 9 | `ARP -> EUCLID -> ARP` | defaults EUCLID `16/4/1/16`, puis defaults ARP au retour ; aucune valeur ARP réinterprétée | transitions propres |
+| 10 | Deux Euclid chaînés | phases/masques/états séparés ; fan-out et sources bornés | mesure et compteur de saturation |
+| 11 | Quatre Euclid dans les quatre slots | autorisés si le budget H743 passe ; sinon borne inférieure documentée par mesure | aucune boucle/récursion |
+| 12 | Saturation de file/budget | traiter Off échus, refuser la paire complète, incrémenter saturation | jamais d'On sans réservation d'Off |
+| 13 | Note Off avant Note On au même sample | ordre observé Off puis On | retrigger propre, pas de legato implicite |
+| 14 | changement modèle ou paramètre structurel | anciens Off invalidés par génération, defaults du modèle cible, aucun Off tardif | aucune note coupée par une ancienne occurrence |
+| 15 | ARP avant et après Euclid | ordre des stages réel et fan-out borné | note courte ARP documentée |
+| 16 | huit pistes Play et 4 slots | sources, files et émissions restent bornés par piste | cycles/high-water H743 sous deadline |
+| 17 | sauvegarde et chargement | modèles/valeurs normalisés identiques, runtime absent | replay propre |
+| 18 | duplication, clipboard, Undo/Redo | defaults de modèle cohérents, runtime absent, p-locks L/P/DIV refusés | UI synchronisée |
+| 19 | capacités de piste | Special, Master, looper exclu et audio pur refusés | aucune page/paramètre Euclid exposé |
+| 20 | terminal post-FX unique | chaque événement normal conserve track/stage/token jusqu'au terminal | seam exploitable ultérieurement par Live Record |
+| 21 | HARMONY avant/après Euclid | modèle absent du HEAD ; contrat parent/enfant et cap 16 à vérifier lorsqu'il existe | aucune multiplication non bornée |
+| 22 | GATE avant/après Euclid | modèle absent ; avant filtre la matière, après modifie éventuellement la durée sans perdre l'identité | Off conservés malgré suppression |
+| 23 | PROBABILITY avant/après Euclid | modèle absent ; chaque drop/acceptation reste déterministe et atomique | aucun Off orphelin |
 
 Tests automatisés à ajouter : `note_fx_euclid_test.c` pour le masque et les bornes, puis extension de `note_fx_runtime_test.c` pour sources/phase/identités ; un test de chaîne doit enregistrer chaque stage et le terminal. Les scripts statiques existants doivent vérifier la présence du terminal commun, l'absence de runtime dans les snapshots et la capacité de piste.
 
@@ -593,7 +625,7 @@ Cette passe ne modifie pas `Src/Seq/seq_live_rec_capture.c`, `seq_live_rec_sessi
 5. Résoudre les défauts généraux Z4-002/Z4-003/Z4-004 avant de considérer la garantie hard-RT complète ; Euclid ne doit pas les masquer.
 6. Confirmer si `CONTINUE` doit toujours repartir à zéro après STOP ou si un futur transport non destructif mérite une phase persistée en runtime ; la recommandation de ce plan reste reset propre.
 7. Définir ultérieurement les parent/child tokens lorsque HARMONY ou une autre expansion polyphonique sera implémentée.
-8. Décider dans une passe séparée si LENGTH/PULSE/DIV deviennent p-lockables ; cette décision demandera des règles de phase, de masque, d'Undo et de coût par step, absentes aujourd'hui.
+8. La V1 refuse définitivement les p-locks `LENGTH/PULSE/DIV`. Une éventuelle activation future est une extension séparée qui devra définir phase, masque, Undo et coût par step ; ce n'est pas une décision ouverte du chantier EUCLID.
 
 ## 15. Ordre recommandé d'exécution
 
