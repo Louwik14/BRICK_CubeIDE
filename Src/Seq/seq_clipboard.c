@@ -15,7 +15,6 @@
 typedef struct
 {
     uint8_t valid;
-    track_topology_identity_t source_identity;
     seq_step_id_t source_anchor;
     seq_step_snapshot_list_t steps;
 } seq_clipboard_state_t;
@@ -24,7 +23,7 @@ UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
 static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
 {
-    return track_topology_is_active(track);
+    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
 static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t step_count, seq_step_id_t *out_min)
@@ -97,11 +96,6 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
 
     memset(&g_seq_clipboard, 0, sizeof(g_seq_clipboard));
     g_seq_clipboard.valid = 1U;
-    if (track_topology_get_identity(track, &g_seq_clipboard.source_identity) == 0U)
-    {
-        g_seq_clipboard.valid = 0U;
-        return 0U;
-    }
     g_seq_clipboard.source_anchor = source_anchor;
 
     if (seq_step_snapshot_capture_list(track,
@@ -139,8 +133,6 @@ uint8_t seq_clipboard_collect_paste_targets(seq_track_id_t target_track,
         || (max_steps == 0U)
         || (g_seq_clipboard.valid == 0U)
         || (seq_clipboard_track_is_valid(target_track) == 0U)
-        || (track_topology_identity_is_compatible(target_track,
-                                                  &g_seq_clipboard.source_identity) == 0U)
         || (dest_steps == 0)
         || (dest_count == 0U))
     {
@@ -184,8 +176,6 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
     if ((out_result == 0)
         || (g_seq_clipboard.valid == 0U)
         || (seq_clipboard_track_is_valid(target_track) == 0U)
-        || (track_topology_identity_is_compatible(target_track,
-                                                  &g_seq_clipboard.source_identity) == 0U)
         || (dest_steps == 0)
         || (dest_count == 0U))
     {
@@ -203,6 +193,8 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         return 0U;
     }
 
+    seq_step_snapshot_list_t paste_list;
+    memset(&paste_list, 0, sizeof(paste_list));
     for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
     {
         const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
@@ -214,14 +206,19 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
             continue;
         }
 
-        if (seq_step_snapshot_apply(target_track, target_step, &src->snapshot) == 0U)
-        {
-            result.partial = 1U;
-            continue;
-        }
-
-        result.pasted_steps++;
+        paste_list.entries[paste_list.count].step = target_step;
+        paste_list.entries[paste_list.count].snapshot = src->snapshot;
+        paste_list.count++;
     }
+
+    if ((paste_list.count == 0U)
+            || (seq_step_snapshot_apply_list(target_track, &paste_list) == 0U))
+    {
+        result.partial = (paste_list.count != 0U) ? 1U : 0U;
+        *out_result = result;
+        return 0U;
+    }
+    result.pasted_steps = paste_list.count;
 
     *out_result = result;
     return (result.pasted_steps > 0U) ? 1U : 0U;

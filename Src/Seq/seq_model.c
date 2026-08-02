@@ -18,8 +18,7 @@
 typedef struct
 {
     seq_track_data_t tracks[SEQ_TRACK_COUNT];
-    seq_plock_entry_t play_pool[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK];
-    seq_plock_entry_t special_pool[TRACK_TOPOLOGY_SPECIAL_TRACK_COUNT][SEQ_SPECIAL_PLOCK_POOL_CAP_PER_TRACK];
+    seq_plock_entry_t pool[SEQ_TRACK_COUNT][SEQ_PLOCK_POOL_CAP_PER_TRACK];
     uint16_t free_head[SEQ_TRACK_COUNT];
     uint16_t free_count[SEQ_TRACK_COUNT];
 } seq_runtime_project_data_t;
@@ -48,14 +47,12 @@ static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 
 static uint8_t seq_model_track_is_play(seq_track_id_t track)
 {
-    return track_topology_is_play(track);
+    return seq_model_track_is_valid(track);
 }
 
 static uint16_t seq_model_pool_capacity(seq_track_id_t track)
 {
-    return (seq_model_track_is_play(track) != 0U)
-        ? (uint16_t)SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK
-        : (uint16_t)SEQ_SPECIAL_PLOCK_POOL_CAP_PER_TRACK;
+    return (seq_model_track_is_valid(track) != 0U) ? (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK : 0U;
 }
 
 static seq_plock_entry_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_t index)
@@ -64,11 +61,7 @@ static seq_plock_entry_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_
     {
         return NULL;
     }
-    if (seq_model_track_is_play(track) != 0U)
-    {
-        return &g_seq_project.play_pool[track][index];
-    }
-    return &g_seq_project.special_pool[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT][index];
+    return &g_seq_project.pool[track][index];
 }
 
 static const seq_plock_entry_t *seq_model_pool_entry_const(seq_track_id_t track, uint16_t index)
@@ -522,11 +515,7 @@ uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step)
         return 0U;
     }
 
-    if (seq_model_track_is_play(track) == 0U)
-    {
-        return ((s->action != (uint8_t)SEQ_SPECIAL_ACTION_NONE) || (s->lock_count != 0U)) ? 1U : 0U;
-    }
-    return (s->trig != 0U) ? 1U : 0U;
+    return ((s->trig != 0U) || (s->lock_count != 0U)) ? 1U : 0U;
 }
 
 seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step)
@@ -536,12 +525,6 @@ seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_
     {
         return SEQ_STEP_CONTENT_EMPTY;
     }
-    if (seq_model_track_is_play(track) == 0U)
-    {
-        return ((s->action != (uint8_t)SEQ_SPECIAL_ACTION_NONE) || (s->lock_count != 0U))
-            ? SEQ_STEP_CONTENT_NON_PLAY_ONLY : SEQ_STEP_CONTENT_EMPTY;
-    }
-
     uint8_t has_play_plock = 0U;
     uint8_t has_non_play_plock = 0U;
     seq_model_step_scan_lock_sets(track, s, &has_play_plock, &has_non_play_plock);
@@ -682,41 +665,10 @@ uint16_t seq_model_get_track_plock_count(seq_track_id_t track)
 }
 
 uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step)
-{
-    const seq_step_t *const s = seq_model_get_step_const(track, step);
-    if ((s == NULL) || (seq_model_track_is_play(track) != 0U))
-    {
-        return (uint8_t)SEQ_SPECIAL_ACTION_NONE;
-    }
-    return (s->action < (uint8_t)SEQ_SPECIAL_ACTION_COUNT)
-        ? s->action : (uint8_t)SEQ_SPECIAL_ACTION_NONE;
-}
+{ (void)track; (void)step; return 0U; }
 
 void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action)
-{
-    seq_step_t *const s = seq_model_get_step_mut(track, step);
-    if ((s == NULL) || (seq_model_track_is_play(track) != 0U))
-    {
-        return;
-    }
-    const uint32_t primask = seq_model_enter_critical();
-    s->action = (action < (uint8_t)SEQ_SPECIAL_ACTION_COUNT)
-        ? action : (uint8_t)SEQ_SPECIAL_ACTION_NONE;
-    s->special_reserved[0] = 0U;
-    s->special_reserved[1] = 0U;
-    s->special_reserved[2] = 0U;
-    seq_model_exit_critical(primask);
-}
-
-void seq_model_toggle_special_action(seq_track_id_t track, seq_step_id_t step)
-{
-    const uint8_t action = seq_model_get_special_action(track, step);
-    seq_model_set_special_action(track,
-                                 step,
-                                 (action == (uint8_t)SEQ_SPECIAL_ACTION_NONE)
-                                     ? (uint8_t)SEQ_SPECIAL_ACTION_TRIGGER
-                                     : (uint8_t)SEQ_SPECIAL_ACTION_NONE);
-}
+{ (void)track; (void)step; (void)action; }
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
@@ -754,10 +706,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     }
 
     if (seq_param_iface_is_set_plockable(set_id) == 0U)
-    {
-        return SEQ_PLOCK_OP_SET_NOT_PLOCKABLE;
-    }
-    if ((seq_model_track_is_play(track) == 0U) && (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY))
     {
         return SEQ_PLOCK_OP_SET_NOT_PLOCKABLE;
     }

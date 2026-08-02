@@ -37,7 +37,7 @@ _Static_assert(SEQ_PARAM_PLAY_SLOT_COUNT <= 255U, "PLAY p-lock capacity exceeds 
 _Static_assert(SEQ_PARAM_MOD_SLOT_COUNT <= 255U, "MOD p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_COUNT <= 255U, "MIDI FX p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds slot type");
-_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 165U, "runtime p-lock bitmap size changed");
+_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 94U, "runtime p-lock bitmap size changed");
 _Static_assert((PARAM_MIDI_FX_S4_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
                "MIDI FX inverse table capacity changed");
 

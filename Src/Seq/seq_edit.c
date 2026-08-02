@@ -455,12 +455,6 @@ static void seq_edit_apply_short_action(uint8_t hall)
     }
 
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(track, &step, 1U);
-    if (track_topology_is_play(track) == 0U)
-    {
-        seq_model_toggle_special_action(track, step);
-        seq_edit_finish_snapshot_undo(undo_started);
-        return;
-    }
     if ((g_seq_hold_state.pressed_active[hall] == 0U)
             && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
             && (g_seq_hold_state.auto_note_pending[hall] != 0U)
@@ -545,14 +539,7 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
     }
 
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(track, &step, 1U);
-    if (track_topology_is_play(track) != 0U)
-    {
-        seq_model_toggle_trig(track, step);
-    }
-    else
-    {
-        seq_model_toggle_special_action(track, step);
-    }
+    seq_model_toggle_trig(track, step);
     seq_edit_finish_snapshot_undo(undo_started);
     return 1U;
 }
@@ -1005,10 +992,7 @@ static void seq_edit_clear_steps_impl(seq_track_id_t track,
             continue;
         }
 
-        if (track_topology_is_play(track) != 0U)
-            seq_model_set_trig(track, step, 0U);
-        else
-            seq_model_set_special_action(track, step, (uint8_t)SEQ_SPECIAL_ACTION_NONE);
+        seq_model_set_trig(track, step, 0U);
         seq_model_step_plock_clear(track, step);
     }
 }

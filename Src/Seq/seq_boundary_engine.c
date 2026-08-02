@@ -35,11 +35,7 @@ static seq_runtime_active_lock_t *seq_boundary_engine_active_locks(seq_runtime_s
     {
         return NULL;
     }
-    if (track_topology_is_play(track) != 0U)
-    {
-        return state->active_locks_play[track];
-    }
-    return state->active_locks_special[track - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+    return state->active_locks[track];
 }
 
 static uint8_t seq_boundary_engine_lock_equals(const seq_runtime_active_lock_t *active,

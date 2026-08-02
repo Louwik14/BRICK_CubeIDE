@@ -1,8 +1,8 @@
 /*
  * Module: undo_v2
  * Role: Undo/Redo cible sur les mutations structurelles de steps.
- * Responsibilities: anneau fixe de huit transactions, validation d'identite
- * de piste, echange d'une image canonique de steps et invalidation atomique.
+ * Responsibilities: anneau fixe de huit transactions, validation de slot,
+ * echange d'une image canonique de steps et invalidation atomique.
  */
 #include "Storage/undo_v2.h"
 
@@ -18,8 +18,7 @@ typedef struct
 {
     uint8_t used;
     uint8_t track;
-    uint8_t reserved;
-    track_topology_identity_t track_identity;
+    uint8_t reserved[2];
     seq_step_snapshot_list_t snapshot;
 } undo_v2_sequence_transaction_t;
 
@@ -32,7 +31,6 @@ typedef struct
     uint8_t apply_in_progress;
     uint8_t capture_suspended;
     uint8_t pending_track;
-    track_topology_identity_t pending_track_identity;
     undo_v2_status_t last_status;
 } undo_v2_runtime_t;
 
@@ -106,9 +104,6 @@ static void undo_v2_clear_pending(void)
 {
     g_undo_v2_pending_snapshot.count = 0U;
     g_undo_v2_runtime.pending_track = 0U;
-    memset(&g_undo_v2_runtime.pending_track_identity,
-           0,
-           sizeof(g_undo_v2_runtime.pending_track_identity));
 }
 
 static void undo_v2_purge_redo_history(void)
@@ -159,10 +154,8 @@ static uint8_t undo_v2_transaction_identity_is_current(
 {
     if ((transaction == 0)
             || (transaction->used == 0U)
-            || (track_topology_is_active(transaction->track) == 0U)
-            || (seq_edit_track_sequence_is_locked(transaction->track) != 0U)
-            || (track_topology_identity_is_compatible(transaction->track,
-                                                       &transaction->track_identity) == 0U))
+            || (transaction->track >= SEQ_TRACK_COUNT)
+            || (seq_edit_track_sequence_is_locked(transaction->track) != 0U))
     {
         return 0U;
     }
@@ -267,13 +260,11 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
 {
     if ((g_undo_v2_runtime.tx_open != 0U)
             || (undo_v2_capture_allowed() == 0U)
-            || (track_topology_is_active(track) == 0U)
+            || (track >= SEQ_TRACK_COUNT)
             || (steps == 0)
             || (step_count == 0U)
             || (step_count > (uint8_t)SEQ_STEP_SNAPSHOT_MAX_STEPS)
-            || (seq_edit_track_sequence_is_locked(track) != 0U)
-            || (track_topology_get_identity(track,
-                                             &g_undo_v2_runtime.pending_track_identity) == 0U))
+            || (seq_edit_track_sequence_is_locked(track) != 0U))
     {
         undo_v2_set_status(UNDO_V2_STATUS_ERR_INVALID_ARG);
         return g_undo_v2_runtime.last_status;
@@ -328,8 +319,7 @@ undo_v2_status_t undo_v2_commit_sequence_transaction(void)
     undo_v2_sequence_transaction_t *const transaction = &g_undo_v2_transactions[slot];
     transaction->used = 1U;
     transaction->track = g_undo_v2_runtime.pending_track;
-    transaction->reserved = 0U;
-    transaction->track_identity = g_undo_v2_runtime.pending_track_identity;
+    memset(transaction->reserved, 0, sizeof(transaction->reserved));
     if (undo_v2_copy_snapshot_list(&transaction->snapshot,
                                    &g_undo_v2_pending_snapshot) == 0U)
     {

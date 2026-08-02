@@ -8,12 +8,6 @@
 #define SEQ_STEP_SNAPSHOT_MAX_STEPS SEQ_MAX_STEPS
 #define SEQ_STEP_SNAPSHOT_MAX_LOCKS SEQ_STEP_MAX_LOCKS
 
-typedef enum
-{
-    SEQ_STEP_SNAPSHOT_ROLE_PLAY = 0,
-    SEQ_STEP_SNAPSHOT_ROLE_SPECIAL
-} seq_step_snapshot_role_t;
-
 typedef struct
 {
     uint8_t set_id;
@@ -25,12 +19,10 @@ typedef struct
 typedef struct
 {
     uint8_t valid;
-    uint8_t role;
     uint8_t trig;
     uint8_t roll;
-    uint8_t action;
     uint8_t lock_count;
-    uint8_t reserved[2];
+    uint8_t reserved[4];
     seq_step_snapshot_plock_t locks[SEQ_STEP_SNAPSHOT_MAX_LOCKS];
 } seq_step_snapshot_t;
 

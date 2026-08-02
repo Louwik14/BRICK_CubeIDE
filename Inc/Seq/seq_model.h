@@ -19,22 +19,10 @@ typedef struct
 {
     uint16_t lock_head;
     uint8_t lock_count;
-    union
-    {
-        struct
-        {
-            uint8_t trig;
-            uint8_t lock_set_mask;
-            uint8_t roll;
-            uint8_t reserved[2];
-        };
-        struct
-        {
-            uint8_t action;
-            uint8_t special_lock_set_mask;
-            uint8_t special_reserved[3];
-        };
-    };
+    uint8_t trig;
+    uint8_t lock_set_mask;
+    uint8_t roll;
+    uint8_t reserved[2];
 } seq_step_t;
 
 typedef enum
@@ -93,12 +81,6 @@ typedef enum
     SEQ_STEP_VISUAL_BLUE
 } seq_step_visual_t;
 
-typedef enum
-{
-    SEQ_SPECIAL_ACTION_NONE = 0,
-    SEQ_SPECIAL_ACTION_TRIGGER,
-    SEQ_SPECIAL_ACTION_COUNT
-} seq_special_action_t;
 
 void seq_model_init_defaults(void);
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
@@ -128,9 +110,9 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
+/* Removed model compatibility for stage-2 track snapshots; never active on 0..7. */
 uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step);
 void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action);
-void seq_model_toggle_special_action(seq_track_id_t track, seq_step_id_t step);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
