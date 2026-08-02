@@ -33,7 +33,8 @@ typedef struct
     int16_t value;
 
     float release_level;
-    float release_coefficient;
+    float release_step;
+    uint8_t release_anchor_remaining;
 
     bool gate_high;
     bool hard_reset;

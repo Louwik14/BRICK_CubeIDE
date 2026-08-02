@@ -1,12 +1,11 @@
 #include "env_adsr_peaks.h"
 
-#include <math.h>
 #include <stddef.h>
 
 #define ENV_ADSR_Q15_MAX 32767
 #define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu
 #define ENV_ADSR_MAX_SEGMENT_SECONDS 30u
-#define ENV_ADSR_RELEASE_END_RATIO (1.0f / 65536.0f)
+#define ENV_ADSR_RELEASE_ANCHOR_SAMPLES 8u
 
 static uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
 {
@@ -80,6 +79,38 @@ static int16_t interpolate_q15(int16_t a, int16_t b, uint16_t t)
     return (int16_t)((int32_t)a + ((delta * (int32_t)t) >> 16));
 }
 
+static float release_quartic_value(const env_adsr_peaks_t *env, uint32_t phase)
+{
+    const uint32_t x = phase >> 16;
+    const uint32_t inv = 65535u - x;
+    const uint32_t inv2 = (inv * inv) >> 16;
+    const uint32_t inv4 = (inv2 * inv2) >> 16;
+    const uint16_t curve = (uint16_t)(65535u - inv4);
+    return (float)interpolate_q15(env->start_value, 0, curve);
+}
+
+static void prepare_release_anchor(env_adsr_peaks_t *env)
+{
+    static const float inv_span[ENV_ADSR_RELEASE_ANCHOR_SAMPLES + 1u] = {
+        0.0f, 1.0f, 0.5f, 1.0f / 3.0f, 0.25f,
+        0.2f, 1.0f / 6.0f, 1.0f / 7.0f, 0.125f
+    };
+    uint32_t span = ENV_ADSR_RELEASE_ANCHOR_SAMPLES;
+    uint32_t anchor_phase =
+        env->phase + (env->phase_increment * ENV_ADSR_RELEASE_ANCHOR_SAMPLES);
+    if(anchor_phase < env->phase)
+    {
+        span = ((UINT32_MAX - env->phase) / env->phase_increment) + 1u;
+        anchor_phase = 0u;
+    }
+    env->target_value = (anchor_phase == 0u)
+        ? 0
+        : (int16_t)release_quartic_value(env, anchor_phase);
+    env->release_step =
+        ((float)env->target_value - env->release_level) * inv_span[span];
+    env->release_anchor_remaining = (uint8_t)span;
+}
+
 static void start_attack(env_adsr_peaks_t *env, bool hard_reset)
 {
     env->start_value = (hard_reset || env->stage == ENV_ADSR_PEAKS_STAGE_IDLE) ? 0 : env->value;
@@ -115,7 +146,8 @@ void env_adsr_peaks_reset(env_adsr_peaks_t *env)
     env->target_value = 0;
     env->value = 0;
     env->release_level = 0.0f;
-    env->release_coefficient = 1.0f;
+    env->release_step = 0.0f;
+    env->release_anchor_remaining = 0u;
     env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
 }
 
@@ -158,17 +190,8 @@ void env_adsr_peaks_gate_off(env_adsr_peaks_t *env)
         env->phase = 0;
         env->phase_increment = env->release_increment;
         env->release_level = (float)env->value;
-        const uint32_t duration_samples =
-            (env->phase_increment != 0u)
-                ? ((UINT32_MAX / env->phase_increment) + 1u)
-                : 1u;
-        const float multiplier = powf(ENV_ADSR_RELEASE_END_RATIO,
-                                      1.0f / (float)duration_samples);
-        env->release_coefficient = 1.0f - multiplier;
-        if(!(env->release_coefficient > 0.0f))
-            env->release_coefficient = 1.0f;
-        else if(env->release_coefficient > 1.0f)
-            env->release_coefficient = 1.0f;
+        env->release_anchor_remaining = 0u;
+        prepare_release_anchor(env);
         env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
     }
 }
@@ -195,16 +218,25 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
     {
         const uint32_t previous_phase = env->phase;
         env->phase += env->phase_increment;
-        env->release_level += env->release_coefficient * (0.0f - env->release_level);
+        env->release_level += env->release_step;
+        env->release_anchor_remaining--;
 
-        if((env->phase < previous_phase) || !(env->release_level > 0.0f))
+        if(env->phase < previous_phase)
         {
             env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
             env->value = 0;
             env->release_level = 0.0f;
+            env->release_step = 0.0f;
+            env->release_anchor_remaining = 0u;
             env->phase = 0u;
             env->phase_increment = 0u;
             return 0;
+        }
+
+        if(env->release_anchor_remaining == 0u)
+        {
+            env->release_level = (float)env->target_value;
+            prepare_release_anchor(env);
         }
 
         env->value = (int16_t)env->release_level;
