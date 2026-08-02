@@ -847,11 +847,17 @@ static sample_page_load_result_t sample_stream_manager_decode_wav_page(
     uint32_t remaining_frames = target->frame_count;
     uint32_t write_frame = 0U;
     const wav_audio_codec_decode_block_fn decode_block =
-        wav_audio_codec_select_pcm_decode_block(info->info.channels,
-                                                info->info.bits_per_sample);
+        (info->info.channels == 1U)
+            ? wav_audio_codec_select_pcm_decode_mono_block(info->info.bits_per_sample)
+            : wav_audio_codec_select_pcm_decode_block(info->info.channels,
+                                                      info->info.bits_per_sample);
     const uint32_t expected_block_align =
         (uint32_t)info->info.channels * ((uint32_t)info->info.bits_per_sample / 8U);
-    if ((decode_block == 0) || (info->info.block_align != expected_block_align))
+    const sample_audio_format_t expected_format =
+        sample_audio_format_from_channels(info->info.channels);
+    if ((decode_block == 0) || (info->info.block_align != expected_block_align)
+        || (target->format != expected_format)
+        || (target->stride_floats != sample_audio_format_stride_floats(expected_format)))
     {
         return SAMPLE_PAGE_LOAD_DECODE_FAILED;
     }
@@ -883,7 +889,7 @@ static sample_page_load_result_t sample_stream_manager_decode_wav_page(
 
         const uint32_t decoded_frames = valid_bytes / info->info.block_align;
         decode_block(io_buffer,
-                     &target->frames_interleaved[write_frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS],
+                     &target->frames_interleaved[write_frame * target->stride_floats],
                      decoded_frames);
         write_frame += decoded_frames;
         remaining_frames -= decoded_frames;

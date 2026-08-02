@@ -36,11 +36,9 @@ static void wav_audio_codec_decode_pcm16_mono_block(const uint8_t *src,
 {
     for (uint32_t frame = 0U; frame < frame_count; ++frame)
     {
-        const float sample = wav_audio_codec_pcm16_to_float_impl(src);
-        dst[0] = sample;
-        dst[1] = sample;
+        dst[0] = wav_audio_codec_pcm16_to_float_impl(src);
         src += 2U;
-        dst += 2U;
+        dst += 1U;
     }
 }
 
@@ -63,11 +61,9 @@ static void wav_audio_codec_decode_pcm24_mono_block(const uint8_t *src,
 {
     for (uint32_t frame = 0U; frame < frame_count; ++frame)
     {
-        const float sample = wav_audio_codec_pcm24_to_float(src);
-        dst[0] = sample;
-        dst[1] = sample;
+        dst[0] = wav_audio_codec_pcm24_to_float(src);
         src += 3U;
-        dst += 2U;
+        dst += 1U;
     }
 }
 
@@ -90,11 +86,9 @@ static void wav_audio_codec_decode_pcm32_mono_block(const uint8_t *src,
 {
     for (uint32_t frame = 0U; frame < frame_count; ++frame)
     {
-        const float sample = wav_audio_codec_pcm32_to_float(src);
-        dst[0] = sample;
-        dst[1] = sample;
+        dst[0] = wav_audio_codec_pcm32_to_float(src);
         src += 4U;
-        dst += 2U;
+        dst += 1U;
     }
 }
 
@@ -145,6 +139,24 @@ wav_audio_codec_decode_block_fn wav_audio_codec_select_pcm_decode_block(uint16_t
         }
     }
 
+    return 0;
+}
+
+wav_audio_codec_decode_mono_block_fn wav_audio_codec_select_pcm_decode_mono_block(
+    uint16_t bits_per_sample)
+{
+    if (bits_per_sample == 16U)
+    {
+        return wav_audio_codec_decode_pcm16_mono_block;
+    }
+    if (bits_per_sample == 24U)
+    {
+        return wav_audio_codec_decode_pcm24_mono_block;
+    }
+    if (bits_per_sample == 32U)
+    {
+        return wav_audio_codec_decode_pcm32_mono_block;
+    }
     return 0;
 }
 
