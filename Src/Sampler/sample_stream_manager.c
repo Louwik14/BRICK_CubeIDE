@@ -150,9 +150,11 @@ static uint32_t sample_stream_manager_page_deadline_frames(const sample_stream_a
     }
 
     uint32_t source_distance = 0U;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(desc->format);
+    const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
     if (desc->direction < 0)
     {
-        const uint64_t page_end = ((uint64_t)page_index + 1ULL) * SAMPLE_PAGE_FRAMES;
+        const uint64_t page_end = ((uint64_t)page_index + 1ULL) * frames_per_page;
         if ((uint64_t)desc->current_frame >= page_end)
         {
             source_distance = (uint32_t)((uint64_t)desc->current_frame - page_end);
@@ -160,7 +162,7 @@ static uint32_t sample_stream_manager_page_deadline_frames(const sample_stream_a
     }
     else
     {
-        const uint64_t page_start = (uint64_t)page_index * SAMPLE_PAGE_FRAMES;
+        const uint64_t page_start = (uint64_t)page_index * frames_per_page;
         if (page_start > (uint64_t)desc->current_frame)
         {
             const uint64_t distance = page_start - (uint64_t)desc->current_frame;
@@ -245,6 +247,10 @@ static uint8_t sample_stream_manager_reader_matches(const sample_stream_reader_t
     return ((reader->data_offset == info->data_offset)
             && (reader->total_frames == info->total_frames)
             && (reader->bytes_per_frame == info->info.block_align)
+            && (reader->format == info->format)
+            && (reader->stride_floats == info->stride_floats)
+            && (reader->frames_per_page == info->frames_per_page)
+            && (reader->registration_epoch == info->registration_epoch)
             && (strncmp(path, info->path, SAMPLE_PAGE_CACHE_PATH_MAX) == 0)) ? 1U : 0U;
 }
 
@@ -302,6 +308,10 @@ static sample_stream_reader_t *sample_stream_manager_get_reader(
             reader->data_offset = info->data_offset;
             reader->total_frames = info->total_frames;
             reader->bytes_per_frame = info->info.block_align;
+            reader->format = info->format;
+            reader->stride_floats = info->stride_floats;
+            reader->frames_per_page = info->frames_per_page;
+            reader->registration_epoch = info->registration_epoch;
             reader->last_page_index = UINT32_MAX;
             reader->current_file_offset = 0U;
             return reader;
@@ -456,7 +466,11 @@ static uint8_t sample_stream_manager_pending_budget_allows(
     {
         return 1U;
     }
-    if (active_owner_pending >= SAMPLE_PAGE_MULTI_WINDOW_PAGES)
+    const uint32_t owner_window_pages = (owner != 0)
+                                            ? sample_audio_format_window_pages(
+                                                  sample_audio_format_or_stereo(owner->format))
+                                            : SAMPLE_PAGE_MULTI_WINDOW_PAGES;
+    if (active_owner_pending >= owner_window_pages)
     {
         (void)key;
         (void)page_index;
@@ -478,6 +492,8 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
                                                       const sample_stream_active_desc_t *owner)
 {
     sample_stream_pending_t *free_slot = 0;
+    sample_page_load_target_t target;
+    const uint8_t target_valid = sample_page_cache_get_load_target_key(key, page_index, &target);
 
     if (sample_stream_manager_pending_budget_allows(key, page_index, owner) == 0U)
     {
@@ -499,6 +515,21 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
         if ((sample_audio_key_equal(&pending->key, &key) != 0U)
             && (pending->page_index == page_index))
         {
+            if ((target_valid != 0U)
+                && ((pending->format != target.format)
+                    || (pending->stride_floats != target.stride_floats)
+                    || (pending->frames_per_page != target.frames_per_page)
+                    || ((pending->registration_epoch != 0U)
+                        && (pending->registration_epoch != target.registration_epoch))))
+            {
+                sample_stream_manager_drop_pending_slot(pending,
+                                                        SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+                if (free_slot == 0)
+                {
+                    free_slot = pending;
+                }
+                continue;
+            }
             const uint32_t old_deadline = pending->deadline_frames;
             if ((uint8_t)priority > pending->priority)
             {
@@ -527,6 +558,13 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
         free_slot->key = key;
         free_slot->sample_id = key.object_id;
         free_slot->page_index = page_index;
+        if (target_valid != 0U)
+        {
+            free_slot->format = target.format;
+            free_slot->stride_floats = target.stride_floats;
+            free_slot->frames_per_page = target.frames_per_page;
+            free_slot->registration_epoch = target.registration_epoch;
+        }
         free_slot->requested_at = ++g_sample_stream_request_clock;
         free_slot->deadline_frames = deadline_frames;
         if (owner != 0)
@@ -1086,7 +1124,12 @@ uint8_t sample_stream_manager_request_range_key_alloc(sample_audio_key_t key,
                                                       sample_page_alloc_type_t alloc_type)
 {
     uint8_t ok = 1U;
-    const uint32_t first_page = start_frame / SAMPLE_PAGE_FRAMES;
+    sample_page_stream_info_t info;
+    const sample_audio_format_t format =
+        (sample_page_cache_get_stream_info_key(key, &info) != 0U)
+            ? sample_audio_format_or_stereo(info.format)
+            : SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    const uint32_t first_page = sample_audio_format_page_index_from_frame(format, start_frame);
     for (uint32_t i = 0U; i < page_count; ++i)
     {
         const uint32_t page_index = first_page + i;
@@ -1198,8 +1241,9 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
         return 0U;
     }
 
-    const uint32_t current_page = desc->current_frame / SAMPLE_PAGE_FRAMES;
-    const uint32_t last_page = (desc->end_frame - 1U) / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(desc->format);
+    const uint32_t current_page = sample_audio_format_page_index_from_frame(format, desc->current_frame);
+    const uint32_t last_page = sample_audio_format_page_index_from_frame(format, desc->end_frame - 1U);
     const uint32_t first_ahead = (desc->request_current_page != 0U) ? 0U : 1U;
     uint8_t requested = 0U;
     uint8_t high_priority_assigned = 0U;
@@ -1346,8 +1390,9 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
         return 0U;
     }
 
-    const uint32_t current_page = desc->current_frame / SAMPLE_PAGE_FRAMES;
-    const uint32_t last_page = (desc->end_frame - 1U) / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(desc->format);
+    const uint32_t current_page = sample_audio_format_page_index_from_frame(format, desc->current_frame);
+    const uint32_t last_page = sample_audio_format_page_index_from_frame(format, desc->end_frame - 1U);
     const uint32_t first_ahead = (desc->request_current_page != 0U) ? 0U : 1U;
     uint8_t high_priority_assigned = 0U;
 

@@ -568,6 +568,10 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     out_source->channels = sample->channels;
     out_source->bits_per_sample = sample->bits_per_sample;
     out_source->block_align = sample->block_align;
+    out_source->format = sample_audio_format_from_channels(sample->channels);
+    out_source->stride_floats = (uint16_t)sample_audio_format_stride_floats(out_source->format);
+    out_source->frames_per_page = sample_audio_format_frames_per_page(out_source->format);
+    out_source->registration_epoch = 0U;
     out_source->root_note = resolved.root_note;
     out_source->fine_tune_cents = 0;
     out_source->region_begin = 0U;

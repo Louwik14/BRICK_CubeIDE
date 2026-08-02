@@ -250,7 +250,7 @@ void sample_pool_clear(uint16_t id)
     sample_pool_clear_entry(&g_sample_pool[id]);
 }
 
-static uint32_t sample_pool_product_cost_bytes(uint32_t frames)
+static uint32_t sample_pool_product_cost_bytes(uint32_t frames, sample_audio_format_t format)
 {
     if (frames == 0U)
     {
@@ -260,7 +260,8 @@ static uint32_t sample_pool_product_cost_bytes(uint32_t frames)
     const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
         ? frames
         : SAMPLE_PREP_MIN_READY_FRAMES;
-    const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    const uint32_t pages = sample_audio_format_required_page_count(
+        sample_audio_format_or_stereo(format), prep_frames);
     return pages * SAMPLE_PAGE_BYTES;
 }
 
@@ -509,7 +510,9 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    const uint32_t product_cost = sample_pool_product_cost_bytes(next_desc.length_frames);
+    const uint32_t product_cost = sample_pool_product_cost_bytes(
+        next_desc.length_frames,
+        sample_audio_format_from_channels(next_desc.channels));
     uint16_t existing_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM, id, &existing_global) == 0U)
         && (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))

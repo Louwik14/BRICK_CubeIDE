@@ -3121,11 +3121,17 @@ static uint8_t brick6_sampler_runtime_multi_prefetch_voice(brick6_sampler_voice_
 
     const sample_stream_active_desc_t stream_desc = {
         .key = brick6_sampler_runtime_multi_key(voice->multi_sample_id),
+        .format = voice->play_plan.format,
+        .stride_floats = voice->play_plan.stride_floats,
+        .frames_per_page = voice->play_plan.frames_per_page,
+        .registration_epoch = voice->play_plan.registration_epoch,
         .current_frame = current_frame,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
         .direction = 1,
-        .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
+        .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
+                                        sample_audio_format_or_stereo(voice->play_plan.format))
+                                    - 1U),
         .request_current_page = 1U,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
@@ -3157,11 +3163,17 @@ static uint8_t brick6_sampler_runtime_multi_prefetch_loop_begin(brick6_sampler_v
 
     const sample_stream_active_desc_t stream_desc = {
         .key = brick6_sampler_runtime_multi_key(voice->multi_sample_id),
+        .format = voice->play_plan.format,
+        .stride_floats = voice->play_plan.stride_floats,
+        .frames_per_page = voice->play_plan.frames_per_page,
+        .registration_epoch = voice->play_plan.registration_epoch,
         .current_frame = voice->play_plan.loop_begin,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
         .direction = 1,
-        .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
+        .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
+                                        sample_audio_format_or_stereo(voice->play_plan.format))
+                                    - 1U),
         .request_current_page = 1U,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
@@ -3190,11 +3202,17 @@ static void brick6_sampler_runtime_multi_prefetch_trigger(brick6_sampler_voice_t
 
     const sample_stream_active_desc_t stream_desc = {
         .key = brick6_sampler_runtime_multi_key(voice->multi_sample_id),
+        .format = voice->play_plan.format,
+        .stride_floats = voice->play_plan.stride_floats,
+        .frames_per_page = voice->play_plan.frames_per_page,
+        .registration_epoch = voice->play_plan.registration_epoch,
         .current_frame = 0U,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
         .direction = 1,
-        .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
+        .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
+                                        sample_audio_format_or_stereo(voice->play_plan.format))
+                                    - 1U),
         .request_current_page = 1U,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
@@ -3821,11 +3839,17 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     sample_stream_manager_active_state_reset(&multi_voice->stream_state);
     const sample_stream_active_desc_t reserve_desc = {
         .key = common_plan.key,
+        .format = common_plan.format,
+        .stride_floats = common_plan.stride_floats,
+        .frames_per_page = common_plan.frames_per_page,
+        .registration_epoch = common_plan.registration_epoch,
         .current_frame = common_plan.start_frame,
         .end_frame = common_plan.region_end,
         .step_q16 = common_plan.step_q16,
         .direction = (common_plan.direction != 0U) ? -1 : 1,
-        .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
+        .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
+                                        sample_audio_format_or_stereo(common_plan.format))
+                                    - 1U),
         .request_current_page = 1U,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(multi_voice),
@@ -3848,11 +3872,17 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     {
         const sample_stream_active_desc_t loop_reserve_desc = {
             .key = common_plan.key,
+            .format = common_plan.format,
+            .stride_floats = common_plan.stride_floats,
+            .frames_per_page = common_plan.frames_per_page,
+            .registration_epoch = common_plan.registration_epoch,
             .current_frame = common_plan.loop_begin,
             .end_frame = common_plan.region_end,
             .step_q16 = common_plan.step_q16,
             .direction = 1,
-            .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
+            .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
+                                            sample_audio_format_or_stereo(common_plan.format))
+                                        - 1U),
             .request_current_page = 1U,
             .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP,
             .owner_id = brick6_sampler_runtime_multi_voice_index(multi_voice),

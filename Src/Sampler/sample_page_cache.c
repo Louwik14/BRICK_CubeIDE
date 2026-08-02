@@ -9,8 +9,11 @@
 #include "stm32h7xx.h"
 
 #define SAMPLE_PAGE_WINDOW_LOCK_MAX (SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2U)
+#define SAMPLE_PAGE_SLOT_FLOAT_CAPACITY (SAMPLE_PAGE_BYTES / sizeof(float))
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(float) == SAMPLE_PAGE_SAMPLE_BYTES, "sample_page_cache expects 32-bit float");
+_Static_assert((SAMPLE_PAGE_SLOT_FLOAT_CAPACITY * sizeof(float)) == SAMPLE_PAGE_BYTES,
+               "sample page slot must remain exactly one physical page");
 #endif
 
 #define SAMPLE_PAGE_INDEX_SIZE (SAMPLE_PAGE_MAX_COUNT * 2U)
@@ -21,6 +24,7 @@ typedef struct
     uint8_t reserved[3];
     uint32_t generation_counter;
     uint32_t touch_counter;
+    uint32_t registration_epoch_counter;
 } sample_page_cache_state_t;
 
 typedef struct
@@ -62,8 +66,7 @@ typedef struct
 } sample_page_window_lock_t;
 
 SDRAM_PAGE_META static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
-SDRAM_PAGE_POOL static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
-                                                                   * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
+SDRAM_PAGE_POOL static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 SDRAM_PAGE_META static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
@@ -77,6 +80,37 @@ static uint16_t sample_page_cache_key_slot(sample_audio_key_t key);
 static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page);
 static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t request_key,
                                                        sample_audio_key_t victim_key);
+
+static sample_audio_format_t sample_page_cache_format_key(sample_audio_key_t key)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+        if ((sample->valid != 0U) && (sample_audio_format_is_valid(sample->format) != 0U))
+        {
+            return sample->format;
+        }
+    }
+    return SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+}
+
+static void sample_page_cache_set_page_geometry(sample_page_desc_t *page,
+                                                sample_audio_key_t key)
+{
+    if (page == 0)
+    {
+        return;
+    }
+
+    page->format = sample_page_cache_format_key(key);
+    page->stride_floats = (uint16_t)sample_audio_format_stride_floats(page->format);
+    page->frames_per_page = sample_audio_format_frames_per_page(page->format);
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    page->registration_epoch = (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+                                   ? g_sample_page_sample_desc[key_slot].registration_epoch
+                                   : 0U;
+}
 
 static uint32_t sample_page_cache_lock(void)
 {
@@ -426,8 +460,13 @@ static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
         return 0U;
     }
 
+    out_ref->key = page->key;
     out_ref->page_index = page->page_index;
     out_ref->page_generation = page->generation;
+    out_ref->format = page->format;
+    out_ref->stride_floats = page->stride_floats;
+    out_ref->frames_per_page = page->frames_per_page;
+    out_ref->registration_epoch = page->registration_epoch;
     out_ref->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;
 }
@@ -443,22 +482,24 @@ static uint32_t sample_page_cache_stream_page_frame_count_key(sample_audio_key_t
         const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
         if ((sample->valid != 0U) && (sample->fully_loaded == 0U) && (sample->total_frames != 0U))
         {
-            const uint32_t start_frame = page_index * SAMPLE_PAGE_FRAMES;
+            const sample_audio_format_t format = sample_audio_format_or_stereo(sample->format);
+            const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
+            const uint32_t start_frame = sample_audio_format_page_start_frame(format, page_index);
             if (start_frame >= sample->total_frames)
             {
                 return 0U;
             }
 
             uint32_t frame_count = sample->total_frames - start_frame;
-            if (frame_count > SAMPLE_PAGE_FRAMES)
+            if (frame_count > frames_per_page)
             {
-                frame_count = SAMPLE_PAGE_FRAMES;
+                frame_count = frames_per_page;
             }
             return frame_count;
         }
     }
 
-    return SAMPLE_PAGE_FRAMES;
+    return sample_audio_format_frames_per_page(SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED);
 }
 
 static uint8_t sample_page_cache_sample_is_stream_loadable(uint16_t sample_id)
@@ -594,7 +635,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             page->key = key;
             page->sample_id = sample_page_cache_key_slot(key);
             page->page_index = page_index;
-            page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
+            sample_page_cache_set_page_geometry(page, key);
+            page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
             page->frame_count = frame_count;
             page->generation = ++g_sample_page_cache_state.generation_counter;
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
@@ -651,7 +693,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->key = key;
     evict_page->sample_id = sample_page_cache_key_slot(key);
     evict_page->page_index = page_index;
-    evict_page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
+    sample_page_cache_set_page_geometry(evict_page, key);
+    evict_page->start_frame = sample_audio_format_page_start_frame(evict_page->format, page_index);
     evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
@@ -783,7 +826,8 @@ static sample_page_desc_t *sample_page_cache_assign_slot_key(uint32_t slot_index
     page->key = key;
     page->sample_id = sample_page_cache_key_slot(key);
     page->page_index = page_index;
-    page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
+    sample_page_cache_set_page_geometry(page, key);
+    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
     page->frame_count = frame_count;
     page->generation = ++g_sample_page_cache_state.generation_counter;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
@@ -1107,6 +1151,11 @@ uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
     out_span->start_frame = page->start_frame;
     out_span->page_index = page->page_index;
     out_span->page_generation = page->generation;
+    out_span->key = page->key;
+    out_span->format = page->format;
+    out_span->stride_floats = page->stride_floats;
+    out_span->frames_per_page = page->frames_per_page;
+    out_span->registration_epoch = page->registration_epoch;
     out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
     sample_page_cache_unlock(primask);
     return 1U;
@@ -1137,7 +1186,12 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
     if ((sample_audio_key_equal(&page->key, &key) == 0U)
         || (page->page_index != ref->page_index)
         || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
-        || (page->data == 0))
+        || (page->data == 0)
+        || ((sample_audio_format_is_valid(ref->format) != 0U) && (page->format != ref->format))
+        || ((ref->registration_epoch != 0U)
+            && (page->registration_epoch != ref->registration_epoch))
+        || ((sample_audio_format_is_valid(ref->format) != 0U)
+            && (sample_audio_key_equal(&ref->key, &key) == 0U)))
     {
         sample_page_cache_unlock(primask);
         return 0U;
@@ -1150,6 +1204,11 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
     out_span->start_frame = page->start_frame;
     out_span->page_index = page->page_index;
     out_span->page_generation = page->generation;
+    out_span->key = page->key;
+    out_span->format = page->format;
+    out_span->stride_floats = page->stride_floats;
+    out_span->frames_per_page = page->frames_per_page;
+    out_span->registration_epoch = page->registration_epoch;
     out_span->slot_index = ref->slot_index;
     sample_page_cache_unlock(primask);
     return 1U;
@@ -1194,7 +1253,10 @@ void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample
     sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
     if ((sample_audio_key_equal(&page->key, &key) == 0U)
         || (page->page_index != ref->page_index)
-        || (page->generation != ref->page_generation))
+        || (page->generation != ref->page_generation)
+        || ((sample_audio_format_is_valid(ref->format) != 0U) && (page->format != ref->format))
+        || ((ref->registration_epoch != 0U)
+            && (page->registration_epoch != ref->registration_epoch)))
     {
         sample_page_cache_unlock(primask);
         return;
@@ -1380,7 +1442,8 @@ uint8_t sample_page_cache_begin_read_block_key(sample_audio_key_t key,
         return 1U;
     }
 
-    const uint32_t page_index = frame_index / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(sample->format);
+    const uint32_t page_index = sample_audio_format_page_index_from_frame(format, frame_index);
     sample_page_span_t span;
     if (sample_page_cache_try_acquire_page_key(key, page_index, &span) == 0U)
     {
@@ -1395,10 +1458,13 @@ uint8_t sample_page_cache_begin_read_block_key(sample_audio_key_t key,
     }
 
     out_block->frames_interleaved =
-        &span.frames_interleaved[page_offset * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
+        &span.frames_interleaved[page_offset * span.stride_floats];
     out_block->frame_count = frame_count;
     out_block->start_frame = frame_index;
     out_block->page_index = page_index;
+    out_block->format = span.format;
+    out_block->stride_floats = span.stride_floats;
+    out_block->frames_per_page = span.frames_per_page;
     out_block->status = (frame_count != 0U) ? SAMPLE_PAGE_BLOCK_OK : SAMPLE_PAGE_BLOCK_NOT_READY;
     return 1U;
 }
@@ -1480,6 +1546,10 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
     out_info->info = sample->info;
     out_info->total_frames = sample->total_frames;
     out_info->data_offset = sample->data_offset;
+    out_info->format = sample->format;
+    out_info->stride_floats = sample->stride_floats;
+    out_info->frames_per_page = sample->frames_per_page;
+    out_info->registration_epoch = sample->registration_epoch;
     out_info->stream_safe = sample->stream_safe;
     out_info->raw_pcm24 = sample->raw_pcm24;
     return 1U;
@@ -1524,6 +1594,10 @@ uint8_t sample_page_cache_find_queued_load_target(uint16_t first_sample_id,
             out_target->page_index = page->page_index;
             out_target->start_frame = page->start_frame;
             out_target->frame_count = page->frame_count;
+            out_target->format = page->format;
+            out_target->stride_floats = page->stride_floats;
+            out_target->frames_per_page = page->frames_per_page;
+            out_target->registration_epoch = page->registration_epoch;
             out_target->frames_interleaved = page->data;
             return 1U;
         }
@@ -1563,6 +1637,10 @@ uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
     out_target->page_index = page->page_index;
     out_target->start_frame = page->start_frame;
     out_target->frame_count = page->frame_count;
+    out_target->format = page->format;
+    out_target->stride_floats = page->stride_floats;
+    out_target->frames_per_page = page->frames_per_page;
+    out_target->registration_epoch = page->registration_epoch;
     out_target->frames_interleaved = page->data;
     return 1U;
 }
@@ -1822,6 +1900,8 @@ uint8_t sample_page_cache_request_page_key_alloc(sample_audio_key_t key,
         sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
     }
 
+    sample_page_cache_set_page_geometry(page, key);
+    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
     page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {
@@ -1863,6 +1943,8 @@ uint8_t sample_page_cache_request_page_ref_key(sample_audio_key_t key,
         sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
     }
 
+    sample_page_cache_set_page_geometry(page, key);
+    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
     page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {
@@ -1903,7 +1985,8 @@ uint8_t sample_page_cache_request_start_pages_key_alloc(sample_audio_key_t key,
                                                         uint32_t page_count,
                                                         sample_page_alloc_type_t alloc_type)
 {
-    const uint32_t first_page = start_frame / SAMPLE_PAGE_FRAMES;
+    const uint32_t first_page = sample_audio_format_page_index_from_frame(
+        sample_page_cache_format_key(key), start_frame);
     uint8_t ok = 1U;
 
     for (uint32_t i = 0U; i < page_count; ++i)
@@ -2030,7 +2113,9 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
         return SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
     }
 
-    const uint32_t page_count = (total_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_from_channels(info->channels);
+    const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
+    const uint32_t page_count = sample_audio_format_required_page_count(format, total_frames);
     uint32_t range_start = 0U;
     uint32_t range_count = SAMPLE_PAGE_MAX_COUNT;
     sample_page_cache_alloc_range(alloc_type, &range_start, &range_count);
@@ -2051,6 +2136,17 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
     }
 
     sample_page_cache_clear_key(key);
+    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    sample->key = key;
+    sample->info = *info;
+    sample->total_frames = total_frames;
+    sample->data_offset = data_offset;
+    sample->format = format;
+    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
+    sample->frames_per_page = frames_per_page;
+    sample->registration_epoch = ++g_sample_page_cache_state.registration_epoch_counter;
+    sample->valid = 1U;
+    sample->fully_loaded = 1U;
 
     const FRESULT seek_fr = f_lseek(fp, (FSIZE_t)data_offset);
     if (seek_fr != FR_OK)
@@ -2060,11 +2156,11 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
 
     for (uint32_t i = 0U; i < page_count; ++i)
     {
-        const uint32_t start_frame = i * SAMPLE_PAGE_FRAMES;
+        const uint32_t start_frame = sample_audio_format_page_start_frame(format, i);
         uint32_t frame_count = total_frames - start_frame;
-        if (frame_count > SAMPLE_PAGE_FRAMES)
+        if (frame_count > frames_per_page)
         {
-            frame_count = SAMPLE_PAGE_FRAMES;
+            frame_count = frames_per_page;
         }
 
         sample_page_desc_t *const page =
@@ -2123,6 +2219,12 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
         return 0U;
     }
 
+    const sample_audio_format_t format = sample_audio_format_from_channels(info->channels);
+    if (sample_audio_format_is_valid(format) == 0U)
+    {
+        return 0U;
+    }
+
     sample_page_cache_clear_key(key);
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
     if (sample_page_cache_trim_path_copy(sample->path, sizeof(sample->path), path) == 0U)
@@ -2134,6 +2236,10 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
     sample->info = *info;
     sample->total_frames = total_frames;
     sample->data_offset = data_offset;
+    sample->format = format;
+    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
+    sample->frames_per_page = sample_audio_format_frames_per_page(format);
+    sample->registration_epoch = ++g_sample_page_cache_state.registration_epoch_counter;
     sample_stream_safe_metadata_init_fatfs(key,
                                            info,
                                            total_frames,
@@ -2185,6 +2291,10 @@ uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_
     sample->info.byte_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
     sample->total_frames = total_frames;
     sample->data_offset = 0U;
+    sample->format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(sample->format);
+    sample->frames_per_page = sample_audio_format_frames_per_page(sample->format);
+    sample->registration_epoch = ++g_sample_page_cache_state.registration_epoch_counter;
     sample_stream_safe_metadata_init_fatfs(key,
                                            &sample->info,
                                            total_frames,

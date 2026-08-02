@@ -195,7 +195,7 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_active = 0U;
 }
 
-static uint8_t multi_loader_sample_required_pages(uint32_t total_frames)
+static uint8_t multi_loader_sample_required_pages(uint32_t total_frames, uint16_t channels)
 {
     if (total_frames == 0U)
     {
@@ -205,7 +205,9 @@ static uint8_t multi_loader_sample_required_pages(uint32_t total_frames)
     const uint32_t contract_frames =
         (total_frames < SAMPLE_PREP_MIN_READY_FRAMES) ? total_frames
                                                       : SAMPLE_PREP_MIN_READY_FRAMES;
-    uint32_t pages = (contract_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(
+        sample_audio_format_from_channels(channels));
+    uint32_t pages = sample_audio_format_required_page_count(format, contract_frames);
     const uint32_t max_budget_pages =
         SAMPLE_PREP_MULTI_BUDGET_BYTES / SAMPLE_PAGE_BYTES;
     if (pages > max_budget_pages)
@@ -236,7 +238,8 @@ static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
         const uint16_t pages =
-            (uint16_t)multi_loader_sample_required_pages(index->samples[i].total_frames);
+            (uint16_t)multi_loader_sample_required_pages(index->samples[i].total_frames,
+                                                          index->samples[i].channels);
         if (pages == 0U)
         {
             if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
@@ -414,7 +417,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         }
 
         const uint8_t required_pages =
-            multi_loader_sample_required_pages(sample->total_frames);
+            multi_loader_sample_required_pages(sample->total_frames, sample->channels);
         for (uint8_t page = 0U; page < required_pages; ++page)
         {
             if (sample_stream_manager_request_page_key_alloc(
@@ -510,7 +513,7 @@ void multi_sample_service_load(uint32_t byte_budget)
         }
 
         const uint8_t required_pages =
-            multi_loader_sample_required_pages(sample->total_frames);
+            multi_loader_sample_required_pages(sample->total_frames, sample->channels);
         uint8_t sample_ready = 1U;
         required_pages_total += required_pages;
         for (uint8_t page = 0U; page < required_pages; ++page)

@@ -32,21 +32,27 @@ static uint32_t sample_play_plan_clamp_requested_frames(const sample_play_plan_t
     return (requested_frames < region_frames) ? requested_frames : region_frames;
 }
 
-static uint32_t sample_play_plan_forward_pages(uint32_t start_frame, uint32_t frames)
+static uint32_t sample_play_plan_forward_pages(sample_audio_format_t format,
+                                               uint32_t start_frame,
+                                               uint32_t frames)
 {
-    const uint32_t page_offset = start_frame % SAMPLE_PAGE_FRAMES;
+    const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
+    const uint32_t page_offset = start_frame % frames_per_page;
     const uint32_t covered = page_offset + frames;
-    return (covered + (SAMPLE_PAGE_FRAMES - 1U)) / SAMPLE_PAGE_FRAMES;
+    return (covered + (frames_per_page - 1U)) / frames_per_page;
 }
 
-static uint32_t sample_play_plan_reverse_pages(uint32_t start_frame, uint32_t frames)
+static uint32_t sample_play_plan_reverse_pages(sample_audio_format_t format,
+                                               uint32_t start_frame,
+                                               uint32_t frames)
 {
-    const uint32_t frames_in_first_page = (start_frame % SAMPLE_PAGE_FRAMES) + 1U;
+    const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
+    const uint32_t frames_in_first_page = (start_frame % frames_per_page) + 1U;
     if (frames <= frames_in_first_page)
     {
         return 1U;
     }
-    return 1U + ((frames - frames_in_first_page + (SAMPLE_PAGE_FRAMES - 1U)) / SAMPLE_PAGE_FRAMES);
+    return 1U + ((frames - frames_in_first_page + (frames_per_page - 1U)) / frames_per_page);
 }
 
 uint8_t sample_play_plan_frames_to_page_span(const sample_play_plan_t *plan,
@@ -58,6 +64,9 @@ uint8_t sample_play_plan_frames_to_page_span(const sample_play_plan_t *plan,
         .page_end = SAMPLE_PLAY_PLAN_PAGE_NONE,
         .page_count = 0U,
         .first_page = SAMPLE_PLAY_PLAN_PAGE_NONE,
+        .format = SAMPLE_AUDIO_FORMAT_INVALID,
+        .stride_floats = 0U,
+        .frames_per_page = 0U,
         .reverse = 0U,
         .valid = 0U,
     };
@@ -81,12 +90,14 @@ uint8_t sample_play_plan_frames_to_page_span(const sample_play_plan_t *plan,
         return 0U;
     }
 
-    const uint32_t first_page = plan->start_frame / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(plan->format);
+    const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
+    const uint32_t first_page = sample_audio_format_page_index_from_frame(format, plan->start_frame);
     uint32_t page_count = (plan->direction != 0U)
-                              ? sample_play_plan_reverse_pages(plan->start_frame, frames)
-                              : sample_play_plan_forward_pages(plan->start_frame, frames);
-    const uint32_t region_first_page = plan->region_begin / SAMPLE_PAGE_FRAMES;
-    const uint32_t region_last_page = (plan->region_end - 1U) / SAMPLE_PAGE_FRAMES;
+                              ? sample_play_plan_reverse_pages(format, plan->start_frame, frames)
+                              : sample_play_plan_forward_pages(format, plan->start_frame, frames);
+    const uint32_t region_first_page = sample_audio_format_page_index_from_frame(format, plan->region_begin);
+    const uint32_t region_last_page = sample_audio_format_page_index_from_frame(format, plan->region_end - 1U);
 
     if (plan->direction != 0U)
     {
@@ -107,6 +118,9 @@ uint8_t sample_play_plan_frames_to_page_span(const sample_play_plan_t *plan,
 
     span.page_count = page_count;
     span.first_page = first_page;
+    span.format = format;
+    span.stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
+    span.frames_per_page = frames_per_page;
     span.reverse = (plan->direction != 0U) ? 1U : 0U;
     span.valid = (page_count != 0U) ? 1U : 0U;
     if (span.reverse != 0U)
@@ -172,7 +186,8 @@ static sample_play_plan_ready_count_t sample_play_plan_count_ready_pages(
         .first_pending_page = SAMPLE_PLAY_PLAN_PAGE_NONE,
     };
 
-    uint32_t page_index = plan->start_frame / SAMPLE_PAGE_FRAMES;
+    const sample_audio_format_t format = sample_audio_format_or_stereo(plan->format);
+    uint32_t page_index = sample_audio_format_page_index_from_frame(format, plan->start_frame);
     for (uint32_t i = 0U; i < required_pages; ++i)
     {
         const sample_page_state_t state = sample_page_cache_get_page_state_key(plan->key, page_index);
@@ -235,7 +250,8 @@ sample_play_plan_ready_status_t sample_play_plan_check_ready_requirements(
         return SAMPLE_PLAY_PLAN_READY_INVALID;
     }
 
-    result.first_required_page = plan->start_frame / SAMPLE_PAGE_FRAMES;
+    result.first_required_page = sample_audio_format_page_index_from_frame(
+        sample_audio_format_or_stereo(plan->format), plan->start_frame);
     sample_play_plan_page_span_t min_span;
     (void)sample_play_plan_frames_to_page_span(plan, plan->min_ready_frames, &min_span);
     const uint32_t target_frames =

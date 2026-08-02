@@ -36,6 +36,13 @@ static inline uint8_t sample_audio_format_is_valid(sample_audio_format_t format)
             || (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)) ? 1U : 0U;
 }
 
+static inline sample_audio_format_t sample_audio_format_or_stereo(sample_audio_format_t format)
+{
+    return (sample_audio_format_is_valid(format) != 0U)
+               ? format
+               : SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+}
+
 static inline uint16_t sample_audio_format_channels(sample_audio_format_t format)
 {
     return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)

@@ -302,6 +302,10 @@ static inline sample_play_plan_build_result_t sample_play_plan_build_from_source
 
     out_plan->key = source->key;
     out_plan->sample_id = source->key.object_id;
+    out_plan->format = sample_audio_format_or_stereo(source->format);
+    out_plan->stride_floats = (uint16_t)sample_audio_format_stride_floats(out_plan->format);
+    out_plan->frames_per_page = sample_audio_format_frames_per_page(out_plan->format);
+    out_plan->registration_epoch = source->registration_epoch;
     out_plan->start_frame = start_frame;
     out_plan->region_begin = region_begin;
     out_plan->region_end = region_end;
