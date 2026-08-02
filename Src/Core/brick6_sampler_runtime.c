@@ -5,6 +5,8 @@
 
 #include "Core/brick6_sampler_runtime.h"
 
+#include "Audio/multi_voice_dsp.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -2453,6 +2455,7 @@ static uint8_t brick6_sampler_runtime_is_terminal_position(const brick6_sampler_
 
 void brick6_sampler_runtime_init(void)
 {
+    multi_voice_dsp_init();
     brick6_sampler_runtime_diag_reset();
     memset(g_sampler_voice, 0, sizeof(g_sampler_voice));
     memset(g_sampler_multi_voice, 0, sizeof(g_sampler_multi_voice));

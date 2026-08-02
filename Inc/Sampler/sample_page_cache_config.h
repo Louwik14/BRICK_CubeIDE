@@ -5,6 +5,7 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/sample_audio_format.h"
+#include "Core/brick6_sampler_multi_contract.h"
 
 /*
  * Product page-cache sizing.
@@ -61,7 +62,8 @@ typedef enum
 #define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_MULTI_ID_BASE \
                                                + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
-#define SAMPLE_PAGE_CACHE_MAX_VOICES          (16U)
+/* Multi page-window reserve; Stream keeps its independent active limit of 16. */
+#define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES
 
 /* Product page-cache budget: keep this margin outside Multi slot presocle pages. */
 #define SAMPLE_PAGE_PRODUCT_MARGIN_PAGES      (128U)
@@ -70,8 +72,12 @@ typedef enum
 #define SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES \
     (SAMPLE_PAGE_MAX_COUNT - SAMPLE_PAGE_PRODUCT_MARGIN_PAGES \
      - SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES)
-#define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS \
+#define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS_RAW \
     (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES / SAMPLE_PAGE_MIN_READY_PAGES)
+#define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS \
+    ((SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS_RAW < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) \
+         ? SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS_RAW \
+         : SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
 
 #define SAMPLE_PAGE_SLOT_POOL_START          (0U)
 #define SAMPLE_PAGE_SLOT_POOL_COUNT          SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES
