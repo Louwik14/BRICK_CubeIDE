@@ -36,10 +36,53 @@ typedef enum
 {
   TLV320AIC3204_STATUS_OK = 0,
   TLV320AIC3204_STATUS_CONFIG_ERROR,
+  TLV320AIC3204_STATUS_NOT_FOUND,
   TLV320AIC3204_STATUS_I2C_ERROR,
   TLV320AIC3204_STATUS_VERIFY_ERROR,
   TLV320AIC3204_STATUS_READY_TIMEOUT
 } tlv320aic3204_status_t;
+
+typedef enum
+{
+  TLV320AIC3204_STAGE_NONE = 0,
+  TLV320AIC3204_STAGE_DEVICE_ACK,
+  TLV320AIC3204_STAGE_RESET,
+  TLV320AIC3204_STAGE_CLOCK_TREE,
+  TLV320AIC3204_STAGE_AUDIO_INTERFACE,
+  TLV320AIC3204_STAGE_ANALOG_POWER,
+  TLV320AIC3204_STAGE_OUTPUT_MUTE,
+  TLV320AIC3204_STAGE_OUTPUT_ROUTE,
+  TLV320AIC3204_STAGE_DAC_ROUTE,
+  TLV320AIC3204_STAGE_DAC_VOLUME,
+  TLV320AIC3204_STAGE_DAC_READY,
+  TLV320AIC3204_STAGE_OUTPUT_POWER,
+  TLV320AIC3204_STAGE_OUTPUT_READY,
+  TLV320AIC3204_STAGE_ADC_READY,
+  TLV320AIC3204_STAGE_OUTPUT_UNMUTE,
+  TLV320AIC3204_STAGE_COMPLETE
+} tlv320aic3204_stage_t;
+
+typedef struct
+{
+  tlv320aic3204_status_t status;
+  tlv320aic3204_stage_t stage;
+  uint8_t page;
+  uint8_t reg;
+  uint8_t expected;
+  uint8_t mask;
+  uint8_t actual;
+  uint8_t device_ack;
+  uint8_t reset_ok;
+  uint8_t clocks_ok;
+  uint8_t interface_ok;
+  uint8_t dac_powered;
+  uint8_t dac_routed;
+  uint8_t dac_unmuted;
+  uint8_t output_routed;
+  uint8_t output_powered;
+  uint8_t output_unmuted;
+  uint8_t volume_ok;
+} tlv320aic3204_diag_t;
 
 typedef struct
 {
@@ -70,5 +113,6 @@ tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
                                                    uint8_t address_7bit);
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config);
 tlv320aic3204_status_t TLV320AIC3204_InitDefault(void);
+void TLV320AIC3204_GetDiag(tlv320aic3204_diag_t *out_diag);
 
 #endif /* TLV320AIC3204_H */

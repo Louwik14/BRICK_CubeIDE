@@ -132,6 +132,7 @@ sont sommées en stéréo avant les inserts, gain, sends et routing communs.
 - Low-cost/TLV320AIC3204: reset logiciel systematique apres clocks stables et lockout registres, readback des diviseurs/interface/routage/mute, puis attente bornee des flags ADC, DAC et HPL/HPR avant unmute. Le chemin utilise directement MCLK a 12,288 MHz; la PLL codec reste volontairement eteinte et `CLK_MUX=0` est verifie.
 - Seul le TX DMA zero tourne pendant la montee codec. Le RX DMA et donc les moteurs/IRQ audio ne peuvent plus demarrer avec un codec non pret.
 - Un echec I2C, readback, clock/power-ready ou DMA provoque au plus une nouvelle tentative complete. Le diagnostic persistant du boot courant reste consultable par `board_audio_get_boot_diag()` hors IRQ.
+- Low-cost conserve dans ce diagnostic l'etape et le registre exacts du premier echec de la derniere tentative; les registres critiques de clock, interface, DAC, routage casque, volumes et mute sont relus. Une IRQ RX active implique ainsi que TX, ACK/reset, readbacks critiques, flags DAC/ADC/casque et unmute ont tous ete valides par le boot courant.
 
 ## WAVE multibande natif
 - La mesure opt-in `brick6_wave_runtime_dwt_*` separe les blocs a un et deux oscillateurs; elle accumule cycles, blocs et maximum. Le pourcentage IRQ WAVE vaut `100 * cycles_moyens / (CPU_HZ * frames / 48000)`. Desactivee, elle n'ajoute aucune lecture DWT.

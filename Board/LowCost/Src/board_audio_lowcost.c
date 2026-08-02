@@ -14,6 +14,75 @@
 
 static board_audio_boot_diag_t g_board_audio_boot_diag;
 
+static void board_audio_capture_codec_diag(void)
+{
+    tlv320aic3204_diag_t codec_diag;
+    TLV320AIC3204_GetDiag(&codec_diag);
+    g_board_audio_boot_diag.codec_stage = (uint8_t)codec_diag.stage;
+    g_board_audio_boot_diag.codec_page = codec_diag.page;
+    g_board_audio_boot_diag.codec_reg = codec_diag.reg;
+    g_board_audio_boot_diag.codec_expected = codec_diag.expected;
+    g_board_audio_boot_diag.codec_mask = codec_diag.mask;
+    g_board_audio_boot_diag.codec_actual = codec_diag.actual;
+    g_board_audio_boot_diag.reset_ok = codec_diag.reset_ok;
+    g_board_audio_boot_diag.clocks_ok = codec_diag.clocks_ok;
+    g_board_audio_boot_diag.interface_ok = codec_diag.interface_ok;
+    g_board_audio_boot_diag.dac_powered = codec_diag.dac_powered;
+    g_board_audio_boot_diag.dac_routed = codec_diag.dac_routed;
+    g_board_audio_boot_diag.dac_unmuted = codec_diag.dac_unmuted;
+    g_board_audio_boot_diag.output_routed = codec_diag.output_routed;
+    g_board_audio_boot_diag.output_powered = codec_diag.output_powered;
+    g_board_audio_boot_diag.output_unmuted = codec_diag.output_unmuted;
+    g_board_audio_boot_diag.volume_ok = codec_diag.volume_ok;
+}
+
+static board_audio_boot_error_t board_audio_codec_error(tlv320aic3204_status_t status)
+{
+    tlv320aic3204_diag_t codec_diag;
+    TLV320AIC3204_GetDiag(&codec_diag);
+
+    if ((status == TLV320AIC3204_STATUS_NOT_FOUND) ||
+        (codec_diag.stage == TLV320AIC3204_STAGE_DEVICE_ACK))
+    {
+        return BOARD_AUDIO_BOOT_CODEC_NOT_FOUND;
+    }
+    if (codec_diag.stage == TLV320AIC3204_STAGE_RESET)
+    {
+        return BOARD_AUDIO_BOOT_CODEC_RESET;
+    }
+    if ((status == TLV320AIC3204_STATUS_READY_TIMEOUT) &&
+        (codec_diag.stage == TLV320AIC3204_STAGE_OUTPUT_READY))
+    {
+        return BOARD_AUDIO_BOOT_OUTPUT_POWER;
+    }
+    if (status == TLV320AIC3204_STATUS_READY_TIMEOUT)
+    {
+        return BOARD_AUDIO_BOOT_CLOCK;
+    }
+    if ((codec_diag.stage == TLV320AIC3204_STAGE_OUTPUT_MUTE) ||
+        (codec_diag.stage == TLV320AIC3204_STAGE_OUTPUT_UNMUTE))
+    {
+        return BOARD_AUDIO_BOOT_CODEC_MUTED;
+    }
+    if (codec_diag.stage == TLV320AIC3204_STAGE_DAC_ROUTE)
+    {
+        return BOARD_AUDIO_BOOT_DAC_ROUTE;
+    }
+    if (codec_diag.stage == TLV320AIC3204_STAGE_OUTPUT_ROUTE)
+    {
+        return BOARD_AUDIO_BOOT_OUTPUT_ROUTE;
+    }
+    if (codec_diag.stage == TLV320AIC3204_STAGE_DAC_VOLUME)
+    {
+        return BOARD_AUDIO_BOOT_VOLUME;
+    }
+    if (status == TLV320AIC3204_STATUS_VERIFY_ERROR)
+    {
+        return BOARD_AUDIO_BOOT_VERIFY;
+    }
+    return BOARD_AUDIO_BOOT_I2C;
+}
+
 void board_audio_codec_init(void)
 {
     g_board_audio_boot_diag = (board_audio_boot_diag_t){0};
@@ -36,6 +105,8 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
     g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
     g_board_audio_boot_diag.codec_ready = 0U;
     g_board_audio_boot_diag.stream_started = 0U;
+    g_board_audio_boot_diag.tx_started = 0U;
+    g_board_audio_boot_diag.rx_started = 0U;
 
     for (uint32_t attempt = 0U; attempt < BOARD_AUDIO_INIT_ATTEMPTS; ++attempt)
     {
@@ -58,29 +129,17 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
             g_board_audio_boot_diag.failure_count++;
             continue;
         }
+        g_board_audio_boot_diag.tx_started = 1U;
         HAL_Delay(1U);
 
         const tlv320aic3204_status_t codec_status = TLV320AIC3204_InitDefault();
+        board_audio_capture_codec_diag();
         if (codec_status != TLV320AIC3204_STATUS_OK)
         {
-            if (codec_status == TLV320AIC3204_STATUS_VERIFY_ERROR)
-            {
-                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_VERIFY;
-            }
-            else if (codec_status == TLV320AIC3204_STATUS_READY_TIMEOUT)
-            {
-                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_READY_TIMEOUT;
-            }
-            else if (codec_status == TLV320AIC3204_STATUS_CONFIG_ERROR)
-            {
-                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_CODEC_RESET;
-            }
-            else
-            {
-                g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_I2C;
-            }
+            g_board_audio_boot_diag.last_error = board_audio_codec_error(codec_status);
             g_board_audio_boot_diag.failure_count++;
             (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+            g_board_audio_boot_diag.tx_started = 0U;
             continue;
         }
 
@@ -91,10 +150,13 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
             g_board_audio_boot_diag.codec_ready = 0U;
             g_board_audio_boot_diag.failure_count++;
             (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+            g_board_audio_boot_diag.tx_started = 0U;
             continue;
         }
 
+        g_board_audio_boot_diag.rx_started = 1U;
         g_board_audio_boot_diag.stream_started = 1U;
+        g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
         return 1U;
     }
 

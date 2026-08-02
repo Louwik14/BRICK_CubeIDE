@@ -135,6 +135,7 @@
 - Chaque tentative est bornee (ACK I2C, lectures de retour et flags de power-ready) et un echec declenche une seconde tentative complete apres arret SAI/DMA et nouveau reset codec.
 - Cette remise a zero explicite supprime la difference de principe entre cold boot, reset MCU et flash/reset GDB: aucun etat conserve du codec externe n'est accepte comme prerequis.
 - `board_audio_get_boot_diag()` expose hors IRQ `last_error`, `init_count`, `failure_count`, `retry_count`, `codec_ready` et `stream_started`.
+- Le diagnostic low-cost expose aussi l'etape TLV320AIC3204, le dernier triplet page/register/attendu/masque/relu, l'etat TX/RX et les validations reset, clocks, interface, DAC, routage, volumes, power et unmute. Les echecs ACK, reset, I2C/readback, clocks, routage, volume, power de sortie et mute sont donc distinguables sans log ni acces IRQ.
 
 ## Addendum 2026-07-29 - copie ITCM au reset
 

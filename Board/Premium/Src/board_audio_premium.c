@@ -36,6 +36,8 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
     g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
     g_board_audio_boot_diag.codec_ready = 0U;
     g_board_audio_boot_diag.stream_started = 0U;
+    g_board_audio_boot_diag.tx_started = 0U;
+    g_board_audio_boot_diag.rx_started = 0U;
 
     for (uint32_t attempt = 0U; attempt < BOARD_AUDIO_INIT_ATTEMPTS; ++attempt)
     {
@@ -58,6 +60,7 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
             g_board_audio_boot_diag.failure_count++;
             continue;
         }
+        g_board_audio_boot_diag.tx_started = 1U;
         HAL_Delay(1U);
 
         const cs42448_status_t codec_status = CS42448_Init(CS42448_I2C_ADDRESS);
@@ -81,20 +84,34 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
             }
             g_board_audio_boot_diag.failure_count++;
             (void)HAL_SAI_DMAStop(&hsai_BlockA2);
+            g_board_audio_boot_diag.tx_started = 0U;
             continue;
         }
 
         g_board_audio_boot_diag.codec_ready = 1U;
+        g_board_audio_boot_diag.reset_ok = 1U;
+        g_board_audio_boot_diag.clocks_ok = 1U;
+        g_board_audio_boot_diag.interface_ok = 1U;
+        g_board_audio_boot_diag.dac_powered = 1U;
+        g_board_audio_boot_diag.dac_routed = 1U;
+        g_board_audio_boot_diag.dac_unmuted = 1U;
+        g_board_audio_boot_diag.output_routed = 1U;
+        g_board_audio_boot_diag.output_powered = 1U;
+        g_board_audio_boot_diag.output_unmuted = 1U;
+        g_board_audio_boot_diag.volume_ok = 1U;
         if (HAL_SAI_Receive_DMA(&hsai_BlockB2, (uint8_t *)rx_buffer, word_count) != HAL_OK)
         {
             g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_RX_DMA;
             g_board_audio_boot_diag.codec_ready = 0U;
             g_board_audio_boot_diag.failure_count++;
             (void)HAL_SAI_DMAStop(&hsai_BlockA2);
+            g_board_audio_boot_diag.tx_started = 0U;
             continue;
         }
 
+        g_board_audio_boot_diag.rx_started = 1U;
         g_board_audio_boot_diag.stream_started = 1U;
+        g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
         return 1U;
     }
 

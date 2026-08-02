@@ -13,6 +13,12 @@ typedef enum
     BOARD_AUDIO_BOOT_I2C,
     BOARD_AUDIO_BOOT_VERIFY,
     BOARD_AUDIO_BOOT_READY_TIMEOUT,
+    BOARD_AUDIO_BOOT_CLOCK,
+    BOARD_AUDIO_BOOT_CODEC_MUTED,
+    BOARD_AUDIO_BOOT_DAC_ROUTE,
+    BOARD_AUDIO_BOOT_OUTPUT_ROUTE,
+    BOARD_AUDIO_BOOT_OUTPUT_POWER,
+    BOARD_AUDIO_BOOT_VOLUME,
     BOARD_AUDIO_BOOT_TX_DMA,
     BOARD_AUDIO_BOOT_RX_DMA
 } board_audio_boot_error_t;
@@ -25,6 +31,24 @@ typedef struct
     board_audio_boot_error_t last_error;
     uint8_t codec_ready;
     uint8_t stream_started;
+    uint8_t tx_started;
+    uint8_t rx_started;
+    uint8_t codec_stage;
+    uint8_t codec_page;
+    uint8_t codec_reg;
+    uint8_t codec_expected;
+    uint8_t codec_mask;
+    uint8_t codec_actual;
+    uint8_t reset_ok;
+    uint8_t clocks_ok;
+    uint8_t interface_ok;
+    uint8_t dac_powered;
+    uint8_t dac_routed;
+    uint8_t dac_unmuted;
+    uint8_t output_routed;
+    uint8_t output_powered;
+    uint8_t output_unmuted;
+    uint8_t volume_ok;
 } board_audio_boot_diag_t;
 
 void board_audio_codec_init(void);
