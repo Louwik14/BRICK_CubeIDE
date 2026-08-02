@@ -60,6 +60,8 @@ ENV est l'unique propriétaire logique du filtre, du VCA et d'ENV3, sur les deux
 
 ARP est un raccourci physique et le nom d'un modèle MIDI FX (`note_fx_arp`), pas une capacité topologique autonome. L'ouverture de MIDI FX ne change pas le mode musical `SEQ`/`KEYBOARD`.
 
+Sur Master, Reverb et Delay exposent une fenetre spectrale commune `POSITION`/`WIDTH` dans un widget large sur deux colonnes. Le mapping logarithmique partage reconstruit les coupures basse/haute DSP dans la plage sure 20 Hz..20 kHz ; aucun controle utilisateur HPF/LPF separe ne subsiste.
+
 ## Audio et moteurs
 
 Le chemin audio est borné, sans RTOS ni allocation dynamique dans l'IRQ : moteur, filtre, VCA/volume, inserts track, sends et bus, puis traitements globaux. Les moteurs produits sont Prism, Wave, Stack, DELUGE, Sampler RAM/Stream/Multi, Drum et MIDI/External selon la capacité de la track. La Special FX applique ses quatre MacroFX sur l'insertion master-bus dédiée.

@@ -77,6 +77,10 @@ $expected = @{
     PARAM_DRUM_MD_P8 = 29
     PARAM_MIX_REVERB_DAMP = 174
     PARAM_RESERVED_175 = 175
+    PARAM_MIX_REVERB_SPECTRAL_POSITION = 162
+    PARAM_MIX_REVERB_SPECTRAL_WIDTH = 163
+    PARAM_MIX_DELAY_SPECTRAL_POSITION = 171
+    PARAM_MIX_DELAY_SPECTRAL_WIDTH = 172
 }
 $current = Get-ParamEnumValues $store
 foreach ($entry in $expected.GetEnumerator()) {

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "cpu_load.h"
 #include "drv_display.h"
@@ -29,6 +30,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
+#include "Audio/spectral_window.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38
@@ -3004,68 +3006,77 @@ static uint8_t ui_renderer_template_filter_curve_group_is_active(const ui_templa
     return 1U;
 }
 
-static uint8_t ui_renderer_template_hpf_lpf_group_is_active(const ui_template_page_state_t *state,
-                                                            const ui_template_subpage_t *subpage,
-                                                            uint8_t *out_first_slot,
-                                                            param_id_t *out_hpf,
-                                                            param_id_t *out_lpf)
+static uint8_t ui_renderer_template_spectral_window_group_is_active(const ui_template_page_state_t *state,
+                                                                     const ui_template_subpage_t *subpage,
+                                                                     uint8_t *out_first_slot,
+                                                                     param_id_t *out_position,
+                                                                     param_id_t *out_width)
 {
-    if ((subpage == NULL) || (out_first_slot == NULL) || (out_hpf == NULL) || (out_lpf == NULL))
+    if ((subpage == NULL) || (out_first_slot == NULL) || (out_position == NULL) || (out_width == NULL))
     {
         return 0U;
     }
 
     for(uint8_t slot = 0U; slot < 3U; ++slot)
     {
-        const param_id_t hpf = subpage->param_bank.params[slot];
-        const param_id_t lpf = subpage->param_bank.params[slot + 1U];
-        const uint8_t recognized = (uint8_t)(((hpf == PARAM_MIX_REVERB_HPF) && (lpf == PARAM_MIX_REVERB_LPF))
-                || ((hpf == PARAM_MIX_DELAY_HPF) && (lpf == PARAM_MIX_DELAY_LPF)));
+        const param_id_t position = subpage->param_bank.params[slot];
+        const param_id_t width = subpage->param_bank.params[slot + 1U];
+        const uint8_t recognized = (uint8_t)(((position == PARAM_MIX_REVERB_SPECTRAL_POSITION) && (width == PARAM_MIX_REVERB_SPECTRAL_WIDTH))
+                || ((position == PARAM_MIX_DELAY_SPECTRAL_POSITION) && (width == PARAM_MIX_DELAY_SPECTRAL_WIDTH)));
         if((recognized != 0U)
-                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot, hpf)
-                        == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP)
-                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot + 1U, lpf)
-                        == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP))
+                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot, position)
+                        == UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP)
+                && (ui_renderer_template_resolve_custom_widget(state, subpage, slot + 1U, width)
+                        == UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP))
         {
             *out_first_slot = slot;
-            *out_hpf = hpf;
-            *out_lpf = lpf;
+            *out_position = position;
+            *out_width = width;
             return 1U;
         }
     }
     return 0U;
 }
 
-static void ui_renderer_template_draw_hpf_lpf_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
-                                                    uint8_t first_slot,
-                                                    param_id_t hpf_id,
-                                                    param_id_t lpf_id)
+static void ui_renderer_template_draw_spectral_window_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                            uint8_t first_slot,
+                                                            param_id_t position_id,
+                                                            param_id_t width_id)
 {
-    float hpf = 0.0f;
-    float lpf = 0.0f;
-    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, hpf_id, &hpf, 0);
-    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, lpf_id, &lpf, 0);
-    if(hpf < 0.0f) hpf = 0.0f;
-    if(hpf > 1.0f) hpf = 1.0f;
-    if(lpf < 0.0f) lpf = 0.0f;
-    if(lpf > 1.0f) lpf = 1.0f;
+    float position = 0.5f;
+    float width_value = 1.0f;
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, position_id, &position, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, width_id, &width_value, 0);
 
     const int x = g_ui_template_frame_x[first_slot] + UI_TEMPLATE_CARD_WIDGET_X_PAD;
     const int y = UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y;
     const int w = (UI_TEMPLATE_FRAME_W * 2) - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD);
     const int h = UI_TEMPLATE_CARD_WIDGET_H;
-    const float hp_edge = 0.02f + (0.32f * hpf);
-    const float lp_edge = (lpf <= 0.0f) ? 1.0f : (1.0f - (0.88f * lpf));
+    const spectral_window_limits_t limits = (position_id == PARAM_MIX_REVERB_SPECTRAL_POSITION)
+        ? spectral_window_reverb_limits() : spectral_window_delay_limits();
+    spectral_window_result_t result;
+    spectral_window_calculate(position, width_value, limits, &result);
+    const float left_edge = spectral_window_log_position(result.low_cut_hz, limits);
+    const float right_edge = spectral_window_log_position(result.high_cut_hz, limits);
+    const float slope = 0.055f;
     int prev_y = y + h - 2;
 
     for(int col = 0; col < w; ++col)
     {
         const float f = (float)col / (float)(w - 1);
-        float hp_gain = (f >= hp_edge) ? 1.0f : (f / hp_edge);
-        float lp_gain = (f <= lp_edge) ? 1.0f : ((1.0f - f) / (1.0f - lp_edge));
-        if(hp_gain < 0.0f) hp_gain = 0.0f;
-        if(lp_gain < 0.0f) lp_gain = 0.0f;
-        const float gain = hp_gain * lp_gain;
+        float gain = 1.0f;
+        if (f < left_edge)
+        {
+            const float t = (f - (left_edge - slope)) / slope;
+            const float clamped = (t < 0.0f) ? 0.0f : ((t > 1.0f) ? 1.0f : t);
+            gain = 0.5f - (0.5f * cosf(clamped * 3.14159265359f));
+        }
+        else if (f > right_edge)
+        {
+            const float t = ((right_edge + slope) - f) / slope;
+            const float clamped = (t < 0.0f) ? 0.0f : ((t > 1.0f) ? 1.0f : t);
+            gain = 0.5f - (0.5f * cosf(clamped * 3.14159265359f));
+        }
         const int yy = y + h - 2 - (int)(gain * (float)(h - 4));
         if(col > 0)
             drv_display_draw_line(x + col - 1, prev_y, x + col, yy);
@@ -4655,15 +4666,15 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget_drawn = 1U;
             }
             uint8_t grouped_filter_first_slot = 0U;
-            param_id_t grouped_filter_hpf = PARAM_COUNT;
-            param_id_t grouped_filter_lpf = PARAM_COUNT;
-            if (ui_renderer_template_hpf_lpf_group_is_active(state,
-                                                             subpage,
-                                                             &grouped_filter_first_slot,
-                                                             &grouped_filter_hpf,
-                                                             &grouped_filter_lpf) != 0U)
+            param_id_t grouped_filter_position = PARAM_COUNT;
+            param_id_t grouped_filter_width = PARAM_COUNT;
+            if (ui_renderer_template_spectral_window_group_is_active(state,
+                                                                      subpage,
+                                                                      &grouped_filter_first_slot,
+                                                                      &grouped_filter_position,
+                                                                      &grouped_filter_width) != 0U)
             {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP;
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;
                 grouped_widget_drawn = 1U;
             }
             param_id_t grouped_lfo_shape_id = PARAM_COUNT;
@@ -4709,12 +4720,12 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 {
                     (void)ui_renderer_template_draw_stack_fold_group(&plock_frame_ctx, subpage);
                 }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP)
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP)
                 {
-                    ui_renderer_template_draw_hpf_lpf_group(&plock_frame_ctx,
-                                                            grouped_filter_first_slot,
-                                                            grouped_filter_hpf,
-                                                            grouped_filter_lpf);
+                    ui_renderer_template_draw_spectral_window_group(&plock_frame_ctx,
+                                                                     grouped_filter_first_slot,
+                                                                     grouped_filter_position,
+                                                                     grouped_filter_width);
                 }
                 else
                 {

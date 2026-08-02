@@ -161,16 +161,16 @@ typedef struct
     float lp_state;
 } feedback_filter_t;
 
-static inline float hpf_alpha(float hpf)
+static inline float hpf_alpha_hz(float frequency_hz, float sample_rate)
 {
-    const float t = clampf_local(hpf, 0.0f, 1.0f);
-    return 0.997f - (0.965f * t * t);
+    const float fc = clampf_local(frequency_hz, 20.0f, 20000.0f);
+    return expf(-6.28318530718f * fc / sample_rate);
 }
 
-static inline float lpf_alpha(float lpf)
+static inline float lpf_alpha_hz(float frequency_hz, float sample_rate)
 {
-    const float t = 1.0f - clampf_local(lpf, 0.0f, 1.0f);
-    return 0.005f + (0.80f * t * t);
+    const float fc = clampf_local(frequency_hz, 20.0f, 20000.0f);
+    return clampf_local(1.0f - expf(-6.28318530718f * fc / sample_rate), 0.005f, 0.805f);
 }
 
 static inline float feedback_filter_process(feedback_filter_t *filter,
@@ -254,8 +254,8 @@ typedef struct
     float time_r_samples;
     float feedback;
     float feedback_target;
-    float hpf;
-    float lpf;
+    float low_cut_hz;
+    float high_cut_hz;
     float width;
     float width_target;
     float feedback_width;
@@ -358,14 +358,19 @@ extern "C" void fx_delay_dual_global_set_feedback(float feedback)
     g_dual.feedback_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
-extern "C" void fx_delay_dual_global_set_hpf(float hpf)
+extern "C" void fx_delay_dual_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
-    g_dual.hpf = clampf_local(hpf, 0.0f, 1.0f);
-}
-
-extern "C" void fx_delay_dual_global_set_lpf(float lpf)
-{
-    g_dual.lpf = clampf_local(lpf, 0.0f, 1.0f);
+    g_dual.low_cut_hz = clampf_local(low_cut_hz, 20.0f, 20000.0f);
+    g_dual.high_cut_hz = clampf_local(high_cut_hz, 20.0f, 20000.0f);
+    if (g_dual.high_cut_hz <= g_dual.low_cut_hz)
+    {
+        g_dual.high_cut_hz = g_dual.low_cut_hz + 1.0f;
+        if (g_dual.high_cut_hz > 20000.0f)
+        {
+            g_dual.high_cut_hz = 20000.0f;
+            g_dual.low_cut_hz = 19999.0f;
+        }
+    }
 }
 
 extern "C" void fx_delay_dual_global_set_width(float width)
@@ -440,10 +445,10 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
     const float isr = 1.0f / sr;
     const float smooth_k = smooth_coeff(sr);
     const float rev = g_dual.reverb_send;
-    const uint8_t hpf_active = (g_dual.hpf > 0.001f) ? 1U : 0U;
-    const uint8_t lpf_active = (g_dual.lpf > 0.001f) ? 1U : 0U;
-    const float hp_a = hpf_active ? hpf_alpha(g_dual.hpf) : 0.0f;
-    const float lp_a = lpf_active ? lpf_alpha(g_dual.lpf) : 0.0f;
+    const uint8_t hpf_active = (g_dual.low_cut_hz > 20.1f) ? 1U : 0U;
+    const uint8_t lpf_active = (g_dual.high_cut_hz < 19999.9f) ? 1U : 0U;
+    const float hp_a = hpf_active ? hpf_alpha_hz(g_dual.low_cut_hz, g_dual.sample_rate) : 0.0f;
+    const float lp_a = lpf_active ? lpf_alpha_hz(g_dual.high_cut_hz, g_dual.sample_rate) : 0.0f;
     const uint8_t has_haas = ((mode != (uint8_t)FX_DELAY_DUAL_MODE_PINGPONG)
             && (mode != (uint8_t)FX_DELAY_DUAL_MODE_CLASSIC_PINGPONG)
             && ((fabsf(g_dual.width) >= kNeutralEpsilon)

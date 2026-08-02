@@ -69,7 +69,7 @@ Chaque track persistée est identifiée par `role + ordinal` issu de `track_topo
 - Kit capture les états de son scope et ne convertit pas une Special en Play ;
 - le binding audio, les voix, les playheads et les autres états transitoires sont reconstruits par les autorités runtime.
 
-Master porte les globals reverb, delay et compresseur. Les valeurs reverb Mutable `WET`, `SIZE`, `DECAY`, `PRED`, `DAMP`, `HPF` et `LPF` utilisent les matrices globales existantes et sont capturées/restaurées comme les autres globals Master. La modulation interne des longs délais n'est pas persistée. FX porte les quatre MacroFX. Looper et Input conservent leurs rôles fixes. Aucun fichier ne déduit ces ownerships d'un index de lane physique.
+Master porte les globals reverb, delay et compresseur. Les valeurs reverb Mutable `WET`, `SIZE`, `DECAY`, `PRED`, `DAMP`, `POSITION` et `WIDTH` utilisent les matrices globales existantes et sont capturées/restaurées comme les autres globals Master. Reverb et Delay ne persistent aucun HPF/LPF utilisateur parallèle : les deux fréquences DSP sont reconstruites par le mapping spectral partagé. La modulation interne des longs délais n'est pas persistée. FX porte les quatre MacroFX. Looper et Input conservent leurs rôles fixes. Aucun fichier ne déduit ces ownerships d'un index de lane physique.
 
 ## Classification des paramètres
 

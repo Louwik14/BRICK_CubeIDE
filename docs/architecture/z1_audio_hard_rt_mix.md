@@ -658,10 +658,10 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - L'autorite d'execution reste `mixer_process()`: accumulation `send_l/r[1]`, appel `fx_delay_stereo_global_process_block()`, ajout du wet `VOL` au bus MAIN et addition du wet `REV` dans l'entree reverb avant traitement reverb.
 - La reverb globale est processee uniquement selon l'autorite `Wet`: `fx_reverb_global_is_active()` retourne vrai si `Wet > 0`, et `mixer_process()` appelle alors `fx_reverb_global_process_block()` a chaque bloc audio, meme si `send_l/r[0]` est silencieux.
 - `Wet=0` coupe immediatement le cout reverb; aucun gate local base sur l'entree et aucun tail mixer local ne participent a la decision.
-- L'entree de la reverb globale est filtree en place par les params globaux `PARAM_MIX_REVERB_HPF` / `PARAM_MIX_REVERB_LPF` dans `mixer_process()`, apres l'eventuel wet delay `REV` et juste avant `fx_reverb_global_process_block()`.
+- La fenetre spectrale globale est calculee par `spectral_window_calculate(position, width, limits)` dans l'espace logarithmique, puis appliquee atomiquement comme coupure basse/haute avant `fx_reverb_global_process_block()`.
 - Le DSP delay CLASSIC vit dans `fx_delay_stereo.*`; ses lignes L/R utilisent le pool partage `fx_delay_shared_pool.*` place en `.audio_delay_sdram`, borne a la capacite commune 6 s.
-- V1 expose le contrat 8 params `TIME`, `X`, `WID`, `FDBK`, `HPF`, `LPF`, `REV`, `VOL`; `TIME` est une division musicale sync BPM stockee comme enum et convertie en secondes via l'autorite tempo `seq_runtime`, tandis que le smoothing/interpolation reste dans le DSP delay.
-- `X` est un bool ping-pong, `HPF/LPF` filtrent la boucle feedback, `WID` est bipolaire et agit uniquement sur le retour wet hors boucle feedback.
+- V1 expose le contrat 8 params `TIME`, `X`, `WID`, `FDBK`, `POSITION`, `WIDTH`, `REV`, `VOL`; `TIME` est une division musicale sync BPM stockee comme enum et convertie en secondes via l'autorite tempo `seq_runtime`, tandis que le smoothing/interpolation reste dans le DSP delay.
+- `POSITION` et `WIDTH` pilotent ensemble les filtres basse/haute de la boucle feedback; `WID` est bipolaire et agit uniquement sur le retour wet hors boucle feedback.
 - `VOL=0` garde le retour master inaudible; le delay reste traite si `REV>0` afin d'alimenter la reverb globale.
 
 ## 14. Addendum - send2 delay TYPE CLASSIC/DUAL
@@ -691,7 +691,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 - `RevB` est l'unique backend global send1 runtime compile; Drumboy, GVerb et Oliverb runtime sont retires.
 - `RevB` reste l'unique backend runtime et execute le kernel Mutable.
-- La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
+- La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique la fenetre `POSITION`/`WIDTH` d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
 - `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
 - `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
 - Params mappes:
@@ -699,7 +699,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
   - `Size` -> diffusion + modulation lente,
   - `Decay` -> feedback/time,
   - `PreD` -> predelay local,
-  - `LPF` -> damping interne en plus du prefiltre d'entree global.
+  - `DAMP` -> damping interne; `POSITION`/`WIDTH` -> coupures basse/haute du prefiltre et des filtres de sortie.
 - Les anciens controles `Type` et `Surr` sont retires du layout courant: `Type` ne selectionnait aucun autre backend et `Surr` ne rejoignait pas `RevB`.
 - RAM conservee pour RevB: `g_revb_engine_buffer[32768]` en D1 via `AUDIO_WARM` soit environ 128 KiB, plus predelay environ 17 KiB en D1 et scratch bloc DTCM.
 - RAM liberee estimee par retrait runtime: Drumboy environ 60 KiB DTCM + 21 KiB RAM_D2, GVerb environ 1.28 MiB SDRAM + petit etat DTCM, Oliverb environ 128 KiB SDRAM + scratch/etat DTCM.

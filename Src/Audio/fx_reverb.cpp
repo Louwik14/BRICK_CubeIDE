@@ -22,8 +22,8 @@ typedef struct
     float decay;
     float damp;
     float predelay_s;
-    float hpf;
-    float lpf;
+    float low_cut_hz;
+    float high_cut_hz;
 } fx_reverb_global_state_t;
 
 static fx_reverb_global_state_t g_reverb_global = {
@@ -34,8 +34,8 @@ static fx_reverb_global_state_t g_reverb_global = {
     .decay = 0.50f,
     .damp = 0.70f,
     .predelay_s = 0.045f,
-    .hpf = 0.0f,
-    .lpf = 0.0f,
+    .low_cut_hz = 20.0f,
+    .high_cut_hz = 20000.0f,
 };
 
 AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
@@ -50,8 +50,8 @@ static void fx_reverb_global_apply_params(void)
     fx_reverb_revb_global_set_decay(g_reverb_global.decay);
     fx_reverb_revb_global_set_damp(g_reverb_global.damp);
     fx_reverb_revb_global_set_predelay(g_reverb_global.predelay_s);
-    fx_reverb_revb_global_set_hpf(g_reverb_global.hpf);
-    fx_reverb_revb_global_set_lpf(g_reverb_global.lpf);
+    fx_reverb_revb_global_set_filter_hz(g_reverb_global.low_cut_hz,
+                                        g_reverb_global.high_cut_hz);
 }
 
 void fx_reverb_global_init(float sample_rate)
@@ -95,15 +95,21 @@ void fx_reverb_global_set_predelay(float predelay_s)
     fx_reverb_global_apply_params();
 }
 
-void fx_reverb_global_set_hpf(float hpf)
+void fx_reverb_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
-    g_reverb_global.hpf = fx_reverb_clamp01(hpf);
-    fx_reverb_global_apply_params();
-}
-
-void fx_reverb_global_set_lpf(float lpf)
-{
-    g_reverb_global.lpf = fx_reverb_clamp01(lpf);
+    g_reverb_global.low_cut_hz = (low_cut_hz < 20.0f) ? 20.0f
+        : ((low_cut_hz > 20000.0f) ? 20000.0f : low_cut_hz);
+    g_reverb_global.high_cut_hz = (high_cut_hz < 20.0f) ? 20.0f
+        : ((high_cut_hz > 20000.0f) ? 20000.0f : high_cut_hz);
+    if (g_reverb_global.high_cut_hz <= g_reverb_global.low_cut_hz)
+    {
+        g_reverb_global.high_cut_hz = g_reverb_global.low_cut_hz + 1.0f;
+        if (g_reverb_global.high_cut_hz > 20000.0f)
+        {
+            g_reverb_global.high_cut_hz = 20000.0f;
+            g_reverb_global.low_cut_hz = 19999.0f;
+        }
+    }
     fx_reverb_global_apply_params();
 }
 

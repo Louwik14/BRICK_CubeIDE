@@ -142,6 +142,9 @@ if(WIN32)
     add_test(NAME reverb_mutable_only
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/reverb_mutable_only_validation.ps1)
+    add_test(NAME spectral_window
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/spectral_window_validation.ps1)
     add_test(NAME seq_play_scheduler_pair
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/seq_play_scheduler_pair_validation.ps1)

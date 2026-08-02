@@ -37,8 +37,8 @@ if (-not $visibleSurface -or $visibleSurface -match [regex]::Escape($legacyParam
 }
 foreach ($param in @(
     'PARAM_MIX_REVERB_WET', 'PARAM_MIX_REVERB_SIZE', 'PARAM_MIX_REVERB_DECAY',
-    'PARAM_MIX_REVERB_PRED', 'PARAM_MIX_REVERB_DAMP', 'PARAM_MIX_REVERB_HPF',
-    'PARAM_MIX_REVERB_LPF')) {
+    'PARAM_MIX_REVERB_PRED', 'PARAM_MIX_REVERB_DAMP', 'PARAM_MIX_REVERB_SPECTRAL_POSITION',
+    'PARAM_MIX_REVERB_SPECTRAL_WIDTH')) {
     if ($visibleSurface -notmatch [regex]::Escape($param)) { throw "Mutable UI parameter missing: $param" }
     if ($pattern -notmatch [regex]::Escape("case ${param}:")) { throw "Pattern global missing: $param" }
     if ($runtime -notmatch [regex]::Escape("case ${param}:")) { throw "Runtime global missing: $param" }
@@ -61,7 +61,7 @@ foreach ($text in @($tone, $reverb, $revb, $model, $mixer, $pattern, $runtime, $
 if ($store -match [regex]::Escape($legacyParam) -or $catalog -match [regex]::Escape($legacyParam)) {
     throw 'Removed Mutable control remains in the active product path'
 }
-if ($tone -notmatch 'PARAM_MIX_REVERB_LPF, PARAM_COUNT') {
+if ($tone -notmatch 'PARAM_MIX_REVERB_SPECTRAL_WIDTH, PARAM_MIX_REVERB_DAMP, PARAM_COUNT') {
     throw 'Mutable reverb UI still exposes an obsolete slot'
 }
 if ($reverb -notmatch 'g_reverb_global\.wet > 0\.0f' -or $reverb -notmatch 'fx_reverb_revb_global_process_send_mono_to_stereo_wet') {

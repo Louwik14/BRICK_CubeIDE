@@ -26,8 +26,8 @@ typedef struct
     float time_current_samples_r;
     float feedback;
     float feedback_target;
-    float hpf;
-    float lpf;
+    float low_cut_hz;
+    float high_cut_hz;
     uint8_t pingpong;
     float width;
     float width_target;
@@ -88,16 +88,18 @@ static inline float read_delay(const float *buffer, uint32_t write_index, float 
     return a + ((b - a) * frac);
 }
 
-static inline float lpf_alpha(float lpf)
+static inline float lpf_alpha_hz(float frequency_hz, float sample_rate)
 {
-    const float t = 1.0f - clampf_local(lpf, 0.0f, 1.0f);
-    return kLpfMinAlpha + ((kLpfMaxAlpha - kLpfMinAlpha) * t * t);
+    const float fc = clampf_local(frequency_hz, 20.0f, 20000.0f);
+    return clampf_local(1.0f - expf(-6.28318530718f * fc / sample_rate),
+                        kLpfMinAlpha,
+                        kLpfMaxAlpha);
 }
 
-static inline float hpf_alpha(float hpf)
+static inline float hpf_alpha_hz(float frequency_hz, float sample_rate)
 {
-    const float t = clampf_local(hpf, 0.0f, 1.0f);
-    return 0.995f - (0.94f * t * t);
+    const float fc = clampf_local(frequency_hz, 20.0f, 20000.0f);
+    return expf(-6.28318530718f * fc / sample_rate);
 }
 
 static inline float process_hpf(float input, float alpha, float *state, float *prev_input)
@@ -127,8 +129,8 @@ extern "C" void fx_delay_stereo_global_init(float sample_rate)
     g_delay.time_current_samples_r = g_delay.time_current_samples_l;
     g_delay.feedback = 0.0f;
     g_delay.feedback_target = 0.0f;
-    g_delay.hpf = 0.0f;
-    g_delay.lpf = 0.0f;
+    g_delay.low_cut_hz = 20.0f;
+    g_delay.high_cut_hz = 20000.0f;
     g_delay.pingpong = 0U;
     g_delay.width = 0.0f;
     g_delay.width_target = 0.0f;
@@ -176,14 +178,19 @@ extern "C" void fx_delay_stereo_global_set_feedback(float feedback)
     g_delay.feedback_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
-extern "C" void fx_delay_stereo_global_set_hpf(float hpf)
+extern "C" void fx_delay_stereo_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
-    g_delay.hpf = clampf_local(hpf, 0.0f, 1.0f);
-}
-
-extern "C" void fx_delay_stereo_global_set_lpf(float lpf)
-{
-    g_delay.lpf = clampf_local(lpf, 0.0f, 1.0f);
+    g_delay.low_cut_hz = clampf_local(low_cut_hz, 20.0f, 20000.0f);
+    g_delay.high_cut_hz = clampf_local(high_cut_hz, 20.0f, 20000.0f);
+    if (g_delay.high_cut_hz <= g_delay.low_cut_hz)
+    {
+        g_delay.high_cut_hz = g_delay.low_cut_hz + 1.0f;
+        if (g_delay.high_cut_hz > 20000.0f)
+        {
+            g_delay.high_cut_hz = 20000.0f;
+            g_delay.low_cut_hz = 19999.0f;
+        }
+    }
 }
 
 extern "C" void fx_delay_stereo_global_set_pingpong(uint8_t enabled)
@@ -237,10 +244,10 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
 
     const float target_l = target_delay_samples(g_delay.time_target_s, g_delay.sample_rate);
     const float target_r = target_l;
-    const uint8_t hpf_active = (g_delay.hpf > 0.001f) ? 1U : 0U;
-    const uint8_t lpf_active = (g_delay.lpf > 0.001f) ? 1U : 0U;
-    const float hpf_a = (hpf_active != 0U) ? hpf_alpha(g_delay.hpf) : 0.0f;
-    const float lpf_a = (lpf_active != 0U) ? lpf_alpha(g_delay.lpf) : 0.0f;
+    const uint8_t hpf_active = (g_delay.low_cut_hz > 20.1f) ? 1U : 0U;
+    const uint8_t lpf_active = (g_delay.high_cut_hz < 19999.9f) ? 1U : 0U;
+    const float hpf_a = (hpf_active != 0U) ? hpf_alpha_hz(g_delay.low_cut_hz, g_delay.sample_rate) : 0.0f;
+    const float lpf_a = (lpf_active != 0U) ? lpf_alpha_hz(g_delay.high_cut_hz, g_delay.sample_rate) : 0.0f;
     const float rev = g_delay.reverb_send;
     const uint8_t has_rev = ((rev_l != 0) && (rev_r != 0)) ? 1U : 0U;
     float *const delay_buffer_l = fx_delay_shared_pool_left();

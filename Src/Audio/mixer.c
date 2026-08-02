@@ -28,6 +28,7 @@
 #include "fx_delay_dual.h"
 #include "fx_delay_stereo.h"
 #include "fx_reverb.h"
+#include "Audio/spectral_window.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
@@ -261,8 +262,8 @@ typedef struct
     float decay;
     float damp;
     float pre_delay;
-    float hpf;
-    float lpf;
+    float spectral_position;
+    float spectral_width;
 } mixer_reverb_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
@@ -271,9 +272,12 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .decay = 0.50f,
     .damp = 0.70f,
     .pre_delay = 0.50f,
-    .hpf = 0.0f,
-    .lpf = 0.0f,
+    .spectral_position = 0.50f,
+    .spectral_width = 1.0f,
 };
+
+static float g_delay_spectral_position = 0.50f;
+static float g_delay_spectral_width = 1.0f;
 
 static float mixer_reverb_predelay_ui_to_seconds(float v)
 {
@@ -1468,8 +1472,31 @@ static void mixer_reverb_state_reset_defaults(void)
     g_reverb.decay = 0.50f;
     g_reverb.damp = 0.70f;
     g_reverb.pre_delay = 0.50f;
-    g_reverb.hpf = 0.0f;
-    g_reverb.lpf = 0.0f;
+    g_reverb.spectral_position = 0.50f;
+    g_reverb.spectral_width = 1.0f;
+    g_delay_spectral_position = 0.50f;
+    g_delay_spectral_width = 1.0f;
+}
+
+static void mixer_apply_reverb_spectral_window(void)
+{
+    spectral_window_result_t result;
+    spectral_window_calculate(g_reverb.spectral_position,
+                              g_reverb.spectral_width,
+                              spectral_window_reverb_limits(),
+                              &result);
+    fx_reverb_global_set_filter_hz(result.low_cut_hz, result.high_cut_hz);
+}
+
+static void mixer_apply_delay_spectral_window(void)
+{
+    spectral_window_result_t result;
+    spectral_window_calculate(g_delay_spectral_position,
+                              g_delay_spectral_width,
+                              spectral_window_delay_limits(),
+                              &result);
+    fx_delay_stereo_global_set_filter_hz(result.low_cut_hz, result.high_cut_hz);
+    fx_delay_dual_global_set_filter_hz(result.low_cut_hz, result.high_cut_hz);
 }
 
 void mixer_reset_runtime_state(void)
@@ -1481,10 +1508,10 @@ void mixer_reset_runtime_state(void)
     fx_reverb_global_set_decay(g_reverb.decay);
     fx_reverb_global_set_damp(g_reverb.damp);
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
-    fx_reverb_global_set_hpf(g_reverb.hpf);
-    fx_reverb_global_set_lpf(g_reverb.lpf);
+    mixer_apply_reverb_spectral_window();
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    mixer_apply_delay_spectral_window();
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
     fx_delay_stereo_global_clear();
     audio_xfade_set(0.0f);
@@ -1793,16 +1820,16 @@ void mixer_set_reverb_pre_delay(float pre_delay)
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
 }
 
-void mixer_set_reverb_hpf(float hpf)
+void mixer_set_reverb_spectral_position(float position)
 {
-    g_reverb.hpf = clamp01(hpf);
-    fx_reverb_global_set_hpf(g_reverb.hpf);
+    g_reverb.spectral_position = clamp01(position);
+    mixer_apply_reverb_spectral_window();
 }
 
-void mixer_set_reverb_lpf(float lpf)
+void mixer_set_reverb_spectral_width(float width)
 {
-    g_reverb.lpf = clamp01(lpf);
-    fx_reverb_global_set_lpf(g_reverb.lpf);
+    g_reverb.spectral_width = clamp01(width);
+    mixer_apply_reverb_spectral_window();
 }
 
 void mixer_set_delay_type(uint8_t type)
@@ -1844,16 +1871,16 @@ void mixer_set_delay_feedback(float feedback)
     fx_delay_dual_global_set_feedback(feedback);
 }
 
-void mixer_set_delay_hpf(float hpf)
+void mixer_set_delay_spectral_position(float position)
 {
-    fx_delay_stereo_global_set_hpf(hpf);
-    fx_delay_dual_global_set_hpf(hpf);
+    g_delay_spectral_position = clamp01(position);
+    mixer_apply_delay_spectral_window();
 }
 
-void mixer_set_delay_lpf(float lpf)
+void mixer_set_delay_spectral_width(float width)
 {
-    fx_delay_stereo_global_set_lpf(lpf);
-    fx_delay_dual_global_set_lpf(lpf);
+    g_delay_spectral_width = clamp01(width);
+    mixer_apply_delay_spectral_window();
 }
 
 void mixer_set_delay_pingpong(uint8_t enabled)

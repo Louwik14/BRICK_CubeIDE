@@ -29,15 +29,15 @@ struct revb_global_state_t
     float size;
     float decay;
     float predelay_s;
-    float lpf;
+    float low_cut_hz;
     float damp;
-    float hpf;
+    float high_cut_hz;
     float wet_current;
     float size_current;
     float decay_current;
     float damp_current;
-    float hpf_current;
-    float lpf_current;
+    float low_cut_current_hz;
+    float high_cut_current_hz;
     float predelay_lag_samples;
     float predelay_current_samples;
     uint32_t predelay_write;
@@ -78,9 +78,8 @@ static void apply_params(void)
             : (1.0f - damping_curve);
     const float lfo1_hz = 0.25f + (0.50f * g_revb.size_current);
     const float lfo2_hz = 0.15f + (0.35f * g_revb.size_current);
-    const float hp_hz = 20.0f + ((expf(1.5f * g_revb.hpf_current) - 1.0f) * 150.0f);
-    const float lpf_deluge_value = 1.0f - g_revb.lpf_current;
-    const float lp_hz = (expf(1.5f * lpf_deluge_value) - 1.0f) * 5083.74f;
+    const float hp_hz = clampf_local(g_revb.low_cut_current_hz, 20.0f, 20000.0f);
+    const float lp_hz = clampf_local(g_revb.high_cut_current_hz, 20.0f, 20000.0f);
     const float hp_fc = hp_hz / g_revb.sample_rate;
     const float lp_fc = lp_hz / g_revb.sample_rate;
 
@@ -90,7 +89,7 @@ static void apply_params(void)
     g_revb.engine.set_time(clampf_local(time, 0.0f, 1.0f));
     g_revb.engine.set_lp(clampf_local(lp, 0.0f, 1.0f));
     g_revb.engine.set_output_filters(hp_fc / (1.0f + hp_fc),
-                                      (g_revb.lpf_current <= 0.0f)
+                                      (lp_hz >= 19999.0f)
                                               ? 1.0f
                                               : (lp_fc / (1.0f + lp_fc)));
     g_revb.engine.set_lfo1_freq(lfo1_hz);
@@ -123,15 +122,15 @@ void fx_reverb_revb_global_init(float sample_rate)
     g_revb.size = 0.0f;
     g_revb.predelay_s = 0.045f;
     g_revb.wet = 0.0f;
-    g_revb.lpf = 0.0f;
+    g_revb.low_cut_hz = 20.0f;
     g_revb.damp = 0.70f;
-    g_revb.hpf = 0.0f;
+    g_revb.high_cut_hz = 20000.0f;
     g_revb.wet_current = 0.0f;
     g_revb.size_current = g_revb.size;
     g_revb.decay_current = g_revb.decay;
     g_revb.damp_current = g_revb.damp;
-    g_revb.hpf_current = g_revb.hpf;
-    g_revb.lpf_current = g_revb.lpf;
+    g_revb.low_cut_current_hz = g_revb.low_cut_hz;
+    g_revb.high_cut_current_hz = g_revb.high_cut_hz;
     g_revb.predelay_lag_samples = 0.0f;
     g_revb.predelay_write = 0U;
     g_revb.predelay_current_samples = g_revb.predelay_s * g_revb.sample_rate;
@@ -183,14 +182,19 @@ void fx_reverb_revb_global_set_predelay(float predelay_s)
     apply_params();
 }
 
-void fx_reverb_revb_global_set_hpf(float hpf)
+void fx_reverb_revb_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
-    g_revb.hpf = clamp01_local(hpf);
-}
-
-void fx_reverb_revb_global_set_lpf(float lpf)
-{
-    g_revb.lpf = clamp01_local(lpf);
+    g_revb.low_cut_hz = clampf_local(low_cut_hz, 20.0f, 20000.0f);
+    g_revb.high_cut_hz = clampf_local(high_cut_hz, 20.0f, 20000.0f);
+    if (g_revb.high_cut_hz <= g_revb.low_cut_hz)
+    {
+        g_revb.high_cut_hz = g_revb.low_cut_hz + 1.0f;
+        if (g_revb.high_cut_hz > 20000.0f)
+        {
+            g_revb.high_cut_hz = 20000.0f;
+            g_revb.low_cut_hz = 19999.0f;
+        }
+    }
 }
 
 ITCM_TEXT_NAMED("fx_reverb_revb_global")
@@ -216,8 +220,8 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     g_revb.size_current += (g_revb.size - g_revb.size_current) * block_smooth;
     g_revb.decay_current += (g_revb.decay - g_revb.decay_current) * block_smooth;
     g_revb.damp_current += (g_revb.damp - g_revb.damp_current) * block_smooth;
-    g_revb.hpf_current += (g_revb.hpf - g_revb.hpf_current) * block_smooth;
-    g_revb.lpf_current += (g_revb.lpf - g_revb.lpf_current) * block_smooth;
+    g_revb.low_cut_current_hz += (g_revb.low_cut_hz - g_revb.low_cut_current_hz) * block_smooth;
+    g_revb.high_cut_current_hz += (g_revb.high_cut_hz - g_revb.high_cut_current_hz) * block_smooth;
     apply_params();
 
     const float wet_step = (g_revb.wet - g_revb.wet_current) / (float)frames;

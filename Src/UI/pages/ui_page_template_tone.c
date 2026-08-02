@@ -34,7 +34,7 @@ static const ui_template_family_t g_ui_template_tone_family_master_reverb_mutabl
     .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
     .subpages = {
         { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } } },
-        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_DAMP, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_COUNT } } },
+        { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_SPECTRAL_POSITION, PARAM_MIX_REVERB_SPECTRAL_WIDTH, PARAM_MIX_REVERB_DAMP, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -46,7 +46,7 @@ static const ui_template_family_t g_ui_template_tone_family_master_delay_classic
     .nav_labels = { "DELAY 1", "DELAY 2", "-", "-" },
     .subpages = {
         { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_VOL } } },
-        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
+        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_SPECTRAL_POSITION, PARAM_MIX_DELAY_SPECTRAL_WIDTH, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -58,7 +58,7 @@ static const ui_template_family_t g_ui_template_tone_family_master_delay_dual = 
     .nav_labels = { "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4" },
     .subpages = {
         { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_VOL } } },
-        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
+        { .title = "DELAY 2", .param_bank = { .params = { PARAM_MIX_DELAY_SPECTRAL_POSITION, PARAM_MIX_DELAY_SPECTRAL_WIDTH, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } } },
         { .title = "DELAY 3", .param_bank = { .params = { PARAM_MIX_DELAY_TIME_R, PARAM_MIX_DELAY_WIDTH, PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_MOD } } },
         { .title = "DELAY 4", .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -1178,12 +1178,12 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     (void)slot;
 
-    if ((id == PARAM_MIX_REVERB_HPF)
-            || (id == PARAM_MIX_REVERB_LPF)
-            || (id == PARAM_MIX_DELAY_HPF)
-            || (id == PARAM_MIX_DELAY_LPF))
+    if ((id == PARAM_MIX_REVERB_SPECTRAL_POSITION)
+            || (id == PARAM_MIX_REVERB_SPECTRAL_WIDTH)
+            || (id == PARAM_MIX_DELAY_SPECTRAL_POSITION)
+            || (id == PARAM_MIX_DELAY_SPECTRAL_WIDTH))
     {
-        return UI_TEMPLATE_CUSTOM_WIDGET_HPF_LPF_RESPONSE_GROUP;
+        return UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;
     }
     (void)value_label;
 
