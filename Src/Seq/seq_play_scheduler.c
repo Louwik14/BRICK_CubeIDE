@@ -92,6 +92,13 @@ static uint8_t g_seq_play_midi_program_valid[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static uint8_t g_seq_play_midi_program_last[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
 static uint32_t g_seq_play_next_event_token;
+/*
+ * Runtime-only occurrence token, retained at the scheduler's active-note
+ * guard. It is distinct from note pitch and from persisted step data. The
+ * one-token-per-pitch mirror remains a compatibility guard for this pass; the
+ * Multi ownership pass must transport the event token into a
+ * brick6_sampler_multi_voice_handle_t so identical pitches cannot alias.
+ */
 static uint32_t g_seq_play_active_event_token[TRACK_TOPOLOGY_PLAY_TRACK_COUNT][128U];
 static uint8_t g_seq_play_track_generation[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
 static uint8_t g_seq_play_track_suspended[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
@@ -637,6 +644,8 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             }
             else
             {
+                /* The current sampler entry point is pitch-based; the token
+                 * is still retained above for the exact runtime hand-off. */
                 brick6_sampler_runtime_note_off_multi_track_note(track, note);
             }
             return;

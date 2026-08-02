@@ -85,6 +85,7 @@ typedef struct
     uint16_t stream_owner_release_sample_id;
     sample_play_plan_t play_plan;
     sample_voice_reader_t reader;
+    /* Multi only: non-zero trigger_order is the handle generation. */
     uint32_t trigger_order;
     uint32_t stream_owner_release_generation;
     sample_stream_active_state_t stream_state;

@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include "Core/track_runtime.h"
+#include "Core/brick6_sampler_multi_contract.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_voice_reader.h"
@@ -20,8 +21,8 @@
 extern "C" {
 #endif
 
-#define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (4U)
-#define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (16U)
+#define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (BRICK6_SAMPLER_MULTI_MAX_VOICES)
+#define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define STREAM_SAMPLER_ROOT_NOTE            (60U)
 
 typedef enum
@@ -162,8 +163,13 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                            uint8_t velocity,
                                                            float gain);
 uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity(uint8_t track_id,
-                                                                 uint8_t note,
-                                                                 uint8_t velocity);
+                                                                  uint8_t note,
+                                                                  uint8_t velocity);
+/*
+ * Current scheduler compatibility surface. The implementation still accepts
+ * [track, note] here; the exact Multi Note Off contract is the runtime handle
+ * above and is introduced by the ownership step without changing persistence.
+ */
 void brick6_sampler_runtime_note_off_multi_track_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off(uint8_t track_id);

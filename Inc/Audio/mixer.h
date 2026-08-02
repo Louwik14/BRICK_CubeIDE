@@ -119,6 +119,12 @@ void mixer_set_track_vca_sustain(uint32_t track_id, float sustain);
 void mixer_set_track_vca_release(uint32_t track_id, float release_s);
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled);
 void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard);
+/*
+ * These APIs own the existing paraphonic track VCA. They remain valid for
+ * the current sampler path, but are not the per-occurrence Multi handle
+ * contract and must not become the ownership authority for future Multi DSP
+ * slots.
+ */
 void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_vca_all_notes_off(uint32_t track_id);
@@ -127,6 +133,7 @@ uint8_t mixer_track_vca_requires_source(uint32_t track_id);
 float mixer_get_track_vca_env_value(uint32_t track_id);
 float mixer_get_track_filter_env_value(uint32_t track_id);
 float mixer_prepare_track_filter_env_source(uint32_t track_id, uint32_t frames);
+/* Track filter gate; Multi per-voice filter state is a separate contract. */
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_filter_all_notes_off(uint32_t track_id);
