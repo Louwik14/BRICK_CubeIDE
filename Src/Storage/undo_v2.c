@@ -149,7 +149,7 @@ static uint8_t undo_v2_capture_allowed(void)
     return 1U;
 }
 
-static uint8_t undo_v2_transaction_identity_is_current(
+static uint8_t undo_v2_transaction_target_is_current(
     const undo_v2_sequence_transaction_t *transaction)
 {
     if ((transaction == 0)
@@ -187,7 +187,7 @@ static uint8_t undo_v2_pending_has_effective_change(void)
 static undo_v2_status_t undo_v2_exchange_transaction(
     undo_v2_sequence_transaction_t *transaction)
 {
-    if (undo_v2_transaction_identity_is_current(transaction) == 0U)
+    if (undo_v2_transaction_target_is_current(transaction) == 0U)
     {
         return UNDO_V2_STATUS_ERR_APPLY_FAILED;
     }

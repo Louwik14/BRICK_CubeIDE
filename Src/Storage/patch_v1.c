@@ -252,8 +252,7 @@ void patch_v1_init(void)
 
 patch_v1_result_t patch_v1_capture_track(uint8_t track, PatchSaveV1 *out_patch)
 {
-    if ((track >= UI_TRACK_COUNT) || (out_patch == 0)
-            || (track_topology_is_play(track) == 0U))
+    if ((track >= UI_TRACK_COUNT) || (out_patch == 0))
     {
         return PATCH_V1_RESULT_INVALID_ARG;
     }
@@ -264,7 +263,6 @@ patch_v1_result_t patch_v1_capture_track(uint8_t track, PatchSaveV1 *out_patch)
     out_patch->meta.source_track = track;
     out_patch->meta.summary_family = out_patch->meta.family;
     out_patch->meta.summary_type = out_patch->meta.type;
-    out_patch->meta.topology_role = (uint8_t)TRACK_TOPOLOGY_ROLE_PLAY;
     (void)snprintf(out_patch->meta.name,
                    sizeof(out_patch->meta.name),
                    "T%02u %s",
@@ -312,7 +310,6 @@ static patch_v1_result_t patch_v1_validate_loaded_patch(PatchSaveV1 *patch)
 {
     if ((patch == 0)
             || (patch_v1_family_type_is_valid(patch->meta.family, patch->meta.type) == 0U)
-            || (patch->meta.topology_role != (uint8_t)TRACK_TOPOLOGY_ROLE_PLAY)
             || (patch_v1_family_type_is_valid(patch->track.family, patch->track.type) == 0U)
             || (patch->meta.family != patch->track.family)
             || (patch->meta.type != patch->track.type))
@@ -347,7 +344,7 @@ static patch_v1_result_t patch_v1_validate_loaded_patch(PatchSaveV1 *patch)
 
 static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, uint8_t target)
 {
-    if ((patch == 0) || (target >= UI_TRACK_COUNT) || (track_topology_is_play(target) == 0U))
+    if ((patch == 0) || (target >= UI_TRACK_COUNT))
     {
         return PATCH_V1_RESULT_INVALID_ARG;
     }
@@ -443,8 +440,7 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
 }
 patch_v1_result_t patch_v1_apply_slot_to_track(uint16_t slot, uint8_t target_track)
 {
-    if ((slot >= PATCH_V1_SLOT_COUNT) || (target_track >= UI_TRACK_COUNT)
-            || (track_topology_is_play(target_track) == 0U))
+    if ((slot >= PATCH_V1_SLOT_COUNT) || (target_track >= UI_TRACK_COUNT))
     {
         return PATCH_V1_RESULT_INVALID_ARG;
     }

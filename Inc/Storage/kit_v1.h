@@ -14,7 +14,7 @@ extern "C" {
 
 #define KIT_V1_SLOT_COUNT 128U
 #define KIT_V1_NAME_MAX   32U
-#define KIT_V1_TRACK_MAX  16U
+#define KIT_V1_TRACK_MAX  SEQ_TRACK_COUNT
 #define KIT_V1_ASSET_PATH_MAX SAMPLE_GLOBAL_POOL_PATH_MAX
 #define KIT_V1_INVALID_SLOT 0xFFFFU
 
@@ -81,8 +81,7 @@ typedef struct
     uint8_t family;
     uint8_t type;
     uint8_t poly_voice_count;
-    uint8_t topology_role;
-    uint8_t topology_ordinal;
+    uint8_t reserved[2];
     float poly_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;

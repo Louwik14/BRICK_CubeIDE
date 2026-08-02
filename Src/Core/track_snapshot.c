@@ -164,45 +164,19 @@ static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *
     }
 
     memset(&out_snapshot->sequence, 0, sizeof(out_snapshot->sequence));
-    if (track_topology_is_play(track) != 0U)
+    track_snapshot_sequence_t *const saved = &out_snapshot->sequence;
+    saved->track.length_steps = seq_model_get_track_length((seq_track_id_t)track);
+    saved->track.ui_page = seq_model_get_track_page((seq_track_id_t)track);
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
     {
-        track_snapshot_play_sequence_t *const saved = &out_snapshot->sequence.play_sequence;
-        saved->track.length_steps = seq_model_get_track_length((seq_track_id_t)track);
-        saved->track.ui_page = seq_model_get_track_page((seq_track_id_t)track);
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-        {
-            seq_step_t *const dst_step = &saved->track.steps[step];
-            dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
-            dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
-            dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
-            uint8_t lock_count = 0U;
-            if (seq_model_step_plock_collect((seq_track_id_t)track,
-                                             step,
-                                             saved->step_locks[step].locks,
-                                             SEQ_PLAY_STEP_MAX_LOCKS,
-                                             &lock_count) == 0U) return 0U;
-            saved->step_locks[step].count = lock_count;
-        }
-    }
-    else
-    {
-        track_snapshot_special_sequence_t *const saved = &out_snapshot->sequence.special_sequence;
-        saved->length_steps = seq_model_get_track_length((seq_track_id_t)track);
-        saved->ui_page = seq_model_get_track_page((seq_track_id_t)track);
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-        {
-            track_snapshot_special_step_t *const dst_step = &saved->steps[step];
-            dst_step->action = seq_model_get_special_action((seq_track_id_t)track, step);
-            if (seq_model_step_plock_collect((seq_track_id_t)track,
-                                             step,
-                                             dst_step->locks,
-                                             SEQ_SPECIAL_STEP_MAX_LOCKS,
-                                             &dst_step->lock_count) == 0U) return 0U;
-            for (uint8_t lock = 0U; lock < dst_step->lock_count; ++lock)
-            {
-                if (dst_step->locks[lock].set_id == (uint8_t)SEQ_PLOCK_SET_PLAY) return 0U;
-            }
-        }
+        seq_step_t *const dst_step = &saved->track.steps[step];
+        dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
+        dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
+        dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
+        if (seq_model_step_plock_collect((seq_track_id_t)track, step,
+                                         saved->step_locks[step].locks,
+                                         SEQ_STEP_MAX_LOCKS,
+                                         &saved->step_locks[step].count) == 0U) return 0U;
     }
 
     (void)seq_runtime_get_track_div((seq_track_id_t)track, &out_snapshot->seq_div);
@@ -222,44 +196,22 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
         return;
     }
 
-    if (track_topology_is_play(track) != 0U)
+    const track_snapshot_sequence_t *const saved = &snapshot->sequence;
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
     {
-        const track_snapshot_play_sequence_t *const saved = &snapshot->sequence.play_sequence;
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+        seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
+        seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
+        seq_model_step_plock_clear((seq_track_id_t)track, step);
+        const uint8_t count = saved->step_locks[step].count;
+        for (uint8_t lock = 0U; lock < count; ++lock)
         {
-            seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
-            seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
-            seq_model_step_plock_clear((seq_track_id_t)track, step);
-            const uint8_t count = saved->step_locks[step].count;
-            for (uint8_t lock = 0U; lock < count; ++lock)
-            {
-                const seq_plock_entry_t *const entry = &saved->step_locks[step].locks[lock];
-                (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
-                                                  entry->param_slot, entry->value16, entry->flags);
-            }
+            const seq_plock_entry_t *const entry = &saved->step_locks[step].locks[lock];
+            (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
+                                              entry->param_slot, entry->value16, entry->flags);
         }
-        seq_model_set_track_length((seq_track_id_t)track, saved->track.length_steps);
-        seq_model_set_track_page((seq_track_id_t)track, saved->track.ui_page);
     }
-    else
-    {
-        const track_snapshot_special_sequence_t *const saved = &snapshot->sequence.special_sequence;
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-        {
-            const track_snapshot_special_step_t *const saved_step = &saved->steps[step];
-            seq_model_set_special_action((seq_track_id_t)track, step, saved_step->action);
-            seq_model_step_plock_clear((seq_track_id_t)track, step);
-            for (uint8_t lock = 0U; lock < saved_step->lock_count; ++lock)
-            {
-                const seq_plock_entry_t *const entry = &saved_step->locks[lock];
-                if (entry->set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
-                    (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
-                                                      entry->param_slot, entry->value16, entry->flags);
-            }
-        }
-        seq_model_set_track_length((seq_track_id_t)track, saved->length_steps);
-        seq_model_set_track_page((seq_track_id_t)track, saved->ui_page);
-    }
+    seq_model_set_track_length((seq_track_id_t)track, saved->track.length_steps);
+    seq_model_set_track_page((seq_track_id_t)track, saved->track.ui_page);
     seq_runtime_restore_track_div((seq_track_id_t)track, snapshot->seq_div);
     seq_runtime_set_track_quant((seq_track_id_t)track, snapshot->seq_quant);
     seq_runtime_set_track_swing((seq_track_id_t)track, snapshot->seq_swing);
@@ -315,7 +267,6 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
-    if (track_topology_get_identity(track, &out_snapshot->identity) == 0U) return 0U;
     out_snapshot->config = ui_get_track_config(track);
     out_snapshot->external_input = ui_get_track_external_input(track);
     out_snapshot->midi_channel = ui_get_track_midi_channel(track);
@@ -357,7 +308,6 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
-    if (track_topology_get_identity(track, &out_snapshot->identity) == 0U) return 0U;
     out_snapshot->config.family = UI_TRACK_FAMILY_OFF;
     out_snapshot->config.type = UI_TRACK_TYPE_AUDIO;
     out_snapshot->external_input = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
@@ -365,15 +315,6 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
     out_snapshot->poly_voice_count = 1U;
     out_snapshot->poly_spread = 0.0f;
-    if (track_topology_is_special(track) != 0U)
-    {
-        out_snapshot->config = ui_get_track_config(track);
-        out_snapshot->external_input = ui_get_track_external_input(track);
-        out_snapshot->midi_channel = ui_get_track_midi_channel(track);
-        out_snapshot->midi_source = ui_get_track_midi_source(track);
-        out_snapshot->poly_voice_count = 0U;
-    }
-
     track_sound_state_make_default(&out_snapshot->sound);
     track_tone_sound_state_make_default(&out_snapshot->tone);
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
@@ -384,14 +325,10 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
         out_snapshot->note_fx.value[slot][3] = NOTE_FX_MODEL_OFF;
     }
 
-    if (track_topology_is_play(track) != 0U)
-    {
-        for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
-            out_snapshot->sequence.play_sequence.track.steps[step].lock_head = TRACK_SNAPSHOT_LOCK_NONE;
-        out_snapshot->sequence.play_sequence.track.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
-        out_snapshot->sequence.play_sequence.track.ui_page = 0U;
-    }
-    else out_snapshot->sequence.special_sequence.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+        out_snapshot->sequence.track.steps[step].lock_head = TRACK_SNAPSHOT_LOCK_NONE;
+    out_snapshot->sequence.track.length_steps = SEQ_DEFAULT_LENGTH_STEPS;
+    out_snapshot->sequence.track.ui_page = 0U;
     out_snapshot->seq_div = 1U;
     out_snapshot->seq_quant = 0U;
     out_snapshot->seq_swing = 0U;
@@ -407,8 +344,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     g_track_snapshot_voice_max = 0U;
     if ((track_snapshot_track_is_valid(target_track) == 0U)
             || (snapshot == 0)
-            || (snapshot->valid == 0U)
-            || (track_topology_identity_is_compatible(target_track, &snapshot->identity) == 0U))
+            || (snapshot->valid == 0U))
     {
         return 0U;
     }

@@ -22,36 +22,19 @@ typedef struct __attribute__((packed))
     uint8_t lock_count;
     uint8_t roll;
     uint8_t reserved;
-    pattern_v1_plock_t locks[SEQ_PLAY_STEP_MAX_LOCKS];
-} pattern_v1_play_step_t;
+    pattern_v1_plock_t locks[SEQ_STEP_MAX_LOCKS];
+} pattern_v1_step_t;
 
 typedef struct
 {
-    track_topology_identity_t identity;
     uint8_t length_steps;
     uint8_t ui_page;
-    pattern_v1_play_step_t steps[SEQ_MAX_STEPS];
-} pattern_v1_play_track_seq_t;
-
-typedef struct __attribute__((packed))
-{
-    uint8_t action;
-    uint8_t lock_count;
     uint8_t reserved[2];
-    pattern_v1_plock_t locks[SEQ_SPECIAL_STEP_MAX_LOCKS];
-} pattern_v1_special_step_t;
+    pattern_v1_step_t steps[SEQ_MAX_STEPS];
+} pattern_v1_track_seq_t;
 
 typedef struct
 {
-    track_topology_identity_t identity;
-    uint8_t length_steps;
-    uint8_t ui_page;
-    pattern_v1_special_step_t steps[SEQ_MAX_STEPS];
-} pattern_v1_special_track_seq_t;
-
-typedef struct
-{
-    track_topology_identity_t identity[SEQ_TRACK_COUNT];
     uint8_t family[SEQ_TRACK_COUNT];
     uint8_t type[SEQ_TRACK_COUNT];
     uint8_t external_input[SEQ_TRACK_COUNT];
@@ -62,9 +45,7 @@ typedef struct
 
 typedef struct
 {
-    pattern_v1_play_track_seq_t play[TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
-    pattern_v1_special_track_seq_t special[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY
-                                           - TRACK_TOPOLOGY_PLAY_TRACK_COUNT];
+    pattern_v1_track_seq_t tracks[SEQ_TRACK_COUNT];
 } pattern_v1_seq_block_t;
 
 typedef struct

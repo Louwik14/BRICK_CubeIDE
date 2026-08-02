@@ -110,9 +110,6 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
-/* Removed model compatibility for stage-2 track snapshots; never active on 0..7. */
-uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step);
-void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,

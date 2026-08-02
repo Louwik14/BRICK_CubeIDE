@@ -12,12 +12,6 @@
 
 #define SEQ_STEP_MAX_LOCKS 32U
 #define SEQ_PLOCK_POOL_CAP_PER_TRACK 1024U
-/* Persistence is migrated in step 2; its old payload widths remain readable until then. */
-#define SEQ_PLAY_STEP_MAX_LOCKS SEQ_STEP_MAX_LOCKS
-#define SEQ_SPECIAL_STEP_MAX_LOCKS 16U
-#define SEQ_PLAY_PLOCK_POOL_CAP_PER_TRACK SEQ_PLOCK_POOL_CAP_PER_TRACK
-#define SEQ_SPECIAL_PLOCK_POOL_CAP_PER_TRACK 512U
-#define SEQ_SPECIAL_ACTION_COUNT 2U
 
 /* Global per-track memory budget: shared by all steps of the track. */
 #define SEQ_PLOCK_BUDGET_PER_TRACK SEQ_PLOCK_POOL_CAP_PER_TRACK

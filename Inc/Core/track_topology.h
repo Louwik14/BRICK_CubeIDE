@@ -41,13 +41,6 @@ typedef struct
     uint16_t capabilities;
 } track_topology_descriptor_t;
 
-/* Current storage formats are removed in migration step 2. */
-typedef struct
-{
-    uint8_t role;
-    uint8_t ordinal;
-} track_topology_identity_t;
-
 /* Transitional queries for consumers removed by the later UI/audio stages.
  * They cannot create identities outside the eight-slot domain. */
 typedef enum
@@ -78,9 +71,6 @@ uint8_t track_topology_get_logical_track_count(void);
 uint8_t track_topology_get_play_track_count(void);
 uint8_t track_topology_get_physical_input_count(void);
 uint8_t track_topology_get_special_track_count(void);
-uint8_t track_topology_get_identity(uint8_t track, track_topology_identity_t *out_identity);
-uint8_t track_topology_resolve_identity(const track_topology_identity_t *identity, uint8_t *out_track);
-uint8_t track_topology_identity_is_compatible(uint8_t track, const track_topology_identity_t *identity);
 
 #ifdef __cplusplus
 }

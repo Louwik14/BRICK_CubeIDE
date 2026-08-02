@@ -640,9 +640,7 @@ uint8_t seq_model_get_step_lock_limit(seq_track_id_t track)
     {
         return 0U;
     }
-    return (seq_model_track_is_play(track) != 0U)
-        ? (uint8_t)SEQ_PLAY_STEP_MAX_LOCKS
-        : (uint8_t)SEQ_SPECIAL_STEP_MAX_LOCKS;
+    return (uint8_t)SEQ_STEP_MAX_LOCKS;
 }
 
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track)
@@ -663,12 +661,6 @@ uint16_t seq_model_get_track_plock_count(seq_track_id_t track)
     seq_model_exit_critical(primask);
     return (free_count <= capacity) ? (uint16_t)(capacity - free_count) : 0U;
 }
-
-uint8_t seq_model_get_special_action(seq_track_id_t track, seq_step_id_t step)
-{ (void)track; (void)step; return 0U; }
-
-void seq_model_set_special_action(seq_track_id_t track, seq_step_id_t step, uint8_t action)
-{ (void)track; (void)step; (void)action; }
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,

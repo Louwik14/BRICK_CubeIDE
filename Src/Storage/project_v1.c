@@ -10,7 +10,6 @@
 #include "Storage/project_sd_bank.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
-#include "Storage/storage_track_identity.h"
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
@@ -66,22 +65,13 @@ static void project_v1_macro_clear_lock(project_v1_macro_lock_t *lock)
 
 static uint8_t project_v1_normalize_track_payloads(const ProjectSaveV1 *project)
 {
-    uint8_t remap[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
     const uint8_t track_count = track_topology_get_logical_track_count();
-    if ((project == 0)
-            || (storage_track_identity_build_remap(project->live.track_cfg.identity,
-                                                   track_count,
-                                                   remap) == 0U))
+    if (project == 0)
     {
         return 0U;
     }
 
     memcpy(g_project_normalized_multi, project->multi, sizeof(g_project_normalized_multi));
-    for (uint8_t source = 0U; source < track_count; ++source)
-    {
-        g_project_normalized_multi[remap[source]] = project->multi[source];
-    }
-
     g_project_normalized_macro = project->macro;
     for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
     {
@@ -98,7 +88,6 @@ static uint8_t project_v1_normalize_track_payloads(const ProjectSaveV1 *project)
             {
                 return 0U;
             }
-            entry->track = remap[entry->track];
         }
     }
     return 1U;

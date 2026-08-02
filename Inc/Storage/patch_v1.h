@@ -52,7 +52,7 @@ typedef struct
     uint8_t source_track;
     uint8_t summary_family;
     uint8_t summary_type;
-    uint8_t topology_role;
+    uint8_t reserved;
 } patch_v1_metadata_t;
 
 typedef struct

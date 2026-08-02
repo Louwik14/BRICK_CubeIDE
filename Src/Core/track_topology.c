@@ -47,17 +47,3 @@ uint8_t track_topology_get_logical_track_count(void) { return TRACK_TOPOLOGY_TRA
 uint8_t track_topology_get_play_track_count(void) { return TRACK_TOPOLOGY_TRACK_COUNT; }
 uint8_t track_topology_get_special_track_count(void) { return 0U; }
 uint8_t track_topology_get_physical_input_count(void) { return TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT; }
-uint8_t track_topology_get_identity(uint8_t track, track_topology_identity_t *identity)
-{
-    if ((identity == NULL) || (track >= TRACK_TOPOLOGY_TRACK_COUNT)) return 0U;
-    identity->role = (uint8_t)TRACK_TOPOLOGY_ROLE_PLAY; identity->ordinal = track; return 1U;
-}
-uint8_t track_topology_resolve_identity(const track_topology_identity_t *identity, uint8_t *track)
-{
-    if ((identity == NULL) || (track == NULL) || (identity->role != TRACK_TOPOLOGY_ROLE_PLAY)
-            || (identity->ordinal >= TRACK_TOPOLOGY_TRACK_COUNT)) return 0U;
-    *track = identity->ordinal; return 1U;
-}
-uint8_t track_topology_identity_is_compatible(uint8_t track, const track_topology_identity_t *identity)
-{ return (uint8_t)((identity != NULL) && (track < TRACK_TOPOLOGY_TRACK_COUNT)
-    && (identity->role == TRACK_TOPOLOGY_ROLE_PLAY)); }
