@@ -55,6 +55,7 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     static const ui_track_type_t k_sampler_types[] = {
         UI_TRACK_TYPE_RAM,
         UI_TRACK_TYPE_STREAM,
+        UI_TRACK_TYPE_LOOPER,
         UI_TRACK_TYPE_MULTI
     };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
@@ -216,8 +217,7 @@ bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_trac
         return false;
     }
 
-    if (((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
-            || (ui_track_catalog_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO)))
+    if (ui_track_catalog_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO))
     {
         return true;
     }
@@ -258,8 +258,7 @@ bool ui_track_catalog_type_is_available(uint8_t track,
                 && (track_configs[track].type == type);
     }
 
-    if (((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
-            || ui_track_catalog_family_is_input(family))
+    if (ui_track_catalog_family_is_input(family))
     {
         return false;
     }

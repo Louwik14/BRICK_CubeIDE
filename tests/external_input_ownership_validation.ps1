@@ -41,8 +41,22 @@ if (-not $ownership.Contains('input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT')) {
 if (-not $runtime.Contains('TRACK_RUNTIME_FAMILY_EXTERNAL')) {
     throw 'External has no distinct runtime family'
 }
-if (-not $runtime.Contains('track_input_ownership_track_owns_input')) {
+if (-not ($runtime -match 'track_input_ownership_track_owns_input\(\s*track,\s*track_input_ownership_get_external_input\(track\)\)')) {
     throw 'Runtime audio routing does not consult the ownership authority'
+}
+if ($ownership.Contains('get_fixed_input_track') -or
+    $ownership.Contains('get_audible_owner') -or
+    $header.Contains('get_fixed_input_track') -or
+    $header.Contains('get_audible_owner')) {
+    throw 'A fixed Input fallback remains in the ownership authority'
+}
+if ($runtime.Contains('TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT') -or
+    $runtime.Contains('track_runtime_mark_reserved_input_mix_tracks') -or
+    $runtime -match 'ctx->mix_track_id\s*=\s*external_input') {
+    throw 'Physical inputs still reserve or dictate mixer lanes'
+}
+if (-not $ownership.Contains('track < UI_TRACK_COUNT')) {
+    throw 'External ownership is not available to all eight logical slots'
 }
 if (([regex]::Matches($runtime, 'track_runtime_is_audio_routable\(track\) == 0U')).Count -lt 3) {
     throw 'Non-owner Input params are not blocked from audio resources'

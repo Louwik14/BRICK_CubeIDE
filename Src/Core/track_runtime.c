@@ -20,7 +20,6 @@
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
-#define TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT UI_AUDIO_INPUT_PROTO_WIRED_COUNT
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 static volatile uint8_t g_track_runtime_global_dirty = 1U;
@@ -146,35 +145,6 @@ static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
     }
 }
 
-static uint8_t track_runtime_input_family_mix_track(track_runtime_family_t family,
-                                                    ui_track_family_t ui_family,
-                                                    uint8_t *out_mix_track)
-{
-    if ((out_mix_track == NULL) || (family != TRACK_RUNTIME_FAMILY_INPUT))
-    {
-        return 0U;
-    }
-
-    switch (ui_family)
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_mix_track = 0U;
-            return 1U;
-#if UI_AUDIO_INPUT_RESOURCE_COUNT > 1U
-        case UI_TRACK_FAMILY_INPUT2:
-            *out_mix_track = 1U;
-            return 1U;
-#endif
-#if UI_AUDIO_INPUT_RESOURCE_COUNT > 2U
-        case UI_TRACK_FAMILY_INPUT3:
-            *out_mix_track = 2U;
-            return 1U;
-#endif
-        default:
-            return 0U;
-    }
-}
-
 static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
                                                uint8_t preferred_mix_track,
                                                uint8_t *used,
@@ -204,22 +174,6 @@ static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
 
     ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
     return 0U;
-}
-
-static void track_runtime_mark_reserved_input_mix_tracks(uint8_t *used, uint8_t used_len)
-{
-    if (used == NULL)
-    {
-        return;
-    }
-
-    const uint8_t count = (TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT < used_len)
-        ? TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT
-        : used_len;
-    for (uint8_t lane = 0U; lane < count; ++lane)
-    {
-        used[lane] = 1U;
-    }
 }
 
 static uint8_t track_runtime_mix_try_reserve_exact(track_runtime_ctx_t *ctx,
@@ -1013,9 +967,8 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
     }
 
     const ui_track_config_t config = track_state_get_config(track);
-    const ui_track_family_t ui_family = config.family;
     const ui_track_type_t ui_type = config.type;
-    track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
+    track_runtime_family_t family = track_runtime_family_from_ui(config.family);
     track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
     if (track_topology_is_role(track, TRACK_TOPOLOGY_ROLE_MASTER) != 0U)
     {
@@ -1045,23 +998,6 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
     ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
     ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
 
-    uint8_t input_mix_track = TRACK_RUNTIME_MIX_TRACK_NONE;
-    if (track_runtime_input_family_mix_track(family, ui_family, &input_mix_track) != 0U)
-    {
-        if (input_mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT)
-        {
-            ctx->mix_track_id = input_mix_track;
-        }
-    }
-    else if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-            && (type == TRACK_RUNTIME_TYPE_EXTERNAL))
-    {
-        const uint8_t external_input = track_state_get_external_input(track);
-        if (external_input < TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
-        {
-            ctx->mix_track_id = external_input;
-        }
-    }
 }
 
 static void track_runtime_mark_used_mix_tracks_except(uint8_t except_track,
@@ -1074,7 +1010,6 @@ static void track_runtime_mark_used_mix_tracks_except(uint8_t except_track,
     }
 
     memset(mix_track_used, 0, used_len);
-    track_runtime_mark_reserved_input_mix_tracks(mix_track_used, used_len);
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         if (track == except_track)
@@ -1228,7 +1163,6 @@ void track_runtime_refresh_all(void)
 
     g_track_runtime_refresh_all_count++;
     memset(mix_track_used, 0, sizeof(mix_track_used));
-    track_runtime_mark_reserved_input_mix_tracks(mix_track_used, (uint8_t)sizeof(mix_track_used));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         previous_looper[track] = (uint8_t)((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
@@ -1461,10 +1395,10 @@ uint8_t track_runtime_is_audio_routable(uint8_t track)
     {
         return 0U;
     }
-    if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
-            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL))
+    if ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
     {
-        return track_input_ownership_track_owns_input(track, ctx->mix_track_id);
+        return track_input_ownership_track_owns_input(
+            track, track_input_ownership_get_external_input(track));
     }
     return 1U;
 }

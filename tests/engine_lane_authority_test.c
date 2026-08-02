@@ -17,12 +17,12 @@ static void assert_usage(const ui_track_config_t *configs,
     assert(usage.total_tracks == (uint8_t)(synth + sampler + drum));
 }
 
-static void test_prism_to_off_ignores_fixed_looper(void)
+static void test_prism_to_off_ignores_looper_engine_lane(void)
 {
     ui_track_config_t configs[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
     memset(configs, 0, sizeof(configs));
-    configs[TRACK_TOPOLOGY_LOOPER_TRACK_INDEX].family = UI_TRACK_FAMILY_SAMPLER;
-    configs[TRACK_TOPOLOGY_LOOPER_TRACK_INDEX].type = UI_TRACK_TYPE_LOOPER;
+    configs[7U].family = UI_TRACK_FAMILY_SAMPLER;
+    configs[7U].type = UI_TRACK_TYPE_LOOPER;
 
     assert_usage(configs, 0U, 0U, 0U);
 
@@ -39,8 +39,8 @@ static void test_partial_and_total_engine_disable(void)
 {
     ui_track_config_t configs[TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY];
     memset(configs, 0, sizeof(configs));
-    configs[TRACK_TOPOLOGY_LOOPER_TRACK_INDEX].family = UI_TRACK_FAMILY_SAMPLER;
-    configs[TRACK_TOPOLOGY_LOOPER_TRACK_INDEX].type = UI_TRACK_TYPE_LOOPER;
+    configs[7U].family = UI_TRACK_FAMILY_SAMPLER;
+    configs[7U].type = UI_TRACK_TYPE_LOOPER;
     configs[0].family = UI_TRACK_FAMILY_SYNTH;
     configs[0].type = UI_TRACK_TYPE_PRISM;
     configs[1].family = UI_TRACK_FAMILY_SAMPLER;
@@ -59,7 +59,7 @@ static void test_partial_and_total_engine_disable(void)
 
 int main(void)
 {
-    test_prism_to_off_ignores_fixed_looper();
+    test_prism_to_off_ignores_looper_engine_lane();
     test_partial_and_total_engine_disable();
     return 0;
 }

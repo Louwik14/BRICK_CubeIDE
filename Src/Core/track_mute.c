@@ -47,8 +47,6 @@ track_mute_kind_t track_mute_get_kind(uint8_t track)
     switch (descriptor.topology_role)
     {
         case TRACK_TOPOLOGY_ROLE_MASTER: return TRACK_MUTE_KIND_NONE;
-        case TRACK_TOPOLOGY_ROLE_LOOPER: return TRACK_MUTE_KIND_LOOPER;
-        case TRACK_TOPOLOGY_ROLE_INPUT: return TRACK_MUTE_KIND_INPUT;
         case TRACK_TOPOLOGY_ROLE_FX: return TRACK_MUTE_KIND_FX;
         default: break;
     }
@@ -60,6 +58,11 @@ track_mute_kind_t track_mute_get_kind(uint8_t track)
     if (descriptor.family == TRACK_RUNTIME_FAMILY_EXTERNAL)
     {
         return TRACK_MUTE_KIND_EXTERNAL;
+    }
+    if ((descriptor.family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (descriptor.type == TRACK_RUNTIME_TYPE_LOOPER))
+    {
+        return TRACK_MUTE_KIND_LOOPER;
     }
     return TRACK_MUTE_KIND_AUDIO;
 }

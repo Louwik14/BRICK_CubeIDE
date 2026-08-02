@@ -25,7 +25,7 @@ static uint8_t track_input_ownership_build(
     }
 
     memset(owners, TRACK_INPUT_OWNER_NONE, TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
-    for (uint8_t track = 0U; track < TRACK_TOPOLOGY_PLAY_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         if (track_input_ownership_is_external(&configs[track]) == 0U)
         {
@@ -110,7 +110,7 @@ uint8_t track_input_ownership_validate_bulk(
 
 uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
 {
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT)
             || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT))
     {
         return 0U;
@@ -125,7 +125,7 @@ uint8_t track_input_ownership_set_external_input(
     const ui_track_config_t configs[UI_TRACK_COUNT])
 {
     uint8_t selected[UI_TRACK_COUNT];
-    if ((track >= TRACK_TOPOLOGY_PLAY_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT)
             || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             || (configs == NULL))
     {
@@ -156,23 +156,9 @@ uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_tra
     return 1U;
 }
 
-uint8_t track_input_ownership_get_fixed_input_track(uint8_t input, uint8_t *out_track)
-{
-    return track_topology_find_special(TRACK_TOPOLOGY_ROLE_INPUT, input, out_track);
-}
-
-uint8_t track_input_ownership_get_audible_owner(uint8_t input, uint8_t *out_track)
-{
-    if (track_input_ownership_get_external_owner(input, out_track) != 0U)
-    {
-        return 1U;
-    }
-    return track_input_ownership_get_fixed_input_track(input, out_track);
-}
-
 uint8_t track_input_ownership_track_owns_input(uint8_t track, uint8_t input)
 {
     uint8_t owner = TRACK_INPUT_OWNER_NONE;
-    return (uint8_t)((track_input_ownership_get_audible_owner(input, &owner) != 0U)
+    return (uint8_t)((track_input_ownership_get_external_owner(input, &owner) != 0U)
             && (owner == track));
 }

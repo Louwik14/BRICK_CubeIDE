@@ -37,16 +37,7 @@ static ui_track_config_t track_state_topology_config(uint8_t track)
             break;
 
         case TRACK_TOPOLOGY_ROLE_LOOPER:
-            config.family = UI_TRACK_FAMILY_SAMPLER;
-            config.type = UI_TRACK_TYPE_LOOPER;
-            break;
-
         case TRACK_TOPOLOGY_ROLE_INPUT:
-            config.family = (ui_track_family_t)((uint8_t)UI_TRACK_FAMILY_INPUT1
-                    + descriptor.physical_input_index);
-            config.type = UI_TRACK_TYPE_AUDIO;
-            break;
-
         case TRACK_TOPOLOGY_ROLE_PLAY:
         case TRACK_TOPOLOGY_ROLE_UNUSED:
         default:
@@ -70,11 +61,6 @@ static void track_state_normalize_play_config(ui_track_config_t *config)
         return;
     }
 
-    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
-            && (config->type == UI_TRACK_TYPE_LOOPER))
-    {
-        config->type = UI_TRACK_TYPE_RAM;
-    }
 }
 
 static void track_state_normalize_config(ui_track_config_t *config)

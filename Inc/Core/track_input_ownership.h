@@ -27,9 +27,7 @@ uint8_t track_input_ownership_set_external_input(
     const ui_track_config_t configs[UI_TRACK_COUNT]);
 uint8_t track_input_ownership_get_external_input(uint8_t track);
 uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_track);
-uint8_t track_input_ownership_get_audible_owner(uint8_t input, uint8_t *out_track);
 uint8_t track_input_ownership_track_owns_input(uint8_t track, uint8_t input);
-uint8_t track_input_ownership_get_fixed_input_track(uint8_t input, uint8_t *out_track);
 
 #ifdef __cplusplus
 }
