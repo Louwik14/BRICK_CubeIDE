@@ -1377,12 +1377,16 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     {
         if (id == PARAM_CFG_POLY_VOICES)
         {
-            *out_value = (float)synth_polyphony_get_voice_count(track);
+            *out_value = (float)((param_registry_track_is_sampler_multi(track) != 0U)
+                ? brick6_sampler_runtime_get_multi_voice_count(track)
+                : synth_polyphony_get_voice_count(track));
             return 1U;
         }
         if (id == PARAM_CFG_POLY_SPREAD)
         {
-            *out_value = synth_polyphony_get_spread(track);
+            *out_value = (param_registry_track_is_sampler_multi(track) != 0U)
+                ? brick6_sampler_runtime_get_multi_spread(track)
+                : synth_polyphony_get_spread(track);
             return 1U;
         }
         switch (id)
@@ -1641,18 +1645,33 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
     {
-        if (track >= SYNTH_POLYPHONY_TRACK_CAPACITY)
+        const uint8_t is_multi = param_registry_track_is_sampler_multi(track);
+        if ((is_multi == 0U) && (track >= SYNTH_POLYPHONY_TRACK_CAPACITY))
         {
             return 0U;
         }
         if (id == PARAM_CFG_POLY_VOICES)
         {
-            keyboard_engine_all_notes_off_for_track(track);
-            (void)synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+            if (is_multi != 0U)
+            {
+                brick6_sampler_runtime_set_multi_voice_count(track, (uint8_t)clamped);
+            }
+            else
+            {
+                keyboard_engine_all_notes_off_for_track(track);
+                (void)synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+            }
         }
         else
         {
-            synth_polyphony_set_spread(track, clamped);
+            if (is_multi != 0U)
+            {
+                brick6_sampler_runtime_set_multi_spread(track, clamped);
+            }
+            else
+            {
+                synth_polyphony_set_spread(track, clamped);
+            }
         }
         kit_v1_mark_dirty();
         return 1U;

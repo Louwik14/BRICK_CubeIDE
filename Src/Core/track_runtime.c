@@ -1,5 +1,6 @@
 #include "Core/track_runtime.h"
 #include "Core/synth_polyphony.h"
+#include "Core/brick6_sampler_runtime.h"
 
 #include <string.h>
 
@@ -692,6 +693,11 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
 {
+    if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)
+            && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
+    {
+        return brick6_sampler_runtime_get_multi_voice_count(ctx->track_id);
+    }
     if ((ctx != NULL) && ((ctx->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == TRACK_RUNTIME_ENGINE_STACK)
             || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)
@@ -710,7 +716,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
     if ((descriptor->family == TRACK_RUNTIME_FAMILY_SAMPLER)
             && (descriptor->type == TRACK_RUNTIME_TYPE_MULTI))
     {
-        return 4U;
+        return brick6_sampler_runtime_get_multi_voice_count(descriptor->instance_id);
     }
     if ((descriptor->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (descriptor->engine == TRACK_RUNTIME_ENGINE_STACK)
