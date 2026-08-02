@@ -167,7 +167,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 if (resolved.has_mix_target != 0U)
                 {
-                    mixer_track_poly_note_off(resolved.mix_track_id, voice, note);
+                    mixer_track_poly_note_off(track, voice, note);
                 }
                 if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
                 {

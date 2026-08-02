@@ -167,7 +167,7 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
             const uint8_t voice = released[i].voice;
             const uint8_t note = released[i].note;
             const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
-            mixer_track_poly_note_off(ctx->mix_track_id, voice, note);
+            mixer_track_poly_note_off(track, voice, note);
             if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
                 brick6_braids_runtime_note_off(instance, note);
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
@@ -257,9 +257,9 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
     if ((is_poly_synth != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE) && (has_mix != 0U))
     {
         if (is_note_on != 0U)
-            mixer_track_poly_note_on(mix_track, voice, note, velocity);
+            mixer_track_poly_note_on(track, mix_track, voice, note, velocity);
         else
-            mixer_track_poly_note_off(mix_track, voice, note);
+            mixer_track_poly_note_off(track, voice, note);
     }
     else if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
     {

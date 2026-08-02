@@ -536,9 +536,9 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             && (resolved.has_mix_target != 0U))
     {
         if (is_note_on != 0U)
-            mixer_track_poly_note_on(resolved.mix_track_id, voice, note, velocity);
+            mixer_track_poly_note_on(track, resolved.mix_track_id, voice, note, velocity);
         else
-            mixer_track_poly_note_off(resolved.mix_track_id, voice, note);
+            mixer_track_poly_note_off(track, voice, note);
     }
     else if (resolved.has_filter_target != 0U)
     {

@@ -169,13 +169,14 @@ enum
     MIXER_EXTERNAL_FORMAT_POLY_STEREO = 3U
 };
 
-static mixer_track_filter_t *mixer_poly_filter(uint32_t track_id, uint8_t voice)
+static mixer_track_filter_t *mixer_poly_filter(uint32_t poly_track_id, uint8_t voice)
 {
-    if ((track_id >= 8U) || (voice >= 8U))
+    if ((poly_track_id >= SYNTH_POLYPHONY_TRACK_CAPACITY)
+            || (voice >= SYNTH_POLYPHONY_MAX_VOICES))
     {
         return NULL;
     }
-    const uint8_t index = synth_polyphony_get_slot((uint8_t)track_id, voice);
+    const uint8_t index = synth_polyphony_get_slot((uint8_t)poly_track_id, voice);
     return (index < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
         ? &g_poly_filters_hot[index] : NULL;
 }
@@ -2500,17 +2501,19 @@ uint8_t mixer_begin_external_poly(uint32_t track_id, uint32_t frames)
     return 1U;
 }
 
-uint8_t mixer_process_external_poly_voice(uint32_t track_id,
+uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
+                                          uint32_t poly_track_id,
                                           uint8_t voice,
                                           float *mono,
                                           uint32_t frames,
                                           float voice_pan)
 {
-    mixer_track_filter_t *const filter = mixer_poly_filter(track_id, voice);
-    if ((filter == NULL) || (mono == NULL) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE))
+    mixer_track_filter_t *const filter = mixer_poly_filter(poly_track_id, voice);
+    if ((filter == NULL) || (mix_track_id >= MIXER_MAX_TRACKS) || (mono == NULL)
+            || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE))
         return 0U;
 
-    mixer_poly_filter_sync_config(filter, &g_track_filters[track_id]);
+    mixer_poly_filter_sync_config(filter, &g_track_filters[mix_track_id]);
     (void)mixer_track_filter_process_block_mono(filter, mono, frames);
     const float pan_for_mix = -clamp_pan(voice_pan);
     const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
@@ -2520,8 +2523,8 @@ uint8_t mixer_process_external_poly_voice(uint32_t track_id,
         const float vca =
             (float)env_adsr_process_step(&filter->vca_env) * (1.0f / 32767.0f);
         filter->vca_env_value = vca;
-        g_external_track_l[track_id][i] += mono[i] * vca * pan_l;
-        g_external_track_r[track_id][i] += mono[i] * vca * pan_r;
+        g_external_track_l[mix_track_id][i] += mono[i] * vca * pan_l;
+        g_external_track_r[mix_track_id][i] += mono[i] * vca * pan_r;
     }
     return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE);
 }
@@ -2536,13 +2539,19 @@ void mixer_commit_external_poly(uint32_t track_id, uint32_t frames)
     g_external_track_enabled[track_id] = 1U;
 }
 
-void mixer_track_poly_note_on(uint32_t track_id, uint8_t voice, uint8_t note, uint8_t velocity)
+void mixer_track_poly_note_on(uint32_t poly_track_id,
+                              uint32_t mix_track_id,
+                              uint8_t voice,
+                              uint8_t note,
+                              uint8_t velocity)
 {
     (void)velocity;
-    mixer_track_filter_t *const filter = mixer_poly_filter(track_id, voice);
+    if (mix_track_id >= MIXER_MAX_TRACKS)
+        return;
+    mixer_track_filter_t *const filter = mixer_poly_filter(poly_track_id, voice);
     if (filter == NULL)
         return;
-    mixer_poly_filter_sync_config(filter, &g_track_filters[track_id]);
+    mixer_poly_filter_sync_config(filter, &g_track_filters[mix_track_id]);
     filter->current_note = note;
     filter->keytrack_ratio_target = mixer_track_filter_keytrack_ratio(filter);
     filter->note_active = 1U;
@@ -2554,9 +2563,9 @@ void mixer_track_poly_note_on(uint32_t track_id, uint8_t voice, uint8_t note, ui
     env_adsr_retrigger(&filter->vca_env, filter->vca_retrigger_hard != 0U);
 }
 
-void mixer_track_poly_note_off(uint32_t track_id, uint8_t voice, uint8_t note)
+void mixer_track_poly_note_off(uint32_t poly_track_id, uint8_t voice, uint8_t note)
 {
-    mixer_track_filter_t *const filter = mixer_poly_filter(track_id, voice);
+    mixer_track_filter_t *const filter = mixer_poly_filter(poly_track_id, voice);
     if ((filter == NULL) || (filter->current_note != note))
         return;
     filter->note_active = 0U;
@@ -2567,11 +2576,11 @@ void mixer_track_poly_note_off(uint32_t track_id, uint8_t voice, uint8_t note)
     env_adsr_gate_off(&filter->vca_env);
 }
 
-void mixer_track_poly_all_notes_off(uint32_t track_id)
+void mixer_track_poly_all_notes_off(uint32_t poly_track_id)
 {
-    for (uint8_t voice = 0U; voice < 8U; ++voice)
+    for (uint8_t voice = 0U; voice < SYNTH_POLYPHONY_MAX_VOICES; ++voice)
     {
-        mixer_track_filter_t *const filter = mixer_poly_filter(track_id, voice);
+        mixer_track_filter_t *const filter = mixer_poly_filter(poly_track_id, voice);
         if (filter != NULL)
         {
             filter->note_active = 0U;

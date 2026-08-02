@@ -215,7 +215,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
                 if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
                     memset(prism_tmp, 0, frames * sizeof(float));
                 const uint8_t running = mixer_process_external_poly_voice(
-                    ctx->mix_track_id, voice, prism_tmp, frames,
+                    ctx->mix_track_id, track, voice, prism_tmp, frames,
                     synth_polyphony_get_voice_pan(track, voice));
                 published = 1U;
                 if (running == 0U)
@@ -285,7 +285,7 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
                         && (brick6_wave_runtime_render_instance(instance, wave_tmp, frames) != 0U))
                 {
                     const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, voice, wave_tmp, frames,
+                        ctx->mix_track_id, track, voice, wave_tmp, frames,
                         synth_polyphony_get_voice_pan(track, voice));
                     published = 1U;
                     if (running == 0U)
@@ -363,7 +363,7 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
                         && (brick6_deluge_runtime_render_instance(instance, deluge_tmp, frames) != 0U))
                 {
                     const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, voice, deluge_tmp, frames,
+                        ctx->mix_track_id, track, voice, deluge_tmp, frames,
                         synth_polyphony_get_voice_pan(track, voice));
                     published = 1U;
                     if (running == 0U)
@@ -441,7 +441,7 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
                 if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) != 0U)
                 {
                     const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, voice, stack_tmp, frames,
+                        ctx->mix_track_id, track, voice, stack_tmp, frames,
                         synth_polyphony_get_voice_pan(track, voice));
                     published = 1U;
                     if (running == 0U)

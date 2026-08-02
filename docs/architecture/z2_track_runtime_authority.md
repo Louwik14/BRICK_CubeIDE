@@ -79,6 +79,11 @@ Les entrées physiques sont publiées par la variante : `Input1` en Low-Cost, `I
 
 ## Polyphonie
 
+L'association d'une voix conserve toujours la track logique jusqu'au filtre/VCA
+poly, meme lorsque la lane mixer physique est differente. Une ecriture de
+`SPREAD` ne touche que l'etat de la track et reste bornee par la table de voix;
+elle ne lance pas de snapshot structurel, de rebind ou de reset moteur.
+
 La polyphonie synth est bornée par un budget global explicite et par les slots réservés à chaque Play Track. Le nombre de voix demandé ne crée ni migration de track, ni second owner ; une réduction coupe et libère les voix conformément à `synth_polyphony`. Les moteurs non synth ont leurs propres capacités runtime.
 
 ## Contrat de projection
