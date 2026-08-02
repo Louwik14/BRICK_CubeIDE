@@ -181,3 +181,16 @@ Gains attendus : retour au socle après la dernière track moteur mise Off ; co�
 Validation locale : builds Release Low-Cost et Release Premium réussis ; budgets mémoire respectivement DTCM `102688/131072` et `103712/131072` octets ; validations statiques frontière poly, ownership CFG/p-lock, dispatcher VCA et modèles de séquence réussies. Le test historique `synth_voice_budget_validation.ps1` reste en échec sur un contrat textuel de `patch_v1.c` déjà absent du HEAD et sans rapport avec ce patch. Un test de cycle du masque couvre Note On, Note Off, maintien RELEASE, fin de release, réutilisation/retrigger, release-all et désactivation ; son exécution hôte n'est pas disponible sur cette machine faute de compilateur natif, mais les deux compilations ARM valident les sources modifiées.
 
 Restent explicitement hors de cette passe : déplacement des instances Prism D2, alternance de coût entre slots et micro-optimisations internes Braids.
+
+## 11. Diagnostic ciblé du plateau Prism vers Off
+
+La cause du `+2 %` résiduel est l'autorité d'activation de la lane matérielle, et non le cleanup Prism/poly. Le comptage utilisé par `ui_core_runtime_bridge_sync_audio_runtime_enables()` parcourait les 14 entrées de `track_state` sans distinguer les tracks de jeu des tracks spéciales. Or la track Looper fixe (index 9) est initialisée comme famille `SAMPLER` et type `LOOPER`. La séquence d'état était donc :
+
+- au démarrage, Looper fixe présent mais `tracks[3].enabled == 0` tant que ce sync n'avait pas activé la lane ;
+- Prism On : compte global `Synth=1, Sampler=1, Drum=0`, donc `tracks[3].enabled=1` ;
+- Prism Off : contexte Prism OFF/non lié/non routable, poly inactive avec `render_voice_count=0` et les 16 slots FREE, publications externes nettoyées par le rebind puis en fin de bloc, mais compte global encore `Synth=0, Sampler=1, Drum=0` à cause du Looper fixe ;
+- `mixer_build_lane_plan(3, ...)` recevait alors `hw_enabled=1` et `ext_enabled=0`, retenait malgré tout la lane 3 et exécutait son traitement silencieux à chaque bloc.
+
+La correction introduit une autorité dédiée qui compte uniquement les tracks de jeu Synth/Sampler/Drum. Le Looper spécial ne maintient plus la lane matérielle. Une ou plusieurs tracks moteur de jeu la conservent ; la désactivation de la dernière la ramène à zéro. Le compteur par famille est conservé car il est léger et directement testable ; l'instrumentation temporaire des contextes, publications, plans de lane et états poly n'est pas conservée.
+
+Régression ajoutée en variantes Low-Cost et Premium : Looper fixe seul, Prism On puis Off, trois tracks Synth/Sampler/Drum, puis désactivation partielle et totale. Les deux binaires de test ARM compilent, ainsi que les firmwares Release Low-Cost et Release Premium. La confirmation du retour IRQ au socle reste une mesure sur cible.

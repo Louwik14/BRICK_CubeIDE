@@ -3,6 +3,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
+#include "Core/engine_lane_authority.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -1067,10 +1068,9 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 #else
     track_enable(2U, 0U);
 #endif
-    const uint8_t has_engine_track = (uint8_t)((track_state_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) > 0U)
-            || (track_state_count_tracks_with_family(UI_TRACK_FAMILY_SAMPLER) > 0U)
-            || (track_state_count_tracks_with_family(UI_TRACK_FAMILY_DRUM) > 0U));
-    track_enable(3U, has_engine_track);
+    engine_lane_usage_t engine_usage;
+    engine_lane_authority_count(track_state_get_configs(), UI_TRACK_COUNT, &engine_usage);
+    track_enable(3U, engine_usage.total_tracks > 0U);
 }
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)
