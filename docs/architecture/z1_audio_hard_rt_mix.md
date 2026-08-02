@@ -877,6 +877,13 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La policy est mise a jour lors des reservations/releases owner et par `sample_cache_service()` apres publication des fenetres actives.
 - Cette passe ne preempte pas un client SD deja proprietaire du gate et ne modifie pas le driver SD/FatFs.
 
+## Addendum 2026-08-02 - Autorite du lock navigateur SD apres Stream
+
+- Le feedback de disponibilite SD repose uniquement sur l'owner courant du gate et sur une policy `streaming_critical` encore active; l'absence de ces deux etats signifie que le navigateur peut reprendre une operation catalogue.
+- `sd_access_gate_last_owner()` reste une trace diagnostique du dernier client servi. Il ne constitue jamais une preuve d'occupation et ne doit pas alimenter le libelle UI `SD STREAM`.
+- La liberation d'un owner Stream ferme le reader, libere ses locks de fenetre et annule/repare les pages en queue associees a sa generation. Les owners differes d'underrun sont liberes par `sample_cache_service()`; aucun purge global du cache n'est requis.
+- En mode gate, le Note Off conserve le reader jusqu'a disparition de la demande VCA (`mixer_track_vca_requires_source() == 0`), puis stoppe la lecture et libere l'owner. Le launch ignore volontairement le Note Off et le stop transport force suit le meme chemin de liberation.
+
 ## Addendum 2026-05-18 - Sampler nettoyage legacy STREAM
 
 - Le streamer ne sert plus les pages `QUEUED` Classic trouvees par fallback global sans pending explicite; toute lecture STREAM servie par `sample_stream_manager` doit avoir une demande en queue.

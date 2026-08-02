@@ -303,7 +303,8 @@ const char *sd_access_gate_busy_label(void)
         return "STREAM";
     }
 
-    return sd_access_gate_client_label(sd_access_gate_last_owner());
+    /* last_owner is diagnostic history, never evidence of current activity. */
+    return sd_access_gate_client_label(SD_ACCESS_CLIENT_NONE);
 }
 
 void sd_access_trace_begin(const char *op)

@@ -16,6 +16,14 @@ La navigation Low-Cost et Premium partage les mêmes ensembles et se distingue u
 
 `ui_template_family_resolve_effective_for_track()` est l'autorité commune entre masque runtime, rôle topologique et template effectif. Navigation, page TONE et clipboard d'ensemble réutilisent cette résolution ; la famille/type UI brute reste uniquement le fallback des Play Tracks et des rôles déjà couverts par ce contrat.
 
+## Navigateur SD et lecture Stream
+
+Le browser Sampler parcourt le catalogue persistant `Samples` avec un chemin borné et une navigation parent explicite. La profondeur 3 ou plus ne constitue pas un plafond de navigation : elle peut seulement provoquer un miss du cache de vues et donc une nouvelle opération SD catalogue.
+
+Pendant une fenêtre Stream réellement active, l'owner `SD_ACCESS_CLIENT_SAMPLE_STREAM`, les locks de pages ou la policy `streaming_critical` restent l'autorité d'arbitrage. Le browser peut alors afficher `SD STREAM` et reporte l'opération. Après libération effective du reader, des pages pending et des locks owner/génération, l'absence d'owner/policy active autorise à nouveau le catalogue ; `sd_access_gate_last_owner()` n'est qu'un historique diagnostique et ne doit jamais maintenir ce feedback.
+
+Le mode gate conserve le reader pendant la décroissance VCA jusqu'à `mixer_track_vca_requires_source() == 0`; le launch ignore le Note Off par contrat. Un stop transporté ou forcé libère ensuite le reader et l'owner via le service Stream hors IRQ.
+
 ## Chaîne Hall press/release et notes
 
 Les deux variantes transmettent les mesures Hall brutes calibrées directement à `hall_engine_process_sample()` : il n'y a pas de moyenne numérique multi-échantillons entre l'ADC et les seuils. La cadence par touche est de 2,8 ms en Low-Cost et 0,8 ms en Premium ; `HALL_THRESHOLD_PPM` et `HALL_HYST_PPM` restent relatifs à la calibration `min/max`.

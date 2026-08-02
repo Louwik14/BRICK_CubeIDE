@@ -140,6 +140,9 @@ if(WIN32)
     add_test(NAME sample_stream_deadline
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/sample_stream_deadline_validation.ps1)
+    add_test(NAME sd_stream_browser_lock
+             COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                     -File ${CMAKE_CURRENT_SOURCE_DIR}/sd_stream_browser_lock_validation.ps1)
     add_test(NAME synth_polyphony_boundary
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/synth_polyphony_boundary_validation.ps1)
