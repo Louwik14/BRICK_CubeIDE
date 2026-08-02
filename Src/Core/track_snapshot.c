@@ -320,8 +320,18 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     out_snapshot->external_input = ui_get_track_external_input(track);
     out_snapshot->midi_channel = ui_get_track_midi_channel(track);
     out_snapshot->midi_source = ui_get_track_midi_source(track);
-    out_snapshot->synth_voice_count = synth_polyphony_get_voice_count(track);
-    out_snapshot->synth_spread = synth_polyphony_get_spread(track);
+    if ((out_snapshot->config.family == UI_TRACK_FAMILY_SYNTH)
+            || (out_snapshot->config.family == UI_TRACK_FAMILY_DRUM))
+    {
+        out_snapshot->poly_voice_count = synth_polyphony_get_voice_count(track);
+        out_snapshot->poly_spread = synth_polyphony_get_spread(track);
+    }
+    else if ((out_snapshot->config.family == UI_TRACK_FAMILY_SAMPLER)
+            && (out_snapshot->config.type == UI_TRACK_TYPE_MULTI))
+    {
+        out_snapshot->poly_voice_count = brick6_sampler_runtime_get_multi_voice_count(track);
+        out_snapshot->poly_spread = brick6_sampler_runtime_get_multi_spread(track);
+    }
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
     if ((track < NOTE_FX_TRACK_COUNT)
@@ -353,15 +363,15 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     out_snapshot->external_input = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
-    out_snapshot->synth_voice_count = 1U;
-    out_snapshot->synth_spread = 0.0f;
+    out_snapshot->poly_voice_count = 1U;
+    out_snapshot->poly_spread = 0.0f;
     if (track_topology_is_special(track) != 0U)
     {
         out_snapshot->config = ui_get_track_config(track);
         out_snapshot->external_input = ui_get_track_external_input(track);
         out_snapshot->midi_channel = ui_get_track_midi_channel(track);
         out_snapshot->midi_source = ui_get_track_midi_source(track);
-        out_snapshot->synth_voice_count = 0U;
+        out_snapshot->poly_voice_count = 0U;
     }
 
     track_sound_state_make_default(&out_snapshot->sound);
@@ -433,7 +443,9 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
             ? options->family_override
             : snapshot->config.family;
 
-    uint8_t applied_voice_count = snapshot->synth_voice_count;
+    uint8_t applied_voice_count = snapshot->poly_voice_count;
+    const uint8_t target_is_multi = (uint8_t)((target_family == UI_TRACK_FAMILY_SAMPLER)
+        && (snapshot->config.type == UI_TRACK_TYPE_MULTI));
     if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM))
     {
         const uint8_t maximum = synth_polyphony_get_available_for_track(target_track);
@@ -448,6 +460,16 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         {
             applied_voice_count = maximum;
             g_track_snapshot_voice_limited = 1U;
+        }
+    }
+    else if (target_is_multi != 0U)
+    {
+        if (applied_voice_count < 1U) applied_voice_count = 1U;
+        if (applied_voice_count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+        {
+            applied_voice_count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+            g_track_snapshot_voice_limited = 1U;
+            g_track_snapshot_voice_max = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
         }
     }
 
@@ -530,10 +552,24 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     track_runtime_invalidate_all();
     track_runtime_refresh_all();
 
-    if (target_family == UI_TRACK_FAMILY_SYNTH)
+    if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM)
+            || (target_is_multi != 0U))
     {
-        (void)synth_polyphony_set_voice_count(target_track, applied_voice_count);
-        synth_polyphony_set_spread(target_track, snapshot->synth_spread);
+        if (param_registry_apply_track_value(PARAM_CFG_POLY_VOICES,
+                                              target_track,
+                                              (float)applied_voice_count) == 0U)
+        {
+            goto restore_done;
+        }
+        if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_is_multi != 0U))
+        {
+            if (param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD,
+                                                  target_track,
+                                                  snapshot->poly_spread) == 0U)
+            {
+                goto restore_done;
+            }
+        }
     }
 
     track_snapshot_apply_sequence(target_track, snapshot);

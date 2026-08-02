@@ -8,6 +8,7 @@
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_input_ownership.h"
@@ -65,12 +66,27 @@ static uint8_t pattern_live_resolve_voice_budget(const PatternSaveV1 *pattern,
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const uint8_t family = pattern->track_cfg.family[track];
+        const uint8_t type = pattern->track_cfg.type[track];
         if ((family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
                 || (family == (uint8_t)UI_TRACK_FAMILY_DRUM))
         {
             if (remaining == 0U) return 0U;
             assigned[track] = 1U;
             remaining--;
+        }
+        else if ((family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+                && (type == (uint8_t)UI_TRACK_TYPE_MULTI))
+        {
+            float raw = 1.0f;
+            if (pattern->sound.track_valid[track][PARAM_CFG_POLY_VOICES] != 0U)
+            {
+                raw = pattern->sound.track_values[track][PARAM_CFG_POLY_VOICES];
+            }
+            assigned[track] = (uint8_t)((raw < 1.0f)
+                ? 1U
+                : ((raw > (float)SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+                    ? SAMPLER_MULTI_MAX_VOICES_PER_TRACK
+                    : (uint8_t)raw));
         }
     }
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -915,17 +931,21 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
         if (classification == PATTERN_LIVE_PARAM_TRACK_AWARE)
         {
-            if (id == PARAM_CFG_POLY_VOICES)
-            {
-                continue;
-            }
-
             for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
             {
                 if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
                 if (ctx->pattern->sound.track_valid[track][id] != 0U)
                 {
-                    (void)param_registry_apply_track_value(id, track, ctx->pattern->sound.track_values[track][id]);
+                    float value = ctx->pattern->sound.track_values[track][id];
+                    const uint8_t family = ctx->pattern->track_cfg.family[track];
+                    if ((id == PARAM_CFG_POLY_VOICES)
+                            && ((family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+                                || (family == (uint8_t)UI_TRACK_FAMILY_DRUM))
+                            && (ctx->voice_count[track] != 0U))
+                    {
+                        value = (float)ctx->voice_count[track];
+                    }
+                    (void)param_registry_apply_track_value(id, track, value);
                 }
 
                 if ((pattern_live_is_param_in_mix_domain(id) != 0U)
@@ -950,17 +970,6 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
         if (note_fx_state_restore_track(track, &ctx->pattern->note_fx[track]) == 0U)
         {
             return 0U;
-        }
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (ctx->voice_count[track] != 0U)
-        {
-            if (synth_polyphony_set_voice_count(track, ctx->voice_count[track]) == 0U)
-            {
-                return 0U;
-            }
         }
     }
 
@@ -1097,14 +1106,23 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_SPREAD] = 0U;
         g_current_pattern.mix.track_valid[track][PARAM_CFG_POLY_VOICES] = 0U;
         g_current_pattern.mix.track_valid[track][PARAM_CFG_POLY_SPREAD] = 0U;
-        if (pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+        const uint8_t is_synth = (uint8_t)((pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+            || (pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_DRUM));
+        const uint8_t is_multi = (uint8_t)((pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
+            && (pattern->track_cfg.type[track] == (uint8_t)UI_TRACK_TYPE_MULTI));
+        if ((is_synth != 0U) || (is_multi != 0U))
         {
-            g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_VOICES] =
-                (float)resolved_voice_count[track];
-            g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 1U;
-            g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_SPREAD] =
-                synth_polyphony_get_spread(track);
-            g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_SPREAD] = 1U;
+            float value = 0.0f;
+            if ((param_registry_get_track_value(PARAM_CFG_POLY_VOICES, track, &value) != 0U))
+            {
+                g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_VOICES] = value;
+                g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 1U;
+            }
+            if ((param_registry_get_track_value(PARAM_CFG_POLY_SPREAD, track, &value) != 0U))
+            {
+                g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_SPREAD] = value;
+                g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_SPREAD] = 1U;
+            }
         }
     }
     pattern_live_apply_linked_kit_for_snapshot(pattern);

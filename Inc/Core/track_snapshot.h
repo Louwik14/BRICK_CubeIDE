@@ -51,8 +51,8 @@ typedef struct
     uint8_t external_input;
     uint8_t midi_channel;
     ui_track_midi_source_t midi_source;
-    uint8_t synth_voice_count;
-    float synth_spread;
+    uint8_t poly_voice_count;
+    float poly_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
     note_fx_track_state_t note_fx;
