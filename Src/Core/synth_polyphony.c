@@ -22,6 +22,7 @@ typedef struct
 {
     uint8_t voice_count;
     uint8_t render_voice_count;
+    uint8_t renderable_voice_mask;
     float spread;
     uint32_t age_counter;
     uint8_t active;
@@ -29,9 +30,9 @@ typedef struct
     uint8_t base_slot;
 } synth_poly_track_t;
 
-SEQ_STATE_D2 static synth_poly_track_t g_synth_poly[SEQ_TRACK_COUNT];
-SEQ_STATE_D2 static uint8_t g_synth_slot_owner[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
-SEQ_STATE_D2 static synth_poly_voice_t g_synth_voice[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
+AUDIO_HOT static synth_poly_track_t g_synth_poly[SEQ_TRACK_COUNT];
+AUDIO_HOT static uint8_t g_synth_slot_owner[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
+AUDIO_HOT static synth_poly_voice_t g_synth_voice[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
 
 static uint8_t synth_polyphony_find_slot(uint8_t track, uint8_t voice)
 {
@@ -124,6 +125,7 @@ void synth_polyphony_init(void)
     {
         g_synth_poly[track].voice_count = 1U;
         g_synth_poly[track].render_voice_count = 0U;
+        g_synth_poly[track].renderable_voice_mask = 0U;
         g_synth_poly[track].base_slot = SYNTH_POLYPHONY_NO_VOICE;
     }
 }
@@ -137,6 +139,7 @@ uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t 
     {
         synth_polyphony_all_notes_off(track);
         poly->render_voice_count = 0U;
+        poly->renderable_voice_mask = 0U;
         __DMB();
         while (poly->voice_count > 0U)
         {
@@ -150,6 +153,7 @@ uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t 
         poly->active = 0U;
         poly->voice_count = 1U;
         poly->render_voice_count = 0U;
+        poly->renderable_voice_mask = 0U;
         poly->base_slot = SYNTH_POLYPHONY_NO_VOICE;
         return 1U;
     }
@@ -167,6 +171,7 @@ uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t 
         poly->base_slot = slot;
         poly->voice_count = 1U;
         poly->render_voice_count = 1U;
+        poly->renderable_voice_mask = 0U;
         poly->active = 1U;
     }
     poly->engine = engine;
@@ -188,6 +193,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
         count = maximum;
     synth_polyphony_reset_track(track);
     g_synth_poly[track].render_voice_count = 0U;
+    g_synth_poly[track].renderable_voice_mask = 0U;
     __DMB();
     for (uint8_t voice = g_synth_poly[track].voice_count; voice < count; ++voice)
     {
@@ -239,6 +245,7 @@ void synth_polyphony_reset_track(uint8_t track)
     synth_poly_track_t *const poly = &g_synth_poly[track];
     mixer_track_poly_all_notes_off(track);
     poly->render_voice_count = 0U;
+    poly->renderable_voice_mask = 0U;
     __DMB();
     for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
     {
@@ -259,6 +266,7 @@ void synth_polyphony_panic(void)
         if (poly->active == 0U) continue;
         mixer_track_poly_all_notes_off(track);
         poly->render_voice_count = 0U;
+        poly->renderable_voice_mask = 0U;
         __DMB();
         for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
         {
@@ -304,6 +312,15 @@ uint8_t synth_polyphony_get_render_voice_count(uint8_t track)
 {
     return (synth_poly_valid_track(track) != 0U)
         ? g_synth_poly[track].render_voice_count : 1U;
+}
+
+uint8_t synth_polyphony_get_renderable_voice_mask(uint8_t track)
+{
+    if (synth_poly_valid_track(track) == 0U)
+    {
+        return 0U;
+    }
+    return g_synth_poly[track].renderable_voice_mask;
 }
 
 uint8_t synth_polyphony_get_voice_count(uint8_t track)
@@ -396,6 +413,8 @@ uint8_t synth_polyphony_note_on_from(uint8_t track, uint8_t note, synth_poly_sou
     target->state = SYNTH_POLY_VOICE_HELD;
     target->source = (uint8_t)source;
     target->age = ++poly->age_counter;
+    __DMB();
+    poly->renderable_voice_mask |= (uint8_t)(1U << selected);
     return selected;
 }
 
@@ -511,9 +530,8 @@ uint8_t synth_polyphony_voice_is_renderable(uint8_t track, uint8_t voice)
 {
     if ((synth_poly_valid_track(track) == 0U)
             || (voice >= g_synth_poly[track].render_voice_count)) return 0U;
-    const uint8_t slot = synth_polyphony_find_slot(track, voice);
-    return (uint8_t)((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-            && (g_synth_voice[slot].state != SYNTH_POLY_VOICE_FREE));
+    return (uint8_t)((g_synth_poly[track].renderable_voice_mask
+            & (uint8_t)(1U << voice)) != 0U);
 }
 
 void synth_polyphony_voice_release_complete(uint8_t track, uint8_t voice)
@@ -524,6 +542,8 @@ void synth_polyphony_voice_release_complete(uint8_t track, uint8_t voice)
         if ((slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 || (g_synth_voice[slot].state != SYNTH_POLY_VOICE_RELEASE)) return;
         g_synth_voice[slot].state = SYNTH_POLY_VOICE_FREE;
+        __DMB();
+        g_synth_poly[track].renderable_voice_mask &= (uint8_t)~(1U << voice);
         while ((g_synth_poly[track].render_voice_count
                     > g_synth_poly[track].voice_count)
                 && ((slot = synth_polyphony_find_slot(track,

@@ -99,6 +99,8 @@ typedef struct
     float level;
     float vca_release_s;
     uint32_t tail_samples_remaining;
+    uint32_t config_version;
+    uint32_t synced_config_version;
 } brick6_braids_runtime_instance_t;
 
 AUDIO_HOT static brick6_braids_runtime_instance_t
@@ -187,6 +189,21 @@ static brick6_braids_runtime_instance_t *brick6_braids_runtime_get_instance_mut(
     return &g_braids_poly_d2[extra];
 }
 
+static void brick6_braids_runtime_touch_config(uint8_t instance_id)
+{
+    brick6_braids_runtime_instance_t *const instance =
+        brick6_braids_runtime_get_instance_mut(instance_id);
+    if (instance == NULL)
+    {
+        return;
+    }
+    instance->config_version++;
+    if (instance->config_version == 0U)
+    {
+        instance->config_version = 1U;
+    }
+}
+
 static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t *instance)
 {
     if (instance == NULL)
@@ -233,6 +250,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
     instance->level = 0.0f;
     instance->vca_release_s = 0.001f;
     instance->tail_samples_remaining = 0U;
+    instance->config_version = 1U;
+    instance->synced_config_version = 0U;
 }
 
 }  // namespace
@@ -263,6 +282,10 @@ void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
     {
         return;
     }
+    if (dst->synced_config_version == src->config_version)
+    {
+        return;
+    }
     dst->vca_release_s = src->vca_release_s;
     for (uint8_t osc = 0U; osc < kBraidsOscCount; ++osc)
     {
@@ -278,6 +301,7 @@ void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
         dst->osc[osc].oscillator.set_shape(
             brick6_braids_runtime_shape_from_edit(dst->osc[osc].voice.edit));
     }
+    dst->synced_config_version = src->config_version;
 }
 
 static brick6_braids_runtime_osc_t *brick6_braids_runtime_get_osc_mut(uint8_t instance_id, uint8_t osc)
@@ -295,9 +319,12 @@ void brick6_braids_runtime_set_osc_edit(uint8_t instance_id, uint8_t osc_index, 
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.edit = brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax);
+        const float next = brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax);
+        if (osc->voice.edit == next) return;
+        osc->voice.edit = next;
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
         brick6_braids_runtime_flush_osc_pending(osc);
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -306,7 +333,10 @@ void brick6_braids_runtime_set_osc_fine(uint8_t instance_id, uint8_t osc_index, 
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.fine = brick6_braids_runtime_clamp(fine, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(fine, 0.0f, 1.0f);
+        if (osc->voice.fine == next) return;
+        osc->voice.fine = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -315,7 +345,10 @@ void brick6_braids_runtime_set_osc_coarse(uint8_t instance_id, uint8_t osc_index
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.coarse = brick6_braids_runtime_clamp(coarse, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(coarse, 0.0f, 1.0f);
+        if (osc->voice.coarse == next) return;
+        osc->voice.coarse = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -324,7 +357,10 @@ void brick6_braids_runtime_set_osc_fm(uint8_t instance_id, uint8_t osc_index, fl
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.fm = brick6_braids_runtime_clamp(fm, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(fm, 0.0f, 1.0f);
+        if (osc->voice.fm == next) return;
+        osc->voice.fm = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -333,7 +369,10 @@ void brick6_braids_runtime_set_osc_timbre(uint8_t instance_id, uint8_t osc_index
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.timbre = brick6_braids_runtime_clamp(timbre, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(timbre, 0.0f, 1.0f);
+        if (osc->voice.timbre == next) return;
+        osc->voice.timbre = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -342,7 +381,10 @@ void brick6_braids_runtime_set_osc_modulation(uint8_t instance_id, uint8_t osc_i
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.modulation = brick6_braids_runtime_clamp(modulation, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(modulation, 0.0f, 1.0f);
+        if (osc->voice.modulation == next) return;
+        osc->voice.modulation = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -351,7 +393,10 @@ void brick6_braids_runtime_set_osc_color(uint8_t instance_id, uint8_t osc_index,
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->voice.color = brick6_braids_runtime_clamp(color, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(color, 0.0f, 1.0f);
+        if (osc->voice.color == next) return;
+        osc->voice.color = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -360,11 +405,14 @@ void brick6_braids_runtime_set_osc_phase_reset(uint8_t instance_id, uint8_t osc_
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->phase_reset_enabled = (enabled != 0U) ? 1U : 0U;
+        const uint8_t next = (enabled != 0U) ? 1U : 0U;
+        if (osc->phase_reset_enabled == next) return;
+        osc->phase_reset_enabled = next;
         if (osc->phase_reset_enabled == 0U)
         {
             osc->phase_reset_pending = 0U;
         }
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -373,7 +421,10 @@ void brick6_braids_runtime_set_osc_level(uint8_t instance_id, uint8_t osc_index,
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
     {
-        osc->osc_level = brick6_braids_runtime_clamp(level, 0.0f, 1.0f);
+        const float next = brick6_braids_runtime_clamp(level, 0.0f, 1.0f);
+        if (osc->osc_level == next) return;
+        osc->osc_level = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 
@@ -392,7 +443,11 @@ void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float re
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->vca_release_s = brick6_braids_runtime_clamp(release_s, kBraidsTailMinSeconds, kBraidsTailMaxSeconds);
+        const float next = brick6_braids_runtime_clamp(
+            release_s, kBraidsTailMinSeconds, kBraidsTailMaxSeconds);
+        if (instance->vca_release_s == next) return;
+        instance->vca_release_s = next;
+        brick6_braids_runtime_touch_config(instance_id);
     }
 }
 

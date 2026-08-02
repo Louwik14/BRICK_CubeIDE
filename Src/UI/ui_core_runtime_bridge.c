@@ -1643,10 +1643,13 @@ void ui_core_runtime_bridge_sync_active_track_midi_source(void)
 
 void ui_core_runtime_bridge_post_track_structure_change(uint8_t sync_active_track_ui_context)
 {
+    /* Reconcile the shared engine hardware lane after runtime rebinding. */
+    ui_core_runtime_bridge_sync_audio_runtime_enables();
     ui_active_track_sync_after_track_structure_change(sync_active_track_ui_context);
 }
 
 void ui_core_runtime_bridge_post_track_creation_from_off(uint8_t sync_active_track_ui_context)
 {
+    ui_core_runtime_bridge_sync_audio_runtime_enables();
     ui_active_track_sync_after_track_creation_from_off(sync_active_track_ui_context);
 }

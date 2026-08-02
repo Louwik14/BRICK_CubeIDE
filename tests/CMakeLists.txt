@@ -85,6 +85,19 @@ target_include_directories(stack_vca_release_test PRIVATE
 target_link_libraries(stack_vca_release_test PRIVATE m)
 add_test(NAME stack_vca_release COMMAND stack_vca_release_test)
 
+add_executable(synth_polyphony_budget_test
+    synth_polyphony_budget_test.c
+    ../Src/Core/synth_polyphony.c
+)
+target_include_directories(synth_polyphony_budget_test PRIVATE
+    stubs
+    ../Inc
+)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(synth_polyphony_budget_test PRIVATE --specs=nosys.specs)
+endif()
+add_test(NAME synth_polyphony_budget COMMAND synth_polyphony_budget_test)
+
 add_executable(cfg_track_family_order_test
     cfg_track_family_order_test.c
     ../Src/UI/ui_track_catalog.c

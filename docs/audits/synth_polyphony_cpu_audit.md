@@ -166,3 +166,18 @@ Sans instrumentation permanente, relever sur les quatre scénarios, au même end
 7. répéter zéro note et une note sur Stack/Wave/DELUGE. Un `+2 %` identique sans note confirme le lane commun ; seule la pente note/oscillateur distingue les moteurs.
 
 Le test décisif du plateau Off est immédiat : si `track_is_enabled(3)` passe de 1 à 0 et aucun lane externe n'est publié, la charge doit revenir au socle. Sinon, la première correction doit viser l'autorité d'activation du lane, pas Braids ni le pool poly.
+
+## 10. Corrections appliquées après audit
+
+Implémentation sur le HEAD courant :
+
+- la synchronisation finale d'une mutation de structure recalcule désormais l'activation de la lane moteur partagée après le rebind runtime ; un passage Prism vers Off désactive donc `tracks[3]` dès qu'aucune track Synth/Sampler/Drum ne la réclame ;
+- un masque HELD/RELEASE par track publie directement les voix rendables. Les quatre renderers poly quittent avant `mixer_begin_external_poly()` quand ce masque est nul et parcourent uniquement ses bits actifs ; les clears de buffers et les scans des voix configurées disparaissent du chemin silencieux ;
+- Prism et les filtres/VCA poly utilisent une version de configuration. Une voix ne resynchronise ses paramètres statiques que lorsque la source change. Les setters ne changent la version qu'après une modification effective ; cutoff modulé, automation, p-locks et paramètres d'enveloppe restent donc propagés, tandis que les états courants de smoothing et d'ADSR restent propres à chaque voix ;
+- `g_synth_poly`, `g_synth_slot_owner` et `g_synth_voice` sont passés de SRAM D2 à DTCM. Le build Release les mesure à `0xe0 + 0x10 + 0x80 = 368` octets, aux adresses `0x2001847c`, `0x2001846c` et `0x200183ec` en Low-Cost (`0x2001887c`, `0x2001886c`, `0x200187ec` en Premium).
+
+Gains attendus : retour au socle après la dernière track moteur mise Off ; coût poly quasi nul sans voix HELD/RELEASE ; coût de contrôle proportionnel aux voix rendables et non aux voix configurées ; suppression des copies statiques, des huit appels ADSR et des `set_shape()` Prism inchangés à chaque bloc. Aucun chiffre CPU cible n'a été mesuré dans cette passe : la mesure DWT/IRQ sur matériel reste à effectuer.
+
+Validation locale : builds Release Low-Cost et Release Premium réussis ; budgets mémoire respectivement DTCM `102688/131072` et `103712/131072` octets ; validations statiques frontière poly, ownership CFG/p-lock, dispatcher VCA et modèles de séquence réussies. Le test historique `synth_voice_budget_validation.ps1` reste en échec sur un contrat textuel de `patch_v1.c` déjà absent du HEAD et sans rapport avec ce patch. Un test de cycle du masque couvre Note On, Note Off, maintien RELEASE, fin de release, réutilisation/retrigger, release-all et désactivation ; son exécution hôte n'est pas disponible sur cette machine faute de compilateur natif, mais les deux compilations ARM valident les sources modifiées.
+
+Restent explicitement hors de cette passe : déplacement des instances Prism D2, alternance de coût entre slots et micro-optimisations internes Braids.

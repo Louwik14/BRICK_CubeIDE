@@ -249,12 +249,15 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
+            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            if (renderable == 0U)
+                continue;
             if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
                 continue;
-            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            while (renderable != 0U)
             {
-                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
-                    continue;
+                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
+                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_braids_runtime_sync_voice(ctx->instance_id, instance);
                 if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
@@ -318,12 +321,15 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
+            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            if (renderable == 0U)
+                continue;
             if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
                 continue;
-            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            while (renderable != 0U)
             {
-                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
-                    continue;
+                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
+                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_wave_runtime_sync_voice(ctx->instance_id, instance);
                 if ((brick6_wave_runtime_prepare_block(instance, frames, 1U) != 0U)
@@ -396,12 +402,15 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
+            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            if (renderable == 0U)
+                continue;
             if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
                 continue;
-            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            while (renderable != 0U)
             {
-                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
-                    continue;
+                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
+                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_deluge_runtime_sync_voice(ctx->instance_id, instance);
                 if ((brick6_deluge_runtime_prepare_block(instance, frames, 1U) != 0U)
@@ -475,12 +484,15 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
+            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            if (renderable == 0U)
+                continue;
             if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
                 continue;
-            for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            while (renderable != 0U)
             {
-                if (synth_polyphony_voice_is_renderable(track, voice) == 0U)
-                    continue;
+                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
+                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_stack_runtime_sync_voice(ctx->instance_id, instance);
                 if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) != 0U)
