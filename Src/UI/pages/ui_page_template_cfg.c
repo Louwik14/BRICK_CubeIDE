@@ -63,6 +63,22 @@ static const ui_template_family_t g_ui_template_cfg_synth_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_cfg_multi_family = {
+    .family_title = "CFG",
+    .nav_labels = { "MAIN", "MIDI", "-", "-" },
+    .subpages = {
+        { .title = "TRACK", .param_bank = { .params = {
+            PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_POLY_VOICES, PARAM_CFG_POLY_SPREAD } } },
+        { .title = "MIDI", .param_bank = { .params = {
+            PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_cfg_external_family = {
     .family_title = "CFG",
     .nav_labels = { "MAIN", "MIDI", "-", "-" },
@@ -202,6 +218,12 @@ static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
     {
         return &g_ui_template_cfg_synth_family;
+    }
+
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
+    {
+        return &g_ui_template_cfg_multi_family;
     }
 
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_EXTERNAL)

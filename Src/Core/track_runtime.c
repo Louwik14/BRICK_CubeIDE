@@ -1929,7 +1929,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_CFG_POLY_VOICES:
         case PARAM_CFG_POLY_SPREAD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_CFG;
-            rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
+            rule.resource = TRACK_RUNTIME_RESOURCE_POLYPHONY;
             return rule;
 
         case PARAM_LFO1_RATE:
@@ -2169,6 +2169,24 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
+                    ? TRACK_RUNTIME_PARAM_ALLOWED
+                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+
+        case TRACK_RUNTIME_RESOURCE_POLYPHONY:
+            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
+            {
+                return TRACK_RUNTIME_PARAM_ALLOWED;
+            }
+            return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 

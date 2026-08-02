@@ -51,7 +51,7 @@ foreach ($match in [regex]::Matches($paramEnum, '(?m)^\s*(PARAM_[A-Z0-9_]+)\s*(?
 Require-Text $runtimeHeader 'TRACK_RUNTIME_PARAM_DOMAIN_CFG = 1' 'CFG runtime domain is missing'
 Require-Text $runtime 'case PARAM_CFG_POLY_VOICES:' 'VOICES runtime rule is missing'
 Require-Text $runtime 'rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_CFG;' 'CFG rule is missing'
-Require-Text $runtime 'rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;' 'CFG is not bound to Synth authority'
+Require-Text $runtime 'rule.resource = TRACK_RUNTIME_RESOURCE_POLYPHONY;' 'CFG is not bound to polyphony authority'
 if ($runtime -match '(?s)case PARAM_SEQ_PLAY_V4_MICTIM:.*?case PARAM_CFG_POLY_VOICES:.*?rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_PLAY') {
     throw 'VOICES/SPREAD still fall through the PLAY rule'
 }
