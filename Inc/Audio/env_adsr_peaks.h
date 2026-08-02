@@ -32,6 +32,9 @@ typedef struct
     int16_t target_value;
     int16_t value;
 
+    float release_level;
+    float release_coefficient;
+
     bool gate_high;
     bool hard_reset;
     uint8_t stage;

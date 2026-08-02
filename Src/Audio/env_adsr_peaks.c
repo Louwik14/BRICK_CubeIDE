@@ -1,10 +1,12 @@
 #include "env_adsr_peaks.h"
 
+#include <math.h>
 #include <stddef.h>
 
 #define ENV_ADSR_Q15_MAX 32767
 #define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu
 #define ENV_ADSR_MAX_SEGMENT_SECONDS 30u
+#define ENV_ADSR_RELEASE_END_RATIO (1.0f / 65536.0f)
 
 static uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
 {
@@ -112,6 +114,8 @@ void env_adsr_peaks_reset(env_adsr_peaks_t *env)
     env->start_value = 0;
     env->target_value = 0;
     env->value = 0;
+    env->release_level = 0.0f;
+    env->release_coefficient = 1.0f;
     env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
 }
 
@@ -153,6 +157,18 @@ void env_adsr_peaks_gate_off(env_adsr_peaks_t *env)
         env->target_value = 0;
         env->phase = 0;
         env->phase_increment = env->release_increment;
+        env->release_level = (float)env->value;
+        const uint32_t duration_samples =
+            (env->phase_increment != 0u)
+                ? ((UINT32_MAX / env->phase_increment) + 1u)
+                : 1u;
+        const float multiplier = powf(ENV_ADSR_RELEASE_END_RATIO,
+                                      1.0f / (float)duration_samples);
+        env->release_coefficient = 1.0f - multiplier;
+        if(!(env->release_coefficient > 0.0f))
+            env->release_coefficient = 1.0f;
+        else if(env->release_coefficient > 1.0f)
+            env->release_coefficient = 1.0f;
         env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
     }
 }
@@ -175,13 +191,33 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
         return env->value;
     }
 
+    if(env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
+    {
+        const uint32_t previous_phase = env->phase;
+        env->phase += env->phase_increment;
+        env->release_level += env->release_coefficient * (0.0f - env->release_level);
+
+        if((env->phase < previous_phase) || !(env->release_level > 0.0f))
+        {
+            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
+            env->value = 0;
+            env->release_level = 0.0f;
+            env->phase = 0u;
+            env->phase_increment = 0u;
+            return 0;
+        }
+
+        env->value = (int16_t)env->release_level;
+        return env->value;
+    }
+
     const uint32_t previous_phase = env->phase;
     env->phase += env->phase_increment;
 
     uint16_t curve = 0;
     if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
         curve = phase_curve_quartic(env->phase);
-    else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY || env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
+    else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
         curve = phase_curve_exponential(env->phase);
     else
         curve = phase_curve_linear(env->phase);
@@ -215,13 +251,6 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
                 env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
                 env->value = (int16_t)env->sustain;
             }
-        }
-        else if(env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
-        {
-            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
-            env->value = 0;
-            env->phase = 0;
-            env->phase_increment = 0;
         }
     }
 
@@ -258,6 +287,16 @@ int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
         {
             env->value = (int16_t)env->sustain;
             return env->value;
+        }
+
+        if(env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
+        {
+            do
+            {
+                (void)env_adsr_peaks_process_step(env);
+                steps--;
+            } while((steps > 0u) && (env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE));
+            continue;
         }
 
         if(((env->stage != ENV_ADSR_PEAKS_STAGE_ATTACK)
