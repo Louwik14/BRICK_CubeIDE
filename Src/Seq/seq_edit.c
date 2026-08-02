@@ -95,18 +95,19 @@ static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
 
 static uint8_t seq_edit_begin_snapshot_undo(uint8_t op,
                                             seq_track_id_t track,
-                                            seq_step_id_t step,
-                                            uint8_t extra)
+                                            const seq_step_id_t *steps,
+                                            uint8_t step_count)
 {
-    if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_BUTTON,
-                                           seq_edit_make_undo_gesture_key(op, track, step, extra)) != UNDO_V2_STATUS_OK)
+    if ((steps == 0) || (step_count == 0U)
+            || (undo_v2_begin_sequence_transaction(UNDO_V2_SOURCE_BUTTON,
+                                                    seq_edit_make_undo_gesture_key(op,
+                                                                                   track,
+                                                                                   steps[0],
+                                                                                   step_count),
+                                                    track,
+                                                    steps,
+                                                    step_count) != UNDO_V2_STATUS_OK))
     {
-        return 0U;
-    }
-
-    if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
-    {
-        undo_v2_cancel_transaction();
         return 0U;
     }
 
@@ -120,13 +121,11 @@ static void seq_edit_finish_snapshot_undo(uint8_t started)
         return;
     }
 
-    if (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK)
+    if (undo_v2_commit_sequence_transaction() != UNDO_V2_STATUS_OK)
     {
         undo_v2_cancel_transaction();
         return;
     }
-
-    (void)undo_v2_commit_transaction();
 }
 
 static uint8_t seq_edit_is_play_note_param(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
@@ -473,7 +472,7 @@ static void seq_edit_apply_short_action(uint8_t hall)
         return;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, step, hall);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, &step, 1U);
     if (track_topology_is_play(track) == 0U)
     {
         seq_model_toggle_special_action(track, step);
@@ -563,7 +562,7 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
         return 0U;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(1U, track, step, hall_index);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(1U, track, &step, 1U);
     if (track_topology_is_play(track) != 0U)
     {
         seq_model_toggle_trig(track, step);
@@ -1034,12 +1033,10 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
         return 0U;
     }
 
-    seq_step_id_t first_step = 0U;
-    if ((dest_steps != 0) && (dest_count != 0U))
-    {
-        first_step = dest_steps[0];
-    }
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(6U, track, first_step, dest_count);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(6U,
+                                                              track,
+                                                              dest_steps,
+                                                              dest_count);
     const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
     seq_edit_finish_snapshot_undo(undo_started);
     return ok;
@@ -1086,7 +1083,10 @@ void seq_edit_clear_steps(seq_track_id_t track,
         return;
     }
 
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(7U, track, steps[0], step_count);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(7U,
+                                                              track,
+                                                              steps,
+                                                              step_count);
     seq_edit_clear_steps_impl(track, steps, step_count);
     seq_edit_finish_snapshot_undo(undo_started);
 }

@@ -66,8 +66,9 @@ if (-not ($edit.Contains('seq_model_set_special_action(track, step, (uint8_t)SEQ
           $edit.Contains('seq_edit_finish_snapshot_undo'))) {
     throw 'Special clear and snapshot Undo/Redo are incomplete'
 }
-if (-not ($undo.Contains('special_step->action != seq_model_get_special_action') -and
-          $undo.Contains('pattern_live_apply_snapshot(snapshot, 0U)'))) {
+if (-not ($undo.Contains('seq_step_snapshot_can_apply_list') -and
+          $undo.Contains('seq_step_snapshot_apply') -and
+          -not $undo.Contains('pattern_live_apply_snapshot'))) {
     throw 'Undo/Redo does not validate and restore heterogeneous snapshots'
 }
 if (-not ($kitHeader.Contains('topology_role') -and $kit.Contains('track_topology_identity_is_compatible'))) {

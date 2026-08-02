@@ -27,6 +27,6 @@ Assert-Storage ($pattern -match 'pattern_live_seq_block_validate_plock_slots\(se
 Assert-Storage ($model -match 'seq_param_iface_slot_is_supported\(track, set_id, param_slot\)') 'model p-lock writes accept invalid compact slots'
 Assert-Storage ($edit -match 'seq_param_iface_slot_is_supported\(track, set_id, param_slot\)') 'Undo/Redo p-lock apply accepts invalid compact slots'
 Assert-Storage ($snapshot -match 'seq_param_iface_slot_is_supported\(track, lock->set_id, lock->param_slot\)') 'clipboard paste does not validate compact slots'
-Assert-Storage ($undo -match 'seq_param_iface_is_param_supported\(track, set_id, param_slot\)') 'Undo/Redo recording does not validate compact slots'
+Assert-Storage ($undo -match 'seq_step_snapshot_can_apply_list') 'Undo/Redo does not use the canonical compact-slot codec'
 
 Write-Output 'seq_compact_storage_validation=PASS pattern=compact-v5 project=compact-v5 load_validation=yes clipboard=yes undo_redo=yes legacy_rejected=yes'

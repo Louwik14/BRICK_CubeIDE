@@ -123,7 +123,7 @@ foreach(UNDO_VARIANT IN ITEMS premium lowcost)
 endforeach()
 
 if(WIN32)
-    add_test(NAME undo_v2_step2_static
+    add_test(NAME undo_v2_step4_static
              COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                      -File ${CMAKE_CURRENT_SOURCE_DIR}/undo_v2_step1_static_validation.ps1)
     add_test(NAME undo_v2_step3_static

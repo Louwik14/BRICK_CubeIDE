@@ -63,6 +63,9 @@ uint8_t seq_step_snapshot_apply(seq_track_id_t track,
                                 seq_step_id_t step,
                                 const seq_step_snapshot_t *snapshot);
 
+uint8_t seq_step_snapshot_can_apply_list(seq_track_id_t track,
+                                         const seq_step_snapshot_list_t *list);
+
 uint8_t seq_step_snapshot_apply_list(seq_track_id_t track,
                                      const seq_step_snapshot_list_t *list);
 

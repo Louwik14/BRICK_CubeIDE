@@ -283,8 +283,8 @@ uint8_t seq_step_snapshot_apply(seq_track_id_t track,
     return 0U;
 }
 
-uint8_t seq_step_snapshot_apply_list(seq_track_id_t track,
-                                     const seq_step_snapshot_list_t *list)
+uint8_t seq_step_snapshot_can_apply_list(seq_track_id_t track,
+                                         const seq_step_snapshot_list_t *list)
 {
     uint32_t current_count;
     uint32_t replaced_count = 0U;
@@ -322,6 +322,24 @@ uint8_t seq_step_snapshot_apply_list(seq_track_id_t track,
                 > seq_model_get_track_plock_capacity(track)))
     {
         return 0U;
+    }
+
+    return 1U;
+}
+
+uint8_t seq_step_snapshot_apply_list(seq_track_id_t track,
+                                     const seq_step_snapshot_list_t *list)
+{
+    if (seq_step_snapshot_can_apply_list(track, list) == 0U)
+    {
+        return 0U;
+    }
+
+    /* Release all target locks first. The preflight above guarantees that the
+     * complete destination image fits before any mutation starts. */
+    for (uint8_t i = 0U; i < list->count; ++i)
+    {
+        seq_model_step_plock_clear(track, list->entries[i].step);
     }
 
     for (uint8_t i = 0U; i < list->count; ++i)

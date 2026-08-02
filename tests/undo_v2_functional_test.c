@@ -37,6 +37,7 @@ static void test_init_model(void)
 {
     seq_model_init_defaults();
     seq_clipboard_init();
+    undo_v2_clear_all();
     memset(g_note_fx, 0, sizeof(g_note_fx));
     g_locked_track = 0xFFU;
     engine_tick_count++;
@@ -295,30 +296,31 @@ static void test_step_snapshot_codec(void)
            "capacity rejection leaves the target step unchanged");
 }
 
-static void test_begin_capture_commit(void)
+static void test_begin_capture_commit(seq_track_id_t track,
+                                      const seq_step_id_t *steps,
+                                      uint8_t step_count)
 {
-    EXPECT(undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_BUTTON, 1U) == UNDO_V2_STATUS_OK,
-           "snapshot transaction begins");
-    EXPECT(undo_v2_capture_snapshot_before() == UNDO_V2_STATUS_OK,
-           "before snapshot captures");
+    EXPECT(undo_v2_begin_sequence_transaction(UNDO_V2_SOURCE_BUTTON,
+                                               1U,
+                                               track,
+                                               steps,
+                                               step_count) == UNDO_V2_STATUS_OK,
+           "sequence transaction begins and captures the before image");
 }
 
 static void test_finish_capture_commit(void)
 {
-    EXPECT(undo_v2_capture_snapshot_after() == UNDO_V2_STATUS_OK,
-           "after snapshot captures");
-    EXPECT(undo_v2_commit_transaction() == UNDO_V2_STATUS_OK,
-           "snapshot transaction commits");
+    EXPECT(undo_v2_commit_sequence_transaction() == UNDO_V2_STATUS_OK,
+           "sequence transaction commits only on effective change");
 }
 
 static void test_play_step_round_trip(void)
 {
     test_init_model();
-    test_begin_capture_commit();
+    const seq_step_id_t step = 3U;
+    test_begin_capture_commit(0U, &step, 1U);
     test_fill_play_step(0U, 3U, 7U);
     test_finish_capture_commit();
-    seq_model_step_plock_clear(0U, 3U);
-    seq_model_set_trig(0U, 3U, 0U);
     EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "Play step undo succeeds");
     EXPECT(seq_model_step_is_empty(0U, 3U) != 0U, "undo restores empty Play step");
     EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK, "Play step redo succeeds");
@@ -331,7 +333,8 @@ static void test_special_round_trip(void)
 {
     const seq_track_id_t track = TRACK_TOPOLOGY_MASTER_TRACK_INDEX;
     test_init_model();
-    test_begin_capture_commit();
+    const seq_step_id_t step = 2U;
+    test_begin_capture_commit(track, &step, 1U);
     seq_model_set_special_action(track, 2U, (uint8_t)SEQ_SPECIAL_ACTION_TRIGGER);
     EXPECT(seq_model_step_plock_upsert(track, 2U, (uint8_t)SEQ_PLOCK_SET_ENV,
                                        0U, 0x3456U, 0xA5U) == SEQ_PLOCK_OP_CREATED,
@@ -340,8 +343,6 @@ static void test_special_round_trip(void)
                                        0U, 0xFFFFU, 0U) == SEQ_PLOCK_OP_SET_NOT_PLOCKABLE,
            "Special rejects PLAY p-locks");
     test_finish_capture_commit();
-    seq_model_set_special_action(track, 2U, (uint8_t)SEQ_SPECIAL_ACTION_NONE);
-    seq_model_step_plock_clear(track, 2U);
     EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "Special undo succeeds");
     EXPECT(seq_model_get_special_action(track, 2U) == SEQ_SPECIAL_ACTION_NONE,
            "Special undo restores empty action");
@@ -372,16 +373,11 @@ static void test_copy_paste_scope(seq_step_id_t count)
         seq_model_step_plock_clear(0U, i);
         seq_model_set_trig(0U, i, 0U);
     }
-    test_begin_capture_commit();
+    test_begin_capture_commit(0U, steps, count);
     seq_clipboard_paste_result_t result;
     EXPECT(seq_clipboard_paste(0U, steps, count, &result) != 0U,
            "Paste succeeds");
     test_finish_capture_commit();
-    for (seq_step_id_t i = 0U; i < count; ++i)
-    {
-        seq_model_step_plock_clear(0U, i);
-        seq_model_set_trig(0U, i, 0U);
-    }
     EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "Paste undo succeeds");
     EXPECT(undo_v2_redo() == UNDO_V2_STATUS_OK, "Paste redo succeeds");
     EXPECT(seq_model_step_plock_count(0U, (seq_step_id_t)(count - 1U)) == 1U,
@@ -393,7 +389,8 @@ static void test_depth_and_branching(void)
     test_init_model();
     for (uint8_t i = 0U; i < 8U; ++i)
     {
-        test_begin_capture_commit();
+        const seq_step_id_t step = i;
+        test_begin_capture_commit(0U, &step, 1U);
         seq_model_set_trig(0U, i, 1U);
         test_finish_capture_commit();
     }
@@ -410,14 +407,16 @@ static void test_depth_and_branching(void)
     EXPECT(undo_v2_is_redo_available() == 0U, "exactly eight Redo levels are exposed");
 
     test_init_model();
-    test_begin_capture_commit();
+    const seq_step_id_t branch_step = 0U;
+    test_begin_capture_commit(0U, &branch_step, 1U);
     seq_model_set_trig(0U, 0U, 1U);
     test_finish_capture_commit();
     EXPECT(undo_v2_undo() == UNDO_V2_STATUS_OK, "branch setup Undo succeeds");
     seq_model_step_plock_upsert(0U, 0U, (uint8_t)SEQ_PLOCK_SET_PLAY, 0U, 0x7777U, 1U);
     EXPECT(undo_v2_is_redo_available() != 0U,
            "non-undoable step content edit preserves Redo");
-    test_begin_capture_commit();
+    const seq_step_id_t next_branch_step = 1U;
+    test_begin_capture_commit(0U, &next_branch_step, 1U);
     seq_model_set_trig(0U, 1U, 1U);
     test_finish_capture_commit();
     EXPECT(undo_v2_is_redo_available() == 0U,
@@ -436,7 +435,12 @@ static void test_pool_near_capacity(void)
     EXPECT(seq_model_step_plock_count(0U, (seq_step_id_t)(filled_steps - 1U))
                == SEQ_PLAY_STEP_MAX_LOCKS,
            "Play p-lock pool reaches its bounded capacity");
-    test_begin_capture_commit();
+    seq_step_id_t steps[SEQ_MAX_STEPS];
+    for (seq_step_id_t step = 0U; step < filled_steps; ++step)
+    {
+        steps[step] = step;
+    }
+    test_begin_capture_commit(0U, steps, filled_steps);
     for (seq_step_id_t step = 0U; step < filled_steps; ++step)
     {
         seq_model_step_plock_clear(0U, step);
@@ -453,14 +457,16 @@ static void test_pool_near_capacity(void)
 static void test_noop_and_atomic_failure(void)
 {
     test_init_model();
-    test_begin_capture_commit();
+    const seq_step_id_t noop_step = 0U;
+    test_begin_capture_commit(0U, &noop_step, 1U);
     test_finish_capture_commit();
     EXPECT(undo_v2_is_undo_available() == 0U,
            "an action without an effective mutation is not recorded");
 
     test_init_model();
     test_fill_play_step(0U, 0U, 1U);
-    test_begin_capture_commit();
+    const seq_step_id_t failure_step = 0U;
+    test_begin_capture_commit(0U, &failure_step, 1U);
     seq_model_step_plock_clear(0U, 0U);
     test_finish_capture_commit();
     seq_model_set_track_length(0U, 1U);
@@ -469,22 +475,6 @@ static void test_noop_and_atomic_failure(void)
            "locked-track restore fails atomically");
     EXPECT(seq_model_get_track_length(0U) == 1U,
            "failed restore leaves unrelated current state unchanged");
-}
-
-static void test_negative_param_contract(void)
-{
-    EXPECT(undo_v2_param_is_undoable(PARAM_SEQ_PLAY_V1_NOTE) == 0U,
-           "isolated note edit is not undoable");
-    EXPECT(undo_v2_param_is_undoable(PARAM_SEQ_PLAY_V1_VEL) == 0U,
-           "isolated velocity edit is not undoable");
-    EXPECT(undo_v2_param_is_undoable(PARAM_SEQ_PLAY_V1_LEN) == 0U,
-           "isolated duration edit is not undoable");
-    EXPECT(undo_v2_param_is_undoable(PARAM_SEQ_PLAY_V1_MICTIM) == 0U,
-           "isolated microtiming edit is not undoable");
-    EXPECT(undo_v2_param_is_undoable(PARAM_SEQ_LENGTH) == 0U,
-           "sequence length edit is not undoable");
-    EXPECT(undo_v2_param_is_undoable(PARAM_MIX_LEVEL) == 0U,
-           "mix edit is not undoable");
 }
 
 int main(void)
@@ -499,7 +489,6 @@ int main(void)
     test_pool_near_capacity();
     test_depth_and_branching();
     test_noop_and_atomic_failure();
-    test_negative_param_contract();
     if (g_failures != 0)
     {
         fprintf(stderr, "undo_v2_functional_test: %d failure(s)\\n", g_failures);

@@ -11,14 +11,13 @@ $applyWrappers = Get-Content -Raw (Join-Path $repo 'Src\Param\param_registry_app
 $functional = Get-Content -Raw (Join-Path $repo 'tests\undo_v2_functional_test.c')
 
 foreach ($required in @(
-    'undo_v2_begin_snapshot_transaction',
-    'undo_v2_capture_snapshot_before',
-    'undo_v2_capture_snapshot_after',
+    'undo_v2_begin_sequence_transaction',
+    'undo_v2_commit_sequence_transaction',
     'undo_v2_undo',
     'undo_v2_redo',
-    'seq_model_step_plock_collect',
-    'pattern_v1_play_step_t',
-    'pattern_v1_special_step_t'
+    'UNDO_V2_MAX_TRANSACTIONS 8U',
+    'seq_step_snapshot_can_apply_list',
+    'undo_v2_exchange_transaction'
 )) {
     if (-not ($undo.Contains($required) -or $undoHeader.Contains($required) -or $functional.Contains($required))) {
         throw "Missing Undo/Redo functional contract symbol: $required"
@@ -45,23 +44,33 @@ foreach ($required in @(
     'seq_edit_paste_steps',
     'seq_edit_clear_steps',
     'seq_edit_clear_steps_without_undo',
-    'undo_v2_snapshot_has_effective_change',
-    'return 0U;'
+    'undo_v2_begin_sequence_transaction',
+    'undo_v2_commit_sequence_transaction'
 )) {
     if (-not ($edit.Contains($required) -or $undo.Contains($required) -or $liveRec.Contains($required))) {
         throw "Missing Step 2 producer contract: $required"
     }
 }
 
-if ($undo -notmatch 'uint8_t undo_v2_param_is_undoable\(param_id_t param_id\)[\s\S]{0,120}return 0U;') {
-    throw 'Parameter Undo gate is still enabled'
+foreach ($forbidden in @(
+    'PatternSaveV1',
+    'pattern_live_apply_snapshot',
+    'undo_v2_record_param_change',
+    'undo_v2_record_plock_change',
+    'undo_v2_begin_snapshot_transaction',
+    'undo_v2_capture_snapshot_before',
+    'undo_v2_capture_snapshot_after'
+)) {
+    if ($undo.Contains($forbidden)) {
+        throw "Legacy global Undo payload remains: $forbidden"
+    }
 }
 
 if ($functional -notmatch 'test_play_step_round_trip' -or
     $functional -notmatch 'test_special_round_trip' -or
+    $functional -notmatch 'test_step_snapshot_codec' -or
     $functional -notmatch 'test_copy_paste_scope' -or
     $functional -notmatch 'test_depth_and_branching' -or
-    $functional -notmatch 'test_negative_param_contract' -or
     $functional -notmatch 'test_noop_and_atomic_failure') {
     throw 'Functional Undo/Redo test matrix is incomplete'
 }
@@ -72,4 +81,4 @@ if ($functional -notmatch 'SEQ_PLAY_STEP_MAX_LOCKS' -or
     throw 'Play/Special step payload coverage is incomplete'
 }
 
-'undo_v2_step2_static_validation=PASS structural_only=yes non_structural_producers=removed no_op_guard=yes variants=lowcost,premium'
+'undo_v2_step4_static_validation=PASS structural_ring=8 global_pattern_snapshot=removed exchange=yes variants=lowcost,premium'

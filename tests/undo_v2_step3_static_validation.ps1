@@ -10,6 +10,7 @@ foreach ($required in @(
     'seq_step_snapshot_capture_list',
     'seq_step_snapshot_validate_for_track',
     'seq_step_snapshot_apply',
+    'seq_step_snapshot_can_apply_list',
     'seq_step_snapshot_apply_list',
     'seq_step_snapshot_equal',
     'SEQ_STEP_SNAPSHOT_ROLE_PLAY',
