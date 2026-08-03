@@ -30,13 +30,33 @@
 
 #include "stmlib/stmlib.h"
 
-#include "Storage/memory_layout.h"
-
 #include "fx_revb_engine.h"
 
 namespace mifx {
 
     class Reverb {
+        typedef FxEngine<32768, FORMAT_32_BIT> E;
+        typedef E::Reserve<150,
+                E::Reserve<214,
+                        E::Reserve < 319,
+                        E::Reserve < 527,
+                        E::Reserve < 2182,
+                        E::Reserve < 2690,
+                        E::Reserve < 4501,
+                        E::Reserve < 2525,
+                        E::Reserve < 2197,
+                        E::Reserve < 6312> > > > > > > > > > DelugeMemory;
+        typedef E::Reserve<163,
+                E::Reserve<233,
+                        E::Reserve < 347,
+                        E::Reserve < 574,
+                        E::Reserve < 2375,
+                        E::Reserve < 2928,
+                        E::Reserve < 4899,
+                        E::Reserve < 2748,
+                        E::Reserve < 2391,
+                        E::Reserve < 6870> > > > > > > > > > TbdMemory;
+
     public:
         Reverb() {}
 
@@ -50,7 +70,6 @@ namespace mifx {
             diffusion_ = 0.625f;
         }
 
-        ITCM_TEXT_NAMED("mifx_reverb_process_stereo")
         void Process(float *left, float *right, size_t size) {
             // Griesinger topology
             // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
@@ -136,21 +155,70 @@ namespace mifx {
             lp_decay_2_ = lp_2;
         }
 
-        ITCM_TEXT_NAMED("mifx_reverb_process_mono")
         void Process(const float* in, float *left, float *right, size_t size) {
-            // Griesinger topology
-            // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
-            // Modulation is applied to the two long delays for a slow shimmer/chorus effect.
-            typedef E::Reserve<163,
-                    E::Reserve<233,
-                            E::Reserve < 347,
-                            E::Reserve < 574,
-                            E::Reserve < 2375,
-                            E::Reserve < 2928,
-                            E::Reserve < 4899,
-                            E::Reserve < 2748,
-                            E::Reserve < 2391,
-                            E::Reserve < 6870> > > > > > > > > > Memory;
+            if (tbd_delays_) {
+                ProcessMonoTbd(in, left, right, size);
+            } else {
+                ProcessMonoDeluge(in, left, right, size);
+            }
+        }
+
+        inline void set_delay_mode(bool tbd) {
+            if (tbd_delays_ != tbd) {
+                tbd_delays_ = tbd;
+                Clear();
+            }
+        }
+
+        inline void set_amount(float amount) {
+            amount_ = amount;
+        }
+
+        inline void set_time(float reverb_time) {
+            reverb_time_ = reverb_time;
+        }
+
+        inline void set_diffusion(float diffusion) {
+            diffusion_ = diffusion;
+        }
+
+        inline void set_lp(float lp) {
+            lp_ = lp;
+        }
+
+        inline void set_output_filters(float hp, float lp) {
+            hp_coefficient_ = hp;
+            lp_coefficient_ = lp;
+        }
+
+        inline void Clear() {
+            engine_.Clear();
+            lp_decay_1_ = 0.0f;
+            lp_decay_2_ = 0.0f;
+            hp_l_ = 0.0f;
+            hp_r_ = 0.0f;
+            lp_l_ = 0.0f;
+            lp_r_ = 0.0f;
+        }
+
+    private:
+        void ProcessMonoTbd(const float* in, float *left, float *right, size_t size) {
+            ProcessMono<TbdMemory>(in, left, right, size,
+                                   6815.2383f, 54.42177f,
+                                   4854.4219f, 43.53742f);
+        }
+
+        void ProcessMonoDeluge(const float* in, float *left, float *right, size_t size) {
+            ProcessMono<DelugeMemory>(in, left, right, size,
+                                      6261.0f, 50.0f,
+                                      4460.0f, 40.0f);
+        }
+
+        template<typename Memory>
+        __attribute__((always_inline)) inline
+        void ProcessMono(const float* in, float *left, float *right, size_t size,
+                         float del2_offset, float del2_modulation,
+                         float del1_offset, float del1_modulation) {
             E::DelayLine<Memory, 0> ap1;
             E::DelayLine<Memory, 1> ap2;
             E::DelayLine<Memory, 2> ap3;
@@ -189,7 +257,7 @@ namespace mifx {
 
                 // Main reverb loop.
                 c.Load(apout);
-                c.Interpolate(del2, 6261.0f, LFO_2, 50.0f, krt);
+                c.Interpolate(del2, del2_offset, LFO_2, del2_modulation, krt);
                 c.Lp(lp_1, klp);
                 c.Read(dap1a TAIL, -kap);
                 c.WriteAllPass(dap1a, kap);
@@ -202,7 +270,7 @@ namespace mifx {
                 *right = one_pole(lp_r_, wet, lp_coefficient_);
 
                 c.Load(apout);
-                c.Interpolate(del1, 4460.0f, LFO_1, 40.0f, krt);
+                c.Interpolate(del1, del1_offset, LFO_1, del1_modulation, krt);
                 c.Lp(lp_2, klp);
                 c.Read(dap2a TAIL, -kap);
                 c.WriteAllPass(dap2a, kap);
@@ -221,41 +289,8 @@ namespace mifx {
             lp_decay_1_ = lp_1;
             lp_decay_2_ = lp_2;
         }
-
-        inline void set_amount(float amount) {
-            amount_ = amount;
-        }
-
-        inline void set_time(float reverb_time) {
-            reverb_time_ = reverb_time;
-        }
-
-        inline void set_diffusion(float diffusion) {
-            diffusion_ = diffusion;
-        }
-
-        inline void set_lp(float lp) {
-            lp_ = lp;
-        }
-
-        inline void set_output_filters(float hp, float lp) {
-            hp_coefficient_ = hp;
-            lp_coefficient_ = lp;
-        }
-
-        inline void Clear() {
-            engine_.Clear();
-            lp_decay_1_ = 0.0f;
-            lp_decay_2_ = 0.0f;
-            hp_l_ = 0.0f;
-            hp_r_ = 0.0f;
-            lp_l_ = 0.0f;
-            lp_r_ = 0.0f;
-        }
-
-    private:
-        typedef FxEngine<32768, FORMAT_32_BIT> E;
         E engine_;
+        bool tbd_delays_ = false;
 
         float amount_ = 0.f;
         float input_gain_ = 0.2f;

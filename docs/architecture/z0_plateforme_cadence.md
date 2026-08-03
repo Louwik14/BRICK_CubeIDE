@@ -1,5 +1,14 @@
 # Z0 - Plateforme / Cadence
 
+## Addendum 2026-08-03 - traitement Hall low-cost en IRQ ADC DMA
+
+- Sur Low-Cost, `HAL_ADC_ConvCpltCallback()` synchronise ADC1/ADC2, applique le rejet de stabilisation MUX, puis appelle directement `hall_engine_process_sample()` pour chaque mesure acceptee. La position, l'automate d'attaque, la velocite et les drapeaux note-on/off ne dependent donc plus de la cadence de la superloop.
+- La cadence physique reste une mesure acceptee par touche toutes les 2,8 ms. Ce changement supprime le backlog logiciel entre acquisition et validation sans modifier les seuils, l'hysteresis, la calibration ni l'algorithme de velocite.
+- `hall_keyboard_bridge_process()` reste hors IRQ: il consomme les drapeaux pending, applique les regles UI/injection puis publie vers le pipeline clavier. Aucun appel UI, MIDI, Note-FX ou moteur audio n'est effectue depuis l'IRQ Hall.
+- L'IRQ audio conserve sa priorite superieure. Le traitement Hall accepte son jitter de preemption audio, mais ne peut plus etre repousse par les services SD, UI, USB ou autres travaux cooperatifs de la superloop.
+- Validation materielle: sur la cible Low-Cost testee, le passage du traitement Hall dans l'IRQ a supprime la latence perceptible, y compris sous la charge audio qui amplifiait auparavant le retard.
+- Premium conserve le chemin historique `FIFO ADC -> hall_loop_process() -> hall_engine_process_sample()` et sa borne de depilement; l'ecart de contexte est volontaire et conditionne par `BRICK6_VARIANT_LOWCOST`.
+
 ## Addendum 2026-08-01 - attributs MPU de la SDRAM externe
 
 - Les deux variantes configurent la region MPU 3 sur les 32 MiB de SDRAM a `0xC0000000` en memoire normale, full-access, non-shareable, write-back/write-allocate et XN avant activation du D-cache.
@@ -8,7 +17,7 @@
 
 ## Addendum 2026-07-30 - cadence Hall low-cost sans ASC
 
-- Le timer/MUX low-cost publie une mesure valide par touche toutes les 2,8 ms. `hall_loop_process()` transmet chaque entree FIFO brute a `hall_engine_process_sample()` sans moyenne numerique ASC.
+- Le timer/MUX low-cost publie une mesure valide par touche toutes les 2,8 ms. Chaque mesure acceptee est transmise directement a `hall_engine_process_sample()` depuis le callback ADC DMA, sans moyenne numerique ASC ni FIFO de traitement en superloop.
 - Le filtre analogique du PCB est l'autorite de lissage low-cost. Les seuils, l'hysteresis, la position, les transitions note-on/off et la calibration restent dans les autorites Hall existantes.
 - Le mode TIME low-cost utilise des bornes comptees a 2,8 ms (`4..56` mesures) afin de conserver sa fenetre temporelle reelle historique. Le debug Hall annonce 2,8 ms et distingue la mesure ADC de la valeur recue par le moteur.
 - Les deux variantes transmettent chaque mesure Hall brute calibrée à `hall_engine_process_sample()` : aucun filtre numérique ASC multi-échantillons ne retarde le press, la navigation ou le Note On.
@@ -238,6 +247,7 @@ Qui appelle Z0:
 - Boot CPU/reset appelle `main()`.
 - Superloop appelle `brick6_app_process()` depuis `main()`.
 - HAL IRQ appelle:
+  - DMA ADC1/ADC2 -> `HAL_ADC_ConvCpltCallback()` -> traitement Hall direct sur Low-Cost.
   - `TIM8_BRK_TIM12_IRQHandler()` -> `HAL_TIM_IRQHandler(&htim12)` -> `HAL_TIM_PeriodElapsedCallback`.
   - `TIM5_IRQHandler()` -> `HAL_TIM_IRQHandler(&htim5)` -> `HAL_TIM_OC_DelayElapsedCallback`.
 
@@ -248,7 +258,7 @@ Contrats implicites d'ordre:
 - `engine_tasklet_init()` doit preceder l'usage de `engine_tick_count` pour UI cadence.
 - `ui_tasklet_poll()` initialise UI au premier tick engine, pas pendant boot `brick6_app_init()`.
 - `engine_tasklet_poll()` consomme au plus `ENGINE_TASKLET_MAX_TICKS_PER_POLL` ticks par appel; le backlog restant est conserve pour les tours suivants.
-- `hall_loop_process()` consomme au plus `HALL_LOOP_MAX_SAMPLES_PER_POLL` samples Hall ADC FIFO par appel; le backlog restant reste dans la FIFO Hall.
+- Premium: `hall_loop_process()` consomme au plus `HALL_LOOP_MAX_SAMPLES_PER_POLL` samples Hall ADC FIFO par appel; le backlog restant reste dans la FIFO Hall. Low-Cost ne depile plus cette FIFO: son moteur Hall est alimente dans l'IRQ ADC DMA.
 
 ## 4. API sortantes
 
@@ -295,9 +305,10 @@ Z0 appelle principalement:
 - `ENGINE_TASKLET_MAX_TICKS_PER_POLL = 8U`:
   - Role: borne dure du nombre de ticks engine consommes par passage superloop.
 
-### `Src/App/Hall/hall_loop.c` (service Hall hors IRQ rattache cadence superloop)
+### `Src/App/Hall/hall_loop.c` (service Hall superloop Premium et finalisation commune)
 - `HALL_LOOP_MAX_SAMPLES_PER_POLL = 32U`:
-  - Role: borne dure du nombre de samples Hall bruts consommes par passage superloop.
+  - Role Premium: borne dure du nombre de samples Hall bruts consommes par passage superloop.
+  - Role Low-Cost: aucun depilement; `hall_engine_process_sample()` est deja execute par l'IRQ ADC DMA et `hall_engine_process()` reste le hook commun actuellement vide.
 
 ### `Src/UI/ui_tasklet.c` (cadence UI rattachee Z0)
 - `g_ui_tasklet_init`:
@@ -366,8 +377,8 @@ Z0 appelle principalement:
 - `brick6_master_control_process()`
 - `ui_boot_loading_service()` apres la premiere frame loading: restore du boot context puis attente de `project_v1_get_autoload_progress()`.
 - pendant le boot loading, le budget `multi_sample_service_load` est reduit pour privilegier des passages UI/OLED plus reguliers; hors loading le budget normal est conserve.
-- si boot loading actif: `hall_loop_process()` seulement, sans navigation UI normale.
-- sinon: `hall_loop_process()`, `ui_core_service_track_selection_inputs()`, `hall_keyboard_bridge_process()`.
+- si boot loading actif: `hall_loop_process()` seulement, sans navigation UI normale; sur Low-Cost l'acquisition et l'automate Hall continuent neanmoins dans l'IRQ.
+- sinon: `hall_loop_process()`, `ui_core_service_track_selection_inputs()`, `hall_keyboard_bridge_process()`; sur Low-Cost le premier appel ne depile plus de samples, tandis que le bridge consomme les transitions produites en IRQ.
 - `voice_manager_service()`
 - `midi_poll()`
 
@@ -376,6 +387,7 @@ Z0 appelle principalement:
 - IRQ TIM5 OC pour clock MIDI.
 - IRQ audio (Z1) alimente `engine_tasklet_notify_frames`; superloop consomme ensuite.
 - IRQ audio (Z1) porte aussi la progression step du sequencer (interne + consommation pulses externes) en domaine sample.
+- IRQ DMA ADC Hall Low-Cost porte le traitement position/velocite et publie uniquement des drapeaux pending; le bridge clavier reste en superloop.
 - `PendSV` sert de contexte differe basse priorite pour demarrer le TX USB MIDI quand des messages sont enfiles depuis ISR.
 
 ## 7. Contraintes RT/CPU/memoire
@@ -386,7 +398,7 @@ Z0 appelle principalement:
   - Z0 orchestre services bornes/bounded hors IRQ (USB host poll bounded, services SD hors IRQ).
 - Dependance forte a l'ordre d'init et au hardware clock/timer configure.
 - `engine_tasklet_poll()` utilise section critique IRQ courte pour transfert frames->ticks et applique un cap fixe permanent de ticks par appel.
-- `hall_loop_process()` applique un cap fixe permanent de samples FIFO Hall par appel; la FIFO Hall conserve le backlog non traite pour les tours suivants.
+- Premium: `hall_loop_process()` applique un cap fixe permanent de samples FIFO Hall par appel. Low-Cost: aucun backlog de traitement Hall en superloop, chaque mesure acceptee est traitee dans l'IRQ ADC DMA.
 - Buffers globaux statiques Looper/writer (`g_record_rings`, `g_looper_preroll_pcm`), pas de malloc dans Z0 observe.
 
 ## 8. Invariants a ne pas casser

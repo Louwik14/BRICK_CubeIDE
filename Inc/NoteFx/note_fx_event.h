@@ -31,10 +31,17 @@ typedef enum
 #define NOTE_EVENT_STAGE_SOURCE   0U
 #define NOTE_EVENT_STAGE_TERMINAL 4U
 #define NOTE_EVENT_DESTINATION_DEFAULT 0xFFU
+#define NOTE_EVENT_OCCURRENCE_COUNTER_MASK 0x3FFFFFFFU
+#define NOTE_EVENT_OCCURRENCE_NAMESPACE_STEP 0x00000000U
+#define NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY  0x40000000U
+#define NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI 0x80000000U
+#define NOTE_EVENT_OCCURRENCE_NAMESPACE_FX   0xC0000000U
 #define NOTE_EVENT_FLAG_GENERATED 0x01U
 #define NOTE_EVENT_FLAG_DEFERRED  0x02U
 #define NOTE_EVENT_FLAG_TERMINAL  0x04U
 #define NOTE_EVENT_FLAG_STALE     0x08U
+#define NOTE_EVENT_FLAG_CLOSURE_RESERVED 0x10U
+#define NOTE_EVENT_FLAG_BUDGET_ACCOUNTED 0x20U
 
 typedef struct
 {
@@ -59,6 +66,19 @@ typedef note_event_t note_fx_event_t;
 typedef note_event_kind_t note_fx_event_type_t;
 typedef note_event_result_t note_fx_result_t;
 
+static inline uint32_t note_event_occurrence_namespace(
+    note_event_provenance_t provenance)
+{
+    switch (provenance)
+    {
+        case NOTE_EVENT_SOURCE_KEY: return NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY;
+        case NOTE_EVENT_SOURCE_MIDI: return NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI;
+        case NOTE_EVENT_SOURCE_FX: return NOTE_EVENT_OCCURRENCE_NAMESPACE_FX;
+        case NOTE_EVENT_SOURCE_STEP:
+        default: return NOTE_EVENT_OCCURRENCE_NAMESPACE_STEP;
+    }
+}
+
 static inline uint8_t note_event_is_valid(const note_event_t *event)
 {
     return (event != 0)
@@ -68,6 +88,7 @@ static inline uint8_t note_event_is_valid(const note_event_t *event)
         && (event->provenance < (uint8_t)NOTE_EVENT_SOURCE_COUNT)
         && (event->stage <= NOTE_EVENT_STAGE_TERMINAL)
         && (event->source_token != 0U)
+        && (event->occurrence_id != 0U)
         && (event->generation != 0U);
 }
 

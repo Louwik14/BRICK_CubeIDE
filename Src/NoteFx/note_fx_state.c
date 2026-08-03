@@ -27,6 +27,15 @@ static uint8_t note_fx_state_clamp_value(uint8_t param, uint8_t value)
     return 0U;
 }
 
+static uint8_t note_fx_state_value_is_valid(uint8_t param, uint8_t value)
+{
+    if (param == 0U) return (value < 8U) ? 1U : 0U;
+    if (param == 1U) return (value < 5U) ? 1U : 0U;
+    if (param == 2U) return ((value >= 1U) && (value <= 4U)) ? 1U : 0U;
+    if (param == 3U) return (value < NOTE_FX_MODEL_COUNT) ? 1U : 0U;
+    return 0U;
+}
+
 uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state)
 {
     if (state == 0) return 0U;
@@ -37,7 +46,10 @@ uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state)
         state->value[slot][3U] = model;
         for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT - 1U; ++param)
         {
-            state->value[slot][param] = note_fx_state_clamp_value(param, state->value[slot][param]);
+            if (note_fx_state_value_is_valid(param, state->value[slot][param]) == 0U)
+            {
+                state->value[slot][param] = note_fx_state_default_for_model(model, param);
+            }
         }
     }
     return 1U;
@@ -95,9 +107,21 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
         return 0U;
     }
 
-    uint8_t raw = note_fx_state_clamp_value(param, (uint8_t)(value + 0.5f));
-    g_note_fx_state[track].value[slot][param] = raw;
-    (void)note_fx_state_normalize_track(&g_note_fx_state[track]);
+    const uint8_t raw = note_fx_state_clamp_value(param, (uint8_t)(value + 0.5f));
+    note_fx_track_state_t next = g_note_fx_state[track];
+    if ((param == 3U) && (next.value[slot][3U] != raw))
+    {
+        for (uint8_t index = 0U; index < NOTE_FX_PARAM_COUNT; ++index)
+        {
+            next.value[slot][index] = note_fx_state_default_for_model(raw, index);
+        }
+    }
+    else
+    {
+        next.value[slot][param] = raw;
+    }
+    (void)note_fx_state_normalize_track(&next);
+    g_note_fx_state[track] = next;
     return 1U;
 }
 
@@ -117,7 +141,8 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     {
         return 0U;
     }
-    g_note_fx_state[track] = *state;
-    (void)note_fx_state_normalize_track(&g_note_fx_state[track]);
+    note_fx_track_state_t normalized = *state;
+    (void)note_fx_state_normalize_track(&normalized);
+    g_note_fx_state[track] = normalized;
     return 1U;
 }

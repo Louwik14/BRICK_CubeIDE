@@ -581,6 +581,21 @@ set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
     COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
 )
 
+# Low-Cost only: hot sampler render code reached from the audio block.
+# Keep sample_cache/sample_stream_manager and the other Sampler sources out:
+# they also own SD/FatFs, refill, page scheduling or asynchronous state.
+if(BRICK6_VARIANT STREQUAL "lowcost")
+    set(LOWCOST_SAMPLE_RENDER_HOT_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/voice_manager.c"
+    )
+    set_source_files_properties(${LOWCOST_SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
+        COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+    )
+
+endif()
+
 # Storage en O0 : fichiers C et C++ du dossier Src/Storage
 set(STORAGE_ALL_SOURCES ${SRC_STORAGE_SRC})
 list(FILTER STORAGE_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")

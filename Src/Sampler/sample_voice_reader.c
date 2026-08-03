@@ -269,21 +269,39 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
         return 1U;
     }
 
+    const float last_segment_position = state->position + (state->step * (float)(segment_frames - 1U));
+    const uint8_t loop_neighbor_in_current =
+        (loop_forward != 0U)
+            && (state->audio_cursor.current_start_frame <= state->plan.loop_begin)
+            && (state->plan.loop_begin
+                < (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count))
+            && ((last_segment_position + state->step) >= (float)forward_end)
+            ? 1U
+            : 0U;
     const uint8_t is_mono = (state->audio_cursor.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 1U : 0U;
     out_segment->l = state->audio_cursor.current_base;
     out_segment->r = (is_mono != 0U) ? out_segment->l : (state->audio_cursor.current_base + 1U);
-    out_segment->neighbor_l = state->audio_cursor.neighbor_base;
-    out_segment->neighbor_r = (state->audio_cursor.neighbor_base != 0)
-                                  ? ((is_mono != 0U) ? state->audio_cursor.neighbor_base
-                                                    : (state->audio_cursor.neighbor_base + 1U))
-                                  : 0;
+    out_segment->neighbor_l = (loop_neighbor_in_current != 0U)
+                                  ? state->audio_cursor.current_base
+                                  : state->audio_cursor.neighbor_base;
+    out_segment->neighbor_r = (loop_neighbor_in_current != 0U)
+                                  ? ((is_mono != 0U) ? state->audio_cursor.current_base
+                                                     : (state->audio_cursor.current_base + 1U))
+                                  : ((state->audio_cursor.neighbor_base != 0)
+                                         ? ((is_mono != 0U) ? state->audio_cursor.neighbor_base
+                                                           : (state->audio_cursor.neighbor_base + 1U))
+                                         : 0);
     out_segment->frames = segment_frames;
     out_segment->frame_stride = state->audio_cursor.stride_floats;
     out_segment->start_frame = (uint32_t)state->position;
     out_segment->source_start_frame = state->audio_cursor.current_start_frame;
     out_segment->source_frame_count = state->audio_cursor.current_frame_count;
-    out_segment->neighbor_start_frame = state->audio_cursor.neighbor_start_frame;
-    out_segment->neighbor_frame_count = state->audio_cursor.neighbor_frame_count;
+    out_segment->neighbor_start_frame = (loop_neighbor_in_current != 0U)
+                                           ? state->audio_cursor.current_start_frame
+                                           : state->audio_cursor.neighbor_start_frame;
+    out_segment->neighbor_frame_count = (loop_neighbor_in_current != 0U)
+                                           ? state->audio_cursor.current_frame_count
+                                           : state->audio_cursor.neighbor_frame_count;
     out_segment->source_limit_frame = forward_end;
     out_segment->source_region_begin = state->plan.region_begin;
     out_segment->source_position = state->position;
@@ -1095,11 +1113,18 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
     const uint32_t frames = segment->frames;
     const uint32_t source_start_frame = segment->source_start_frame;
     const uint32_t source_limit_frame = segment->source_limit_frame;
+    const uint32_t source_end_frame = source_start_frame + segment->source_frame_count;
     const uint32_t frame_stride = segment->frame_stride;
     const uint32_t right_offset = (segment->is_mono != 0U) ? 0U : 1U;
     const float gain_base = gain;
-    uint32_t pos_q16 = (uint32_t)(((segment->source_position - (float)source_start_frame) * 65536.0f) + 0.5f);
-    const uint32_t step_q16 = (uint32_t)(segment->source_step * 65536.0f + 0.5f);
+    uint32_t pos_q16 =
+        (uint32_t)(((segment->source_position - (float)source_start_frame)
+                    * (float)SAMPLE_Q16_ONE) + 0.5f);
+    uint32_t step_q16 = (uint32_t)((segment->source_step * (float)SAMPLE_Q16_ONE) + 0.5f);
+    if (step_q16 == 0U)
+    {
+        step_q16 = 1U;
+    }
     float *dst_l = &out_l[out_offset];
     float *dst_r = &out_r[out_offset];
     const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
@@ -1111,46 +1136,114 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
         return;
     }
 
-    const uint64_t last_pos_q16 =
-        (uint64_t)pos_q16 + ((uint64_t)step_q16 * (uint64_t)(frames - 1U));
-    const uint32_t last_base_offset = (uint32_t)(last_pos_q16 >> 16U);
-    const uint8_t same_span =
-        ((last_base_offset + 1U) < segment->source_frame_count)
-        && ((source_start_frame + last_base_offset + 1U) < source_limit_frame) ? 1U : 0U;
-
-    if (same_span != 0U)
+    uint32_t same_page_frames = frames;
+    const uint32_t same_page_limit_frame = (source_end_frame < source_limit_frame)
+                                               ? source_end_frame
+                                               : source_limit_frame;
+    if (same_page_limit_frame <= (source_start_frame + 1U))
     {
-        for (uint32_t i = 0U; i < frames; ++i)
-        {
-            const uint32_t base_offset = pos_q16 >> 16U;
-            const uint32_t src0 = base_offset * frame_stride;
-            const float sample_l = src[src0];
-            const float sample_r = src[src0 + right_offset];
-
-            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-            last_l = sample_l * sample_gain;
-            last_r = sample_r * sample_gain;
-            dst_l[i] += last_l;
-            dst_r[i] += last_r;
-            pos_q16 += step_q16;
-        }
+        same_page_frames = 0U;
     }
     else
     {
-        for (uint32_t i = 0U; i < frames; ++i)
+        const uint32_t first_boundary_frame = same_page_limit_frame - 1U;
+        const uint64_t first_boundary_q16 =
+            ((uint64_t)(first_boundary_frame - source_start_frame)) << 16U;
+        if ((uint64_t)pos_q16 >= first_boundary_q16)
         {
-            const uint32_t base_offset = pos_q16 >> 16U;
-            const float *read_ptr = &src[base_offset * frame_stride];
-
-            const float sample_l = read_ptr[0];
-            const float sample_r = read_ptr[right_offset];
-            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-            last_l = sample_l * sample_gain;
-            last_r = sample_r * sample_gain;
-            dst_l[i] += last_l;
-            dst_r[i] += last_r;
-            pos_q16 += step_q16;
+            same_page_frames = 0U;
         }
+        else
+        {
+            const uint64_t distance_q16 = first_boundary_q16 - (uint64_t)pos_q16;
+            const uint64_t frames_before_boundary = ((distance_q16 - 1ULL) / step_q16) + 1ULL;
+            if (frames_before_boundary < (uint64_t)same_page_frames)
+            {
+                same_page_frames = (uint32_t)frames_before_boundary;
+            }
+        }
+    }
+
+    for (uint32_t i = 0U; i < same_page_frames; ++i)
+    {
+        const uint32_t base_offset = pos_q16 >> 16U;
+        const uint32_t src0 = base_offset * frame_stride;
+        const float curr_l = src[src0];
+        const float curr_r = src[src0 + right_offset];
+        const uint32_t frac_q16 = pos_q16 & (SAMPLE_Q16_ONE - 1U);
+        float sample_l = curr_l;
+        float sample_r = curr_r;
+        if (frac_q16 != 0U)
+        {
+            const float frac = (float)frac_q16 * (1.0f / (float)SAMPLE_Q16_ONE);
+            const float next_l = src[src0 + frame_stride];
+            sample_l = curr_l + ((next_l - curr_l) * frac);
+            if (right_offset != 0U)
+            {
+                const float next_r = src[src0 + frame_stride + right_offset];
+                sample_r = curr_r + ((next_r - curr_r) * frac);
+            }
+            else
+            {
+                sample_r = sample_l;
+            }
+        }
+
+        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+        last_l = sample_l * sample_gain;
+        last_r = sample_r * sample_gain;
+        dst_l[i] += last_l;
+        dst_r[i] += last_r;
+        pos_q16 += step_q16;
+    }
+
+    for (uint32_t i = same_page_frames; i < frames; ++i)
+    {
+        const uint32_t base_offset = pos_q16 >> 16U;
+        const uint32_t base_frame = source_start_frame + base_offset;
+        const uint32_t src0 = base_offset * frame_stride;
+        const float curr_l = src[src0];
+        const float curr_r = src[src0 + right_offset];
+        const uint32_t frac_q16 = pos_q16 & (SAMPLE_Q16_ONE - 1U);
+        float sample_l = curr_l;
+        float sample_r = curr_r;
+
+        if (frac_q16 != 0U)
+        {
+            uint32_t next_frame = base_frame + 1U;
+            if (next_frame >= source_limit_frame)
+            {
+                next_frame = (segment->neighbor_l != 0) ? segment->source_region_begin : UINT32_MAX;
+            }
+
+            const float *next_l_ptr = 0;
+            const float *next_r_ptr = 0;
+            if ((next_frame >= source_start_frame) && (next_frame < source_end_frame))
+            {
+                next_l_ptr = &src[(next_frame - source_start_frame) * frame_stride];
+                next_r_ptr = &next_l_ptr[right_offset];
+            }
+            else if ((segment->neighbor_l != 0) && (next_frame >= segment->neighbor_start_frame)
+                     && (next_frame < (segment->neighbor_start_frame + segment->neighbor_frame_count)))
+            {
+                next_l_ptr = &segment->neighbor_l[(next_frame - segment->neighbor_start_frame) * frame_stride];
+                next_r_ptr = &segment->neighbor_r[(next_frame - segment->neighbor_start_frame) * frame_stride];
+            }
+
+            if ((next_l_ptr != 0) && (next_r_ptr != 0))
+            {
+                const float frac = (float)frac_q16 * (1.0f / (float)SAMPLE_Q16_ONE);
+                sample_l = curr_l + ((*next_l_ptr - curr_l) * frac);
+                sample_r = curr_r + ((*next_r_ptr - curr_r) * frac);
+            }
+        }
+
+        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+        last_l = sample_l * sample_gain;
+        last_r = sample_r * sample_gain;
+        dst_l[i] += last_l;
+        dst_r[i] += last_r;
+        pos_q16 += step_q16;
     }
     if ((frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
     {

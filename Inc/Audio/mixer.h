@@ -84,6 +84,7 @@ void mixer_set_reverb_damping(float damping);
 void mixer_set_reverb_width(float width);
 void mixer_set_reverb_hpf(float hpf);
 void mixer_set_reverb_lpf(float lpf);
+void mixer_set_reverb_delays(uint8_t tbd);
 void mixer_set_delay_type(uint8_t type);
 void mixer_set_delay_mode(uint8_t mode);
 void mixer_set_delay_time(float time_s);

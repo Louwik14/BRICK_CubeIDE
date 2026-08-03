@@ -15,6 +15,7 @@ void fx_reverb_revb_global_set_damping(float damping);
 void fx_reverb_revb_global_set_width(float width);
 void fx_reverb_revb_global_set_hpf(float hpf);
 void fx_reverb_revb_global_set_lpf(float lpf);
+void fx_reverb_revb_global_set_delay_mode(uint8_t tbd);
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
                                                             float *out_l,
                                                             float *out_r,

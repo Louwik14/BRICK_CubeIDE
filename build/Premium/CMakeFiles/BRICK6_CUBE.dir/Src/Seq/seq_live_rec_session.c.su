@@ -29,5 +29,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_sessi
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:862:6:seq_live_rec_session_set_pattern_rec_target_track	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:878:9:seq_live_rec_session_live_rec_param_can_write	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:899:9:seq_live_rec_session_live_rec_param_write	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:933:6:seq_live_rec_session_live_rec_note_on	128	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:933:6:seq_live_rec_session_live_rec_note_on	120	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c:1084:6:seq_live_rec_session_live_rec_note_off	40	static

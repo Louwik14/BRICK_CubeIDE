@@ -17,8 +17,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_chain.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_shared_pool.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_dj_eq3_cmsis.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_filter_ladder_moog.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_onepole.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_peaks_svf_lut.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c"
@@ -54,7 +52,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_svf.cpp"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/moogladder.cpp"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")

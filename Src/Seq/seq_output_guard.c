@@ -148,8 +148,9 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 }
 void seq_output_guard_panic(uint8_t send_transport_stop)
 {
-    (void)seq_play_scheduler_transition_all(
-        SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL);
+    if (seq_play_scheduler_transition_all(
+            SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) == 0U)
+        return;
     synth_polyphony_panic();
     for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {

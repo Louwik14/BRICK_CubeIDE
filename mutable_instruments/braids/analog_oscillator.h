@@ -58,18 +58,13 @@ enum SyncMode {
 
 class AnalogOscillator {
  public:
-  typedef void (AnalogOscillator::*RenderFn)(
-      const uint8_t*,
-      int16_t*,
-      uint8_t*,
-      size_t);
-
   AnalogOscillator() { }
   ~AnalogOscillator() { }
   
   inline void Init() {
     phase_ = 0;
     phase_increment_ = 1;
+    phase_increment_pitch_ = -32768;
     high_ = false;
     parameter_ = previous_parameter_ = 0;
     aux_parameter_ = 0;
@@ -107,8 +102,23 @@ class AnalogOscillator {
       int16_t* buffer,
       uint8_t* sync_out,
       size_t size);
+  void RenderNoSync(int16_t* buffer, size_t size);
+  void RenderNoSyncOut(
+      const uint8_t* sync_in,
+      int16_t* buffer,
+      size_t size);
+  void RenderSyncOutNoInput(
+      int16_t* buffer,
+      uint8_t* sync_out,
+      size_t size);
   
  private:
+  void PrepareRender();
+  inline void Dispatch(
+      const uint8_t* sync_in,
+      int16_t* buffer,
+      uint8_t* sync_out,
+      size_t size);
   void RenderSquare(const uint8_t*, int16_t*, uint8_t*, size_t);
   void RenderSaw(const uint8_t*, int16_t*, uint8_t*, size_t);
   void RenderVariableSaw(const uint8_t*, int16_t*, uint8_t*, size_t);
@@ -146,13 +156,12 @@ class AnalogOscillator {
   int16_t aux_parameter_;
   int16_t discontinuity_depth_;
   int16_t pitch_;
+  int16_t phase_increment_pitch_;
   
   int32_t next_sample_;
   
   AnalogOscillatorShape shape_;
   AnalogOscillatorShape previous_shape_;
-  
-  static RenderFn fn_table_[];
   
   DISALLOW_COPY_AND_ASSIGN(AnalogOscillator);
 };

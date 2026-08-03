@@ -31,6 +31,8 @@
 
 #define HALL_USER_CAPTURE_FIFO_LEN         16U
 #define HALL_USER_VEL_POINT_COUNT          10U
+#define HALL_EDGE_FIFO_LEN                 16U
+#define HALL_EDGE_FIFO_MASK                (HALL_EDGE_FIFO_LEN - 1U)
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define HALL_PRESS_DECREASES_RAW           1U
@@ -75,6 +77,14 @@ static volatile uint8_t  hall_velocity_valid[HALL_KEY_COUNT];
 static volatile uint16_t hall_last_metric[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_on_pending[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
+typedef struct
+{
+    uint8_t pressed;
+    uint8_t velocity;
+} hall_edge_t;
+static volatile hall_edge_t hall_edge_fifo[HALL_KEY_COUNT][HALL_EDGE_FIFO_LEN];
+static volatile uint8_t hall_edge_read[HALL_KEY_COUNT];
+static volatile uint8_t hall_edge_write[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
@@ -113,6 +123,66 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
 
     hall_exit_critical(primask);
     return pending;
+}
+
+static void hall_edge_refresh_pending_flags_locked(uint8_t key)
+{
+    uint8_t read = hall_edge_read[key];
+    const uint8_t write = hall_edge_write[key];
+    uint8_t note_on = 0U;
+    uint8_t note_off = 0U;
+    while (read != write)
+    {
+        if (hall_edge_fifo[key][read].pressed != 0U)
+            note_on = 1U;
+        else
+            note_off = 1U;
+        read = (uint8_t)((read + 1U) & HALL_EDGE_FIFO_MASK);
+    }
+    hall_note_on_pending[key] = note_on;
+    hall_note_off_pending[key] = note_off;
+}
+
+static void hall_edge_push_locked(uint8_t key, uint8_t pressed,
+                                  uint8_t velocity)
+{
+    uint8_t write = hall_edge_write[key];
+    const uint8_t next = (uint8_t)((write + 1U) & HALL_EDGE_FIFO_MASK);
+    if (next == hall_edge_read[key])
+    {
+        /* Preserve a conservative close/reopen resynchronisation. */
+        hall_edge_read[key] = 0U;
+        write = 0U;
+        hall_edge_write[key] = 0U;
+        hall_edge_fifo[key][write++] = (hall_edge_t){
+            .pressed = 0U,
+            .velocity = 0U
+        };
+        if (pressed != 0U)
+        {
+            hall_edge_fifo[key][write++] = (hall_edge_t){
+                .pressed = 1U,
+                .velocity = velocity
+            };
+        }
+        hall_edge_write[key] = (uint8_t)(write & HALL_EDGE_FIFO_MASK);
+        hall_edge_refresh_pending_flags_locked(key);
+        return;
+    }
+    hall_edge_fifo[key][write] = (hall_edge_t){
+        .pressed = (pressed != 0U) ? 1U : 0U,
+        .velocity = velocity
+    };
+    __DMB();
+    hall_edge_write[key] = next;
+    hall_edge_refresh_pending_flags_locked(key);
+}
+
+static void hall_edge_push(uint8_t key, uint8_t pressed, uint8_t velocity)
+{
+    const uint32_t primask = hall_enter_critical();
+    hall_edge_push_locked(key, pressed, velocity);
+    hall_exit_critical(primask);
 }
 
 static void hall_velocity_capture_flush(void)
@@ -291,6 +361,8 @@ static void hall_engine_reset_key_runtime(uint8_t key)
     hall_clear_velocity_state(key);
     hall_note_on_pending[key] = 0U;
     hall_note_off_pending[key] = 0U;
+    hall_edge_read[key] = 0U;
+    hall_edge_write[key] = 0U;
 
     hall_buttons[key].min = hall_min[key];
     hall_buttons[key].max = hall_max[key];
@@ -310,16 +382,8 @@ static void hall_engine_invalidate_key_state(uint8_t key, uint8_t emit_note_off)
     hall_value[key] = 0U;
     hall_position[key] = 0U;
     hall_pressed[key] = 0U;
-    hall_note_on_pending[key] = 0U;
-
     if ((emit_note_off != 0U) && (was_pressed != 0U))
-    {
-        hall_note_off_pending[key] = 1U;
-    }
-    else
-    {
-        hall_note_off_pending[key] = 0U;
-    }
+        hall_edge_push(key, 0U, 0U);
 
     hall_buttons[key].min = hall_min[key];
     hall_buttons[key].max = hall_max[key];
@@ -920,7 +984,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
         hall_buttons[key].curr_out = 1U;
         hall_last_metric[key] = hall_buttons[key].dv_peak;
         hall_velocity[key] = hall_velocity_compute(key, range);
-        hall_velocity_valid[key] = 1U;
+    hall_velocity_valid[key] = 1U;
     }
     else if ((hall_buttons[key].curr_out != 0U)
              &&
@@ -938,12 +1002,12 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
 
     if ((hall_buttons[key].prev_out == 0U) && (hall_buttons[key].curr_out == 1U))
     {
-        hall_note_on_pending[key] = 1U;
+        hall_edge_push(key, 1U, hall_velocity[key]);
         hall_velocity_capture_push(key, hall_last_metric[key]);
     }
     else if ((hall_buttons[key].prev_out != 0U) && (hall_buttons[key].curr_out == 0U))
     {
-        hall_note_off_pending[key] = 1U;
+        hall_edge_push(key, 0U, 0U);
         hall_clear_velocity_state(key);
         hall_buttons[key].dv_peak = 0U;
         hall_buttons[key].sum_dv = 0U;
@@ -1084,6 +1148,27 @@ uint8_t hall_engine_consume_note_off(uint8_t key)
     }
 
     return hall_consume_flag(&hall_note_off_pending[key]);
+}
+
+uint8_t hall_engine_consume_edge(uint8_t key, uint8_t *pressed,
+                                 uint8_t *velocity)
+{
+    if ((key >= HALL_KEY_COUNT) || (pressed == 0) || (velocity == 0))
+        return 0U;
+
+    const uint32_t primask = hall_enter_critical();
+    const uint8_t read = hall_edge_read[key];
+    if (read == hall_edge_write[key])
+    {
+        hall_exit_critical(primask);
+        return 0U;
+    }
+    *pressed = hall_edge_fifo[key][read].pressed;
+    *velocity = hall_edge_fifo[key][read].velocity;
+    hall_edge_read[key] = (uint8_t)((read + 1U) & HALL_EDGE_FIFO_MASK);
+    hall_edge_refresh_pending_flags_locked(key);
+    hall_exit_critical(primask);
+    return 1U;
 }
 
 uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture)

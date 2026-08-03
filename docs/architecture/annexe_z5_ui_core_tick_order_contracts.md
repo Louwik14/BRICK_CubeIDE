@@ -7,7 +7,7 @@ Date: 2026-04-15
 Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui_core_tick`, avec lien explicite vers le flux hors queue `ui_core_service_track_selection_inputs()`.
 
 ## Preuve de flux runtime
-- Superloop: `brick6_app_process()` appelle `hall_loop_process()` -> `ui_core_service_track_selection_inputs()` -> `hall_keyboard_bridge_process()` (`Src/Core/brick6_app_init.c:151-153`).
+- Superloop: `brick6_app_process()` appelle `hall_loop_process()` -> `ui_core_service_track_selection_inputs()` -> `hall_keyboard_bridge_process()`. Sur Low-Cost, l'IRQ ADC DMA a deja execute `hall_engine_process_sample()`; `hall_loop_process()` ne depile plus de FIFO et le bridge consomme les transitions pending produites en IRQ. Premium conserve le depilement FIFO dans `hall_loop_process()`.
 - Tasklet UI: `ui_tasklet_poll()` appelle `ui_core_tick()` (`Src/UI/ui_tasklet.c:50`).
 - Scheduler: `main` ne lance plus `ui_tasklet_poll()` en 1:1 avec `engine_tick_count`; le service UI est sous-echantillonne par un diviseur explicite et le rattrapage reste borne par tour de boucle principale.
 - Implication contractuelle: certaines transitions de mode/track se font hors queue d'events, avant `ui_core_tick` et avant le bridge clavier hall.

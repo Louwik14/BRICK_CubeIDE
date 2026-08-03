@@ -49,6 +49,7 @@ static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
 static const char *const g_delay_type_labels[] = {"CLASSIC", "DUAL", NULL};
 static const char *const g_delay_mode_labels[] = {"Normal", "PingPong", "Tap", "ClassicPP", NULL};
+static const char *const g_reverb_delays_labels[] = {"DELUGE", "TBD", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "PingPong", NULL};
 static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8", "16", "32", "64", NULL};
 static const char *const g_sampler_clip_sync_length_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
@@ -278,6 +279,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_DELAY_SPECTRAL_POSITION, "POSITION", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_spectral_position),
     PARAM_DESC_EX(PARAM_MIX_DELAY_SPECTRAL_WIDTH, "WIDTH", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_spectral_width),
     PARAM_DESC_EX(PARAM_MIX_DELAY_FBW, "FBW", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_mix_delay_feedback_width),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DELAYS, "DELAYS", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_delays_labels, apply_mix_reverb_delays),
     PARAM_DESC_EX(PARAM_RESERVED_175, "Reserved 175", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD, "MOD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_delay_mod),
     PARAM_DESC_EX(PARAM_MIX_DELAY_MOD_RATE, "M.RATE", PARAM_TYPE_FLOAT, 0.01f, 12.0f, 0.01f, 0.25f, PARAM_DISPLAY_FLOAT, "Hz", NULL, apply_mix_delay_mod_rate),

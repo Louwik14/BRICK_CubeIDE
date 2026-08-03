@@ -185,6 +185,7 @@ void midi_note_on(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
 void midi_note_off(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
 uint8_t midi_note_on_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
 uint8_t midi_note_off_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
+uint32_t midi_usb_transport_generation(void);
 void midi_poly_aftertouch(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t pressure);
 void midi_cc(midi_dest_t dest, uint8_t ch, uint8_t cc, uint8_t val);
 void midi_program_change(midi_dest_t dest, uint8_t ch, uint8_t program);

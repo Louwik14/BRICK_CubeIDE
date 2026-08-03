@@ -37,17 +37,18 @@ typedef enum
     NOTE_FX_TRANSITION_PANIC_CLOSE_ALL,
     NOTE_FX_TRANSITION_MODEL_RECONFIGURE,
     NOTE_FX_TRANSITION_PATTERN_REPLACE,
-    NOTE_FX_TRANSITION_DESTINATION_REBIND
+    NOTE_FX_TRANSITION_DESTINATION_REBIND,
+    NOTE_FX_TRANSITION_SOURCE_CLOCK_CHANGE
 } note_fx_transition_policy_t;
 
 note_fx_pipeline_diag_t note_fx_pipeline_diag(uint8_t track);
 note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event);
 /* Audio-owner seam: only the audio execution domain may call this directly. */
 note_fx_result_t note_fx_pipeline_submit_audio(const note_fx_event_t *event);
-note_fx_result_t note_fx_pipeline_submit_source(uint8_t track, uint8_t note,
-                                                 uint8_t velocity, uint8_t is_note_on,
-                                                 uint64_t sample_time,
-                                                 note_event_provenance_t provenance);
+note_fx_result_t note_fx_pipeline_submit_source_occurrence(
+    uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
+    uint64_t sample_time, note_event_provenance_t provenance,
+    uint32_t source_occurrence_id);
 void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                               uint32_t samples_per_step_q16);
 void note_fx_pipeline_begin_audio_half(uint16_t frames);

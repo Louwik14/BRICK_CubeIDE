@@ -514,6 +514,28 @@ uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
     return SYNTH_POLYPHONY_NO_VOICE;
 }
 
+uint8_t synth_polyphony_occurrence_is_active(uint8_t track,
+                                             synth_poly_source_t source,
+                                             uint32_t occurrence_id)
+{
+    if ((synth_poly_valid_track(track) == 0U) || (occurrence_id == 0U))
+        return 0U;
+
+    const synth_poly_track_t *const poly = &g_synth_poly[track];
+    for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
+    {
+        const uint8_t slot = synth_polyphony_find_slot(track, voice);
+        if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+                && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD)
+                && (g_synth_voice[slot].source == (uint8_t)source)
+                && (g_synth_voice[slot].occurrence_id == occurrence_id))
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 uint8_t synth_polyphony_release_source(uint8_t track,
                                       synth_poly_source_t source,
                                       synth_poly_release_t *out,

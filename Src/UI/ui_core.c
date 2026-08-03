@@ -41,6 +41,8 @@
 #include "Storage/sample_capture.h"
 #include "Core/track_input_ownership.h"
 #include "NoteFx/note_fx_pipeline.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "ui_bootstrap.h"
 #include "ui_event.h"
 #include "ui_core_navigation_bridge.h"
@@ -236,11 +238,17 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
 
     if (track_state_get_midi_channel(track) != channel_1_16)
     {
-        (void)note_fx_pipeline_transition_track(
-            track, NOTE_FX_TRANSITION_DESTINATION_REBIND);
+        const seq_track_id_t transition_track = track;
+        if (seq_play_scheduler_transition_tracks(
+                &transition_track, 1U,
+                SEQ_PLAY_TRANSITION_DESTINATION_REBIND) == 0U)
+            return false;
     }
     if (track_state_set_track_midi_channel(track, channel_1_16) == false)
     {
+        const seq_track_id_t transition_track = track;
+        (void)seq_play_scheduler_transition_tracks(
+            &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
         return false;
     }
     track_runtime_invalidate_track(track);
@@ -248,6 +256,9 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
     {
         ui_core_runtime_bridge_sync_active_track_midi_channel();
     }
+    const seq_track_id_t transition_track = track;
+    (void)seq_play_scheduler_transition_tracks(
+        &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
     return true;
 }
 

@@ -19,9 +19,11 @@ dans le mixer : le buffer droit de compatibilitÃ© est un discard de bloc, sans
 accumulation L/R pour un instrument Multi mono. Le chemin stÃ©rÃ©o conserve son
 comportement.
 
-Les dettes non couvertes sont le filtre/VCA par voice Multi, la vraie
-interpolation, le mono-tail natif, l'optimisation des pages voisines et la
-mesure IRQ rÃ©elle sur matÃ©riel.
+Les dettes non couvertes sont le filtre/VCA par voice Multi, le mono-tail
+natif, l'optimisation des pages voisines et la mesure IRQ rÃ©elle sur
+matÃ©riel. L'interpolation linÃ©aire 2 points est couverte pour les lectures
+Stream/Multi forward pitchÃ©es ; le sampler RAM et les chemins reverse/ping-pong
+restent hors pÃ©rimÃ¨tre.
 
 Ce contrat est introduit par l’étape 1 du plan `docs/plan_stream_multi_mono.md`.
 Il ne modifie encore aucun décodage ni aucun chemin audio.

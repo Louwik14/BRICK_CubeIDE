@@ -1,7 +1,7 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:136:16:track_snapshot_apply_structure_mutation	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:33:9:track_snapshot_last_voice_limited	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:34:9:track_snapshot_last_voice_max	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:303:9:track_snapshot_capture	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:352:9:track_snapshot_make_default	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:402:9:track_snapshot_apply_ex	256	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:589:9:track_snapshot_apply	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:141:16:track_snapshot_apply_structure_mutation	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:35:9:track_snapshot_last_voice_limited	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:36:9:track_snapshot_last_voice_max	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:260:9:track_snapshot_capture	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:308:9:track_snapshot_make_default	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:344:9:track_snapshot_apply_ex	192	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_snapshot.c:530:9:track_snapshot_apply	8	static

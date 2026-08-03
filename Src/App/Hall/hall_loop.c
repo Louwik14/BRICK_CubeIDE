@@ -24,6 +24,7 @@ void hall_loop_init(void)
 
 void hall_loop_process(void)
 {
+#if !defined(BRICK6_VARIANT_LOWCOST)
     hall_adc_sample_t sample;
     uint32_t samples_processed = 0U;
 
@@ -38,6 +39,7 @@ void hall_loop_process(void)
 
         hall_engine_process_sample(sample.key, sample.raw, sample.sample_count);
     }
+#endif
 
     hall_engine_process();
 }

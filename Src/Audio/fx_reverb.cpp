@@ -2,7 +2,6 @@
 #include "audio_float.h"
 #include "fx_reverb_revb.h"
 #include "Storage/memory_layout.h"
-#include <string.h>
 
 static inline float clamp01(float v)
 {
@@ -65,6 +64,7 @@ void fx_reverb_global_set_damping(float value) { g_reverb_global.damping = clamp
 void fx_reverb_global_set_width(float value) { g_reverb_global.width = clamp01(value); apply_params(); }
 void fx_reverb_global_set_hpf(float value) { g_reverb_global.hpf = clamp01(value); apply_params(); }
 void fx_reverb_global_set_lpf(float value) { g_reverb_global.lpf = clamp01(value); apply_params(); }
+void fx_reverb_global_set_delay_mode(uint8_t tbd) { fx_reverb_revb_global_set_delay_mode(tbd); }
 
 uint8_t fx_reverb_global_is_active(void)
 {
@@ -77,8 +77,13 @@ void fx_reverb_global_process_block(float *in_l, float *in_r, float *out_l, floa
         return;
     if(g_reverb_global.backend_valid == 0U)
     {
-        memset(out_l, 0, sizeof(float) * frames);
-        memset(out_r, 0, sizeof(float) * frames);
+        volatile float *zero_l = out_l;
+        volatile float *zero_r = out_r;
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            zero_l[i] = 0.0f;
+            zero_r[i] = 0.0f;
+        }
         return;
     }
     if(frames > AUDIO_BLOCK_SIZE)

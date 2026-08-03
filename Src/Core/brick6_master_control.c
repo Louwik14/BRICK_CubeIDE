@@ -15,11 +15,12 @@
 #include <stdint.h>
 
 #include "App/mux_pots.h"
+#include "Board/board_surface.h"
 #include "mixer.h"
 #include "Param/param_macro.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
-#define LOWCOST_FIXED_MASTER_GAIN 0.5f
+#define LOWCOST_FALLBACK_MASTER_GAIN 0.75f
 #endif
 
 void brick6_master_control_process(void)
@@ -78,11 +79,20 @@ void brick6_master_control_process(void)
 #endif
 
 #if defined(BRICK6_VARIANT_LOWCOST)
-    if (initialized == 0U)
+    uint16_t raw = 0U;
+    if (board_surface_read_master_volume_raw(&raw) == 0U)
     {
-        mixer_set_master(LOWCOST_FIXED_MASTER_GAIN);
-        initialized = 1U;
+        if (initialized == 0U)
+        {
+            mixer_set_master(LOWCOST_FALLBACK_MASTER_GAIN);
+            initialized = 1U;
+        }
+        return;
     }
+
+    const float gain = (float)raw / 65535.0f;
+    mixer_set_master(gain * gain);
+    initialized = 1U;
     return;
 #else
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)

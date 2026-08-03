@@ -39,6 +39,31 @@ namespace braids {
   
 using namespace stmlib;
 
+static inline void RenderAnalogNoSyncOut(
+    AnalogOscillator* oscillator,
+    const uint8_t* sync,
+    int16_t* buffer,
+    size_t size) {
+  if (sync == NULL) {
+    oscillator->RenderNoSync(buffer, size);
+  } else {
+    oscillator->RenderNoSyncOut(sync, buffer, size);
+  }
+}
+
+static inline void RenderAnalogSyncOut(
+    AnalogOscillator* oscillator,
+    const uint8_t* sync,
+    int16_t* buffer,
+    uint8_t* sync_out,
+    size_t size) {
+  if (sync == NULL) {
+    oscillator->RenderSyncOutNoInput(buffer, sync_out, size);
+  } else {
+    oscillator->Render(sync, buffer, sync_out, size);
+  }
+}
+
 void MacroOscillator::Render(
     const uint8_t* sync,
     int16_t* buffer,
@@ -55,7 +80,7 @@ void MacroOscillator::RenderCSaw(
   analog_oscillator_[0].set_shape(OSC_SHAPE_CSAW);
   analog_oscillator_[0].set_parameter(parameter_[0]);
   analog_oscillator_[0].set_aux_parameter(parameter_[1]);
-  analog_oscillator_[0].Render(sync, buffer, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
   int16_t shift = -(parameter_[1] - 32767) >> 4;
   while (size--) {
     int32_t s = *buffer + shift;
@@ -93,8 +118,8 @@ void MacroOscillator::RenderMorph(
   
   int16_t* shape_1 = buffer;
   int16_t* shape_2 = temp_buffer_;
-  analog_oscillator_[0].Render(sync, shape_1, NULL, size);
-  analog_oscillator_[1].Render(sync, shape_2, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, shape_1, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, shape_2, size);
   
   int32_t lp_cutoff = pitch_ - (parameter_[1] >> 1) + 128 * 128;
   if (lp_cutoff < 0) {
@@ -139,8 +164,8 @@ void MacroOscillator::RenderSawSquare(
   int16_t* saw_buffer = buffer;
   int16_t* square_buffer = temp_buffer_;
   
-  analog_oscillator_[0].Render(sync, saw_buffer, NULL, size);
-  analog_oscillator_[1].Render(sync, square_buffer, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, saw_buffer, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, square_buffer, size);
   
   BEGIN_INTERPOLATE_PARAMETER_1
   while (size--) {
@@ -214,7 +239,7 @@ void MacroOscillator::RenderTriple(
 
   std::fill(&buffer[0], &buffer[size], 0);
   for (size_t i = 0; i < 3; ++i) {
-    analog_oscillator_[i].Render(sync, temp_buffer_, NULL, size);
+    RenderAnalogNoSyncOut(&analog_oscillator_[i], sync, temp_buffer_, size);
     for (size_t j = 0; j < size; ++j) {
       buffer[j] += temp_buffer_[j] * 21 >> 6;
     }
@@ -236,8 +261,8 @@ void MacroOscillator::RenderSub(
   int16_t octave = parameter_[1] < 16384 ? (24 << 7) : (12 << 7);
   analog_oscillator_[1].set_pitch(pitch_ - octave);
 
-  analog_oscillator_[0].Render(sync, buffer, NULL, size);
-  analog_oscillator_[1].Render(sync, temp_buffer_, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
   
   BEGIN_INTERPOLATE_PARAMETER_1
 
@@ -268,8 +293,8 @@ void MacroOscillator::RenderDualSync(
   analog_oscillator_[1].set_shape(base_shape);
   analog_oscillator_[1].set_pitch(pitch_ + (parameter_[0] >> 2));
 
-  analog_oscillator_[0].Render(sync, buffer, sync_buffer_, size);
-  analog_oscillator_[1].Render(sync_buffer_, temp_buffer_, NULL, size);
+  RenderAnalogSyncOut(&analog_oscillator_[0], sync, buffer, sync_buffer_, size);
+  analog_oscillator_[1].RenderNoSyncOut(sync_buffer_, temp_buffer_, size);
   
   BEGIN_INTERPOLATE_PARAMETER_1
 
@@ -307,8 +332,8 @@ void MacroOscillator::RenderSineTriangle(
   analog_oscillator_[0].set_shape(OSC_SHAPE_SINE_FOLD);
   analog_oscillator_[1].set_shape(OSC_SHAPE_TRIANGLE_FOLD);
 
-  analog_oscillator_[0].Render(sync, buffer, NULL, size);
-  analog_oscillator_[1].Render(sync, temp_buffer_, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
 
   int16_t* temp_buffer = temp_buffer_;
   
@@ -338,8 +363,8 @@ void MacroOscillator::RenderBuzz(
   analog_oscillator_[1].set_shape(OSC_SHAPE_BUZZ);
   analog_oscillator_[1].set_pitch(pitch_ + (parameter_[1] >> 8));
 
-  analog_oscillator_[0].Render(sync, buffer, NULL, size);
-  analog_oscillator_[1].Render(sync, temp_buffer_, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
   int16_t* temp_buffer = temp_buffer_;
   while (size--) {
     *buffer >>= 1;
@@ -367,7 +392,7 @@ void MacroOscillator::RenderSawComb(
   analog_oscillator_[0].set_parameter(0);
   analog_oscillator_[0].set_pitch(pitch_);
   analog_oscillator_[0].set_shape(OSC_SHAPE_SAW);
-  analog_oscillator_[0].Render(sync, buffer, NULL, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
   
   digital_oscillator_.set_parameters(parameter_[0], parameter_[1]);
   digital_oscillator_.set_pitch(pitch_);

@@ -70,27 +70,6 @@ uint32_t DigitalOscillator::ComputePhaseIncrement(int16_t midi_pitch) {
   return phase_increment;
 }
 
-uint32_t DigitalOscillator::ComputeDelay(int16_t midi_pitch) {
-  if (midi_pitch >= kHighestNote - kOctave) {
-    midi_pitch = kHighestNote - kOctave;
-  }
-  
-  int32_t ref_pitch = midi_pitch;
-  ref_pitch -= kPitchTableStart;
-  
-  size_t num_shifts = 0;
-  while (ref_pitch < 0) {
-    ref_pitch += kOctave;
-    ++num_shifts;
-  }
-  
-  uint32_t a = lut_oscillator_delays[ref_pitch >> 4];
-  uint32_t b = lut_oscillator_delays[(ref_pitch >> 4) + 1];
-  uint32_t delay = a + (static_cast<int32_t>(b - a) * (ref_pitch & 0xf) >> 4);  
-  delay >>= 12 - num_shifts;
-  return delay;
-}
-
 void DigitalOscillator::Render(
     const uint8_t* sync,
     int16_t* buffer,
@@ -106,16 +85,16 @@ void DigitalOscillator::Render(
     parameter_[1] = a + ((b - a) * fractional >> 8);
   }    
   
-  RenderFn fn = fn_table_[shape_];
-  
   if (shape_ != previous_shape_) {
     Init();
     previous_shape_ = shape_;
     init_ = true;
   }
   
-  phase_increment_ = ComputePhaseIncrement(pitch_);
-  delay_ = ComputeDelay(pitch_);
+  if (pitch_ != phase_increment_pitch_) {
+    phase_increment_ = ComputePhaseIncrement(pitch_);
+    phase_increment_pitch_ = pitch_;
+  }
   
   if (pitch_ > kHighestNote) {
     pitch_ = kHighestNote;
@@ -123,7 +102,44 @@ void DigitalOscillator::Render(
     pitch_ = 0;
   }
 
-  (this->*fn)(sync, buffer, size);
+  switch (static_cast<uint8_t>(shape_)) {
+    case 0: RenderTripleRingMod(sync, buffer, size); break;
+    case 1: RenderSawSwarm(sync, buffer, size); break;
+    case 2: RenderComb(sync, buffer, size); break;
+    case 3: RenderToy(sync, buffer, size); break;
+    case 4:
+    case 5:
+    case 6:
+    case 7: RenderDigitalFilter(sync, buffer, size); break;
+    case 8: RenderVosim(sync, buffer, size); break;
+    case 9: RenderVowel(sync, buffer, size); break;
+    case 10: RenderVowelFof(sync, buffer, size); break;
+    case 11: RenderHarmonics(sync, buffer, size); break;
+    case 12: RenderFm(sync, buffer, size); break;
+    case 13: RenderFeedbackFm(sync, buffer, size); break;
+    case 14: RenderChaoticFeedbackFm(sync, buffer, size); break;
+    case 15: RenderPlucked(sync, buffer, size); break;
+    case 16: RenderBowed(sync, buffer, size); break;
+    case 17: RenderBlown(sync, buffer, size); break;
+    case 18: RenderFluted(sync, buffer, size); break;
+    case 19: RenderStruckBell(sync, buffer, size); break;
+    case 20: RenderStruckDrum(sync, buffer, size); break;
+    case 21: RenderKick(sync, buffer, size); break;
+    case 22: RenderCymbal(sync, buffer, size); break;
+    case 23: RenderSnare(sync, buffer, size); break;
+    case 24: RenderWavetables(sync, buffer, size); break;
+    case 25: RenderWaveMap(sync, buffer, size); break;
+    case 26: RenderWaveLine(sync, buffer, size); break;
+    case 27: RenderWaveParaphonic(sync, buffer, size); break;
+    case 28: RenderFilteredNoise(sync, buffer, size); break;
+    case 29: RenderTwinPeaksNoise(sync, buffer, size); break;
+    case 30: RenderClockedNoise(sync, buffer, size); break;
+    case 31: RenderGranularCloud(sync, buffer, size); break;
+    case 32: RenderParticleNoise(sync, buffer, size); break;
+    case 33: RenderDigitalModulation(sync, buffer, size); break;
+    case 34: RenderQuestionMark(sync, buffer, size); break;
+    default: break;
+  }
 }
 
 void DigitalOscillator::RenderTripleRingMod(
@@ -143,7 +159,7 @@ void DigitalOscillator::RenderTripleRingMod(
   
   while (size--) {
     phase += increment;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase = 0;
       modulator_phase = 0;
       modulator_phase_2 = 0;
@@ -201,7 +217,7 @@ void DigitalOscillator::RenderSawSwarm(
   int32_t lp = state_.saw.lp;
 
   while (size--) {
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       for (size_t i = 0; i < 6; ++i) {
         state_.saw.phase[i] = 0;
       }
@@ -268,7 +284,7 @@ void DigitalOscillator::RenderToy(
   uint8_t held_sample = state_.toy.held_sample;
   while (size--) {
     int32_t filtered_sample = 0;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase = 0;
     } 
     for (size_t tap = 0; tap < 4; ++tap) {
@@ -322,7 +338,7 @@ void DigitalOscillator::RenderDigitalFilter(
     modulator_phase += modulator_phase_increment;
     uint16_t integrator_gain = (modulator_phase_increment >> 14);
     
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       state_.res.polarity = 1;
       phase_ = 0;
       modulator_phase = 0;
@@ -386,7 +402,7 @@ void DigitalOscillator::RenderVosim(
   }
   while (size--) {
     phase_ += phase_increment_;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = 0;
     }
     int32_t sample = 16384 + 8192;
@@ -613,7 +629,11 @@ void DigitalOscillator::RenderVowelFof(
   // The original implementation used FOF but we live in the future and it's
   // less computationally expensive to render a proper bank of 5 SVF.
 
-  int16_t amplitudes[kNumFormants];
+  const int16_t amplitude = InterpolateFormantParameter(
+      formant_a_data,
+      parameter_[1],
+      parameter_[0],
+      0);
   int32_t svf_lp[kNumFormants];
   int32_t svf_bp[kNumFormants];
   int16_t svf_f[kNumFormants];
@@ -625,11 +645,6 @@ void DigitalOscillator::RenderVowelFof(
         parameter_[0],
         i) + (12 << 7);
     svf_f[i] = Interpolate824(lut_svf_cutoff, frequency << 17);
-    amplitudes[i] = InterpolateFormantParameter(
-        formant_a_data,
-        parameter_[1],
-        parameter_[0],
-        i);
     if (init_) {
       svf_lp[i] = 0;
       svf_bp[i] = 0;
@@ -670,7 +685,7 @@ void DigitalOscillator::RenderVowelFof(
       int32_t hp = notch - svf_lp[i];
       svf_bp[i] += svf_f[i] * hp >> 15;
       CLIP(svf_bp[i])
-      out += svf_bp[i] * amplitudes[0] >> 17;
+      out += svf_bp[i] * amplitude >> 17;
     }
     CLIP(out);
     *buffer++ = (out + previous_sample) >> 1;
@@ -701,7 +716,7 @@ void DigitalOscillator::RenderFm(
     INTERPOLATE_PARAMETER_0
     
     phase_ += phase_increment_;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = modulator_phase = 0;
     }
     modulator_phase += modulator_phase_increment;
@@ -737,7 +752,7 @@ void DigitalOscillator::RenderFeedbackFm(
     INTERPOLATE_PARAMETER_0
     
     phase_ += phase_increment_;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = modulator_phase = 0;
     }
     
@@ -773,7 +788,7 @@ void DigitalOscillator::RenderChaoticFeedbackFm(
     INTERPOLATE_PARAMETER_0
     
     phase_ += phase_increment_;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = modulator_phase = 0;
     }
     
@@ -935,7 +950,7 @@ void DigitalOscillator::RenderHarmonics(
     int32_t out;
     
     phase += phase_increment;
-    if (*sync++ || *sync++) {
+    if ((sync != NULL && *sync++) || (sync != NULL && *sync++)) {
       phase = 0;
     }
     out = 0;
@@ -1048,7 +1063,7 @@ void DigitalOscillator::RenderStruckDrum(
   state_.add.lp_noise[0] = lp_state_0;
   state_.add.lp_noise[1] = lp_state_1;
   state_.add.lp_noise[2] = lp_state_2;
-  for (size_t i = 0; i < kNumBellPartials; ++i) {
+  for (size_t i = 0; i < kNumDrumPartials; ++i) {
     AdditiveState* a = &state_.add;
     a->partial_amplitude[i] = a->target_partial_amplitude[i];
   }
@@ -1241,7 +1256,7 @@ void DigitalOscillator::RenderWavetables(
     int16_t sample;
     // 2x naive oversampling.
     phase_ += phase_increment;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = 0;
     }
     
@@ -1284,7 +1299,7 @@ void DigitalOscillator::RenderWaveMap(
     int16_t sample;
     // 2x naive oversampling.
     phase_ += phase_increment;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase_ = 0;
     }
     
@@ -1338,7 +1353,7 @@ void DigitalOscillator::RenderWaveLine(
   
   if (parameter_[1] < 8192) {
     while (size--) {
-      if (*sync++) {
+      if (sync != NULL && *sync++) {
         phase = 0;
       }
       int32_t sample = 0;
@@ -1359,7 +1374,7 @@ void DigitalOscillator::RenderWaveLine(
     }
   } else if (parameter_[1] < 16384) {
     while (size--) {
-      if (*sync++) {
+      if (sync != NULL && *sync++) {
         phase = 0;
       }
       int32_t sample = 0;
@@ -1380,7 +1395,7 @@ void DigitalOscillator::RenderWaveLine(
     }
   } else if (parameter_[1] < 24576) {
     while (size--) {
-      if (*sync++) {
+      if (sync != NULL && *sync++) {
         phase = 0;
       }
       int32_t sample = 0;
@@ -1399,7 +1414,7 @@ void DigitalOscillator::RenderWaveLine(
     }
   } else {
     while (size--) {
-      if (*sync++) {
+      if (sync != NULL && *sync++) {
         phase = 0;
       }
       int32_t sample = 0;
@@ -1676,7 +1691,7 @@ void DigitalOscillator::RenderClockedNoise(
   uint32_t quantizer_divider = 65536 / num_steps;
   while (size--) {
     phase += phase_increment;
-    if (*sync++) {
+    if (sync != NULL && *sync++) {
       phase = 0;
     }
     
@@ -2212,46 +2227,5 @@ void DigitalOscillator::RenderYourAlgo(
   }
 }
 */
-
-/* static */
-DigitalOscillator::RenderFn DigitalOscillator::fn_table_[] = {
-  &DigitalOscillator::RenderTripleRingMod,
-  &DigitalOscillator::RenderSawSwarm,
-  &DigitalOscillator::RenderComb,
-  &DigitalOscillator::RenderToy,
-  &DigitalOscillator::RenderDigitalFilter,
-  &DigitalOscillator::RenderDigitalFilter,
-  &DigitalOscillator::RenderDigitalFilter,
-  &DigitalOscillator::RenderDigitalFilter,
-  &DigitalOscillator::RenderVosim,
-  &DigitalOscillator::RenderVowel,
-  &DigitalOscillator::RenderVowelFof,
-  &DigitalOscillator::RenderHarmonics,
-  &DigitalOscillator::RenderFm,
-  &DigitalOscillator::RenderFeedbackFm,
-  &DigitalOscillator::RenderChaoticFeedbackFm,
-  &DigitalOscillator::RenderPlucked,
-  &DigitalOscillator::RenderBowed,
-  &DigitalOscillator::RenderBlown,
-  &DigitalOscillator::RenderFluted,
-  &DigitalOscillator::RenderStruckBell,
-  &DigitalOscillator::RenderStruckDrum,
-  &DigitalOscillator::RenderKick,
-  &DigitalOscillator::RenderCymbal,
-  &DigitalOscillator::RenderSnare,
-  &DigitalOscillator::RenderWavetables,
-  &DigitalOscillator::RenderWaveMap,
-  &DigitalOscillator::RenderWaveLine,
-  &DigitalOscillator::RenderWaveParaphonic,
-  &DigitalOscillator::RenderFilteredNoise,
-  &DigitalOscillator::RenderTwinPeaksNoise,
-  &DigitalOscillator::RenderClockedNoise,
-  &DigitalOscillator::RenderGranularCloud,
-  &DigitalOscillator::RenderParticleNoise,
-  &DigitalOscillator::RenderDigitalModulation,
-  // &DigitalOscillator::RenderYourAlgo,
-
-  &DigitalOscillator::RenderQuestionMark
-};
 
 }  // namespace braids

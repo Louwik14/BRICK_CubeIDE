@@ -5,7 +5,6 @@
 #include "fx_revb_model.h"
 
 #include <cmath>
-#include <cstring>
 
 namespace
 {
@@ -89,7 +88,11 @@ void fx_reverb_revb_global_set_lpf(float lpf)
     g_revb.engine.set_output_filters(g_revb.hpf_coefficient, g_revb.lpf_coefficient);
 }
 
-ITCM_TEXT_NAMED("fx_reverb_revb_global")
+void fx_reverb_revb_global_set_delay_mode(uint8_t tbd)
+{
+    g_revb.engine.set_delay_mode(tbd != 0U);
+}
+
 void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
                                                            float *out_l,
                                                            float *out_r,
@@ -99,8 +102,13 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
         return;
     if((g_revb.initialized == 0U) || (g_revb.wet <= 0.0f))
     {
-        memset(out_l, 0, sizeof(float) * frames);
-        memset(out_r, 0, sizeof(float) * frames);
+        volatile float *zero_l = out_l;
+        volatile float *zero_r = out_r;
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            zero_l[i] = 0.0f;
+            zero_r[i] = 0.0f;
+        }
         return;
     }
     if(frames > AUDIO_BLOCK_SIZE)

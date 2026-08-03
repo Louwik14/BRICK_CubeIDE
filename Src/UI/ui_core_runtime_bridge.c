@@ -3,7 +3,6 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/engine_lane_authority.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -1054,9 +1053,12 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
             && (track_input_ownership_get_external_owner(input, &owner) != 0U));
         track_enable(input, enabled);
     }
-    engine_lane_usage_t engine_usage;
-    engine_lane_authority_count(track_state_get_configs(), UI_TRACK_COUNT, &engine_usage);
-    track_enable(3U, engine_usage.total_tracks > 0U);
+    /*
+     * Internal engines publish directly into mixer external lanes.  Physical
+     * track 3 has no input source, so enabling it only creates a second,
+     * silent mixer lane and an unnecessary block clear.
+     */
+    track_enable(3U, 0U);
 }
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)

@@ -40,10 +40,24 @@ static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
 #define KEYBOARD_ENGINE_MONO_HELD_MAX 8U
+#define KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY 128U
 static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
 static uint8_t g_kbd_rec_note_stack_count[128U];
 static uint8_t g_kbd_rec_track_note_channel[TRACK_TOPOLOGY_TRACK_COUNT][128U];
 static uint8_t g_kbd_rec_track_note_count[TRACK_TOPOLOGY_TRACK_COUNT][128U];
+
+typedef struct
+{
+    uint8_t active;
+    uint8_t track;
+    uint8_t note;
+    uint8_t provenance;
+    uint32_t occurrence_id;
+} keyboard_engine_source_occurrence_t;
+
+static keyboard_engine_source_occurrence_t
+    g_keyboard_engine_source_occurrence[KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY];
+static uint32_t g_keyboard_engine_next_occurrence_id;
 
 typedef struct
 {
@@ -378,15 +392,112 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
     }
 }
 
+static uint32_t keyboard_engine_next_occurrence_id(void)
+{
+    for (uint16_t attempt = 0U;
+            attempt <= KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++attempt)
+    {
+        g_keyboard_engine_next_occurrence_id =
+            (g_keyboard_engine_next_occurrence_id + 1U)
+            & NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
+        if (g_keyboard_engine_next_occurrence_id == 0U)
+            g_keyboard_engine_next_occurrence_id = 1U;
+        uint8_t collision = 0U;
+        for (uint8_t i = 0U; i < KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++i)
+        {
+            collision |= (uint8_t)(
+                (g_keyboard_engine_source_occurrence[i].active != 0U)
+                && ((g_keyboard_engine_source_occurrence[i].occurrence_id
+                        & NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
+                    == g_keyboard_engine_next_occurrence_id));
+        }
+        if (collision == 0U)
+            return g_keyboard_engine_next_occurrence_id;
+    }
+    return 0U;
+}
+
+static int8_t keyboard_engine_find_source_occurrence(uint8_t owner_track,
+                                                      uint8_t note,
+                                                      note_event_provenance_t provenance)
+{
+    int8_t selected = -1;
+    for (uint8_t i = 0U; i < KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++i)
+    {
+        const keyboard_engine_source_occurrence_t *const occurrence =
+            &g_keyboard_engine_source_occurrence[i];
+        if ((occurrence->active != 0U)
+                && (occurrence->track == owner_track)
+                && (occurrence->note == note)
+                && (occurrence->provenance == (uint8_t)provenance)
+                && ((selected < 0)
+                    || ((int32_t)(occurrence->occurrence_id
+                        - g_keyboard_engine_source_occurrence[(uint8_t)selected]
+                            .occurrence_id) < 0)))
+        {
+            selected = (int8_t)i;
+        }
+    }
+    return selected;
+}
+
 static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
                                                       uint8_t note,
                                                       uint8_t velocity,
                                                       uint8_t is_note_on,
                                                       note_event_provenance_t provenance)
 {
-    (void)note_fx_pipeline_submit_source(owner_track, note, velocity, is_note_on,
-                                         seq_runtime_exec_get_audio_timeline_sample(),
-                                         provenance);
+    int8_t index = -1;
+    uint32_t occurrence_id = 0U;
+    if (is_note_on != 0U)
+    {
+        for (uint8_t i = 0U; i < KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++i)
+        {
+            if (g_keyboard_engine_source_occurrence[i].active == 0U)
+            {
+                index = (int8_t)i;
+                break;
+            }
+        }
+        if (index < 0)
+            return;
+        const uint32_t counter = keyboard_engine_next_occurrence_id();
+        if (counter == 0U)
+            return;
+        occurrence_id = note_event_occurrence_namespace(provenance)
+                      | (counter & NOTE_EVENT_OCCURRENCE_COUNTER_MASK);
+    }
+    else
+    {
+        index = keyboard_engine_find_source_occurrence(owner_track, note,
+                                                        provenance);
+        if (index < 0)
+            return;
+        occurrence_id =
+            g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
+    }
+
+    const note_fx_result_t result = note_fx_pipeline_submit_source_occurrence(
+        owner_track, note, velocity, is_note_on,
+        seq_runtime_exec_get_audio_timeline_sample(), provenance, occurrence_id);
+    if (result != NOTE_EVENT_RESULT_ACCEPTED)
+        return;
+
+    if (is_note_on != 0U)
+    {
+        g_keyboard_engine_source_occurrence[(uint8_t)index] =
+            (keyboard_engine_source_occurrence_t){
+                .active = 1U,
+                .track = owner_track,
+                .note = note,
+                .provenance = (uint8_t)provenance,
+                .occurrence_id = occurrence_id
+            };
+    }
+    else
+    {
+        g_keyboard_engine_source_occurrence[(uint8_t)index].active = 0U;
+    }
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -764,6 +875,12 @@ void keyboard_engine_all_notes_off(void)
     g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
     memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
+}
+
+void keyboard_engine_clear_source_occurrences_silent(void)
+{
+    memset(g_keyboard_engine_source_occurrence, 0,
+           sizeof(g_keyboard_engine_source_occurrence));
 }
 
 void keyboard_engine_clear_state_silent(void)

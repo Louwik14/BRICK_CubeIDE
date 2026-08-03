@@ -13,6 +13,7 @@ void fx_reverb_global_set_damping(float damping);
 void fx_reverb_global_set_width(float width);
 void fx_reverb_global_set_hpf(float hpf);
 void fx_reverb_global_set_lpf(float lpf);
+void fx_reverb_global_set_delay_mode(uint8_t tbd);
 uint8_t fx_reverb_global_is_active(void);
 void fx_reverb_global_process_block(float *in_l,
                                     float *in_r,

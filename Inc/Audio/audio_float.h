@@ -36,8 +36,8 @@ extern "C" {
 #define AUDIO_BLOCK_SIZE 64U
 /*
  * DSP engine exposes 4 stereo tracks. Tracks 0..2 come from TDM slots
- * (0/1, 2/3, 4/5) and track 3 is reserved for internal sources.
- * The current board wiring feeds 3 physical stereo input pairs to this layer.
+ * (0/1, 2/3, 4/5). Track 3 has no physical input and remains disabled;
+ * internal engines publish through the mixer's external-lane seam.
  */
 #define MAX_TRACKS       4U
 

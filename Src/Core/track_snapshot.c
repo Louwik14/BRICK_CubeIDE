@@ -23,6 +23,8 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "UI/ui_active_track_sync.h"
 
 #define TRACK_SNAPSHOT_LOCK_NONE 0xFFFFU
@@ -112,8 +114,11 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
         return;
     }
 
-    (void)note_fx_pipeline_transition_track(
-        track, NOTE_FX_TRANSITION_MODEL_RECONFIGURE);
+    const seq_track_id_t transition_track = track;
+    if (seq_play_scheduler_transition_tracks(
+            &transition_track, 1U,
+            SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE) == 0U)
+        return;
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
     brick6_sampler_runtime_reset_track(track);

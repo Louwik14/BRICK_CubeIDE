@@ -1,5 +1,75 @@
-undo_v2_functional_premium 7 0.00242483
-undo_v2_functional_lowcost 7 0.00223773
-undo_v2_step5_static 7 0.137566
-undo_v2_step3_static 7 0.0687249
+undo_v2_functional_premium 9 0.00169666
+undo_v2_functional_lowcost 9 0.00164458
+undo_v2_step5_static 7 0
+undo_v2_step3_static 7 0
+filter_tpt_modulation 0 0
+reverb_mutable_stability 0 0
+common_modulation 0 0
+note_fx_arp 0 0
+note_fx_runtime 0 0
+hall_engine_lowcost 0 0
+hall_engine_premium 0 0
+stack_vca_release 0 0
+synth_polyphony_budget 0 0
+cfg_track_family_order_unit 0 0
+cfg_track_family_order_static 0 0
+led_track_select_static 0 0
+engine_output_gain 0 0
+hall_lowcost_integration 0 0
+wave_mipmap_spectral 0 0
+track_paste_playback 0 0
+note_fx_pipeline 0 0
+note_fx_plock 0 0
+note_fx_persistence 0 0
+note_fx_step10_consolidation 0 0
+env_ownership 0 0
+seq_param_compact_contract 0 0
+vca_dispatcher 0 0
+stream_sampler_vca_lifecycle 0 0
+multi_sampler_vca_lifecycle 0 0
+multi_polyphony_exhaustive 0 0
+pattern_persistence_classification 0 0
+reverb_mutable_only 0 0
+spectral_window 0 0
+seq_play_scheduler_pair 0 0
+sample_stream_coalesced_lifecycle 0 0
+sample_stream_deadline 0 0
+sd_stream_browser_lock 0 0
+synth_polyphony_boundary 0 0
 ---
+filter_tpt_modulation
+reverb_mutable_stability
+common_modulation
+note_fx_arp
+note_fx_runtime
+hall_engine_lowcost
+hall_engine_premium
+stack_vca_release
+synth_polyphony_budget
+undo_v2_step5_static
+undo_v2_step3_static
+cfg_track_family_order_unit
+cfg_track_family_order_static
+led_track_select_static
+engine_output_gain
+hall_lowcost_integration
+wave_mipmap_spectral
+track_paste_playback
+note_fx_pipeline
+note_fx_plock
+note_fx_persistence
+note_fx_step10_consolidation
+env_ownership
+seq_param_compact_contract
+vca_dispatcher
+stream_sampler_vca_lifecycle
+multi_sampler_vca_lifecycle
+multi_polyphony_exhaustive
+pattern_persistence_classification
+reverb_mutable_only
+spectral_window
+seq_play_scheduler_pair
+sample_stream_coalesced_lifecycle
+sample_stream_deadline
+sd_stream_browser_lock
+synth_polyphony_boundary

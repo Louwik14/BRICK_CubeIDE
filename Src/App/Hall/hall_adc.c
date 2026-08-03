@@ -1,5 +1,8 @@
 #include "App/Hall/hall_adc.h"
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+#include "App/Hall/hall_engine.h"
+#endif
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
 #include "Storage/memory_layout.h"
@@ -12,11 +15,16 @@
 /*
  * ADC DMA mailboxes:
  * - premium: ADC1/ADC2 each write one Hall MUX sample
- * - low-cost: ADC1 writes Hall MUX 0/2, ADC2 writes Hall MUX 1
+ * - low-cost: ADC1 writes Hall MUX 0/2 plus the master-volume pot,
+ *   ADC2 writes Hall MUX 1
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
+#if defined(BRICK6_VARIANT_LOWCOST)
+static DMA_BUFFER volatile uint16_t adc1_dma[3U];
+#else
 static DMA_BUFFER volatile uint16_t adc1_dma[2U];
+#endif
 static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
@@ -44,14 +52,26 @@ static void hall_mux_select(uint8_t index)
 static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
+#if !defined(BRICK6_VARIANT_LOWCOST)
     const uint32_t head = hall_fifo_head;
     const uint32_t tail = hall_fifo_tail;
     const uint32_t depth = head - tail;
+#endif
 
     hall_raw[key] = raw;
     hall_sample_count[key] = sample_count;
     board_surface_update_lane(key, raw, sample_count);
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+    /*
+     * Low-cost Hall samples are already produced from the ADC DMA callback.
+     * Process the bounded per-key state machine here so audio load cannot
+     * postpone attack detection behind the application superloop backlog.
+     * Note routing remains outside the IRQ through the existing pending flags.
+     */
+    hall_engine_process_sample(key, raw, sample_count);
+    return;
+#else
     if (depth >= HALL_SAMPLE_FIFO_SIZE)
     {
         hall_fifo_drop_count++;
@@ -75,6 +95,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
             hall_fifo_max_depth = new_depth;
         }
     }
+#endif
 }
 
 static void hall_adc_process_pair(void)
@@ -131,6 +152,9 @@ void hall_adc_init(void)
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
+#if defined(BRICK6_VARIANT_LOWCOST)
+    adc1_dma[2U] = 0U;
+#endif
     adc2_dma = 0U;
 
     hall_fifo_head = 0U;

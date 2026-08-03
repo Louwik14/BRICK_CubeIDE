@@ -22,6 +22,8 @@
 #include "param_registry.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_pipeline.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "Param/param_macro.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
@@ -1574,7 +1576,12 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     uint8_t note_fx_param = 0U;
     if (note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
     {
+        note_fx_track_state_t previous_note_fx_state;
         if (track_runtime_is_ui_ensemble_available(track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) == 0U)
+        {
+            return 0U;
+        }
+        if (note_fx_state_capture_track(track, &previous_note_fx_state) == 0U)
         {
             return 0U;
         }
@@ -1584,15 +1591,41 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             if ((note_fx_state_get_param(track, id, &previous) != 0U)
                     && ((uint8_t)(previous + 0.5f) != (uint8_t)(clamped + 0.5f)))
             {
-                (void)note_fx_pipeline_transition_track(track,
-                                                         NOTE_FX_TRANSITION_MODEL_RECONFIGURE);
+                const seq_track_id_t transition_track = track;
+                if (seq_play_scheduler_transition_tracks(
+                        &transition_track, 1U,
+                        SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE) == 0U)
+                    return 0U;
             }
         }
         if (note_fx_state_set_param(track, id, clamped) == 0U)
         {
+            if (note_fx_param == 3U)
+            {
+                const seq_track_id_t transition_track = track;
+                (void)seq_play_scheduler_transition_tracks(
+                    &transition_track, 1U,
+                    SEQ_PLAY_TRANSITION_RESUME_TRIGS);
+            }
             return 0U;
         }
-        (void)note_fx_pipeline_sync_track(track);
+        if (note_fx_pipeline_sync_track(track) == 0U)
+        {
+            (void)note_fx_state_restore_track(track, &previous_note_fx_state);
+            if (note_fx_param == 3U)
+            {
+                const seq_track_id_t transition_track = track;
+                (void)seq_play_scheduler_transition_tracks(
+                    &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
+            }
+            return 0U;
+        }
+        if (note_fx_param == 3U)
+        {
+            const seq_track_id_t transition_track = track;
+            (void)seq_play_scheduler_transition_tracks(
+                &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
+        }
         return 1U;
     }
 
@@ -1632,8 +1665,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
     {
-        (void)note_fx_pipeline_transition_track(
-            track, NOTE_FX_TRANSITION_STOP_CLOSE);
+        const seq_track_id_t transition_track = track;
+        if (seq_play_scheduler_transition_tracks(
+                &transition_track, 1U,
+                SEQ_PLAY_TRANSITION_STOP_CLOSE) == 0U)
+            return 0U;
         const uint8_t ok = param_apply_cfg_track_value(id, track, clamped);
         if (ok != 0U)
         {

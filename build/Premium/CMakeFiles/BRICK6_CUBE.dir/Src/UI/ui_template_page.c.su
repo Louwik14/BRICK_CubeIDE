@@ -11,7 +11,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:223:29:ui_template_family_resolve_active_track	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:253:29:ui_template_family_resolve_effective_for_track	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:273:29:ui_template_family_resolve_effective_active_track	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:280:9:ui_template_family_get_effective_scope_count	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:280:9:ui_template_family_get_effective_scope_count	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:356:30:ui_template_page_get_active_subpage	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:293:13:ui_template_page_apply_active_bank	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:308:6:ui_template_page_select_subpage	16	static

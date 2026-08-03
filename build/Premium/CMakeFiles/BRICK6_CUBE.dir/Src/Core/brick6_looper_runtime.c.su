@@ -37,7 +37,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_run
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1469:6:brick6_looper_runtime_on_transport_start	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1479:6:brick6_looper_runtime_on_transport_stop	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1487:6:brick6_looper_runtime_on_boundary_edge	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1516:9:brick6_looper_runtime_next_start_offset	28	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1516:9:brick6_looper_runtime_next_start_offset	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1556:6:brick6_looper_runtime_on_scheduled_start	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1590:9:brick6_looper_runtime_is_ready	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_looper_runtime.c:1600:9:brick6_looper_runtime_is_playing	0	static

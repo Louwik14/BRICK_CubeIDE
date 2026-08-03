@@ -44,6 +44,9 @@ uint8_t synth_polyphony_note_on_occurrence_from(uint8_t track, uint8_t note,
 uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
                                                  synth_poly_source_t source,
                                                  uint32_t occurrence_id);
+uint8_t synth_polyphony_occurrence_is_active(uint8_t track,
+                                             synth_poly_source_t source,
+                                             uint32_t occurrence_id);
 uint8_t synth_polyphony_release_source(uint8_t track,
                                       synth_poly_source_t source,
                                       synth_poly_release_t *out,

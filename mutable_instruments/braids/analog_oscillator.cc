@@ -70,22 +70,83 @@ void AnalogOscillator::Render(
     int16_t* buffer,
     uint8_t* sync_out,
     size_t size) {
-  RenderFn fn = fn_table_[shape_];
-  
+  PrepareRender();
+  Dispatch(sync_in, buffer, sync_out, size);
+}
+
+void AnalogOscillator::RenderNoSync(int16_t* buffer, size_t size) {
+  PrepareRender();
+  Dispatch(NULL, buffer, NULL, size);
+}
+
+void AnalogOscillator::RenderNoSyncOut(
+    const uint8_t* sync_in,
+    int16_t* buffer,
+    size_t size) {
+  PrepareRender();
+  Dispatch(sync_in, buffer, NULL, size);
+}
+
+void AnalogOscillator::RenderSyncOutNoInput(
+    int16_t* buffer,
+    uint8_t* sync_out,
+    size_t size) {
+  PrepareRender();
+  Dispatch(NULL, buffer, sync_out, size);
+}
+
+void AnalogOscillator::PrepareRender() {
   if (shape_ != previous_shape_) {
     Init();
     previous_shape_ = shape_;
   }
   
-  phase_increment_ = ComputePhaseIncrement(pitch_);
+  if (pitch_ != phase_increment_pitch_) {
+    phase_increment_ = ComputePhaseIncrement(pitch_);
+    phase_increment_pitch_ = pitch_;
+  }
   
   if (pitch_ > kHighestNote) {
     pitch_ = kHighestNote;
   } else if (pitch_ < 0) {
     pitch_ = 0;
   }
-  
-  (this->*fn)(sync_in, buffer, sync_out, size);
+}
+
+__attribute__((always_inline)) inline void AnalogOscillator::Dispatch(
+    const uint8_t* sync_in,
+    int16_t* buffer,
+    uint8_t* sync_out,
+    size_t size) {
+  switch (shape_) {
+    case OSC_SHAPE_SAW:
+      RenderSaw(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_VARIABLE_SAW:
+      RenderVariableSaw(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_CSAW:
+      RenderCSaw(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_SQUARE:
+      RenderSquare(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_TRIANGLE:
+      RenderTriangle(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_SINE:
+      RenderSine(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_TRIANGLE_FOLD:
+      RenderTriangleFold(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_SINE_FOLD:
+      RenderSineFold(sync_in, buffer, sync_out, size);
+      break;
+    case OSC_SHAPE_BUZZ:
+      RenderBuzz(sync_in, buffer, sync_out, size);
+      break;
+  }
 }
 
 void AnalogOscillator::RenderCSaw(
@@ -109,7 +170,7 @@ void AnalogOscillator::RenderCSaw(
     int32_t this_sample = next_sample;
     next_sample = 0;
 
-    if (*sync_in) {
+    if (sync_in != NULL && *sync_in) {
       // sync_in contain the fractional reset time.
       reset_time = static_cast<uint32_t>(*sync_in - 1) << 9;
       uint32_t phase_at_reset = phase_ + \
@@ -128,7 +189,7 @@ void AnalogOscillator::RenderCSaw(
         next_sample += discontinuity * NextBlepSample(reset_time) >> 15;
       }
     }
-    sync_in++;
+    if (sync_in != NULL) ++sync_in;
 
     phase_ += phase_increment;
     if (phase_ < phase_increment) {
@@ -208,7 +269,7 @@ void AnalogOscillator::RenderSquare(
     int32_t this_sample = next_sample;
     next_sample = 0;
     
-    if (*sync_in) {
+    if (sync_in != NULL && *sync_in) {
       // sync_in contain the fractional reset time.
       reset_time = static_cast<uint32_t>(*sync_in - 1) << 9;
       uint32_t phase_at_reset = phase_ + \
@@ -222,7 +283,7 @@ void AnalogOscillator::RenderSquare(
         next_sample -= NextBlepSample(reset_time);
       }
     }
-    sync_in++;
+    if (sync_in != NULL) ++sync_in;
     
     phase_ += phase_increment;
     if (phase_ < phase_increment) {
@@ -288,7 +349,7 @@ void AnalogOscillator::RenderSaw(
     int32_t this_sample = next_sample;
     next_sample = 0;
 
-    if (*sync_in) {
+    if (sync_in != NULL && *sync_in) {
       // sync_in contain the fractional reset time.
       reset_time = static_cast<uint32_t>(*sync_in - 1) << 9;
       uint32_t phase_at_reset = phase_ + \
@@ -301,7 +362,7 @@ void AnalogOscillator::RenderSaw(
       this_sample -= discontinuity * ThisBlepSample(reset_time) >> 15;
       next_sample -= discontinuity * NextBlepSample(reset_time) >> 15;
     }
-    sync_in++;
+    if (sync_in != NULL) ++sync_in;
 
     phase_ += phase_increment;
     if (phase_ < phase_increment) {
@@ -356,7 +417,7 @@ void AnalogOscillator::RenderVariableSaw(
     int32_t this_sample = next_sample;
     next_sample = 0;
 
-    if (*sync_in) {
+    if (sync_in != NULL && *sync_in) {
       // sync_in contain the fractional reset time.
       reset_time = static_cast<uint32_t>(*sync_in - 1) << 9;
       uint32_t phase_at_reset = phase_ + \
@@ -371,7 +432,7 @@ void AnalogOscillator::RenderVariableSaw(
       this_sample += discontinuity * ThisBlepSample(reset_time) >> 15;
       next_sample += discontinuity * NextBlepSample(reset_time) >> 15;
     }
-    sync_in++;
+    if (sync_in != NULL) ++sync_in;
 
     phase_ += phase_increment;
     if (phase_ < phase_increment) {
@@ -434,7 +495,7 @@ void AnalogOscillator::RenderTriangle(
     int16_t triangle;
     uint16_t phase_16;
     
-    if (*sync_in++) {
+    if (sync_in != NULL && *sync_in++) {
       phase = 0;
     }
     
@@ -464,7 +525,7 @@ void AnalogOscillator::RenderSine(
   while (size--) {
     INTERPOLATE_PHASE_INCREMENT
     phase += phase_increment;
-    if (*sync_in++) {
+    if (sync_in != NULL && *sync_in++) {
       phase = 0;
     }
     *buffer++ = Interpolate824(wav_sine, phase);
@@ -491,7 +552,7 @@ void AnalogOscillator::RenderTriangleFold(
     int16_t triangle;
     int16_t gain = 2048 + (parameter * 30720 >> 15);
     
-    if (*sync_in++) {
+    if (sync_in != NULL && *sync_in++) {
       phase = 0;
     }
     
@@ -536,7 +597,7 @@ void AnalogOscillator::RenderSineFold(
     int16_t sine;
     int16_t gain = 2048 + (parameter * 30720 >> 15);
     
-    if (*sync_in++) {
+    if (sync_in != NULL && *sync_in++) {
       phase = 0;
     }
     
@@ -579,24 +640,11 @@ void AnalogOscillator::RenderBuzz(
   const int16_t* wave_2 = waveform_table[WAV_BANDLIMITED_COMB_0 + index];
   while (size--) {
     phase_ += phase_increment_;
-    if (*sync_in++) {
+    if (sync_in != NULL && *sync_in++) {
       phase_ = 0;
     }
     *buffer++ = Crossfade(wave_1, wave_2, phase_, crossfade);
   }
 }
-
-/* static */
-AnalogOscillator::RenderFn AnalogOscillator::fn_table_[] = {
-  &AnalogOscillator::RenderSaw,
-  &AnalogOscillator::RenderVariableSaw,
-  &AnalogOscillator::RenderCSaw,
-  &AnalogOscillator::RenderSquare,
-  &AnalogOscillator::RenderTriangle,
-  &AnalogOscillator::RenderSine,
-  &AnalogOscillator::RenderTriangleFold,
-  &AnalogOscillator::RenderSineFold,
-  &AnalogOscillator::RenderBuzz,
-};
 
 }  // namespace braids

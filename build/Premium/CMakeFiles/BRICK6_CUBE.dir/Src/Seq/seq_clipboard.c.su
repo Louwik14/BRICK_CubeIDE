@@ -1,4 +1,6 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:100:6:seq_clipboard_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:105:9:seq_clipboard_is_valid	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:110:9:seq_clipboard_copy	72	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:185:9:seq_clipboard_paste	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:29:16:seq_clipboard_find_min_step	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:69:6:seq_clipboard_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:74:9:seq_clipboard_is_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:79:9:seq_clipboard_copy	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:119:9:seq_clipboard_collect_paste_targets	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clipboard.c:169:9:seq_clipboard_paste	12976	static

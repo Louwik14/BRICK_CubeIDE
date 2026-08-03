@@ -1,12 +1,10 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:17:16:track_input_ownership_build	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:62:9:track_input_ownership_apply_bulk	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:62:9:track_input_ownership_apply_bulk	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:56:9:track_input_ownership_apply_configs	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:46:6:track_input_ownership_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:46:6:track_input_ownership_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:92:9:track_input_ownership_validate_bulk	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:111:9:track_input_ownership_can_claim	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:122:9:track_input_ownership_set_external_input	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:122:9:track_input_ownership_set_external_input	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:140:9:track_input_ownership_get_external_input	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:145:9:track_input_ownership_get_external_owner	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:159:9:track_input_ownership_get_fixed_input_track	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:164:9:track_input_ownership_get_audible_owner	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:173:9:track_input_ownership_track_owns_input	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_input_ownership.c:159:9:track_input_ownership_track_owns_input	16	static

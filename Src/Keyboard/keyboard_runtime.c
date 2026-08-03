@@ -19,6 +19,8 @@
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/keyboard_input.h"
 #include "NoteFx/note_fx_pipeline.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 
 #include "ui_core.h"
 
@@ -121,9 +123,11 @@ static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len
         memset(g_keyboard_runtime_midi_sustained_release[channel_zero_based], 0, sizeof(g_keyboard_runtime_midi_sustained_release[channel_zero_based]));
         g_keyboard_runtime_midi_sustain_down[channel_zero_based] = 0U;
     }
-    (void)note_fx_pipeline_transition_all(
-        NOTE_FX_TRANSITION_PANIC_CLOSE_ALL);
+    if (seq_play_scheduler_transition_all(
+            SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) == 0U)
+        return;
     keyboard_engine_midi_receive(msg, len);
+    keyboard_engine_clear_source_occurrences_silent();
 }
 
 void keyboard_runtime_init(void)
@@ -243,8 +247,11 @@ void keyboard_runtime_all_notes_off(void)
 {
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
-    (void)note_fx_pipeline_transition_all(
-        NOTE_FX_TRANSITION_PANIC_CLOSE_ALL);
+    if (seq_play_scheduler_transition_all(
+            SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) != 0U)
+    {
+        keyboard_engine_clear_source_occurrences_silent();
+    }
 }
 
 void keyboard_runtime_sync_track_focus_context(void)

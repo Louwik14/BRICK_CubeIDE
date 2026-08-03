@@ -468,13 +468,15 @@ void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
 {
-    const uint32_t primask = seq_runtime_enter_critical();
     if ((uint8_t)src >= (uint8_t)SEQ_CLOCK_SRC_COUNT)
-    {
-        seq_runtime_exit_critical(primask);
         return;
-    }
+    if (src == seq_runtime_get_clock_source_internal())
+        return;
+    if (seq_play_scheduler_transition_all(
+            SEQ_PLAY_TRANSITION_SOURCE_SWITCH) == 0U)
+        return;
 
+    const uint32_t primask = seq_runtime_enter_critical();
     g_seq_runtime_control.clock_src = src;
     seq_clock_bridge_set_source(&g_seq_clock_bridge, &g_seq_runtime, src);
     if (seq_clock_bridge_is_external_source(src) == 0U)
@@ -482,7 +484,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         g_seq_internal_time_tick = 0U;
     }
     seq_runtime_exec_set_external_step_pulses_pending(0U);
-    seq_play_scheduler_clear();
     seq_runtime_update_samples_per_step_from_tempo();
 
     if (seq_clock_bridge_is_external_source(src) != 0U)

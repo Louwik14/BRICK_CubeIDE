@@ -2157,6 +2157,11 @@ void mixer_set_reverb_lpf(float lpf)
     fx_reverb_global_set_lpf(g_reverb.lpf);
 }
 
+void mixer_set_reverb_delays(uint8_t tbd)
+{
+    fx_reverb_global_set_delay_mode(tbd);
+}
+
 void mixer_set_delay_type(uint8_t type)
 {
     const uint8_t next = (type != 0U) ? (uint8_t)MIXER_DELAY_TYPE_DUAL : (uint8_t)MIXER_DELAY_TYPE_CLASSIC;

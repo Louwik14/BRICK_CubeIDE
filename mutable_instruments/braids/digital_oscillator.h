@@ -230,8 +230,6 @@ union DigitalOscillatorState {
 
 class DigitalOscillator {
  public:
-  typedef void (DigitalOscillator::*RenderFn)(const uint8_t*, int16_t*, size_t);
-
   DigitalOscillator() { }
   ~DigitalOscillator() { }
   
@@ -245,6 +243,7 @@ class DigitalOscillator {
     svf_[1].Init();
     svf_[2].Init();
     phase_ = 0;
+    phase_increment_pitch_ = -32768;
     strike_ = true;
     init_ = true;
   }
@@ -323,7 +322,6 @@ class DigitalOscillator {
   // void RenderYourAlgo(const uint8_t*, int16_t*, size_t);
   
   uint32_t ComputePhaseIncrement(int16_t midi_pitch);
-  uint32_t ComputeDelay(int16_t midi_pitch);
   int16_t InterpolateFormantParameter(
       const int16_t table[][kNumFormants][kNumFormants],
       int16_t x,
@@ -332,12 +330,11 @@ class DigitalOscillator {
    
   uint32_t phase_;
   uint32_t phase_increment_;
-  uint32_t delay_;
-
   int16_t parameter_[2];
   int16_t previous_parameter_[2];
   int32_t smoothed_parameter_;
   int16_t pitch_;
+  int16_t phase_increment_pitch_;
   
   uint8_t active_voice_;
   
@@ -350,8 +347,6 @@ class DigitalOscillator {
   
   Excitation pulse_[4];
   Svf svf_[3];
-  
-  static RenderFn fn_table_[];
   
   DISALLOW_COPY_AND_ASSIGN(DigitalOscillator);
 };

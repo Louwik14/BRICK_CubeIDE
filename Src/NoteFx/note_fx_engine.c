@@ -15,12 +15,20 @@ typedef struct {
     note_fx_owned_t owned[NOTE_FX_MAX_OUTPUTS];
     uint64_t next_sample;
     uint32_t generation;
-    uint8_t model, rate, style, range, destination;
+    uint32_t pending_close_token, pending_close_generation;
+    uint8_t model, rate, style, range, destination, closing;
+    uint8_t pending_source_close;
 } note_fx_slot_runtime_t;
 
 static note_fx_slot_runtime_t g_slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
 static note_fx_diag_t g_diag[NOTE_FX_TRACK_COUNT];
 static uint32_t g_token;
+
+static uint8_t closure_is_settled(note_fx_result_t result)
+{
+    return (result == NOTE_EVENT_RESULT_ACCEPTED)
+        || (result == NOTE_EVENT_RESULT_REJECTED_STALE);
+}
 
 static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
                          note_fx_emit_fn emit, void *context)
@@ -41,16 +49,22 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
             .kind = NOTE_EVENT_KIND_OFF,
             .provenance = NOTE_EVENT_SOURCE_FX,
             .stage = (uint8_t)(slot + 1U),
-            .flags = NOTE_EVENT_FLAG_GENERATED,
+            .flags = NOTE_EVENT_FLAG_GENERATED | NOTE_EVENT_FLAG_CLOSURE_RESERVED,
             .source_token = owned->source_token,
             .occurrence_id = owned->token,
             .generation = owned->generation
         };
-        if (emit != 0) (void)emit(&event, context);
-        owned->active = 0U;
+        const note_fx_result_t result = (emit != 0)
+            ? emit(&event, context) : NOTE_EVENT_RESULT_ACCEPTED;
+        if (closure_is_settled(result) != 0U)
+            owned->active = 0U;
     }
     note_fx_arp_init(&runtime->arp, 0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
-    runtime->next_sample = 0U;
+    runtime->pending_source_close = 0U;
+    runtime->closing = 0U;
+    for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
+        runtime->closing |= runtime->owned[i].active;
+    runtime->next_sample = (runtime->closing != 0U) ? sample : 0U;
 }
 
 void note_fx_engine_init(void)
@@ -90,35 +104,57 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
     {
         note_fx_event_t forwarded = *event;
         forwarded.stage = (uint8_t)(slot + 1U);
-        if (emit != 0) (void)emit(&forwarded, context);
-        return NOTE_EVENT_RESULT_ACCEPTED;
+        return (emit != 0) ? emit(&forwarded, context)
+                           : NOTE_EVENT_RESULT_ACCEPTED;
     }
     if (event->kind == NOTE_EVENT_KIND_OFF) {
-        if (note_fx_arp_note_off(&runtime->arp, event->source_token,
-                                 event->generation) == 0U)
-        {
-            return NOTE_EVENT_RESULT_REJECTED_STALE;
-        }
+        note_fx_result_t close_result = NOTE_EVENT_RESULT_ACCEPTED;
+        uint8_t matched_owned = 0U;
         for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
             note_fx_owned_t *const owned = &runtime->owned[i];
             if ((owned->active == 0U)
                     || (owned->source_token != event->source_token)
                     || (owned->source_generation != event->generation)) continue;
+            matched_owned = 1U;
             note_fx_event_t off = *event;
             off.note = owned->note;
             off.velocity = 0U;
             off.kind = NOTE_EVENT_KIND_OFF;
             off.provenance = NOTE_EVENT_SOURCE_FX;
             off.stage = (uint8_t)(slot + 1U);
-            off.flags |= NOTE_EVENT_FLAG_GENERATED;
+            off.flags |= NOTE_EVENT_FLAG_GENERATED | NOTE_EVENT_FLAG_CLOSURE_RESERVED;
             off.source_token = owned->source_token;
             off.occurrence_id = owned->token;
             off.generation = owned->generation;
             off.destination_id = owned->destination;
-            if (emit != 0) (void)emit(&off, context);
-            owned->active = 0U;
+            const note_fx_result_t result = (emit != 0)
+                ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
+            if (closure_is_settled(result) != 0U)
+                owned->active = 0U;
+            else
+                close_result = result;
         }
-        if (runtime->arp.count == 0U) runtime->next_sample = 0U;
+        if (close_result != NOTE_EVENT_RESULT_ACCEPTED)
+        {
+            runtime->pending_source_close = 1U;
+            runtime->pending_close_token = event->source_token;
+            runtime->pending_close_generation = event->generation;
+            runtime->next_sample = event->sample_abs;
+            return close_result;
+        }
+        if (note_fx_arp_note_off(&runtime->arp, event->source_token,
+                                 event->generation) == 0U)
+        {
+            return (matched_owned != 0U) ? NOTE_EVENT_RESULT_ACCEPTED
+                                         : NOTE_EVENT_RESULT_REJECTED_STALE;
+        }
+        if (runtime->arp.count == 0U) {
+            runtime->closing = 0U;
+            for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
+                runtime->closing |= runtime->owned[i].active;
+            runtime->next_sample = (runtime->closing != 0U)
+                ? event->sample_abs : 0U;
+        }
         return 1U;
     }
 
@@ -148,9 +184,15 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                             note_fx_emit_fn emit, void *context)
 {
     const uint64_t end = start + frames;
+    /* First pass: every due owned closure precedes every newly generated On. */
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
+            if ((runtime->closing != 0U) && (runtime->next_sample < end)) {
+                if (runtime->next_sample < start) runtime->next_sample = start;
+                release_slot(track, slot, runtime->next_sample, emit, context);
+                continue;
+            }
             if (runtime->model != NOTE_FX_MODEL_ARP ||
                 runtime->arp.count == 0U || runtime->next_sample >= end) continue;
             if (runtime->next_sample < start) runtime->next_sample = start;
@@ -166,13 +208,54 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                     .kind = NOTE_EVENT_KIND_OFF,
                     .provenance = NOTE_EVENT_SOURCE_FX,
                     .stage = (uint8_t)(slot + 1U),
-                    .flags = NOTE_EVENT_FLAG_GENERATED,
+                    .flags = NOTE_EVENT_FLAG_GENERATED | NOTE_EVENT_FLAG_CLOSURE_RESERVED,
                     .source_token = owned->source_token,
                     .occurrence_id = owned->token,
                     .generation = owned->generation
                 };
-                if (emit != 0) (void)emit(&off, context);
-                owned->active = 0U;
+                const note_fx_result_t result = (emit != 0)
+                    ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
+                if (closure_is_settled(result) != 0U)
+                    owned->active = 0U;
+            }
+            if (runtime->pending_source_close != 0U) {
+                uint8_t pending_owned = 0U;
+                for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
+                    const note_fx_owned_t *const owned = &runtime->owned[i];
+                    if ((owned->active != 0U)
+                            && (owned->source_token == runtime->pending_close_token)
+                            && (owned->source_generation
+                                == runtime->pending_close_generation)) {
+                        pending_owned = 1U;
+                        break;
+                    }
+                }
+                if (pending_owned == 0U) {
+                    (void)note_fx_arp_note_off(&runtime->arp,
+                                              runtime->pending_close_token,
+                                              runtime->pending_close_generation);
+                    runtime->pending_source_close = 0U;
+                    if (runtime->arp.count == 0U)
+                        runtime->next_sample = 0U;
+                }
+            }
+        }
+    }
+
+    /* Second pass: generate only after the global closure pass completed. */
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
+        for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
+            note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
+            if ((runtime->closing != 0U)
+                    || (runtime->model != NOTE_FX_MODEL_ARP)
+                    || (runtime->arp.count == 0U)
+                    || (runtime->next_sample >= end)) continue;
+            uint8_t release_pending = 0U;
+            for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
+                release_pending |= runtime->owned[i].active;
+            if (release_pending != 0U) {
+                runtime->next_sample += rate_period(runtime->rate, step_q16);
+                continue;
             }
             uint8_t note, velocity;
             if (note_fx_arp_next(&runtime->arp,
@@ -187,7 +270,9 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
             owned->source_token = runtime->arp.last_source_token;
             owned->source_generation = runtime->arp.last_source_generation;
             owned->destination = runtime->destination;
-            owned->token = ++g_token;
+            g_token = (g_token + 1U) & NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
+            if (g_token == 0U) g_token = 1U;
+            owned->token = NOTE_EVENT_OCCURRENCE_NAMESPACE_FX | g_token;
             owned->generation = runtime->generation;
             const note_fx_event_t on = {
                 .sample_abs = runtime->next_sample,
@@ -232,8 +317,11 @@ uint64_t note_fx_engine_next_deadline(void)
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             const note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-            if (runtime->model == NOTE_FX_MODEL_ARP &&
-                runtime->arp.count != 0U && runtime->next_sample < next)
+            if (((runtime->closing != 0U)
+                    || (runtime->pending_source_close != 0U)
+                    || ((runtime->model == NOTE_FX_MODEL_ARP)
+                        && (runtime->arp.count != 0U)))
+                    && runtime->next_sample < next)
                 next = runtime->next_sample;
         }
     return next;
