@@ -44,9 +44,11 @@ typedef struct
 
 static AUDIO_HOT brick6_deluge_runtime_instance_t
     g_deluge_instances[BRICK6_DELUGE_MAX_INSTANCES];
-static SEQ_STATE_D2 brick6_deluge_runtime_instance_t
+static AUDIO_HOT brick6_deluge_runtime_instance_t
     g_deluge_poly_instances[BRICK6_DELUGE_VOICE_INSTANCE_COUNT - BRICK6_DELUGE_MAX_INSTANCES];
 static AUDIO_HOT int32_t g_deluge_render_q31[AUDIO_BLOCK_SIZE];
+static AUDIO_HOT uint32_t g_deluge_config_version[BRICK6_DELUGE_VOICE_INSTANCE_COUNT];
+static AUDIO_HOT uint32_t g_deluge_synced_config_version[BRICK6_DELUGE_VOICE_INSTANCE_COUNT];
 
 static const uint16_t k_semitone_ratio_q15[12] = {
     32768U, 34716U, 36781U, 38968U, 41285U, 43740U,
@@ -67,6 +69,12 @@ static brick6_deluge_runtime_instance_t *instance_mut(uint8_t instance_id)
     return (instance_id < BRICK6_DELUGE_MAX_INSTANCES)
         ? &g_deluge_instances[instance_id]
         : &g_deluge_poly_instances[instance_id - BRICK6_DELUGE_MAX_INSTANCES];
+}
+
+static void touch_config(uint8_t instance_id)
+{
+    uint32_t version = g_deluge_config_version[instance_id] + 1U;
+    g_deluge_config_version[instance_id] = (version != 0U) ? version : 1U;
 }
 
 static float clampf(float value, float lo, float hi)
@@ -257,6 +265,8 @@ void brick6_deluge_runtime_reset_instance(uint8_t instance_id)
     instance->phase_increment_current = instance->phase_increment;
     update_native_pulse_width(instance);
     instance->initialized = 1U;
+    touch_config(instance_id);
+    g_deluge_synced_config_version[instance_id] = 0U;
 }
 
 void brick6_deluge_runtime_init(void)
@@ -275,6 +285,8 @@ void brick6_deluge_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
     {
         return;
     }
+    if (g_deluge_synced_config_version[voice_instance]
+            == g_deluge_config_version[track_instance]) return;
     dst->retrig = src->retrig;
     dst->model = src->model;
     dst->oscillator_type = src->oscillator_type;
@@ -286,6 +298,8 @@ void brick6_deluge_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
     dst->phase_degrees = src->phase_degrees;
     dst->pitch_dirty = 1U;
     update_native_pulse_width(dst);
+    g_deluge_synced_config_version[voice_instance] =
+        g_deluge_config_version[track_instance];
 }
 
 void brick6_deluge_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity)
@@ -362,6 +376,7 @@ void brick6_deluge_runtime_set_model(uint8_t instance_id, brick6_deluge_model_t 
         instance->model = (uint8_t)model;
         instance->oscillator_type = (uint8_t)oscillator_type_from_model(model);
         update_native_pulse_width(instance);
+        touch_config(instance_id);
     }
 }
 
@@ -370,11 +385,14 @@ void brick6_deluge_runtime_set_level(uint8_t instance_id, float level)
     if (instance_valid(instance_id) != 0U)
     {
         brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
-        instance->level_target = clampf(level, 0.0f, 1.0f);
+        const float next = clampf(level, 0.0f, 1.0f);
+        if (instance->level_target == next) return;
+        instance->level_target = next;
         if (instance->velocity <= 0.0f)
         {
             instance->level_current = instance->level_target;
         }
+        touch_config(instance_id);
     }
 }
 
@@ -388,6 +406,7 @@ void brick6_deluge_runtime_set_tune(uint8_t instance_id, float semitones)
         {
             instance->tune_semitones = clamped;
             instance->pitch_dirty = 1U;
+            touch_config(instance_id);
         }
     }
 }
@@ -402,6 +421,7 @@ void brick6_deluge_runtime_set_fine(uint8_t instance_id, float cents)
         {
             instance->fine_cents = clamped;
             instance->pitch_dirty = 1U;
+            touch_config(instance_id);
         }
     }
 }
@@ -414,12 +434,11 @@ void brick6_deluge_runtime_set_width(uint8_t instance_id, float value)
         const float clamped = (instance->model == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE)
             ? clampf(value, 0.0f, 1.0f)
             : clampf(value, -1.0f, 1.0f);
-        if (instance->width_value != clamped)
-        {
-            instance->width_value = clamped;
-        }
+        if ((instance->width_value == clamped) && (instance->width_is_manual != 0U)) return;
+        instance->width_value = clamped;
         instance->width_is_manual = 1U;
         update_native_pulse_width(instance);
+        touch_config(instance_id);
     }
 }
 
@@ -428,11 +447,14 @@ void brick6_deluge_runtime_set_width_modulated(uint8_t instance_id, float value)
     if (instance_valid(instance_id) != 0U)
     {
         brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
-        instance->width_value = (instance->model == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE)
+        const float next = (instance->model == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE)
             ? clampf(value, 0.0f, 1.0f)
             : clampf(value, -1.0f, 1.0f);
+        if ((instance->width_value == next) && (instance->width_is_manual == 0U)) return;
+        instance->width_value = next;
         instance->width_is_manual = 0U;
         update_native_pulse_width(instance);
+        touch_config(instance_id);
     }
 }
 
@@ -440,7 +462,11 @@ void brick6_deluge_runtime_set_phase(uint8_t instance_id, float degrees)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        instance_mut(instance_id)->phase_degrees = clampf(degrees, 0.0f, 360.0f);
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
+        const float next = clampf(degrees, 0.0f, 360.0f);
+        if (instance->phase_degrees == next) return;
+        instance->phase_degrees = next;
+        touch_config(instance_id);
     }
 }
 
@@ -448,7 +474,11 @@ void brick6_deluge_runtime_set_retrig(uint8_t instance_id, uint8_t enabled)
 {
     if (instance_valid(instance_id) != 0U)
     {
-        instance_mut(instance_id)->retrig = (enabled != 0U) ? 1U : 0U;
+        brick6_deluge_runtime_instance_t *const instance = instance_mut(instance_id);
+        const uint8_t next = (enabled != 0U) ? 1U : 0U;
+        if (instance->retrig == next) return;
+        instance->retrig = next;
+        touch_config(instance_id);
     }
 }
 

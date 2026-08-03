@@ -42,6 +42,8 @@ typedef struct
     brick6_wave_runtime_osc_t osc[BRICK6_WAVE_OSC_COUNT];
     brick6_wave_runtime_voice_t voice;
     brick6_wave_runtime_quality_t quality;
+    uint32_t config_version;
+    uint32_t synced_config_version;
 } brick6_wave_runtime_instance_t;
 
 typedef struct
@@ -74,7 +76,7 @@ typedef struct
 } wave_osc_block_ctx_t;
 
 AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
-SEQ_STATE_D2 static brick6_wave_runtime_instance_t
+AUDIO_HOT static brick6_wave_runtime_instance_t
     g_wave_poly_runtime[BRICK6_WAVE_VOICE_INSTANCE_COUNT - BRICK6_WAVE_MAX_INSTANCES];
 static volatile uint8_t g_wave_dwt_enabled;
 static brick6_wave_runtime_dwt_stats_t g_wave_dwt_stats;
@@ -112,6 +114,12 @@ static const brick6_wave_runtime_instance_t *wave_get_instance(uint8_t instance_
     return (instance_id < BRICK6_WAVE_MAX_INSTANCES)
         ? &g_wave_runtime[instance_id]
         : &g_wave_poly_runtime[instance_id - BRICK6_WAVE_MAX_INSTANCES];
+}
+
+static void wave_touch_config(brick6_wave_runtime_instance_t *instance)
+{
+    uint32_t version = instance->config_version + 1U;
+    instance->config_version = (version != 0U) ? version : 1U;
 }
 
 static void wave_resolve_table(brick6_wave_runtime_osc_t *osc)
@@ -350,6 +358,7 @@ static void wave_reset_instance(brick6_wave_runtime_instance_t *instance)
     instance->quality.sample_interp_enabled = WAVE_DEFAULT_SAMPLE_INTERP;
     instance->quality.pos_update = WAVE_DEFAULT_POS_UPDATE;
     instance->quality.pos_smooth_enabled = WAVE_DEFAULT_POS_SMOOTH;
+    instance->config_version = 1U;
 }
 
 static float wave_read_frame_sample(const int16_t *frame_data,
@@ -667,6 +676,8 @@ void brick6_wave_runtime_set_osc_table_global(uint8_t instance_id, uint8_t osc, 
     {
         wave_snap_pos(target);
     }
+    if ((target->table_wavetable_slot != previous_slot)
+            || (target->table_generation != previous_generation)) wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot)
@@ -700,6 +711,8 @@ void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t os
             wave_snap_pos(target);
         }
     }
+    if ((target->table_wavetable_slot != previous_slot)
+            || (target->table_generation != previous_generation)) wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_level(uint8_t instance_id, uint8_t osc, float level)
@@ -709,7 +722,10 @@ void brick6_wave_runtime_set_osc_level(uint8_t instance_id, uint8_t osc, float l
     {
         return;
     }
-    instance->osc[osc].level = wave_clampf(level, 0.0f, 1.0f);
+    const float next = wave_clampf(level, 0.0f, 1.0f);
+    if (instance->osc[osc].level == next) return;
+    instance->osc[osc].level = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_tune(uint8_t instance_id, uint8_t osc, float semitones)
@@ -719,8 +735,11 @@ void brick6_wave_runtime_set_osc_tune(uint8_t instance_id, uint8_t osc, float se
     {
         return;
     }
-    instance->osc[osc].tune_semitones = wave_clampf(semitones, -60.0f, 60.0f);
+    const float next = wave_clampf(semitones, -60.0f, 60.0f);
+    if (instance->osc[osc].tune_semitones == next) return;
+    instance->osc[osc].tune_semitones = next;
     wave_update_pitch(instance, osc);
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos)
@@ -730,7 +749,10 @@ void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos
     {
         return;
     }
-    instance->osc[osc].pos = wave_clampf(pos, 0.0f, 1.0f);
+    const float next = wave_clampf(pos, 0.0f, 1.0f);
+    if (instance->osc[osc].pos == next) return;
+    instance->osc[osc].pos = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float start)
@@ -740,7 +762,10 @@ void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float s
     {
         return;
     }
-    instance->osc[osc].start = wave_clampf(start, 0.0f, 1.0f);
+    const float next = wave_clampf(start, 0.0f, 1.0f);
+    if (instance->osc[osc].start == next) return;
+    instance->osc[osc].start = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end)
@@ -750,7 +775,10 @@ void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end
     {
         return;
     }
-    instance->osc[osc].end = wave_clampf(end, 0.0f, 1.0f);
+    const float next = wave_clampf(end, 0.0f, 1.0f);
+    if (instance->osc[osc].end == next) return;
+    instance->osc[osc].end = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_phase(uint8_t instance_id, uint8_t osc, brick6_wave_phase_t phase)
@@ -760,8 +788,10 @@ void brick6_wave_runtime_set_osc_phase(uint8_t instance_id, uint8_t osc, brick6_
     {
         return;
     }
-    instance->osc[osc].phase_mode =
-        ((uint8_t)phase < (uint8_t)BRICK6_WAVE_PHASE_COUNT) ? (uint8_t)phase : 0U;
+    const uint8_t next = ((uint8_t)phase < (uint8_t)BRICK6_WAVE_PHASE_COUNT) ? (uint8_t)phase : 0U;
+    if (instance->osc[osc].phase_mode == next) return;
+    instance->osc[osc].phase_mode = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_wave_flip_t flip)
@@ -771,8 +801,10 @@ void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_w
     {
         return;
     }
-    instance->osc[osc].flip =
-        ((uint8_t)flip < (uint8_t)BRICK6_WAVE_FLIP_COUNT) ? (uint8_t)flip : 0U;
+    const uint8_t next = ((uint8_t)flip < (uint8_t)BRICK6_WAVE_FLIP_COUNT) ? (uint8_t)flip : 0U;
+    if (instance->osc[osc].flip == next) return;
+    instance->osc[osc].flip = next;
+    wave_touch_config(instance);
 }
 
 void brick6_wave_runtime_set_frame_interp(uint8_t instance_id, uint8_t enabled)
@@ -780,7 +812,10 @@ void brick6_wave_runtime_set_frame_interp(uint8_t instance_id, uint8_t enabled)
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->quality.frame_interp_enabled = (enabled != 0U) ? 1U : 0U;
+        const uint8_t next = (enabled != 0U) ? 1U : 0U;
+        if (instance->quality.frame_interp_enabled == next) return;
+        instance->quality.frame_interp_enabled = next;
+        wave_touch_config(instance);
     }
 }
 
@@ -789,7 +824,10 @@ void brick6_wave_runtime_set_sample_interp(uint8_t instance_id, uint8_t enabled)
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->quality.sample_interp_enabled = (enabled != 0U) ? 1U : 0U;
+        const uint8_t next = (enabled != 0U) ? 1U : 0U;
+        if (instance->quality.sample_interp_enabled == next) return;
+        instance->quality.sample_interp_enabled = next;
+        wave_touch_config(instance);
     }
 }
 
@@ -798,10 +836,12 @@ void brick6_wave_runtime_set_pos_update(uint8_t instance_id, brick6_wave_pos_upd
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->quality.pos_update =
-            ((uint8_t)update < (uint8_t)BRICK6_WAVE_POS_UPDATE_COUNT)
+        const uint8_t next = ((uint8_t)update < (uint8_t)BRICK6_WAVE_POS_UPDATE_COUNT)
                 ? update
                 : WAVE_DEFAULT_POS_UPDATE;
+        if (instance->quality.pos_update == next) return;
+        instance->quality.pos_update = next;
+        wave_touch_config(instance);
     }
 }
 
@@ -810,7 +850,10 @@ void brick6_wave_runtime_set_pos_smooth(uint8_t instance_id, uint8_t enabled)
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->quality.pos_smooth_enabled = (enabled != 0U) ? 1U : 0U;
+        const uint8_t next = (enabled != 0U) ? 1U : 0U;
+        if (instance->quality.pos_smooth_enabled == next) return;
+        instance->quality.pos_smooth_enabled = next;
+        wave_touch_config(instance);
     }
 }
 
@@ -882,6 +925,7 @@ void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instan
     {
         return;
     }
+    if (dst->synced_config_version == src->config_version) return;
     dst->quality = src->quality;
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
@@ -895,6 +939,7 @@ void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instan
         dst->osc[osc].level_current = level_current;
         dst->osc[osc].pos_smoothed = pos_smoothed;
     }
+    dst->synced_config_version = src->config_version;
 }
 
 uint8_t brick6_wave_runtime_prepare_block(uint8_t instance_id,

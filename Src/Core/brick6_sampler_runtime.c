@@ -5329,6 +5329,34 @@ static inline float brick6_sampler_runtime_q16_to_float(uint64_t position_q16)
     return (float)frame_index + brick6_sampler_runtime_q16_frac_float(position_q16);
 }
 
+/* Exact bounded ceil/floor quotients used only to cap a render segment.  The
+ * IRQ never needs the full 64-bit quotient: once it reaches the remaining
+ * block length, the exact larger value is irrelevant. */
+static uint32_t brick6_sampler_runtime_bounded_steps(uint64_t distance_q16,
+                                                     uint32_t step_q16,
+                                                     uint32_t limit,
+                                                     uint8_t include_endpoint)
+{
+    uint32_t count = 0U;
+    if ((step_q16 == 0U) || (limit == 0U)) return 0U;
+    while (count < limit)
+    {
+        if (include_endpoint != 0U)
+        {
+            if (distance_q16 < (uint64_t)step_q16) break;
+            distance_q16 -= (uint64_t)step_q16;
+            count++;
+        }
+        else
+        {
+            count++;
+            if (distance_q16 <= (uint64_t)step_q16) return count;
+            distance_q16 -= (uint64_t)step_q16;
+        }
+    }
+    return count + ((count < limit) ? 1U : 0U);
+}
+
 static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     brick6_sampler_voice_t *voice,
     const sampler_ram_slot_t *ram,
@@ -5392,8 +5420,8 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
         if (position_q16 < last_q16)
         {
             const uint64_t distance_to_last_q16 = last_q16 - position_q16;
-            const uint32_t until_last =
-                (uint32_t)(((distance_to_last_q16 - 1ULL) / (uint64_t)step_q16) + 1ULL);
+            const uint32_t until_last = brick6_sampler_runtime_bounded_steps(
+                distance_to_last_q16, step_q16, todo, 0U);
             if (todo > until_last)
             {
                 todo = until_last;
@@ -5403,9 +5431,8 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
         else
         {
             const uint64_t distance_to_end_q16 = end_q16 - position_q16;
-            uint32_t until_end =
-                (uint32_t)((distance_to_end_q16 + (uint64_t)step_q16 - 1ULL)
-                           / (uint64_t)step_q16);
+            uint32_t until_end = brick6_sampler_runtime_bounded_steps(
+                distance_to_end_q16, step_q16, todo, 0U);
             if (until_end == 0U)
             {
                 until_end = 1U;
@@ -5546,8 +5573,8 @@ static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
         else
         {
             const uint64_t distance_from_begin = position_q16 - begin_q16;
-            const uint32_t until_begin =
-                (uint32_t)((distance_from_begin / (uint64_t)step_q16) + 1ULL);
+            const uint32_t until_begin = brick6_sampler_runtime_bounded_steps(
+                distance_from_begin, step_q16, todo, 1U);
             if (todo > until_begin)
             {
                 todo = until_begin;
@@ -5862,8 +5889,8 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
         if (reverse == 0U)
         {
             const uint64_t distance_to_last = last_q16 - position_q16;
-            const uint32_t until_last =
-                (uint32_t)((distance_to_last / (uint64_t)step_q16) + 1ULL);
+            const uint32_t until_last = brick6_sampler_runtime_bounded_steps(
+                distance_to_last, step_q16, todo, 1U);
             if (todo > until_last)
             {
                 todo = until_last;
@@ -5910,8 +5937,8 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
         else
         {
             const uint64_t segment_distance_from_begin = position_q16 - begin_q16;
-            const uint32_t until_begin =
-                (uint32_t)((segment_distance_from_begin / (uint64_t)step_q16) + 1ULL);
+            const uint32_t until_begin = brick6_sampler_runtime_bounded_steps(
+                segment_distance_from_begin, step_q16, todo, 1U);
             if (todo > until_begin)
             {
                 todo = until_begin;

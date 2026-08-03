@@ -245,6 +245,8 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
         }
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count == 0U)
+            continue;
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
@@ -317,6 +319,8 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         }
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count == 0U)
+            continue;
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
@@ -331,16 +335,15 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_wave_runtime_sync_voice(ctx->instance_id, instance);
-                if ((brick6_wave_runtime_prepare_block(instance, frames, 1U) != 0U)
-                        && (brick6_wave_runtime_render_instance(instance, wave_tmp, frames) != 0U))
-                {
-                    const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, track, voice, wave_tmp, frames,
-                        synth_polyphony_get_voice_pan(track, voice));
-                    published = 1U;
-                    if (running == 0U)
-                        synth_polyphony_voice_release_complete(track, voice);
-                }
+                if ((brick6_wave_runtime_prepare_block(instance, frames, 1U) == 0U)
+                        || (brick6_wave_runtime_render_instance(instance, wave_tmp, frames) == 0U))
+                    memset(wave_tmp, 0, frames * sizeof(float));
+                const uint8_t running = mixer_process_external_poly_voice(
+                    ctx->mix_track_id, track, voice, wave_tmp, frames,
+                    synth_polyphony_get_voice_pan(track, voice));
+                published = 1U;
+                if (running == 0U)
+                    synth_polyphony_voice_release_complete(track, voice);
             }
             if (published != 0U)
             {
@@ -398,6 +401,8 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
         }
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count == 0U)
+            continue;
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
@@ -412,16 +417,15 @@ static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tra
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_deluge_runtime_sync_voice(ctx->instance_id, instance);
-                if ((brick6_deluge_runtime_prepare_block(instance, frames, 1U) != 0U)
-                        && (brick6_deluge_runtime_render_instance(instance, deluge_tmp, frames) != 0U))
-                {
-                    const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, track, voice, deluge_tmp, frames,
-                        synth_polyphony_get_voice_pan(track, voice));
-                    published = 1U;
-                    if (running == 0U)
-                        synth_polyphony_voice_release_complete(track, voice);
-                }
+                if ((brick6_deluge_runtime_prepare_block(instance, frames, 1U) == 0U)
+                        || (brick6_deluge_runtime_render_instance(instance, deluge_tmp, frames) == 0U))
+                    memset(deluge_tmp, 0, frames * sizeof(float));
+                const uint8_t running = mixer_process_external_poly_voice(
+                    ctx->mix_track_id, track, voice, deluge_tmp, frames,
+                    synth_polyphony_get_voice_pan(track, voice));
+                published = 1U;
+                if (running == 0U)
+                    synth_polyphony_voice_release_complete(track, voice);
             }
             if (published != 0U)
             {
@@ -480,6 +484,8 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
         }
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
+        if (voice_count == 0U)
+            continue;
         if (voice_count > 1U)
         {
             uint8_t published = 0U;
@@ -494,15 +500,14 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_stack_runtime_sync_voice(ctx->instance_id, instance);
-                if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) != 0U)
-                {
-                    const uint8_t running = mixer_process_external_poly_voice(
-                        ctx->mix_track_id, track, voice, stack_tmp, frames,
-                        synth_polyphony_get_voice_pan(track, voice));
-                    published = 1U;
-                    if (running == 0U)
-                        synth_polyphony_voice_release_complete(track, voice);
-                }
+                if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) == 0U)
+                    memset(stack_tmp, 0, frames * sizeof(float));
+                const uint8_t running = mixer_process_external_poly_voice(
+                    ctx->mix_track_id, track, voice, stack_tmp, frames,
+                    synth_polyphony_get_voice_pan(track, voice));
+                published = 1U;
+                if (running == 0U)
+                    synth_polyphony_voice_release_complete(track, voice);
             }
             if (published != 0U)
             {
@@ -594,25 +599,29 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         (void)looper_tracks;
     }
 
+    if (synth_usage.prism_tracks != 0U)
     {
         uint8_t prism_tracks = 0U;
         brick6_render_prism_tracks(frames, &prism_tracks);
         (void)prism_tracks;
     }
 
+    brick6_stack_runtime_process_commands_from_audio();
+    if (synth_usage.stack_tracks != 0U)
     {
         uint8_t stack_tracks = 0U;
-        brick6_stack_runtime_process_commands_from_audio();
         brick6_render_stack_tracks(frames, &stack_tracks);
         (void)stack_tracks;
     }
 
+    if (synth_usage.wave_tracks != 0U)
     {
         uint8_t wave_tracks = 0U;
         brick6_render_wave_tracks(frames, &wave_tracks);
         (void)wave_tracks;
     }
 
+    if (synth_usage.deluge_tracks != 0U)
     {
         uint8_t deluge_tracks = 0U;
         brick6_render_deluge_tracks(frames, &deluge_tracks);

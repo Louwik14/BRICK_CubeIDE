@@ -954,18 +954,22 @@ static void track_runtime_mark_used_mix_tracks_except(uint8_t except_track,
 
 static void track_runtime_recompute_synth_usage(void)
 {
-    uint8_t drum_count = 0U;
+    track_runtime_synth_usage_t usage = { 0U };
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
-        if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
+        if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND) continue;
+        switch ((track_runtime_engine_t)ctx->engine)
         {
-            drum_count++;
+            case TRACK_RUNTIME_ENGINE_DRUM: usage.drum_tracks++; break;
+            case TRACK_RUNTIME_ENGINE_PRISM: usage.prism_tracks++; break;
+            case TRACK_RUNTIME_ENGINE_STACK: usage.stack_tracks++; break;
+            case TRACK_RUNTIME_ENGINE_WAVE: usage.wave_tracks++; break;
+            case TRACK_RUNTIME_ENGINE_DELUGE: usage.deluge_tracks++; break;
+            default: break;
         }
     }
-
-    g_track_runtime_synth_usage.drum_tracks = drum_count;
+    g_track_runtime_synth_usage = usage;
 }
 
 static void track_runtime_reset_prism_if_owner_changed(uint8_t previous_engine,
@@ -1085,7 +1089,7 @@ void track_runtime_refresh_all(void)
     track_runtime_allocator_state_t allocator = { 0U };
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
     uint8_t previous_mix_track[SEQ_TRACK_COUNT];
-    uint8_t drum_count = 0U;
+    track_runtime_synth_usage_t synth_usage = { 0U };
     uint8_t previous_looper[SEQ_TRACK_COUNT];
 
     g_track_runtime_refresh_all_count++;
@@ -1148,9 +1152,14 @@ void track_runtime_refresh_all(void)
 
         if (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
         {
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+            switch ((track_runtime_engine_t)ctx->engine)
             {
-                drum_count++;
+                case TRACK_RUNTIME_ENGINE_DRUM: synth_usage.drum_tracks++; break;
+                case TRACK_RUNTIME_ENGINE_PRISM: synth_usage.prism_tracks++; break;
+                case TRACK_RUNTIME_ENGINE_STACK: synth_usage.stack_tracks++; break;
+                case TRACK_RUNTIME_ENGINE_WAVE: synth_usage.wave_tracks++; break;
+                case TRACK_RUNTIME_ENGINE_DELUGE: synth_usage.deluge_tracks++; break;
+                default: break;
             }
         }
     }
@@ -1180,7 +1189,7 @@ void track_runtime_refresh_all(void)
             (void)param_backend_reapply_tone_deluge_runtime(track);
     }
 
-    g_track_runtime_synth_usage.drum_tracks = drum_count;
+    g_track_runtime_synth_usage = synth_usage;
     track_runtime_rebuild_mix_track_reverse_map();
     g_track_runtime_global_dirty = 0U;
     ++g_track_runtime_revision;
@@ -1824,6 +1833,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_REVERB_WIDTH:
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
+        case PARAM_MIX_REVERB_DELAYS:
         case PARAM_MIX_DELAY_TYPE:
         case PARAM_MIX_DELAY_TIME:
         case PARAM_MIX_DELAY_PINGPONG:

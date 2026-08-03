@@ -136,6 +136,10 @@ typedef struct
 typedef struct
 {
     uint8_t drum_tracks;
+    uint8_t prism_tracks;
+    uint8_t stack_tracks;
+    uint8_t wave_tracks;
+    uint8_t deluge_tracks;
 } track_runtime_synth_usage_t;
 
 typedef enum
