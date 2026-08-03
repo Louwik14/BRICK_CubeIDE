@@ -34,6 +34,10 @@ void fx_comp_lab_init(fx_comp_lab_t *comp, float sample_rate)
     comp->brick_env = 0.0f;
     comp->transition = 1.0f;
     comp->transition_old_gain = 1.0f;
+    comp->cached_makeup = 1.0f;
+    comp->cached_hpf_a = 0.0f;
+    comp->cached_coeff_frames = 0U;
+    comp->coeff_dirty = 1U;
     comp->model = 0U;
     comp->detector_rms = 0U;
     comp->deluge_saturation = 0U;
@@ -41,9 +45,9 @@ void fx_comp_lab_init(fx_comp_lab_t *comp, float sample_rate)
 
 void fx_comp_lab_set_threshold_db(fx_comp_lab_t *c, float v) { if(c) c->threshold_db = clampf(v, -48.0f, 0.0f); }
 void fx_comp_lab_set_ratio(fx_comp_lab_t *c, float v) { if(c) c->ratio = clampf(v, 1.0f, 20.0f); }
-void fx_comp_lab_set_attack_s(fx_comp_lab_t *c, float v) { if(c) c->attack_s = clampf(v, 0.0001f, 0.1f); }
-void fx_comp_lab_set_release_s(fx_comp_lab_t *c, float v) { if(c) c->release_s = clampf(v, 0.02f, 1.0f); }
-void fx_comp_lab_set_makeup_db(fx_comp_lab_t *c, float v) { if(c) c->manual_makeup_db = clampf(v, 0.0f, 18.0f); }
+void fx_comp_lab_set_attack_s(fx_comp_lab_t *c, float v) { if(c) { const float n = clampf(v, 0.0001f, 0.1f); if(n != c->attack_s) { c->attack_s = n; c->coeff_dirty = 1U; } } }
+void fx_comp_lab_set_release_s(fx_comp_lab_t *c, float v) { if(c) { const float n = clampf(v, 0.02f, 1.0f); if(n != c->release_s) { c->release_s = n; c->coeff_dirty = 1U; } } }
+void fx_comp_lab_set_makeup_db(fx_comp_lab_t *c, float v) { if(c) { const float n = clampf(v, 0.0f, 18.0f); if(n != c->manual_makeup_db) { c->manual_makeup_db = n; c->coeff_dirty = 1U; } } }
 void fx_comp_lab_set_mix(fx_comp_lab_t *c, float v) { if(c) c->mix = clampf(v, 0.0f, 1.0f); }
 
 void fx_comp_lab_set_model(fx_comp_lab_t *c, uint8_t model)
@@ -62,7 +66,7 @@ void fx_comp_lab_set_model(fx_comp_lab_t *c, uint8_t model)
 }
 
 void fx_comp_lab_set_sc_hpf_hz(fx_comp_lab_t *c, float hz)
-{ if(c) c->sc_hpf_hz = (hz < 40.0f) ? 0.0f : clampf(hz, 40.0f, 200.0f); }
+{ if(c) { const float n = (hz < 40.0f) ? 0.0f : clampf(hz, 40.0f, 200.0f); if(n != c->sc_hpf_hz) { c->sc_hpf_hz = n; c->coeff_dirty = 1U; } } }
 void fx_comp_lab_set_detector_rms(fx_comp_lab_t *c, uint8_t rms) { if(c) c->detector_rms = rms ? 1U : 0U; }
 void fx_comp_lab_set_knee_db(fx_comp_lab_t *c, float db) { if(c) c->knee_db = clampf(db, 0.0f, 12.0f); }
 void fx_comp_lab_set_deluge_saturation(fx_comp_lab_t *c, uint8_t enabled) { if(c) c->deluge_saturation = enabled ? 1U : 0U; }
@@ -70,7 +74,7 @@ void fx_comp_lab_set_deluge_saturation(fx_comp_lab_t *c, uint8_t enabled) { if(c
 static float detector_hpf(fx_comp_lab_t *c, float x, bool right)
 {
     if(c->sc_hpf_hz < 40.0f) return x;
-    const float a = expf(-6.28318530718f * c->sc_hpf_hz / c->sample_rate);
+    const float a = c->cached_hpf_a;
     float& y = right ? c->hpf_r : c->hpf_l;
     float& px = right ? c->hpf_x_r : c->hpf_x_l;
     y = a * (y + x - px);
@@ -94,13 +98,25 @@ void fx_comp_lab_process_block(fx_comp_lab_t *c, float *left, float *right, uint
     if(!c || !left || !right) return;
     const float mix = c->mix;
     const float imix = 1.0f - mix;
-    const float makeup = powf(10.0f, c->manual_makeup_db * 0.05f);
+    const uint32_t count = (frames > 64U) ? 64U : frames;
+    if ((c->coeff_dirty != 0U) || (c->cached_coeff_frames != count))
+    {
+        c->cached_makeup = powf(10.0f, c->manual_makeup_db * 0.05f);
+        c->cached_hpf_a = (c->sc_hpf_hz >= 40.0f)
+            ? expf(-6.28318530718f * c->sc_hpf_hz / c->sample_rate) : 0.0f;
+        c->cached_deluge_attack_coeff = expf(-(float)count / (c->attack_s * c->sample_rate));
+        c->cached_deluge_release_coeff = expf(-(float)count / (c->release_s * c->sample_rate));
+        c->cached_brick_attack_coeff = expf(-8.0f / (c->attack_s * c->sample_rate));
+        c->cached_brick_release_coeff = expf(-8.0f / (c->release_s * c->sample_rate));
+        c->cached_coeff_frames = count;
+        c->coeff_dirty = 0U;
+    }
+    const float makeup = c->cached_makeup;
     float deluge_target = c->deluge_gain;
     float brick_target = c->brick_gain;
     float deluge_step = 0.0f;
     float brick_step = 0.0f;
     float key_l[64], key_r[64];
-    const uint32_t count = (frames > 64U) ? 64U : frames;
     for(uint32_t i = 0U; i < count; ++i)
     {
         key_l[i] = detector_hpf(c, left[i], false);
@@ -128,8 +144,8 @@ void fx_comp_lab_process_block(fx_comp_lab_t *c, float *left, float *right, uint
                 const float threshold_np = c->threshold_db * 0.11512925465f;
                 const float over = fmaxf(c->deluge_rms_log - threshold_np, 0.0f);
                 const float desired = over * (1.0f - 1.0f / c->ratio);
-                const float tc = (desired > c->deluge_env) ? c->attack_s : c->release_s;
-                const float coeff = expf(-(float)count / (tc * c->sample_rate));
+                const float coeff = (desired > c->deluge_env)
+                    ? c->cached_deluge_attack_coeff : c->cached_deluge_release_coeff;
                 c->deluge_env = desired + coeff * (c->deluge_env - desired);
                 deluge_target = expf(-c->deluge_env) * makeup;
                 deluge_step = (deluge_target - c->deluge_gain) / (float)count;
@@ -164,8 +180,8 @@ void fx_comp_lab_process_block(fx_comp_lab_t *c, float *left, float *right, uint
                 const float level_db = 20.0f * log10f(detect + 1e-20f);
                 const float target_db = brick_curve_db(level_db, c->threshold_db, c->ratio, c->knee_db);
                 const float target = powf(10.0f, target_db * 0.05f) * makeup;
-                const float tc = (target < c->brick_env) ? c->attack_s : c->release_s;
-                const float coeff = expf(-8.0f / (tc * c->sample_rate));
+                const float coeff = (target < c->brick_env)
+                    ? c->cached_brick_attack_coeff : c->cached_brick_release_coeff;
                 c->brick_env = target + coeff * (c->brick_env - target);
                 brick_target = c->brick_env;
                 brick_step = (brick_target - c->brick_gain) * 0.125f;

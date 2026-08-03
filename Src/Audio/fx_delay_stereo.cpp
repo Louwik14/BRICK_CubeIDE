@@ -44,6 +44,9 @@ typedef struct
     float feedback_lp_l;
     float feedback_lp_r;
     uint32_t write_index;
+    float cached_hpf_a;
+    float cached_lpf_a;
+    uint8_t filter_coeff_dirty;
     uint8_t initialized;
 } fx_delay_stereo_global_state_t;
 
@@ -147,6 +150,9 @@ extern "C" void fx_delay_stereo_global_init(float sample_rate)
     g_delay.feedback_lp_l = 0.0f;
     g_delay.feedback_lp_r = 0.0f;
     g_delay.write_index = 0U;
+    g_delay.cached_hpf_a = 0.0f;
+    g_delay.cached_lpf_a = 0.0f;
+    g_delay.filter_coeff_dirty = 1U;
     fx_delay_shared_pool_acquire(FX_DELAY_SHARED_OWNER_CLASSIC, 1U);
     g_delay.initialized = 1U;
 }
@@ -180,6 +186,8 @@ extern "C" void fx_delay_stereo_global_set_feedback(float feedback)
 
 extern "C" void fx_delay_stereo_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
+    const float previous_low = g_delay.low_cut_hz;
+    const float previous_high = g_delay.high_cut_hz;
     g_delay.low_cut_hz = clampf_local(low_cut_hz, 20.0f, 20000.0f);
     g_delay.high_cut_hz = clampf_local(high_cut_hz, 20.0f, 20000.0f);
     if (g_delay.high_cut_hz <= g_delay.low_cut_hz)
@@ -191,6 +199,8 @@ extern "C" void fx_delay_stereo_global_set_filter_hz(float low_cut_hz, float hig
             g_delay.low_cut_hz = 19999.0f;
         }
     }
+    if ((g_delay.low_cut_hz != previous_low) || (g_delay.high_cut_hz != previous_high))
+        g_delay.filter_coeff_dirty = 1U;
 }
 
 extern "C" void fx_delay_stereo_global_set_pingpong(uint8_t enabled)
@@ -246,8 +256,16 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     const float target_r = target_l;
     const uint8_t hpf_active = (g_delay.low_cut_hz > 20.1f) ? 1U : 0U;
     const uint8_t lpf_active = (g_delay.high_cut_hz < 19999.9f) ? 1U : 0U;
-    const float hpf_a = (hpf_active != 0U) ? hpf_alpha_hz(g_delay.low_cut_hz, g_delay.sample_rate) : 0.0f;
-    const float lpf_a = (lpf_active != 0U) ? lpf_alpha_hz(g_delay.high_cut_hz, g_delay.sample_rate) : 0.0f;
+    if (g_delay.filter_coeff_dirty != 0U)
+    {
+        g_delay.cached_hpf_a = (hpf_active != 0U)
+            ? hpf_alpha_hz(g_delay.low_cut_hz, g_delay.sample_rate) : 0.0f;
+        g_delay.cached_lpf_a = (lpf_active != 0U)
+            ? lpf_alpha_hz(g_delay.high_cut_hz, g_delay.sample_rate) : 0.0f;
+        g_delay.filter_coeff_dirty = 0U;
+    }
+    const float hpf_a = g_delay.cached_hpf_a;
+    const float lpf_a = g_delay.cached_lpf_a;
     const float rev = g_delay.reverb_send;
     const uint8_t has_rev = ((rev_l != 0) && (rev_r != 0)) ? 1U : 0U;
     float *const delay_buffer_l = fx_delay_shared_pool_left();

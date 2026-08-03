@@ -25,6 +25,14 @@ struct fx_comp_lab_t {
     float brick_gain;
     float transition;
     float transition_old_gain;
+    float cached_makeup;
+    float cached_hpf_a;
+    float cached_deluge_attack_coeff;
+    float cached_deluge_release_coeff;
+    float cached_brick_attack_coeff;
+    float cached_brick_release_coeff;
+    uint32_t cached_coeff_frames;
+    uint8_t coeff_dirty;
     uint8_t model;
     uint8_t detector_rms;
     uint8_t deluge_saturation;

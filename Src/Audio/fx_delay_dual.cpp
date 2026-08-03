@@ -275,6 +275,12 @@ typedef struct
     delay_line_t haas_r;
     feedback_filter_t filter_delay_l;
     feedback_filter_t filter_delay_r;
+    float cached_hp_a;
+    float cached_lp_a;
+    float cached_mod_sin_step;
+    float cached_mod_cos_step;
+    uint8_t filter_coeff_dirty;
+    uint8_t mod_step_dirty;
     uint8_t initialized;
 } fx_delay_dual_global_state_t;
 
@@ -331,6 +337,8 @@ extern "C" void fx_delay_dual_global_clear(void)
     g_dual.time_r_samples = target_delay_samples(g_dual.time_r_s, g_dual.sample_rate);
     g_dual.mod_depth_smooth = g_dual.mod_depth;
     g_dual.mod_phase = 0.0f;
+    g_dual.filter_coeff_dirty = 1U;
+    g_dual.mod_step_dirty = 1U;
 }
 
 extern "C" void fx_delay_dual_global_set_mode(uint8_t mode)
@@ -360,6 +368,8 @@ extern "C" void fx_delay_dual_global_set_feedback(float feedback)
 
 extern "C" void fx_delay_dual_global_set_filter_hz(float low_cut_hz, float high_cut_hz)
 {
+    const float previous_low = g_dual.low_cut_hz;
+    const float previous_high = g_dual.high_cut_hz;
     g_dual.low_cut_hz = clampf_local(low_cut_hz, 20.0f, 20000.0f);
     g_dual.high_cut_hz = clampf_local(high_cut_hz, 20.0f, 20000.0f);
     if (g_dual.high_cut_hz <= g_dual.low_cut_hz)
@@ -371,6 +381,8 @@ extern "C" void fx_delay_dual_global_set_filter_hz(float low_cut_hz, float high_
             g_dual.low_cut_hz = 19999.0f;
         }
     }
+    if ((g_dual.low_cut_hz != previous_low) || (g_dual.high_cut_hz != previous_high))
+        g_dual.filter_coeff_dirty = 1U;
 }
 
 extern "C" void fx_delay_dual_global_set_width(float width)
@@ -393,7 +405,10 @@ extern "C" void fx_delay_dual_global_set_mod_depth(float depth)
 
 extern "C" void fx_delay_dual_global_set_mod_rate(float rate_hz)
 {
-    g_dual.mod_rate_hz = clampf_local(rate_hz, 0.01f, 12.0f);
+    const float next = clampf_local(rate_hz, 0.01f, 12.0f);
+    if (next == g_dual.mod_rate_hz) return;
+    g_dual.mod_rate_hz = next;
+    g_dual.mod_step_dirty = 1U;
 }
 
 extern "C" void fx_delay_dual_global_set_reverb_send(float reverb_send)
@@ -447,8 +462,14 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
     const float rev = g_dual.reverb_send;
     const uint8_t hpf_active = (g_dual.low_cut_hz > 20.1f) ? 1U : 0U;
     const uint8_t lpf_active = (g_dual.high_cut_hz < 19999.9f) ? 1U : 0U;
-    const float hp_a = hpf_active ? hpf_alpha_hz(g_dual.low_cut_hz, g_dual.sample_rate) : 0.0f;
-    const float lp_a = lpf_active ? lpf_alpha_hz(g_dual.high_cut_hz, g_dual.sample_rate) : 0.0f;
+    if (g_dual.filter_coeff_dirty != 0U)
+    {
+        g_dual.cached_hp_a = hpf_active ? hpf_alpha_hz(g_dual.low_cut_hz, sr) : 0.0f;
+        g_dual.cached_lp_a = lpf_active ? lpf_alpha_hz(g_dual.high_cut_hz, sr) : 0.0f;
+        g_dual.filter_coeff_dirty = 0U;
+    }
+    const float hp_a = g_dual.cached_hp_a;
+    const float lp_a = g_dual.cached_lp_a;
     const uint8_t has_haas = ((mode != (uint8_t)FX_DELAY_DUAL_MODE_PINGPONG)
             && (mode != (uint8_t)FX_DELAY_DUAL_MODE_CLASSIC_PINGPONG)
             && ((fabsf(g_dual.width) >= kNeutralEpsilon)
@@ -464,9 +485,15 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
     {
         mod_sin = sinf(mod_phase * kTwoPi);
         mod_cos = cosf(mod_phase * kTwoPi);
-        const float mod_step = g_dual.mod_rate_hz * isr;
-        mod_sin_step = sinf(mod_step * kTwoPi);
-        mod_cos_step = cosf(mod_step * kTwoPi);
+        if (g_dual.mod_step_dirty != 0U)
+        {
+            const float mod_step = g_dual.mod_rate_hz * isr;
+            g_dual.cached_mod_sin_step = sinf(mod_step * kTwoPi);
+            g_dual.cached_mod_cos_step = cosf(mod_step * kTwoPi);
+            g_dual.mod_step_dirty = 0U;
+        }
+        mod_sin_step = g_dual.cached_mod_sin_step;
+        mod_cos_step = g_dual.cached_mod_cos_step;
     }
 
     resize_runtime_lines(mode, target_l, target_r);
