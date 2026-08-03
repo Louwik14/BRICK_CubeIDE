@@ -525,12 +525,60 @@ set_source_files_properties(${ALL_CPP_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<$<CONFIG:Release>:-O2>"
 )
 
-# Audio en O2 : fichiers C et C++ du dossier Src/Audio
+# Braids only: favor IRQ throughput and enable cross-TU optimization in Release.
+set(BRAIDS_O3_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/analog_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/digital_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/macro_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/resources.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp"
+)
+set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+)
+
+# Audio Low-Cost: keep LTO scoped to audio, DSP/modulation and synth runtime.
 set(AUDIO_ALL_SOURCES ${SRC_AUDIO_SRC})
 list(FILTER AUDIO_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 
-set_source_files_properties(${AUDIO_ALL_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O2>"
+set(LOWCOST_AUDIO_LTO_SOURCES
+    ${AUDIO_ALL_SOURCES} ${CMSIS_DSP_SRC} ${SRC_MOD_SRC}
+    ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
+    ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
+    ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_deluge_runtime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/synth_polyphony.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
+)
+set_source_files_properties(${LOWCOST_AUDIO_LTO_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-flto>"
+)
+set(LOWCOST_AUDIO_O3_SOURCES
+    ${AUDIO_ALL_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_deluge_runtime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
+    ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
+    ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
+    ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
+)
+set_source_files_properties(${LOWCOST_AUDIO_O3_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+)
+set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
+    COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
 )
 
 # Storage en O0 : fichiers C et C++ du dossier Src/Storage
@@ -547,11 +595,6 @@ set_source_files_properties(${U8G2_SRC} PROPERTIES
 )
 list(FILTER AUDIO_C_SOURCES INCLUDE REGEX ".*\\.c$")
 
-# wav_audio_codec.c en O3 pour isoler l'impact de son optimisation
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
-    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>"
-)
 # --------------------------------------------------------------------------
 # Link options aligned with CubeIDE
 # --------------------------------------------------------------------------
