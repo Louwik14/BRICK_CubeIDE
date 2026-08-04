@@ -14,6 +14,7 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_audio_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -62,6 +63,7 @@ typedef struct
     uint32_t end_tick;
     uint32_t test_frames;
     uint32_t audio_blocks;
+    uint32_t prism_tracks;
     uint32_t max_frames_per_block;
     uint16_t master_gain_before_start_milli;
     audio_runtime_diag_t audio_diag;
@@ -330,6 +332,13 @@ void prism_debug_boot_audio_block_begin(uint32_t frames)
     if (frames > window->max_frames_per_block) window->max_frames_per_block = frames;
 }
 
+void prism_debug_boot_audio_prism_tracks(uint8_t tracks)
+{
+    if ((g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL)
+            && (g_debug.state != PRISM_DEBUG_STATE_RUNNING_RETEST)) return;
+    debug_active_window()->prism_tracks += tracks;
+}
+
 void prism_debug_boot_audio_half_complete(uint8_t half_index, uint32_t frames)
 {
     (void)half_index;
@@ -465,6 +474,8 @@ static int debug_append_window(char *report, int length, const char *section,
         "master_gain_before_test = %u.%03u\n",
         (unsigned)(window->master_gain_before_start_milli / 1000U),
         (unsigned)(window->master_gain_before_start_milli % 1000U));
+    length = debug_append(report, PRISM_DEBUG_REPORT_MAX, length,
+        "prism_tracks = %lu\n", (unsigned long)window->prism_tracks);
     length = debug_append(report, PRISM_DEBUG_REPORT_MAX, length,
         "tx_buffer_address = 0x%08lX\ntx_buffer_bytes = %lu\n"
         "tx_buffer_cacheable = %u\ntx_buffer_region = .ram_d2_lut\n"
@@ -669,7 +680,9 @@ void prism_debug_boot_service(void)
         (void)board_audio_codec_reset_and_reinit(&g_debug.reset_diag);
         board_audio_get_codec_post_test_snapshot(&g_debug.codec_after_reset);
         HAL_Delay(PRISM_DEBUG_CODEC_RESTART_WAIT_MS);
+        brick6_audio_runtime_set_diagnostic_hold(1U);
         debug_configure_tracks();
+        brick6_audio_runtime_set_diagnostic_hold(0U);
         g_debug.retest_mode = 1U;
         g_debug.state = PRISM_DEBUG_STATE_ARMED;
         mixer_set_master(1.0f);

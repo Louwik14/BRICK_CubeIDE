@@ -22,6 +22,7 @@ uint8_t prism_debug_boot_is_active(void);
 
 /* Called only by the audio runtime/IRQ path; no storage or logging occurs here. */
 void prism_debug_boot_audio_block_begin(uint32_t frames);
+void prism_debug_boot_audio_prism_tracks(uint8_t tracks);
 void prism_debug_boot_audio_half_complete(uint8_t half_index, uint32_t frames);
 
 /* The encoder is consumed while the temporary page is active, but has no mode. */
