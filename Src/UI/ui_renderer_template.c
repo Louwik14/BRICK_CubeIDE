@@ -4432,6 +4432,10 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     {
         cpu_x = (bpm_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(bpm_x - cpu_text_w - 1U) : 0U;
     }
+    if (cpu_x >= 2U)
+    {
+        cpu_x = (uint8_t)(cpu_x - 2U);
+    }
     drv_display_draw_text(cpu_x, 1U, cpu_avg_label);
 
     ui_renderer_template_fit_text(kit_label, 42U);
