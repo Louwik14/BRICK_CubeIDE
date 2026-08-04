@@ -28,6 +28,7 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
+#include "Core/prism_debug_boot.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
@@ -312,7 +313,33 @@ static void process_half(uint32_t half_index)
     note_fx_pipeline_end_audio_half();
     seq_play_scheduler_audio_end_half();
 
+    /* The board packer has completed this half: observe the main PCM24
+       slots without touching TX, DMA state, or the write order. P12/P13 are
+       intentionally block snapshots of the same final buffer because this
+       target has no intermediate conversion or interleave buffer. */
+    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P12,
+                                      tx,
+                                      AUDIO_FRAMES_PER_HALF,
+                                      AUDIO_WORDS_PER_FRAME,
+                                      (uint8_t)half_index);
+    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P13,
+                                      tx,
+                                      AUDIO_FRAMES_PER_HALF,
+                                      AUDIO_WORDS_PER_FRAME,
+                                      (uint8_t)half_index);
+    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P14,
+                                      tx,
+                                      AUDIO_FRAMES_PER_HALF,
+                                      AUDIO_WORDS_PER_FRAME,
+                                      (uint8_t)half_index);
+
     dcache_clean_by_addr_aligned(tx, half_bytes);
+
+    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P15,
+                                      tx,
+                                      AUDIO_FRAMES_PER_HALF,
+                                      AUDIO_WORDS_PER_FRAME,
+                                      (uint8_t)half_index);
 }
 /* ============================================================
    API

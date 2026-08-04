@@ -28,8 +28,20 @@ typedef enum
     PRISM_DEBUG_PROBE_P9,
     PRISM_DEBUG_PROBE_P10,
     PRISM_DEBUG_PROBE_P11,
+    PRISM_DEBUG_PROBE_P12,
+    PRISM_DEBUG_PROBE_P13,
+    PRISM_DEBUG_PROBE_P14,
+    PRISM_DEBUG_PROBE_P15,
     PRISM_DEBUG_PROBE_COUNT
 } prism_debug_probe_t;
+
+typedef enum
+{
+    PRISM_DEBUG_DMA_OBSERVATION_P12 = 0,
+    PRISM_DEBUG_DMA_OBSERVATION_P13,
+    PRISM_DEBUG_DMA_OBSERVATION_P14,
+    PRISM_DEBUG_DMA_OBSERVATION_P15
+} prism_debug_dma_observation_t;
 
 void prism_debug_boot_init(void);
 void prism_debug_boot_service(void);
@@ -57,6 +69,11 @@ void prism_debug_boot_capture_p2(uint8_t track,
                                  uint32_t frames);
 void prism_debug_boot_capture_p10(const float *left, const float *right, uint32_t frames);
 void prism_debug_boot_capture_p11(const float *left, const float *right, uint32_t frames);
+void prism_debug_boot_capture_dma_half(prism_debug_dma_observation_t observation,
+                                       const int32_t *tx_half,
+                                       uint32_t frames,
+                                       uint32_t slots,
+                                       uint8_t half_index);
 void prism_debug_boot_end_block(uint32_t frames);
 
 void prism_debug_boot_request_probe(prism_debug_probe_t probe);
