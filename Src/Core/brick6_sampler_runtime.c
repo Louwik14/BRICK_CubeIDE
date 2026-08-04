@@ -232,7 +232,6 @@ static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
 static AUDIO_HOT brick6_sampler_declick_tail_t
     g_sampler_declick_tail[STEAL_DECLICK_TAIL_SLOTS];
-static AUDIO_HOT ALIGN32 float g_sampler_ram_mono_discard[AUDIO_BLOCK_SIZE];
 static uint32_t g_sampler_voice_trigger_counter;
 static uint8_t g_sampler_multi_alloc_stole_voice;
 static CTRL_STATE uint8_t
@@ -371,6 +370,9 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                                               float *out_l,
                                               float *out_r,
                                               uint32_t frames);
+static void brick6_sampler_runtime_render_ram_mono(brick6_sampler_voice_t *voice,
+                                                   float *out_mono,
+                                                   uint32_t frames);
 static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice);
 static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
                                                         float *out_l,
@@ -416,6 +418,9 @@ static void brick6_sampler_runtime_mix_declick_tails(uint8_t track_id,
                                                      float *out_l,
                                                      float *out_r,
                                                      uint32_t frames);
+static void brick6_sampler_runtime_mix_declick_tails_mono(uint8_t track_id,
+                                                          float *out_mono,
+                                                          uint32_t frames);
 static uint8_t brick6_sampler_runtime_oneshot_voice_is_stealable(uint8_t track_id);
 static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t track_id);
 static void brick6_sampler_runtime_multi_track_reset(uint8_t track_id);
@@ -572,6 +577,45 @@ static void brick6_sampler_runtime_mix_declick_tails(uint8_t track_id,
                                    : 0.0f;
             out_l[i] += tail->start_l * gain;
             out_r[i] += tail->start_r * gain;
+            tail->remaining--;
+        }
+
+        if (tail->remaining == 0U)
+        {
+            tail->active = 0U;
+            tail->start_l = 0.0f;
+            tail->start_r = 0.0f;
+            tail->owner_track_id = UINT8_MAX;
+        }
+    }
+}
+
+static void brick6_sampler_runtime_mix_declick_tails_mono(uint8_t track_id,
+                                                          float *out_mono,
+                                                          uint32_t frames)
+{
+    if ((track_id >= SEQ_TRACK_COUNT) || (out_mono == NULL) || (frames == 0U))
+    {
+        return;
+    }
+
+    const float denom = (STEAL_DECLICK_SAMPLES > 1U)
+                            ? (1.0f / (float)(STEAL_DECLICK_SAMPLES - 1U))
+                            : 1.0f;
+    for (uint8_t t = 0U; t < STEAL_DECLICK_TAIL_SLOTS; ++t)
+    {
+        brick6_sampler_declick_tail_t *const tail = &g_sampler_declick_tail[t];
+        if ((tail->active == 0U) || (tail->owner_track_id != track_id))
+        {
+            continue;
+        }
+
+        for (uint32_t i = 0U; (i < frames) && (tail->remaining != 0U); ++i)
+        {
+            const float gain = (tail->remaining > 1U)
+                                   ? ((float)(tail->remaining - 1U) * denom)
+                                   : 0.0f;
+            out_mono[i] += tail->start_l * gain;
             tail->remaining--;
         }
 
@@ -6314,6 +6358,165 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
     voice->position = brick6_sampler_runtime_q16_to_float(position_q16);
 }
 
+static void brick6_sampler_runtime_render_ram_mono(brick6_sampler_voice_t *voice,
+                                                   float *out_mono,
+                                                   uint32_t frames)
+{
+    const sampler_ram_slot_t *ram = NULL;
+    if ((voice == NULL) || (out_mono == NULL) || (frames == 0U) || (voice->active == 0U))
+    {
+        return;
+    }
+
+    if ((brick6_sampler_runtime_ram_slot_valid(voice, &ram) == 0U)
+        || (ram == NULL) || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_MONO))
+    {
+        brick6_sampler_runtime_begin_declick_tail(voice->owner_track_id, voice);
+        brick6_sampler_runtime_clear_ram_voice(voice);
+        return;
+    }
+
+    uint64_t position_q16 = voice->ram_position_q16;
+    if ((position_q16 == 0ULL) && (voice->position > 0.0f))
+    {
+        position_q16 = (uint64_t)(voice->position * (float)BRICK6_SAMPLER_Q16_ONE + 0.5f);
+    }
+    if ((voice->region_end <= voice->region_begin) || (voice->region_end > ram->frames))
+    {
+        brick6_sampler_runtime_clear_ram_voice(voice);
+        return;
+    }
+
+    const uint64_t begin_q16 = (uint64_t)voice->region_begin << 16U;
+    const uint64_t end_q16 = (uint64_t)voice->region_end << 16U;
+    const uint64_t last_q16 = (uint64_t)(voice->region_end - 1U) << 16U;
+    const uint64_t last_offset_q16 = last_q16 - begin_q16;
+    const uint32_t region_frames = voice->region_end - voice->region_begin;
+    const uint32_t loop_begin =
+        ((voice->loop_begin >= voice->region_begin) && (voice->loop_begin < voice->region_end))
+            ? voice->loop_begin
+            : voice->region_begin;
+    const uint64_t loop_begin_q16 = (uint64_t)loop_begin << 16U;
+    const uint64_t loop_span_q16 = end_q16 - loop_begin_q16;
+    const uint32_t step_q16 = (voice->ram_step_q16 != 0U)
+                                  ? voice->ram_step_q16
+                                  : BRICK6_SAMPLER_Q16_ONE;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    const float *const data = ram->data;
+    float last = 0.0f;
+    uint32_t produced = 0U;
+    uint8_t terminal = 0U;
+
+    while (produced < frames)
+    {
+        if ((voice->reverse == 0U) && (position_q16 >= end_q16))
+        {
+            if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD) && (loop_span_q16 != 0ULL))
+            {
+                position_q16 = loop_begin_q16
+                               + brick6_sampler_runtime_wrap_q16(position_q16 - loop_begin_q16,
+                                                                 loop_span_q16);
+            }
+            else if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
+                     && (region_frames > 1U) && (last_offset_q16 != 0ULL))
+            {
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            position_q16 - begin_q16,
+                                                            &position_q16,
+                                                            &voice->reverse);
+            }
+            else
+            {
+                terminal = 1U;
+                break;
+            }
+        }
+        if ((voice->reverse != 0U) && (position_q16 < begin_q16))
+        {
+            if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
+                && (region_frames > 1U) && (last_offset_q16 != 0ULL))
+            {
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            begin_q16 - position_q16,
+                                                            &position_q16,
+                                                            &voice->reverse);
+            }
+            else
+            {
+                terminal = 1U;
+                break;
+            }
+        }
+        if ((position_q16 < begin_q16) || (position_q16 >= end_q16))
+        {
+            terminal = 1U;
+            break;
+        }
+
+        const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
+        float gain = render_gain;
+        if (voice->start_fade_remaining != 0U)
+        {
+            gain *= brick6_sampler_runtime_ram_fade_gain(voice);
+        }
+        last = data[frame_index] * gain;
+        out_mono[produced++] += last;
+
+        if (voice->reverse != 0U)
+        {
+            const uint64_t distance_from_begin = position_q16 - begin_q16;
+            if (distance_from_begin < (uint64_t)step_q16)
+            {
+                if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
+                    && (region_frames > 1U) && (last_offset_q16 != 0ULL))
+                {
+                    brick6_sampler_runtime_reflect_pingpong_q16(
+                        begin_q16,
+                        last_offset_q16,
+                        (uint64_t)step_q16 - distance_from_begin,
+                        &position_q16,
+                        &voice->reverse);
+                }
+                else
+                {
+                    position_q16 = begin_q16;
+                    terminal = 1U;
+                }
+            }
+            else
+            {
+                position_q16 -= (uint64_t)step_q16;
+            }
+        }
+        else
+        {
+            position_q16 += (uint64_t)step_q16;
+            if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE) && (position_q16 >= end_q16))
+            {
+                terminal = 1U;
+            }
+        }
+        if (terminal != 0U)
+        {
+            break;
+        }
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last, last);
+    }
+    if (terminal != 0U)
+    {
+        brick6_sampler_runtime_clear_ram_voice(voice);
+        return;
+    }
+    voice->ram_position_q16 = position_q16;
+    voice->position = brick6_sampler_runtime_q16_to_float(position_q16);
+}
+
 static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice)
 {
     if (voice == NULL)
@@ -6472,16 +6675,30 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_runtime_ctx_t *ctx
 {
     if ((ctx == NULL) || (out_mono == NULL) || (frames == 0U)
         || (frames > AUDIO_BLOCK_SIZE)
+        || (ctx->track_id >= SEQ_TRACK_COUNT)
+        || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+        || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
+        || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
         || (brick6_sampler_runtime_track_ram_is_mono(ctx->track_id) == 0U))
     {
         return;
     }
 
-    memset(g_sampler_ram_mono_discard, 0, frames * sizeof(float));
-    brick6_sampler_runtime_render_ram_track(ctx,
-                                            out_mono,
-                                            g_sampler_ram_mono_discard,
-                                            frames);
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[ctx->track_id];
+    if ((voice->active != 0U)
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+        && (ctx->mix_track_id < MIXER_MAX_TRACKS)
+        && (mixer_track_vca_is_running(ctx->mix_track_id) == 0U))
+    {
+        brick6_sampler_runtime_clear_ram_voice(voice);
+    }
+    if ((voice->active != 0U)
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM))
+    {
+        brick6_sampler_runtime_render_ram_mono(voice, out_mono, frames);
+    }
+    brick6_sampler_runtime_mix_declick_tails_mono(ctx->track_id, out_mono, frames);
 }
 
 void brick6_sampler_runtime_render_stream_track(const track_runtime_ctx_t *ctx,
