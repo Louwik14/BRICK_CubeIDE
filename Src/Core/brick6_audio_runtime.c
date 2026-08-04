@@ -141,13 +141,15 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
 
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
         {
+            const uint8_t multi_mono_native =
+                brick6_sampler_runtime_track_is_mono_native(ctx->track_id);
             memset(sampler_tmp_l, 0, frames * sizeof(float));
             memset(sampler_tmp_r, 0, frames * sizeof(float));
             brick6_sampler_runtime_render_multi_track(ctx,
                                                        sampler_tmp_l,
                                                        sampler_tmp_r,
                                                        frames);
-            if (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) != 0U)
+            if (multi_mono_native != 0U)
             {
                 mixer_submit_external_multi_mono(ctx->mix_track_id,
                                                  sampler_tmp_l,

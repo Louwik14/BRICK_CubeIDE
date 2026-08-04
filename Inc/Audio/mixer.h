@@ -146,6 +146,10 @@ void mixer_multi_filter_process(uint32_t track_id,
                                 float *left,
                                 float *right,
                                 uint32_t frames);
+void mixer_multi_filter_process_mono(uint32_t track_id,
+                                     struct multi_voice_dsp_slot_t *slot,
+                                     float *mono,
+                                     uint32_t frames);
 /* Track filter gate; Multi per-voice filter state is a separate contract. */
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);

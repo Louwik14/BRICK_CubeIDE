@@ -1653,21 +1653,9 @@ uint8_t mixer_multi_voice_vca_requires_source(
     return (env_adsr_stage(&slot->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
 }
 
-void mixer_multi_filter_process(uint32_t track_id,
-                                struct multi_voice_dsp_slot_t *slot,
-                                float *left,
-                                float *right,
-                                uint32_t frames)
+static void mixer_multi_filter_prepare_block(uint32_t track_id,
+                                             multi_voice_dsp_slot_t *slot)
 {
-    if ((slot == NULL) || (left == NULL) || (right == NULL) || (frames == 0U))
-    {
-        return;
-    }
-    if (frames > AUDIO_BLOCK_SIZE)
-    {
-        frames = AUDIO_BLOCK_SIZE;
-    }
-
     mixer_multi_filter_sync_config(track_id, slot);
     slot->cutoff_hz = mixer_smooth_block(slot->cutoff_hz,
                                          slot->cutoff_target_hz,
@@ -1690,6 +1678,24 @@ void mixer_multi_filter_process(uint32_t track_id,
     slot->eq_high_db = mixer_smooth_block(slot->eq_high_db,
                                           slot->eq_high_target_db,
                                           MIXER_FILTER_BLOCK_SMOOTH);
+}
+
+void mixer_multi_filter_process(uint32_t track_id,
+                                struct multi_voice_dsp_slot_t *slot,
+                                float *left,
+                                float *right,
+                                uint32_t frames)
+{
+    if ((slot == NULL) || (left == NULL) || (right == NULL) || (frames == 0U))
+    {
+        return;
+    }
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    mixer_multi_filter_prepare_block(track_id, slot);
 
     const uint8_t filter_is_off =
         (slot->filter_type == MIXER_TRACK_FILTER_OFF) ? 1U : 0U;
@@ -1747,6 +1753,64 @@ void mixer_multi_filter_process(uint32_t track_id,
                             * (1.0f / 32767.0f);
             left[frame] *= vca;
             right[frame] *= vca;
+        }
+    }
+}
+
+void mixer_multi_filter_process_mono(uint32_t track_id,
+                                     struct multi_voice_dsp_slot_t *slot,
+                                     float *mono,
+                                     uint32_t frames)
+{
+    if ((slot == NULL) || (mono == NULL) || (frames == 0U)
+        || (slot->format != (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO))
+    {
+        return;
+    }
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    mixer_multi_filter_prepare_block(track_id, slot);
+    const uint8_t filter_is_off =
+        (slot->filter_type == MIXER_TRACK_FILTER_OFF) ? 1U : 0U;
+    const uint8_t filter_bypass_complete =
+        (slot->filter.mono.biquad.bypass_xfade_remaining == 0U) ? 1U : 0U;
+    if ((filter_is_off == 0U) || (filter_bypass_complete == 0U))
+    {
+        if (slot->filter_type == MIXER_TRACK_FILTER_EQ3)
+        {
+            for (uint32_t offset = 0U; offset < frames; offset += MIXER_FILTER_UPDATE_PERIOD)
+            {
+                uint32_t chunk = frames - offset;
+                if (chunk > MIXER_FILTER_UPDATE_PERIOD)
+                {
+                    chunk = MIXER_FILTER_UPDATE_PERIOD;
+                }
+                fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
+                                            slot->eq_low_db,
+                                            slot->eq_mid_db,
+                                            slot->eq_high_db);
+                fx_dj_eq3_mono_process_block(&slot->filter.mono.eq3,
+                                             &mono[offset],
+                                             chunk);
+            }
+        }
+        else if ((mixer_track_filter_type_is_biquad(slot->filter_type) != 0U)
+                 || (slot->filter_type == MIXER_TRACK_FILTER_OFF))
+        {
+            mixer_multi_filter_process_biquad(slot, mono, NULL, frames);
+        }
+    }
+
+    if (slot->vca_enabled != 0U)
+    {
+        for (uint32_t frame = 0U; frame < frames; ++frame)
+        {
+            const float vca = (float)env_adsr_process_step(&slot->vca_env)
+                            * (1.0f / 32767.0f);
+            mono[frame] *= vca;
         }
     }
 }
