@@ -67,35 +67,25 @@ TLV320 est abandonné et n'est appelé par aucune étape du test décrit ici.
 
 ## Expérience implémentée
 
-Identifiant: `SAI_DMA_RESTART_V1_TX_THEN_RX`.
+Identifiant: `AUTO_POST_CODEC_SAI_RESTART`.
 
-Après un verdict initial BAD, en main loop uniquement:
+Après le retour de `audio_start()`, l'initialisation TLV320 est terminée et les
+flux initiaux TX/RX sont actifs. Juste avant le scénario Prism, une seule fois par
+boot, le firmware exécute strictement:
 
-1. le moteur DSP est sérialisé avec l'IRQ, sans log en IRQ;
-2. les registres codec sont photographiés;
-3. RX DMA/SAI est stoppé, puis TX DMA/SAI;
-4. les deux FIFO SAI sont explicitement flushées et tous les flags effaçables
-   sont nettoyés;
-5. les deux moitiés RX/TX sont mises à zéro; RX est invalidé et TX nettoyé côté
-   D-cache avant redémarrage;
-6. TX redémarre, puis RX, avec les mêmes handles, registres SAI, DMA, buffers et
-   clock tree; aucune fonction TLV320 et aucun `HAL_SAI_Init()` n'est appelé;
-7. le scénario Prism identique repart pour 288000 frames, puis reçoit son second
-   verdict manuel.
+1. `HAL_SAI_DMAStop(RX)`;
+2. `HAL_SAI_DMAStop(TX)`;
+3. `HAL_SAI_Transmit_DMA(TX)`;
+4. `HAL_SAI_Receive_DMA(RX)`.
 
-Le rapport unique contient les snapshots codec avant/après, les statuts HAL des
-quatre opérations, les SR/CR1 SAI avant/purge/après, les états et erreurs SAI/DMA,
-la confirmation flush/flags/buffers, puis les deux fenêtres complètes de 6 s.
-Les suffixes sont `GOOD`, `BAD_THEN_SAI_RESTART_GOOD`,
-`BAD_THEN_SAI_RESTART_BAD` ou `BAD_SAI_RESTART_FAILED`.
+Il n'y a ni accès codec, ni réinitialisation des clocks ou du SAI, ni `CLRFR`,
+ni purge supplémentaire, ni remise à zéro diagnostique des buffers. Le verdict
+manuel GOOD/BAD porte sur l'unique scénario de 288000 frames (6 s). Le workflow
+BAD puis restart manuel puis second test a été retiré.
 
-Interprétation:
-
-- BAD -> GOOD: SAI/FIFO/framing/synchronisation initiale devient prioritaire;
-- BAD -> BAD: codec interne, clocks physiques, alimentations ou analogique;
-- BAD -> son différent: le trajet SAI influence le phénomène même sans guérison;
-- restart HAL en échec: exploiter le rapport `BAD_SAI_RESTART_FAILED` avant tout
-  nouveau test.
+Le rapport contient `test_variant`, le statut attempted/success, les quatre
+retours HAL et confirme que codec et clock tree n'ont pas été réinitialisés.
+Les suffixes de fichiers redeviennent simplement `GOOD` et `BAD`.
 
 ## Variantes suivantes, uniquement si V1 ne tranche pas
 

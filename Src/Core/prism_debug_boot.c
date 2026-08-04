@@ -37,9 +37,6 @@ typedef enum
     PRISM_DEBUG_STATE_ARMED = 0,
     PRISM_DEBUG_STATE_RUNNING_INITIAL,
     PRISM_DEBUG_STATE_INITIAL_COMPLETE,
-    PRISM_DEBUG_STATE_SAI_RESTARTING,
-    PRISM_DEBUG_STATE_RUNNING_RETEST,
-    PRISM_DEBUG_STATE_RETEST_COMPLETE,
     PRISM_DEBUG_STATE_SAVING,
     PRISM_DEBUG_STATE_DONE,
     PRISM_DEBUG_STATE_ERROR
@@ -79,16 +76,12 @@ typedef struct
     uint32_t test_index;
     uint32_t boot_index;
     uint8_t initial_verdict;
-    uint8_t retest_verdict;
-    uint8_t retest_mode;
     uint8_t codec_snapshot_pending;
+    uint8_t restart_attempted;
     uint8_t restart_completed;
     prism_debug_save_error_t save_error;
     board_audio_restart_diag_t restart_diag;
-    board_audio_codec_snapshot_t codec_before_restart;
-    board_audio_codec_snapshot_t codec_after_restart;
     prism_debug_window_t initial;
-    prism_debug_window_t retest;
     char path[PRISM_DEBUG_PATH_MAX];
 } prism_debug_state_data_t;
 
@@ -112,9 +105,6 @@ static const char *debug_state_label(void)
         case PRISM_DEBUG_STATE_ARMED: return "WAIT START";
         case PRISM_DEBUG_STATE_RUNNING_INITIAL: return "INITIAL 6S";
         case PRISM_DEBUG_STATE_INITIAL_COMPLETE: return "INITIAL DONE";
-        case PRISM_DEBUG_STATE_SAI_RESTARTING: return "SAI RESTART...";
-        case PRISM_DEBUG_STATE_RUNNING_RETEST: return "RETEST 6S";
-        case PRISM_DEBUG_STATE_RETEST_COMPLETE: return "AFTER RESTART";
         case PRISM_DEBUG_STATE_SAVING: return "SAVING";
         case PRISM_DEBUG_STATE_DONE: return "SAVE OK";
         default: return "SAVE ERROR";
@@ -135,8 +125,7 @@ static const char *debug_save_error_label(void)
 
 static prism_debug_window_t *debug_active_window(void)
 {
-    return (g_debug.state == PRISM_DEBUG_STATE_RUNNING_RETEST)
-        ? &g_debug.retest : &g_debug.initial;
+    return &g_debug.initial;
 }
 
 static void debug_configure_tracks(void)
@@ -244,8 +233,7 @@ static void debug_capture_frozen_diagnostics(prism_debug_window_t *window)
 
 static void debug_complete_test(uint32_t frames)
 {
-    if ((g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL)
-            && (g_debug.state != PRISM_DEBUG_STATE_RUNNING_RETEST)) return;
+    if (g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL) return;
     prism_debug_window_t *const window = debug_active_window();
     window->test_frames += frames;
     if (window->test_frames < PRISM_DEBUG_TEST_FRAMES) return;
@@ -254,8 +242,7 @@ static void debug_complete_test(uint32_t frames)
     debug_capture_frozen_diagnostics(window);
     g_debug.codec_snapshot_pending = 1U;
     debug_stop_scenario();
-    g_debug.state = (g_debug.state == PRISM_DEBUG_STATE_RUNNING_RETEST)
-        ? PRISM_DEBUG_STATE_RETEST_COMPLETE : PRISM_DEBUG_STATE_INITIAL_COMPLETE;
+    g_debug.state = PRISM_DEBUG_STATE_INITIAL_COMPLETE;
 }
 
 void prism_debug_boot_init(void)
@@ -269,8 +256,9 @@ void prism_debug_boot_init(void)
 void prism_debug_boot_start_test(void)
 {
     if (g_debug.state != PRISM_DEBUG_STATE_ARMED) return;
-    prism_debug_window_t *const active = (g_debug.retest_mode != 0U)
-        ? &g_debug.retest : &g_debug.initial;
+    g_debug.restart_attempted = 1U;
+    g_debug.restart_completed = audio_restart_stream(&g_debug.restart_diag);
+    prism_debug_window_t *const active = &g_debug.initial;
     active->verdict = 0U;
     mixer_set_master(1.0f);
     for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
@@ -293,8 +281,7 @@ void prism_debug_boot_start_test(void)
     __disable_irq();
     audio_runtime_diag_reset_for_test();
     active->start_tick = HAL_GetTick();
-    g_debug.state = (g_debug.retest_mode != 0U)
-        ? PRISM_DEBUG_STATE_RUNNING_RETEST : PRISM_DEBUG_STATE_RUNNING_INITIAL;
+    g_debug.state = PRISM_DEBUG_STATE_RUNNING_INITIAL;
     if (primask == 0U) __enable_irq();
 }
 
@@ -305,8 +292,7 @@ uint8_t prism_debug_boot_is_active(void)
 
 void prism_debug_boot_audio_block_begin(uint32_t frames)
 {
-    if ((g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL)
-            && (g_debug.state != PRISM_DEBUG_STATE_RUNNING_RETEST)) return;
+    if (g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL) return;
     prism_debug_window_t *const window = debug_active_window();
     window->audio_blocks++;
     if (frames > window->max_frames_per_block) window->max_frames_per_block = frames;
@@ -328,13 +314,9 @@ uint8_t prism_debug_boot_handle_encoder(uint8_t encoder, int16_t delta)
 static void debug_capture_post_test_codec(void)
 {
     if ((g_debug.codec_snapshot_pending != 0U)
-            && ((g_debug.state == PRISM_DEBUG_STATE_INITIAL_COMPLETE)
-                || (g_debug.state == PRISM_DEBUG_STATE_RETEST_COMPLETE)))
+            && (g_debug.state == PRISM_DEBUG_STATE_INITIAL_COMPLETE))
     {
-        board_audio_codec_snapshot_t *const snapshot =
-            (g_debug.state == PRISM_DEBUG_STATE_RETEST_COMPLETE)
-            ? &g_debug.retest.codec_diag : &g_debug.initial.codec_diag;
-        board_audio_get_codec_post_test_snapshot(snapshot);
+        board_audio_get_codec_post_test_snapshot(&g_debug.initial.codec_diag);
         g_debug.codec_snapshot_pending = 0U;
     }
 }
@@ -353,19 +335,6 @@ uint8_t prism_debug_boot_handle_event(const ui_event_t *event)
         else if (event->id == (uint8_t)BTN_PAGE_2)
         {
             g_debug.initial_verdict = 0U;
-            g_debug.state = PRISM_DEBUG_STATE_SAI_RESTARTING;
-        }
-    }
-    else if (g_debug.state == PRISM_DEBUG_STATE_RETEST_COMPLETE)
-    {
-        if (event->id == (uint8_t)BTN_PAGE_1)
-        {
-            g_debug.retest_verdict = 1U;
-            g_debug.state = PRISM_DEBUG_STATE_SAVING;
-        }
-        else if (event->id == (uint8_t)BTN_PAGE_2)
-        {
-            g_debug.retest_verdict = 0U;
             g_debug.state = PRISM_DEBUG_STATE_SAVING;
         }
     }
@@ -525,97 +494,22 @@ static int debug_append_window(char *report, int length, const char *section,
 
 static int debug_write_report(void)
 {
-    const uint8_t restart_attempted = (g_debug.initial_verdict == 0U) ? 1U : 0U;
     char report[PRISM_DEBUG_REPORT_MAX];
     int length = snprintf(report, sizeof(report),
-        "test_variant = SAI_DMA_RESTART_V1_TX_THEN_RX\n"
+        "test_variant = AUTO_POST_CODEC_SAI_RESTART\n"
         "test_index = %lu\nboot_index = %lu\n"
-        "mcu_rebooted = 0\nclock_tree_reinitialized = 0\ncodec_reinitialized = 0\n"
-        "codec_reset = 0\nsai_restart_attempted = %u\n"
-        "sai_restarted = %u\ndma_restarted = %u\n",
+        "post_codec_restart_attempted = %u\npost_codec_restart_success = %u\n"
+        "stop_rx_hal = %u\nstop_tx_hal = %u\n"
+        "start_tx_hal = %u\nstart_rx_hal = %u\n"
+        "codec_reinitialized = 0\nclock_tree_reinitialized = 0\n",
         (unsigned long)g_debug.test_index, (unsigned long)g_debug.boot_index,
-        (unsigned)restart_attempted, (unsigned)g_debug.restart_completed,
-        (unsigned)g_debug.restart_completed);
+        (unsigned)g_debug.restart_attempted, (unsigned)g_debug.restart_completed,
+        (unsigned)g_debug.restart_diag.stop_rx_status,
+        (unsigned)g_debug.restart_diag.stop_tx_status,
+        (unsigned)g_debug.restart_diag.start_tx_status,
+        (unsigned)g_debug.restart_diag.start_rx_status);
     g_debug.initial.verdict = g_debug.initial_verdict;
     length = debug_append_window(report, length, "INITIAL_TEST", &g_debug.initial);
-    if (restart_attempted != 0U)
-    {
-        length = debug_append(report, sizeof(report), length,
-            "\n[SAI_DMA_RESTART]\nvariant_id = SAI_DMA_RESTART_V1_TX_THEN_RX\n"
-            "stop_order = RX_THEN_TX\nstart_order = TX_THEN_RX\n"
-            "supported = %u\nsuccess = %u\nword_count = %lu\n"
-            "stop_rx_hal = %u\nstop_tx_hal = %u\n"
-            "start_tx_hal = %u\nstart_rx_hal = %u\n"
-            "fifo_flushed = %u\nflags_cleared = %u\nbuffers_zeroed = %u\n"
-            "tx_sr_before = 0x%08lX\nrx_sr_before = 0x%08lX\n"
-            "tx_sr_after_purge = 0x%08lX\nrx_sr_after_purge = 0x%08lX\n"
-            "tx_sr_after_restart = 0x%08lX\nrx_sr_after_restart = 0x%08lX\n"
-            "tx_cr1_before = 0x%08lX\nrx_cr1_before = 0x%08lX\n"
-            "tx_cr1_after_restart = 0x%08lX\nrx_cr1_after_restart = 0x%08lX\n"
-            "tx_mcken_before = %u\ntx_mckdiv_before = %lu\n"
-            "tx_mcken_after_restart = %u\ntx_mckdiv_after_restart = %lu\n"
-            "before_tx_sai_state = %lu\nbefore_rx_sai_state = %lu\n"
-            "before_tx_dma_state = %lu\nbefore_rx_dma_state = %lu\n"
-            "purged_tx_sai_state = %lu\npurged_rx_sai_state = %lu\n"
-            "purged_tx_dma_state = %lu\npurged_rx_dma_state = %lu\n"
-            "restarted_tx_sai_state = %lu\nrestarted_rx_sai_state = %lu\n"
-            "restarted_tx_dma_state = %lu\nrestarted_rx_dma_state = %lu\n"
-            "restarted_tx_sai_error = 0x%08lX\nrestarted_rx_sai_error = 0x%08lX\n"
-            "restarted_tx_dma_error = 0x%08lX\nrestarted_rx_dma_error = 0x%08lX\n"
-            "snapshot_before_restart = CODEC_BEFORE_SAI_RESTART\n",
-            (unsigned)g_debug.restart_diag.supported,
-            (unsigned)g_debug.restart_diag.success,
-            (unsigned long)g_debug.restart_diag.word_count,
-            (unsigned)g_debug.restart_diag.stop_rx_status,
-            (unsigned)g_debug.restart_diag.stop_tx_status,
-            (unsigned)g_debug.restart_diag.start_tx_status,
-            (unsigned)g_debug.restart_diag.start_rx_status,
-            (unsigned)g_debug.restart_diag.fifo_flushed,
-            (unsigned)g_debug.restart_diag.flags_cleared,
-            (unsigned)g_debug.restart_diag.buffers_zeroed,
-            (unsigned long)g_debug.restart_diag.tx_sr_before,
-            (unsigned long)g_debug.restart_diag.rx_sr_before,
-            (unsigned long)g_debug.restart_diag.tx_sr_after_purge,
-            (unsigned long)g_debug.restart_diag.rx_sr_after_purge,
-            (unsigned long)g_debug.restart_diag.tx_sr_after_restart,
-            (unsigned long)g_debug.restart_diag.rx_sr_after_restart,
-            (unsigned long)g_debug.restart_diag.tx_cr1_before,
-            (unsigned long)g_debug.restart_diag.rx_cr1_before,
-            (unsigned long)g_debug.restart_diag.tx_cr1_after_restart,
-            (unsigned long)g_debug.restart_diag.rx_cr1_after_restart,
-            (unsigned)((g_debug.restart_diag.tx_cr1_before & SAI_xCR1_MCKEN) != 0U),
-            (unsigned long)((g_debug.restart_diag.tx_cr1_before & SAI_xCR1_MCKDIV) >> 20U),
-            (unsigned)((g_debug.restart_diag.tx_cr1_after_restart & SAI_xCR1_MCKEN) != 0U),
-            (unsigned long)((g_debug.restart_diag.tx_cr1_after_restart & SAI_xCR1_MCKDIV) >> 20U),
-            (unsigned long)g_debug.restart_diag.before.tx_sai_state,
-            (unsigned long)g_debug.restart_diag.before.rx_sai_state,
-            (unsigned long)g_debug.restart_diag.before.tx_dma_state,
-            (unsigned long)g_debug.restart_diag.before.rx_dma_state,
-            (unsigned long)g_debug.restart_diag.after_purge.tx_sai_state,
-            (unsigned long)g_debug.restart_diag.after_purge.rx_sai_state,
-            (unsigned long)g_debug.restart_diag.after_purge.tx_dma_state,
-            (unsigned long)g_debug.restart_diag.after_purge.rx_dma_state,
-            (unsigned long)g_debug.restart_diag.after_restart.tx_sai_state,
-            (unsigned long)g_debug.restart_diag.after_restart.rx_sai_state,
-            (unsigned long)g_debug.restart_diag.after_restart.tx_dma_state,
-            (unsigned long)g_debug.restart_diag.after_restart.rx_dma_state,
-            (unsigned long)g_debug.restart_diag.after_restart.tx_sai_error_code,
-            (unsigned long)g_debug.restart_diag.after_restart.rx_sai_error_code,
-            (unsigned long)g_debug.restart_diag.after_restart.tx_dma_error_code,
-            (unsigned long)g_debug.restart_diag.after_restart.rx_dma_error_code);
-        length = debug_append_codec_snapshot(report, length, "before_sai_restart",
-                                              &g_debug.codec_before_restart);
-        length = debug_append(report, sizeof(report), length,
-                              "snapshot_after_restart = CODEC_AFTER_SAI_RESTART\n");
-        length = debug_append_codec_snapshot(report, length, "after_sai_restart",
-                                              &g_debug.codec_after_restart);
-        if (g_debug.restart_completed != 0U)
-        {
-            g_debug.retest.verdict = g_debug.retest_verdict;
-            length = debug_append_window(report, length,
-                                         "AFTER_SAI_DMA_RESTART_TEST", &g_debug.retest);
-        }
-    }
     if ((length <= 0) || ((size_t)length >= sizeof(report))) return 0U;
     FIL file;
     UINT written = 0U;
@@ -637,26 +531,6 @@ static int debug_write_report(void)
 void prism_debug_boot_service(void)
 {
     debug_capture_post_test_codec();
-    if (g_debug.state == PRISM_DEBUG_STATE_SAI_RESTARTING)
-    {
-        mixer_set_master(0.0f);
-        brick6_audio_runtime_set_diagnostic_hold(1U);
-        board_audio_get_codec_post_test_snapshot(&g_debug.codec_before_restart);
-        g_debug.restart_completed = audio_restart_stream(&g_debug.restart_diag);
-        board_audio_get_codec_post_test_snapshot(&g_debug.codec_after_restart);
-        if (g_debug.restart_completed == 0U)
-        {
-            brick6_audio_runtime_set_diagnostic_hold(0U);
-            g_debug.state = PRISM_DEBUG_STATE_SAVING;
-            return;
-        }
-        debug_configure_tracks();
-        g_debug.retest_mode = 1U;
-        g_debug.state = PRISM_DEBUG_STATE_ARMED;
-        prism_debug_boot_start_test();
-        brick6_audio_runtime_set_diagnostic_hold(0U);
-        return;
-    }
     if (g_debug.state != PRISM_DEBUG_STATE_SAVING) return;
     if (sd_access_gate_try_acquire(PRISM_DEBUG_REPORT_CLIENT) == 0U) return;
     if (sd_access_fs_mount_if_needed() == 0U)
@@ -674,10 +548,7 @@ void prism_debug_boot_service(void)
         sd_access_gate_release(PRISM_DEBUG_REPORT_CLIENT);
         return;
     }
-    const char *const suffix = (g_debug.initial_verdict != 0U) ? "GOOD"
-        : ((g_debug.restart_completed == 0U) ? "BAD_SAI_RESTART_FAILED"
-        : ((g_debug.retest_verdict != 0U) ? "BAD_THEN_SAI_RESTART_GOOD"
-                                          : "BAD_THEN_SAI_RESTART_BAD"));
+    const char *const suffix = (g_debug.initial_verdict != 0U) ? "GOOD" : "BAD";
     g_debug.test_index = debug_find_test_index(suffix);
     (void)snprintf(g_debug.path, sizeof(g_debug.path),
                    "0:/PRISM_HW_DEBUG/TEST_%04lu_%s.txt",
@@ -692,8 +563,7 @@ void prism_debug_boot_render(void)
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text(0U, 0U, "PRISM HW TEST");
     drv_display_draw_text(0U, 12U, debug_state_label());
-    if ((g_debug.state == PRISM_DEBUG_STATE_RUNNING_INITIAL)
-            || (g_debug.state == PRISM_DEBUG_STATE_RUNNING_RETEST))
+    if (g_debug.state == PRISM_DEBUG_STATE_RUNNING_INITIAL)
     {
         const prism_debug_window_t *const window = debug_active_window();
         char text[24];
@@ -705,16 +575,6 @@ void prism_debug_boot_render(void)
     {
         drv_display_draw_text(0U, 22U, "INITIAL: GOOD/BAD");
     }
-    else if (g_debug.state == PRISM_DEBUG_STATE_SAI_RESTARTING)
-    {
-        drv_display_draw_text(0U, 22U, "INITIAL: BAD");
-        drv_display_draw_text(0U, 32U, "SAI/DMA RESTART");
-        drv_display_draw_text(0U, 42U, "RETEST 6S");
-    }
-    else if (g_debug.state == PRISM_DEBUG_STATE_RETEST_COMPLETE)
-    {
-        drv_display_draw_text(0U, 22U, "AFTER SAI: GOOD/BAD");
-    }
     else if ((g_debug.state == PRISM_DEBUG_STATE_ERROR)
              || (g_debug.state == PRISM_DEBUG_STATE_DONE))
     {
@@ -722,8 +582,7 @@ void prism_debug_boot_render(void)
     }
     drv_display_draw_text(0U, 34U, "GOOD: PAGE1");
     drv_display_draw_text(0U, 44U, "BAD: PAGE2");
-    if ((g_debug.state == PRISM_DEBUG_STATE_INITIAL_COMPLETE)
-            || (g_debug.state == PRISM_DEBUG_STATE_RETEST_COMPLETE))
+    if (g_debug.state == PRISM_DEBUG_STATE_INITIAL_COMPLETE)
         drv_display_draw_text(0U, 54U, "CHOOSE VERDICT");
     else if (g_debug.state == PRISM_DEBUG_STATE_SAVING)
         drv_display_draw_text(0U, 54U, "SAVING...");

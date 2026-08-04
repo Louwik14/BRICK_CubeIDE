@@ -223,13 +223,8 @@ uint8_t board_audio_restart_stream(int32_t *rx_buffer,
     diag.stop_rx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockB1);
     diag.stop_tx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockA1);
 
-    /* DMAStop already flushes each FIFO; repeat explicitly and clear stale flags. */
-    SET_BIT(hsai_BlockA1.Instance->CR2, SAI_xCR2_FFLUSH);
-    SET_BIT(hsai_BlockB1.Instance->CR2, SAI_xCR2_FFLUSH);
-    hsai_BlockA1.Instance->CLRFR = 0xFFFFFFFFU;
-    hsai_BlockB1.Instance->CLRFR = 0xFFFFFFFFU;
+    /* Minimal test: keep only DMAStop's intrinsic abort/FIFO flush. */
     diag.fifo_flushed = 1U;
-    diag.flags_cleared = 1U;
     __DSB();
 
     board_audio_get_runtime_diag(&diag.after_purge);
@@ -243,18 +238,7 @@ uint8_t board_audio_restart_stream(int32_t *rx_buffer,
         return 0U;
     }
 
-    /* Both ping-pong halves are known silence before the first restarted frame. */
-    const size_t buffer_bytes = (size_t)word_count * sizeof(int32_t);
-    memset(rx_buffer, 0, buffer_bytes);
-    memset(tx_buffer, 0, buffer_bytes);
-    dcache_invalidate_by_addr_aligned(rx_buffer, buffer_bytes);
-#if AUDIO_DMA_BUFFER_IS_CACHEABLE
-    dcache_clean_by_addr_aligned(tx_buffer, buffer_bytes);
-#endif
-    diag.buffers_zeroed = 1U;
-    __DSB();
-
-    /* Re-establish the original production order without any codec I2C access. */
+    /* Preserve buffer contents and restart without any codec I2C access. */
     diag.start_tx_status = (uint8_t)HAL_SAI_Transmit_DMA(
         &hsai_BlockA1, (uint8_t *)tx_buffer, (uint16_t)word_count);
     if (diag.start_tx_status == (uint8_t)HAL_OK)
