@@ -92,7 +92,6 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
 {
     static float sampler_tmp_l[AUDIO_BLOCK_SIZE];
     static float sampler_tmp_r[AUDIO_BLOCK_SIZE];
-    static float sampler_tmp_mono_discard[AUDIO_BLOCK_SIZE];
     uint8_t sampler_tracks = 0U;
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -171,14 +170,12 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
             if (mixer_begin_external_mono_native(ctx->mix_track_id,
                                                  frames,
                                                  &direct_mono) != 0U)
-            {
-                memset(direct_mono, 0, frames * sizeof(float));
-                memset(sampler_tmp_mono_discard, 0, frames * sizeof(float));
-                brick6_sampler_runtime_render_track(ctx,
-                                                    direct_mono,
-                                                    sampler_tmp_mono_discard,
-                                                    frames);
-                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                {
+                    memset(direct_mono, 0, frames * sizeof(float));
+                    brick6_sampler_runtime_render_stream_track_mono(ctx,
+                                                                    direct_mono,
+                                                                    frames);
+                    mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 sampler_tracks++;
                 continue;
             }
