@@ -195,6 +195,10 @@ void brick6_app_init(void)
 
     board_power_delay_ms(200U);
 
+#if BRICK6_PRISM_DEBUG_BOOT
+    prism_debug_boot_start_test();
+#endif
+
     cpu_load_reset_peak();
 
     midi_init();

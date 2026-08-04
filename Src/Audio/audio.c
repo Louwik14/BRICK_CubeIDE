@@ -71,18 +71,41 @@
  * - TX: CPU écrit, DMA lit
  *
  * Politique de cette passe (test audio uniquement):
- * - RX/TX audio restent en D2 mais en section cacheable
- * - cohérence CPU/DMA assurée par maintenance D-cache explicite en IRQ
- * - les autres buffers DMA critiques conservent la section DMA_BUFFER non-cacheable
+ * - RX reste dans la section cacheable existante et est invalidé avant lecture CPU
+ * - TX peut être placé dans la région D2 non-cacheable par PRISM_DEBUG_TX_NONCACHEABLE
+ * - aucune copie ni changement de format n'est introduit dans le chemin IRQ
  */
 static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
-static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
    ============================================================ */
 
 static audio_seq_diag_t g_audio_seq_diag;
+static audio_runtime_diag_t g_audio_runtime_diag;
+
+static void audio_runtime_diag_note_callback(uint8_t callback_kind)
+{
+    const uint32_t callback_count = g_audio_runtime_diag.half_callbacks
+                                  + g_audio_runtime_diag.full_callbacks;
+    const uint8_t expected = (callback_count == 0U)
+        ? 1U
+        : ((g_audio_runtime_diag.last_callback == 1U) ? 2U : 1U);
+    if (callback_kind != expected)
+    {
+        g_audio_runtime_diag.callback_alternation_errors++;
+    }
+    if (callback_kind == 1U)
+    {
+        g_audio_runtime_diag.half_callbacks++;
+    }
+    else
+    {
+        g_audio_runtime_diag.full_callbacks++;
+    }
+    g_audio_runtime_diag.last_callback = callback_kind;
+}
 
 /* ============================================================
    INTERNAL PROCESSING
@@ -254,6 +277,7 @@ static uint16_t audio_process_seq_event_segment(int32_t *rx,
 }
 static void process_half(uint32_t half_index)
 {
+    const uint32_t cycle_start = DWT->CYCCNT;
     const uint32_t offset =
         half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
     const size_t half_bytes = (size_t)AUDIO_FRAMES_PER_HALF
@@ -262,6 +286,13 @@ static void process_half(uint32_t half_index)
 
     int32_t *rx = &rx_buffer[offset];
     int32_t *tx = &tx_buffer[offset];
+
+    if (half_index > 1U)
+    {
+        g_audio_runtime_diag.wrong_half_writes++;
+        g_audio_runtime_diag.half_not_ready++;
+        return;
+    }
 
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traite. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
@@ -313,33 +344,32 @@ static void process_half(uint32_t half_index)
     note_fx_pipeline_end_audio_half();
     seq_play_scheduler_audio_end_half();
 
-    /* The board packer has completed this half: observe the main PCM24
-       slots without touching TX, DMA state, or the write order. P12/P13 are
-       intentionally block snapshots of the same final buffer because this
-       target has no intermediate conversion or interleave buffer. */
-    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P12,
-                                      tx,
-                                      AUDIO_FRAMES_PER_HALF,
-                                      AUDIO_WORDS_PER_FRAME,
-                                      (uint8_t)half_index);
-    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P13,
-                                      tx,
-                                      AUDIO_FRAMES_PER_HALF,
-                                      AUDIO_WORDS_PER_FRAME,
-                                      (uint8_t)half_index);
-    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P14,
-                                      tx,
-                                      AUDIO_FRAMES_PER_HALF,
-                                      AUDIO_WORDS_PER_FRAME,
-                                      (uint8_t)half_index);
-
+#if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx, half_bytes);
+#endif
 
-    prism_debug_boot_capture_dma_half(PRISM_DEBUG_DMA_OBSERVATION_P15,
-                                      tx,
-                                      AUDIO_FRAMES_PER_HALF,
-                                      AUDIO_WORDS_PER_FRAME,
-                                      (uint8_t)half_index);
+    if (tx != &tx_buffer[half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME])
+    {
+        g_audio_runtime_diag.wrong_half_writes++;
+    }
+    else
+    {
+        g_audio_runtime_diag.fill_count[half_index]++;
+    }
+    {
+        const uint32_t elapsed = DWT->CYCCNT - cycle_start;
+        const uint32_t budget = (SystemCoreClock / BOARD_AUDIO_SAMPLE_RATE_HZ)
+                              * AUDIO_FRAMES_PER_HALF;
+        if (elapsed > g_audio_runtime_diag.max_fill_cycles)
+        {
+            g_audio_runtime_diag.max_fill_cycles = elapsed;
+        }
+        if ((budget != 0U) && (elapsed > budget))
+        {
+            g_audio_runtime_diag.late_fills++;
+        }
+    }
+    prism_debug_boot_audio_half_complete((uint8_t)half_index, AUDIO_FRAMES_PER_HALF);
 }
 /* ============================================================
    API
@@ -367,9 +397,25 @@ void audio_init(void)
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
     g_audio_seq_diag = (audio_seq_diag_t){0};
+    g_audio_runtime_diag = (audio_runtime_diag_t){0};
+    g_audio_runtime_diag.tx_buffer_address = (uintptr_t)tx_buffer;
+    g_audio_runtime_diag.tx_half_address[0] = (uintptr_t)&tx_buffer[0];
+    g_audio_runtime_diag.tx_half_address[1] = (uintptr_t)&tx_buffer[AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME];
+    g_audio_runtime_diag.tx_buffer_bytes = sizeof(tx_buffer);
+    g_audio_runtime_diag.tx_half_bytes = sizeof(tx_buffer) / 2U;
+    g_audio_runtime_diag.dma_word_count = AUDIO_BUFFER_WORDS;
+    g_audio_runtime_diag.tx_cacheable = AUDIO_DMA_BUFFER_IS_CACHEABLE;
+    /* RX invalidation remains active in every build; TX cleaning is conditional. */
+    g_audio_runtime_diag.cache_maintenance_active = 1U;
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
     /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
+#if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx_buffer, sizeof(tx_buffer));
+#endif
 
     /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
     cpu_load_init();
@@ -411,6 +457,14 @@ void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag)
     *out_diag = g_audio_seq_diag;
 }
 
+void audio_runtime_diag_snapshot(audio_runtime_diag_t *out_diag)
+{
+    if (out_diag != NULL)
+    {
+        *out_diag = g_audio_runtime_diag;
+    }
+}
+
 /* ============================================================
    DMA IRQ CALLBACKS : AUDIO RUNS HERE
    ============================================================ */
@@ -442,6 +496,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(board_audio_is_rx_callback_handle(hsai) != 0U)
     {
+        audio_runtime_diag_note_callback(1U);
         cpu_load_irq_begin();
 
         process_half(0);
@@ -480,6 +535,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(board_audio_is_rx_callback_handle(hsai) != 0U)
     {
+        audio_runtime_diag_note_callback(2U);
         cpu_load_irq_begin();
 
         process_half(1);
@@ -488,5 +544,24 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
 
         cpu_load_irq_end();
+    }
+}
+
+void HAL_SAI_ErrorCallback(SAI_HandleTypeDef *hsai)
+{
+    if ((board_audio_is_rx_callback_handle(hsai) != 0U)
+            || (board_audio_is_tx_callback_handle(hsai) != 0U))
+    {
+        g_audio_runtime_diag.sai_error_callbacks++;
+        g_audio_runtime_diag.last_sai_error_code = hsai->ErrorCode;
+    }
+}
+
+void HAL_DMA_ErrorCallback(DMA_HandleTypeDef *hdma)
+{
+    if (board_audio_is_audio_dma_handle(hdma) != 0U)
+    {
+        g_audio_runtime_diag.dma_error_callbacks++;
+        g_audio_runtime_diag.last_dma_error_code = hdma->ErrorCode;
     }
 }

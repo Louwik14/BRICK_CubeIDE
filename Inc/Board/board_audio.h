@@ -51,11 +51,32 @@ typedef struct
     uint8_t volume_ok;
 } board_audio_boot_diag_t;
 
+typedef struct
+{
+    uint32_t tx_sai_state;
+    uint32_t rx_sai_state;
+    uint32_t tx_sai_error_code;
+    uint32_t rx_sai_error_code;
+    uint32_t tx_dma_state;
+    uint32_t rx_dma_state;
+    uint32_t tx_dma_error_code;
+    uint32_t rx_dma_error_code;
+    uint32_t frame_length;
+    uint32_t active_frame_length;
+    uint32_t data_size;
+    uint32_t slot_size;
+    uint32_t slot_number;
+    uint32_t slot_active;
+} board_audio_runtime_diag_t;
+
 void board_audio_codec_init(void);
 void board_audio_init(void);
 uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_t word_count);
 uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
+void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag);
+uint8_t board_audio_is_tx_callback_handle(void *handle);
+uint8_t board_audio_is_audio_dma_handle(void *handle);
 
 void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
                               StereoTrack *AUDIO_RESTRICT track_buf,

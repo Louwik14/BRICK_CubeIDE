@@ -21,6 +21,10 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
+option(PRISM_DEBUG_TX_NONCACHEABLE
+       "Place the temporary diagnostic audio DMA buffers in the non-cacheable D2 region"
+       OFF)
+
 # --------------------------------------------------------------------------
 # Standards
 # --------------------------------------------------------------------------
@@ -472,6 +476,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     STM32H743xx
     BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
 )
+
+if(PRISM_DEBUG_TX_NONCACHEABLE)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PRISM_DEBUG_TX_NONCACHEABLE=1)
+endif()
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>

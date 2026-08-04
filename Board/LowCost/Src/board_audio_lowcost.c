@@ -171,6 +171,40 @@ void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag)
     }
 }
 
+void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag)
+{
+    if (out_diag == NULL) return;
+    *out_diag = (board_audio_runtime_diag_t){0};
+    out_diag->tx_sai_state = (uint32_t)hsai_BlockA1.State;
+    out_diag->rx_sai_state = (uint32_t)hsai_BlockB1.State;
+    out_diag->tx_sai_error_code = hsai_BlockA1.ErrorCode;
+    out_diag->rx_sai_error_code = hsai_BlockB1.ErrorCode;
+    out_diag->tx_dma_state = (hsai_BlockA1.hdmatx != NULL) ? (uint32_t)hsai_BlockA1.hdmatx->State : 0U;
+    out_diag->rx_dma_state = (hsai_BlockB1.hdmarx != NULL) ? (uint32_t)hsai_BlockB1.hdmarx->State : 0U;
+    out_diag->tx_dma_error_code = (hsai_BlockA1.hdmatx != NULL) ? hsai_BlockA1.hdmatx->ErrorCode : 0U;
+    out_diag->rx_dma_error_code = (hsai_BlockB1.hdmarx != NULL) ? hsai_BlockB1.hdmarx->ErrorCode : 0U;
+    out_diag->frame_length = hsai_BlockA1.FrameInit.FrameLength;
+    out_diag->active_frame_length = hsai_BlockA1.FrameInit.ActiveFrameLength;
+    out_diag->data_size = hsai_BlockA1.Init.DataSize;
+    out_diag->slot_size = hsai_BlockA1.SlotInit.SlotSize;
+    out_diag->slot_number = hsai_BlockA1.SlotInit.SlotNumber;
+    out_diag->slot_active = hsai_BlockA1.SlotInit.SlotActive;
+}
+
+uint8_t board_audio_is_tx_callback_handle(void *handle)
+{
+    return ((handle != NULL) && (handle == (void *)&hsai_BlockA1)) ? 1U : 0U;
+}
+
+uint8_t board_audio_is_audio_dma_handle(void *handle)
+{
+    return ((handle != NULL)
+            && ((handle == (void *)hsai_BlockA1.hdmatx)
+            || (handle == (void *)hsai_BlockA1.hdmarx)
+            || (handle == (void *)hsai_BlockB1.hdmatx)
+            || (handle == (void *)hsai_BlockB1.hdmarx))) ? 1U : 0U;
+}
+
 uint8_t board_audio_is_rx_callback_handle(void *handle)
 {
     return (handle == (void *)&hsai_BlockB1) ? 1U : 0U;

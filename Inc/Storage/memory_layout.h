@@ -38,12 +38,16 @@
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 
 
-/*
- * Audio RX/TX DMA test buffers (cacheable path):
- * - keep in D2 SRAM for DMA reachability, but outside .ram_d2_dma MPU non-cacheable window
- * - explicit D-cache maintenance is required in audio IRQ callbacks
- */
+/* Temporary Prism boot test DMA-buffer placement. */
 #define AUDIO_DMA_BUFFER_CACHEABLE SEC_ATTR(".ram_d2_lut") ALIGN32
+
+#if defined(PRISM_DEBUG_TX_NONCACHEABLE)
+#define AUDIO_DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
+#define AUDIO_DMA_BUFFER_IS_CACHEABLE 0U
+#else
+#define AUDIO_DMA_BUFFER SEC_ATTR(".ram_d2_lut") ALIGN32
+#define AUDIO_DMA_BUFFER_IS_CACHEABLE 1U
+#endif
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
 #define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_lut")

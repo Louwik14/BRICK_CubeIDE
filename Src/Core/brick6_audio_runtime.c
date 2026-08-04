@@ -234,7 +234,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
     static float prism_tmp[AUDIO_BLOCK_SIZE];
     uint8_t prism_tracks = 0U;
 
-    prism_debug_boot_begin_block(frames);
+    prism_debug_boot_audio_block_begin(frames);
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -246,8 +246,6 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
         {
             continue;
         }
-
-        prism_debug_boot_set_render_track(track);
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
@@ -277,13 +275,6 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             }
             if (published != 0U)
             {
-                float *poly_left = NULL;
-                float *poly_right = NULL;
-                if (mixer_begin_external_stereo(ctx->mix_track_id, frames,
-                                                &poly_left, &poly_right) != 0U)
-                {
-                    prism_debug_boot_capture_p9(track, poly_left, poly_right, frames);
-                }
                 mixer_commit_external_poly(ctx->mix_track_id, frames);
                 prism_tracks++;
             }

@@ -2,13 +2,17 @@
 
 #if BRICK6_PRISM_DEBUG_BOOT
 
-#include <math.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
-#include "Audio/mixer.h"
+#include "Audio/audio.h"
+#include "Audio/audio_track_diag.h"
 #include "Audio/fx_pool.h"
 #include "Audio/metronome_runtime.h"
+#include "Audio/mixer.h"
+#include "Board/board_audio.h"
+#include "Board/board_audio_format.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
@@ -18,336 +22,101 @@
 #include "Storage/sd_access_gate.h"
 #include "buttons.h"
 #include "drv_display.h"
-#include "encoders.h"
 #include "ff.h"
 #include "font.h"
 #include "stm32h7xx_hal.h"
 
-#define PRISM_DEBUG_CAPTURE_CLIENT SD_ACCESS_CLIENT_RECORDER
-#define PRISM_DEBUG_WAV_HEADER 44U
-#define PRISM_DEBUG_WAV_CHUNK 1024U
-#define PRISM_DEBUG_MAX_FILE_CHANNELS 2U
-#define PRISM_DEBUG_PATH_MAX 320U
+#define PRISM_DEBUG_REPORT_CLIENT SD_ACCESS_CLIENT_RECORDER
+#define PRISM_DEBUG_PATH_MAX 160U
+#define PRISM_DEBUG_REPORT_MAX 4096U
 #define PRISM_DEBUG_NOTE_BASE 48U
 
 typedef enum
 {
-    PRISM_DEBUG_STATE_RUNNING = 0,
-    PRISM_DEBUG_STATE_FROZEN,
+    PRISM_DEBUG_STATE_ARMED = 0,
+    PRISM_DEBUG_STATE_RUNNING,
+    PRISM_DEBUG_STATE_COMPLETE,
     PRISM_DEBUG_STATE_SAVING,
     PRISM_DEBUG_STATE_DONE,
     PRISM_DEBUG_STATE_ERROR
 } prism_debug_state_t;
 
+typedef enum
+{
+    PRISM_DEBUG_SAVE_NONE = 0,
+    PRISM_DEBUG_SAVE_MOUNT,
+    PRISM_DEBUG_SAVE_DIRECTORY,
+    PRISM_DEBUG_SAVE_OPEN,
+    PRISM_DEBUG_SAVE_WRITE
+} prism_debug_save_error_t;
+
 typedef struct
 {
-    volatile prism_debug_probe_t requested_probe;
-    volatile prism_debug_probe_t active_probe;
-    volatile uint8_t freeze_requested;
+    volatile prism_debug_state_t state;
     volatile uint8_t verdict;
-    volatile uint8_t frozen;
-    volatile uint8_t block_open;
-    volatile uint16_t block_mask;
-    volatile uint8_t render_track;
-    uint16_t expected_block_mask;
-    uint8_t capture_channels;
-    uint8_t file_count;
-    uint8_t channels_per_file;
-    uint32_t block_frames;
-    uint32_t write_frame;
-    uint32_t valid_frames;
-    uint32_t capture_index;
+    uint8_t notes[PRISM_DEBUG_TRACK_COUNT];
+    uint8_t instance_id[PRISM_DEBUG_TRACK_COUNT];
+    uint8_t voice_slot[PRISM_DEBUG_TRACK_COUNT];
+    uint8_t mix_track_id[PRISM_DEBUG_TRACK_COUNT];
+    uintptr_t voice_state_address[PRISM_DEBUG_TRACK_COUNT];
+    uint32_t test_index;
     uint32_t boot_index;
-    prism_debug_state_t state;
-    uint8_t save_file;
-    uint8_t save_phase;
-    uint32_t save_frame;
-    uint32_t save_oldest;
-    uint32_t save_frames;
-    uint32_t save_byte_budget;
-    uint16_t dma_half_frames;
-    uint8_t dma_half_index;
-    uint8_t dma_slots;
-    char folder[PRISM_DEBUG_PATH_MAX];
-    char wav_path[PRISM_DEBUG_PATH_MAX];
-    char info_path[PRISM_DEBUG_PATH_MAX];
-    FIL file;
-    uint8_t file_open;
-    uint8_t io[PRISM_DEBUG_WAV_CHUNK * PRISM_DEBUG_MAX_FILE_CHANNELS * 2U];
+    uint32_t start_tick;
+    uint32_t end_tick;
+    uint32_t test_frames;
+    uint32_t audio_blocks;
+    uint32_t max_frames_per_block;
+    prism_debug_save_error_t save_error;
+    audio_runtime_diag_t audio_diag;
+    board_audio_boot_diag_t boot_diag;
+    board_audio_runtime_diag_t board_diag;
+    char path[PRISM_DEBUG_PATH_MAX];
 } prism_debug_state_data_t;
 
 STORAGE_STATE_SDRAM static prism_debug_state_data_t g_debug;
-AUDIO_HISTORY_SDRAM static int16_t g_debug_ring[PRISM_DEBUG_MAX_CAPTURE_CHANNELS][PRISM_DEBUG_RING_FRAMES];
-AUDIO_HOT static float g_debug_block[PRISM_DEBUG_MAX_CAPTURE_CHANNELS][AUDIO_BLOCK_SIZE];
 
 static const uint8_t g_debug_notes[PRISM_DEBUG_TRACK_COUNT] = {
     PRISM_DEBUG_NOTE_BASE, 52U, 55U, 59U, 62U, 67U, 71U, 74U
 };
 
-static uint8_t debug_track_valid(uint8_t track)
+static const char *debug_state_label(void)
 {
-    return (track < PRISM_DEBUG_TRACK_COUNT) ? 1U : 0U;
-}
-
-static uint8_t debug_channel_valid(uint8_t channel)
-{
-    return (channel < g_debug.capture_channels) ? 1U : 0U;
-}
-
-static void debug_select_layout(prism_debug_probe_t probe)
-{
-    if ((probe == PRISM_DEBUG_PROBE_P6)
-            || (probe == PRISM_DEBUG_PROBE_P5)
-            || (probe == PRISM_DEBUG_PROBE_P7)
-            || (probe == PRISM_DEBUG_PROBE_P4)
-            || (probe == PRISM_DEBUG_PROBE_P3)
-            || (probe == PRISM_DEBUG_PROBE_P2))
+    switch (g_debug.state)
     {
-        g_debug.capture_channels = PRISM_DEBUG_TRACK_COUNT;
-        g_debug.file_count = PRISM_DEBUG_TRACK_COUNT;
-        g_debug.channels_per_file = 1U;
-        g_debug.expected_block_mask = 0x00FFU;
-    }
-    else if ((probe == PRISM_DEBUG_PROBE_P8) || (probe == PRISM_DEBUG_PROBE_P9))
-    {
-        g_debug.capture_channels = PRISM_DEBUG_MAX_CAPTURE_CHANNELS;
-        g_debug.file_count = PRISM_DEBUG_TRACK_COUNT;
-        g_debug.channels_per_file = PRISM_DEBUG_MAX_FILE_CHANNELS;
-        g_debug.expected_block_mask = 0xFFFFU;
-    }
-    else
-    {
-        g_debug.capture_channels = PRISM_DEBUG_MAX_FILE_CHANNELS;
-        g_debug.file_count = 1U;
-        g_debug.channels_per_file = PRISM_DEBUG_MAX_FILE_CHANNELS;
-        g_debug.expected_block_mask = 0x0003U;
+        case PRISM_DEBUG_STATE_ARMED: return "WAIT START";
+        case PRISM_DEBUG_STATE_RUNNING: return "RUNNING";
+        case PRISM_DEBUG_STATE_COMPLETE: return "TEST DONE";
+        case PRISM_DEBUG_STATE_SAVING: return "SAVING";
+        case PRISM_DEBUG_STATE_DONE: return "SAVE OK";
+        default: return "SAVE ERROR";
     }
 }
 
-static void debug_join_path(char *dst, size_t capacity, const char *folder, const char *leaf)
+static const char *debug_save_error_label(void)
 {
-    const size_t folder_length = strlen(folder);
-    const size_t leaf_length = strlen(leaf);
-    size_t copy_folder = folder_length;
-    size_t copy_leaf = leaf_length;
-
-    if (capacity == 0U) return;
-    if (copy_folder > capacity - 1U) copy_folder = capacity - 1U;
-    if (copy_leaf > capacity - copy_folder - 1U) copy_leaf = capacity - copy_folder - 1U;
-    memcpy(dst, folder, copy_folder);
-    if (copy_folder < capacity - 1U)
+    switch (g_debug.save_error)
     {
-        dst[copy_folder++] = '/';
-        if (copy_leaf > capacity - copy_folder - 1U) copy_leaf = capacity - copy_folder - 1U;
-        memcpy(&dst[copy_folder], leaf, copy_leaf);
-        copy_folder += copy_leaf;
+        case PRISM_DEBUG_SAVE_MOUNT: return "MOUNT";
+        case PRISM_DEBUG_SAVE_DIRECTORY: return "DIRECTORY";
+        case PRISM_DEBUG_SAVE_OPEN: return "OPEN";
+        case PRISM_DEBUG_SAVE_WRITE: return "WRITE";
+        default: return "NONE";
     }
-    dst[copy_folder] = '\0';
 }
 
-static float debug_clampf(float value)
-{
-    if (value > 1.0f) return 1.0f;
-    if (value < -1.0f) return -1.0f;
-    return value;
-}
-
-static int16_t debug_pcm16(float value)
-{
-    const float clamped = debug_clampf(value);
-    const float scaled = (clamped >= 0.0f) ? (clamped * 32767.0f) : (clamped * 32768.0f);
-    return (int16_t)((scaled >= 0.0f) ? (scaled + 0.5f) : (scaled - 0.5f));
-}
-
-static int16_t debug_pcm24_word_to_pcm16(int32_t word)
-{
-    int32_t sample = word & 0x00FFFFFF;
-    if ((sample & 0x00800000) != 0) sample |= (int32_t)0xFF000000;
-    return debug_pcm16((float)sample * (1.0f / 8388607.0f));
-}
-
-static void debug_copy_float(uint8_t track, const float *src, uint32_t offset, uint32_t frames)
-{
-    if ((debug_track_valid(track) == 0U) || (src == NULL) || (offset >= AUDIO_BLOCK_SIZE)
-            || (debug_channel_valid(track) == 0U))
-        return;
-    if (frames > (AUDIO_BLOCK_SIZE - offset)) frames = AUDIO_BLOCK_SIZE - offset;
-    memcpy(&g_debug_block[track][offset], src, frames * sizeof(float));
-    g_debug.block_mask |= (uint16_t)(1U << track);
-}
-
-static void debug_copy_stereo(uint8_t track,
-                              const float *left,
-                              const float *right,
-                              uint32_t offset,
-                              uint32_t frames)
-{
-    const uint8_t left_channel = (uint8_t)(track * 2U);
-    const uint8_t right_channel = (uint8_t)(left_channel + 1U);
-    if ((debug_track_valid(track) == 0U) || (left == NULL) || (right == NULL)
-            || (debug_channel_valid(left_channel) == 0U)
-            || (debug_channel_valid(right_channel) == 0U)
-            || (offset >= AUDIO_BLOCK_SIZE))
-        return;
-    if (frames > (AUDIO_BLOCK_SIZE - offset)) frames = AUDIO_BLOCK_SIZE - offset;
-    memcpy(&g_debug_block[left_channel][offset], left, frames * sizeof(float));
-    memcpy(&g_debug_block[right_channel][offset], right, frames * sizeof(float));
-    g_debug.block_mask |= (uint16_t)(3U << left_channel);
-}
-
-static void debug_set_stereo_sample(uint8_t track,
-                                    uint32_t offset,
-                                    float left,
-                                    float right)
-{
-    const uint8_t left_channel = (uint8_t)(track * 2U);
-    const uint8_t right_channel = (uint8_t)(left_channel + 1U);
-    if ((debug_track_valid(track) == 0U) || (debug_channel_valid(left_channel) == 0U)
-            || (debug_channel_valid(right_channel) == 0U) || (offset >= AUDIO_BLOCK_SIZE))
-        return;
-    g_debug_block[left_channel][offset] = left;
-    g_debug_block[right_channel][offset] = right;
-    g_debug.block_mask |= (uint16_t)(3U << left_channel);
-}
-
-static void debug_copy_common_stereo(const float *left,
-                                     const float *right,
-                                     uint32_t offset,
-                                     uint32_t frames)
-{
-    if ((left == NULL) || (right == NULL) || (debug_channel_valid(0U) == 0U)
-            || (debug_channel_valid(1U) == 0U) || (offset >= AUDIO_BLOCK_SIZE))
-        return;
-    if (frames > (AUDIO_BLOCK_SIZE - offset)) frames = AUDIO_BLOCK_SIZE - offset;
-    memcpy(&g_debug_block[0U][offset], left, frames * sizeof(float));
-    memcpy(&g_debug_block[1U][offset], right, frames * sizeof(float));
-    g_debug.block_mask |= 0x0003U;
-}
-
-static void debug_set_probe_source(uint8_t track, uint32_t offset, float sample)
-{
-    if ((debug_track_valid(track) == 0U) || (offset >= AUDIO_BLOCK_SIZE)) return;
-    g_debug_block[track][offset] = sample;
-    g_debug.block_mask |= (uint16_t)(1U << track);
-}
-
-static void debug_build_path(uint8_t file_index)
-{
-    const char *verdict = (g_debug.verdict != 0U) ? "GOOD" : "BAD";
-    const char *probe = prism_debug_boot_probe_name(g_debug.active_probe);
-    (void)snprintf(g_debug.folder, sizeof(g_debug.folder),
-                   "0:/PRISM_DEBUG/BOOT_%03lu_%s_%s",
-                   (unsigned long)g_debug.boot_index, verdict, probe);
-    if (file_index < g_debug.file_count)
-    {
-        char leaf[16];
-        if (g_debug.file_count == 1U)
-            (void)snprintf(leaf, sizeof(leaf), "MASTER.wav");
-        else
-            (void)snprintf(leaf, sizeof(leaf), "TRACK_%u.wav", (unsigned)(file_index + 1U));
-        debug_join_path(g_debug.wav_path, sizeof(g_debug.wav_path), g_debug.folder, leaf);
-    }
-    debug_join_path(g_debug.info_path, sizeof(g_debug.info_path), g_debug.folder, "INFO.txt");
-}
-
-static uint8_t debug_capture_index_used(uint32_t index)
-{
-    FILINFO info;
-    char path[PRISM_DEBUG_PATH_MAX];
-    static const char *const verdicts[] = { "BAD", "GOOD" };
-
-    for (uint8_t verdict = 0U; verdict < 2U; ++verdict)
-    {
-        for (uint8_t probe = 0U; probe < PRISM_DEBUG_PROBE_COUNT; ++probe)
-        {
-            (void)snprintf(path, sizeof(path), "0:/PRISM_DEBUG/BOOT_%03lu_%s_%s",
-                           (unsigned long)index, verdicts[verdict],
-                           prism_debug_boot_probe_name((prism_debug_probe_t)probe));
-            if (f_stat(path, &info) == FR_OK) return 1U;
-        }
-    }
-    return 0U;
-}
-
-static void debug_write_le16(uint8_t *p, uint16_t value)
-{
-    p[0] = (uint8_t)value;
-    p[1] = (uint8_t)(value >> 8);
-}
-
-static void debug_write_le32(uint8_t *p, uint32_t value)
-{
-    p[0] = (uint8_t)value;
-    p[1] = (uint8_t)(value >> 8);
-    p[2] = (uint8_t)(value >> 16);
-    p[3] = (uint8_t)(value >> 24);
-}
-
-static void debug_wav_header(uint8_t *header, uint8_t channels)
-{
-    const uint32_t data_bytes = PRISM_DEBUG_RING_FRAMES * (uint32_t)channels * 2U;
-    memset(header, 0, PRISM_DEBUG_WAV_HEADER);
-    memcpy(header, "RIFF", 4U);
-    debug_write_le32(&header[4], 36U + data_bytes);
-    memcpy(&header[8], "WAVEfmt ", 8U);
-    debug_write_le32(&header[16], 16U);
-    debug_write_le16(&header[20], 1U);
-    debug_write_le16(&header[22], channels);
-    debug_write_le32(&header[24], PRISM_DEBUG_SAMPLE_RATE);
-    debug_write_le32(&header[28], PRISM_DEBUG_SAMPLE_RATE * (uint32_t)channels * 2U);
-    debug_write_le16(&header[32], (uint16_t)(channels * 2U));
-    debug_write_le16(&header[34], 16U);
-    memcpy(&header[36], "data", 4U);
-    debug_write_le32(&header[40], data_bytes);
-}
-
-static void debug_reset_block(void)
-{
-    memset(g_debug_block, 0, sizeof(g_debug_block));
-    g_debug.block_mask = 0U;
-}
-
-static void debug_commit_block(uint32_t frames)
-{
-    if ((g_debug.frozen != 0U) || (frames == 0U)) return;
-    if (frames > AUDIO_BLOCK_SIZE) frames = AUDIO_BLOCK_SIZE;
-
-    for (uint32_t channel = 0U; channel < g_debug.capture_channels; ++channel)
-    {
-        uint32_t dst = g_debug.write_frame;
-        for (uint32_t i = 0U; i < frames; ++i)
-        {
-            g_debug_ring[channel][dst] = debug_pcm16(g_debug_block[channel][i]);
-            dst++;
-            if (dst >= PRISM_DEBUG_RING_FRAMES) dst = 0U;
-        }
-    }
-    g_debug.write_frame = (g_debug.write_frame + frames) % PRISM_DEBUG_RING_FRAMES;
-    g_debug.valid_frames += frames;
-    if (g_debug.valid_frames > PRISM_DEBUG_RING_FRAMES)
-        g_debug.valid_frames = PRISM_DEBUG_RING_FRAMES;
-}
-
-void prism_debug_boot_init(void)
+static void debug_configure_tracks(void)
 {
     uint8_t family[UI_TRACK_COUNT];
     uint8_t type[UI_TRACK_COUNT];
     uint8_t channel[UI_TRACK_COUNT];
     uint8_t source[UI_TRACK_COUNT];
 
-    memset(&g_debug, 0, sizeof(g_debug));
-    memset(g_debug_ring, 0, sizeof(g_debug_ring));
-    g_debug.requested_probe = PRISM_DEBUG_PROBE_P6;
-    g_debug.active_probe = PRISM_DEBUG_PROBE_P6;
-    debug_select_layout(g_debug.active_probe);
-    g_debug.state = PRISM_DEBUG_STATE_RUNNING;
-    g_debug.boot_index = 1U;
-    g_debug.capture_index = 1U;
-
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        family[track] = (track < PRISM_DEBUG_TRACK_COUNT) ? UI_TRACK_FAMILY_SYNTH : UI_TRACK_FAMILY_OFF;
-        type[track] = (track < PRISM_DEBUG_TRACK_COUNT) ? UI_TRACK_TYPE_PRISM : UI_TRACK_TYPE_NONE;
+        family[track] = (track < PRISM_DEBUG_TRACK_COUNT)
+            ? UI_TRACK_FAMILY_SYNTH : UI_TRACK_FAMILY_OFF;
+        type[track] = (track < PRISM_DEBUG_TRACK_COUNT)
+            ? UI_TRACK_TYPE_PRISM : UI_TRACK_TYPE_NONE;
         channel[track] = (uint8_t)(track + 1U);
         source[track] = (uint8_t)UI_TRACK_MIDI_SRC_INT;
     }
@@ -362,11 +131,20 @@ void prism_debug_boot_init(void)
     mixer_set_delay_volume(0.0f);
     mixer_set_send_fx_slot(0U, -1);
     mixer_set_send_fx_slot(1U, -1);
+    audio_track_diag_close();
+
     for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *ctx = track_runtime_get_ctx(track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        g_debug.notes[track] = g_debug_notes[track];
+        g_debug.instance_id[track] = 0xFFU;
+        g_debug.voice_slot[track] = 0xFFU;
+        g_debug.mix_track_id[track] = 0xFFU;
+        g_debug.voice_state_address[track] = 0U;
         if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)) continue;
 
+        g_debug.instance_id[track] = ctx->instance_id;
+        g_debug.mix_track_id[track] = ctx->mix_track_id;
         mixer_set_track_gain(ctx->mix_track_id, 1.0f);
         mixer_set_track_pan(ctx->mix_track_id, 0.0f);
         mixer_set_track_mute(ctx->mix_track_id, 0U);
@@ -384,8 +162,6 @@ void prism_debug_boot_init(void)
         mixer_set_track_filter_sustain(ctx->mix_track_id, 1.0f);
         mixer_set_track_filter_release(ctx->mix_track_id, 0.1f);
         mixer_set_track_filter_keytrack(ctx->mix_track_id, 0.0f);
-        mixer_track_filter_note_on(ctx->mix_track_id, g_debug_notes[track], 127U);
-
         brick6_braids_runtime_set_osc_level(ctx->instance_id, 0U, 1.0f);
         brick6_braids_runtime_set_osc_level(ctx->instance_id, 1U, 0.0f);
         brick6_braids_runtime_set_osc_edit(ctx->instance_id, 0U, 0.0f);
@@ -396,495 +172,381 @@ void prism_debug_boot_init(void)
         brick6_braids_runtime_set_osc_color(ctx->instance_id, 0U, 0.5f);
         brick6_braids_runtime_set_osc_timbre(ctx->instance_id, 1U, 0.5f);
         brick6_braids_runtime_set_osc_color(ctx->instance_id, 1U, 0.5f);
-        brick6_braids_runtime_note_on(ctx->instance_id, (float)g_debug_notes[track], 1.0f);
-        (void)synth_polyphony_note_on(track, g_debug_notes[track]);
-        mixer_track_poly_note_on(track, ctx->mix_track_id, 0U, g_debug_notes[track], 127U);
+        (void)synth_polyphony_set_voice_count(track, 1U);
+        g_debug.voice_slot[track] = synth_polyphony_get_slot(track, 0U);
     }
 }
 
-uint8_t prism_debug_boot_is_active(void) { return 1U; }
-
-void prism_debug_boot_begin_block(uint32_t frames)
+static void debug_capture_frozen_diagnostics(void)
 {
-    if (frames > AUDIO_BLOCK_SIZE) frames = AUDIO_BLOCK_SIZE;
-    g_debug.block_open = 1U;
-    g_debug.block_frames = frames;
-    g_debug.active_probe = g_debug.requested_probe;
-    debug_select_layout(g_debug.active_probe);
-    if (g_debug.freeze_requested != 0U)
+    audio_runtime_diag_snapshot(&g_debug.audio_diag);
+    board_audio_get_boot_diag(&g_debug.boot_diag);
+    board_audio_get_runtime_diag(&g_debug.board_diag);
+}
+
+static void debug_stop_scenario(void)
+{
+    for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
     {
-        g_debug.frozen = 1U;
-        g_debug.freeze_requested = 0U;
-        g_debug.state = PRISM_DEBUG_STATE_FROZEN;
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)) continue;
+        brick6_braids_runtime_note_off(ctx->instance_id, g_debug.notes[track]);
+        synth_polyphony_all_notes_off(track);
+        mixer_track_poly_all_notes_off(ctx->mix_track_id);
     }
-    debug_reset_block();
+    mixer_set_master(0.0f);
 }
 
-void prism_debug_boot_set_render_track(uint8_t track)
+static void debug_complete_test(uint32_t frames)
 {
-    g_debug.render_track = track;
+    if (g_debug.state != PRISM_DEBUG_STATE_RUNNING) return;
+    g_debug.test_frames += frames;
+    if (g_debug.test_frames < PRISM_DEBUG_TEST_FRAMES) return;
+    g_debug.test_frames = PRISM_DEBUG_TEST_FRAMES;
+    g_debug.end_tick = HAL_GetTick();
+    debug_stop_scenario();
+    debug_capture_frozen_diagnostics();
+    g_debug.state = PRISM_DEBUG_STATE_COMPLETE;
 }
 
-uint8_t prism_debug_boot_get_render_track(void)
+void prism_debug_boot_init(void)
 {
-    return g_debug.render_track;
+    memset(&g_debug, 0, sizeof(g_debug));
+    g_debug.state = PRISM_DEBUG_STATE_ARMED;
+    g_debug.boot_index = 1U;
+    g_debug.save_error = PRISM_DEBUG_SAVE_NONE;
+    debug_configure_tracks();
 }
 
-void prism_debug_boot_capture_p6(uint8_t track, const float *mono, uint32_t frames)
+void prism_debug_boot_start_test(void)
 {
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P6 && g_debug.frozen == 0U)
-        debug_copy_float(track, mono, 0U, frames);
-}
-
-void prism_debug_boot_capture_p5(uint8_t track, const float *mono, uint32_t frames)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P5 && g_debug.frozen == 0U)
-        debug_copy_float(track, mono, 0U, frames);
-}
-
-void prism_debug_boot_capture_p7(uint8_t track, const float *mono, uint32_t frames)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P7 && g_debug.frozen == 0U)
-        debug_copy_float(track, mono, 0U, frames);
-}
-
-void prism_debug_boot_capture_p8_sample(uint8_t track,
-                                        uint32_t offset,
-                                        float left,
-                                        float right)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P8 && g_debug.frozen == 0U)
-        debug_set_stereo_sample(track, offset, left, right);
-}
-
-void prism_debug_boot_capture_p9(uint8_t track,
-                                 const float *left,
-                                 const float *right,
-                                 uint32_t frames)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P9 && g_debug.frozen == 0U)
-        debug_copy_stereo(track, left, right, 0U, frames);
-}
-
-void prism_debug_boot_capture_p4_sample(uint8_t track, uint32_t offset, float sample)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P4 && g_debug.frozen == 0U)
-        debug_set_probe_source(track, offset, sample);
-}
-
-void prism_debug_boot_capture_p3_sample(uint8_t track, uint32_t offset, float sample)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P3 && g_debug.frozen == 0U)
-        debug_set_probe_source(track, offset, sample);
-}
-
-void prism_debug_boot_capture_p2(uint8_t track, const int16_t *native, uint32_t offset, uint32_t frames)
-{
-    if ((g_debug.active_probe != PRISM_DEBUG_PROBE_P2) || (g_debug.frozen != 0U)
-            || (native == NULL) || !debug_track_valid(track)) return;
-    if (offset >= AUDIO_BLOCK_SIZE) return;
-    if (frames > AUDIO_BLOCK_SIZE - offset) frames = AUDIO_BLOCK_SIZE - offset;
-    for (uint32_t i = 0U; i < frames; ++i)
-        g_debug_block[track][offset + i] = (float)native[i] * (1.0f / 32768.0f);
-    g_debug.block_mask |= (uint16_t)(1U << track);
-}
-
-void prism_debug_boot_capture_p10(const float *left, const float *right, uint32_t frames)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P10 && g_debug.frozen == 0U)
-        debug_copy_common_stereo(left, right, 0U, frames);
-}
-
-void prism_debug_boot_capture_p11(const float *left, const float *right, uint32_t frames)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P11 && g_debug.frozen == 0U)
-        debug_copy_common_stereo(left, right, 0U, frames);
-}
-
-void prism_debug_boot_capture_dma_half(prism_debug_dma_observation_t observation,
-                                       const int32_t *tx_half,
-                                       uint32_t frames,
-                                       uint32_t slots,
-                                       uint8_t half_index)
-{
-    const prism_debug_probe_t probe = (prism_debug_probe_t)(PRISM_DEBUG_PROBE_P12
-                                                            + (uint32_t)observation);
-    if ((observation > PRISM_DEBUG_DMA_OBSERVATION_P15)
-            || (g_debug.active_probe != probe)
-            || (g_debug.frozen != 0U)
-            || (tx_half == NULL)
-            || (slots < 2U)
-            || (frames == 0U))
-        return;
-    if (frames > AUDIO_BLOCK_SIZE) frames = AUDIO_BLOCK_SIZE;
-
-    /* The board packer has already completed the whole DMA half here. The
-       diagnostic conversion is deliberately block-level and does not run in
-       the per-sample PCM/slot write loop. */
-    for (uint32_t frame = 0U; frame < frames; ++frame)
+    if (g_debug.state != PRISM_DEBUG_STATE_ARMED) return;
+    mixer_set_master(1.0f);
+    for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
     {
-        const int32_t *packed = &tx_half[frame * slots];
-        g_debug_block[0U][frame] = (float)debug_pcm24_word_to_pcm16(packed[0])
-                                  * (1.0f / 32768.0f);
-        g_debug_block[1U][frame] = (float)debug_pcm24_word_to_pcm16(packed[1])
-                                  * (1.0f / 32768.0f);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)) continue;
+        brick6_braids_runtime_note_on(ctx->instance_id, (float)g_debug.notes[track], 1.0f);
+        (void)synth_polyphony_note_on(track, g_debug.notes[track]);
+        mixer_track_filter_note_on(ctx->mix_track_id, g_debug.notes[track], 127U);
+        mixer_track_poly_note_on(track, ctx->mix_track_id, 0U, g_debug.notes[track], 127U);
+        const brick6_braids_runtime_voice_t *const voice =
+            brick6_braids_runtime_get_voice(ctx->instance_id);
+        g_debug.voice_state_address[track] = (uintptr_t)voice;
+        g_debug.voice_slot[track] = synth_polyphony_get_slot(track, 0U);
     }
-    g_debug.capture_channels = 2U;
-    g_debug.file_count = 1U;
-    g_debug.channels_per_file = 2U;
-    g_debug.dma_half_frames = (uint16_t)frames;
-    g_debug.dma_half_index = half_index;
-    g_debug.dma_slots = (slots > 255U) ? 255U : (uint8_t)slots;
-    g_debug.block_mask = 0x0003U;
-    debug_commit_block(frames);
+    g_debug.start_tick = HAL_GetTick();
+    g_debug.state = PRISM_DEBUG_STATE_RUNNING;
 }
 
-void prism_debug_boot_end_block(uint32_t frames)
+uint8_t prism_debug_boot_is_active(void)
 {
-    if (g_debug.block_open == 0U) return;
-    g_debug.block_open = 0U;
-    if ((g_debug.frozen != 0U) || (frames == 0U)) return;
-    if (frames > AUDIO_BLOCK_SIZE) frames = AUDIO_BLOCK_SIZE;
-    if (g_debug.block_mask != g_debug.expected_block_mask) return;
-    debug_commit_block(frames);
+    return 1U;
 }
 
-void prism_debug_boot_request_probe(prism_debug_probe_t probe)
+void prism_debug_boot_audio_block_begin(uint32_t frames)
 {
-    if (probe < PRISM_DEBUG_PROBE_COUNT && g_debug.frozen == 0U)
-        g_debug.requested_probe = probe;
+    if (g_debug.state != PRISM_DEBUG_STATE_RUNNING) return;
+    g_debug.audio_blocks++;
+    if (frames > g_debug.max_frames_per_block)
+        g_debug.max_frames_per_block = frames;
 }
 
-prism_debug_probe_t prism_debug_boot_get_probe(void) { return g_debug.requested_probe; }
-
-const char *prism_debug_boot_probe_name(prism_debug_probe_t probe)
+void prism_debug_boot_audio_half_complete(uint8_t half_index, uint32_t frames)
 {
-    static const char *const names[] = {
-        "P6", "P5", "P4", "P3", "P2", "P7", "P8", "P9", "P10", "P11",
-        "P12", "P13", "P14", "P15"
-    };
-    return (probe < PRISM_DEBUG_PROBE_COUNT) ? names[probe] : "P6";
-}
-
-const char *prism_debug_boot_probe_label(prism_debug_probe_t probe)
-{
-    static const char *const labels[] = {
-        "P6 PRE FILTER", "P5 PRISM OUT", "P4 OSC MIX", "P3 OSC1 FLOAT", "P2 OSC1 NATIVE",
-        "P7 POST FILTER", "P8 POST VOICE", "P9 POST POLY", "P10 TRACK SUM", "P11 MASTER PRE-DMA",
-        "P12 POST PCM24", "P13 POST TDM PACK", "P14 DMA HALF PRE-CLEAN", "P15 DMA HALF POST-CLEAN"
-    };
-    return (probe < PRISM_DEBUG_PROBE_COUNT) ? labels[probe] : labels[0];
+    (void)half_index;
+    debug_complete_test(frames);
 }
 
 uint8_t prism_debug_boot_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if (encoder != ENC_PAGE || delta == 0 || g_debug.frozen != 0U) return 0U;
-    int32_t next = (int32_t)g_debug.requested_probe + ((delta > 0) ? 1 : -1);
-    while (next < 0) next += PRISM_DEBUG_PROBE_COUNT;
-    next %= PRISM_DEBUG_PROBE_COUNT;
-    prism_debug_boot_request_probe((prism_debug_probe_t)next);
+    (void)encoder;
+    (void)delta;
     return 1U;
 }
 
 uint8_t prism_debug_boot_handle_event(const ui_event_t *event)
 {
-    if ((event == NULL) || (event->type != UI_EVENT_BUTTON_PRESS)) return 0U;
-    if (event->id == (uint8_t)BTN_PAGE_1 && g_debug.frozen == 0U)
+    if ((event == NULL) || (event->type != UI_EVENT_BUTTON_PRESS)) return 1U;
+    if (g_debug.state != PRISM_DEBUG_STATE_COMPLETE) return 1U;
+    if (event->id == (uint8_t)BTN_PAGE_1)
     {
         g_debug.verdict = 1U;
-        g_debug.freeze_requested = 1U;
-        return 1U;
+        g_debug.state = PRISM_DEBUG_STATE_SAVING;
     }
-    if (event->id == (uint8_t)BTN_PAGE_2 && g_debug.frozen == 0U)
+    else if (event->id == (uint8_t)BTN_PAGE_2)
     {
         g_debug.verdict = 0U;
-        g_debug.freeze_requested = 1U;
-        return 1U;
+        g_debug.state = PRISM_DEBUG_STATE_SAVING;
     }
     return 1U;
 }
 
-static uint8_t debug_open_next_file(void)
+static uint32_t debug_find_test_index(const char *verdict)
 {
-    uint8_t header[PRISM_DEBUG_WAV_HEADER];
-    debug_build_path(g_debug.save_file);
-    if (f_open(&g_debug.file, g_debug.wav_path, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) return 0U;
-    debug_wav_header(header, g_debug.channels_per_file);
-    UINT written = 0U;
-    if ((f_write(&g_debug.file, header, sizeof(header), &written) != FR_OK) || written != sizeof(header))
+    FILINFO info;
+    char path[PRISM_DEBUG_PATH_MAX];
+    for (uint32_t index = 1U; index < 10000U; ++index)
     {
-        (void)f_close(&g_debug.file);
+        (void)snprintf(path, sizeof(path), "0:/PRISM_HW_DEBUG/TEST_%04lu_%s.txt",
+                       (unsigned long)index, verdict);
+        if (f_stat(path, &info) != FR_OK) return index;
+    }
+    return 9999U;
+}
+
+static int debug_append(char *text, size_t capacity, int length, const char *format, ...)
+{
+    va_list args;
+    if ((length < 0) || ((size_t)length >= capacity)) return length;
+    va_start(args, format);
+    length += vsnprintf(&text[length], capacity - (size_t)length, format, args);
+    va_end(args);
+    return length;
+}
+
+static uint32_t debug_sai_errors(void)
+{
+    return g_debug.board_diag.tx_sai_error_code | g_debug.board_diag.rx_sai_error_code;
+}
+
+static const char *debug_last_callback(void)
+{
+    if (g_debug.audio_diag.last_callback == 1U) return "HALF";
+    if (g_debug.audio_diag.last_callback == 2U) return "FULL";
+    return "NONE";
+}
+
+static uint8_t debug_write_report(void)
+{
+    const char *verdict = (g_debug.verdict != 0U) ? "GOOD" : "BAD";
+    const uint32_t elapsed_ms = g_debug.end_tick - g_debug.start_tick;
+    char report[PRISM_DEBUG_REPORT_MAX];
+    int length = snprintf(report, sizeof(report),
+        "verdict = %s\ntest_index = %lu\nboot_index = %lu\n"
+        "test_state = COMPLETE\nduration_frames = %lu\n"
+        "duration_audio_ms = %u\nduration_wall_ms = %lu\n"
+        "sample_rate = %u\nframes_per_block = %u\nmax_frames_per_block = %lu\n"
+        "audio_blocks = %lu\ntracks = 8\nosc1 = ON\nosc2 = OFF\n"
+        "filter = LP_BI\nfilter_cutoff_ui = 0\nfilter_cutoff_hz = 20\n",
+        verdict, (unsigned long)g_debug.test_index, (unsigned long)g_debug.boot_index,
+        (unsigned long)g_debug.test_frames, PRISM_DEBUG_TEST_SECONDS * 1000U,
+        (unsigned long)elapsed_ms,
+        PRISM_DEBUG_SAMPLE_RATE, AUDIO_BLOCK_SIZE,
+        (unsigned long)g_debug.max_frames_per_block,
+        (unsigned long)g_debug.audio_blocks);
+
+    length = debug_append(report, sizeof(report), length,
+        "tx_buffer_address = 0x%08lX\ntx_buffer_bytes = %lu\n"
+        "tx_half_0_address = 0x%08lX\ntx_half_1_address = 0x%08lX\n"
+        "tx_half_bytes = %lu\ndma_word_count = %lu\n"
+        "tx_buffer_cacheable = %u\ntx_buffer_region = %s\n"
+        "tx_buffer_alignment = 32\nformat = PCM24 right-aligned in int32\n"
+        "tdm_slots = %u\nframes_per_dma_half = %u\n",
+        (unsigned long)g_debug.audio_diag.tx_buffer_address,
+        (unsigned long)g_debug.audio_diag.tx_buffer_bytes,
+        (unsigned long)g_debug.audio_diag.tx_half_address[0],
+        (unsigned long)g_debug.audio_diag.tx_half_address[1],
+        (unsigned long)g_debug.audio_diag.tx_half_bytes,
+        (unsigned long)g_debug.audio_diag.dma_word_count,
+        (unsigned)g_debug.audio_diag.tx_cacheable,
+        (g_debug.audio_diag.tx_cacheable != 0U) ? ".ram_d2_lut (cacheable)"
+                                               : ".ram_d2_dma (MPU non-cacheable)",
+        BOARD_AUDIO_TDM_SLOTS, BOARD_AUDIO_FRAMES_PER_HALF);
+
+    length = debug_append(report, sizeof(report), length,
+        "hal_sai_transmit_dma_word_count = %lu\n"
+        "half_callbacks = %lu\nfull_callbacks = %lu\nlast_callback = %s\n"
+        "callback_alternation_errors = %lu\ndma_error_callbacks = %lu\n"
+        "sai_error_callbacks = %lu\nlast_dma_error_code = 0x%08lX\n"
+        "last_sai_error_code = 0x%08lX\nunderrun_flags = 0x%08lX\n"
+        "fill_half_0 = %lu\nfill_half_1 = %lu\nwrong_half_writes = %lu\n"
+        "half_not_ready = %lu\nlate_fills = %lu\nmax_fill_cycles = %lu\n",
+        (unsigned long)g_debug.audio_diag.dma_word_count,
+        (unsigned long)g_debug.audio_diag.half_callbacks,
+        (unsigned long)g_debug.audio_diag.full_callbacks,
+        debug_last_callback(),
+        (unsigned long)g_debug.audio_diag.callback_alternation_errors,
+        (unsigned long)g_debug.audio_diag.dma_error_callbacks,
+        (unsigned long)g_debug.audio_diag.sai_error_callbacks,
+        (unsigned long)g_debug.audio_diag.last_dma_error_code,
+        (unsigned long)g_debug.audio_diag.last_sai_error_code,
+        (unsigned long)(debug_sai_errors() & HAL_SAI_ERROR_UDR),
+        (unsigned long)g_debug.audio_diag.fill_count[0],
+        (unsigned long)g_debug.audio_diag.fill_count[1],
+        (unsigned long)g_debug.audio_diag.wrong_half_writes,
+        (unsigned long)g_debug.audio_diag.half_not_ready,
+        (unsigned long)g_debug.audio_diag.late_fills,
+        (unsigned long)g_debug.audio_diag.max_fill_cycles);
+
+    length = debug_append(report, sizeof(report), length,
+        "codec_ready = %u\ncodec_reset_ok = %u\ncodec_clocks_ok = %u\n"
+        "codec_interface_ok = %u\ndac_powered = %u\ndac_routed = %u\n"
+        "dac_unmuted = %u\noutput_routed = %u\noutput_powered = %u\n"
+        "output_unmuted = %u\ncodec_volume_ok = %u\ncodec_stage = %u\n"
+        "codec_page = %u\ncodec_reg = %u\ncodec_expected = %u\n"
+        "codec_mask = %u\ncodec_actual = %u\ncodec_register_snapshot = BOOT_VERIFY_ONLY\n"
+        "sai_tx_state = %lu\nsai_rx_state = %lu\nsai_tx_error = 0x%08lX\n"
+        "sai_rx_error = 0x%08lX\ndma_tx_state = %lu\ndma_rx_state = %lu\n"
+        "dma_tx_error = 0x%08lX\ndma_rx_error = 0x%08lX\n"
+        "sai_frame_length = %lu\nsai_active_frame_length = %lu\n"
+        "sai_data_size = %lu\nsai_slot_size = %lu\nsai_slot_number = %lu\n"
+        "sai_slot_active = 0x%08lX\n",
+        (unsigned)g_debug.boot_diag.codec_ready,
+        (unsigned)g_debug.boot_diag.reset_ok,
+        (unsigned)g_debug.boot_diag.clocks_ok,
+        (unsigned)g_debug.boot_diag.interface_ok,
+        (unsigned)g_debug.boot_diag.dac_powered,
+        (unsigned)g_debug.boot_diag.dac_routed,
+        (unsigned)g_debug.boot_diag.dac_unmuted,
+        (unsigned)g_debug.boot_diag.output_routed,
+        (unsigned)g_debug.boot_diag.output_powered,
+        (unsigned)g_debug.boot_diag.output_unmuted,
+        (unsigned)g_debug.boot_diag.volume_ok,
+        (unsigned)g_debug.boot_diag.codec_stage,
+        (unsigned)g_debug.boot_diag.codec_page,
+        (unsigned)g_debug.boot_diag.codec_reg,
+        (unsigned)g_debug.boot_diag.codec_expected,
+        (unsigned)g_debug.boot_diag.codec_mask,
+        (unsigned)g_debug.boot_diag.codec_actual,
+        (unsigned long)g_debug.board_diag.tx_sai_state,
+        (unsigned long)g_debug.board_diag.rx_sai_state,
+        (unsigned long)g_debug.board_diag.tx_sai_error_code,
+        (unsigned long)g_debug.board_diag.rx_sai_error_code,
+        (unsigned long)g_debug.board_diag.tx_dma_state,
+        (unsigned long)g_debug.board_diag.rx_dma_state,
+        (unsigned long)g_debug.board_diag.tx_dma_error_code,
+        (unsigned long)g_debug.board_diag.rx_dma_error_code,
+        (unsigned long)g_debug.board_diag.frame_length,
+        (unsigned long)g_debug.board_diag.active_frame_length,
+        (unsigned long)g_debug.board_diag.data_size,
+        (unsigned long)g_debug.board_diag.slot_size,
+        (unsigned long)g_debug.board_diag.slot_number,
+        (unsigned long)g_debug.board_diag.slot_active);
+
+    length = debug_append(report, sizeof(report), length,
+        "rx_buffer_cacheable = 1\nrx_cache_invalidate_active = 1\n"
+        "tx_cache_clean_active = %u\ncache_maintenance_active = %u\nmpu_region = %s\n"
+        "notes = %u,%u,%u,%u,%u,%u,%u,%u\n",
+        (unsigned)g_debug.audio_diag.tx_cacheable,
+        (unsigned)g_debug.audio_diag.cache_maintenance_active,
+        (g_debug.audio_diag.tx_cacheable != 0U) ? "cacheable D2 LUT" : "non-cacheable D2 DMA",
+        g_debug.notes[0], g_debug.notes[1], g_debug.notes[2], g_debug.notes[3],
+        g_debug.notes[4], g_debug.notes[5], g_debug.notes[6], g_debug.notes[7]);
+
+    for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
+    {
+        length = debug_append(report, sizeof(report), length,
+            "track_%u = note:%u instance:%u voice_slot:%u mix_track:%u voice_state:0x%08lX\n",
+            (unsigned)(track + 1U), (unsigned)g_debug.notes[track],
+            (unsigned)g_debug.instance_id[track], (unsigned)g_debug.voice_slot[track],
+            (unsigned)g_debug.mix_track_id[track],
+            (unsigned long)g_debug.voice_state_address[track]);
+    }
+
+    FIL file;
+    UINT written = 0U;
+    if ((length <= 0) || ((size_t)length >= sizeof(report))) return 0U;
+    if (f_open(&file, g_debug.path, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+    {
+        g_debug.save_error = PRISM_DEBUG_SAVE_OPEN;
         return 0U;
     }
-    g_debug.file_open = 1U;
-    g_debug.save_frame = 0U;
-    g_debug.save_oldest = (g_debug.valid_frames == PRISM_DEBUG_RING_FRAMES)
-        ? g_debug.write_frame : 0U;
-    g_debug.save_frames = (g_debug.valid_frames < PRISM_DEBUG_RING_FRAMES)
-        ? g_debug.valid_frames : PRISM_DEBUG_RING_FRAMES;
+    const FRESULT result = f_write(&file, report, (UINT)length, &written);
+    (void)f_close(&file);
+    if ((result != FR_OK) || (written != (UINT)length))
+    {
+        g_debug.save_error = PRISM_DEBUG_SAVE_WRITE;
+        return 0U;
+    }
     return 1U;
-}
-
-static uint8_t debug_write_file_chunk(void)
-{
-    uint32_t count = PRISM_DEBUG_WAV_CHUNK;
-    const uint8_t channel_count = g_debug.channels_per_file;
-    const uint8_t channel_base = (uint8_t)(g_debug.save_file * channel_count);
-    if (g_debug.save_frame >= PRISM_DEBUG_RING_FRAMES) return 1U;
-    if (count > PRISM_DEBUG_RING_FRAMES - g_debug.save_frame) count = PRISM_DEBUG_RING_FRAMES - g_debug.save_frame;
-    for (uint32_t i = 0U; i < count; ++i)
-    {
-        const uint32_t logical = g_debug.save_frame + i;
-        const uint32_t padding = PRISM_DEBUG_RING_FRAMES - g_debug.save_frames;
-        const uint8_t valid = (logical >= padding) ? 1U : 0U;
-        const uint32_t src = (g_debug.save_oldest + logical - padding) % PRISM_DEBUG_RING_FRAMES;
-        for (uint8_t channel = 0U; channel < channel_count; ++channel)
-        {
-            const int16_t sample = (valid != 0U)
-                ? g_debug_ring[channel_base + channel][src] : 0;
-            debug_write_le16(&g_debug.io[(i * channel_count + channel) * 2U],
-                             (uint16_t)sample);
-        }
-    }
-    UINT written = 0U;
-    const UINT byte_count = (UINT)(count * channel_count * 2U);
-    if ((f_write(&g_debug.file, g_debug.io, byte_count, &written) != FR_OK)
-            || (written != byte_count)) return 0U;
-    g_debug.save_frame += count;
-    return 1U;
-}
-
-static const char *debug_dma_capture_point(void)
-{
-    switch (g_debug.active_probe)
-    {
-        case PRISM_DEBUG_PROBE_P12:
-            return "Src/Audio/audio.c:process_half tx_buffer[half] after board_audio_pack_output";
-        case PRISM_DEBUG_PROBE_P13:
-            return "Src/Audio/audio.c:process_half tx_buffer[half] after complete TDM frame packing";
-        case PRISM_DEBUG_PROBE_P14:
-            return "Src/Audio/audio.c:process_half tx_buffer[half] immediately before dcache_clean_by_addr_aligned";
-        case PRISM_DEBUG_PROBE_P15:
-            return "Src/Audio/audio.c:process_half tx_buffer[half] immediately after dcache_clean_by_addr_aligned";
-        default:
-            return "not a DMA-half probe";
-    }
-}
-
-static const char *debug_dma_cache_state(void)
-{
-    switch (g_debug.active_probe)
-    {
-        case PRISM_DEBUG_PROBE_P14:
-            return "cacheable D2 .ram_d2_lut; CPU-owned dirty lines before clean";
-        case PRISM_DEBUG_PROBE_P15:
-            return "cacheable D2 .ram_d2_lut; clean completed, DMA-visible";
-        case PRISM_DEBUG_PROBE_P12:
-        case PRISM_DEBUG_PROBE_P13:
-            return "cacheable D2 .ram_d2_lut; CPU-owned before clean";
-        default:
-            return "not applicable";
-    }
-}
-
-static const char *debug_capture_sample_format(void)
-{
-    if (g_debug.active_probe >= PRISM_DEBUG_PROBE_P12)
-        return "signed PCM24 right-aligned int32 -> PCM16 WAV";
-    return "probe-native/float engine value -> PCM16 WAV";
-}
-
-static const char *debug_capture_memory_region(void)
-{
-    if (g_debug.active_probe >= PRISM_DEBUG_PROBE_P12)
-        return "D2 .ram_d2_lut";
-    return "probe-specific audio buffer";
-}
-
-static const char *debug_capture_interleave(void)
-{
-    if (g_debug.active_probe >= PRISM_DEBUG_PROBE_P12)
-        return "frame stride in DMA words; L slot 0, R slot 1";
-    return "probe-specific layout";
-}
-
-static const char *debug_capture_channels(void)
-{
-    if (g_debug.file_count == 1U) return "stereo";
-    return (g_debug.channels_per_file == 1U) ? "eight track mono" : "eight track stereo";
-}
-
-static const char *debug_capture_alignment(void)
-{
-    if (g_debug.active_probe >= PRISM_DEBUG_PROBE_P12) return "32 bytes";
-    return "not applicable to DMA buffer";
-}
-
-static const char *debug_capture_owner(void)
-{
-    if (g_debug.active_probe == PRISM_DEBUG_PROBE_P15) return "DMA after clean";
-    if (g_debug.active_probe >= PRISM_DEBUG_PROBE_P12) return "CPU before DMA hand-off";
-    return "probe-specific";
-}
-
-static uint8_t debug_write_info(void)
-{
-    FIL info;
-    if (f_open(&info, g_debug.info_path, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) return 0U;
-    char text[1024];
-    int length = snprintf(text, sizeof(text),
-        "verdict = %s\nprobe = %s\nprobe_name = %s\ncapture_index = %lu\nboot_index = %lu\n"
-        "sample_rate = %u\nframes_per_channel = %u\ntrack_count = 8\n"
-        "channel_count = %u\nfile_count = %u\nchannels_per_file = %u\n"
-        "capture_layout = %s\nengine = PRISM\n"
-        "dma_half_frames = %u\ndma_half_index = %u\ntdm_slots = %u\n"
-        "main_slot_left = 0\nmain_slot_right = 1\n"
-        "capture_point = %s\nsample_format = %s\n"
-        "channels = %s\ninterleave = %s\n"
-        "memory_region = %s\ncache_alignment = %s\ncache_state = %s\n"
-        "dma_owner = %s\n"
-        "osc1 = ON\nosc2 = OFF\nfilter = ON\ncutoff = 0\n",
-        (g_debug.verdict != 0U) ? "GOOD" : "BAD",
-        prism_debug_boot_probe_name(g_debug.active_probe),
-        prism_debug_boot_probe_label(g_debug.active_probe),
-        (unsigned long)g_debug.capture_index, (unsigned long)g_debug.boot_index,
-        PRISM_DEBUG_SAMPLE_RATE, PRISM_DEBUG_RING_FRAMES,
-        (unsigned)g_debug.capture_channels, (unsigned)g_debug.file_count,
-        (unsigned)g_debug.channels_per_file,
-        (g_debug.file_count == 1U) ? "COMMON_STEREO" :
-            ((g_debug.channels_per_file == 1U) ? "TRACK_MONO" : "TRACK_STEREO"),
-        (unsigned)g_debug.dma_half_frames,
-        (unsigned)g_debug.dma_half_index,
-        (unsigned)g_debug.dma_slots,
-        debug_dma_capture_point(),
-        debug_capture_sample_format(),
-        debug_capture_channels(),
-        debug_capture_interleave(),
-        debug_capture_memory_region(),
-        debug_capture_alignment(),
-        debug_dma_cache_state(),
-        debug_capture_owner());
-    for (uint8_t i = 0U; i < PRISM_DEBUG_TRACK_COUNT && length > 0 && length < (int)sizeof(text); ++i)
-        length += snprintf(&text[length], sizeof(text) - (size_t)length, "note_track_%u = %u\n",
-                           (unsigned)(i + 1U), (unsigned)g_debug_notes[i]);
-    UINT written = 0U;
-    const uint8_t ok = (length > 0 && f_write(&info, text, (UINT)length, &written) == FR_OK
-                        && written == (UINT)length) ? 1U : 0U;
-    (void)f_close(&info);
-    return ok;
 }
 
 void prism_debug_boot_service(void)
 {
-    if (g_debug.state == PRISM_DEBUG_STATE_FROZEN)
-    {
-        if (sd_access_gate_try_acquire(PRISM_DEBUG_CAPTURE_CLIENT) == 0U) return;
-        FILINFO root_info;
-        if (sd_access_fs_mount_if_needed() == 0U)
-        {
-            sd_access_gate_release(PRISM_DEBUG_CAPTURE_CLIENT);
-            g_debug.state = PRISM_DEBUG_STATE_ERROR;
-            return;
-        }
-        const FRESULT root_mkdir = f_mkdir("0:/PRISM_DEBUG");
-        if ((root_mkdir != FR_OK) && (f_stat("0:/PRISM_DEBUG", &root_info) != FR_OK))
-        {
-            sd_access_gate_release(PRISM_DEBUG_CAPTURE_CLIENT);
-            g_debug.state = PRISM_DEBUG_STATE_ERROR;
-            return;
-        }
-        while (debug_capture_index_used(g_debug.boot_index) != 0U)
-        {
-            ++g_debug.boot_index;
-        }
-        g_debug.capture_index = g_debug.boot_index;
-        debug_build_path(0U);
-        (void)f_mkdir(g_debug.folder);
-        g_debug.save_file = 0U;
-        g_debug.file_open = 0U;
-        g_debug.state = PRISM_DEBUG_STATE_SAVING;
-        sd_access_gate_release(PRISM_DEBUG_CAPTURE_CLIENT);
-        return;
-    }
     if (g_debug.state != PRISM_DEBUG_STATE_SAVING) return;
-    if (sd_access_gate_try_acquire(PRISM_DEBUG_CAPTURE_CLIENT) == 0U) return;
-    if (sd_access_fs_mount_if_needed() == 0U)
+    if (sd_access_gate_try_acquire(PRISM_DEBUG_REPORT_CLIENT) == 0U) return;
+
+    const uint8_t mounted = sd_access_fs_mount_if_needed();
+    if (mounted == 0U)
     {
+        g_debug.save_error = PRISM_DEBUG_SAVE_MOUNT;
         g_debug.state = PRISM_DEBUG_STATE_ERROR;
-        sd_access_gate_release(PRISM_DEBUG_CAPTURE_CLIENT);
+        sd_access_gate_release(PRISM_DEBUG_REPORT_CLIENT);
         return;
     }
-    if (g_debug.file_open == 0U)
+
+    const FRESULT directory_result = f_mkdir("0:/PRISM_HW_DEBUG");
+    if ((directory_result != FR_OK) && (directory_result != FR_EXIST))
     {
-        if (g_debug.save_file < g_debug.file_count)
-        {
-            if (debug_open_next_file() == 0U) g_debug.state = PRISM_DEBUG_STATE_ERROR;
-        }
-        else if (debug_write_info() == 0U)
-        {
-            g_debug.state = PRISM_DEBUG_STATE_ERROR;
-        }
-        else
-        {
-            g_debug.state = PRISM_DEBUG_STATE_DONE;
-        }
-    }
-    else if (debug_write_file_chunk() == 0U)
-    {
-        (void)f_close(&g_debug.file);
-        g_debug.file_open = 0U;
+        g_debug.save_error = PRISM_DEBUG_SAVE_DIRECTORY;
         g_debug.state = PRISM_DEBUG_STATE_ERROR;
+        sd_access_gate_release(PRISM_DEBUG_REPORT_CLIENT);
+        return;
     }
-    else if (g_debug.save_frame >= PRISM_DEBUG_RING_FRAMES)
-    {
-        (void)f_close(&g_debug.file);
-        g_debug.file_open = 0U;
-        g_debug.save_file++;
-    }
-    sd_access_gate_release(PRISM_DEBUG_CAPTURE_CLIENT);
+
+    const char *verdict = (g_debug.verdict != 0U) ? "GOOD" : "BAD";
+    g_debug.test_index = debug_find_test_index(verdict);
+    (void)snprintf(g_debug.path, sizeof(g_debug.path),
+                   "0:/PRISM_HW_DEBUG/TEST_%04lu_%s.txt",
+                   (unsigned long)g_debug.test_index, verdict);
+    g_debug.state = (debug_write_report() != 0U)
+        ? PRISM_DEBUG_STATE_DONE : PRISM_DEBUG_STATE_ERROR;
+    sd_access_gate_release(PRISM_DEBUG_REPORT_CLIENT);
 }
 
 void prism_debug_boot_render(void)
 {
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(0U, 0U, "PRISM DEBUG");
-    drv_display_draw_text(0U, 12U, "PROBE:");
-    drv_display_draw_text(0U, 20U, prism_debug_boot_probe_label(g_debug.requested_probe));
-    if (g_debug.requested_probe != g_debug.active_probe) drv_display_draw_text(84U, 20U, "WAIT");
-    drv_display_draw_text(0U, 32U, "GOOD: PAGE1");
-    drv_display_draw_text(0U, 42U, "BAD: PAGE2");
-    if (g_debug.state == PRISM_DEBUG_STATE_SAVING) drv_display_draw_text(0U, 54U, "SAVING...");
-    else if (g_debug.state == PRISM_DEBUG_STATE_DONE) drv_display_draw_text(0U, 54U, "CAPTURE DONE");
-    else if (g_debug.state == PRISM_DEBUG_STATE_ERROR) drv_display_draw_text(0U, 54U, "SD ERROR");
-    else drv_display_draw_text(0U, 54U, "8 TRACKS RUNNING");
+    drv_display_draw_text(0U, 0U, "PRISM HW TEST");
+    drv_display_draw_text(0U, 12U, debug_state_label());
+    if (g_debug.state == PRISM_DEBUG_STATE_RUNNING)
+    {
+        char text[24];
+        (void)snprintf(text, sizeof(text), "%lu/%u FRAMES",
+                       (unsigned long)g_debug.test_frames, PRISM_DEBUG_TEST_FRAMES);
+        drv_display_draw_text(0U, 22U, text);
+    }
+    else if ((g_debug.state == PRISM_DEBUG_STATE_ERROR)
+             || (g_debug.state == PRISM_DEBUG_STATE_DONE))
+    {
+        drv_display_draw_text(0U, 22U, debug_save_error_label());
+    }
+    drv_display_draw_text(0U, 34U, "GOOD: PAGE1");
+    drv_display_draw_text(0U, 44U, "BAD: PAGE2");
+    if (g_debug.state == PRISM_DEBUG_STATE_COMPLETE)
+        drv_display_draw_text(0U, 54U, "CHOOSE VERDICT");
+    else if (g_debug.state == PRISM_DEBUG_STATE_SAVING)
+        drv_display_draw_text(0U, 54U, "SAVING...");
+    else if (g_debug.state == PRISM_DEBUG_STATE_DONE)
+        drv_display_draw_text(0U, 54U, "SAVE OK");
+    else if (g_debug.state == PRISM_DEBUG_STATE_ERROR)
+        drv_display_draw_text(0U, 54U, "SAVE ERROR");
 }
 
 #else
 
 void prism_debug_boot_init(void) {}
+void prism_debug_boot_start_test(void) {}
 void prism_debug_boot_service(void) {}
 uint8_t prism_debug_boot_is_active(void) { return 0U; }
-void prism_debug_boot_begin_block(uint32_t frames) { (void)frames; }
-void prism_debug_boot_set_render_track(uint8_t track) { (void)track; }
-uint8_t prism_debug_boot_get_render_track(void) { return 0U; }
-void prism_debug_boot_capture_p6(uint8_t track, const float *mono, uint32_t frames) { (void)track; (void)mono; (void)frames; }
-void prism_debug_boot_capture_p5(uint8_t track, const float *mono, uint32_t frames) { (void)track; (void)mono; (void)frames; }
-void prism_debug_boot_capture_p7(uint8_t track, const float *mono, uint32_t frames) { (void)track; (void)mono; (void)frames; }
-void prism_debug_boot_capture_p8_sample(uint8_t track, uint32_t offset, float left, float right) { (void)track; (void)offset; (void)left; (void)right; }
-void prism_debug_boot_capture_p9(uint8_t track, const float *left, const float *right, uint32_t frames) { (void)track; (void)left; (void)right; (void)frames; }
-void prism_debug_boot_capture_p4_sample(uint8_t track, uint32_t offset, float sample) { (void)track; (void)offset; (void)sample; }
-void prism_debug_boot_capture_p3_sample(uint8_t track, uint32_t offset, float sample) { (void)track; (void)offset; (void)sample; }
-void prism_debug_boot_capture_p2(uint8_t track, const int16_t *native, uint32_t offset, uint32_t frames) { (void)track; (void)native; (void)offset; (void)frames; }
-void prism_debug_boot_capture_p10(const float *left, const float *right, uint32_t frames) { (void)left; (void)right; (void)frames; }
-void prism_debug_boot_capture_p11(const float *left, const float *right, uint32_t frames) { (void)left; (void)right; (void)frames; }
-void prism_debug_boot_capture_dma_half(prism_debug_dma_observation_t observation, const int32_t *tx_half, uint32_t frames, uint32_t slots, uint8_t half_index) { (void)observation; (void)tx_half; (void)frames; (void)slots; (void)half_index; }
-void prism_debug_boot_end_block(uint32_t frames) { (void)frames; }
-void prism_debug_boot_request_probe(prism_debug_probe_t probe) { (void)probe; }
-prism_debug_probe_t prism_debug_boot_get_probe(void) { return PRISM_DEBUG_PROBE_P6; }
-const char *prism_debug_boot_probe_name(prism_debug_probe_t probe) { (void)probe; return "P6"; }
-const char *prism_debug_boot_probe_label(prism_debug_probe_t probe) { (void)probe; return "P6 PRE FILTER"; }
-uint8_t prism_debug_boot_handle_encoder(uint8_t encoder, int16_t delta) { (void)encoder; (void)delta; return 0U; }
-uint8_t prism_debug_boot_handle_event(const ui_event_t *event) { (void)event; return 0U; }
+void prism_debug_boot_audio_block_begin(uint32_t frames) { (void)frames; }
+void prism_debug_boot_audio_half_complete(uint8_t half_index, uint32_t frames)
+{
+    (void)half_index;
+    (void)frames;
+}
+uint8_t prism_debug_boot_handle_encoder(uint8_t encoder, int16_t delta)
+{
+    (void)encoder;
+    (void)delta;
+    return 0U;
+}
+uint8_t prism_debug_boot_handle_event(const ui_event_t *event)
+{
+    (void)event;
+    return 0U;
+}
 void prism_debug_boot_render(void) {}
 
 #endif
