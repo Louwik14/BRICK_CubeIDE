@@ -1064,60 +1064,6 @@ static void mixer_track_filter_sync_stereo_state_from_mono_eq3(mixer_track_filte
     filter->eq3.coeffs_pending_update = filter->eq3_mono.coeffs_pending_update;
 }
 
-static uint8_t mixer_track_filter_supports_mono_native_path(const mixer_track_filter_t *filter)
-{
-    if (filter == NULL)
-    {
-        return 0U;
-    }
-
-    return ((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
-            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3)
-            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_LP_BI)
-            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_HP_BI)
-            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
-}
-
-static uint8_t mixer_track_insert_is_mono_native_compatible(int8_t slot)
-{
-    if (slot < 0)
-    {
-        return 1U;
-    }
-
-    fx_slot_t *fx_slot = fx_pool_get_slot((uint32_t)slot);
-    if ((fx_slot == NULL) || (fx_slot->active == 0U))
-    {
-        return 1U;
-    }
-
-    return ((fx_type_t)fx_slot->type == FX_SAT) ? 1U : 0U;
-}
-
-static uint8_t mixer_track_supports_mono_native_path(const mixer_track_t *track,
-                                                     const mixer_track_filter_t *filter)
-{
-    if ((track == NULL) || (filter == NULL))
-    {
-        return 0U;
-    }
-
-    if (mixer_track_filter_supports_mono_native_path(filter) == 0U)
-    {
-        return 0U;
-    }
-
-    for (uint32_t i = 0U; i < MIXER_INSERTS_PER_TRACK; ++i)
-    {
-        if (mixer_track_insert_is_mono_native_compatible(track->insert_slot[i]) == 0U)
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
-}
-
 static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
                                                const mixer_track_t *track,
                                                const mixer_track_filter_t *filter,
@@ -1203,10 +1149,7 @@ static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
                 || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
     {
         plan.source_kind = MIXER_LANE_SOURCE_EXT_MONO_NATIVE;
-        if (mixer_track_supports_mono_native_path(track, filter) != 0U)
-        {
-            plan.exec_kind = MIXER_LANE_EXEC_MONO_NATIVE;
-        }
+        plan.exec_kind = MIXER_LANE_EXEC_MONO_NATIVE;
     }
 
     return plan;
@@ -1221,14 +1164,11 @@ typedef struct
 
 static mixer_lane_buffers_t mixer_lane_prepare_stereo_buffers(uint32_t track_id,
                                                               const mixer_lane_plan_t *plan,
-                                                              StereoTrack *tracks,
-                                                              uint32_t frames,
-                                                              float *ext_mono_l,
-                                                              float *ext_mono_r)
+                                                              StereoTrack *tracks)
 {
     mixer_lane_buffers_t buffers = {0};
 
-    if ((plan == NULL) || (tracks == NULL) || (ext_mono_l == NULL) || (ext_mono_r == NULL))
+    if ((plan == NULL) || (tracks == NULL))
     {
         return buffers;
     }
@@ -1239,24 +1179,6 @@ static mixer_lane_buffers_t mixer_lane_prepare_stereo_buffers(uint32_t track_id,
     {
         buffers.left = tracks[track_id].L;
         buffers.right = tracks[track_id].R;
-        return buffers;
-    }
-
-    if (plan->source_kind == MIXER_LANE_SOURCE_EXT_MONO_NATIVE)
-    {
-        for (uint32_t i = 0U; i < plan->ext_frames; ++i)
-        {
-            const float s = g_external_track_mono[track_id][i];
-            ext_mono_l[i] = s;
-            ext_mono_r[i] = s;
-        }
-        for (uint32_t i = plan->ext_frames; i < frames; ++i)
-        {
-            ext_mono_l[i] = 0.0f;
-            ext_mono_r[i] = 0.0f;
-        }
-        buffers.left = ext_mono_l;
-        buffers.right = ext_mono_r;
         return buffers;
     }
 
@@ -1304,13 +1226,11 @@ static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
                                                             const mixer_track_t *track,
                                                             mixer_track_filter_t *filter,
                                                             uint32_t frames,
-                                                            float *ext_mono_l,
-                                                            float *ext_mono_r,
                                                             uint8_t diag_lane)
 {
     mixer_lane_buffers_t buffers = {0};
 
-    if ((track == NULL) || (filter == NULL) || (ext_mono_l == NULL) || (ext_mono_r == NULL))
+    if ((track == NULL) || (filter == NULL))
     {
         return buffers;
     }
@@ -1331,8 +1251,6 @@ static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
                                       frames);
     }
 
-    (void)ext_mono_l;
-    (void)ext_mono_r;
     buffers.mono = g_external_track_mono[track_id];
     return buffers;
 }
@@ -3157,8 +3075,8 @@ void mixer_synth_voice_slot_reset(uint8_t slot)
  */
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
-    AUDIO_HOT ALIGN32 static float ext_mono_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float ext_mono_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float mono_pan_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
 #if MIXER_HAS_CUE_BUS
@@ -3366,8 +3284,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                                            mt,
                                                            &g_track_filters[t],
                                                            frames,
-                                                           ext_mono_l,
-                                                           ext_mono_r,
                                                            diag_lane);
             }
             mono = buffers.mono;
@@ -3376,10 +3292,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         {
             const mixer_lane_buffers_t buffers = mixer_lane_prepare_stereo_buffers(t,
                                                                                    &lane_plan,
-                                                                                   tracks,
-                                                                                   frames,
-                                                                                   ext_mono_l,
-                                                                                   ext_mono_r);
+                                                                                   tracks);
             L = buffers.left;
             R = buffers.right;
             mixer_lane_accumulate_external_source(t, &lane_plan, L, R);
@@ -3435,8 +3348,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                                        mono[i] * vca_gain,
                                                        mono[i] * vca_gain);
                         mono[i] *= (gain_cur * mute_gain_cur * vca_gain);
-                        ext_mono_l[i] = mono[i] * pan_l;
-                        ext_mono_r[i] = mono[i] * pan_r;
+                        mono_pan_l[i] = mono[i] * pan_l;
+                        mono_pan_r[i] = mono[i] * pan_r;
                     }
                     else
                     {
@@ -3488,8 +3401,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     if (is_mono_native_lane != 0U)
                     {
                         mono[i] *= (gain_cur * mute_gain_cur * vca_gain);
-                        ext_mono_l[i] = mono[i] * pan_l;
-                        ext_mono_r[i] = mono[i] * pan_r;
+                        mono_pan_l[i] = mono[i] * pan_l;
+                        mono_pan_r[i] = mono[i] * pan_r;
                     }
                     else
                     {
@@ -3518,8 +3431,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         if (is_mono_native_lane != 0U)
         {
-            L = ext_mono_l;
-            R = ext_mono_r;
+            L = mono_pan_l;
+            R = mono_pan_r;
         }
 
         /*
