@@ -198,6 +198,31 @@ void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_
                                     0x01U, 0x00U);
 }
 
+uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_diag)
+{
+    board_audio_codec_reset_diag_t diag = {
+        .supported = 1U,
+        .reset_type = BOARD_AUDIO_CODEC_RESET_HARDWARE,
+        .reset_pin_used = 1U,
+        .reset_low_duration_ms = 2U,
+        .wait_ms = 2U
+    };
+    const cs42448_status_t status = CS42448_Init(CS42448_I2C_ADDRESS);
+    diag.reset_ok = 1U;
+    diag.init_ok = (status == CS42448_STATUS_OK) ? 1U : 0U;
+    if (status == CS42448_STATUS_I2C)
+    {
+        diag.i2c_errors = 1U;
+        diag.write_failures = 1U;
+    }
+    else if (status == CS42448_STATUS_VERIFY)
+    {
+        diag.readback_errors = 1U;
+    }
+    if (out_diag != NULL) *out_diag = diag;
+    return diag.init_ok;
+}
+
 uint8_t board_audio_is_tx_callback_handle(void *handle)
 {
     return ((handle != NULL) && (handle == (void *)&hsai_BlockA2)) ? 1U : 0U;

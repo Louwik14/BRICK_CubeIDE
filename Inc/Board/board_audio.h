@@ -108,6 +108,27 @@ typedef struct
     uint8_t _pad[2];
 } board_audio_codec_snapshot_t;
 
+typedef enum
+{
+    BOARD_AUDIO_CODEC_RESET_UNSUPPORTED = 0U,
+    BOARD_AUDIO_CODEC_RESET_HARDWARE = 1U,
+    BOARD_AUDIO_CODEC_RESET_SOFTWARE = 2U
+} board_audio_codec_reset_type_t;
+
+typedef struct
+{
+    uint8_t supported;
+    uint8_t reset_ok;
+    uint8_t init_ok;
+    board_audio_codec_reset_type_t reset_type;
+    uint8_t reset_pin_used;
+    uint32_t reset_low_duration_ms;
+    uint32_t wait_ms;
+    uint32_t i2c_errors;
+    uint32_t write_failures;
+    uint32_t readback_errors;
+} board_audio_codec_reset_diag_t;
+
 void board_audio_codec_init(void);
 void board_audio_init(void);
 uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_t word_count);
@@ -115,6 +136,8 @@ uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag);
 void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_snapshot);
+/* Codec-only reset/reinitialisation; never touches STM32 clocks, SAI or DMA. */
+uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_diag);
 uint8_t board_audio_is_tx_callback_handle(void *handle);
 uint8_t board_audio_is_audio_dma_handle(void *handle);
 

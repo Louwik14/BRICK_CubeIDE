@@ -70,9 +70,9 @@
  * - RX: DMA écrit, CPU lit
  * - TX: CPU écrit, DMA lit
  *
- * Politique de cette passe (test audio uniquement):
+ * Politique des buffers DMA:
  * - RX reste dans la section cacheable existante et est invalidé avant lecture CPU
- * - TX peut être placé dans la région D2 non-cacheable par PRISM_DEBUG_TX_NONCACHEABLE
+ * - TX reste dans la section D2 cacheable et est nettoyé avant consommation DMA
  * - aucune copie ni changement de format n'est introduit dans le chemin IRQ
  */
 static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];

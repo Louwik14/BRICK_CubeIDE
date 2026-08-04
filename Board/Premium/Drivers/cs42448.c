@@ -271,6 +271,16 @@ cs42448_status_t CS42448_Init(uint8_t addr)
                               0xFFU);
   if (status != CS42448_STATUS_OK) { return status; }
   status = cs42448_verify_reg(addr,
+                              CS42448_REG_ADC_CTRL,
+                              CS42448_ADC_CONTROL_SINGLE_ENDED,
+                              0xFFU);
+  if (status != CS42448_STATUS_OK) { return status; }
+  status = cs42448_verify_reg(addr,
+                              CS42448_REG_TRANSITION_CTRL,
+                              CS42448_TRANSITION_SOFT_VOL,
+                              0xFFU);
+  if (status != CS42448_STATUS_OK) { return status; }
+  status = cs42448_verify_reg(addr,
                               CS42448_REG_DAC_MUTE,
                               CS42448_DAC_MUTE_ALL,
                               0xFFU);
@@ -292,6 +302,8 @@ cs42448_status_t CS42448_Init(uint8_t addr)
   {
     return CS42448_STATUS_I2C;
   }
+  status = cs42448_verify_reg(addr, CS42448_REG_STATUS_MASK, 0x18U, 0xFFU);
+  if (status != CS42448_STATUS_OK) { return status; }
   uint8_t clock_status = 0U;
   if (cs42448_read_reg(addr, CS42448_REG_STATUS, &clock_status) != HAL_OK)
   {

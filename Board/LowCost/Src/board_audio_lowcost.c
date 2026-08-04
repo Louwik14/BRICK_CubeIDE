@@ -285,6 +285,29 @@ void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_
     out_snapshot->expected[BOARD_AUDIO_CODEC_REG_CHIP_ID] = 0U;
 }
 
+uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_diag)
+{
+    board_audio_codec_reset_diag_t diag = {0};
+    tlv320aic3204_diag_t codec_diag;
+    diag.supported = 1U;
+    diag.reset_type = BOARD_AUDIO_CODEC_RESET_SOFTWARE;
+    const tlv320aic3204_status_t status = TLV320AIC3204_InitDefault();
+    TLV320AIC3204_GetDiag(&codec_diag);
+    diag.reset_ok = codec_diag.reset_ok;
+    diag.init_ok = (status == TLV320AIC3204_STATUS_OK) ? 1U : 0U;
+    diag.reset_type = (codec_diag.reset_pin_used != 0U)
+        ? BOARD_AUDIO_CODEC_RESET_HARDWARE : BOARD_AUDIO_CODEC_RESET_SOFTWARE;
+    diag.reset_pin_used = codec_diag.reset_pin_used;
+    diag.reset_low_duration_ms = codec_diag.reset_low_duration_ms;
+    diag.wait_ms = codec_diag.reset_wait_ms;
+    diag.i2c_errors = codec_diag.i2c_errors;
+    diag.write_failures = codec_diag.write_failures;
+    diag.readback_errors = codec_diag.readback_errors;
+    board_audio_capture_codec_diag();
+    if (out_diag != NULL) *out_diag = diag;
+    return diag.init_ok;
+}
+
 uint8_t board_audio_is_tx_callback_handle(void *handle)
 {
     return ((handle != NULL) && (handle == (void *)&hsai_BlockA1)) ? 1U : 0U;

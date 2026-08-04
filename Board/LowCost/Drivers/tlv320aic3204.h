@@ -82,6 +82,12 @@ typedef struct
   uint8_t output_powered;
   uint8_t output_unmuted;
   uint8_t volume_ok;
+  uint8_t reset_pin_used;
+  uint32_t reset_low_duration_ms;
+  uint32_t reset_wait_ms;
+  uint32_t i2c_errors;
+  uint32_t write_failures;
+  uint32_t readback_errors;
 } tlv320aic3204_diag_t;
 
 typedef struct
