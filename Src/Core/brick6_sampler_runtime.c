@@ -4920,8 +4920,8 @@ static void brick6_sampler_runtime_mix_reader_segment(const sample_audio_segment
         return;
     }
 
-    /* Mono readers select L once per segment; the legacy stereo output buffers
-       remain the voice-level insertion point until the mixer-native step. */
+    /* This dispatcher is the stereo insertion point, including the explicit
+       mono-to-stereo promotion required by the clip shifter. */
     switch (segment->kernel_type)
     {
         case SAMPLE_KERNEL_REV_1X:

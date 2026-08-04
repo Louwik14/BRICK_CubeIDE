@@ -2711,34 +2711,6 @@ void __attribute__((used)) mixer_external_inputs_clear(void)
     memset(g_external_track_frames_valid, 0, sizeof(g_external_track_frames_valid));
 }
 
-void __attribute__((used)) mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames)
-{
-    if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))
-    {
-        return;
-    }
-
-    if (frames > AUDIO_BLOCK_SIZE)
-    {
-        frames = AUDIO_BLOCK_SIZE;
-    }
-
-    if (g_external_track_enabled[track_id] != 0U)
-    {
-        return;
-    }
-
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        g_external_track_l[track_id][i] = mono[i];
-        g_external_track_r[track_id][i] = mono[i];
-    }
-
-    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
-    g_external_track_frames_valid[track_id] = (uint16_t)frames;
-    g_external_track_enabled[track_id] = 1U;
-}
-
 void __attribute__((used)) mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames)
 {
     if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))

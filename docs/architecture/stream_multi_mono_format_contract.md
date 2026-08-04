@@ -1,80 +1,100 @@
-# Contrat de format Stream/Multi
+# Contrat audio mono du sampler
 
-## Etat livrÃ© aprÃ¨s l'Ã©tape 8
+## État courant
 
-Le contrat est maintenant raccordÃ© aux chemins Stream et Multi. Une page
-logique reste un slot physique statique de 16 Kio. Le pool compte 1280 pages :
-1024 pages de slot, 128 pages de fenÃªtre voix et 128 pages de marge.
+Le sampler conserve le format mono depuis le stockage jusqu'au dernier
+traitement qui exige deux canaux. Le contrat couvre le Sampler RAM, le Stream
+et les voix Multi. Le futur `GROUP` doit sélectionner le même chemin à partir
+du format immuable du sample, sans introduire de renderer particulier.
 
-Le prÃ©socle Multi consomme 2 pages mono ou 4 pages stÃ©rÃ©o pour 8192 frames ;
-la fenÃªtre suit la mÃªme gÃ©omÃ©trie et le budget Multi est de 512 pages. Les
-refs vÃ©rifient key, page, gÃ©nÃ©ration, format, stride, frames/page et epoch.
-Les pending et targets sont comparÃ©s Ã  la description courante avant de
-remplir une page.
+Une page Stream/Multi reste un slot physique statique de 16 Kio :
 
-Les chemins stop, steal, owner release et libÃ©ration diffÃ©rÃ©e nettoient les
-pins et les pending ; le relancement d'un Multi interrompu nettoie son pool.
-Le reader Looper conserve Ã©galement la ref complÃ¨te. Le rendu mono reste natif
-dans le mixer : le buffer droit de compatibilitÃ© est un discard de bloc, sans
-accumulation L/R pour un instrument Multi mono. Le chemin stÃ©rÃ©o conserve son
-comportement.
+| Format | Stride FLOAT32 | Octets/frame | Frames/page |
+| --- | ---: | ---: | ---: |
+| `FLOAT32_MONO` | 1 | 4 | 4096 |
+| `FLOAT32_STEREO_INTERLEAVED` | 2 | 8 | 2048 |
 
-Les dettes non couvertes sont le filtre/VCA par voice Multi, le mono-tail
-natif, l'optimisation des pages voisines et la mesure IRQ rÃ©elle sur
-matÃ©riel. L'interpolation linÃ©aire 2 points est couverte pour les lectures
-Stream/Multi forward pitchÃ©es ; le sampler RAM et les chemins reverse/ping-pong
-restent hors pÃ©rimÃ¨tre.
+Les helpers de `Inc/Sampler/sample_audio_format.h` sont l'unique source de
+géométrie. Le `block_align` du WAV ne sert jamais de stride FLOAT32 interne.
 
-Ce contrat est introduit par l’étape 1 du plan `docs/plan_stream_multi_mono.md`.
-Il ne modifie encore aucun décodage ni aucun chemin audio.
+## Lecture
 
-## Formats internes
+Le play plan, le reader et le cursor portent le format, le stride, les
+frames/page et l'epoch d'enregistrement. La navigation reste commune : pages,
+position, pas, direction, loop, ping-pong, interpolation, fin et underrun.
 
-Les seuls formats FLOAT32 du page cache Stream/Multi sont `MONO` et
-`STEREO_INTERLEAVED`. Le WAV conserve ses `channels`, `bits_per_sample` et
-`block_align` comme métadonnées de source. `block_align` n’est jamais utilisé
-comme stride FLOAT32 interne.
+Les kernels de sortie sont spécialisés :
 
-| Format | Stride FLOAT32 | Bytes/frame | Frames/page | Pages pour 8192 frames |
-| --- | ---: | ---: | ---: | ---: |
-| `FLOAT32_MONO` | 1 | 4 | 4096 | 2 |
-| `FLOAT32_STEREO_INTERLEAVED` | 2 | 8 | 2048 | 4 |
+```text
+reader mono   → une lecture utile → une écriture mono
+reader stéréo → lectures L/R      → écritures L/R
+```
 
-La page physique reste un slot statique de 16 Kio. Aucun slot n’est partagé
-entre deux pages logiques et aucune allocation dynamique n’est introduite.
+Le dispatch de format est effectué par voix ou par bloc, jamais au moyen
+d'une duplication mono vers un buffer droit de rejet.
 
-Les helpers de `Inc/Sampler/sample_audio_format.h` sont l’unique source de
-géométrie : frames/page, stride, bytes/frame, index et début de page, nombre
-de pages requis, présocle et fenêtre. Les calculs de frames utilisent des
-intermédiaires 64 bits.
+## Sampler RAM et Stream
 
-## Métadonnées et identité
+```text
+sample mono
+→ renderer mono
+→ filtre de piste mono
+→ VCA, volume et mute mono
+→ pan final vers L/R
+→ inserts, sends et bus stéréo
+```
 
-Les descripteurs Stream, Multi, page, pending/target, span, ref, play plan,
-reader et voice portent le format, le stride et les frames/page. Les refs et
-targets portent aussi l’epoch d’enregistrement afin de rendre explicite
-l’invalidation d’un ancien `(key, page, génération, format)` lorsque cette
-protection sera raccordée au cache.
+Le Stream partage la même acquisition de pages et le même cursor entre mono
+et stéréo. Son fast path forward 1× possède une sortie mono dédiée. Le shifter
+de clip reste explicitement stéréo et empêche donc la sélection du chemin
+mono-native.
 
-Un instrument Multi porte un format unique. La validation d’homogénéité et la
-persistance effective de l’index sont traitées par les étapes Multi dédiées ;
-cette étape ne convertit aucun sample et ne réserve aucune page supplémentaire.
+Le Sampler RAM mono utilise un renderer Q16 mono couvrant forward, pitch,
+reverse, loop et ping-pong. Les fades de démarrage et tails de declick ont un
+point d'entrée mono ; aucun buffer droit de rejet n'est conservé.
 
-## Consommateurs encore stéréo à migrer
+## Multi
 
-Les alias historiques `SAMPLE_PAGE_FRAMES`, `SAMPLE_PAGE_CHANNELS`,
-`SAMPLE_PAGE_FRAME_STRIDE_FLOATS` et `SAMPLE_PAGE_BYTES_PER_FRAME` décrivent
-explicitement le chemin stéréo existant. Les occurrences suivantes restent
-intentionnelles jusqu’aux étapes de cache/rendu correspondantes :
+Chaque voix Multi garde son reader et son slot DSP indépendants. Pour une
+source mono, l'ordre est strict :
 
-- `Src/Sampler/sample_page_cache.c` : tableau physique et index de page ;
-- `Src/Sampler/sample_cache.c` : fenêtres, offsets et accès page ;
-- `Src/Sampler/sample_stream_manager.c` : deadlines, plages et decode targets ;
-- `Src/Sampler/sample_play_plan.c` : spans et exigences de pages ;
-- `Src/Sampler/sample_voice_reader.c` : lecture interleaved et kernels ;
-- `Src/Sampler/sample_pool.c` : budget de pages ;
-- `Src/Core/brick6_looper_runtime.c` et `Src/Sampler/sampler_ram_pool.c` :
-  consommateurs explicitement stéréo ou RAM hors chantier.
+```text
+renderer mono
+→ filtre mono de voix
+→ VCA mono de voix
+→ spread/pan de voix vers L/R
+→ sommation de piste
+```
 
-Les constantes ne sont donc pas supprimées à cette étape. Leur remplacement
-par les helpers de format appartient aux étapes 2 à 7 du plan.
+Le canal droit n'existe pas avant la projection du spread. Une voix stéréo
+conserve le renderer, le filtre et le VCA stéréo. Un instrument Multi reste
+homogène : toutes ses zones partagent le même format interne.
+
+## Mixer et promotion
+
+Une source externe marquée `MONO_NATIVE` ou `MULTI_MONO` emprunte toujours la
+lane mono quand aucune source matérielle stéréo n'est mélangée à la piste.
+La présence ou le type d'un insert ne provoque plus de duplication avant le
+filtre : tous les inserts de piste sont placés après le pan final et reçoivent
+donc le signal L/R produit à cet endroit.
+
+Les sources matérielles stéréo, les sources poly/stéréo et les mélanges
+matériel + externe restent sur la lane stéréo existante.
+
+## Invariants de cycle de vie
+
+- le format d'une voix active ne change pas ;
+- key, page, génération, format, stride, frames/page et epoch sont validés ;
+- stop, steal, release et underrun libèrent les cursors et owners existants ;
+- aucune allocation dynamique n'est effectuée dans le chemin audio ;
+- le chemin stéréo ne passe pas par les kernels mono ;
+- la loi de pan, l'ordre des inserts, les sends et le routing restent inchangés.
+
+## Validation
+
+Les changements du contrat mono doivent réussir les builds Release Low-Cost
+et Release Premium. La validation fonctionnelle couvre au minimum forward,
+pitch, reverse, loop, ping-pong, frontières de page, fin, underrun, fades,
+declick, filtre, VCA, pan, spread et non-régression stéréo.
+
+La mesure exacte du coût IRQ reste une mesure sur matériel.

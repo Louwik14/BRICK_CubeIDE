@@ -393,12 +393,12 @@ Le pipeline observé est :
 Drum :
 - `brick6_render_synth_tracks()`
 - `drum_synth_process_block_for_instance()`
-- `mixer_submit_external_mono()`
+- `mixer_submit_external_mono_native()`
 
 Sampler :
 - `brick6_render_sampler_tracks()`
 - `brick6_sampler_runtime_render_track()`
-- `mixer_submit_external_mono()`
+- `mixer_begin_external_mono_native()` / `mixer_commit_external_mono_native()`
 
 Autres sources :
 - `voice_manager_process()` écrit directement dans `tracks[0]`
@@ -414,7 +414,7 @@ Deux options cohérentes avec l’existant :
 - ajouter un helper `brick6_render_engine_tracks()`
 - boucler sur les tracks runtime bindées au nouveau `TRACK_RUNTIME_ENGINE_*`
 - rendre dans un buffer mono/stéréo temporaire
-- injecter via `mixer_submit_external_mono()` ou équivalent stéréo si nécessaire
+- injecter via `mixer_submit_external_mono_native()` ou l'API stéréo si nécessaire
 
 2. Moteur intégré à une infrastructure de voix déjà existante :
 - seulement si l’autorité runtime est déjà `voice_manager`

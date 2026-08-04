@@ -34,10 +34,3 @@ void fx_chain_process_slot_for_track(
     float* in_r,
     uint32_t frames
 );
-
-void fx_chain_process_slot_for_track_mono(
-    uint32_t track,
-    uint32_t slot,
-    float* inout,
-    uint32_t frames
-);

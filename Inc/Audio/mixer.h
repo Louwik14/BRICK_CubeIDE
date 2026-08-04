@@ -160,7 +160,6 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
 void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track);
 void mixer_snap_track_runtime_state(uint32_t track_id);
 void mixer_external_inputs_clear(void);
-void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_stereo(uint32_t track_id, const float *left, const float *right, uint32_t frames);
 void mixer_submit_external_multi_stereo(uint32_t track_id,

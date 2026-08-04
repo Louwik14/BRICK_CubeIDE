@@ -155,15 +155,3 @@ void fx_chain_process_slot_for_track(uint32_t track, uint32_t slot, float* L, fl
 
     fx_chain_process_fx_slot(s, L, R, frames);
 }
-
-void fx_chain_process_slot_for_track_mono(uint32_t track, uint32_t slot, float* inout, uint32_t frames)
-{
-    fx_slot_t* s = fx_pool_get_slot(slot);
-    if (!s || !s->active || !inout)
-        return;
-
-    if (s->type == FX_SAT)
-    {
-        fx_saturation_process_mono_block((fx_saturation_t*)fx_pool_get_sat_state_for_track(track), inout, frames);
-    }
-}
