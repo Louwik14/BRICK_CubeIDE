@@ -4,6 +4,7 @@
  */
 
 #include "Core/brick6_braids_runtime.h"
+#include "Core/prism_debug_boot.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -648,6 +649,11 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 (osc->phase_reset_enabled != 0U) ? sync_block : NULL;
             osc->oscillator.Render(
                 sync_input, sample_block[osc_index], (size_t)render_count);
+            if (osc_index == 0U)
+            {
+                prism_debug_boot_capture_p2(prism_debug_boot_get_render_track(),
+                                            sample_block[osc_index], offset, render_count);
+            }
             sync_block[0] = 0U;
         }
         if (trigger_pending != 0U)
@@ -675,7 +681,13 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 else
                 {
                     const int16_t sample = sample_block[single_osc][i];
-                    mixed = ((float)sample / 32768.0f) * osc_level;
+                    const float converted = (float)sample / 32768.0f;
+                    if (single_osc == 0U)
+                    {
+                        prism_debug_boot_capture_p3_sample(
+                            prism_debug_boot_get_render_track(), offset + i, converted);
+                    }
+                    mixed = converted * osc_level;
                 }
             }
             else
@@ -693,7 +705,13 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                         continue;
                     }
                     const int16_t sample = sample_block[osc_index][i];
-                    mixed += ((float)sample / 32768.0f) * osc_level;
+                    const float converted = (float)sample / 32768.0f;
+                    if (osc_index == 0U)
+                    {
+                        prism_debug_boot_capture_p3_sample(
+                            prism_debug_boot_get_render_track(), offset + i, converted);
+                    }
+                    mixed += converted * osc_level;
                     osc_level_sum += osc_level;
                 }
                 if (levels_stable == 0U)
@@ -701,6 +719,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                     mix_norm = (osc_level_sum > 1.0f) ? (1.0f / osc_level_sum) : 1.0f;
                 }
             }
+            prism_debug_boot_capture_p4_sample(
+                prism_debug_boot_get_render_track(), offset + i, mixed * mix_norm);
             out_mono[offset + i] = brick6_braids_runtime_clamp(mixed * mix_norm * instance->level, -1.0f, 1.0f) * BRAIDS_OUTPUT_TRIM;
             if ((instance->gate == 0U) && (instance->tail_samples_remaining > 0U))
             {
@@ -720,6 +740,7 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         instance->level = 0.0f;
         instance->has_note = 0U;
     }
+    prism_debug_boot_capture_p5(prism_debug_boot_get_render_track(), out_mono, frames);
     return 1U;
 }
 

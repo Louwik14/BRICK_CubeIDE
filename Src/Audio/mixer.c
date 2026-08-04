@@ -33,6 +33,7 @@
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Audio/multi_voice_dsp.h"
+#include "Core/prism_debug_boot.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define MIXER_HAS_CUE_BUS 0
@@ -2979,6 +2980,7 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
         return 0U;
 
     mixer_poly_filter_sync_config(filter, &g_track_filters[mix_track_id]);
+    prism_debug_boot_capture_p6((uint8_t)poly_track_id, mono, frames);
     (void)mixer_track_filter_process_block_mono(filter, mono, frames);
     const float pan_for_mix = -clamp_pan(voice_pan);
     const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
@@ -3251,7 +3253,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
         mixer_track_t *mt = &g_tracks[t];
-        const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
+        const uint8_t hw_enabled = ((prism_debug_boot_is_active() == 0U) && (t < ntracks))
+            ? tracks[t].enabled : 0U;
         const mixer_lane_plan_t lane_plan = mixer_build_lane_plan(t,
                                                                   mt,
                                                                   &g_track_filters[t],

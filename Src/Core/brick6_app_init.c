@@ -41,6 +41,7 @@
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/prism_debug_boot.h"
 #include "Core/track_mute.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
@@ -163,11 +164,16 @@ void brick6_app_init(void)
     seq_runtime_init();
     track_mute_init();
     ui_core_init();
+#if BRICK6_PRISM_DEBUG_BOOT
+    prism_debug_boot_init();
+#endif
     pattern_live_init();
     patch_v1_init();
     kit_v1_init();
     project_v1_init();
+#if !BRICK6_PRISM_DEBUG_BOOT
     ui_boot_loading_begin();
+#endif
     undo_v2_init();
     hall_loop_init();
     if (hall_calibration_load() != 0U)
@@ -180,6 +186,9 @@ void brick6_app_init(void)
     }
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
+#endif
+#if BRICK6_PRISM_DEBUG_BOOT
+    ui_page_set(UI_PAGE_PRISM_DEBUG);
 #endif
 
     audio_start();
@@ -207,6 +216,10 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     engine_tasklet_poll();
+#if BRICK6_PRISM_DEBUG_BOOT
+    prism_debug_boot_service();
+    return;
+#endif
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.

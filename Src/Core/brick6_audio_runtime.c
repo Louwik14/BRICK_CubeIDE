@@ -29,6 +29,7 @@
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
+#include "Core/prism_debug_boot.h"
 #include "Mod/mod_lfo_v1.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
@@ -233,6 +234,8 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
     static float prism_tmp[AUDIO_BLOCK_SIZE];
     uint8_t prism_tracks = 0U;
 
+    prism_debug_boot_begin_block(frames);
+
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -244,10 +247,12 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             continue;
         }
 
+        prism_debug_boot_set_render_track(track);
+
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
-        if (voice_count > 1U)
+        if ((voice_count > 1U) || (prism_debug_boot_is_active() != 0U))
         {
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
@@ -300,6 +305,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
     {
         *out_prism_tracks = prism_tracks;
     }
+    prism_debug_boot_end_block(frames);
 }
 
 static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
