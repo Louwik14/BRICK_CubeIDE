@@ -291,7 +291,7 @@ uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_d
     tlv320aic3204_diag_t codec_diag;
     diag.supported = 1U;
     diag.reset_type = BOARD_AUDIO_CODEC_RESET_SOFTWARE;
-    const tlv320aic3204_status_t status = TLV320AIC3204_InitDefault();
+    const tlv320aic3204_status_t status = TLV320AIC3204_InitDefaultChecked();
     TLV320AIC3204_GetDiag(&codec_diag);
     diag.reset_ok = codec_diag.reset_ok;
     diag.init_ok = (status == TLV320AIC3204_STATUS_OK) ? 1U : 0U;
