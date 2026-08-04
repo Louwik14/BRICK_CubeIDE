@@ -78,6 +78,20 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  .itcm_text :
+  {
+    . = ALIGN(4);
+    __itcm_text_start__ = .;
+    *(.itcm_text)
+    *(.itcm_text*)
+    /* Braids is an IRQ audio producer; keep its emitted function sections in ITCM. */
+    *(.text._ZN6braids*)
+    *(.text.brick6_braids_runtime_render_instance*)
+    . = ALIGN(4);
+    __itcm_text_end__ = .;
+  } >ITCMRAM AT> FLASH
+  __itcm_text_load__ = LOADADDR(.itcm_text);
+
   /* The program code and other data goes into FLASH */
   .text :
   {
@@ -94,17 +108,6 @@ SECTIONS
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
   } >FLASH
-
-  .itcm_text :
-  {
-    . = ALIGN(4);
-    __itcm_text_start__ = .;
-    *(.itcm_text)
-    *(.itcm_text*)
-    . = ALIGN(4);
-    __itcm_text_end__ = .;
-  } >ITCMRAM AT> FLASH
-  __itcm_text_load__ = LOADADDR(.itcm_text);
 
   /* Constant data goes into FLASH */
   .rodata :
