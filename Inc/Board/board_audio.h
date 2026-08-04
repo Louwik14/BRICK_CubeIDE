@@ -127,6 +127,14 @@ typedef struct
     uint32_t i2c_errors;
     uint32_t write_failures;
     uint32_t readback_errors;
+    uint8_t reinit_status;
+    uint8_t reinit_failed_stage;
+    uint8_t reinit_failed_page;
+    uint8_t reinit_failed_reg;
+    uint8_t reinit_expected;
+    uint8_t reinit_actual;
+    uint8_t reinit_mask;
+    uint8_t _pad2;
 } board_audio_codec_reset_diag_t;
 
 void board_audio_codec_init(void);

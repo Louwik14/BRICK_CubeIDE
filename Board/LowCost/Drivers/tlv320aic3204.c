@@ -7,6 +7,8 @@
 #define TLV_I2C_TIMEOUT_MS 100U
 #define TLV_DEVICE_READY_TIMEOUT_MS 100U
 #define TLV_BLOCK_READY_TIMEOUT_MS 100U
+#define TLV_CODEC_STARTUP_WAIT_MS 5U
+#define TLV_OUTPUT_SOFTSTEP_TIMEOUT_MS 3000U
 
 enum
 {
@@ -54,6 +56,7 @@ enum
   TLV_P1_LEFT_PGA_GAIN = 59,
   TLV_P1_RIGHT_PGA_GAIN = 60,
   TLV_P1_ADC_POWER_TUNE = 61,
+  TLV_P1_DAC_GAIN_FLAGS = 63,
   TLV_P1_ANALOG_INPUT_QUICK_CHARGE = 71,
   TLV_P1_REFERENCE_POWER_UP = 123
 };
@@ -216,14 +219,14 @@ tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
 #else
   g_tlv_diag.reset_pin_used = 0U;
   g_tlv_diag.reset_low_duration_ms = 0U;
-  g_tlv_diag.reset_wait_ms = 2U;
+  g_tlv_diag.reset_wait_ms = TLV_CODEC_STARTUP_WAIT_MS;
 #endif
 
   tlv320aic3204_status_t status =
       TLV320AIC3204_WriteReg(i2c, address_7bit, 0U, TLV_RESET, 0x01U);
   if (status == TLV320AIC3204_STATUS_OK)
   {
-    HAL_Delay(2U);
+    HAL_Delay(TLV_CODEC_STARTUP_WAIT_MS);
     uint8_t reset_value = 0xFFU;
     status = TLV320AIC3204_ReadReg(i2c, address_7bit, 0U, TLV_RESET, &reset_value);
     g_tlv_diag.expected = 0x00U;
@@ -502,6 +505,17 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config,
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
   tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_UNMUTE);
+  if (g_tlv_verify_extended_writes != 0U)
+  {
+    status = tlv_wait_mask(config->i2c,
+                           config->address_7bit,
+                           1U,
+                           TLV_P1_DAC_GAIN_FLAGS,
+                           0xC0U,
+                           0xC0U,
+                           TLV_OUTPUT_SOFTSTEP_TIMEOUT_MS);
+    if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  }
   status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);

@@ -303,6 +303,13 @@ uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_d
     diag.i2c_errors = codec_diag.i2c_errors;
     diag.write_failures = codec_diag.write_failures;
     diag.readback_errors = codec_diag.readback_errors;
+    diag.reinit_status = (uint8_t)codec_diag.status;
+    diag.reinit_failed_stage = (uint8_t)codec_diag.stage;
+    diag.reinit_failed_page = codec_diag.page;
+    diag.reinit_failed_reg = codec_diag.reg;
+    diag.reinit_expected = codec_diag.expected;
+    diag.reinit_actual = codec_diag.actual;
+    diag.reinit_mask = codec_diag.mask;
     board_audio_capture_codec_diag();
     if (out_diag != NULL) *out_diag = diag;
     return diag.init_ok;

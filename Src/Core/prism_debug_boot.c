@@ -30,6 +30,8 @@
 #define PRISM_DEBUG_PATH_MAX 160U
 #define PRISM_DEBUG_REPORT_MAX 16384U
 #define PRISM_DEBUG_NOTE_BASE 48U
+#define PRISM_DEBUG_CODEC_RESTART_WAIT_MS 100U
+#define PRISM_DEBUG_TEST_DURATION_MS (PRISM_DEBUG_TEST_SECONDS * 1000U)
 
 typedef enum
 {
@@ -61,6 +63,7 @@ typedef struct
     uint32_t test_frames;
     uint32_t audio_blocks;
     uint32_t max_frames_per_block;
+    uint16_t master_gain_before_start_milli;
     audio_runtime_diag_t audio_diag;
     board_audio_boot_diag_t boot_diag;
     board_audio_runtime_diag_t board_diag;
@@ -256,6 +259,21 @@ static void debug_complete_test(uint32_t frames)
         ? PRISM_DEBUG_STATE_RETEST_COMPLETE : PRISM_DEBUG_STATE_INITIAL_COMPLETE;
 }
 
+static void debug_complete_test_on_time(void)
+{
+    if ((g_debug.state != PRISM_DEBUG_STATE_RUNNING_INITIAL)
+            && (g_debug.state != PRISM_DEBUG_STATE_RUNNING_RETEST)) return;
+    prism_debug_window_t *const window = debug_active_window();
+    if ((uint32_t)(HAL_GetTick() - window->start_tick) < PRISM_DEBUG_TEST_DURATION_MS) return;
+    window->test_frames = PRISM_DEBUG_TEST_FRAMES;
+    window->end_tick = window->start_tick + PRISM_DEBUG_TEST_DURATION_MS;
+    debug_capture_frozen_diagnostics(window);
+    g_debug.codec_snapshot_pending = 1U;
+    debug_stop_scenario();
+    g_debug.state = (g_debug.state == PRISM_DEBUG_STATE_RUNNING_RETEST)
+        ? PRISM_DEBUG_STATE_RETEST_COMPLETE : PRISM_DEBUG_STATE_INITIAL_COMPLETE;
+}
+
 void prism_debug_boot_init(void)
 {
     memset(&g_debug, 0, sizeof(g_debug));
@@ -271,6 +289,8 @@ void prism_debug_boot_start_test(void)
         ? &g_debug.retest : &g_debug.initial;
     active->verdict = 0U;
     mixer_set_master(1.0f);
+    active->master_gain_before_start_milli =
+        (uint16_t)(mixer_get_master() * 1000.0f + 0.5f);
     for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -442,6 +462,10 @@ static int debug_append_window(char *report, int length, const char *section,
         g_debug.notes[0], g_debug.notes[1], g_debug.notes[2], g_debug.notes[3],
         g_debug.notes[4], g_debug.notes[5], g_debug.notes[6], g_debug.notes[7]);
     length = debug_append(report, PRISM_DEBUG_REPORT_MAX, length,
+        "master_gain_before_test = %u.%03u\n",
+        (unsigned)(window->master_gain_before_start_milli / 1000U),
+        (unsigned)(window->master_gain_before_start_milli % 1000U));
+    length = debug_append(report, PRISM_DEBUG_REPORT_MAX, length,
         "tx_buffer_address = 0x%08lX\ntx_buffer_bytes = %lu\n"
         "tx_buffer_cacheable = %u\ntx_buffer_region = .ram_d2_lut\n"
         "tx_cache_clean_active = %u\nformat = PCM24 right-aligned in int32\n"
@@ -540,6 +564,11 @@ static int debug_write_report(void)
             "reset_low_duration = %lu\nwait_time = %lu\nreset_supported = %u\n"
             "reset_ok = %u\nreinitialization_result = %u\n"
             "i2c_errors = %lu\nwrite_failures = %lu\nreadback_errors = %lu\n"
+            "codec_reset_result = %u\ncodec_reinit_result = %u\n"
+            "codec_reinit_status = %u\ncodec_reinit_failed_stage = %u\n"
+            "codec_reinit_failed_page = %u\ncodec_reinit_failed_reg = %u\n"
+            "codec_reinit_expected = 0x%02X\ncodec_reinit_actual = 0x%02X\n"
+            "codec_reinit_mask = 0x%02X\npost_reinit_wait_ms = %u\n"
             "snapshot_before_reset = CODEC_BEFORE_RESET\n",
             (g_debug.reset_diag.reset_type == BOARD_AUDIO_CODEC_RESET_HARDWARE)
                 ? "HARDWARE" : ((g_debug.reset_diag.reset_type == BOARD_AUDIO_CODEC_RESET_SOFTWARE)
@@ -551,7 +580,23 @@ static int debug_write_report(void)
             (unsigned)g_debug.reset_diag.init_ok,
             (unsigned long)g_debug.reset_diag.i2c_errors,
             (unsigned long)g_debug.reset_diag.write_failures,
-            (unsigned long)g_debug.reset_diag.readback_errors);
+            (unsigned long)g_debug.reset_diag.readback_errors,
+            (unsigned)g_debug.reset_diag.reset_ok,
+            (unsigned)g_debug.reset_diag.init_ok,
+            (unsigned)g_debug.reset_diag.reinit_status,
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_failed_stage),
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_failed_page),
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_failed_reg),
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_expected),
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_actual),
+            (unsigned)((g_debug.reset_diag.init_ok != 0U)
+                ? 0U : g_debug.reset_diag.reinit_mask),
+            (unsigned)PRISM_DEBUG_CODEC_RESTART_WAIT_MS);
         length = debug_append_codec_snapshot(report, length, "before_reset",
                                               &g_debug.codec_before_reset);
         length = debug_append(report, sizeof(report), length,
@@ -559,6 +604,40 @@ static int debug_write_report(void)
         length = debug_append_codec_snapshot(report, length, "after_reinitialization",
                                               &g_debug.codec_after_reset);
         g_debug.retest.verdict = g_debug.retest_verdict;
+        length = debug_append(report, sizeof(report), length,
+            "master_gain_before_second_test = %u.%03u\n"
+            "second_test_audio_blocks = %lu\n"
+            "second_test_half_callbacks = %lu\n"
+            "second_test_full_callbacks = %lu\n"
+            "codec_post_reinit_dac_state = 0x%02X\n"
+            "codec_post_reinit_mute = 0x%02X\n"
+            "codec_post_reinit_route_l = 0x%02X\n"
+            "codec_post_reinit_route_r = 0x%02X\n"
+            "codec_post_reinit_output_power = 0x%02X\n"
+            "codec_post_reinit_status = 0x%02X\n",
+            (unsigned)(g_debug.retest.master_gain_before_start_milli / 1000U),
+            (unsigned)(g_debug.retest.master_gain_before_start_milli % 1000U),
+            (unsigned long)g_debug.retest.audio_blocks,
+            (unsigned long)g_debug.retest.audio_diag.half_callbacks,
+            (unsigned long)g_debug.retest.audio_diag.full_callbacks,
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_DAC_STATE)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_DAC_STATE] : 0xFFU),
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_MUTE)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_MUTE] : 0xFFU),
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_ROUTE_L)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_ROUTE_L] : 0xFFU),
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_ROUTE_R)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_ROUTE_R] : 0xFFU),
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_OUTPUT_POWER)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_OUTPUT_POWER] : 0xFFU),
+            (unsigned)((g_debug.codec_after_reset.valid_mask
+                & (1UL << BOARD_AUDIO_CODEC_REG_STATUS)) != 0U
+                ? g_debug.codec_after_reset.actual[BOARD_AUDIO_CODEC_REG_STATUS] : 0xFFU));
         length = debug_append_window(report, length, "AFTER_CODEC_RESET_TEST", &g_debug.retest);
     }
     if ((length <= 0) || ((size_t)length >= sizeof(report))) return 0U;
@@ -581,6 +660,7 @@ static int debug_write_report(void)
 
 void prism_debug_boot_service(void)
 {
+    debug_complete_test_on_time();
     debug_capture_post_test_codec();
     if (g_debug.state == PRISM_DEBUG_STATE_CODEC_RESETTING)
     {
@@ -588,9 +668,11 @@ void prism_debug_boot_service(void)
         board_audio_get_codec_post_test_snapshot(&g_debug.codec_before_reset);
         (void)board_audio_codec_reset_and_reinit(&g_debug.reset_diag);
         board_audio_get_codec_post_test_snapshot(&g_debug.codec_after_reset);
+        HAL_Delay(PRISM_DEBUG_CODEC_RESTART_WAIT_MS);
         debug_configure_tracks();
         g_debug.retest_mode = 1U;
         g_debug.state = PRISM_DEBUG_STATE_ARMED;
+        mixer_set_master(1.0f);
         prism_debug_boot_start_test();
         return;
     }
