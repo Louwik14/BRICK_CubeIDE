@@ -28,8 +28,16 @@
 
 #define PRISM_DEBUG_REPORT_CLIENT SD_ACCESS_CLIENT_RECORDER
 #define PRISM_DEBUG_PATH_MAX 160U
-#define PRISM_DEBUG_REPORT_MAX 4096U
+#define PRISM_DEBUG_REPORT_MAX 8192U
 #define PRISM_DEBUG_NOTE_BASE 48U
+
+#if defined(PRISM_DEBUG_TX_NONCACHEABLE)
+#define PRISM_DEBUG_TEST_VARIANT "TX_NONCACHEABLE"
+#define PRISM_DEBUG_TX_MPU_REGION "region=1 base=0x30000000 size=32KB subregion_disable=0xF8 covered=12KB TEX=LEVEL1 access=FULL disable_exec=1 shareable=1 cacheable=0 bufferable=0"
+#else
+#define PRISM_DEBUG_TEST_VARIANT "TX_CACHEABLE"
+#define PRISM_DEBUG_TX_MPU_REGION "TX in D2 LUT cacheable default region; no temporary TX MPU override"
+#endif
 
 typedef enum
 {
@@ -67,9 +75,11 @@ typedef struct
     uint32_t audio_blocks;
     uint32_t max_frames_per_block;
     prism_debug_save_error_t save_error;
+    uint8_t codec_post_test_pending;
     audio_runtime_diag_t audio_diag;
     board_audio_boot_diag_t boot_diag;
     board_audio_runtime_diag_t board_diag;
+    board_audio_codec_snapshot_t codec_diag;
     char path[PRISM_DEBUG_PATH_MAX];
 } prism_debug_state_data_t;
 
@@ -77,6 +87,14 @@ STORAGE_STATE_SDRAM static prism_debug_state_data_t g_debug;
 
 static const uint8_t g_debug_notes[PRISM_DEBUG_TRACK_COUNT] = {
     PRISM_DEBUG_NOTE_BASE, 52U, 55U, 59U, 62U, 67U, 71U, 74U
+};
+
+static const char *const g_codec_reg_names[BOARD_AUDIO_CODEC_REG_COUNT_SENTINEL] = {
+    "interface",
+    "clock_0", "clock_1", "clock_2", "clock_3", "clock_4", "clock_5", "clock_6", "clock_7",
+    "dac_state", "mute", "route_l", "route_r", "output_power",
+    "digital_volume_l", "digital_volume_r", "analog_volume_l", "analog_volume_r",
+    "status", "status_mask", "functional_mode", "chip_id"
 };
 
 static const char *debug_state_label(void)
@@ -204,8 +222,10 @@ static void debug_complete_test(uint32_t frames)
     if (g_debug.test_frames < PRISM_DEBUG_TEST_FRAMES) return;
     g_debug.test_frames = PRISM_DEBUG_TEST_FRAMES;
     g_debug.end_tick = HAL_GetTick();
-    debug_stop_scenario();
+    /* Freeze the exact test window before any note-off or save-side work. */
     debug_capture_frozen_diagnostics();
+    g_debug.codec_post_test_pending = 1U;
+    debug_stop_scenario();
     g_debug.state = PRISM_DEBUG_STATE_COMPLETE;
 }
 
@@ -235,8 +255,19 @@ void prism_debug_boot_start_test(void)
         g_debug.voice_state_address[track] = (uintptr_t)voice;
         g_debug.voice_slot[track] = synth_polyphony_get_slot(track, 0U);
     }
+    /* The first block counted by the RUNNING state is the test boundary. */
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    audio_runtime_diag_reset_for_test();
+    g_debug.test_frames = 0U;
+    g_debug.audio_blocks = 0U;
+    g_debug.max_frames_per_block = 0U;
     g_debug.start_tick = HAL_GetTick();
     g_debug.state = PRISM_DEBUG_STATE_RUNNING;
+    if (primask == 0U)
+    {
+        __enable_irq();
+    }
 }
 
 uint8_t prism_debug_boot_is_active(void)
@@ -269,6 +300,11 @@ uint8_t prism_debug_boot_handle_event(const ui_event_t *event)
 {
     if ((event == NULL) || (event->type != UI_EVENT_BUTTON_PRESS)) return 1U;
     if (g_debug.state != PRISM_DEBUG_STATE_COMPLETE) return 1U;
+    if (g_debug.codec_post_test_pending != 0U)
+    {
+        board_audio_get_codec_post_test_snapshot(&g_debug.codec_diag);
+        g_debug.codec_post_test_pending = 0U;
+    }
     if (event->id == (uint8_t)BTN_PAGE_1)
     {
         g_debug.verdict = 1U;
@@ -280,6 +316,16 @@ uint8_t prism_debug_boot_handle_event(const ui_event_t *event)
         g_debug.state = PRISM_DEBUG_STATE_SAVING;
     }
     return 1U;
+}
+
+static void debug_capture_post_test_codec(void)
+{
+    if ((g_debug.state == PRISM_DEBUG_STATE_COMPLETE)
+            && (g_debug.codec_post_test_pending != 0U))
+    {
+        board_audio_get_codec_post_test_snapshot(&g_debug.codec_diag);
+        g_debug.codec_post_test_pending = 0U;
+    }
 }
 
 static uint32_t debug_find_test_index(const char *verdict)
@@ -305,11 +351,6 @@ static int debug_append(char *text, size_t capacity, int length, const char *for
     return length;
 }
 
-static uint32_t debug_sai_errors(void)
-{
-    return g_debug.board_diag.tx_sai_error_code | g_debug.board_diag.rx_sai_error_code;
-}
-
 static const char *debug_last_callback(void)
 {
     if (g_debug.audio_diag.last_callback == 1U) return "HALF";
@@ -324,12 +365,14 @@ static uint8_t debug_write_report(void)
     char report[PRISM_DEBUG_REPORT_MAX];
     int length = snprintf(report, sizeof(report),
         "verdict = %s\ntest_index = %lu\nboot_index = %lu\n"
+        "test_variant = %s\n"
         "test_state = COMPLETE\nduration_frames = %lu\n"
         "duration_audio_ms = %u\nduration_wall_ms = %lu\n"
         "sample_rate = %u\nframes_per_block = %u\nmax_frames_per_block = %lu\n"
         "audio_blocks = %lu\ntracks = 8\nosc1 = ON\nosc2 = OFF\n"
         "filter = LP_BI\nfilter_cutoff_ui = 0\nfilter_cutoff_hz = 20\n",
         verdict, (unsigned long)g_debug.test_index, (unsigned long)g_debug.boot_index,
+        PRISM_DEBUG_TEST_VARIANT,
         (unsigned long)g_debug.test_frames, PRISM_DEBUG_TEST_SECONDS * 1000U,
         (unsigned long)elapsed_ms,
         PRISM_DEBUG_SAMPLE_RATE, AUDIO_BLOCK_SIZE,
@@ -350,15 +393,17 @@ static uint8_t debug_write_report(void)
         (unsigned long)g_debug.audio_diag.tx_half_bytes,
         (unsigned long)g_debug.audio_diag.dma_word_count,
         (unsigned)g_debug.audio_diag.tx_cacheable,
-        (g_debug.audio_diag.tx_cacheable != 0U) ? ".ram_d2_lut (cacheable)"
-                                               : ".ram_d2_dma (MPU non-cacheable)",
+        (g_debug.audio_diag.tx_cacheable != 0U) ? ".ram_d2_lut" : ".ram_d2_dma",
         BOARD_AUDIO_TDM_SLOTS, BOARD_AUDIO_FRAMES_PER_HALF);
 
     length = debug_append(report, sizeof(report), length,
         "hal_sai_transmit_dma_word_count = %lu\n"
         "half_callbacks = %lu\nfull_callbacks = %lu\nlast_callback = %s\n"
+        "test_callback_total = %lu\nexpected_audio_blocks = %u\n"
+        "expected_callback_total = %u\n"
         "callback_alternation_errors = %lu\ndma_error_callbacks = %lu\n"
-        "sai_error_callbacks = %lu\nlast_dma_error_code = 0x%08lX\n"
+        "sai_error_callbacks = %lu\nunderrun_callbacks = %lu\n"
+        "last_dma_error_code = 0x%08lX\n"
         "last_sai_error_code = 0x%08lX\nunderrun_flags = 0x%08lX\n"
         "fill_half_0 = %lu\nfill_half_1 = %lu\nwrong_half_writes = %lu\n"
         "half_not_ready = %lu\nlate_fills = %lu\nmax_fill_cycles = %lu\n",
@@ -366,12 +411,16 @@ static uint8_t debug_write_report(void)
         (unsigned long)g_debug.audio_diag.half_callbacks,
         (unsigned long)g_debug.audio_diag.full_callbacks,
         debug_last_callback(),
+        (unsigned long)(g_debug.audio_diag.half_callbacks + g_debug.audio_diag.full_callbacks),
+        PRISM_DEBUG_TEST_FRAMES / AUDIO_BLOCK_SIZE,
+        PRISM_DEBUG_TEST_FRAMES / BOARD_AUDIO_FRAMES_PER_HALF,
         (unsigned long)g_debug.audio_diag.callback_alternation_errors,
         (unsigned long)g_debug.audio_diag.dma_error_callbacks,
         (unsigned long)g_debug.audio_diag.sai_error_callbacks,
+        (unsigned long)g_debug.audio_diag.underrun_callbacks,
         (unsigned long)g_debug.audio_diag.last_dma_error_code,
         (unsigned long)g_debug.audio_diag.last_sai_error_code,
-        (unsigned long)(debug_sai_errors() & HAL_SAI_ERROR_UDR),
+        (unsigned long)(g_debug.audio_diag.last_sai_error_code & HAL_SAI_ERROR_UDR),
         (unsigned long)g_debug.audio_diag.fill_count[0],
         (unsigned long)g_debug.audio_diag.fill_count[1],
         (unsigned long)g_debug.audio_diag.wrong_half_writes,
@@ -385,7 +434,9 @@ static uint8_t debug_write_report(void)
         "dac_unmuted = %u\noutput_routed = %u\noutput_powered = %u\n"
         "output_unmuted = %u\ncodec_volume_ok = %u\ncodec_stage = %u\n"
         "codec_page = %u\ncodec_reg = %u\ncodec_expected = %u\n"
-        "codec_mask = %u\ncodec_actual = %u\ncodec_register_snapshot = BOOT_VERIFY_ONLY\n"
+        "codec_mask = %u\ncodec_actual = %u\n"
+        "codec_boot_expected_stage = %u\ncodec_boot_expected_reg = %u\n"
+        "codec_boot_expected_value = %u\ncodec_register_snapshot = POST_TEST_READ\n"
         "sai_tx_state = %lu\nsai_rx_state = %lu\nsai_tx_error = 0x%08lX\n"
         "sai_rx_error = 0x%08lX\ndma_tx_state = %lu\ndma_rx_state = %lu\n"
         "dma_tx_error = 0x%08lX\ndma_rx_error = 0x%08lX\n"
@@ -409,6 +460,9 @@ static uint8_t debug_write_report(void)
         (unsigned)g_debug.boot_diag.codec_expected,
         (unsigned)g_debug.boot_diag.codec_mask,
         (unsigned)g_debug.boot_diag.codec_actual,
+        (unsigned)g_debug.boot_diag.codec_stage,
+        (unsigned)g_debug.boot_diag.codec_reg,
+        (unsigned)g_debug.boot_diag.codec_expected,
         (unsigned long)g_debug.board_diag.tx_sai_state,
         (unsigned long)g_debug.board_diag.rx_sai_state,
         (unsigned long)g_debug.board_diag.tx_sai_error_code,
@@ -430,9 +484,34 @@ static uint8_t debug_write_report(void)
         "notes = %u,%u,%u,%u,%u,%u,%u,%u\n",
         (unsigned)g_debug.audio_diag.tx_cacheable,
         (unsigned)g_debug.audio_diag.cache_maintenance_active,
-        (g_debug.audio_diag.tx_cacheable != 0U) ? "cacheable D2 LUT" : "non-cacheable D2 DMA",
+        PRISM_DEBUG_TX_MPU_REGION,
         g_debug.notes[0], g_debug.notes[1], g_debug.notes[2], g_debug.notes[3],
         g_debug.notes[4], g_debug.notes[5], g_debug.notes[6], g_debug.notes[7]);
+
+    length = debug_append(report, sizeof(report), length,
+        "codec_post_test_read_ok = %u\ncodec_post_test_i2c_error = %u\n",
+        (unsigned)g_debug.codec_diag.read_ok,
+        (unsigned)g_debug.codec_diag.i2c_error);
+    for (uint8_t id = 0U; id < (uint8_t)BOARD_AUDIO_CODEC_REG_COUNT_SENTINEL; ++id)
+    {
+        const uint32_t bit = 1UL << id;
+        if ((g_debug.codec_diag.valid_mask & bit) != 0U)
+        {
+            length = debug_append(report, sizeof(report), length,
+                "codec_boot_expected_%s = 0x%02X\n"
+                "codec_post_test_actual_%s = 0x%02X\n",
+                g_codec_reg_names[id], (unsigned)g_debug.codec_diag.expected[id],
+                g_codec_reg_names[id], (unsigned)g_debug.codec_diag.actual[id]);
+        }
+        else
+        {
+            length = debug_append(report, sizeof(report), length,
+                "codec_boot_expected_%s = 0x%02X\n"
+                "codec_post_test_actual_%s = NA\n",
+                g_codec_reg_names[id], (unsigned)g_debug.codec_diag.expected[id],
+                g_codec_reg_names[id]);
+        }
+    }
 
     for (uint8_t track = 0U; track < PRISM_DEBUG_TRACK_COUNT; ++track)
     {
@@ -464,6 +543,7 @@ static uint8_t debug_write_report(void)
 
 void prism_debug_boot_service(void)
 {
+    debug_capture_post_test_codec();
     if (g_debug.state != PRISM_DEBUG_STATE_SAVING) return;
     if (sd_access_gate_try_acquire(PRISM_DEBUG_REPORT_CLIENT) == 0U) return;
 

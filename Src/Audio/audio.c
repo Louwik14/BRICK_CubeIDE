@@ -85,6 +85,19 @@ static AUDIO_DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 static audio_seq_diag_t g_audio_seq_diag;
 static audio_runtime_diag_t g_audio_runtime_diag;
 
+static void audio_runtime_diag_set_static_metadata(void)
+{
+    g_audio_runtime_diag.tx_buffer_address = (uintptr_t)tx_buffer;
+    g_audio_runtime_diag.tx_half_address[0] = (uintptr_t)&tx_buffer[0];
+    g_audio_runtime_diag.tx_half_address[1] = (uintptr_t)&tx_buffer[AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME];
+    g_audio_runtime_diag.tx_buffer_bytes = sizeof(tx_buffer);
+    g_audio_runtime_diag.tx_half_bytes = sizeof(tx_buffer) / 2U;
+    g_audio_runtime_diag.dma_word_count = AUDIO_BUFFER_WORDS;
+    g_audio_runtime_diag.tx_cacheable = AUDIO_DMA_BUFFER_IS_CACHEABLE;
+    /* RX invalidation remains active in every build; TX cleaning is conditional. */
+    g_audio_runtime_diag.cache_maintenance_active = 1U;
+}
+
 static void audio_runtime_diag_note_callback(uint8_t callback_kind)
 {
     const uint32_t callback_count = g_audio_runtime_diag.half_callbacks
@@ -398,15 +411,7 @@ void audio_init(void)
     memset(tx_buffer, 0, sizeof(tx_buffer));
     g_audio_seq_diag = (audio_seq_diag_t){0};
     g_audio_runtime_diag = (audio_runtime_diag_t){0};
-    g_audio_runtime_diag.tx_buffer_address = (uintptr_t)tx_buffer;
-    g_audio_runtime_diag.tx_half_address[0] = (uintptr_t)&tx_buffer[0];
-    g_audio_runtime_diag.tx_half_address[1] = (uintptr_t)&tx_buffer[AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME];
-    g_audio_runtime_diag.tx_buffer_bytes = sizeof(tx_buffer);
-    g_audio_runtime_diag.tx_half_bytes = sizeof(tx_buffer) / 2U;
-    g_audio_runtime_diag.dma_word_count = AUDIO_BUFFER_WORDS;
-    g_audio_runtime_diag.tx_cacheable = AUDIO_DMA_BUFFER_IS_CACHEABLE;
-    /* RX invalidation remains active in every build; TX cleaning is conditional. */
-    g_audio_runtime_diag.cache_maintenance_active = 1U;
+    audio_runtime_diag_set_static_metadata();
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
@@ -463,6 +468,12 @@ void audio_runtime_diag_snapshot(audio_runtime_diag_t *out_diag)
     {
         *out_diag = g_audio_runtime_diag;
     }
+}
+
+void audio_runtime_diag_reset_for_test(void)
+{
+    g_audio_runtime_diag = (audio_runtime_diag_t){0};
+    audio_runtime_diag_set_static_metadata();
 }
 
 /* ============================================================
@@ -553,6 +564,10 @@ void HAL_SAI_ErrorCallback(SAI_HandleTypeDef *hsai)
             || (board_audio_is_tx_callback_handle(hsai) != 0U))
     {
         g_audio_runtime_diag.sai_error_callbacks++;
+        if ((hsai->ErrorCode & HAL_SAI_ERROR_UDR) != 0U)
+        {
+            g_audio_runtime_diag.underrun_callbacks++;
+        }
         g_audio_runtime_diag.last_sai_error_code = hsai->ErrorCode;
     }
 }

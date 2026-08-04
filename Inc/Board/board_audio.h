@@ -69,12 +69,52 @@ typedef struct
     uint32_t slot_active;
 } board_audio_runtime_diag_t;
 
+#define BOARD_AUDIO_CODEC_SNAPSHOT_REG_COUNT 24U
+
+typedef enum
+{
+    BOARD_AUDIO_CODEC_REG_INTERFACE = 0U,
+    BOARD_AUDIO_CODEC_REG_CLOCK_0,
+    BOARD_AUDIO_CODEC_REG_CLOCK_1,
+    BOARD_AUDIO_CODEC_REG_CLOCK_2,
+    BOARD_AUDIO_CODEC_REG_CLOCK_3,
+    BOARD_AUDIO_CODEC_REG_CLOCK_4,
+    BOARD_AUDIO_CODEC_REG_CLOCK_5,
+    BOARD_AUDIO_CODEC_REG_CLOCK_6,
+    BOARD_AUDIO_CODEC_REG_CLOCK_7,
+    BOARD_AUDIO_CODEC_REG_DAC_STATE,
+    BOARD_AUDIO_CODEC_REG_MUTE,
+    BOARD_AUDIO_CODEC_REG_ROUTE_L,
+    BOARD_AUDIO_CODEC_REG_ROUTE_R,
+    BOARD_AUDIO_CODEC_REG_OUTPUT_POWER,
+    BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_L,
+    BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_R,
+    BOARD_AUDIO_CODEC_REG_ANALOG_VOLUME_L,
+    BOARD_AUDIO_CODEC_REG_ANALOG_VOLUME_R,
+    BOARD_AUDIO_CODEC_REG_STATUS,
+    BOARD_AUDIO_CODEC_REG_STATUS_MASK,
+    BOARD_AUDIO_CODEC_REG_FUNCTIONAL_MODE,
+    BOARD_AUDIO_CODEC_REG_CHIP_ID,
+    BOARD_AUDIO_CODEC_REG_COUNT_SENTINEL
+} board_audio_codec_reg_id_t;
+
+typedef struct
+{
+    uint32_t valid_mask;
+    uint8_t expected[BOARD_AUDIO_CODEC_SNAPSHOT_REG_COUNT];
+    uint8_t actual[BOARD_AUDIO_CODEC_SNAPSHOT_REG_COUNT];
+    uint8_t read_ok;
+    uint8_t i2c_error;
+    uint8_t _pad[2];
+} board_audio_codec_snapshot_t;
+
 void board_audio_codec_init(void);
 void board_audio_init(void);
 uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_t word_count);
 uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag);
+void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_snapshot);
 uint8_t board_audio_is_tx_callback_handle(void *handle);
 uint8_t board_audio_is_audio_dma_handle(void *handle);
 

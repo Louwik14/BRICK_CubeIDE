@@ -109,6 +109,11 @@ tlv320aic3204_status_t TLV320AIC3204_ReadReg(I2C_HandleTypeDef *i2c,
                                              uint8_t page,
                                              uint8_t reg,
                                              uint8_t *value);
+/* Reads the currently selected page without writing the page selector. */
+tlv320aic3204_status_t TLV320AIC3204_ReadRegCurrentPage(I2C_HandleTypeDef *i2c,
+                                                        uint8_t address_7bit,
+                                                        uint8_t reg,
+                                                        uint8_t *value);
 tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
                                                    uint8_t address_7bit);
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config);

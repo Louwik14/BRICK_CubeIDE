@@ -67,6 +67,7 @@ typedef struct
     uint32_t callback_alternation_errors;
     uint32_t dma_error_callbacks;
     uint32_t sai_error_callbacks;
+    uint32_t underrun_callbacks;
     uint32_t last_dma_error_code;
     uint32_t last_sai_error_code;
     uint32_t fill_count[2];
@@ -92,3 +93,4 @@ void audio_set_process_callback(audio_process_fn cb);
 void audio_seq_diag_reset(void);
 void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag);
 void audio_runtime_diag_snapshot(audio_runtime_diag_t *out_diag);
+void audio_runtime_diag_reset_for_test(void);

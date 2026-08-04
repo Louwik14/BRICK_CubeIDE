@@ -138,6 +138,17 @@ static HAL_StatusTypeDef cs42448_read_reg(uint8_t addr, uint8_t reg, uint8_t *va
                           100U);
 }
 
+cs42448_status_t CS42448_ReadReg(uint8_t addr, uint8_t reg, uint8_t *value)
+{
+  if (value == NULL)
+  {
+    return CS42448_STATUS_I2C;
+  }
+  return (cs42448_read_reg(addr, reg, value) == HAL_OK)
+      ? CS42448_STATUS_OK
+      : CS42448_STATUS_I2C;
+}
+
 static cs42448_status_t cs42448_verify_reg(uint8_t addr,
                                            uint8_t reg,
                                            uint8_t expected,

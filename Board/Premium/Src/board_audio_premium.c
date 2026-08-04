@@ -146,6 +146,58 @@ void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag)
     out_diag->slot_active = hsai_BlockA2.SlotInit.SlotActive;
 }
 
+static void board_audio_codec_snapshot_read(board_audio_codec_snapshot_t *snapshot,
+                                            board_audio_codec_reg_id_t id,
+                                            uint8_t reg,
+                                            uint8_t expected)
+{
+    snapshot->expected[id] = expected;
+    uint8_t actual = 0U;
+    const cs42448_status_t status = CS42448_ReadReg(CS42448_I2C_ADDR, reg, &actual);
+    if (status == CS42448_STATUS_OK)
+    {
+        snapshot->actual[id] = actual;
+        snapshot->valid_mask |= (1UL << (uint32_t)id);
+    }
+    else
+    {
+        snapshot->read_ok = 0U;
+        snapshot->i2c_error = 1U;
+    }
+}
+
+void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_snapshot)
+{
+    if (out_snapshot == NULL) return;
+    *out_snapshot = (board_audio_codec_snapshot_t){0};
+    out_snapshot->read_ok = 1U;
+
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_INTERFACE,
+                                    0x04U, 0x76U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_0,
+                                    0x03U, 0xF4U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_1,
+                                    0x19U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_DAC_STATE,
+                                    0x02U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_MUTE,
+                                    0x07U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_OUTPUT_POWER,
+                                    0x02U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_L,
+                                    0x08U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_R,
+                                    0x09U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_STATUS,
+                                    0x19U, 0x00U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_STATUS_MASK,
+                                    0x1AU, 0x18U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_FUNCTIONAL_MODE,
+                                    0x03U, 0xF4U);
+    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_CHIP_ID,
+                                    0x01U, 0x00U);
+}
+
 uint8_t board_audio_is_tx_callback_handle(void *handle)
 {
     return ((handle != NULL) && (handle == (void *)&hsai_BlockA2)) ? 1U : 0U;

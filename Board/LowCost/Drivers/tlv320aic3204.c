@@ -156,6 +156,32 @@ tlv320aic3204_status_t TLV320AIC3204_ReadReg(I2C_HandleTypeDef *i2c,
   return tlv_record_status(status);
 }
 
+tlv320aic3204_status_t TLV320AIC3204_ReadRegCurrentPage(I2C_HandleTypeDef *i2c,
+                                                        uint8_t address_7bit,
+                                                        uint8_t reg,
+                                                        uint8_t *value)
+{
+  if ((i2c == NULL) || (address_7bit == 0U) || (value == NULL))
+  {
+    return TLV320AIC3204_STATUS_CONFIG_ERROR;
+  }
+
+  const tlv320aic3204_status_t status = tlv_hal_to_status(HAL_I2C_Mem_Read(
+      i2c,
+      (uint16_t)(address_7bit << 1),
+      reg,
+      I2C_MEMADD_SIZE_8BIT,
+      value,
+      1U,
+      TLV_I2C_TIMEOUT_MS));
+  g_tlv_diag.reg = reg;
+  if (status == TLV320AIC3204_STATUS_OK)
+  {
+    g_tlv_diag.actual = *value;
+  }
+  return tlv_record_status(status);
+}
+
 tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
                                                    uint8_t address_7bit)
 {
