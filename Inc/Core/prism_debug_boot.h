@@ -14,6 +14,7 @@ extern "C" {
 #define PRISM_DEBUG_SAMPLE_RATE 48000U
 #define PRISM_DEBUG_CAPTURE_SECONDS 2U
 #define PRISM_DEBUG_RING_FRAMES (PRISM_DEBUG_SAMPLE_RATE * PRISM_DEBUG_CAPTURE_SECONDS)
+#define PRISM_DEBUG_MAX_CAPTURE_CHANNELS (PRISM_DEBUG_TRACK_COUNT * 2U)
 
 typedef enum
 {
@@ -22,6 +23,11 @@ typedef enum
     PRISM_DEBUG_PROBE_P4,
     PRISM_DEBUG_PROBE_P3,
     PRISM_DEBUG_PROBE_P2,
+    PRISM_DEBUG_PROBE_P7,
+    PRISM_DEBUG_PROBE_P8,
+    PRISM_DEBUG_PROBE_P9,
+    PRISM_DEBUG_PROBE_P10,
+    PRISM_DEBUG_PROBE_P11,
     PRISM_DEBUG_PROBE_COUNT
 } prism_debug_probe_t;
 
@@ -34,12 +40,23 @@ void prism_debug_boot_set_render_track(uint8_t track);
 uint8_t prism_debug_boot_get_render_track(void);
 void prism_debug_boot_capture_p6(uint8_t track, const float *mono, uint32_t frames);
 void prism_debug_boot_capture_p5(uint8_t track, const float *mono, uint32_t frames);
+void prism_debug_boot_capture_p7(uint8_t track, const float *mono, uint32_t frames);
+void prism_debug_boot_capture_p8_sample(uint8_t track,
+                                        uint32_t offset,
+                                        float left,
+                                        float right);
+void prism_debug_boot_capture_p9(uint8_t track,
+                                 const float *left,
+                                 const float *right,
+                                 uint32_t frames);
 void prism_debug_boot_capture_p4_sample(uint8_t track, uint32_t offset, float sample);
 void prism_debug_boot_capture_p3_sample(uint8_t track, uint32_t offset, float sample);
 void prism_debug_boot_capture_p2(uint8_t track,
                                  const int16_t *native,
                                  uint32_t offset,
                                  uint32_t frames);
+void prism_debug_boot_capture_p10(const float *left, const float *right, uint32_t frames);
+void prism_debug_boot_capture_p11(const float *left, const float *right, uint32_t frames);
 void prism_debug_boot_end_block(uint32_t frames);
 
 void prism_debug_boot_request_probe(prism_debug_probe_t probe);

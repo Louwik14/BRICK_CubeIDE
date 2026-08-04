@@ -277,6 +277,13 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             }
             if (published != 0U)
             {
+                float *poly_left = NULL;
+                float *poly_right = NULL;
+                if (mixer_begin_external_stereo(ctx->mix_track_id, frames,
+                                                &poly_left, &poly_right) != 0U)
+                {
+                    prism_debug_boot_capture_p9(track, poly_left, poly_right, frames);
+                }
                 mixer_commit_external_poly(ctx->mix_track_id, frames);
                 prism_tracks++;
             }
@@ -305,7 +312,6 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
     {
         *out_prism_tracks = prism_tracks;
     }
-    prism_debug_boot_end_block(frames);
 }
 
 static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)

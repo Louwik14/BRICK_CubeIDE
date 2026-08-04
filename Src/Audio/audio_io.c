@@ -8,6 +8,7 @@
 #include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
+#include "Core/prism_debug_boot.h"
 
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                      StereoTrack *AUDIO_RESTRICT track_buf,
@@ -74,12 +75,14 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
+    prism_debug_boot_capture_p11(monitor_main_l, monitor_main_r, frames);
     if (diag_enabled != 0U)
     {
         audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_PRE_PCM24,
                                          monitor_main_l, monitor_main_r, frames);
     }
 
+    prism_debug_boot_end_block(frames);
     board_audio_pack_output(tx,
                             monitor_main_l,
                             monitor_main_r,

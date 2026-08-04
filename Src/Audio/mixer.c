@@ -2982,6 +2982,7 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
     mixer_poly_filter_sync_config(filter, &g_track_filters[mix_track_id]);
     prism_debug_boot_capture_p6((uint8_t)poly_track_id, mono, frames);
     (void)mixer_track_filter_process_block_mono(filter, mono, frames);
+    prism_debug_boot_capture_p7((uint8_t)poly_track_id, mono, frames);
     const float pan_for_mix = -clamp_pan(voice_pan);
     const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
     const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
@@ -2990,8 +2991,11 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
         const float vca =
             (float)env_adsr_process_step(&filter->vca_env) * (1.0f / 32767.0f);
         filter->vca_env_value = vca;
-        g_external_track_l[mix_track_id][i] += mono[i] * vca * pan_l;
-        g_external_track_r[mix_track_id][i] += mono[i] * vca * pan_r;
+        const float voice_l = mono[i] * vca * pan_l;
+        const float voice_r = mono[i] * vca * pan_r;
+        g_external_track_l[mix_track_id][i] += voice_l;
+        g_external_track_r[mix_track_id][i] += voice_r;
+        prism_debug_boot_capture_p8_sample((uint8_t)poly_track_id, i, voice_l, voice_r);
     }
     return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE);
 }
@@ -3617,6 +3621,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
 #endif
     }
+
+    prism_debug_boot_capture_p10(bus_main_l, bus_main_r, frames);
 
     if (diag_enabled != 0U)
     {
