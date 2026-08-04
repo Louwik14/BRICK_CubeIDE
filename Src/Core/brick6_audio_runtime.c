@@ -639,7 +639,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     {
         uint8_t prism_tracks = 0U;
         brick6_render_prism_tracks(frames, &prism_tracks);
-        prism_debug_boot_audio_prism_tracks(prism_tracks);
+        (void)prism_tracks;
     }
 
     brick6_stack_runtime_process_commands_from_audio();

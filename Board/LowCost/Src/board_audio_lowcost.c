@@ -1,6 +1,8 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Audio/audio_track_diag.h"
+#include "Storage/cache_maintenance.h"
+#include "Storage/memory_layout.h"
 
 #include "i2c.h"
 #include "sai.h"
@@ -191,6 +193,94 @@ void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag)
     out_diag->slot_active = hsai_BlockA1.SlotInit.SlotActive;
 }
 
+uint8_t board_audio_restart_stream(int32_t *rx_buffer,
+                                   int32_t *tx_buffer,
+                                   uint32_t word_count,
+                                   board_audio_restart_diag_t *out_diag)
+{
+    board_audio_restart_diag_t diag = {0};
+    diag.supported = 1U;
+    diag.stop_rx_status = 0xFFU;
+    diag.stop_tx_status = 0xFFU;
+    diag.start_tx_status = 0xFFU;
+    diag.start_rx_status = 0xFFU;
+    diag.word_count = word_count;
+
+    if ((rx_buffer == NULL) || (tx_buffer == NULL)
+            || (word_count == 0U) || (word_count > UINT16_MAX))
+    {
+        if (out_diag != NULL) *out_diag = diag;
+        return 0U;
+    }
+
+    board_audio_get_runtime_diag(&diag.before);
+    diag.tx_sr_before = hsai_BlockA1.Instance->SR;
+    diag.rx_sr_before = hsai_BlockB1.Instance->SR;
+    diag.tx_cr1_before = hsai_BlockA1.Instance->CR1;
+    diag.rx_cr1_before = hsai_BlockB1.Instance->CR1;
+
+    /* RX owns the audio callbacks: stop it first, then stop the TX clock master. */
+    diag.stop_rx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockB1);
+    diag.stop_tx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockA1);
+
+    /* DMAStop already flushes each FIFO; repeat explicitly and clear stale flags. */
+    SET_BIT(hsai_BlockA1.Instance->CR2, SAI_xCR2_FFLUSH);
+    SET_BIT(hsai_BlockB1.Instance->CR2, SAI_xCR2_FFLUSH);
+    hsai_BlockA1.Instance->CLRFR = 0xFFFFFFFFU;
+    hsai_BlockB1.Instance->CLRFR = 0xFFFFFFFFU;
+    diag.fifo_flushed = 1U;
+    diag.flags_cleared = 1U;
+    __DSB();
+
+    board_audio_get_runtime_diag(&diag.after_purge);
+    diag.tx_sr_after_purge = hsai_BlockA1.Instance->SR;
+    diag.rx_sr_after_purge = hsai_BlockB1.Instance->SR;
+
+    if ((diag.stop_rx_status != (uint8_t)HAL_OK)
+            || (diag.stop_tx_status != (uint8_t)HAL_OK))
+    {
+        if (out_diag != NULL) *out_diag = diag;
+        return 0U;
+    }
+
+    /* Both ping-pong halves are known silence before the first restarted frame. */
+    const size_t buffer_bytes = (size_t)word_count * sizeof(int32_t);
+    memset(rx_buffer, 0, buffer_bytes);
+    memset(tx_buffer, 0, buffer_bytes);
+    dcache_invalidate_by_addr_aligned(rx_buffer, buffer_bytes);
+#if AUDIO_DMA_BUFFER_IS_CACHEABLE
+    dcache_clean_by_addr_aligned(tx_buffer, buffer_bytes);
+#endif
+    diag.buffers_zeroed = 1U;
+    __DSB();
+
+    /* Re-establish the original production order without any codec I2C access. */
+    diag.start_tx_status = (uint8_t)HAL_SAI_Transmit_DMA(
+        &hsai_BlockA1, (uint8_t *)tx_buffer, (uint16_t)word_count);
+    if (diag.start_tx_status == (uint8_t)HAL_OK)
+    {
+        diag.start_rx_status = (uint8_t)HAL_SAI_Receive_DMA(
+            &hsai_BlockB1, (uint8_t *)rx_buffer, (uint16_t)word_count);
+    }
+
+    if (diag.start_rx_status != (uint8_t)HAL_OK)
+    {
+        (void)HAL_SAI_DMAStop(&hsai_BlockB1);
+        (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+    }
+
+    board_audio_get_runtime_diag(&diag.after_restart);
+    diag.tx_sr_after_restart = hsai_BlockA1.Instance->SR;
+    diag.rx_sr_after_restart = hsai_BlockB1.Instance->SR;
+    diag.tx_cr1_after_restart = hsai_BlockA1.Instance->CR1;
+    diag.rx_cr1_after_restart = hsai_BlockB1.Instance->CR1;
+    diag.success = ((diag.start_tx_status == (uint8_t)HAL_OK)
+                 && (diag.start_rx_status == (uint8_t)HAL_OK)) ? 1U : 0U;
+
+    if (out_diag != NULL) *out_diag = diag;
+    return diag.success;
+}
+
 static void board_audio_codec_snapshot_read(board_audio_codec_snapshot_t *snapshot,
                                             board_audio_codec_reg_id_t id,
                                             uint8_t page,
@@ -303,13 +393,6 @@ uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_d
     diag.i2c_errors = codec_diag.i2c_errors;
     diag.write_failures = codec_diag.write_failures;
     diag.readback_errors = codec_diag.readback_errors;
-    diag.reinit_status = (uint8_t)codec_diag.status;
-    diag.reinit_failed_stage = (uint8_t)codec_diag.stage;
-    diag.reinit_failed_page = codec_diag.page;
-    diag.reinit_failed_reg = codec_diag.reg;
-    diag.reinit_expected = codec_diag.expected;
-    diag.reinit_actual = codec_diag.actual;
-    diag.reinit_mask = codec_diag.mask;
     board_audio_capture_codec_diag();
     if (out_diag != NULL) *out_diag = diag;
     return diag.init_ok;

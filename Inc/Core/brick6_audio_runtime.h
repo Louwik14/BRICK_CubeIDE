@@ -22,7 +22,7 @@ extern "C" {
 
 void brick6_audio_runtime_init(void);
 
-/* Hold only the MCU DSP mutation path; SAI/DMA keep running. */
+/* Serialize main-loop diagnostic mutations against the audio IRQ. */
 void brick6_audio_runtime_set_diagnostic_hold(uint8_t hold);
 
 void brick6_audio_runtime_dsp(StereoTrack *tracks,

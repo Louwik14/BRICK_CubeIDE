@@ -447,6 +447,19 @@ void audio_start(void)
     (void)board_audio_start_stream(rx_buffer, tx_buffer, AUDIO_BUFFER_WORDS);
 }
 
+uint8_t audio_restart_stream(board_audio_restart_diag_t *out_diag)
+{
+#if defined(BRICK6_VARIANT_LOWCOST)
+    return board_audio_restart_stream(rx_buffer,
+                                      tx_buffer,
+                                      AUDIO_BUFFER_WORDS,
+                                      out_diag);
+#else
+    if (out_diag != NULL) *out_diag = (board_audio_restart_diag_t){0};
+    return 0U;
+#endif
+}
+
 void audio_seq_diag_reset(void)
 {
     g_audio_seq_diag = (audio_seq_diag_t){0};

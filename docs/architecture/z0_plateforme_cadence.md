@@ -524,7 +524,7 @@ Z0 appelle principalement:
 
 ## Addendum 2026-07-23 - bootstrap audio low-cost
 
-- Le codec low-cost est le `TLV320AIC3204` sur `I2C1`, adresse 7 bits `0x18`; son reset exploitable par le firmware est le reset logiciel du codec.
+- Le codec low-cost est le `TLV320AIC3204` sur `I2C1`, adresse 7 bits `0x18`; son reset de boot est logiciel. Le reset codec diagnostique est abandonné: le scénario matériel courant compare un boot BAD avant/après restart SAI1/DMA seul, sans toucher au codec ni au clock tree (`docs/debug/lowcost_audio_boot_good_bad.md`).
 - `SAI1_A` fournit le TX maitre a 48 kHz avec MCLK 12,288 MHz, trames stereo de 64 bits et deux slots actifs de 32 bits transportant chacun 24 bits utiles.
 - Le DMA TX low-cost reste circulaire en mots 32 bits. Les deux slots doivent rester explicitement actifs dans CubeMX et dans le code genere.
 - Tant que le potentiometre low-cost n'est pas monte, `PB1` ne participe ni a la sequence ADC Hall ni au traitement runtime; le controle master conserve son gain fixe temporaire. Le chemin premium reste inchange.

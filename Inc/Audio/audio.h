@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Board/board_audio.h"
+
 /**
  * @file audio.h
  * @brief Couche bas niveau audio SAI + DMA (double buffer) pour STM32H743.
@@ -43,6 +45,9 @@ void audio_init(void);
  * - Active les interruptions half/full transfer via HAL.
  */
 void audio_start(void);
+
+/* Diagnostic Low-Cost: restart SAI/DMA only, without touching codec or clocks. */
+uint8_t audio_restart_stream(board_audio_restart_diag_t *out_diag);
 
 /* User DSP callback (héritage API historique, non utilisé par audio.c actuel). */
 typedef void (*audio_process_fn)(int32_t *rx,

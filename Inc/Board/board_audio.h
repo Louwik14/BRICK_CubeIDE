@@ -69,6 +69,34 @@ typedef struct
     uint32_t slot_active;
 } board_audio_runtime_diag_t;
 
+typedef struct
+{
+    uint8_t supported;
+    uint8_t success;
+    uint8_t stop_rx_status;
+    uint8_t stop_tx_status;
+    uint8_t start_tx_status;
+    uint8_t start_rx_status;
+    uint8_t fifo_flushed;
+    uint8_t flags_cleared;
+    uint8_t buffers_zeroed;
+    uint8_t _pad_restart[3];
+    uint32_t word_count;
+    uint32_t tx_sr_before;
+    uint32_t rx_sr_before;
+    uint32_t tx_sr_after_purge;
+    uint32_t rx_sr_after_purge;
+    uint32_t tx_sr_after_restart;
+    uint32_t rx_sr_after_restart;
+    uint32_t tx_cr1_before;
+    uint32_t rx_cr1_before;
+    uint32_t tx_cr1_after_restart;
+    uint32_t rx_cr1_after_restart;
+    board_audio_runtime_diag_t before;
+    board_audio_runtime_diag_t after_purge;
+    board_audio_runtime_diag_t after_restart;
+} board_audio_restart_diag_t;
+
 #define BOARD_AUDIO_CODEC_SNAPSHOT_REG_COUNT 24U
 
 typedef enum
@@ -127,19 +155,17 @@ typedef struct
     uint32_t i2c_errors;
     uint32_t write_failures;
     uint32_t readback_errors;
-    uint8_t reinit_status;
-    uint8_t reinit_failed_stage;
-    uint8_t reinit_failed_page;
-    uint8_t reinit_failed_reg;
-    uint8_t reinit_expected;
-    uint8_t reinit_actual;
-    uint8_t reinit_mask;
-    uint8_t _pad2;
 } board_audio_codec_reset_diag_t;
 
 void board_audio_codec_init(void);
 void board_audio_init(void);
 uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_t word_count);
+#if defined(BRICK6_VARIANT_LOWCOST)
+uint8_t board_audio_restart_stream(int32_t *rx_buffer,
+                                   int32_t *tx_buffer,
+                                   uint32_t word_count,
+                                   board_audio_restart_diag_t *out_diag);
+#endif
 uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag);
