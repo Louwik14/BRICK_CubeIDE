@@ -465,8 +465,13 @@ static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len)
     }
 
     const uint32_t avg_permille = cpu_load_get_avg_permille();
-    const uint32_t percent = (avg_permille + 5U) / 10U;
-    (void)snprintf(out, out_len, "%lu%%", (unsigned long)percent);
+    const uint32_t percent = avg_permille / 10U;
+    const uint32_t hundredths = (avg_permille % 10U) * 10U;
+    (void)snprintf(out,
+                   out_len,
+                   "%lu.%02lu %%",
+                   (unsigned long)percent,
+                   (unsigned long)hundredths);
 }
 
 static int ui_renderer_template_center_x(int x, int w, const char *txt)
@@ -4396,7 +4401,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
                           title_fit);
 
     drv_display_set_font(&FONT_4X6);
-    ui_renderer_template_fit_text(cpu_avg_label, 12U);
+    ui_renderer_template_fit_text(cpu_avg_label, 30U);
     if (draw_bpm != 0U)
     {
         drv_display_set_font(&FONT_4X6);
