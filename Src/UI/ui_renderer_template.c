@@ -469,7 +469,7 @@ static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len)
     const uint32_t hundredths = (avg_permille % 10U) * 10U;
     (void)snprintf(out,
                    out_len,
-                   "%lu.%02lu %%",
+                   "%lu.%02lu",
                    (unsigned long)percent,
                    (unsigned long)hundredths);
 }
@@ -4427,7 +4427,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
     const uint8_t bpm_w = (draw_bpm != 0U) ? drv_display_text_width(bpm_label) : 0U;
     const uint8_t bpm_x = (draw_bpm != 0U) ? ui_renderer_template_right_x(0U, bpm_w) : OLED_WIDTH;
-    uint8_t cpu_x = (uint8_t)(100U - cpu_text_w);
+    uint8_t cpu_x = (uint8_t)(112U - cpu_text_w);
     if ((draw_bpm != 0U) && ((uint8_t)(cpu_x + cpu_text_w + 1U) > bpm_x))
     {
         cpu_x = (bpm_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(bpm_x - cpu_text_w - 1U) : 0U;
