@@ -39,7 +39,6 @@
 
 
 #define AUDIO_DMA_BUFFER_CACHEABLE SEC_ATTR(".ram_d2_lut") ALIGN32
-#define AUDIO_DMA_BUFFER SEC_ATTR(".ram_d2_lut") ALIGN32
 #define AUDIO_DMA_BUFFER_IS_CACHEABLE 1U
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */

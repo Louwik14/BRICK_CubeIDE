@@ -31,6 +31,7 @@
 
 #include "engine_tasklet.h"
 #include "stm32h7xx_hal.h"
+#include "Audio/audio.h"
 
 #include "buttons.h"
 #include "encoders.h"
@@ -195,5 +196,17 @@ void engine_tasklet_poll(void)
 
     engine_tick(dt_ms);
     ticks_processed++;
+  }
+
+  /* Keep controls/UI alive when audio boot failed and no DMA frames can tick us. */
+  if ((ticks_processed == 0U) && (audio_get_init_state() == AUDIO_INIT_ERROR))
+  {
+    const uint32_t now_ms = HAL_GetTick();
+    const uint32_t dt_ms = now_ms - engine_last_poll_ms;
+    if (dt_ms != 0U)
+    {
+      engine_last_poll_ms = now_ms;
+      engine_tick(dt_ms);
+    }
   }
 }

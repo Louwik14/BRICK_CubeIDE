@@ -22,9 +22,6 @@ extern "C" {
 
 void brick6_audio_runtime_init(void);
 
-/* Serialize main-loop diagnostic mutations against the audio IRQ. */
-void brick6_audio_runtime_set_diagnostic_hold(uint8_t hold);
-
 void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames);

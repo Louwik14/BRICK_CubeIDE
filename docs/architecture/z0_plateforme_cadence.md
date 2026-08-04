@@ -513,8 +513,8 @@ Z0 appelle principalement:
 ## Addendum 2026-07-23 - cadence low-cost et initialisation OLED
 
 - Le SAI1 low-cost active explicitement ses deux slots stereo TX/RX (`SlotActive=0x00000003`). Avec zero slot actif, le DMA RX ne produisait pas les callbacks qui alimentent `engine_tasklet_notify_frames()`.
-- L'initialisation lazy de l'OLED reste commune et autoritative dans le premier `ui_tasklet_poll()`. Sur low-cost, ce premier poll redevient atteignable lorsque les callbacks audio font avancer `engine_tick_count`; aucun second chemin d'initialisation display n'est ajoute.
-- La chaine confirmee reste: callbacks DMA RX SAI1 -> `engine_tasklet_notify_frames()` -> `engine_tasklet_poll()` -> `engine_tick_count` -> `ui_tasklet_poll()` -> `drv_display_init()`, puis renderer et service de flush SPI5/DMA.
+- L'initialisation lazy de l'OLED reste commune et autoritative dans le premier `ui_tasklet_poll()`. En fonctionnement normal, les callbacks audio font avancer `engine_tick_count`. Si le bootstrap audio termine en `AUDIO_INIT_ERROR`, `engine_tasklet_poll()` produit un tick de secours borne par `HAL_GetTick()` afin que l'OLED puisse afficher l'erreur explicite.
+- La chaine nominale reste: callbacks DMA RX SAI1 -> `engine_tasklet_notify_frames()` -> `engine_tasklet_poll()` -> `engine_tick_count` -> `ui_tasklet_poll()` -> `drv_display_init()`, puis renderer et service de flush SPI5/DMA. Le tick de secours n'est actif qu'en erreur audio finale.
 
 ## Addendum 2026-07-28 - boot calibration Hall low-cost
 

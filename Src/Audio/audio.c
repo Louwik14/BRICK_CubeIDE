@@ -28,7 +28,6 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/prism_debug_boot.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
@@ -76,49 +75,13 @@
  * - aucune copie ni changement de format n'est introduit dans le chemin IRQ
  */
 static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
-static AUDIO_DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
    ============================================================ */
 
-static audio_seq_diag_t g_audio_seq_diag;
-static audio_runtime_diag_t g_audio_runtime_diag;
-
-static void audio_runtime_diag_set_static_metadata(void)
-{
-    g_audio_runtime_diag.tx_buffer_address = (uintptr_t)tx_buffer;
-    g_audio_runtime_diag.tx_half_address[0] = (uintptr_t)&tx_buffer[0];
-    g_audio_runtime_diag.tx_half_address[1] = (uintptr_t)&tx_buffer[AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME];
-    g_audio_runtime_diag.tx_buffer_bytes = sizeof(tx_buffer);
-    g_audio_runtime_diag.tx_half_bytes = sizeof(tx_buffer) / 2U;
-    g_audio_runtime_diag.dma_word_count = AUDIO_BUFFER_WORDS;
-    g_audio_runtime_diag.tx_cacheable = AUDIO_DMA_BUFFER_IS_CACHEABLE;
-    /* RX invalidation remains active in every build; TX cleaning is conditional. */
-    g_audio_runtime_diag.cache_maintenance_active = 1U;
-}
-
-static void audio_runtime_diag_note_callback(uint8_t callback_kind)
-{
-    const uint32_t callback_count = g_audio_runtime_diag.half_callbacks
-                                  + g_audio_runtime_diag.full_callbacks;
-    const uint8_t expected = (callback_count == 0U)
-        ? 1U
-        : ((g_audio_runtime_diag.last_callback == 1U) ? 2U : 1U);
-    if (callback_kind != expected)
-    {
-        g_audio_runtime_diag.callback_alternation_errors++;
-    }
-    if (callback_kind == 1U)
-    {
-        g_audio_runtime_diag.half_callbacks++;
-    }
-    else
-    {
-        g_audio_runtime_diag.full_callbacks++;
-    }
-    g_audio_runtime_diag.last_callback = callback_kind;
-}
+static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 
 /* ============================================================
    INTERNAL PROCESSING
@@ -231,15 +194,14 @@ static uint16_t audio_seq_collect_frames_until_next_internal_pulse(uint16_t rema
     return (uint16_t)frames_until_pulse;
 }
 
-static uint16_t audio_process_seq_event_segment(int32_t *rx,
-                                                int32_t *tx,
-                                                uint32_t half_cursor,
-                                                uint64_t block_start_sample,
-                                                uint16_t block_frames,
-                                                seq_runtime_audio_event_t *events,
-                                                uint16_t event_count)
+static void audio_process_seq_event_segment(int32_t *rx,
+                                            int32_t *tx,
+                                            uint32_t half_cursor,
+                                            uint64_t block_start_sample,
+                                            uint16_t block_frames,
+                                            seq_runtime_audio_event_t *events,
+                                            uint16_t event_count)
 {
-    uint16_t segment_count = 0U;
     uint32_t cursor = 0U;
     uint16_t event_index = 0U;
 
@@ -266,7 +228,6 @@ static uint16_t audio_process_seq_event_segment(int32_t *rx,
                                   segment_sample,
                                   segment_frames);
             cursor = next_event_offset;
-            segment_count++;
             continue;
         }
 
@@ -286,11 +247,9 @@ static uint16_t audio_process_seq_event_segment(int32_t *rx,
         event_index++;
     }
 
-    return segment_count;
 }
 static void process_half(uint32_t half_index)
 {
-    const uint32_t cycle_start = DWT->CYCCNT;
     const uint32_t offset =
         half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
     const size_t half_bytes = (size_t)AUDIO_FRAMES_PER_HALF
@@ -302,8 +261,6 @@ static void process_half(uint32_t half_index)
 
     if (half_index > 1U)
     {
-        g_audio_runtime_diag.wrong_half_writes++;
-        g_audio_runtime_diag.half_not_ready++;
         return;
     }
 
@@ -312,8 +269,6 @@ static void process_half(uint32_t half_index)
     note_fx_pipeline_begin_audio_half(AUDIO_FRAMES_PER_HALF);
     seq_play_scheduler_audio_begin_half(SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA);
 
-    uint16_t segment_count = 0U;
-    uint16_t half_event_count = 0U;
     uint32_t half_cursor = 0U;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {
@@ -332,26 +287,14 @@ static void process_half(uint32_t half_index)
                                                                             block_frames);
         const uint64_t block_start_sample =
             seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)block_frames;
-        half_event_count = (uint16_t)(half_event_count + event_count);
-        segment_count = (uint16_t)(segment_count
-            + audio_process_seq_event_segment(rx,
-                                              tx,
-                                              half_cursor,
-                                              block_start_sample,
-                                              block_frames,
-                                              block_events,
-                                              event_count));
+        audio_process_seq_event_segment(rx,
+                                        tx,
+                                        half_cursor,
+                                        block_start_sample,
+                                        block_frames,
+                                        block_events,
+                                        event_count);
         half_cursor += block_frames;
-    }
-
-    if (half_event_count > g_audio_seq_diag.max_events_collected_per_half)
-    {
-        g_audio_seq_diag.max_events_collected_per_half = half_event_count;
-    }
-
-    if (segment_count > g_audio_seq_diag.max_subsegments_per_half)
-    {
-        g_audio_seq_diag.max_subsegments_per_half = segment_count;
     }
 
     note_fx_pipeline_end_audio_half();
@@ -361,28 +304,6 @@ static void process_half(uint32_t half_index)
     dcache_clean_by_addr_aligned(tx, half_bytes);
 #endif
 
-    if (tx != &tx_buffer[half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME])
-    {
-        g_audio_runtime_diag.wrong_half_writes++;
-    }
-    else
-    {
-        g_audio_runtime_diag.fill_count[half_index]++;
-    }
-    {
-        const uint32_t elapsed = DWT->CYCCNT - cycle_start;
-        const uint32_t budget = (SystemCoreClock / BOARD_AUDIO_SAMPLE_RATE_HZ)
-                              * AUDIO_FRAMES_PER_HALF;
-        if (elapsed > g_audio_runtime_diag.max_fill_cycles)
-        {
-            g_audio_runtime_diag.max_fill_cycles = elapsed;
-        }
-        if ((budget != 0U) && (elapsed > budget))
-        {
-            g_audio_runtime_diag.late_fills++;
-        }
-    }
-    prism_debug_boot_audio_half_complete((uint8_t)half_index, AUDIO_FRAMES_PER_HALF);
 }
 /* ============================================================
    API
@@ -406,13 +327,10 @@ static void process_half(uint32_t half_index)
 void audio_init(void)
 {
     board_audio_init();
+    g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
-    g_audio_seq_diag = (audio_seq_diag_t){0};
-    g_audio_runtime_diag = (audio_runtime_diag_t){0};
-    audio_runtime_diag_set_static_metadata();
-
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
@@ -442,51 +360,28 @@ void audio_init(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_start(void)
+uint8_t audio_start(void)
 {
-    (void)board_audio_start_stream(rx_buffer, tx_buffer, AUDIO_BUFFER_WORDS);
-}
-
-uint8_t audio_restart_stream(board_audio_restart_diag_t *out_diag)
-{
-#if defined(BRICK6_VARIANT_LOWCOST)
-    return board_audio_restart_stream(rx_buffer,
-                                      tx_buffer,
-                                      AUDIO_BUFFER_WORDS,
-                                      out_diag);
-#else
-    if (out_diag != NULL) *out_diag = (board_audio_restart_diag_t){0};
-    return 0U;
-#endif
-}
-
-void audio_seq_diag_reset(void)
-{
-    g_audio_seq_diag = (audio_seq_diag_t){0};
-}
-
-void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag)
-{
-    if (out_diag == NULL)
+    g_audio_init_state = AUDIO_INIT_CODEC;
+    if (board_audio_start_stream(rx_buffer, tx_buffer, AUDIO_BUFFER_WORDS,
+                                 &g_audio_init_state) == 0U)
     {
-        return;
+        g_audio_init_state = AUDIO_INIT_ERROR;
+        return 0U;
     }
-
-    *out_diag = g_audio_seq_diag;
+    return (g_audio_init_state == AUDIO_INIT_READY) ? 1U : 0U;
 }
 
-void audio_runtime_diag_snapshot(audio_runtime_diag_t *out_diag)
+audio_init_state_t audio_get_init_state(void)
 {
-    if (out_diag != NULL)
-    {
-        *out_diag = g_audio_runtime_diag;
-    }
+    return g_audio_init_state;
 }
 
-void audio_runtime_diag_reset_for_test(void)
+board_audio_boot_error_t audio_get_boot_error(void)
 {
-    g_audio_runtime_diag = (audio_runtime_diag_t){0};
-    audio_runtime_diag_set_static_metadata();
+    board_audio_boot_diag_t diag;
+    board_audio_get_boot_diag(&diag);
+    return diag.last_error;
 }
 
 /* ============================================================
@@ -518,9 +413,9 @@ void audio_runtime_diag_reset_for_test(void)
  */
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
-    if(board_audio_is_rx_callback_handle(hsai) != 0U)
+    if ((g_audio_init_state == AUDIO_INIT_READY)
+            && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_runtime_diag_note_callback(1U);
         cpu_load_irq_begin();
 
         process_half(0);
@@ -557,9 +452,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
  */
 void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
-    if(board_audio_is_rx_callback_handle(hsai) != 0U)
+    if ((g_audio_init_state == AUDIO_INIT_READY)
+            && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_runtime_diag_note_callback(2U);
         cpu_load_irq_begin();
 
         process_half(1);
@@ -568,28 +463,5 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
 
         cpu_load_irq_end();
-    }
-}
-
-void HAL_SAI_ErrorCallback(SAI_HandleTypeDef *hsai)
-{
-    if ((board_audio_is_rx_callback_handle(hsai) != 0U)
-            || (board_audio_is_tx_callback_handle(hsai) != 0U))
-    {
-        g_audio_runtime_diag.sai_error_callbacks++;
-        if ((hsai->ErrorCode & HAL_SAI_ERROR_UDR) != 0U)
-        {
-            g_audio_runtime_diag.underrun_callbacks++;
-        }
-        g_audio_runtime_diag.last_sai_error_code = hsai->ErrorCode;
-    }
-}
-
-void HAL_DMA_ErrorCallback(DMA_HandleTypeDef *hdma)
-{
-    if (board_audio_is_audio_dma_handle(hdma) != 0U)
-    {
-        g_audio_runtime_diag.dma_error_callbacks++;
-        g_audio_runtime_diag.last_dma_error_code = hdma->ErrorCode;
     }
 }

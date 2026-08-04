@@ -29,13 +29,10 @@
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
-#include "Core/prism_debug_boot.h"
 #include "Mod/mod_lfo_v1.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
-static volatile uint8_t g_runtime_diagnostic_hold;
-static volatile uint8_t g_runtime_dsp_active;
 
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
@@ -236,8 +233,6 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
     static float prism_tmp[AUDIO_BLOCK_SIZE];
     uint8_t prism_tracks = 0U;
 
-    prism_debug_boot_audio_block_begin(frames);
-
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -252,7 +247,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
-        if ((voice_count > 1U) || (prism_debug_boot_is_active() != 0U))
+        if (voice_count > 1U)
         {
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
@@ -559,45 +554,14 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
 void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
-    g_runtime_diagnostic_hold = 0U;
-    g_runtime_dsp_active = 0U;
     synth_polyphony_init();
     metronome_runtime_init();
-}
-
-void brick6_audio_runtime_set_diagnostic_hold(uint8_t hold)
-{
-    if (hold != 0U)
-    {
-        g_runtime_diagnostic_hold = 1U;
-        __DMB();
-        while (g_runtime_dsp_active != 0U) { }
-    }
-    else
-    {
-        __DMB();
-        g_runtime_diagnostic_hold = 0U;
-    }
 }
 
 void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    g_runtime_dsp_active = 1U;
-    __DMB();
-    if (g_runtime_diagnostic_hold != 0U)
-    {
-        for (uint32_t track = 0U; track < track_count; ++track)
-        {
-            memset(tracks[track].L, 0, frames * sizeof(float));
-            memset(tracks[track].R, 0, frames * sizeof(float));
-        }
-        __DMB();
-        g_runtime_dsp_active = 0U;
-        return;
-    }
-
     track_runtime_synth_usage_t synth_usage = { 0U };
     (void)track_runtime_refresh_if_dirty();
     track_runtime_get_cached_synth_usage(&synth_usage);
@@ -687,8 +651,5 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
             }
         }
     }
-
-    __DMB();
-    g_runtime_dsp_active = 0U;
 
 }

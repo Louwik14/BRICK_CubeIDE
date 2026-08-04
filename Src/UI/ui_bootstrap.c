@@ -19,7 +19,6 @@
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_lowcost_button_test.h"
-#include "pages/ui_page_prism_debug.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 #include "lowcost_button_test_config.h"
@@ -73,7 +72,7 @@ void ui_bootstrap_init(void)
 #else
     ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
 #endif
-    ui_page_manager_register(&g_ui_page_prism_debug);
+    ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

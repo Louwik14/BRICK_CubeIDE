@@ -1,10 +1,7 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Audio/audio_track_diag.h"
-#include "Storage/cache_maintenance.h"
-#include "Storage/memory_layout.h"
 
-#include "i2c.h"
 #include "sai.h"
 #include "tlv320aic3204.h"
 
@@ -12,7 +9,8 @@
 #include "stm32h743xx.h"
 #include <string.h>
 
-#define BOARD_AUDIO_INIT_ATTEMPTS 2U
+#define BOARD_AUDIO_INIT_ATTEMPTS 3U
+#define BOARD_AUDIO_RETRY_DELAY_MS 10U
 
 static board_audio_boot_diag_t g_board_audio_boot_diag;
 
@@ -94,12 +92,17 @@ void board_audio_init(void)
 {
 }
 
-uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_t word_count)
+uint8_t board_audio_start_stream(int32_t *rx_buffer,
+                                 int32_t *tx_buffer,
+                                 uint32_t word_count,
+                                 volatile audio_init_state_t *init_state)
 {
-    if ((rx_buffer == NULL) || (tx_buffer == NULL) || (word_count == 0U))
+    if ((rx_buffer == NULL) || (tx_buffer == NULL) || (word_count == 0U)
+            || (word_count > UINT16_MAX) || (init_state == NULL))
     {
         g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_BAD_ARGUMENT;
         g_board_audio_boot_diag.failure_count++;
+        if (init_state != NULL) *init_state = AUDIO_INIT_ERROR;
         return 0U;
     }
 
@@ -115,7 +118,11 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
         if (attempt != 0U)
         {
             g_board_audio_boot_diag.retry_count++;
+            HAL_Delay(BOARD_AUDIO_RETRY_DELAY_MS);
         }
+
+        *init_state = AUDIO_INIT_CODEC;
+        g_board_audio_boot_diag.codec_ready = 0U;
 
         (void)HAL_SAI_DMAStop(&hsai_BlockB1);
         (void)HAL_SAI_DMAStop(&hsai_BlockA1);
@@ -157,11 +164,52 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer, int32_t *tx_buffer, uint32_
         }
 
         g_board_audio_boot_diag.rx_started = 1U;
+
+        /* Hardware-proven post-codec boundary: stop RX, stop TX, start TX, start RX. */
+        *init_state = AUDIO_INIT_SAI_SYNC;
+        const HAL_StatusTypeDef stop_rx = HAL_SAI_DMAStop(&hsai_BlockB1);
+        const HAL_StatusTypeDef stop_tx = HAL_SAI_DMAStop(&hsai_BlockA1);
+        g_board_audio_boot_diag.rx_started = 0U;
+        g_board_audio_boot_diag.tx_started = 0U;
+        if ((stop_rx != HAL_OK) || (stop_tx != HAL_OK))
+        {
+            g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_SAI_SYNC;
+            g_board_audio_boot_diag.failure_count++;
+            continue;
+        }
+
+        if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)tx_buffer,
+                                 (uint16_t)word_count) != HAL_OK)
+        {
+            g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_TX_DMA;
+            g_board_audio_boot_diag.failure_count++;
+            continue;
+        }
+        g_board_audio_boot_diag.tx_started = 1U;
+
+        if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t *)rx_buffer,
+                                (uint16_t)word_count) != HAL_OK)
+        {
+            g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_RX_DMA;
+            g_board_audio_boot_diag.failure_count++;
+            (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+            g_board_audio_boot_diag.tx_started = 0U;
+            continue;
+        }
+
+        g_board_audio_boot_diag.rx_started = 1U;
         g_board_audio_boot_diag.stream_started = 1U;
         g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
+        *init_state = AUDIO_INIT_READY;
         return 1U;
     }
 
+    (void)HAL_SAI_DMAStop(&hsai_BlockB1);
+    (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+    g_board_audio_boot_diag.stream_started = 0U;
+    g_board_audio_boot_diag.tx_started = 0U;
+    g_board_audio_boot_diag.rx_started = 0U;
+    *init_state = AUDIO_INIT_ERROR;
     return 0U;
 }
 
@@ -171,229 +219,6 @@ void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag)
     {
         *out_diag = g_board_audio_boot_diag;
     }
-}
-
-void board_audio_get_runtime_diag(board_audio_runtime_diag_t *out_diag)
-{
-    if (out_diag == NULL) return;
-    *out_diag = (board_audio_runtime_diag_t){0};
-    out_diag->tx_sai_state = (uint32_t)hsai_BlockA1.State;
-    out_diag->rx_sai_state = (uint32_t)hsai_BlockB1.State;
-    out_diag->tx_sai_error_code = hsai_BlockA1.ErrorCode;
-    out_diag->rx_sai_error_code = hsai_BlockB1.ErrorCode;
-    out_diag->tx_dma_state = (hsai_BlockA1.hdmatx != NULL) ? (uint32_t)hsai_BlockA1.hdmatx->State : 0U;
-    out_diag->rx_dma_state = (hsai_BlockB1.hdmarx != NULL) ? (uint32_t)hsai_BlockB1.hdmarx->State : 0U;
-    out_diag->tx_dma_error_code = (hsai_BlockA1.hdmatx != NULL) ? hsai_BlockA1.hdmatx->ErrorCode : 0U;
-    out_diag->rx_dma_error_code = (hsai_BlockB1.hdmarx != NULL) ? hsai_BlockB1.hdmarx->ErrorCode : 0U;
-    out_diag->frame_length = hsai_BlockA1.FrameInit.FrameLength;
-    out_diag->active_frame_length = hsai_BlockA1.FrameInit.ActiveFrameLength;
-    out_diag->data_size = hsai_BlockA1.Init.DataSize;
-    out_diag->slot_size = hsai_BlockA1.SlotInit.SlotSize;
-    out_diag->slot_number = hsai_BlockA1.SlotInit.SlotNumber;
-    out_diag->slot_active = hsai_BlockA1.SlotInit.SlotActive;
-}
-
-uint8_t board_audio_restart_stream(int32_t *rx_buffer,
-                                   int32_t *tx_buffer,
-                                   uint32_t word_count,
-                                   board_audio_restart_diag_t *out_diag)
-{
-    board_audio_restart_diag_t diag = {0};
-    diag.supported = 1U;
-    diag.stop_rx_status = 0xFFU;
-    diag.stop_tx_status = 0xFFU;
-    diag.start_tx_status = 0xFFU;
-    diag.start_rx_status = 0xFFU;
-    diag.word_count = word_count;
-
-    if ((rx_buffer == NULL) || (tx_buffer == NULL)
-            || (word_count == 0U) || (word_count > UINT16_MAX))
-    {
-        if (out_diag != NULL) *out_diag = diag;
-        return 0U;
-    }
-
-    board_audio_get_runtime_diag(&diag.before);
-    diag.tx_sr_before = hsai_BlockA1.Instance->SR;
-    diag.rx_sr_before = hsai_BlockB1.Instance->SR;
-    diag.tx_cr1_before = hsai_BlockA1.Instance->CR1;
-    diag.rx_cr1_before = hsai_BlockB1.Instance->CR1;
-
-    /* RX owns the audio callbacks: stop it first, then stop the TX clock master. */
-    diag.stop_rx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockB1);
-    diag.stop_tx_status = (uint8_t)HAL_SAI_DMAStop(&hsai_BlockA1);
-
-    /* Minimal test: keep only DMAStop's intrinsic abort/FIFO flush. */
-    diag.fifo_flushed = 1U;
-    __DSB();
-
-    board_audio_get_runtime_diag(&diag.after_purge);
-    diag.tx_sr_after_purge = hsai_BlockA1.Instance->SR;
-    diag.rx_sr_after_purge = hsai_BlockB1.Instance->SR;
-
-    if ((diag.stop_rx_status != (uint8_t)HAL_OK)
-            || (diag.stop_tx_status != (uint8_t)HAL_OK))
-    {
-        if (out_diag != NULL) *out_diag = diag;
-        return 0U;
-    }
-
-    /* Preserve buffer contents and restart without any codec I2C access. */
-    diag.start_tx_status = (uint8_t)HAL_SAI_Transmit_DMA(
-        &hsai_BlockA1, (uint8_t *)tx_buffer, (uint16_t)word_count);
-    if (diag.start_tx_status == (uint8_t)HAL_OK)
-    {
-        diag.start_rx_status = (uint8_t)HAL_SAI_Receive_DMA(
-            &hsai_BlockB1, (uint8_t *)rx_buffer, (uint16_t)word_count);
-    }
-
-    if (diag.start_rx_status != (uint8_t)HAL_OK)
-    {
-        (void)HAL_SAI_DMAStop(&hsai_BlockB1);
-        (void)HAL_SAI_DMAStop(&hsai_BlockA1);
-    }
-
-    board_audio_get_runtime_diag(&diag.after_restart);
-    diag.tx_sr_after_restart = hsai_BlockA1.Instance->SR;
-    diag.rx_sr_after_restart = hsai_BlockB1.Instance->SR;
-    diag.tx_cr1_after_restart = hsai_BlockA1.Instance->CR1;
-    diag.rx_cr1_after_restart = hsai_BlockB1.Instance->CR1;
-    diag.success = ((diag.start_tx_status == (uint8_t)HAL_OK)
-                 && (diag.start_rx_status == (uint8_t)HAL_OK)) ? 1U : 0U;
-
-    if (out_diag != NULL) *out_diag = diag;
-    return diag.success;
-}
-
-static void board_audio_codec_snapshot_read(board_audio_codec_snapshot_t *snapshot,
-                                            board_audio_codec_reg_id_t id,
-                                            uint8_t page,
-                                            uint8_t reg,
-                                            uint8_t expected)
-{
-    snapshot->expected[id] = expected;
-    uint8_t actual = 0U;
-    const tlv320aic3204_status_t status = TLV320AIC3204_ReadReg(
-        &hi2c1, TLV320AIC3204_I2C_ADDR_7BIT, page, reg, &actual);
-    if (status == TLV320AIC3204_STATUS_OK)
-    {
-        snapshot->actual[id] = actual;
-        snapshot->valid_mask |= (1UL << (uint32_t)id);
-    }
-    else
-    {
-        snapshot->read_ok = 0U;
-        snapshot->i2c_error = 1U;
-    }
-}
-
-static void board_audio_codec_snapshot_read_current_page(board_audio_codec_snapshot_t *snapshot,
-                                                         board_audio_codec_reg_id_t id,
-                                                         uint8_t reg,
-                                                         uint8_t expected)
-{
-    snapshot->expected[id] = expected;
-    uint8_t actual = 0U;
-    const tlv320aic3204_status_t status = TLV320AIC3204_ReadRegCurrentPage(
-        &hi2c1, TLV320AIC3204_I2C_ADDR_7BIT, reg, &actual);
-    if (status == TLV320AIC3204_STATUS_OK)
-    {
-        snapshot->actual[id] = actual;
-        snapshot->valid_mask |= (1UL << (uint32_t)id);
-    }
-    else
-    {
-        snapshot->read_ok = 0U;
-        snapshot->i2c_error = 1U;
-    }
-}
-
-void board_audio_get_codec_post_test_snapshot(board_audio_codec_snapshot_t *out_snapshot)
-{
-    if (out_snapshot == NULL) return;
-    *out_snapshot = (board_audio_codec_snapshot_t){0};
-    out_snapshot->read_ok = 1U;
-
-    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_INTERFACE,
-                                    0U, 27U, 0x20U);
-    /* Only the page selector is changed to address the second register page. */
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_0,
-                                                 4U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_1,
-                                                 11U, 0x81U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_2,
-                                                 12U, 0x82U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_3,
-                                                 13U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_4,
-                                                 14U, 0x80U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_5,
-                                                 18U, 0x81U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_6,
-                                                 19U, 0x82U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_CLOCK_7,
-                                                 20U, 0x80U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_DAC_STATE,
-                                                 37U, 0xAAU);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_L,
-                                                 65U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_DIGITAL_VOLUME_R,
-                                                 66U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_STATUS,
-                                                 36U, 0x44U);
-
-    /* Page 1 is selected once; all remaining reads are read-only. */
-    board_audio_codec_snapshot_read(out_snapshot, BOARD_AUDIO_CODEC_REG_MUTE,
-                                    1U, 16U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_ROUTE_L,
-                                                 12U, 0x08U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_ROUTE_R,
-                                                 13U, 0x08U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_OUTPUT_POWER,
-                                                 9U, 0x30U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_ANALOG_VOLUME_L,
-                                                 16U, 0x00U);
-    board_audio_codec_snapshot_read_current_page(out_snapshot, BOARD_AUDIO_CODEC_REG_ANALOG_VOLUME_R,
-                                                 17U, 0x00U);
-    out_snapshot->expected[BOARD_AUDIO_CODEC_REG_FUNCTIONAL_MODE] = 0U;
-    out_snapshot->expected[BOARD_AUDIO_CODEC_REG_CHIP_ID] = 0U;
-}
-
-uint8_t board_audio_codec_reset_and_reinit(board_audio_codec_reset_diag_t *out_diag)
-{
-    board_audio_codec_reset_diag_t diag = {0};
-    tlv320aic3204_diag_t codec_diag;
-    diag.supported = 1U;
-    diag.reset_type = BOARD_AUDIO_CODEC_RESET_SOFTWARE;
-    const tlv320aic3204_status_t status = TLV320AIC3204_InitDefaultChecked();
-    TLV320AIC3204_GetDiag(&codec_diag);
-    diag.reset_ok = codec_diag.reset_ok;
-    diag.init_ok = (status == TLV320AIC3204_STATUS_OK) ? 1U : 0U;
-    diag.reset_type = (codec_diag.reset_pin_used != 0U)
-        ? BOARD_AUDIO_CODEC_RESET_HARDWARE : BOARD_AUDIO_CODEC_RESET_SOFTWARE;
-    diag.reset_pin_used = codec_diag.reset_pin_used;
-    diag.reset_low_duration_ms = codec_diag.reset_low_duration_ms;
-    diag.wait_ms = codec_diag.reset_wait_ms;
-    diag.i2c_errors = codec_diag.i2c_errors;
-    diag.write_failures = codec_diag.write_failures;
-    diag.readback_errors = codec_diag.readback_errors;
-    board_audio_capture_codec_diag();
-    if (out_diag != NULL) *out_diag = diag;
-    return diag.init_ok;
-}
-
-uint8_t board_audio_is_tx_callback_handle(void *handle)
-{
-    return ((handle != NULL) && (handle == (void *)&hsai_BlockA1)) ? 1U : 0U;
-}
-
-uint8_t board_audio_is_audio_dma_handle(void *handle)
-{
-    return ((handle != NULL)
-            && ((handle == (void *)hsai_BlockA1.hdmatx)
-            || (handle == (void *)hsai_BlockA1.hdmarx)
-            || (handle == (void *)hsai_BlockB1.hdmatx)
-            || (handle == (void *)hsai_BlockB1.hdmarx))) ? 1U : 0U;
 }
 
 uint8_t board_audio_is_rx_callback_handle(void *handle)

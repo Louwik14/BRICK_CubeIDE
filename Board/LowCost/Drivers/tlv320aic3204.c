@@ -60,7 +60,6 @@ enum
 };
 
 static tlv320aic3204_diag_t g_tlv_diag;
-static uint8_t g_tlv_verify_extended_writes;
 
 static void tlv_set_stage(tlv320aic3204_stage_t stage)
 {
@@ -275,10 +274,6 @@ static tlv320aic3204_status_t tlv_write_extended(I2C_HandleTypeDef *i2c,
                                                  uint8_t reg,
                                                  uint8_t value)
 {
-  if (g_tlv_verify_extended_writes != 0U)
-  {
-    return tlv_write_checked(i2c, address, page, reg, value);
-  }
   return TLV320AIC3204_WriteReg(i2c, address, page, reg, value);
 }
 
@@ -324,11 +319,9 @@ static tlv320aic3204_status_t tlv_wait_mask(I2C_HandleTypeDef *i2c,
   return tlv_record_status(TLV320AIC3204_STATUS_READY_TIMEOUT);
 }
 
-static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config,
-                                       uint8_t verify_extended_writes)
+static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
 {
   memset(&g_tlv_diag, 0, sizeof(g_tlv_diag));
-  g_tlv_verify_extended_writes = verify_extended_writes;
   if ((config == NULL) ||
       (config->i2c == NULL) ||
       (config->address_7bit == 0U) ||
@@ -517,12 +510,7 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config,
 
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
 {
-  return tlv_init(config, 0U);
-}
-
-tlv320aic3204_status_t TLV320AIC3204_InitChecked(const tlv320aic3204_config_t *config)
-{
-  return tlv_init(config, 1U);
+  return tlv_init(config);
 }
 
 tlv320aic3204_status_t TLV320AIC3204_InitDefault(void)
@@ -539,22 +527,6 @@ tlv320aic3204_status_t TLV320AIC3204_InitDefault(void)
   };
 
   return TLV320AIC3204_Init(&config);
-}
-
-tlv320aic3204_status_t TLV320AIC3204_InitDefaultChecked(void)
-{
-  const tlv320aic3204_config_t config = {
-      .i2c = &hi2c1,
-      .address_7bit = TLV320AIC3204_I2C_ADDR_7BIT,
-      .mclk_hz = TLV320AIC3204_MCLK_HZ,
-      .word_bits = TLV320AIC3204_WORD_BITS,
-      .left_p_route = TLV320AIC3204_LEFT_P_ROUTE,
-      .left_m_route = TLV320AIC3204_LEFT_M_ROUTE,
-      .right_p_route = TLV320AIC3204_RIGHT_P_ROUTE,
-      .right_m_route = TLV320AIC3204_RIGHT_M_ROUTE,
-  };
-
-  return TLV320AIC3204_InitChecked(&config);
 }
 
 void TLV320AIC3204_GetDiag(tlv320aic3204_diag_t *out_diag)

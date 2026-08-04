@@ -30,7 +30,6 @@
 #include "fx_reverb.h"
 #include "Audio/spectral_window.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/prism_debug_boot.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Audio/multi_voice_dsp.h"
@@ -3254,8 +3253,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
         mixer_track_t *mt = &g_tracks[t];
-        const uint8_t hw_enabled = ((prism_debug_boot_is_active() == 0U) && (t < ntracks))
-            ? tracks[t].enabled : 0U;
+        const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
         const mixer_lane_plan_t lane_plan = mixer_build_lane_plan(t,
                                                                   mt,
                                                                   &g_track_filters[t],

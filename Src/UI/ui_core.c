@@ -44,7 +44,6 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
 #include "ui_bootstrap.h"
-#include "Core/prism_debug_boot.h"
 #include "ui_event.h"
 #include "ui_core_navigation_bridge.h"
 #include "ui_hall_input_service.h"
@@ -822,11 +821,6 @@ void ui_core_tick(void)
         {
             delta = (int16_t)-delta;
         }
-        if ((ui_page_get_id() == UI_PAGE_PRISM_DEBUG)
-                && (prism_debug_boot_handle_encoder(encoder, delta) != 0U))
-        {
-            continue;
-        }
         if (ui_page_settings_is_open() != 0U)
         {
             ui_page_settings_handle_encoder(encoder, delta);
@@ -869,13 +863,6 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
-#if BRICK6_PRISM_DEBUG_BOOT
-        if (ui_page_get_id() == UI_PAGE_PRISM_DEBUG)
-        {
-            (void)prism_debug_boot_handle_event(&ev);
-            goto next_event;
-        }
-#endif
         /* Temporary low-cost bring-up page owns button events, including events
          * normally consumed by transport, shortcuts, or navigation. */
         if (ui_page_lowcost_button_test_capture_event(&ev) != 0U)

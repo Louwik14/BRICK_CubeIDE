@@ -123,10 +123,7 @@ tlv320aic3204_status_t TLV320AIC3204_ReadRegCurrentPage(I2C_HandleTypeDef *i2c,
 tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
                                                    uint8_t address_7bit);
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config);
-/* Used after an isolated codec reset; verifies the extended register set. */
-tlv320aic3204_status_t TLV320AIC3204_InitChecked(const tlv320aic3204_config_t *config);
 tlv320aic3204_status_t TLV320AIC3204_InitDefault(void);
-tlv320aic3204_status_t TLV320AIC3204_InitDefaultChecked(void);
 void TLV320AIC3204_GetDiag(tlv320aic3204_diag_t *out_diag);
 
 #endif /* TLV320AIC3204_H */
