@@ -64,7 +64,7 @@ static const char *const g_looper_play_labels[] = {"Off", "Auto", NULL};
 
 
 static const char *const g_prism_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Toy", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "Bell", "Drum", "Kick", "Cymbal", "Snare", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
-static const char *const g_stack_model_labels[] = {"SINFD", "SHAPE", "WAVETABLE", "SUB", "FM", "FB FM", "RING", "TRIPLE SAW", "TRIPLE SQR", "SWARM", "TRIFD", "SINMORPH", "TRIMORPH", NULL};
+static const char *const g_stack_model_labels[] = {"SINFD", "SHAPE", "WAVETABLE", "SUB", "TRIPLE SAW", "TRIFD", "SINMORPH", "TRIMORPH", NULL};
 static const char *const g_deluge_model_labels[] = {
     "SINE", "TRI", "SQUARE", "A-SQUARE", "SAW", "A-SAW", NULL
 };

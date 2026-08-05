@@ -23,12 +23,7 @@ typedef enum
     BRICK6_STACK_MODEL_SHAPE,
     BRICK6_STACK_MODEL_WAVETABLE,
     BRICK6_STACK_MODEL_SUB,
-    BRICK6_STACK_MODEL_FM,
-    BRICK6_STACK_MODEL_FEEDBACK_FM,
-    BRICK6_STACK_MODEL_RING,
     BRICK6_STACK_MODEL_TRIPLE_SAW,
-    BRICK6_STACK_MODEL_TRIPLE_SQUARE,
-    BRICK6_STACK_MODEL_SWARM,
     BRICK6_STACK_MODEL_TRIFD,
     BRICK6_STACK_MODEL_SINMORPH,
     BRICK6_STACK_MODEL_TRIMORPH,
@@ -48,11 +43,7 @@ typedef enum
     BRICK6_STACK_KERNEL_PHASE_FOLD,
     BRICK6_STACK_KERNEL_WAVETABLE,
     BRICK6_STACK_KERNEL_SUB,
-    BRICK6_STACK_KERNEL_FM,
-    BRICK6_STACK_KERNEL_FEEDBACK_FM,
-    BRICK6_STACK_KERNEL_RING,
     BRICK6_STACK_KERNEL_TRIPLE_ANALOG,
-    BRICK6_STACK_KERNEL_SWARM,
     BRICK6_STACK_KERNEL_COUNT
 } brick6_stack_kernel_id_t;
 
@@ -67,7 +58,6 @@ typedef struct
     uint8_t color;
     uint8_t param3;
     uint8_t kernel_id;
-    uint8_t kernel_state_size;
     uint16_t level_q15;
     uint16_t level_current_q15;
     uint16_t timbre_q15;
@@ -78,7 +68,6 @@ typedef struct
     uint32_t phase_inc_current;
     uint32_t phase2;
     uint32_t phase3;
-    int16_t feedback_q15;
 } stack_osc_slot_t;
 
 typedef struct

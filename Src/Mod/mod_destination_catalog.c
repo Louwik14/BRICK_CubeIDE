@@ -600,12 +600,7 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
                 case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
                 case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
                 case BRICK6_STACK_MODEL_SUB: return "SHAPE";
-                case BRICK6_STACK_MODEL_FM: return "INDEX";
-                case BRICK6_STACK_MODEL_FEEDBACK_FM: return "FB IDX";
-                case BRICK6_STACK_MODEL_RING: return "MOD1";
-                case BRICK6_STACK_MODEL_TRIPLE_SAW:
-                case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC2";
-                case BRICK6_STACK_MODEL_SWARM: return "SPREAD";
+                case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
                 default: return "TIMBRE";
             }
         case 4U:
@@ -618,12 +613,7 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
                 case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
                 case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
                 case BRICK6_STACK_MODEL_SUB: return "SUB";
-                case BRICK6_STACK_MODEL_FM:
-                case BRICK6_STACK_MODEL_FEEDBACK_FM: return "RATIO";
-                case BRICK6_STACK_MODEL_RING: return "MOD2";
-                case BRICK6_STACK_MODEL_TRIPLE_SAW:
-                case BRICK6_STACK_MODEL_TRIPLE_SQUARE: return "OSC3";
-                case BRICK6_STACK_MODEL_SWARM: return "COLOR";
+                case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
                 default: return "COLOR";
             }
         case 5U:
