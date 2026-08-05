@@ -146,6 +146,7 @@ static AUDIO_HOT float g_external_track_mono[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE]
 static AUDIO_HOT float g_external_track_l[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
+static uint8_t g_external_poly_initialized[MIXER_MAX_TRACKS];
 static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
 static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
 volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
@@ -697,6 +698,7 @@ static void mixer_external_input_clear_lane(uint32_t lane)
     }
 
     g_external_track_enabled[lane] = 0U;
+    g_external_poly_initialized[lane] = 0U;
     g_external_track_format[lane] = MIXER_EXTERNAL_FORMAT_NONE;
     g_external_track_frames_valid[lane] = 0U;
 }
@@ -2733,6 +2735,7 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
 void __attribute__((used)) mixer_external_inputs_clear(void)
 {
     memset(g_external_track_enabled, 0, sizeof(g_external_track_enabled));
+    memset(g_external_poly_initialized, 0, sizeof(g_external_poly_initialized));
     memset(g_external_track_format, 0, sizeof(g_external_track_format));
     memset(g_external_track_frames_valid, 0, sizeof(g_external_track_frames_valid));
 }
@@ -2964,8 +2967,7 @@ uint8_t mixer_begin_external_poly(uint32_t track_id, uint32_t frames)
     if ((track_id >= 8U) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE)
             || (g_external_track_enabled[track_id] != 0U))
         return 0U;
-    memset(g_external_track_l[track_id], 0, frames * sizeof(float));
-    memset(g_external_track_r[track_id], 0, frames * sizeof(float));
+    g_external_poly_initialized[track_id] = 0U;
     return 1U;
 }
 
@@ -2997,6 +2999,8 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
         attenuated_pan = pan_l;
     }
     uint32_t i = 0U;
+    const uint8_t poly_initialized =
+        g_external_poly_initialized[mix_track_id];
     for (; i < frames; ++i)
     {
         float vca = 0.0f;
@@ -3006,8 +3010,30 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
         }
         filter->vca_env_value = vca;
         const float scaled = mono[i] * vca;
-        attenuated_output[i] += scaled * attenuated_pan;
-        unit_output[i] += scaled;
+        const float attenuated = scaled * attenuated_pan;
+        if (poly_initialized == 0U)
+        {
+            attenuated_output[i] = attenuated;
+            unit_output[i] = scaled;
+        }
+        else
+        {
+            attenuated_output[i] += attenuated;
+            unit_output[i] += scaled;
+        }
+    }
+    if (poly_initialized == 0U)
+    {
+        if (i < frames)
+        {
+            memset(&g_external_track_l[mix_track_id][i],
+                   0,
+                   (frames - i) * sizeof(float));
+            memset(&g_external_track_r[mix_track_id][i],
+                   0,
+                   (frames - i) * sizeof(float));
+        }
+        g_external_poly_initialized[mix_track_id] = 1U;
     }
     if (i < frames)
     {
@@ -3020,7 +3046,8 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
 void mixer_commit_external_poly(uint32_t track_id, uint32_t frames)
 {
     if ((track_id >= 8U) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE)
-            || (g_external_track_enabled[track_id] != 0U))
+            || (g_external_track_enabled[track_id] != 0U)
+            || (g_external_poly_initialized[track_id] == 0U))
         return;
     g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_POLY_STEREO;
     g_external_track_frames_valid[track_id] = (uint16_t)frames;
