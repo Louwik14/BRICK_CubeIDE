@@ -25,6 +25,9 @@ void brick6_clip_shifter_init(brick6_clip_shifter_t *shifter);
 void brick6_clip_shifter_reset(brick6_clip_shifter_t *shifter);
 void brick6_clip_shifter_set_window_frames(brick6_clip_shifter_t *shifter, uint16_t window_frames);
 void brick6_clip_shifter_set_pitch_correction(brick6_clip_shifter_t *shifter, float pitch_correction);
+void brick6_clip_shifter_process_mono(brick6_clip_shifter_t *shifter,
+                                      float *mono,
+                                      uint32_t frames);
 void brick6_clip_shifter_process_stereo(brick6_clip_shifter_t *shifter,
                                         float *left,
                                         float *right,

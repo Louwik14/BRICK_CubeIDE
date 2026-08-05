@@ -605,6 +605,41 @@ static void brick6_sampler_runtime_mix_declick_tails(uint8_t track_id,
     }
 }
 
+static void brick6_sampler_runtime_clip_render_shifter_mono(brick6_sampler_voice_t *voice,
+                                                             brick6_sampler_clip_runtime_t *clip,
+                                                             brick6_sampler_clip_slot_t *slot,
+                                                             float *out_mono,
+                                                             uint32_t frames)
+{
+    if ((voice == NULL) || (clip == NULL) || (slot == NULL) || (out_mono == NULL) || (frames == 0U))
+    {
+        return;
+    }
+
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    /* Reuse the existing left scratch as the single mono scratch. */
+    memset(slot->stretch_render_l, 0, sizeof(slot->stretch_render_l));
+    brick6_sampler_runtime_clip_configure_shifter(clip, slot);
+    brick6_sampler_render_sample_segment_cursor_mono(voice,
+                                                     slot->stretch_render_l,
+                                                     frames);
+    brick6_clip_shifter_process_mono(&slot->shifter,
+                                     slot->stretch_render_l,
+                                     frames);
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        out_mono[i] += slot->stretch_render_l[i];
+    }
+    brick6_sampler_runtime_voice_note_output(voice,
+                                             slot->stretch_render_l[frames - 1U],
+                                             slot->stretch_render_l[frames - 1U]);
+}
+
 static void brick6_sampler_runtime_mix_reader_segment_mono(
     const sample_audio_segment_t *segment,
     float gain,
@@ -7024,8 +7059,11 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
     {
         const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
         const brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+        const uint8_t shifter_slot_ready =
+            ((clip->use_shifter_engine == 0U)
+             || (brick6_sampler_runtime_clip_get_slot(track_id) != NULL)) ? 1U : 0U;
         return ((clip->state == (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)
-                && (clip->use_shifter_engine == 0U)
+                && (shifter_slot_ready != 0U)
                 && (voice->active != 0U)
                 && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
                 && (sample_audio_format_or_stereo(voice->format)
@@ -7258,8 +7296,7 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_runtime_ctx_t *
         brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
         return;
     }
-    if ((voice->sample == NULL) || (voice->active == 0U)
-        || (clip->use_shifter_engine != 0U))
+    if ((voice->sample == NULL) || (voice->active == 0U))
     {
         brick6_sampler_runtime_clip_stop_playback(track_id);
         clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
@@ -7274,7 +7311,26 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_runtime_ctx_t *
         return;
     }
 
-    brick6_sampler_render_sample_mono(voice->sample, voice, out_mono, frames);
+    if (clip->use_shifter_engine != 0U)
+    {
+        brick6_sampler_clip_slot_t *const slot = brick6_sampler_runtime_clip_get_slot(track_id);
+        if (slot == NULL)
+        {
+            brick6_sampler_runtime_clip_stop_playback(track_id);
+            clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
+            brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
+            return;
+        }
+        brick6_sampler_runtime_clip_render_shifter_mono(voice,
+                                                        clip,
+                                                        slot,
+                                                        out_mono,
+                                                        frames);
+    }
+    else
+    {
+        brick6_sampler_render_sample_mono(voice->sample, voice, out_mono, frames);
+    }
     if (voice->active == 0U)
     {
         clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;

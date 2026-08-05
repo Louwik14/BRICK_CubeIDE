@@ -52,6 +52,40 @@ static float brick6_clip_shifter_read_interp(const float *buffer, uint16_t write
     return a + ((b - a) * offset_fractional);
 }
 
+static void brick6_clip_shifter_advance_phase(brick6_clip_shifter_t *shifter,
+                                               float *out_tri,
+                                               float *out_phase,
+                                               float *out_half)
+{
+    shifter->phase += (1.0f - shifter->ratio) / shifter->window_frames;
+    if (shifter->phase >= 1.0f)
+    {
+        shifter->phase -= 1.0f;
+    }
+    if (shifter->phase <= 0.0f)
+    {
+        shifter->phase += 1.0f;
+    }
+
+    *out_tri = 2.0f * ((shifter->phase >= 0.5f) ? (1.0f - shifter->phase) : shifter->phase);
+    *out_phase = shifter->phase * shifter->window_frames;
+    *out_half = *out_phase + (shifter->window_frames * 0.5f);
+    if (*out_half >= shifter->window_frames)
+    {
+        *out_half -= shifter->window_frames;
+    }
+}
+
+static float brick6_clip_shifter_render_channel(const float *buffer,
+                                                uint16_t write_index,
+                                                float phase,
+                                                float half,
+                                                float tri)
+{
+    return (brick6_clip_shifter_read_interp(buffer, write_index, phase) * tri)
+           + (brick6_clip_shifter_read_interp(buffer, write_index, half) * (1.0f - tri));
+}
+
 void brick6_clip_shifter_init(brick6_clip_shifter_t *shifter)
 {
     if (shifter == NULL)
@@ -106,6 +140,33 @@ void brick6_clip_shifter_set_pitch_correction(brick6_clip_shifter_t *shifter, fl
     shifter->ratio = brick6_clip_shifter_clampf(pitch_correction,
                                                 BRICK6_CLIP_SHIFTER_RATIO_MIN,
                                                 BRICK6_CLIP_SHIFTER_RATIO_MAX);
+}
+
+void brick6_clip_shifter_process_mono(brick6_clip_shifter_t *shifter,
+                                      float *mono,
+                                      uint32_t frames)
+{
+    if ((shifter == NULL) || (mono == NULL) || (frames == 0U))
+    {
+        return;
+    }
+
+    /* buffer_r remains reserved for the unchanged stereo path. */
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        shifter->write_index = (uint16_t)((shifter->write_index - 1U) & BRICK6_CLIP_SHIFTER_DELAY_MASK);
+        shifter->buffer_l[shifter->write_index] = mono[i];
+
+        float tri;
+        float phase;
+        float half;
+        brick6_clip_shifter_advance_phase(shifter, &tri, &phase, &half);
+        mono[i] = brick6_clip_shifter_render_channel(shifter->buffer_l,
+                                                     shifter->write_index,
+                                                     phase,
+                                                     half,
+                                                     tri);
+    }
 }
 
 void brick6_clip_shifter_process_stereo(brick6_clip_shifter_t *shifter,
