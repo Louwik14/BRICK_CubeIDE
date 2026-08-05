@@ -31,6 +31,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Audio/mixer.h"
@@ -656,13 +657,13 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC2_TUNE:
             *out_value = state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)];
             return 1U;
-        case PARAM_WAVE_OSC1_PHASE:
-        case PARAM_WAVE_OSC2_PHASE:
-            *out_value = state->wave.phase[(uint8_t)((id - PARAM_WAVE_OSC1_PHASE) / 8U)];
+        case PARAM_WAVE_OSC1_WARP_TYPE:
+        case PARAM_WAVE_OSC2_WARP_TYPE:
+            *out_value = state->wave.warp_type[(uint8_t)((id - PARAM_WAVE_OSC1_WARP_TYPE) / 8U)];
             return 1U;
-        case PARAM_WAVE_OSC1_FLIP:
-        case PARAM_WAVE_OSC2_FLIP:
-            *out_value = state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)];
+        case PARAM_WAVE_OSC1_WARP_AMT:
+        case PARAM_WAVE_OSC2_WARP_AMT:
+            *out_value = state->wave.warp_amt[(uint8_t)((id - PARAM_WAVE_OSC1_WARP_AMT) / 8U)];
             return 1U;
         case PARAM_WAVE_FRAME_INTERP:
             *out_value = state->wave.frame_interp;
@@ -941,14 +942,29 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC2_TUNE:
             state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)] = clamp_value(value, -60.0f, 60.0f);
             return 1U;
-        case PARAM_WAVE_OSC1_PHASE:
-        case PARAM_WAVE_OSC2_PHASE:
-            state->wave.phase[(uint8_t)((id - PARAM_WAVE_OSC1_PHASE) / 8U)] = clamp_value(value, 0.0f, 3.0f);
+        case PARAM_WAVE_OSC1_WARP_TYPE:
+        case PARAM_WAVE_OSC2_WARP_TYPE:
+        {
+            const uint8_t osc = (uint8_t)((id - PARAM_WAVE_OSC1_WARP_TYPE) / 8U);
+            const float type = clamp_value(value, 0.0f, (float)(BRICK6_WAVE_WARP_TYPE_COUNT - 1U));
+            state->wave.warp_type[osc] = type;
+            if (((uint8_t)(type + 0.5f) != (uint8_t)BRICK6_WAVE_WARP_BEND)
+                    && ((uint8_t)(type + 0.5f) != (uint8_t)BRICK6_WAVE_WARP_SKEW))
+            {
+                state->wave.warp_amt[osc] = clamp_value(state->wave.warp_amt[osc], 0.0f, 1.0f);
+            }
             return 1U;
-        case PARAM_WAVE_OSC1_FLIP:
-        case PARAM_WAVE_OSC2_FLIP:
-            state->wave.flip[(uint8_t)((id - PARAM_WAVE_OSC1_FLIP) / 8U)] = clamp_value(value, 0.0f, 3.0f);
+        }
+        case PARAM_WAVE_OSC1_WARP_AMT:
+        case PARAM_WAVE_OSC2_WARP_AMT:
+        {
+            const uint8_t osc = (uint8_t)((id - PARAM_WAVE_OSC1_WARP_AMT) / 8U);
+            const uint8_t type = (uint8_t)(state->wave.warp_type[osc] + 0.5f);
+            const float min_value = ((type == (uint8_t)BRICK6_WAVE_WARP_BEND)
+                                     || (type == (uint8_t)BRICK6_WAVE_WARP_SKEW)) ? -1.0f : 0.0f;
+            state->wave.warp_amt[osc] = clamp_value(value, min_value, 1.0f);
             return 1U;
+        }
         case PARAM_WAVE_FRAME_INTERP:
             state->wave.frame_interp = clamp_value(value, 0.0f, 1.0f);
             return 1U;

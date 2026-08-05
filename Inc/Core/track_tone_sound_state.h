@@ -75,8 +75,8 @@ typedef struct
         float end[2];
         float level[2];
         float tune[2];
-        float phase[2];
-        float flip[2];
+        float warp_type[2];
+        float warp_amt[2];
         float frame_interp;
         float sample_interp;
         float pos_update;

@@ -560,7 +560,7 @@ static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, u
 {
     if ((out_osc == NULL) || (out_param == NULL)
             || (id < PARAM_WAVE_OSC1_TABLE)
-            || (id > PARAM_WAVE_OSC2_FLIP))
+            || (id > PARAM_WAVE_OSC2_WARP_AMT))
     {
         return 0U;
     }
@@ -569,6 +569,15 @@ static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, u
     *out_osc = (uint8_t)(rel / 8U);
     *out_param = (uint8_t)(rel % 8U);
     return (*out_osc < BRICK6_WAVE_OSC_COUNT) ? 1U : 0U;
+}
+
+static float param_backend_wave_warp_amt_clamp(brick6_wave_warp_type_t type, float value)
+{
+    if ((type == BRICK6_WAVE_WARP_BEND) || (type == BRICK6_WAVE_WARP_SKEW))
+    {
+        return param_backend_clamp_value(value, -1.0f, 1.0f);
+    }
+    return param_backend_clamp_value(value, 0.0f, 1.0f);
 }
 
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
@@ -696,22 +705,31 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         }
         case 6U:
         {
-            const brick6_wave_phase_t phase = (brick6_wave_phase_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+            const brick6_wave_warp_type_t type = (brick6_wave_warp_type_t)(uint8_t)(param_backend_clamp_value(value,
+                                                                                                               0.0f,
+                                                                                                               (float)(BRICK6_WAVE_WARP_TYPE_COUNT - 1U)) + 0.5f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.phase[osc] = (float)(uint8_t)phase;
+                state->wave.warp_type[osc] = (float)(uint8_t)type;
+                state->wave.warp_amt[osc] = param_backend_wave_warp_amt_clamp(type,
+                                                                                state->wave.warp_amt[osc]);
             }
-            brick6_wave_runtime_set_osc_phase(ctx->instance_id, osc, phase);
+            brick6_wave_runtime_set_osc_warp_type(ctx->instance_id, osc, type);
             return 1U;
         }
         default:
         {
-            const brick6_wave_flip_t flip = (brick6_wave_flip_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+            const brick6_wave_warp_type_t type = (state != NULL)
+                ? (brick6_wave_warp_type_t)(uint8_t)(param_backend_clamp_value(state->wave.warp_type[osc],
+                                                                                0.0f,
+                                                                                (float)(BRICK6_WAVE_WARP_TYPE_COUNT - 1U)) + 0.5f)
+                : BRICK6_WAVE_WARP_OFF;
+            const float amount = param_backend_wave_warp_amt_clamp(type, value);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.flip[osc] = (float)(uint8_t)flip;
+                state->wave.warp_amt[osc] = amount;
             }
-            brick6_wave_runtime_set_osc_flip(ctx->instance_id, osc, flip);
+            brick6_wave_runtime_set_osc_warp_amt(ctx->instance_id, osc, amount);
             return 1U;
         }
     }
@@ -738,8 +756,14 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
         brick6_wave_runtime_set_osc_end(ctx->instance_id, osc, param_backend_clamp_value(state->wave.end[osc], 0.0f, 1.0f));
         brick6_wave_runtime_set_osc_level(ctx->instance_id, osc, param_backend_clamp_value(state->wave.level[osc], 0.0f, 1.0f));
         brick6_wave_runtime_set_osc_tune(ctx->instance_id, osc, param_backend_clamp_value(state->wave.tune[osc], -60.0f, 60.0f));
-        brick6_wave_runtime_set_osc_phase(ctx->instance_id, osc, (brick6_wave_phase_t)(uint8_t)(param_backend_clamp_value(state->wave.phase[osc], 0.0f, 3.0f) + 0.5f));
-        brick6_wave_runtime_set_osc_flip(ctx->instance_id, osc, (brick6_wave_flip_t)(uint8_t)(param_backend_clamp_value(state->wave.flip[osc], 0.0f, 3.0f) + 0.5f));
+        const brick6_wave_warp_type_t warp_type = (brick6_wave_warp_type_t)(uint8_t)(param_backend_clamp_value(state->wave.warp_type[osc],
+                                                                                                             0.0f,
+                                                                                                             (float)(BRICK6_WAVE_WARP_TYPE_COUNT - 1U)) + 0.5f);
+        brick6_wave_runtime_set_osc_warp_type(ctx->instance_id, osc, warp_type);
+        brick6_wave_runtime_set_osc_warp_amt(ctx->instance_id,
+                                             osc,
+                                             param_backend_wave_warp_amt_clamp(warp_type,
+                                                                                state->wave.warp_amt[osc]));
     }
     brick6_wave_runtime_set_frame_interp(ctx->instance_id, (state->wave.frame_interp >= 0.5f) ? 1U : 0U);
     brick6_wave_runtime_set_sample_interp(ctx->instance_id, (state->wave.sample_interp >= 0.5f) ? 1U : 0U);

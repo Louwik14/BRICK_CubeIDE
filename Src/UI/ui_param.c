@@ -34,6 +34,7 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/brick6_sampler_multi_contract.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
@@ -739,6 +740,23 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     const param_desc_t *desc = &param_registry[param];
     *out_min = desc->min;
     *out_max = desc->max;
+    if ((param == PARAM_WAVE_OSC1_WARP_AMT) || (param == PARAM_WAVE_OSC2_WARP_AMT))
+    {
+        const param_id_t type_id = (param == PARAM_WAVE_OSC1_WARP_AMT)
+            ? PARAM_WAVE_OSC1_WARP_TYPE
+            : PARAM_WAVE_OSC2_WARP_TYPE;
+        float type_value = 0.0f;
+        if (param_registry_get_track_value(type_id, track, &type_value) != 0U)
+        {
+            const uint8_t type = (uint8_t)(type_value + 0.5f);
+            if ((type != (uint8_t)BRICK6_WAVE_WARP_BEND)
+                    && (type != (uint8_t)BRICK6_WAVE_WARP_SKEW))
+            {
+                *out_min = 0.0f;
+            }
+        }
+        return 1U;
+    }
 
     if (param == PARAM_CFG_TRACK)
     {

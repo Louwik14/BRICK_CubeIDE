@@ -43,8 +43,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_comp_model_labels[] = {"OFF", "DELUGE", "BRICK", NULL};
 static const char *const g_comp_detect_labels[] = {"PEAK", "RMS", NULL};
 static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
-static const char *const g_wave_phase_labels[] = {"0", "90", "180", "270", NULL};
-static const char *const g_wave_flip_labels[] = {"OFF", "X", "Y", "XY", NULL};
+static const char *const g_wave_warp_type_labels[] = {"OFF", "BEND", "SKEW", "FOLD", "REPEAT", "QUANTIZE", NULL};
 static const char *const g_wave_pos_update_labels[] = {"FULL", "8", "16", "32", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
@@ -370,16 +369,16 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_WAVE_OSC1_END, "END", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC1_LEVEL, "LEVEL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC1_TUNE, "TUNE", PARAM_TYPE_BIPOLAR, -60.0f, 60.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
-    PARAM_DESC_EX(PARAM_WAVE_OSC1_PHASE, "PHASE", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_phase_labels, NULL),
-    PARAM_DESC_EX(PARAM_WAVE_OSC1_FLIP, "FLIP", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_flip_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_OSC1_WARP_TYPE, "WARP TYPE", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_warp_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_OSC1_WARP_AMT, "WARP AMT", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_TABLE, "TABLE", PARAM_TYPE_INT, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U), 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_POS, "POS", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_START, "START", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_END, "END", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_LEVEL, "LEVEL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_OSC2_TUNE, "TUNE", PARAM_TYPE_BIPOLAR, -60.0f, 60.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
-    PARAM_DESC_EX(PARAM_WAVE_OSC2_PHASE, "PHASE", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_phase_labels, NULL),
-    PARAM_DESC_EX(PARAM_WAVE_OSC2_FLIP, "FLIP", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_flip_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_OSC2_WARP_TYPE, "WARP TYPE", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_wave_warp_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_WAVE_OSC2_WARP_AMT, "WARP AMT", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_WAVE_FRAME_INTERP, "FRAME", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_WAVE_SAMPLE_INTERP, "SAMPLE", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_WAVE_POS_UPDATE, "POSUPD", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_wave_pos_update_labels, NULL),

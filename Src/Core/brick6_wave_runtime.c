@@ -25,9 +25,8 @@
 #define WAVE_PHASE_FRAC_TO_FLOAT   (1.0f / (float)(1UL << WAVE_PHASE_FRAC_BITS))
 #define WAVE_PHASE_SAMPLE_ROUND    (1UL << (WAVE_PHASE_FRAC_BITS - 1U))
 #define WAVE_PHASE_SCALE           4294967296.0
-#define WAVE_PHASE_90              0x40000000UL
-#define WAVE_PHASE_180             0x80000000UL
-#define WAVE_PHASE_270             0xC0000000UL
+#define WAVE_Q16_ONE               65536U
+#define WAVE_Q32_HALF              0x80000000UL
 #define WAVE_S16_TO_FLOAT          (1.0f / 32768.0f)
 #define WAVE_LEVEL_SILENCE_EPS     0.00001f
 #define BRICK6_WAVE_OUTPUT_GAIN    0.42169650f
@@ -36,6 +35,9 @@
 #else
 #define WAVE_OUTPUT_TRIM           1.0f
 #endif
+
+typedef struct wave_osc_block_ctx_t wave_osc_block_ctx_t;
+typedef uint32_t (*wave_warp_fn_t)(const wave_osc_block_ctx_t *ctx, uint32_t phase);
 
 typedef struct
 {
@@ -46,7 +48,7 @@ typedef struct
     uint32_t synced_config_version;
 } brick6_wave_runtime_instance_t;
 
-typedef struct
+struct wave_osc_block_ctx_t
 {
     brick6_wave_runtime_osc_t *osc;
     const int16_t *data;
@@ -64,8 +66,16 @@ typedef struct
     float level_step;
     double phase_inc_current;
     double phase_inc_step;
-    uint8_t reverse;
-    uint8_t invert;
+    wave_warp_fn_t warp_phase;
+    uint32_t warp_slope_q16;
+    uint32_t warp_pivot;
+    uint32_t warp_pivot_out;
+    uint32_t warp_slope_a_q16;
+    uint32_t warp_slope_b_q16;
+    int32_t warp_slope_b_signed_q16;
+    int32_t warp_amount_q16;
+    uint32_t warp_repeat;
+    uint32_t warp_quantize_mask;
     uint8_t pos_stable;
     uint8_t frame_interp;
     uint8_t frame_interp_enabled;
@@ -73,7 +83,7 @@ typedef struct
     uint8_t pos_smooth_enabled;
     uint8_t pos_update_samples;
     uint8_t pos_chunk_remaining;
-} wave_osc_block_ctx_t;
+};
 
 AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
 AUDIO_HOT static brick6_wave_runtime_instance_t
@@ -202,22 +212,6 @@ static uint32_t wave_note_to_phase_inc(float note, float tune_semitones)
     return (uint32_t)(scaled + 0.5);
 }
 
-static uint32_t wave_phase_start(uint8_t phase_mode)
-{
-    switch ((brick6_wave_phase_t)phase_mode)
-    {
-        case BRICK6_WAVE_PHASE_90:
-            return WAVE_PHASE_90;
-        case BRICK6_WAVE_PHASE_180:
-            return WAVE_PHASE_180;
-        case BRICK6_WAVE_PHASE_270:
-            return WAVE_PHASE_270;
-        case BRICK6_WAVE_PHASE_0:
-        default:
-            return 0U;
-    }
-}
-
 static float wave_absf(float value)
 {
     return (value < 0.0f) ? -value : value;
@@ -336,8 +330,8 @@ static void wave_reset_osc(brick6_wave_runtime_osc_t *osc, uint8_t osc_index)
     osc->end = 1.0f;
     osc->pos = 0.0f;
     osc->pos_smoothed = 0.0f;
-    osc->phase_mode = (uint8_t)BRICK6_WAVE_PHASE_0;
-    osc->flip = (uint8_t)BRICK6_WAVE_FLIP_OFF;
+    osc->warp_type = (uint8_t)BRICK6_WAVE_WARP_OFF;
+    osc->warp_amt = 0.0f;
     osc->phase = 0U;
     osc->phase_inc = wave_note_to_phase_inc((float)WAVE_DEFAULT_NOTE, 0.0f);
     osc->phase_inc_current = osc->phase_inc;
@@ -361,41 +355,206 @@ static void wave_reset_instance(brick6_wave_runtime_instance_t *instance)
     instance->config_version = 1U;
 }
 
+static uint32_t wave_q16_from_float(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0U;
+    }
+    if (value >= 65535.999f)
+    {
+        return 0xFFFFFFFFUL;
+    }
+    return (uint32_t)((value * (float)WAVE_Q16_ONE) + 0.5f);
+}
+
+static uint32_t wave_q32_from_unit(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0U;
+    }
+    if (value >= 1.0f)
+    {
+        return 0xFFFFFFFFUL;
+    }
+    return (uint32_t)((value * (float)WAVE_PHASE_SCALE) + 0.5f);
+}
+
+static uint32_t wave_mul_q32_q16(uint32_t value, uint32_t factor_q16)
+{
+    return (uint32_t)(((uint64_t)value * (uint64_t)factor_q16) >> 16U);
+}
+
+static uint32_t wave_add_signed_q32(uint32_t base, int64_t delta)
+{
+    const int64_t value = (int64_t)base + delta;
+    if (value <= 0)
+    {
+        return 0U;
+    }
+    if (value >= 0xFFFFFFFFLL)
+    {
+        return 0xFFFFFFFFUL;
+    }
+    return (uint32_t)value;
+}
+
+static uint32_t wave_warp_bend(const wave_osc_block_ctx_t *ctx, uint32_t phase)
+{
+    const uint32_t distance = (phase < ctx->warp_pivot)
+        ? (ctx->warp_pivot - phase)
+        : (phase - ctx->warp_pivot);
+    const uint32_t edge = (phase < ctx->warp_pivot) ? phase : (0xFFFFFFFFUL - phase);
+    const uint32_t bend_term = (uint32_t)(((uint64_t)edge * (uint64_t)distance) >> 31U);
+    const int64_t delta = ((int64_t)bend_term * (int64_t)ctx->warp_amount_q16) >> 16U;
+    return wave_add_signed_q32(phase, delta);
+}
+
+static uint32_t wave_warp_skew(const wave_osc_block_ctx_t *ctx, uint32_t phase)
+{
+    if (phase < ctx->warp_pivot)
+    {
+        return wave_mul_q32_q16(phase, ctx->warp_slope_a_q16);
+    }
+    return wave_add_signed_q32(ctx->warp_pivot_out,
+                               (int64_t)wave_mul_q32_q16(phase - ctx->warp_pivot,
+                                                         ctx->warp_slope_b_q16));
+}
+
+static uint32_t wave_warp_fold(const wave_osc_block_ctx_t *ctx, uint32_t phase)
+{
+    if (phase < ctx->warp_pivot)
+    {
+        return wave_mul_q32_q16(phase, ctx->warp_slope_a_q16);
+    }
+    return wave_add_signed_q32(ctx->warp_pivot_out,
+                               ((int64_t)(phase - ctx->warp_pivot)
+                                * (int64_t)ctx->warp_slope_b_signed_q16) >> 16U);
+}
+
+static uint32_t wave_warp_repeat(const wave_osc_block_ctx_t *ctx, uint32_t phase)
+{
+    return (uint32_t)((uint64_t)phase * (uint64_t)ctx->warp_repeat);
+}
+
+static uint32_t wave_warp_quantize(const wave_osc_block_ctx_t *ctx, uint32_t phase)
+{
+    return phase & ctx->warp_quantize_mask;
+}
+
+static uint32_t wave_warp_slope_q16(float slope_a, float slope_b)
+{
+    const float max_slope = (wave_absf(slope_a) > wave_absf(slope_b)) ? wave_absf(slope_a) : wave_absf(slope_b);
+    return wave_q16_from_float(max_slope);
+}
+
+static void wave_prepare_warp(const brick6_wave_runtime_osc_t *osc,
+                              wave_osc_block_ctx_t *ctx)
+{
+    const brick6_wave_warp_type_t type = (osc->warp_type < (uint8_t)BRICK6_WAVE_WARP_TYPE_COUNT)
+        ? (brick6_wave_warp_type_t)osc->warp_type
+        : BRICK6_WAVE_WARP_OFF;
+    const float amount = wave_clampf(osc->warp_amt, -1.0f, 1.0f);
+    const float positive_amount = wave_clampf(amount, 0.0f, 1.0f);
+    const uint32_t half = WAVE_Q32_HALF;
+
+    ctx->warp_phase = NULL;
+    ctx->warp_slope_q16 = WAVE_Q16_ONE;
+    ctx->warp_pivot = half;
+    ctx->warp_pivot_out = half;
+    ctx->warp_slope_a_q16 = WAVE_Q16_ONE;
+    ctx->warp_slope_b_q16 = WAVE_Q16_ONE;
+    ctx->warp_slope_b_signed_q16 = (int32_t)WAVE_Q16_ONE;
+    ctx->warp_amount_q16 = 0;
+    ctx->warp_repeat = 1U;
+    ctx->warp_quantize_mask = 0xFFFFFFFFUL;
+
+    switch (type)
+    {
+        case BRICK6_WAVE_WARP_BEND:
+        {
+            ctx->warp_phase = wave_warp_bend;
+            ctx->warp_amount_q16 = (int32_t)wave_q16_from_float(wave_absf(amount));
+            if (amount < 0.0f)
+            {
+                ctx->warp_amount_q16 = -ctx->warp_amount_q16;
+            }
+            ctx->warp_slope_q16 = 2U * WAVE_Q16_ONE;
+            break;
+        }
+
+        case BRICK6_WAVE_WARP_SKEW:
+        {
+            const float slope_a = 1.0f - amount;
+            const float slope_b = 1.0f + amount;
+            ctx->warp_phase = wave_warp_skew;
+            ctx->warp_pivot_out = wave_q32_from_unit(0.5f * (1.0f - amount));
+            ctx->warp_slope_a_q16 = wave_q16_from_float(slope_a);
+            ctx->warp_slope_b_q16 = wave_q16_from_float(slope_b);
+            ctx->warp_slope_q16 = wave_warp_slope_q16(slope_a, slope_b);
+            break;
+        }
+
+        case BRICK6_WAVE_WARP_FOLD:
+        {
+            const float slope_a = 1.0f + positive_amount;
+            const float slope_b = 1.0f - (3.0f * positive_amount);
+            ctx->warp_phase = wave_warp_fold;
+            ctx->warp_pivot_out = wave_q32_from_unit(0.5f * (1.0f + positive_amount));
+            ctx->warp_slope_a_q16 = wave_q16_from_float(slope_a);
+            ctx->warp_slope_b_signed_q16 = (int32_t)wave_q16_from_float(wave_absf(slope_b));
+            if (slope_b < 0.0f)
+            {
+                ctx->warp_slope_b_signed_q16 = -ctx->warp_slope_b_signed_q16;
+            }
+            ctx->warp_slope_q16 = wave_warp_slope_q16(slope_a, slope_b);
+            break;
+        }
+
+        case BRICK6_WAVE_WARP_REPEAT:
+        {
+            const uint32_t index = (uint32_t)((positive_amount * 3.0f) + 0.5f);
+            ctx->warp_phase = wave_warp_repeat;
+            ctx->warp_repeat = (index < 3U) ? (index + 1U) : 4U;
+            ctx->warp_slope_q16 = ctx->warp_repeat * WAVE_Q16_ONE;
+            break;
+        }
+
+        case BRICK6_WAVE_WARP_QUANTIZE:
+        {
+            const uint32_t index = (uint32_t)((positive_amount * 4.0f) + 0.5f);
+            const uint32_t steps = 64U >> ((index < 4U) ? index : 4U);
+            const uint32_t quantum = 0x100000000ULL / steps;
+            ctx->warp_phase = wave_warp_quantize;
+            ctx->warp_quantize_mask = ~(quantum - 1U);
+            ctx->warp_slope_q16 = steps * WAVE_Q16_ONE;
+            break;
+        }
+
+        case BRICK6_WAVE_WARP_OFF:
+        default:
+            break;
+    }
+}
+
 static float wave_read_frame_sample(const int16_t *frame_data,
                                     uint32_t phase,
                                     uint32_t cycle_sample_count,
                                     uint32_t phase_shift,
                                     uint32_t phase_mask,
                                     float phase_to_float,
-                                    uint8_t reverse,
                                     uint8_t sample_interp_enabled)
 {
     if (sample_interp_enabled == 0U)
     {
         uint32_t i0 = (phase + (1UL << (phase_shift - 1U))) >> phase_shift;
         i0 &= (cycle_sample_count - 1U);
-        if (reverse != 0U)
-        {
-            i0 = (cycle_sample_count - 1U - i0) & (cycle_sample_count - 1U);
-        }
-
         return (float)frame_data[i0] * WAVE_S16_TO_FLOAT;
     }
 
     uint32_t i0 = phase >> phase_shift;
     uint32_t frac_q = phase & phase_mask;
-    if (reverse != 0U)
-    {
-        if (frac_q != 0U)
-        {
-            i0 = (cycle_sample_count - 2U - i0) & (cycle_sample_count - 1U);
-            frac_q = (phase_mask + 1U) - frac_q;
-        }
-        else
-        {
-            i0 = (cycle_sample_count - 1U - i0) & (cycle_sample_count - 1U);
-        }
-    }
 
     const uint32_t i1 = (i0 + 1U) & (cycle_sample_count - 1U);
     const float frac = (float)frac_q * phase_to_float;
@@ -515,23 +674,29 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
     const wavetable_mipmap_view_t *const mipmap = wavetable_pool_get_mipmap_view(
         osc->table_wavetable_slot);
     const wavetable_mipmap_band_t *band = NULL;
+    wave_prepare_warp(osc, ctx);
+    const uint64_t effective_phase_inc_wide = ((uint64_t)osc->phase_inc
+                                               * (uint64_t)ctx->warp_slope_q16) >> 16U;
+    const uint32_t effective_phase_inc = (effective_phase_inc_wide > 0xFFFFFFFFULL)
+        ? 0xFFFFFFFFUL
+        : (uint32_t)effective_phase_inc_wide;
     if ((mipmap != NULL) && (mipmap->band_count != 0U))
     {
         uint8_t selected = osc->mipmap_band;
-        if ((osc->mipmap_phase_inc != osc->phase_inc)
+        if ((osc->mipmap_effective_phase_inc != effective_phase_inc)
             || (selected >= mipmap->band_count))
         {
             selected = (uint8_t)(mipmap->band_count - 1U);
             for (uint8_t i = 0U; i < mipmap->band_count; ++i)
             {
-                if (osc->phase_inc <= mipmap->bands[i].max_phase_increment)
+                if (effective_phase_inc <= mipmap->bands[i].max_phase_increment)
                 {
                     selected = i;
                     break;
                 }
             }
             osc->mipmap_band = selected;
-            osc->mipmap_phase_inc = osc->phase_inc;
+            osc->mipmap_effective_phase_inc = effective_phase_inc;
         }
         band = &mipmap->bands[selected];
     }
@@ -545,10 +710,6 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
     ctx->phase_mask = (1UL << ctx->phase_shift) - 1UL;
     ctx->phase_to_float = 1.0f / (float)(1UL << ctx->phase_shift);
     ctx->max_frame = (table->frame_count > 1U) ? (float)(table->frame_count - 1U) : 0.0f;
-    ctx->reverse = ((osc->flip == (uint8_t)BRICK6_WAVE_FLIP_Y)
-                    || (osc->flip == (uint8_t)BRICK6_WAVE_FLIP_XY)) ? 1U : 0U;
-    ctx->invert = ((osc->flip == (uint8_t)BRICK6_WAVE_FLIP_X)
-                   || (osc->flip == (uint8_t)BRICK6_WAVE_FLIP_XY)) ? 1U : 0U;
 
     const float target_pos = wave_remap_pos_to_scan_zone(osc);
     if ((ctx->pos_smooth_enabled == 0U) || (wave_absf(target_pos - osc->pos_smoothed) <= WAVE_POS_SMOOTH_SNAP))
@@ -580,31 +741,28 @@ static float wave_render_osc_sample_dynamic_ctx(wave_osc_block_ctx_t *ctx)
     }
     ctx->pos_chunk_remaining--;
 
+    const uint32_t warped_phase = (ctx->warp_phase != NULL)
+        ? ctx->warp_phase(ctx, osc->phase)
+        : osc->phase;
     float out = wave_read_frame_sample(ctx->frame0_data,
-                                       osc->phase,
+                                       warped_phase,
                                        ctx->cycle_sample_count,
                                        ctx->phase_shift,
                                        ctx->phase_mask,
                                        ctx->phase_to_float,
-                                       ctx->reverse,
                                        ctx->sample_interp_enabled);
     if (ctx->frame_interp != 0U)
     {
         const float b = wave_read_frame_sample(ctx->frame1_data,
-                                               osc->phase,
+                                               warped_phase,
                                                ctx->cycle_sample_count,
                                                ctx->phase_shift,
                                                ctx->phase_mask,
                                                ctx->phase_to_float,
-                                               ctx->reverse,
                                                ctx->sample_interp_enabled);
         out += (b - out) * ctx->frame_frac;
     }
 
-    if (ctx->invert != 0U)
-    {
-        out = -out;
-    }
     wave_advance_phase(ctx);
     ctx->level_current += ctx->level_step;
     osc->level_current = ctx->level_current;
@@ -614,31 +772,28 @@ static float wave_render_osc_sample_dynamic_ctx(wave_osc_block_ctx_t *ctx)
 static float wave_render_osc_sample_stable_ctx(wave_osc_block_ctx_t *ctx)
 {
     brick6_wave_runtime_osc_t *const osc = ctx->osc;
+    const uint32_t warped_phase = (ctx->warp_phase != NULL)
+        ? ctx->warp_phase(ctx, osc->phase)
+        : osc->phase;
     float out = wave_read_frame_sample(ctx->frame0_data,
-                                       osc->phase,
+                                       warped_phase,
                                        ctx->cycle_sample_count,
                                        ctx->phase_shift,
                                        ctx->phase_mask,
                                        ctx->phase_to_float,
-                                       ctx->reverse,
                                        ctx->sample_interp_enabled);
     if (ctx->frame_interp != 0U)
     {
         const float b = wave_read_frame_sample(ctx->frame1_data,
-                                               osc->phase,
+                                               warped_phase,
                                                ctx->cycle_sample_count,
                                                ctx->phase_shift,
                                                ctx->phase_mask,
                                                ctx->phase_to_float,
-                                               ctx->reverse,
                                                ctx->sample_interp_enabled);
         out += (b - out) * ctx->frame_frac;
     }
 
-    if (ctx->invert != 0U)
-    {
-        out = -out;
-    }
     wave_advance_phase(ctx);
     ctx->level_current += ctx->level_step;
     osc->level_current = ctx->level_current;
@@ -781,29 +936,33 @@ void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end
     wave_touch_config(instance);
 }
 
-void brick6_wave_runtime_set_osc_phase(uint8_t instance_id, uint8_t osc, brick6_wave_phase_t phase)
+void brick6_wave_runtime_set_osc_warp_type(uint8_t instance_id,
+                                           uint8_t osc,
+                                           brick6_wave_warp_type_t type)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT))
     {
         return;
     }
-    const uint8_t next = ((uint8_t)phase < (uint8_t)BRICK6_WAVE_PHASE_COUNT) ? (uint8_t)phase : 0U;
-    if (instance->osc[osc].phase_mode == next) return;
-    instance->osc[osc].phase_mode = next;
+    const uint8_t next = ((uint8_t)type < (uint8_t)BRICK6_WAVE_WARP_TYPE_COUNT)
+        ? (uint8_t)type
+        : (uint8_t)BRICK6_WAVE_WARP_OFF;
+    if (instance->osc[osc].warp_type == next) return;
+    instance->osc[osc].warp_type = next;
     wave_touch_config(instance);
 }
 
-void brick6_wave_runtime_set_osc_flip(uint8_t instance_id, uint8_t osc, brick6_wave_flip_t flip)
+void brick6_wave_runtime_set_osc_warp_amt(uint8_t instance_id, uint8_t osc, float amount)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT))
     {
         return;
     }
-    const uint8_t next = ((uint8_t)flip < (uint8_t)BRICK6_WAVE_FLIP_COUNT) ? (uint8_t)flip : 0U;
-    if (instance->osc[osc].flip == next) return;
-    instance->osc[osc].flip = next;
+    const float next = wave_clampf(amount, -1.0f, 1.0f);
+    if (instance->osc[osc].warp_amt == next) return;
+    instance->osc[osc].warp_amt = next;
     wave_touch_config(instance);
 }
 
@@ -871,7 +1030,7 @@ void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velo
     instance->voice.velocity = wave_clampf((float)velocity * (1.0f / 127.0f), 0.0f, 1.0f);
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
-        instance->osc[osc].phase = wave_phase_start(instance->osc[osc].phase_mode);
+        instance->osc[osc].phase = 0U;
         wave_snap_pos(&instance->osc[osc]);
         wave_update_pitch(instance, osc);
         instance->osc[osc].phase_inc_current = instance->osc[osc].phase_inc;

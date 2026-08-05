@@ -5,6 +5,7 @@
 #include "Audio/md_model.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Sampler/sample_global_pool.h"
@@ -156,9 +157,9 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .nav_labels = { "O1W", "O1V", "O2W", "O2V" },
     .subpages = {
         { .title = "OSC1 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_END } } },
-        { .title = "OSC1 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC1_LEVEL, PARAM_WAVE_OSC1_TUNE, PARAM_WAVE_OSC1_PHASE, PARAM_WAVE_OSC1_FLIP } } },
+        { .title = "OSC1 WARP", .param_bank = { .params = { PARAM_WAVE_OSC1_LEVEL, PARAM_WAVE_OSC1_TUNE, PARAM_WAVE_OSC1_WARP_TYPE, PARAM_WAVE_OSC1_WARP_AMT } } },
         { .title = "OSC2 WAVE", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_END } } },
-        { .title = "OSC2 VOICE", .param_bank = { .params = { PARAM_WAVE_OSC2_LEVEL, PARAM_WAVE_OSC2_TUNE, PARAM_WAVE_OSC2_PHASE, PARAM_WAVE_OSC2_FLIP } } },
+        { .title = "OSC2 WARP", .param_bank = { .params = { PARAM_WAVE_OSC2_LEVEL, PARAM_WAVE_OSC2_TUNE, PARAM_WAVE_OSC2_WARP_TYPE, PARAM_WAVE_OSC2_WARP_AMT } } },
     },
     .default_subpage = 0U,
 };
@@ -1040,6 +1041,28 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         return UIW_WIDGET_ENUM_TEXT;
     }
 
+    if ((id == PARAM_WAVE_OSC1_WARP_AMT) || (id == PARAM_WAVE_OSC2_WARP_AMT))
+    {
+        const param_id_t type_id = (id == PARAM_WAVE_OSC1_WARP_AMT)
+            ? PARAM_WAVE_OSC1_WARP_TYPE
+            : PARAM_WAVE_OSC2_WARP_TYPE;
+        float type_value = 0.0f;
+        if (param_registry_get_track_value(type_id, ui_get_active_track(), &type_value) != 0U)
+        {
+            const uint8_t type = (uint8_t)(type_value + 0.5f);
+            if ((type == (uint8_t)BRICK6_WAVE_WARP_BEND)
+                    || (type == (uint8_t)BRICK6_WAVE_WARP_SKEW))
+            {
+                return UIW_WIDGET_BIPOLAR_BAR;
+            }
+            if (type == (uint8_t)BRICK6_WAVE_WARP_FOLD)
+            {
+                return UIW_WIDGET_BAR;
+            }
+            return UIW_WIDGET_ENUM_TEXT;
+        }
+    }
+
     if (ui_page_template_tone_prism_kind_for_param(id, labels, NULL, &kind) == 0U)
     {
         if ((id == PARAM_PRISM_EDIT) || (id == PARAM_PRISM_OSC2_EDIT))
@@ -1159,13 +1182,13 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             case PARAM_WAVE_OSC2_TUNE:
                 name = "TUNE";
                 break;
-            case PARAM_WAVE_OSC1_PHASE:
-            case PARAM_WAVE_OSC2_PHASE:
-                name = "PHASE";
+            case PARAM_WAVE_OSC1_WARP_TYPE:
+            case PARAM_WAVE_OSC2_WARP_TYPE:
+                name = "WARP TYPE";
                 break;
-            case PARAM_WAVE_OSC1_FLIP:
-            case PARAM_WAVE_OSC2_FLIP:
-                name = "FLIP";
+            case PARAM_WAVE_OSC1_WARP_AMT:
+            case PARAM_WAVE_OSC2_WARP_AMT:
+                name = "WARP AMT";
                 break;
             case PARAM_WAVE_FRAME_INTERP:
                 name = "FRAME";
@@ -1217,6 +1240,61 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                         const char sign = (cents < 0L) ? '-' : '+';
                         const int32_t abs_cents = (cents < 0L) ? -cents : cents;
                         (void)snprintf(out_value, out_value_len, "%c%ld.%02ldst", sign, (long)(abs_cents / 100L), (long)(abs_cents % 100L));
+                    }
+                }
+                else if ((id == PARAM_WAVE_OSC1_WARP_AMT) || (id == PARAM_WAVE_OSC2_WARP_AMT))
+                {
+                    const param_id_t type_id = (id == PARAM_WAVE_OSC1_WARP_AMT)
+                        ? PARAM_WAVE_OSC1_WARP_TYPE
+                        : PARAM_WAVE_OSC2_WARP_TYPE;
+                    float type_value = 0.0f;
+                    uint8_t type = (uint8_t)BRICK6_WAVE_WARP_OFF;
+                    (void)param_registry_get_track_value(type_id, active_track, &type_value);
+                    type = (uint8_t)(type_value + 0.5f);
+                    if ((type == (uint8_t)BRICK6_WAVE_WARP_BEND)
+                            || (type == (uint8_t)BRICK6_WAVE_WARP_SKEW))
+                    {
+                        int32_t percent = (int32_t)((value * 100.0f) + ((value >= 0.0f) ? 0.5f : -0.5f));
+                        if ((percent > -1L) && (percent < 1L))
+                        {
+                            percent = 0L;
+                        }
+                        (void)snprintf(out_value, out_value_len, "%+ld%%", (long)percent);
+                    }
+                    else if (type == (uint8_t)BRICK6_WAVE_WARP_FOLD)
+                    {
+                        int32_t percent = (int32_t)((value * 100.0f) + 0.5f);
+                        if (percent < 0L)
+                        {
+                            percent = 0L;
+                        }
+                        if (percent > 100L)
+                        {
+                            percent = 100L;
+                        }
+                        (void)snprintf(out_value, out_value_len, "%ld%%", (long)percent);
+                    }
+                    else if (type == (uint8_t)BRICK6_WAVE_WARP_REPEAT)
+                    {
+                        uint8_t index = (uint8_t)((value * 3.0f) + 0.5f);
+                        if (index > 3U)
+                        {
+                            index = 3U;
+                        }
+                        (void)snprintf(out_value, out_value_len, "%uX", (unsigned int)(index + 1U));
+                    }
+                    else if (type == (uint8_t)BRICK6_WAVE_WARP_QUANTIZE)
+                    {
+                        uint8_t index = (uint8_t)((value * 4.0f) + 0.5f);
+                        if (index > 4U)
+                        {
+                            index = 4U;
+                        }
+                        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(64U >> index));
+                    }
+                    else
+                    {
+                        (void)snprintf(out_value, out_value_len, "-");
                     }
                 }
                 else if ((id == PARAM_WAVE_FRAME_INTERP)
