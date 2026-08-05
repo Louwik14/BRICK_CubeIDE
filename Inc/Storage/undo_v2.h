@@ -26,6 +26,8 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
                                                     const seq_step_id_t *steps,
                                                     uint8_t step_count);
 undo_v2_status_t undo_v2_commit_sequence_transaction(void);
+undo_v2_status_t undo_v2_begin_note_fx_transaction(void);
+undo_v2_status_t undo_v2_commit_note_fx_transaction(void);
 void undo_v2_cancel_transaction(void);
 
 undo_v2_status_t undo_v2_undo(void);

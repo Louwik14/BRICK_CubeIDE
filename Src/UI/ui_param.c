@@ -43,6 +43,7 @@
 #include "Mod/mod_matrix.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
+#include "Storage/undo_v2.h"
 #include "pages/ui_page_template_play.h"
 #include "stm32h7xx_hal.h"
 
@@ -73,6 +74,7 @@ static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
 static uint8_t g_ui_param_bank_track = 0xFFU;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
+static uint8_t g_ui_param_note_fx_undo_started;
 
 typedef struct
 {
@@ -599,11 +601,37 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
 
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx)
 {
-    (void)ctx;
+    g_ui_param_note_fx_undo_started = 0U;
+    if ((ctx == 0) || (ctx->valid == 0U))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        uint8_t slot = 0U;
+        uint8_t param = 0U;
+        if (note_fx_state_param_map(ctx->bank.params[i], &slot, &param) != 0U)
+        {
+            g_ui_param_note_fx_undo_started =
+                (undo_v2_begin_note_fx_transaction() == UNDO_V2_STATUS_OK) ? 1U : 0U;
+            return;
+        }
+    }
 }
 
 void ui_param_end_encoder_edit_group(void)
 {
+    if (g_ui_param_note_fx_undo_started == 0U)
+    {
+        return;
+    }
+
+    if (undo_v2_commit_note_fx_transaction() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+    }
+    g_ui_param_note_fx_undo_started = 0U;
 }
 
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param)

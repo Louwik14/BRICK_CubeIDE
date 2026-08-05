@@ -93,6 +93,50 @@ static void seq_boundary_engine_prioritize_md_model(seq_track_id_t target_track,
     }
 }
 
+static uint8_t seq_boundary_engine_lock_is_midi_fx_model(
+    seq_track_id_t target_track,
+    const seq_boundary_engine_step_lock_t *lock)
+{
+    param_id_t param = PARAM_COUNT;
+    return (lock != 0)
+        && (lock->set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
+        && (seq_param_iface_slot_to_param(target_track,
+                                          lock->set_id,
+                                          lock->target_slot,
+                                          &param) != 0U)
+        && (param == PARAM_MIDI_FX_S1_MODEL
+            || param == PARAM_MIDI_FX_S2_MODEL
+            || param == PARAM_MIDI_FX_S3_MODEL);
+}
+
+static void seq_boundary_engine_prioritize_midi_fx_models(
+    seq_track_id_t target_track,
+    seq_boundary_engine_step_lock_t *locks,
+    uint8_t count)
+{
+    if (locks == 0)
+    {
+        return;
+    }
+
+    uint8_t write = 0U;
+    for (uint8_t read = 0U; read < count; ++read)
+    {
+        if (seq_boundary_engine_lock_is_midi_fx_model(target_track, &locks[read]) == 0U)
+        {
+            continue;
+        }
+
+        const seq_boundary_engine_step_lock_t model_lock = locks[read];
+        for (uint8_t move = read; move > write; --move)
+        {
+            locks[move] = locks[move - 1U];
+        }
+        locks[write] = model_lock;
+        ++write;
+    }
+}
+
 static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
                                                           seq_step_id_t step,
                                                           seq_boundary_engine_step_lock_t *out_locks,
@@ -148,6 +192,7 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
     }
 
     seq_boundary_engine_prioritize_md_model(track, out_locks, count);
+    seq_boundary_engine_prioritize_midi_fx_models(track, out_locks, count);
     *out_count = count;
     return 1U;
 }

@@ -12,8 +12,10 @@
 #include "ui_macro_interaction.h"
 #include "Storage/project_v1.h"
 #include "Storage/memory_layout.h"
+#include "Storage/undo_v2.h"
 #include "Core/engine_tasklet.h"
 #include "Core/track_snapshot.h"
+#include "NoteFx/note_fx_state.h"
 #include "param_registry.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_edit.h"
@@ -63,6 +65,51 @@ typedef struct
 } ui_clipboard_state_t;
 
 UI_SDRAM static ui_clipboard_state_t g_ui_clipboard;
+
+static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_param)
+{
+    uint8_t slot = 0U;
+    uint8_t param = 0U;
+    if ((out_param == 0) || (note_fx_state_param_map(id, &slot, &param) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_param = param;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_begin_note_fx_undo(const param_id_t *params, uint8_t count)
+{
+    if (params == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        uint8_t param = 0U;
+        if (ui_core_clipboard_note_fx_param_kind(params[i], &param) != 0U)
+        {
+            return (undo_v2_begin_note_fx_transaction() == UNDO_V2_STATUS_OK) ? 1U : 0U;
+        }
+    }
+
+    return 0U;
+}
+
+static void ui_core_clipboard_finish_note_fx_undo(uint8_t started)
+{
+    if (started == 0U)
+    {
+        return;
+    }
+
+    if (undo_v2_commit_note_fx_transaction() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+    }
+}
 
 static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, const char *message)
 {
@@ -340,26 +387,41 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         return;
     }
 
+    const uint8_t note_fx_undo_started = ui_core_clipboard_begin_note_fx_undo(params, count);
+
     /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
-    for (uint8_t i = 0U; i < count; ++i)
+    for (uint8_t pass = 0U; pass < 2U; ++pass)
     {
-        const param_id_t id = params[i];
-        if (id < PARAM_COUNT)
+        for (uint8_t i = 0U; i < count; ++i)
         {
-            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-            if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            const param_id_t id = params[i];
+            uint8_t note_fx_param = 0U;
+            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(id, &note_fx_param);
+            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
+            if (((pass == 0U) && (is_note_fx_model == 0U))
+                    || ((pass == 1U) && (is_note_fx_model != 0U)))
             {
-                param_set(id, param_registry[id].min);
+                continue;
             }
-            else
+
+            if (id < PARAM_COUNT)
             {
-                (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+                const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+                if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                {
+                    param_set(id, param_registry[id].min);
+                }
+                else
+                {
+                    (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+                }
             }
         }
     }
     param_registry_batch_end();
+    ui_core_clipboard_finish_note_fx_undo(note_fx_undo_started);
 }
 
 static uint8_t ui_core_clipboard_copy_track(uint8_t track)
@@ -469,44 +531,59 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     uint8_t applied = 0U;
     uint8_t common = 0U;
+    const uint8_t note_fx_undo_started = ui_core_clipboard_begin_note_fx_undo(target_params, target_count);
     /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
 
-    for (uint8_t i = 0U; i < target_count; ++i)
+    /* MODEL is applied before the three model-dependent values so the target
+     * slot is normalized once, then receives the copied values. */
+    for (uint8_t pass = 0U; pass < 2U; ++pass)
     {
-        const param_id_t target = target_params[i];
-        uint8_t found = 0U;
-        float value = 0.0f;
-
-        for (uint8_t src = 0U; src < clipboard->param_count; ++src)
+        for (uint8_t i = 0U; i < target_count; ++i)
         {
-            if (clipboard->params[src] == target)
+            const param_id_t target = target_params[i];
+            uint8_t note_fx_param = 0U;
+            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(target, &note_fx_param);
+            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
+            if (((pass == 0U) && (is_note_fx_model == 0U))
+                    || ((pass == 1U) && (is_note_fx_model != 0U)))
             {
-                value = clipboard->values[src];
-                found = 1U;
-                break;
+                continue;
             }
-        }
 
-        if (found == 0U)
-        {
-            continue;
-        }
+            uint8_t found = 0U;
+            float value = 0.0f;
+            for (uint8_t src = 0U; src < clipboard->param_count; ++src)
+            {
+                if (clipboard->params[src] == target)
+                {
+                    value = clipboard->values[src];
+                    found = 1U;
+                    break;
+                }
+            }
 
-        ++common;
-        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
-        if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-        {
-            param_set(target, value);
-            ++applied;
-        }
-        else if (param_registry_apply_track_value(target, track, value) != 0U)
-        {
-            ++applied;
+            if (found == 0U)
+            {
+                continue;
+            }
+
+            ++common;
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
+            if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            {
+                param_set(target, value);
+                ++applied;
+            }
+            else if (param_registry_apply_track_value(target, track, value) != 0U)
+            {
+                ++applied;
+            }
         }
     }
     param_registry_batch_end();
+    ui_core_clipboard_finish_note_fx_undo(note_fx_undo_started);
 
     *out_common_count = common;
 

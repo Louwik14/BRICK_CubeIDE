@@ -635,3 +635,16 @@ La validation dynamique des snapshots, de la persistance, du clipboard, de
 l’Undo et des tests host reste reportée à l’étape 3/D-019 ; les références
 fonctionnelles S4 absentes du code courant ont été contrôlées par recherche
 négative.
+
+**Étape 3 — passe UI/format/clipboard/Undo du 2026-08-05 : exécutée sur le
+chemin courant.** Les formats Pattern et Project passent en version 7 et
+rejettent les payloads antérieurs ; les structures Pattern, Project et
+snapshots utilisent déjà l’état `NOTE_FX_SLOT_COUNT=3`. Les p-locks courants
+restent bornés à 12 positions et les validations de chargement refusent les
+slots non supportés. Le collage MIDI FX applique `MODEL` avant ses paramètres
+dépendants et la base normalisée des trois slots est maintenant couverte par
+une transaction Undo/Redo sans capture du runtime.
+
+Les builds `build/Release` et `build/Premium` passent. La matrice dynamique
+host/round-trip et les tests dédiés restent bloqués par D-019 : les sources
+référencées par `tests/CMakeLists.txt` ne sont pas présentes dans ce checkout.

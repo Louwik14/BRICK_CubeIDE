@@ -14,7 +14,7 @@ Les remplacements en masse valident toutes les familles, types, capacités Loope
 
 ## Séquence
 
-`seq_model` contient huit modèles identiques de 64 steps et un pool de 1024 p-locks par piste. Le scheduler, le live record, les Note FX, le mute, le stop et le panic sont bornés par les mêmes huit index. `undo_v2` conserve huit transactions structurelles maximum et prévalide l'espace des pools avant toute application.
+`seq_model` contient huit modèles identiques de 64 steps et un pool de 1024 p-locks par piste. Chaque piste Play possède exactement trois slots MIDI FX (`S1..S3`) ; le scheduler, le live record, le mute, le stop et le panic sont bornés par les mêmes huit index. `undo_v2` conserve huit transactions maximum, séquence ou état de base MIDI FX, et prévalide l'espace nécessaire avant toute application.
 
 ## UI
 
@@ -22,7 +22,7 @@ STEP 1 à 8 sélectionnent les pistes. STEP 9 à 16 sont contextuels; `SHIFT + S
 
 ## Persistance
 
-Pattern v6, Project v6, Kit v4 et Patch v4 sont des formats stricts sans conversion d'anciens payloads. Les collections de pistes sont indexées directement `0..7`; Patch représente un slot unique. Un Pattern ou Project appliqué avec succès invalide Undo/Redo.
+Pattern v7, Project v7, Kit v4 et Patch v4 sont des formats stricts sans conversion d'anciens payloads. Pattern/Project embarquent trois slots MIDI FX par piste ; les p-locks MIDI FX courants occupent 12 positions. Les collections de pistes sont indexées directement `0..7`; Patch représente un slot unique. Un Pattern ou Project appliqué avec succès invalide Undo/Redo.
 
 ## Cartographie
 

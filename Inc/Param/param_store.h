@@ -424,7 +424,8 @@ PARAM_STORE_STATIC_ASSERT(PARAM_COUNT == 319, "Parameter count changed");
 PARAM_STORE_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 307, "Persistent parameter count changed");
 #undef PARAM_STORE_STATIC_ASSERT
 
-/* Persistent PARAM_COUNT-indexed payloads stop before the staged MIDI FX domain until step 7. */
+/* Generic dense payloads stop before MIDI FX; three MIDI FX bases persist in
+ * PatternSaveV1.note_fx and are not duplicated in these PARAM_COUNT-indexed blocks. */
 #define PARAM_PERSIST_COUNT PARAM_MIDI_FX_S1_PARAM1
 
 
