@@ -208,6 +208,14 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
         }
 
         env->value = (int16_t)env->release_level;
+        if (env->value <= 0)
+        {
+            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
+            env->release_level = 0.0f;
+            env->phase = 0u;
+            env->phase_increment = 0u;
+            return 0;
+        }
         return env->value;
     }
 

@@ -50,6 +50,16 @@ int16_t env_adsr_process_step(env_adsr_t *env)
     return env_adsr_peaks_process_step(env);
 }
 
+uint8_t env_adsr_process_vca_sample(env_adsr_t *env, float *out_gain)
+{
+    const int16_t value = env_adsr_process_step(env);
+    if (out_gain != 0)
+    {
+        *out_gain = (float)value * (1.0f / 32767.0f);
+    }
+    return (env_adsr_stage(env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
+}
+
 int16_t env_adsr_process_advance(env_adsr_t *env,
                                  uint32_t steps,
                                  int16_t *first_value)

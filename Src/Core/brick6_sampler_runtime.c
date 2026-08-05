@@ -329,6 +329,7 @@ static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_
 static void brick6_sampler_runtime_clip_reset(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id);
 static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id);
+static void brick6_sampler_runtime_clip_stop_playback_silent(uint8_t track_id);
 static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *voice,
                                                        brick6_sampler_clip_runtime_t *clip,
                                                        brick6_sampler_clip_slot_t *slot,
@@ -396,6 +397,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
                                         float *out_r,
                                         uint32_t frames);
 static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voice, uint8_t reason);
+static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voice_t *voice);
 static void brick6_sampler_runtime_multi_stop_track(uint8_t track_id);
 static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id);
 static void brick6_sampler_runtime_multi_service_streaming(void);
@@ -1942,7 +1944,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     return 1U;
 }
 
-static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
+static void brick6_sampler_runtime_clip_stop_playback_internal(uint8_t track_id,
+                                                               uint8_t with_declick)
 {
     if (track_id >= SEQ_TRACK_COUNT)
     {
@@ -1950,7 +1953,10 @@ static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
     }
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    brick6_sampler_runtime_begin_declick_tail(track_id, voice);
+    if (with_declick != 0U)
+    {
+        brick6_sampler_runtime_begin_declick_tail(track_id, voice);
+    }
     sample_voice_reader_stop(&voice->reader);
     sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
     voice->active = 0U;
@@ -1962,6 +1968,16 @@ static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
     g_sampler_clip_runtime[track_id].state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_IDLE;
     g_sampler_clip_runtime[track_id].use_shifter_engine = 0U;
     brick6_sampler_runtime_clip_release_slot(track_id);
+}
+
+static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
+{
+    brick6_sampler_runtime_clip_stop_playback_internal(track_id, 1U);
+}
+
+static void brick6_sampler_runtime_clip_stop_playback_silent(uint8_t track_id)
+{
+    brick6_sampler_runtime_clip_stop_playback_internal(track_id, 0U);
 }
 
 static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count)
@@ -3513,6 +3529,19 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
     voice->trigger_order = 0U;
 
     brick6_sampler_runtime_multi_defer_stream_release(stopped_multi_sample_id);
+}
+
+static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voice_t *voice)
+{
+    if (voice != NULL)
+    {
+        voice->last_out_valid = 0U;
+        voice->last_out_l = 0.0f;
+        voice->last_out_r = 0.0f;
+    }
+    brick6_sampler_runtime_multi_stop_voice(
+        voice,
+        (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
 }
 
 static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id)
@@ -7200,7 +7229,7 @@ void brick6_sampler_runtime_render_stream_track(const track_runtime_ctx_t *ctx,
     if ((voice->release_pending != 0U)
             && (mixer_track_vca_requires_source(ctx->mix_track_id) == 0U))
     {
-        brick6_sampler_runtime_clip_stop_playback(ctx->track_id);
+        brick6_sampler_runtime_clip_stop_playback_silent(ctx->track_id);
         brick6_sampler_runtime_mix_declick_tails(ctx->track_id, out_l, out_r, frames);
         return;
     }
@@ -7275,7 +7304,7 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_runtime_ctx_t *
     if ((voice->release_pending != 0U)
         && (mixer_track_vca_requires_source(ctx->mix_track_id) == 0U))
     {
-        brick6_sampler_runtime_clip_stop_playback(track_id);
+        brick6_sampler_runtime_clip_stop_playback_silent(track_id);
         brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
         return;
     }
@@ -7371,9 +7400,7 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
             }
             if (mixer_multi_voice_vca_requires_source(dsp_state) == 0U)
             {
-                brick6_sampler_runtime_multi_stop_voice(
-                    multi_voice,
-                    (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
+                brick6_sampler_runtime_multi_stop_voice_after_vca(multi_voice);
             }
         }
     }

@@ -1665,12 +1665,21 @@ void mixer_multi_filter_process(uint32_t track_id,
 
     if (slot->vca_enabled != 0U)
     {
-        for (uint32_t frame = 0U; frame < frames; ++frame)
+        uint32_t frame = 0U;
+        for (; frame < frames; ++frame)
         {
-            const float vca = (float)env_adsr_process_step(&slot->vca_env)
-                            * (1.0f / 32767.0f);
+            float vca = 0.0f;
+            if (env_adsr_process_vca_sample(&slot->vca_env, &vca) == 0U)
+            {
+                break;
+            }
             left[frame] *= vca;
             right[frame] *= vca;
+        }
+        if (frame < frames)
+        {
+            memset(&left[frame], 0, (frames - frame) * sizeof(float));
+            memset(&right[frame], 0, (frames - frame) * sizeof(float));
         }
     }
 }
@@ -1724,11 +1733,19 @@ void mixer_multi_filter_process_mono(uint32_t track_id,
 
     if (slot->vca_enabled != 0U)
     {
-        for (uint32_t frame = 0U; frame < frames; ++frame)
+        uint32_t frame = 0U;
+        for (; frame < frames; ++frame)
         {
-            const float vca = (float)env_adsr_process_step(&slot->vca_env)
-                            * (1.0f / 32767.0f);
+            float vca = 0.0f;
+            if (env_adsr_process_vca_sample(&slot->vca_env, &vca) == 0U)
+            {
+                break;
+            }
             mono[frame] *= vca;
+        }
+        if (frame < frames)
+        {
+            memset(&mono[frame], 0, (frames - frame) * sizeof(float));
         }
     }
 }
@@ -2937,15 +2954,24 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
     const float pan_for_mix = -clamp_pan(voice_pan);
     const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
     const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-    for (uint32_t i = 0U; i < frames; ++i)
+    uint32_t i = 0U;
+    for (; i < frames; ++i)
     {
-        const float vca =
-            (float)env_adsr_process_step(&filter->vca_env) * (1.0f / 32767.0f);
+        float vca = 0.0f;
+        if (env_adsr_process_vca_sample(&filter->vca_env, &vca) == 0U)
+        {
+            break;
+        }
         filter->vca_env_value = vca;
         const float voice_l = mono[i] * vca * pan_l;
         const float voice_r = mono[i] * vca * pan_r;
         g_external_track_l[mix_track_id][i] += voice_l;
         g_external_track_r[mix_track_id][i] += voice_r;
+    }
+    if (i < frames)
+    {
+        memset(&mono[i], 0, (frames - i) * sizeof(float));
+        filter->vca_env_value = 0.0f;
     }
     return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE);
 }
@@ -3291,6 +3317,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             const float pan_step = (mt->pan - pan_cur) * inv_frames;
             const float mute_target = (mt->mute != 0U) ? 0.0f : 1.0f;
             const float mute_step = 1.0f / 240.0f;
+            const uint8_t track_vca_enabled =
+                ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                    && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                    && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
+                    && (g_track_filters[t].vca_enabled != 0U)) ? 1U : 0U;
+            uint8_t vca_running = track_vca_enabled;
 
             if (diag_lane != 0U)
             {
@@ -3301,17 +3333,18 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
                     const float gain_l = gain_cur * pan_l * mute_gain_cur;
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
-                    const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
-                            && (g_track_filters[t].vca_enabled != 0U))
-                            ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
-                            : 1.0f;
-                    if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
-                            && (g_track_filters[t].vca_enabled != 0U))
+                    float vca_gain = 1.0f;
+                    if (track_vca_enabled != 0U)
                     {
+                        if (vca_running != 0U)
+                        {
+                            vca_running = env_adsr_process_vca_sample(
+                                &g_track_filters[t].vca_env, &vca_gain);
+                        }
+                        else
+                        {
+                            vca_gain = 0.0f;
+                        }
                         g_track_filters[t].vca_env_value = vca_gain;
                     }
                     if (is_mono_native_lane != 0U)
@@ -3357,17 +3390,18 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
                     const float gain_l = gain_cur * pan_l * mute_gain_cur;
                     const float gain_r = gain_cur * pan_r * mute_gain_cur;
-                    const float vca_gain = ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
-                            && (g_track_filters[t].vca_enabled != 0U))
-                            ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
-                            : 1.0f;
-                    if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
-                            && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO)
-                            && (g_track_filters[t].vca_enabled != 0U))
+                    float vca_gain = 1.0f;
+                    if (track_vca_enabled != 0U)
                     {
+                        if (vca_running != 0U)
+                        {
+                            vca_running = env_adsr_process_vca_sample(
+                                &g_track_filters[t].vca_env, &vca_gain);
+                        }
+                        else
+                        {
+                            vca_gain = 0.0f;
+                        }
                         g_track_filters[t].vca_env_value = vca_gain;
                     }
                     if (is_mono_native_lane != 0U)
