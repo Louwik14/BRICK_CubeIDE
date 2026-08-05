@@ -950,13 +950,9 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINFD:
-        case BRICK6_STACK_MODEL_TRIFD: return "FOLD";
         case BRICK6_STACK_MODEL_SINMORPH:
         case BRICK6_STACK_MODEL_TRIMORPH: return "MORPH";
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
-        case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
-        case BRICK6_STACK_MODEL_SUB: return "SHAPE";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
         default: return "TIMBRE";
     }
@@ -966,13 +962,9 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINFD:
-        case BRICK6_STACK_MODEL_TRIFD: return "SYM";
         case BRICK6_STACK_MODEL_SINMORPH:
         case BRICK6_STACK_MODEL_TRIMORPH: return "TARGET";
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
-        case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
-        case BRICK6_STACK_MODEL_SUB: return "SUB";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
         default: return "COLOR";
     }
@@ -982,8 +974,6 @@ static const char *ui_page_template_tone_stack_param3_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINFD:
-        case BRICK6_STACK_MODEL_TRIFD: return "SHAPE";
         case BRICK6_STACK_MODEL_SINMORPH: return "ASYM";
         case BRICK6_STACK_MODEL_TRIMORPH: return "SKEW";
         default: return "PARAM3";
@@ -1205,9 +1195,7 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }
-    if (((model == BRICK6_STACK_MODEL_SINFD)
-            || (model == BRICK6_STACK_MODEL_TRIFD)
-            || (model == BRICK6_STACK_MODEL_SINMORPH)
+    if (((model == BRICK6_STACK_MODEL_SINMORPH)
             || (model == BRICK6_STACK_MODEL_TRIMORPH))
             && ((stack_param == 3U) || (stack_param == 4U) || (stack_param == 5U)))
     {

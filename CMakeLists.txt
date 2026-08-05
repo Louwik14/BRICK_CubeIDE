@@ -181,7 +181,6 @@ list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_snapshot.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_braids_resources.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/rec_live_debug.c"

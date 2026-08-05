@@ -1074,12 +1074,6 @@ static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_s
         const uint32_t phase = (uint32_t)(((uint64_t)((px * 2) + 1) * 0xFFFFFFFFULL) / denom);
         switch (model)
         {
-            case BRICK6_STACK_MODEL_SINFD:
-                cache->samples[px] = brick6_stack_waveform_sine_fold(phase, timbre_q15, color_q15, param3_q15);
-                break;
-            case BRICK6_STACK_MODEL_TRIFD:
-                cache->samples[px] = brick6_stack_waveform_tri_fold(phase, timbre_q15, color_q15, param3_q15);
-                break;
             case BRICK6_STACK_MODEL_SINMORPH:
                 cache->samples[px] = brick6_stack_waveform_sine_morph(phase, timbre_q15, color_q15, param3_q15);
                 break;
@@ -1144,9 +1138,7 @@ static uint8_t ui_renderer_template_draw_stack_waveform_widget(const ui_param_se
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
     if (!(((model == BRICK6_STACK_MODEL_SHAPE) && (id == color_param))
-            || (((model == BRICK6_STACK_MODEL_SINFD)
-                    || (model == BRICK6_STACK_MODEL_TRIFD)
-                    || (model == BRICK6_STACK_MODEL_SINMORPH)
+            || (((model == BRICK6_STACK_MODEL_SINMORPH)
                     || (model == BRICK6_STACK_MODEL_TRIMORPH))
                 && ((id == timbre_param) || (id == color_param) || (id == param3_param)))))
     {
@@ -1241,9 +1233,7 @@ static uint8_t ui_renderer_template_stack_fold_group_is_active(const ui_param_se
     }
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-    return ((model == BRICK6_STACK_MODEL_SINFD)
-            || (model == BRICK6_STACK_MODEL_TRIFD)
-            || (model == BRICK6_STACK_MODEL_SINMORPH)
+    return ((model == BRICK6_STACK_MODEL_SINMORPH)
             || (model == BRICK6_STACK_MODEL_TRIMORPH)) ? 1U : 0U;
 }
 

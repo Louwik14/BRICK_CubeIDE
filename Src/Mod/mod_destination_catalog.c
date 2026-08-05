@@ -593,34 +593,24 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
         case 3U:
             switch ((brick6_stack_model_t)model)
             {
-                case BRICK6_STACK_MODEL_SINFD:
-                case BRICK6_STACK_MODEL_TRIFD: return "FOLD";
                 case BRICK6_STACK_MODEL_SINMORPH:
                 case BRICK6_STACK_MODEL_TRIMORPH: return "MORPH";
                 case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
-                case BRICK6_STACK_MODEL_WAVETABLE: return "WAVE";
-                case BRICK6_STACK_MODEL_SUB: return "SHAPE";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
                 default: return "TIMBRE";
             }
         case 4U:
             switch ((brick6_stack_model_t)model)
             {
-                case BRICK6_STACK_MODEL_SINFD:
-                case BRICK6_STACK_MODEL_TRIFD: return "SYM";
                 case BRICK6_STACK_MODEL_SINMORPH:
                 case BRICK6_STACK_MODEL_TRIMORPH: return "TARGET";
                 case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
-                case BRICK6_STACK_MODEL_WAVETABLE: return "BANK";
-                case BRICK6_STACK_MODEL_SUB: return "SUB";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
                 default: return "COLOR";
             }
         case 5U:
             switch ((brick6_stack_model_t)model)
             {
-                case BRICK6_STACK_MODEL_SINFD:
-                case BRICK6_STACK_MODEL_TRIFD: return "SHAPE";
                 case BRICK6_STACK_MODEL_SINMORPH: return "ASYM";
                 case BRICK6_STACK_MODEL_TRIMORPH: return "SKEW";
                 default: return "PARAM3";

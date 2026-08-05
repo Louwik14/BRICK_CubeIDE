@@ -11,11 +11,7 @@ int16_t brick6_stack_waveform_saw(uint32_t phase);
 int16_t brick6_stack_waveform_triangle(uint32_t phase);
 int16_t brick6_stack_waveform_sine(uint32_t phase);
 int16_t brick6_stack_waveform_pwm(uint32_t phase, uint16_t width_q15);
-int16_t brick6_stack_waveform_fold(int16_t sample, uint16_t amount_q15);
 int16_t brick6_stack_waveform_wavefold(int16_t sample, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15);
-int16_t brick6_stack_waveform_sine_fold(uint32_t phase, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15);
-int16_t brick6_stack_waveform_tri_fold(uint32_t phase, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15);
-int16_t brick6_stack_waveform_soft(uint32_t phase, uint16_t morph_q15, uint16_t fold_q15);
 int16_t brick6_stack_waveform_shape(uint32_t phase, uint16_t shape_q15, uint16_t morph_q15);
 int16_t brick6_stack_waveform_sine_morph(uint32_t phase,
                                          uint16_t morph_q15,

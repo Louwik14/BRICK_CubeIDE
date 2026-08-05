@@ -99,20 +99,6 @@ int16_t brick6_stack_waveform_pwm(uint32_t phase, uint16_t width_q15)
     return ((phase >> 16) < width) ? 32767 : -32768;
 }
 
-int16_t brick6_stack_waveform_fold(int16_t sample, uint16_t amount_q15)
-{
-    if (amount_q15 == 0U)
-    {
-        return sample;
-    }
-
-    const uint32_t drive_q15 = 32767U + (((uint32_t)amount_q15 * 196608U) >> 15);
-    const int32_t driven = ((int32_t)sample * (int32_t)drive_q15) >> 15;
-    const uint32_t fold_phase = (uint32_t)(0x40000000LL + ((int64_t)driven << 17));
-    const int16_t folded = brick6_stack_waveform_sine(fold_phase);
-    return brick6_stack_waveform_mix_q15(sample, folded, amount_q15);
-}
-
 int16_t brick6_stack_waveform_wavefold(int16_t sample, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15)
 {
     if (fold_q15 == 0U)
@@ -145,36 +131,6 @@ int16_t brick6_stack_waveform_wavefold(int16_t sample, uint16_t fold_q15, uint16
     const int16_t rounded = brick6_stack_waveform_sine(rounded_phase);
     const int16_t shaped = brick6_stack_waveform_mix_q15(folded, rounded, shape_q15);
     return brick6_stack_waveform_mix_q15(sample, shaped, fold_q15);
-}
-
-int16_t brick6_stack_waveform_sine_fold(uint32_t phase, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15)
-{
-    return brick6_stack_waveform_wavefold(brick6_stack_waveform_sine(phase), fold_q15, sym_q15, shape_q15);
-}
-
-int16_t brick6_stack_waveform_tri_fold(uint32_t phase, uint16_t fold_q15, uint16_t sym_q15, uint16_t shape_q15)
-{
-    return brick6_stack_waveform_wavefold(brick6_stack_waveform_triangle(phase), fold_q15, sym_q15, shape_q15);
-}
-
-int16_t brick6_stack_waveform_soft(uint32_t phase, uint16_t morph_q15, uint16_t fold_q15)
-{
-    int16_t sample = 0;
-    if (morph_q15 == 0U)
-    {
-        sample = brick6_stack_waveform_sine(phase);
-    }
-    else if (morph_q15 >= 32767U)
-    {
-        sample = brick6_stack_waveform_triangle(phase);
-    }
-    else
-    {
-        sample = brick6_stack_waveform_mix_q15(brick6_stack_waveform_sine(phase),
-                                               brick6_stack_waveform_triangle(phase),
-                                               morph_q15);
-    }
-    return brick6_stack_waveform_fold(sample, fold_q15);
 }
 
 int16_t brick6_stack_waveform_shape(uint32_t phase, uint16_t shape_q15, uint16_t morph_q15)
