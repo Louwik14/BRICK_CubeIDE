@@ -31,8 +31,6 @@ static fx_reverb_global_state_t g_reverb_global = {
     .lpf = 1.0f,
 };
 
-AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
-
 static void apply_params(void)
 {
     if(g_reverb_global.backend_valid == 0U)
@@ -88,7 +86,25 @@ void fx_reverb_global_process_block(float *in_l, float *in_r, float *out_l, floa
     }
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
-    for(uint32_t i = 0U; i < frames; ++i)
-        g_reverb_global_mono[i] = 0.5f * (in_l[i] + in_r[i]);
-    fx_reverb_revb_global_process_send_mono_to_stereo_wet(g_reverb_global_mono, out_l, out_r, frames);
+    fx_reverb_revb_global_process_send_stereo_wet(in_l, in_r, out_l, out_r, frames);
+}
+
+void fx_reverb_global_process_block_add(const float *in_l,
+                                        const float *in_r,
+                                        float *destination_l,
+                                        float *destination_r,
+                                        uint32_t frames)
+{
+    if((in_l == 0) || (in_r == 0)
+            || (destination_l == 0) || (destination_r == 0))
+        return;
+    if(g_reverb_global.backend_valid == 0U)
+        return;
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+    fx_reverb_revb_global_process_send_stereo_wet_add(in_l,
+                                                      in_r,
+                                                      destination_l,
+                                                      destination_r,
+                                                      frames);
 }

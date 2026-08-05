@@ -144,6 +144,10 @@ namespace mifx {
             };
         };
 
+        struct BlockState {
+            int32_t write_ptr;
+        };
+
         class Context {
             friend class FxEngine;
 
@@ -348,6 +352,32 @@ namespace mifx {
                 c->lfo_value_[0] = lfo_[0].value();
                 c->lfo_value_[1] = lfo_[1].value();
             }
+        }
+
+        inline void BeginBlock(BlockState *state) const {
+            state->write_ptr = write_ptr_;
+        }
+
+        inline void Start(Context *c, BlockState *state) {
+            --state->write_ptr;
+            if (state->write_ptr < 0) {
+                state->write_ptr += size;
+            }
+            c->accumulator_ = 0.0f;
+            c->previous_read_ = 0.0f;
+            c->buffer_ = buffer_;
+            c->write_ptr_ = state->write_ptr;
+            if ((state->write_ptr & 31) == 0) {
+                c->lfo_value_[0] = lfo_[0].Next();
+                c->lfo_value_[1] = lfo_[1].Next();
+            } else {
+                c->lfo_value_[0] = lfo_[0].value();
+                c->lfo_value_[1] = lfo_[1].value();
+            }
+        }
+
+        inline void EndBlock(const BlockState *state) {
+            write_ptr_ = state->write_ptr;
         }
 
         inline void StartNoLFO(Context *c) {

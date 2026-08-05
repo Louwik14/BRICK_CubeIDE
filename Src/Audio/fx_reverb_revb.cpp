@@ -12,7 +12,6 @@ constexpr float kDefaultSampleRate = 48000.0f;
 constexpr uint32_t kEngineBufferSize = 32768U;
 
 AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
-AUDIO_HOT ALIGN32 static float g_revb_input[AUDIO_BLOCK_SIZE];
 
 struct revb_global_state_t
 {
@@ -113,7 +112,56 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
     }
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
-    for(uint32_t i = 0U; i < frames; ++i)
-        g_revb_input[i] = in[i] * g_revb.wet;
-    g_revb.engine.Process(g_revb_input, out_l, out_r, frames);
+    g_revb.engine.ProcessMonoWet(in, out_l, out_r, &g_revb.wet, frames);
+}
+
+void fx_reverb_revb_global_process_send_stereo_wet(const float *in_l,
+                                                   const float *in_r,
+                                                   float *out_l,
+                                                   float *out_r,
+                                                   uint32_t frames)
+{
+    if((in_l == nullptr) || (in_r == nullptr)
+            || (out_l == nullptr) || (out_r == nullptr))
+        return;
+    if((g_revb.initialized == 0U) || (g_revb.wet <= 0.0f))
+    {
+        volatile float *zero_l = out_l;
+        volatile float *zero_r = out_r;
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            zero_l[i] = 0.0f;
+            zero_r[i] = 0.0f;
+        }
+        return;
+    }
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+    g_revb.engine.ProcessStereoWet(in_l,
+                                   in_r,
+                                   out_l,
+                                   out_r,
+                                   &g_revb.wet,
+                                   frames);
+}
+
+void fx_reverb_revb_global_process_send_stereo_wet_add(const float *in_l,
+                                                       const float *in_r,
+                                                       float *destination_l,
+                                                       float *destination_r,
+                                                       uint32_t frames)
+{
+    if((in_l == nullptr) || (in_r == nullptr)
+            || (destination_l == nullptr) || (destination_r == nullptr))
+        return;
+    if((g_revb.initialized == 0U) || (g_revb.wet <= 0.0f))
+        return;
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+    g_revb.engine.ProcessStereoWetAdd(in_l,
+                                      in_r,
+                                      destination_l,
+                                      destination_r,
+                                      &g_revb.wet,
+                                      frames);
 }

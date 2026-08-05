@@ -163,6 +163,62 @@ namespace mifx {
             }
         }
 
+        void ProcessStereoWetAdd(const float *in_l,
+                                 const float *in_r,
+                                 float *out_l,
+                                 float *out_r,
+                                 const float *wet,
+                                 size_t size) {
+            StereoWetInput input = {in_l, in_r, wet};
+            AddOutput output = {out_l, out_r};
+            if (tbd_delays_) {
+                ProcessCore<TbdMemory>(input, output, size,
+                                       6815.2383f, 54.42177f,
+                                       4854.4219f, 43.53742f);
+            } else {
+                ProcessCore<DelugeMemory>(input, output, size,
+                                          6261.0f, 50.0f,
+                                          4460.0f, 40.0f);
+            }
+        }
+
+        void ProcessStereoWet(const float *in_l,
+                              const float *in_r,
+                              float *out_l,
+                              float *out_r,
+                              const float *wet,
+                              size_t size) {
+            StereoWetInput input = {in_l, in_r, wet};
+            BufferOutput output = {out_l, out_r};
+            if (tbd_delays_) {
+                ProcessCore<TbdMemory>(input, output, size,
+                                       6815.2383f, 54.42177f,
+                                       4854.4219f, 43.53742f);
+            } else {
+                ProcessCore<DelugeMemory>(input, output, size,
+                                          6261.0f, 50.0f,
+                                          4460.0f, 40.0f);
+            }
+        }
+
+        void ProcessMonoWet(const float *in,
+                            float *out_l,
+                            float *out_r,
+                            const float *wet,
+                            size_t size) {
+            MonoWetInput input = {in, wet};
+            BufferOutput output = {out_l, out_r};
+            if (tbd_delays_) {
+                ProcessCore<TbdMemory>(input, output, size,
+                                       6815.2383f, 54.42177f,
+                                       4854.4219f, 43.53742f);
+            } else {
+                ProcessCore<DelugeMemory>(input, output, size,
+                                          6261.0f, 50.0f,
+                                          4460.0f, 40.0f);
+            }
+        }
+
         inline void set_delay_mode(bool tbd) {
             if (tbd_delays_ != tbd) {
                 tbd_delays_ = tbd;
@@ -202,21 +258,75 @@ namespace mifx {
         }
 
     private:
+        struct MonoInput {
+            const float *in;
+
+            __attribute__((always_inline)) inline float Next() {
+                return *in++;
+            }
+        };
+
+        struct StereoWetInput {
+            const float *left;
+            const float *right;
+            const float *wet;
+
+            __attribute__((always_inline)) inline float Next() {
+                const float mono = 0.5f * (*left++ + *right++);
+                return mono * *wet;
+            }
+        };
+
+        struct MonoWetInput {
+            const float *in;
+            const float *wet;
+
+            __attribute__((always_inline)) inline float Next() {
+                return *in++ * *wet;
+            }
+        };
+
+        struct BufferOutput {
+            float *left;
+            float *right;
+
+            __attribute__((always_inline)) inline void Store(float left_value,
+                                                              float right_value) {
+                *left++ = left_value;
+                *right++ = right_value;
+            }
+        };
+
+        struct AddOutput {
+            float *left;
+            float *right;
+
+            __attribute__((always_inline)) inline void Store(float left_value,
+                                                              float right_value) {
+                *left++ += left_value;
+                *right++ += right_value;
+            }
+        };
+
         void ProcessMonoTbd(const float* in, float *left, float *right, size_t size) {
-            ProcessMono<TbdMemory>(in, left, right, size,
+            MonoInput input = {in};
+            BufferOutput output = {left, right};
+            ProcessCore<TbdMemory>(input, output, size,
                                    6815.2383f, 54.42177f,
                                    4854.4219f, 43.53742f);
         }
 
         void ProcessMonoDeluge(const float* in, float *left, float *right, size_t size) {
-            ProcessMono<DelugeMemory>(in, left, right, size,
+            MonoInput input = {in};
+            BufferOutput output = {left, right};
+            ProcessCore<DelugeMemory>(input, output, size,
                                       6261.0f, 50.0f,
                                       4460.0f, 40.0f);
         }
 
-        template<typename Memory>
+        template<typename Memory, typename Input, typename Output>
         __attribute__((always_inline)) inline
-        void ProcessMono(const float* in, float *left, float *right, size_t size,
+        void ProcessCore(Input& input, Output& output, size_t size,
                          float del2_offset, float del2_modulation,
                          float del1_offset, float del1_modulation) {
             E::DelayLine<Memory, 0> ap1;
@@ -236,14 +346,21 @@ namespace mifx {
             const float krt = reverb_time_;
             float lp_1 = lp_decay_1_;
             float lp_2 = lp_decay_2_;
+            float hp_l = hp_l_;
+            float hp_r = hp_r_;
+            float lp_l = lp_l_;
+            float lp_r = lp_r_;
+            const float hp_coefficient = hp_coefficient_;
+            const float lp_coefficient = lp_coefficient_;
+            E::BlockState block;
+            engine_.BeginBlock(&block);
 
             while (size--) {
                 float wet;
                 float apout = 0.0f;
-                engine_.Start(&c);
+                engine_.Start(&c, &block);
 
-                c.Read(*in);
-                in++;
+                c.Read(input.Next());
                 // Diffuse through 4 allpasses.
                 c.Read(ap1 TAIL, kap);
                 c.WriteAllPass(ap1, -kap);
@@ -266,8 +383,8 @@ namespace mifx {
                 c.Write(del1, 2.0f);
                 c.Write(wet, 0.0f);
 
-                wet -= one_pole(hp_r_, wet, hp_coefficient_);
-                *right = one_pole(lp_r_, wet, lp_coefficient_);
+                wet -= one_pole(hp_r, wet, hp_coefficient);
+                const float right_value = one_pole(lp_r, wet, lp_coefficient);
 
                 c.Load(apout);
                 c.Interpolate(del1, del1_offset, LFO_1, del1_modulation, krt);
@@ -279,15 +396,19 @@ namespace mifx {
                 c.Write(del2, 2.0f);
                 c.Write(wet, 0.0f);
 
-                wet -= one_pole(hp_l_, wet, hp_coefficient_);
-                *left = one_pole(lp_l_, wet, lp_coefficient_);
+                wet -= one_pole(hp_l, wet, hp_coefficient);
+                const float left_value = one_pole(lp_l, wet, lp_coefficient);
 
-                ++left;
-                ++right;
+                output.Store(left_value, right_value);
             }
 
+            engine_.EndBlock(&block);
             lp_decay_1_ = lp_1;
             lp_decay_2_ = lp_2;
+            hp_l_ = hp_l;
+            hp_r_ = hp_r;
+            lp_l_ = lp_l;
+            lp_r_ = lp_r;
         }
         E engine_;
         bool tbd_delays_ = false;

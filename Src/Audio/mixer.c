@@ -4134,23 +4134,37 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         if(reverb_active != 0U)
         {
-            fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
-                                           send_r[MIXER_REVERB_SEND_INDEX],
-                                           reverb_return_l,
-                                           reverb_return_r,
-                                           frames);
-            if(diag_enabled != 0U)
+#if defined(BRICK6_VARIANT_LOWCOST)
+            if(diag_enabled == 0U)
             {
-                audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_REVERB_RETURN,
-                                                 reverb_return_l,
-                                                 reverb_return_r,
-                                                 frames);
+                fx_reverb_global_process_block_add(
+                    send_l[MIXER_REVERB_SEND_INDEX],
+                    send_r[MIXER_REVERB_SEND_INDEX],
+                    bus_main_l,
+                    bus_main_r,
+                    frames);
             }
-
-            for(uint32_t i = 0; i < frames; i++)
+            else
+#endif
             {
-                bus_main_l[i] += reverb_return_l[i];
-                bus_main_r[i] += reverb_return_r[i];
+                fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
+                                               send_r[MIXER_REVERB_SEND_INDEX],
+                                               reverb_return_l,
+                                               reverb_return_r,
+                                               frames);
+                if(diag_enabled != 0U)
+                {
+                    audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_REVERB_RETURN,
+                                                     reverb_return_l,
+                                                     reverb_return_r,
+                                                     frames);
+                }
+
+                for(uint32_t i = 0; i < frames; i++)
+                {
+                    bus_main_l[i] += reverb_return_l[i];
+                    bus_main_r[i] += reverb_return_r[i];
+                }
             }
         }
         else if(diag_enabled != 0U)

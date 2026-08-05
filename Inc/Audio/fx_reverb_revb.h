@@ -20,6 +20,16 @@ void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float *in,
                                                             float *out_l,
                                                             float *out_r,
                                                             uint32_t frames);
+void fx_reverb_revb_global_process_send_stereo_wet(const float *in_l,
+                                                   const float *in_r,
+                                                   float *out_l,
+                                                   float *out_r,
+                                                   uint32_t frames);
+void fx_reverb_revb_global_process_send_stereo_wet_add(const float *in_l,
+                                                       const float *in_r,
+                                                       float *destination_l,
+                                                       float *destination_r,
+                                                       uint32_t frames);
 
 #ifdef __cplusplus
 }
