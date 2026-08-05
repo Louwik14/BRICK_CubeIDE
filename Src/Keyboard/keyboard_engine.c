@@ -479,7 +479,7 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
 
     const note_fx_result_t result = note_fx_pipeline_submit_source_occurrence(
         owner_track, note, velocity, is_note_on,
-        seq_runtime_exec_get_audio_timeline_sample(), provenance, occurrence_id);
+        NOTE_FX_SAMPLE_TIME_AUDIO_OWNER, provenance, occurrence_id);
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
         return;
 

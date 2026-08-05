@@ -24,6 +24,34 @@ static note_fx_slot_runtime_t g_slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
 static note_fx_diag_t g_diag[NOTE_FX_TRACK_COUNT];
 static uint32_t g_token;
 
+uint8_t note_fx_engine_is_generated_occurrence_current(
+    uint8_t track, uint32_t occurrence_id, uint32_t generation)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (occurrence_id == 0U)
+            || (generation == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        const note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
+        if (runtime->closing != 0U)
+            continue;
+        for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
+        {
+            const note_fx_owned_t *const owned = &runtime->owned[i];
+            if ((owned->active != 0U)
+                    && (owned->token == occurrence_id)
+                    && (owned->generation == generation))
+            {
+                return 1U;
+            }
+        }
+    }
+    return 0U;
+}
+
 static uint8_t closure_is_settled(note_fx_result_t result)
 {
     return (result == NOTE_EVENT_RESULT_ACCEPTED)

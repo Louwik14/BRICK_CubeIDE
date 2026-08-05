@@ -339,3 +339,17 @@ Les préconditions Euclid les plus importantes ne sont pas réunies : paire gén
 ## 21. Recommandation finale
 
 Poursuivre la passe corrective avant le réaudit Euclid, limitée dans cet ordre à : admission moteur réelle; tests comportementaux enregistrés, dont réservation/retry, identité/retrigger, interleavings owner, defaults/restore et matrice transitions/source switch des lots 1–6; consolidation Z1/Z4. Réauditer ensuite statiquement, puis seulement exécuter builds/tests et mesures H743. Ne pas mettre à jour `docs/plan_midi_fx_euclid.md` avant cette fermeture.
+
+## Addendum 2026-08-05 — passe corrective étape 1 du plan trois slots/EUCLID
+
+HEAD courant contrôlé : `d5eb82184` (`docs: plan three midi fx slots and euclid`), puis correctifs locaux de l’étape 1. Les changements fonctionnels de cette passe sont limités au seam live, à l’autorité de génération terminale, à l’admission mono explicite, au compteur de clock externe et à la suppression des wrappers terminal pitch-based.
+
+- D-009 : les producteurs live transmettent désormais `NOTE_FX_SAMPLE_TIME_AUDIO_OWNER`; l’owner résout ce marqueur au moment de la consommation de commande. Le timestamp n’est plus capturé par le producteur avant l’application différée.
+- D-004 : un Note On FX n’est admis au terminal que si son occurrence est encore owned par le runtime NoteFx courant. Un On stale est refusé et compté séparément ; les Off de fermeture terminale ne passent pas par cette garde.
+- D-014 : les moteurs mono à API `void` sont maintenant bornés par un adaptateur d’admission scheduler à une occurrence interne active par piste. Un second On est refusé sans toucher la voix courante ; un Off d’une occurrence déjà fermée est un no-op acquitté. Les chemins poly et Multi conservent leurs acquittements réels.
+- D-010 : le pending clock externe passe à 32 bits ; un éventuel overflow est compté dans `external_pulses_overflowed` au lieu d’être perdu silencieusement à 65535. La borne de traitement reste 4 pulses par bloc et le surplus reste coalescé/rephasé.
+- D-018 : `seq_play_scheduler_dispatch_terminal_note[_to_channel]` et leur helper pitch-based ne sont plus exposés ni compilés ; aucun appel fonctionnel ne les référençait dans le HEAD.
+- D-017 n’est pas modifiée par cette passe : le changement de MODEL est déjà transactionnel dans `note_fx_state_set_param()` et les restores restent normalisés ; la matrice complète restore/clipboard/p-lock reste à valider avant EUCLID.
+- D-019 reste ouverte : le checkout courant ne contient toujours pas les sources/scripts référencés par `tests/CMakeLists.txt`. Aucun test absent n’a été remplacé par un faux succès.
+
+Les builds `build/Release` et `build/Premium` passent. Le verdict Euclid reste `NON PRÊT — DETTES STRUCTURELLES OUVERTES` tant que les tests comportementaux réels, les saturations moteur/MIDI et les mesures H743 ne sont pas exécutés.

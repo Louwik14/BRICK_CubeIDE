@@ -607,3 +607,18 @@ Il n’y a pas de décision ouverte sur un slot audio fonctionnel, une migration
 ```
 
 Ne pas sauter l’étape 1 pour livrer un prototype EUCLID qui masque une admission moteur supposée ou un timestamp live ancien. Ne pas réutiliser les IDs/libérations du slot 4 pour audio. Ne pas fusionner les transitions destructives dans l’algorithme de masque : le modèle, le runtime, les fermetures et le terminal doivent rester des responsabilités séparables et testables.
+
+### Journal d’exécution
+
+**Étape 1 — passe corrective du 2026-08-05 : partiellement exécutée.** Le
+seam live résout désormais son sample au owner audio ; le terminal refuse les
+On FX stale ; l’admission mono est bornée par une occurrence interne active ;
+le pending clock externe est 32 bits avec compteur d’overflow ; les wrappers
+terminal pitch-based ont été supprimés. Les builds `build/Release` et
+`build/Premium` passent.
+
+La fermeture complète de l’étape reste conditionnée à D-019 : les sources et
+scripts référencés par `tests/CMakeLists.txt` ne sont pas présents dans le
+checkout courant. Aucun test absent n’a été inventé ni transformé en faux
+succès. Les validations host/H743, USB/moteur et restore/clipboard/p-lock
+restent donc prérequis avant l’étape 2.

@@ -79,6 +79,7 @@ typedef struct
     uint32_t internal_step_burst_block_count;
     uint16_t max_internal_step_pulses_per_block;
     uint32_t external_pulses_coalesced;
+    uint32_t external_pulses_overflowed;
     uint16_t max_external_pulses_per_block;
 } seq_runtime_diag_t;
 

@@ -637,12 +637,30 @@ static uint8_t seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     const uint8_t is_multi_sampler = (uint8_t)((resolved.descriptor.engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
-    if ((is_note_on == 0U) && (is_poly_synth == 0U)
-            && (is_multi_sampler == 0U)
-            && (event_token != 0U)
-            && (g_seq_engine_mono_occurrence[track] != event_token))
+    /* Mono engines expose a void note API.  Their admission contract is the
+     * fixed one-occurrence voice owned by this scheduler, so a second live
+     * occurrence is refused instead of silently stealing the first ledger. */
+    if ((is_poly_synth == 0U) && (is_multi_sampler == 0U)
+            && (event_token != 0U))
     {
-        return 1U;
+        if (is_note_on != 0U)
+        {
+            if ((g_seq_engine_mono_occurrence[track] != 0U)
+                    && (g_seq_engine_mono_occurrence[track] != event_token))
+            {
+                return 0U;
+            }
+            if (g_seq_engine_mono_occurrence[track] == event_token)
+            {
+                return 0U;
+            }
+        }
+        else if (g_seq_engine_mono_occurrence[track] != event_token)
+        {
+            /* The voice was already closed or replaced; this stale Off is a
+             * settled no-op and must not touch the current mono voice. */
+            return 1U;
+        }
     }
     const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U)
@@ -801,37 +819,6 @@ static uint8_t seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     return 1U;
 }
 
-static void seq_play_scheduler_dispatch_terminal_owned(seq_track_id_t track,
-                                                       uint8_t channel,
-                                                       uint8_t note,
-                                                       uint8_t velocity,
-                                                       uint8_t is_note_on,
-                                                       uint32_t occurrence_id,
-                                                       uint32_t generation)
-{
-    if (is_note_on != 0U)
-    {
-        if (g_seq_play_track_closing[track] != 0U)
-            return;
-        const uint8_t internal_admitted = seq_play_scheduler_emit_engine_note(
-            track, note, velocity, 1U, occurrence_id);
-        const uint8_t midi_dest_mask = midi_note_on_admit(
-            MIDI_DEST_BOTH, channel, note, velocity);
-        if ((internal_admitted != 0U) || (midi_dest_mask != 0U))
-        {
-            (void)seq_output_guard_note_on_seen_mask(track, note, occurrence_id,
-                                                     generation, midi_dest_mask);
-        }
-    }
-    else
-    {
-        (void)seq_play_scheduler_emit_engine_note(track, note, 0U, 0U,
-                                                   occurrence_id);
-        (void)midi_note_off_admit(MIDI_DEST_BOTH, channel, note, 0U);
-        (void)seq_output_guard_note_off_seen(track, note, occurrence_id, generation);
-    }
-}
-
 note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_t *event)
 {
     if (!note_event_is_valid(event)
@@ -853,6 +840,13 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
         {
             ++g_seq_play_diag.terminal_on_internal_refused;
             return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+        }
+        if ((event->provenance == NOTE_EVENT_SOURCE_FX)
+                && (note_fx_pipeline_is_generated_occurrence_current(
+                    event->track, occurrence_id, event->generation) == 0U))
+        {
+            ++g_seq_play_diag.terminal_on_stale_refused;
+            return NOTE_EVENT_RESULT_REJECTED_STALE;
         }
         const int16_t free_index = seq_play_scheduler_terminal_free(event->track);
         if (free_index < 0)
@@ -939,22 +933,6 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
     (void)seq_output_guard_note_off_seen(event->track, record->note,
                                          occurrence_id, event->generation);
     return NOTE_EVENT_RESULT_ACCEPTED;
-}
-void seq_play_scheduler_dispatch_terminal_note(seq_track_id_t track, uint8_t note,
-                                               uint8_t velocity, uint8_t is_note_on)
-{
-    seq_play_scheduler_dispatch_terminal_note_to_channel(
-        track, track_runtime_get_midi_channel_zero_based(track), note, velocity, is_note_on);
-}
-
-void seq_play_scheduler_dispatch_terminal_note_to_channel(seq_track_id_t track,
-                                                          uint8_t channel,
-                                                          uint8_t note,
-                                                          uint8_t velocity,
-                                                          uint8_t is_note_on)
-{
-    seq_play_scheduler_dispatch_terminal_owned(track, channel, note, velocity,
-                                               is_note_on, 0U, 0U);
 }
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
                                                               seq_step_id_t step,

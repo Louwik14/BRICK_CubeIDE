@@ -201,3 +201,13 @@ On/Off, les continuations, les releases et les cleanups partagent ce contexte;
 la file owner est plafonnée à 32 commandes consommées par demi-buffer. Le test
 statique `tests/note_fx_budget_validation.ps1` vérifie l'absence du budget local
 par sous-segment et l'absence de release hors admission.
+
+# Addendum 2026-08-05 — admission mono et validation
+
+L’admission terminale des moteurs mono possède maintenant une politique fixe
+d’une occurrence interne active par piste : un nouvel On concurrent est
+refusé avant l’appel aux APIs moteur `void`, et un Off stale est un no-op
+acquitté. Cette politique borne le ledger sans prétendre que les moteurs
+historiques acquittent eux-mêmes leurs APIs `void`. Les interleavings, la
+saturation et le coût H743 restent à mesurer ; les sources de tests référencées
+par le CMake courant ne sont pas présentes dans le checkout audité.

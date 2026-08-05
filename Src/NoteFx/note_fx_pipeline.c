@@ -97,6 +97,19 @@ static note_fx_half_budget_t g_note_fx_half_budget;
 static uint16_t g_note_fx_last_half_emissions;
 static uint16_t g_note_fx_max_half_emissions;
 
+uint8_t note_fx_pipeline_is_generated_occurrence_current(
+    uint8_t track, uint32_t occurrence_id, uint32_t generation)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (occurrence_id == 0U)
+            || (generation == 0U))
+    {
+        return 0U;
+    }
+
+    return note_fx_engine_is_generated_occurrence_current(
+        track, occurrence_id, generation);
+}
+
 static uint32_t note_fx_pipeline_enter_critical(void)
 {
     const uint32_t primask = __get_PRIMASK();
@@ -704,6 +717,11 @@ static note_fx_result_t note_fx_pipeline_submit_source_audio(uint8_t track, uint
             || (source_occurrence_id == 0U))
     {
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
+    }
+
+    if (sample_time == NOTE_FX_SAMPLE_TIME_AUDIO_OWNER)
+    {
+        sample_time = seq_runtime_exec_get_audio_timeline_sample();
     }
 
     int8_t source_index = -1;

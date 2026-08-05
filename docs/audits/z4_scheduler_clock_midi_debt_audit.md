@@ -177,3 +177,12 @@ La ring Stack laisse un slot vide : 0 place utile signifie 255 commandes en atte
 ## 12. Limites de preuve
 
 Cet audit ne prouve ni underrun, ni note bloquee reproduite, ni retard audible sur cible. Il prouve les chemins de refus, de perte d'acquittement et les positions temporelles source. Les couts et priorites effectifs doivent etre mesures sur H743 avant de fixer les quotas.
+
+# Addendum 2026-08-05 — étape 1
+
+Le HEAD courant remplace le timestamp live capturé avant consommation par le
+marqueur `NOTE_FX_SAMPLE_TIME_AUDIO_OWNER`, résolu par l’owner audio au retrait
+de la commande. Le pending clock externe est désormais 32 bits et expose les
+overflows dans `seq_runtime_diag_t::external_pulses_overflowed`; la limite de
+quatre pulses traités par bloc reste inchangée. Les tests comportementaux et la
+mesure H743 restent à fournir.

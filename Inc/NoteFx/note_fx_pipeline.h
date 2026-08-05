@@ -13,6 +13,11 @@
      + NOTE_FX_HALF_OFF_RESERVE)
 #define NOTE_FX_HALF_COMMAND_QUOTA 32U
 
+/* A live source is queued by a non-audio producer.  The audio owner resolves
+ * this marker at command consumption so the event sample is the application
+ * sample, not the producer's earlier timeline projection. */
+#define NOTE_FX_SAMPLE_TIME_AUDIO_OWNER UINT64_MAX
+
 void note_fx_pipeline_init(void);
 typedef struct
 {
@@ -49,6 +54,10 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint64_t sample_time, note_event_provenance_t provenance,
     uint32_t source_occurrence_id);
+/* Returns non-zero only while an FX-owned occurrence is still current in the
+ * audio owner.  Terminal admission uses this to reject stale generated On. */
+uint8_t note_fx_pipeline_is_generated_occurrence_current(
+    uint8_t track, uint32_t occurrence_id, uint32_t generation);
 void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                               uint32_t samples_per_step_q16);
 void note_fx_pipeline_begin_audio_half(uint16_t frames);

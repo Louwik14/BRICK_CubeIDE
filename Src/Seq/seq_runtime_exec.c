@@ -38,7 +38,8 @@ static uint64_t g_seq_runtime_exec_audio_timeline_sample;
 static uint8_t g_seq_runtime_exec_midi_clock_audio_enabled;
 static uint32_t g_seq_runtime_exec_midi_clock_period_q16;
 static uint64_t g_seq_runtime_exec_midi_clock_next_sample_q16;
-static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
+static volatile uint32_t g_seq_runtime_exec_external_step_pulses_pending;
+static volatile uint32_t g_seq_runtime_exec_external_step_pulses_overflowed;
 static seq_runtime_exec_boundary_event_t g_seq_runtime_exec_boundary_events[SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP];
 static uint8_t g_seq_runtime_exec_boundary_event_count;
 static uint32_t g_seq_runtime_exec_metronome_step;
@@ -80,6 +81,7 @@ void seq_runtime_exec_init(void)
     g_seq_runtime_exec_midi_clock_period_q16 = 1U;
     g_seq_runtime_exec_midi_clock_next_sample_q16 = 0U;
     g_seq_runtime_exec_external_step_pulses_pending = 0U;
+    g_seq_runtime_exec_external_step_pulses_overflowed = 0U;
     g_seq_runtime_exec_boundary_event_count = 0U;
     g_seq_runtime_exec_metronome_step = 0U;
 }
@@ -434,24 +436,35 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
     }
 }
 
-void seq_runtime_exec_set_external_step_pulses_pending(uint16_t pending)
+void seq_runtime_exec_set_external_step_pulses_pending(uint32_t pending)
 {
     g_seq_runtime_exec_external_step_pulses_pending = pending;
 }
 
 void seq_runtime_exec_increment_external_step_pulses_pending(void)
 {
-    if (g_seq_runtime_exec_external_step_pulses_pending < 0xFFFFU)
+    if (g_seq_runtime_exec_external_step_pulses_pending < UINT32_MAX)
     {
         g_seq_runtime_exec_external_step_pulses_pending++;
     }
+    else if (g_seq_runtime_exec_external_step_pulses_overflowed < UINT32_MAX)
+    {
+        ++g_seq_runtime_exec_external_step_pulses_overflowed;
+    }
 }
 
-uint16_t seq_runtime_exec_consume_external_step_pulses_pending(void)
+uint32_t seq_runtime_exec_consume_external_step_pulses_pending(void)
 {
-    const uint16_t pending = g_seq_runtime_exec_external_step_pulses_pending;
+    const uint32_t pending = g_seq_runtime_exec_external_step_pulses_pending;
     g_seq_runtime_exec_external_step_pulses_pending = 0U;
     return pending;
+}
+
+uint32_t seq_runtime_exec_consume_external_step_pulses_overflowed(void)
+{
+    const uint32_t overflowed = g_seq_runtime_exec_external_step_pulses_overflowed;
+    g_seq_runtime_exec_external_step_pulses_overflowed = 0U;
+    return overflowed;
 }
 
 void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *state,
@@ -630,14 +643,16 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
     }
 
     /* Progression guard: external cadence consumes pending pulses only inside the audio block domain. */
-    const uint16_t pending_steps = seq_runtime_exec_consume_external_step_pulses_pending();
+    const uint32_t pending_steps = seq_runtime_exec_consume_external_step_pulses_pending();
+    diag->external_pulses_overflowed +=
+        seq_runtime_exec_consume_external_step_pulses_overflowed();
     if (pending_steps == 0U)
     {
         return;
     }
 
     const uint64_t pulse_sample_q16 = block_start_sample << 16;
-    uint16_t pulses_to_process = pending_steps;
+    uint32_t pulses_to_process = pending_steps;
     if (pulses_to_process > SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK)
     {
         pulses_to_process = SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK;
@@ -663,8 +678,8 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
 
     if (pending_steps > SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK)
     {
-        const uint16_t coalesced = (uint16_t)(pending_steps
-                                              - SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK);
+        const uint32_t coalesced = pending_steps
+                                  - SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK;
         const uint32_t skipped = coalesced;
         for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
         {

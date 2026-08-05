@@ -94,9 +94,10 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
                                                      uint32_t now_tick,
                                                      uint64_t block_start_sample,
                                                      uint16_t block_frames);
-void seq_runtime_exec_set_external_step_pulses_pending(uint16_t pending);
+void seq_runtime_exec_set_external_step_pulses_pending(uint32_t pending);
 void seq_runtime_exec_increment_external_step_pulses_pending(void);
-uint16_t seq_runtime_exec_consume_external_step_pulses_pending(void);
+uint32_t seq_runtime_exec_consume_external_step_pulses_pending(void);
+uint32_t seq_runtime_exec_consume_external_step_pulses_overflowed(void);
 /*
  * Contract surface:
  * - block-domain convergence point between progression/timeline and event scheduling.
