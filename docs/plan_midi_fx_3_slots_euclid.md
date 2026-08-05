@@ -14,21 +14,28 @@ Contrôle effectué sur le HEAD réel `7253ef172` (`perf: fuse Multi sampler VCA
 - **Étape 2 : CONFORME sur la structure.** `NOTE_FX_SLOT_COUNT=3`, `PARAM_COUNT=319`, p-lock MIDI FX `12`, runtime p-lock `90`, UI S1..S3 et recherches négatives S4 sont cohérents. Aucun appel audio ni alias S4 n’a été ajouté. Les preuves dynamiques restent dépendantes de `D-019`.
 - **Étape 3 : finalisée après correction.** Les changements UI, p-lock, Pattern/Project v7, snapshots, clipboard et priorité `MODEL` avant paramètres dépendants sont conservés. Toute extension Undo/Redo des paramètres ou modèles MIDI FX a été retirée : `undo_v2` reste séquence-only.
 
-La prochaine étape non fermée est donc l’**étape corrective 1R**, avant toute étape 4 et avant toute implémentation EUCLID. Cette passe n’implémente ni modèle, ni masque, ni runtime EUCLID.
+La passe corrective 1R est maintenant engagée avant toute étape 4 et avant toute implémentation EUCLID. Elle n’implémente ni modèle, ni masque, ni runtime EUCLID.
+
+## État après corrective 1R
+
+Contrôle effectué sur le HEAD réel `2a4cb752d` (`perf: specialize common SVF filter paths`). La correction D-017 est appliquée : un restore qui change le modèle charge le tuple de defaults du modèle cible pour chaque slot, tandis qu’un restore dans le même modèle conserve les valeurs valides. Le scheduler expose désormais explicitement son adapter d’admission interne : pour les anciens backends `void`, l’admission signifie une lease interne bornée par le scheduler et ne prétend pas être un acquittement matériel.
+
+Le CMake des tests ne référence plus des sources absentes. Un test de restore et une validation statique de l’adapter, du terminal indépendant, de la file owner, du seam sample et du compteur clock sont enregistrés. Le test C est compilable et linkable avec la toolchain H743 ; l’exécution hôte et la matrice dynamique des quatre combinaisons/interleavings restent à fournir, ainsi que les mesures DWT sur les deux cibles.
 
 ## 1. Verdict
 
-### `NON PRÊT — DETTES STRUCTURELLES OUVERTES`
+### `NON PRÊT POUR EUCLID — 1R PARTIELLE`
 
 Le HEAD fournit une base exploitable pour planifier les trois slots et EUCLID, mais il ne faut pas poser EUCLID sur le socle sans fermer d’abord plusieurs dettes du nettoyage :
 
-- le terminal traite encore plusieurs admissions moteur `void` comme si elles étaient acquittées (`Src/Seq/seq_play_scheduler.c`, `seq_play_scheduler_emit_engine_note()`), ce qui laisse ouverte la dette critique/haute D-014 ;
-- le chemin live capture encore `seq_runtime_exec_get_audio_timeline_sample()` avant l’application différée (`Src/Keyboard/keyboard_engine.c`), donc le sample d’application réel n’est pas garanti au seam NoteFx (D-009) ;
-- l’autorité de génération courante n’est pas encore une condition complète d’admission d’un nouvel On au terminal (D-004) ; les wrappers terminal pitch-based historiques restent présents (D-018) ;
-- le compteur de pending clock externe sature à `0xffff` sans compter chaque perte, même si le rattrapage par bloc est borné à 4 pulses (D-010) ;
+- les backends internes historiques restent `void`, mais le terminal passe désormais par un adapter d’admission explicite (`seq_play_scheduler_admit_internal_note()`) dont la sémantique de lease interne est documentée ; la saturation réelle et l’acquittement backend restent à mesurer (D-014) ;
+- le chemin live publie désormais `NOTE_FX_SAMPLE_TIME_AUDIO_OWNER` et l’owner résout le sample au retrait de la commande ; la trace temporelle réelle et sa marge restent à exécuter (D-009) ;
+- l’autorité de génération courante est contrôlée à l’admission d’un nouvel On FX et les wrappers terminal pitch-based ont été supprimés ; la matrice stale reste à exécuter (D-004/D-018) ;
+- le pending clock externe est désormais 32 bits et compte ses overflows ; la borne de rattrapage reste 4 pulses par bloc et sa marge H743 reste à mesurer (D-010) ;
 - la validation dynamique des interleavings owner, des réserves Off, des quatre combinaisons d’admission et des capacités H743 n’est pas démontrée ;
-- la version committée actuelle de `tests/` ne contient que `CMakeLists.txt`, le sous-CMake `engine_lane_authority` et des stubs. Le CMake référence des sources et scripts NoteFx absents du HEAD. Le document d’audit final affirme une couverture qui n’est donc pas reproductible depuis ce HEAD ;
-- `note_fx_state_restore_track()` normalise les valeurs invalides mais conserve des valeurs valides issues d’un autre modèle. Cette implémentation ne suffit pas à garantir la politique produit « changement de modèle = defaults cibles » pour tous les restores, contrairement à l’affirmation structurelle de D-017 dans l’audit final.
+- le test C de restore est compilable/linkable avec la toolchain H743, mais aucun compilateur hôte n’est disponible dans l’environnement courant pour exécuter le binaire sur Windows ;
+- la preuve dynamique des quatre combinaisons d’admission, des interleavings owner et des capacités H743 n’est pas encore démontrée ;
+- les defaults cibles sont maintenant imposés par `note_fx_state_restore_track()` quand le modèle restauré diffère du modèle courant, conformément à D-017.
 
 Les briques déjà présentes et réutilisables sont néanmoins réelles : événement canonique de 32 octets, stages ordonnés `0 → 1 → 2 → 3 → terminal 4`, owner audio et file fixe de commandes, ledger par occurrence au terminal, admission MIDI séparée par destination, réservation de paires NoteFx, budgets ouverts au niveau demi-buffer et mute STEP non destructif. Ces garanties doivent être prouvées par tests, pas seulement conservées parce que les documents les déclarent.
 
@@ -50,13 +57,13 @@ L’audit a recoupé `Inc/NoteFx/*`, `Src/NoteFx/*`, `Src/Seq/seq_play_scheduler
 | Owner runtime | `g_note_fx_commands[32]`, mutations owner audio, snapshots de piste et budgets de demi-buffer existent. | Présent structurellement ; interleavings et temps de section critique non mesurés. |
 | Chaîne | `note_fx_pipeline_stage_emit()` continue au stage suivant ; seul le stage terminal appelle le scheduler. | La chaîne courante à trois slots est `0 → 1 → 2 → 3 → terminal` ; tests d’ordre et de continuation encore requis. |
 | Note Off et réserves | Fermetures globales avant les nouveaux On, réserve Off et owned conservé si refus. | Contrat présent ; exhaustion et retry non prouvés. |
-| Terminal | Masques interne/MIDI distincts, ledger exact et MIDI USB avec réserve Off/génération de connexion. | D-014 ouverte pour les moteurs internes ; D-004 reste à fermer. |
+| Terminal | Masques interne/MIDI distincts, ledger exact et MIDI USB avec réserve Off/génération de connexion. | Adapter interne explicite ; admission réelle des backends `void` et matrice dynamique encore à mesurer (D-014). |
 | Clock/source switch | `seq_runtime_set_clock_source()` demande la transition `SOURCE_SWITCH` avant de modifier l’autorité clock. | Correctif structurel présent ; matrice dynamique et pending saturé à tester. |
 | Mute | `MUTE_TRIGS` suspend les nouveaux STEP sans purge des occurrences ou deadlines existantes. | Conforme à la décision produit ; tester ARP et futur EUCLID. |
-| Defaults | `note_fx_state_set_param()` réinitialise le slot lors d’un changement de MODEL ; restore ne remplace pas toutes les valeurs valides par les defaults du modèle déclaré. | D-017 partiellement ouverte jusqu’à une autorité de modèle transactionnelle commune. |
-| Admission moteur | Plusieurs appels internes restent `void` et retournent implicitement succès. | D-014 haute/critique ; ne pas contourner dans EUCLID. |
-| Tests | `tests/CMakeLists.txt` référence des fichiers NoteFx non présents dans le HEAD committé. | D-019 ouverte ; restaurer/enregistrer une vraie matrice avant l’intégration. |
-| Documentation/code mort | Wrappers `seq_play_scheduler_dispatch_terminal_note[_to_channel]` encore présents ; Z1/Z4 portent des assertions historiques contradictoires. | D-018 ouverte ; consolidation avant verdict final. |
+| Defaults | `note_fx_state_set_param()` réinitialise le slot lors d’un changement de MODEL ; restore applique les defaults cibles lors d’un changement de modèle, avec une API exacte réservée au rollback transactionnel. | D-017 fermée structurellement ; matrice restore/clipboard/p-lock encore à exécuter. |
+| Admission moteur | Les appels internes historiques restent `void`, mais passent par `seq_play_scheduler_admit_internal_note()` et une lease explicite bornée. | D-014 traitée structurellement ; saturation/backend réel à mesurer avant EUCLID. |
+| Tests | Le CMake courant ne référence que le test C de restore, sa validation statique et des fichiers présents. | D-019 assainie ; exécution hôte et matrice dynamique restent ouvertes. |
+| Documentation/code mort | Wrappers `seq_play_scheduler_dispatch_terminal_note[_to_channel]` supprimés ; les audits historiques sont complétés par des addenda datés. | D-018 traitée ; consolidation documentaire conservée. |
 
 Le plan de nettoyage historique indique que les anciens problèmes « premier ARP », ledger `[track][note]`, budget recréé par sous-segment et mute destructif ont été corrigés. Le code courant confirme les stages, les ledgers et le budget demi-buffer, mais le verdict reste conditionné aux tests et aux deux défauts de contrat relevés ci-dessus. `docs/plan_midi_fx_euclid.md` n’est pas modifié par ce livrable.
 
@@ -386,9 +393,10 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 ### Étape corrective 1R — Rouvrir les preuves de nettoyage avant EUCLID
 
 - **Objectif :** fermer les écarts réellement constatés de l’étape 1 sans réécrire son commit et sans ajouter EUCLID.
-- **État :** NON FERMÉE ; elle est la prochaine étape tant que `D-014`, `D-017` ou `D-019` restent ouverts.
-- **Actions :** rendre l’admission des backends internes observable ou documenter un adapter d’admission explicite ; imposer les defaults cibles lors de tout restore de modèle ; restaurer ou enregistrer uniquement les tests réellement présents ; relever la matrice owner/terminal et les budgets.
-- **Critères de fin :** tests host compilables et exécutables depuis le checkout, preuve des quatre combinaisons d’admission et des interleavings owner, restore modèle conforme, mesures Low-Cost/Premium enregistrées. Aucun runtime EUCLID n’est requis pour fermer 1R.
+- **État :** PARTIELLE ; D-017 est fermée structurellement, D-019 est assainie pour les fichiers présents et D-014 possède un adapter explicite, mais les preuves dynamiques et matérielles restent ouvertes.
+- **Actions réalisées :** adapter d’admission interne documenté dans le seam scheduler ; defaults cibles imposés sur restore de modèle ; CMake réduit aux tests présents et validation statique enregistrée ; test C de restore ajouté ; builds Release Low-Cost/Premium et empreintes mémoire relevés. `Release` : FLASH 1 098 780, DTCMRAM 104 064, RAM_D1 416 320, RAM_D2 102 144 octets ; `Premium` : FLASH 1 086 184, DTCMRAM 105 088, RAM_D1 469 536, RAM_D2 108 640 octets.
+- **Reste :** exécuter le test C avec une toolchain hôte, exercer les quatre combinaisons `internal/MIDI` et les interleavings owner sur un harness dynamique, puis relever DWT/high-water sur Low-Cost et Premium.
+- **Critères de fin :** test host compilable et exécutable depuis le checkout, preuve dynamique des quatre combinaisons et interleavings owner, restore modèle conforme, mesures Low-Cost/Premium enregistrées. Le premier et le second critère restent ouverts dans l’environnement courant. Aucun runtime EUCLID n’est requis pour fermer 1R.
 - **Dépendances :** aucune ; 1R bloque les étapes 4 à 10.
 
 ### Étape 2 — Réduire les autorités de données à trois slots

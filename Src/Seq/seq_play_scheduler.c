@@ -611,11 +611,23 @@ static param_id_t seq_play_scheduler_param_for_play_kind(seq_play_scheduler_play
     return seq_play_scheduler_param_note(0U);
 }
 
-static uint8_t seq_play_scheduler_emit_engine_note(seq_track_id_t track,
-                                                 uint8_t note,
-                                                 uint8_t velocity,
-                                                 uint8_t is_note_on,
-                                                 uint32_t event_token)
+/*
+ * Explicit admission adapter for legacy internal engines.
+ *
+ * Several engine note APIs are void and cannot acknowledge a downstream
+ * queue.  This adapter therefore defines the only observable contract at
+ * the scheduler seam: a bound track, a successful polyphonic occurrence
+ * lease, or the fixed mono occurrence lease owned below.  A returned non-zero
+ * value means that the scheduler owns that internal occurrence; it does not
+ * claim a hardware/backend acknowledgement.  Backends with a real admission
+ * result can be wired into this same boundary without changing the terminal
+ * ledger or its independent MIDI mask.
+ */
+static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
+                                                       uint8_t note,
+                                                       uint8_t velocity,
+                                                       uint8_t is_note_on,
+                                                       uint32_t event_token)
 {
     track_runtime_resolved_track_t resolved;
     if (track_runtime_resolve_track(track, &resolved) == 0U)
@@ -855,7 +867,7 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
             return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
         }
 
-        const uint8_t internal_admitted = seq_play_scheduler_emit_engine_note(
+        const uint8_t internal_admitted = seq_play_scheduler_admit_internal_note(
             event->track, event->note, event->velocity, 1U, occurrence_id);
         const uint8_t midi_dest_mask = midi_note_on_admit(
             MIDI_DEST_BOTH, channel, event->note, event->velocity);
@@ -899,7 +911,7 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
         &g_seq_terminal_admission[event->track][record_index];
     if (record->internal_admitted != 0U)
     {
-        const uint8_t internal_closed = seq_play_scheduler_emit_engine_note(
+        const uint8_t internal_closed = seq_play_scheduler_admit_internal_note(
             event->track, record->note, 0U, 0U, occurrence_id);
         if ((internal_closed != 0U)
                 || ((synth_polyphony_get_voice_count(event->track) > 1U)
@@ -1817,7 +1829,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     {
         /* Multi owns its occurrence token directly; the legacy NoteFx path
          * has no per-output token contract and must not collapse identical notes. */
-        if (seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
+        if (seq_play_scheduler_admit_internal_note((seq_track_id_t)event->track,
                                                  event->note,
                                                  event->velocity,
                                                  is_note_on,

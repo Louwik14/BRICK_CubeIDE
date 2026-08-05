@@ -209,5 +209,6 @@ d’une occurrence interne active par piste : un nouvel On concurrent est
 refusé avant l’appel aux APIs moteur `void`, et un Off stale est un no-op
 acquitté. Cette politique borne le ledger sans prétendre que les moteurs
 historiques acquittent eux-mêmes leurs APIs `void`. Les interleavings, la
-saturation et le coût H743 restent à mesurer ; les sources de tests référencées
-par le CMake courant ne sont pas présentes dans le checkout audité.
+saturation, l’exécution hôte et le coût H743 restent à mesurer. Un test C de
+restore et une validation statique sont maintenant présents dans le CMake ;
+les interleavings owner, la saturation et les mesures H743 restent ouvertes.

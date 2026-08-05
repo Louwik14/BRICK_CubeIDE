@@ -27,6 +27,8 @@ uint8_t note_fx_state_get_param(uint8_t track, param_id_t id, float *out_value);
 uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value);
 uint8_t note_fx_state_capture_track(uint8_t track, note_fx_track_state_t *out_state);
 uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *state);
+/* Transaction rollback only: restore a normalized snapshot byte-for-byte. */
+uint8_t note_fx_state_restore_track_exact(uint8_t track, const note_fx_track_state_t *state);
 uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state);
 
 #endif

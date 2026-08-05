@@ -186,3 +186,11 @@ de la commande. Le pending clock externe est désormais 32 bits et expose les
 overflows dans `seq_runtime_diag_t::external_pulses_overflowed`; la limite de
 quatre pulses traités par bloc reste inchangée. Les tests comportementaux et la
 mesure H743 restent à fournir.
+
+Le correctif 1R ajoute `seq_play_scheduler_admit_internal_note()` comme adapter
+explicite au seam terminal. Pour les APIs moteur `void`, son retour est une
+lease interne bornée et non un acquittement backend ; le ledger sépare toujours
+`internal_admitted` du masque MIDI. Le CMake courant enregistre uniquement le
+test de restore réellement présent et la validation statique du contrat. La
+validation dynamique des quatre combinaisons, des interleavings owner et la
+mesure DWT Low-Cost/Premium restent ouvertes.

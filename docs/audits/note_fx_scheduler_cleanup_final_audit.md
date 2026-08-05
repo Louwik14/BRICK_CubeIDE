@@ -127,12 +127,12 @@ Comptage D-001..D-019 après lots correctifs 1 à 6 : **12 fermées structurelle
 - Validation restante : saturation USB réelle, débranchement pendant On/Off, reconnexion, ordre et latence de vidage sur H743.
 - Impact Euclid / corrective : base structurelle disponible; aucune correction structurelle MIDI identifiée, validation dynamique obligatoire.
 
-### D-014 — `NON FERMÉE`
+### D-014 — `FERMÉE STRUCTURELLEMENT PAR ADAPTER — VALIDATION DYNAMIQUE RESTANTE`
 
-- Preuve/symboles : `seq_play_scheduler_emit_engine_note()` retourne un booléen, mais la plupart des moteurs appelés sont `void` et aboutissent à `return 1U`. Le lot 2 ferme désormais les synthés polyphoniques par occurrence et protège les moteurs mono par `g_seq_engine_mono_occurrence`; l'identité est exacte, mais le succès d'admission réel ne l'est pas.
-- Ancien présent : APIs moteur void/pitch-based derrière la garde terminale et admission supposée.
-- Invariant violé : admission interne réellement acquittée et comportement de capacité défini pour chaque moteur.
-- Reste : moteur plein, mêmes pitches, steal, Stack queue pleine, Sampler Multi. Impact Euclid : répétitions rapides non sûres. Passe corrective : **oui**.
+- Preuve/symboles : `seq_play_scheduler_admit_internal_note()` est l’adapter unique. Il ne renvoie une admission qu’après résolution d’une piste liée, allocation d’une occurrence polyphonique ou réservation de la lease mono fixe ; Sampler Multi conserve son retour d’admission propre.
+- Limite explicite : les backends historiques `void` ne fournissent pas d’acquittement matériel. Le booléen de l’adapter représente donc la possession interne du scheduler, et ne prétend pas confirmer une queue backend ou une émission physique.
+- Invariant fermé au seam : le terminal ne crée pas de ledger interne sans lease de l’adapter, conserve séparément `internal_admitted` et le masque MIDI, et ne ferme que les destinations possédées.
+- Reste : harness dynamique moteur plein/steal, Stack queue pleine, mêmes pitches, Sampler Multi et mesures H743. Impact Euclid : la répétition reste conditionnée à cette validation. Passe corrective : **oui, validation dynamique obligatoire**.
 
 ### D-015 — `FERMÉE STRUCTURELLEMENT — VALIDATION DYNAMIQUE RESTANTE`
 
@@ -150,7 +150,7 @@ Comptage D-001..D-019 après lots correctifs 1 à 6 : **12 fermées structurelle
 
 ### D-017 — `FERMÉE STRUCTURELLEMENT — VALIDATION DYNAMIQUE RESTANTE`
 
-- Preuve/symboles : `g_note_fx_model_defaults` est l'autorité par modèle. `note_fx_state_set_param()` construit désormais un `note_fx_track_state_t` complet, remplace les quatre valeurs du slot par les defaults de la cible lors d'un changement MODEL, normalise puis publie le snapshot en une affectation. `note_fx_state_restore_track()` normalise une copie locale avant publication. `param_registry_apply_track_value()` capture l'ancien état et le restaure si la commande fixe `note_fx_pipeline_sync_track()` est refusée.
+- Preuve/symboles : `g_note_fx_model_defaults` est l'autorité par modèle. `note_fx_state_set_param()` construit désormais un `note_fx_track_state_t` complet, remplace les quatre valeurs du slot par les defaults de la cible lors d'un changement MODEL, normalise puis publie le snapshot en une affectation. `note_fx_state_restore_track()` normalise une copie locale et applique les defaults cibles lors d’un changement de modèle avant publication. `note_fx_state_restore_track_exact()` est réservé au rollback transactionnel de `param_registry_apply_track_value()`, qui capture l'ancien état et le restaure si la commande fixe `note_fx_pipeline_sync_track()` est refusée.
 - Ancien supprimé / reliquat : unicité ARP, conservation des valeurs brutes entre modèles et publication d'un restore avant normalisation supprimées; Undo NoteFx reste une fonctionnalité absente, pas une autorité concurrente.
 - Invariant garanti : une reconfiguration de modèle publie ensemble modèle et paramètres cibles; une file owner pleine ne laisse pas l'état de base diverger du runtime commandé; les valeurs restaurées invalides retombent sur les defaults du modèle restauré.
 - Validation restante : modèle aller/retour, restore invalide, clipboard/page et p-lock; vérifier la politique produit Undo. Impact Euclid : defaults model-aware prêts pour de futurs modèles. Passe corrective : **non**, sauf échec dynamique.
@@ -218,7 +218,7 @@ Dépendant H743 : coût de 64 sous-segments, scans `128×512`, cleanup `8×4×16
 
 La structure `seq_terminal_admission_t` sépare `internal_admitted` et `midi_dest_mask`. Les quatre combinaisons sont exprimables dans le code, et un refus interne n'empêche pas l'appel MIDI ni l'inverse. L'Off consulte le record et vise uniquement les flags mémorisés.
 
-Le lot 5 rend l'admission MIDI fidèle : UART stub refusé, USB refusé hors configuration, contrôle de capacité et enqueue atomiques, réserve de 16 Off, aucune éviction par une priorité realtime et génération renouvelée avec purge lors de chaque déconnexion/reconnexion. Le terminal mémorise la génération USB et ne transmet pas à une nouvelle session l'Off d'une ancienne admission. Le lot 4 conserve séparément `internal_admitted` et chaque bit MIDI jusqu'à acquittement. Les quatre cas restent à démontrer dynamiquement et l'admission des backends moteur `void` demeure structurellement ouverte.
+Le lot 5 rend l’admission MIDI fidèle : UART stub refusé, USB refusé hors configuration, contrôle de capacité et enqueue atomiques, réserve de 16 Off, aucune éviction par une priorité realtime et génération renouvelée avec purge lors de chaque déconnexion/reconnexion. Le terminal mémorise la génération USB et ne transmet pas à une nouvelle session l’Off d’une ancienne admission. Le lot 4 conserve séparément `internal_admitted` et chaque bit MIDI jusqu’à acquittement. Les quatre cas restent à démontrer dynamiquement ; l’admission interne est désormais bornée par l’adapter explicite décrit dans D-014.
 
 ## 12. Mute et transitions
 
@@ -353,3 +353,24 @@ HEAD courant contrôlé : `d5eb82184` (`docs: plan three midi fx slots and eucli
 - D-019 reste ouverte : le checkout courant ne contient toujours pas les sources/scripts référencés par `tests/CMakeLists.txt`. Aucun test absent n’a été remplacé par un faux succès.
 
 Les builds `build/Release` et `build/Premium` passent. Le verdict Euclid reste `NON PRÊT — DETTES STRUCTURELLES OUVERTES` tant que les tests comportementaux réels, les saturations moteur/MIDI et les mesures H743 ne sont pas exécutés.
+
+## Addendum 2026-08-05 — étape corrective 1R
+
+HEAD courant contrôlé : `2a4cb752d`. Le CMake de `tests/` a été réduit aux
+fichiers présents : un test C de restore et une validation statique du seam
+audio-owner, de l’adapter d’admission interne, du ledger terminal indépendant,
+de la file owner et du compteur de clock. Le test C est compilable et linkable
+avec la toolchain H743 ; l’environnement ne fournit pas de compilateur hôte
+Windows pour exécuter ce binaire.
+
+D-017 applique désormais les defaults du modèle cible lors d’un restore qui
+change de modèle. `note_fx_state_restore_track_exact()` est réservé au
+rollback transactionnel, afin de ne pas perdre les valeurs du snapshot
+précédent lorsqu’une commande owner est refusée. D-014 est traitée
+structurellement par `seq_play_scheduler_admit_internal_note()` : une API
+backend `void` produit une lease interne bornée, explicitement distincte d’un
+acquittement matériel. Les quatre combinaisons d’admission, les interleavings
+owner et les mesures DWT Low-Cost/Premium restent à exécuter. Les builds
+`Release` relèvent FLASH 1 098 780, DTCMRAM 104 064, RAM_D1 416 320 et RAM_D2
+102 144 octets ; `Premium` relève FLASH 1 086 184, DTCMRAM 105 088, RAM_D1
+469 536 et RAM_D2 108 640 octets.

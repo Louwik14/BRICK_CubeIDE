@@ -1611,7 +1611,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         }
         if (note_fx_pipeline_sync_track(track) == 0U)
         {
-            (void)note_fx_state_restore_track(track, &previous_note_fx_state);
+            (void)note_fx_state_restore_track_exact(track, &previous_note_fx_state);
             if (note_fx_param == 3U)
             {
                 const seq_track_id_t transition_track = track;

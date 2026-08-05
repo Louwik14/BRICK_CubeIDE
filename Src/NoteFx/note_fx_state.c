@@ -143,6 +143,35 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     }
     note_fx_track_state_t normalized = *state;
     (void)note_fx_state_normalize_track(&normalized);
+
+    /* A restore is also a model transition.  Do not let a valid payload from
+     * the previous model leak into the target model: the target model owns
+     * the complete default tuple.  A restore within the same model remains a
+     * regular value round-trip. */
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        if (g_note_fx_state[track].value[slot][3U]
+                != normalized.value[slot][3U])
+        {
+            const uint8_t model = normalized.value[slot][3U];
+            for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT - 1U; ++param)
+                normalized.value[slot][param] =
+                    note_fx_state_default_for_model(model, param);
+        }
+    }
+    g_note_fx_state[track] = normalized;
+    return 1U;
+}
+
+uint8_t note_fx_state_restore_track_exact(uint8_t track,
+                                          const note_fx_track_state_t *state)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (state == 0))
+    {
+        return 0U;
+    }
+    note_fx_track_state_t normalized = *state;
+    (void)note_fx_state_normalize_track(&normalized);
     g_note_fx_state[track] = normalized;
     return 1U;
 }
