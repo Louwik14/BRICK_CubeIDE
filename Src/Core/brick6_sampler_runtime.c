@@ -7034,7 +7034,9 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
 
     if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
     {
-        if (g_sampler_multi_track_state[track_id].spread > 0.0f)
+        const uint8_t voice_limit = brick6_sampler_runtime_multi_voice_limit(track_id);
+        if ((voice_limit > 1U)
+            && (g_sampler_multi_track_state[track_id].spread > 0.0f))
         {
             return 0U;
         }
