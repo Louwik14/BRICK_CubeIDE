@@ -3,6 +3,18 @@ project(brick6_note_fx_step1_tests C)
 
 enable_testing()
 
+add_executable(mod_lfo_segment_test
+    mod_lfo_segment_test.c
+    ../Src/Mod/mod_lfo_segment.c
+)
+target_include_directories(mod_lfo_segment_test PRIVATE ../Inc)
+if(NOT CMAKE_CROSSCOMPILING)
+    if(UNIX)
+        target_link_libraries(mod_lfo_segment_test PRIVATE m)
+    endif()
+    add_test(NAME mod_lfo_segment COMMAND mod_lfo_segment_test)
+endif()
+
 add_executable(note_fx_state_restore_test
     note_fx_state_restore_test.c
     ../Src/NoteFx/note_fx_state.c

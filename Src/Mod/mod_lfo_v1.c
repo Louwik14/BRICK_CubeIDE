@@ -1,6 +1,6 @@
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_segment.h"
 
-#include <math.h>
 #include <string.h>
 
 #include "Core/brick6_audio_event_grid.h"
@@ -29,7 +29,6 @@
 #define MOD_LFO_CONTROL_STRIDE MOD_LFO_LEGACY_CONTROL_STRIDE
 #define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_CONTROL_RATE_HZ)
 #endif
-#define MOD_LFO_SINE_LUT_SIZE 256U
 #define MOD_LFO_RATE_OFF_EPS 0.0001f
 
 /* Positive RATE values index this tempo-sync table: 1=8BAR ... 16=1/128. */
@@ -41,10 +40,6 @@ static const float g_mod_lfo_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
     0.0625f, 0.04166667f,
     0.03125f, 0.020833334f,
     0.015625f, 0.0078125f
-};
-
-static const float g_mod_lfo_sine_lut[MOD_LFO_SINE_LUT_SIZE + 1U] = {
-#include "mod_lfo_sine_lut_257.inc"
 };
 
 typedef struct
@@ -63,6 +58,8 @@ typedef struct
     uint8_t hold_valid;
     uint8_t slew_valid;
     uint8_t active;
+    mod_lfo_ramp_t ramp;
+    uint8_t ramp_valid;
     uint8_t temp_valid_mask;
     track_mod_lfo_state_t temp;
 } mod_lfo_runtime_state_t;
@@ -329,46 +326,65 @@ static uint8_t mod_lfo_shape_is_positive(mod_lfo_shape_t shape)
 
 static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime_state_t *state)
 {
-    switch (shape)
+    return mod_lfo_segment_wave((uint8_t)shape, phase, state->sh_value);
+}
+
+static void mod_lfo_prepare_ramp(mod_lfo_runtime_state_t *rt,
+                                 mod_lfo_shape_t shape,
+                                 mod_lfo_trig_mode_t trig,
+                                 uint32_t frames)
+{
+    if ((rt == NULL) || (frames == 0U))
     {
-        case MOD_LFO_SHAPE_SINE:
-        case MOD_LFO_SHAPE_SINE_POS:
+        return;
+    }
+
+    rt->ramp_valid = 0U;
+    uint32_t remaining = frames;
+    while (remaining > 0U)
+    {
+        if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->sh_valid == 0U))
         {
-            const uint32_t lut_pos = phase >> 24;
-            const uint32_t frac = (phase >> 8) & 0xFFFFU;
-            const float y0 = g_mod_lfo_sine_lut[lut_pos];
-            const float y1 = g_mod_lfo_sine_lut[lut_pos + 1U];
-            const float y = y0 + (y1 - y0) * ((float)frac * (1.0f / 65535.0f));
-            return (shape == MOD_LFO_SHAPE_SINE_POS) ? ((y + 1.0f) * 0.5f) : y;
+            rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+            rt->sh_valid = 1U;
         }
 
-        case MOD_LFO_SHAPE_TRIANGLE:
-        case MOD_LFO_SHAPE_TRIANGLE_POS:
+        mod_lfo_ramp_t ramp;
+        const uint32_t consumed = mod_lfo_segment_plan((uint8_t)shape,
+                                                        rt->phase,
+                                                        rt->phase_inc,
+                                                        remaining,
+                                                        rt->sh_value,
+                                                        (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U,
+                                                        &ramp);
+        if (consumed == 0U)
         {
-            const float p = (float)phase * (1.0f / 4294967296.0f);
-            const float y = 1.0f - 4.0f * fabsf(p - 0.5f);
-            return (shape == MOD_LFO_SHAPE_TRIANGLE_POS) ? ((y + 1.0f) * 0.5f) : y;
+            break;
         }
 
-        case MOD_LFO_SHAPE_SAW:
-            return ((float)phase * (2.0f / 4294967296.0f)) - 1.0f;
+        if (rt->ramp_valid == 0U)
+        {
+            rt->ramp = ramp;
+            rt->ramp_valid = 1U;
+        }
 
-        case MOD_LFO_SHAPE_REVERSE_SAW:
-            return 1.0f - ((float)phase * (2.0f / 4294967296.0f));
+        const uint32_t phase_before = rt->phase;
+        rt->phase = ramp.phase_after;
+        remaining -= consumed;
 
-        case MOD_LFO_SHAPE_SQUARE:
-        case MOD_LFO_SHAPE_SQUARE_POS:
-            if (shape == MOD_LFO_SHAPE_SQUARE_POS)
-            {
-                return (phase < 0x80000000U) ? 1.0f : 0.0f;
-            }
-            return (phase < 0x80000000U) ? 1.0f : -1.0f;
+        if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_before))
+        {
+            rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+            rt->sh_valid = 1U;
+        }
 
-        case MOD_LFO_SHAPE_RANDOM_SH:
-            return state->sh_value;
-
-        default:
-            return 0.0f;
+        if ((trig == MOD_LFO_TRIG_ONE) && (rt->phase < phase_before))
+        {
+            rt->one_done = 1U;
+            rt->one_running = 0U;
+            rt->phase = 0U;
+            break;
+        }
     }
 }
 
@@ -537,25 +553,13 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 
             if ((trig == MOD_LFO_TRIG_ONE) && (rt->one_done != 0U))
             {
+                rt->current = mod_lfo_wave(shape_id, 0xFFFFFFFFU, rt);
+                source_values[(uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo] = rt->current;
+                source_valid[(uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo] = 1U;
                 continue;
             }
 
-            const uint32_t phase_prev = rt->phase;
-            rt->phase += (uint32_t)(((uint64_t)rt->phase_inc) * (uint64_t)elapsed_frames);
-
-            if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
-            {
-                if ((rt->sh_valid == 0U) || (rt->phase < phase_prev))
-                {
-                    rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
-                    rt->sh_valid = 1U;
-                }
-            }
-
-            if ((trig == MOD_LFO_TRIG_ONE) && (rt->phase < phase_prev))
-            {
-                rt->one_done = 1U;
-            }
+            mod_lfo_prepare_ramp(rt, shape_id, trig, elapsed_frames);
 
             if ((trig == MOD_LFO_TRIG_HOLD) && (rt->hold_valid != 0U))
             {
@@ -563,7 +567,9 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             }
             else
             {
-                rt->current = mod_lfo_wave(shape_id, phase_prev, rt);
+                rt->current = (rt->ramp_valid != 0U)
+                    ? rt->ramp.start
+                    : mod_lfo_wave(shape_id, rt->phase, rt);
             }
 
             if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
@@ -628,6 +634,7 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
+            g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
             g_mod_lfo_runtime[track][lfo].temp = (track_mod_lfo_state_t){0};
         }
@@ -662,6 +669,7 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
+            g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
         }
     }
@@ -694,6 +702,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
                 s->rate = mod_lfo_quantize_sync_rate(s->rate);
             }
             rt->phase_inc = mod_lfo_phase_inc_from_rate(s->rate);
+            rt->ramp_valid = 0U;
             if (rt->phase_inc == 0U)
             {
                 rt->active = 0U;
@@ -705,6 +714,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             s->shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
             rt->sh_valid = 0U;
             rt->slew_valid = 0U;
+            rt->ramp_valid = 0U;
             return 1U;
 
         case MOD_LFO_PARAM_TRIG:
@@ -715,12 +725,14 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->one_done = 0U;
             rt->hold_valid = 0U;
             rt->active = 0U;
+            rt->ramp_valid = 0U;
             return 1U;
 
         case MOD_LFO_PARAM_PHASE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->phase = mod_lfo_clampf(value, 0.0f, 360.0f);
             rt->slew_valid = 0U;
+            rt->ramp_valid = 0U;
             return 1U;
 
         default:
