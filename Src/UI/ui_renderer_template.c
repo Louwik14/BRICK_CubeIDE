@@ -3465,7 +3465,7 @@ static void ui_renderer_template_draw_wave_wavetable_cache(void)
     {
         const float depth = (float)layer / (float)(cache->layer_count - 1U);
         const int x_offset = (int)(((1.0f - depth) * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
-        const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - x_offset;
+        const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - (2 * x_offset);
         int prev_x = ui_renderer_template_wave_wavetable_trace_x(cache->x_start[layer],
                                                                  x_width,
                                                                  0U);
@@ -3528,7 +3528,7 @@ static void ui_renderer_template_draw_wave_wavetable_pos_cache(void)
 
     const int x_offset = (int)(((1.0f - cache->pos_value)
                                 * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
-    const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - x_offset;
+    const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - (2 * x_offset);
     ui_renderer_template_clear_wave_wavetable_pos_halo(cache->pos_x_start,
                                                        x_width,
                                                        cache->pos_y);
