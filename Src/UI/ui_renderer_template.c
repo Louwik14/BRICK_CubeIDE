@@ -71,12 +71,14 @@
 #define UI_TEMPLATE_WAVE_WT_H       31
 #define UI_TEMPLATE_WAVE_WT_INNER_W (UI_TEMPLATE_WAVE_WT_W - 2)
 #define UI_TEMPLATE_WAVE_WT_INNER_H (UI_TEMPLATE_WAVE_WT_H - 2)
-#define UI_TEMPLATE_WAVE_WT_LAYER_TARGET 12U
-#define UI_TEMPLATE_WAVE_WT_MAX_LAYERS   12U
-#define UI_TEMPLATE_WAVE_WT_MAX_POINTS   UI_TEMPLATE_WAVE_WT_INNER_W
+#define UI_TEMPLATE_WAVE_WT_LAYER_TARGET 8U
+#define UI_TEMPLATE_WAVE_WT_MAX_LAYERS   8U
+#define UI_TEMPLATE_WAVE_WT_TRACE_POINTS 96U
 #define UI_TEMPLATE_WAVE_WT_DEPTH_X_PX   5
-#define UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX   15
-#define UI_TEMPLATE_WAVE_WT_AMP_HALF_PX  4
+#define UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX   7
+#define UI_TEMPLATE_WAVE_WT_CONTEXT_BASE_Y 7
+#define UI_TEMPLATE_WAVE_WT_CONTEXT_AMP_HALF_PX 2
+#define UI_TEMPLATE_WAVE_WT_POS_AMP_HALF_PX 3
 #define UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W (OLED_WIDTH - 2)
 
 typedef struct
@@ -95,13 +97,16 @@ typedef struct
     uint32_t table_generation;
     uint32_t preview_generation;
     uint32_t frame_count;
-    uint32_t first_frame;
-    uint32_t last_frame;
     uint16_t global_peak;
     uint8_t layer_count;
+    float start_value;
+    float end_value;
     uint8_t x_start[UI_TEMPLATE_WAVE_WT_MAX_LAYERS];
-    uint8_t point_count[UI_TEMPLATE_WAVE_WT_MAX_LAYERS];
-    int8_t y[UI_TEMPLATE_WAVE_WT_MAX_LAYERS][UI_TEMPLATE_WAVE_WT_MAX_POINTS];
+    int8_t y[UI_TEMPLATE_WAVE_WT_MAX_LAYERS][UI_TEMPLATE_WAVE_WT_TRACE_POINTS];
+    uint8_t pos_valid;
+    float pos_value;
+    uint8_t pos_x_start;
+    int8_t pos_y[UI_TEMPLATE_WAVE_WT_TRACE_POINTS];
 } ui_renderer_template_wavetable_cache_t;
 
 static ui_renderer_template_wavetable_cache_t g_ui_renderer_template_wavetable_cache;
@@ -3226,64 +3231,95 @@ static void ui_renderer_template_draw_sampler_ram_marker(float value,
     ui_renderer_template_draw_sampler_ram_marker_label(x, label);
 }
 
-static int32_t ui_renderer_template_wave_wavetable_peak_sample(const int16_t *src,
-                                                               uint32_t begin,
-                                                               uint32_t end)
+static float ui_renderer_template_wave_wavetable_sample(const wavetable_slot_t *table,
+                                                        float frame_position,
+                                                        float sample_position)
 {
-    int32_t selected = 0L;
-    uint32_t selected_abs = 0U;
-
-    if ((src == NULL) || (begin >= WAVETABLE_FRAME_SAMPLE_COUNT))
+    if ((table == NULL)
+            || (table->data == NULL)
+            || (table->frame_count == 0U))
     {
-        return 0L;
+        return 0.0f;
     }
 
-    if (end > WAVETABLE_FRAME_SAMPLE_COUNT)
+    const uint32_t max_frame = (table->frame_count > 1U) ? (table->frame_count - 1U) : 0U;
+    if (frame_position < 0.0f)
     {
-        end = WAVETABLE_FRAME_SAMPLE_COUNT;
+        frame_position = 0.0f;
     }
-    if (end <= begin)
+    else if (frame_position > (float)max_frame)
     {
-        end = begin + 1U;
-        if (end > WAVETABLE_FRAME_SAMPLE_COUNT)
-        {
-            end = WAVETABLE_FRAME_SAMPLE_COUNT;
-        }
+        frame_position = (float)max_frame;
     }
-
-    for (uint32_t i = begin; i < end; ++i)
+    if (sample_position < 0.0f)
     {
-        int32_t sample = (int32_t)src[i];
-        const uint32_t sample_abs = (uint32_t)((sample < 0L) ? -sample : sample);
-        if (sample_abs > selected_abs)
-        {
-            selected = sample;
-            selected_abs = sample_abs;
-        }
+        sample_position = 0.0f;
+    }
+    else if (sample_position > (float)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U))
+    {
+        sample_position = (float)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U);
     }
 
-    return selected;
+    uint32_t frame0 = (uint32_t)frame_position;
+    uint32_t frame1 = (frame0 < max_frame) ? (frame0 + 1U) : frame0;
+    const float frame_frac = frame_position - (float)frame0;
+    uint32_t sample0 = (uint32_t)sample_position;
+    uint32_t sample1 = (sample0 < (WAVETABLE_FRAME_SAMPLE_COUNT - 1U)) ? (sample0 + 1U) : sample0;
+    const float sample_frac = sample_position - (float)sample0;
+
+    const int16_t *const frame0_data = &table->data[frame0 * WAVETABLE_FRAME_SAMPLE_COUNT];
+    const int16_t *const frame1_data = &table->data[frame1 * WAVETABLE_FRAME_SAMPLE_COUNT];
+    const float frame0_sample = (float)frame0_data[sample0]
+        + (((float)frame0_data[sample1] - (float)frame0_data[sample0]) * sample_frac);
+    const float frame1_sample = (float)frame1_data[sample0]
+        + (((float)frame1_data[sample1] - (float)frame1_data[sample0]) * sample_frac);
+    return frame0_sample + ((frame1_sample - frame0_sample) * frame_frac);
 }
 
-static int ui_renderer_template_wave_wavetable_layer_count(uint32_t first_frame,
-                                                           uint32_t last_frame)
+static int ui_renderer_template_wave_wavetable_sample_to_y(float sample,
+                                                            float peak,
+                                                            int center_y,
+                                                            int amplitude_half,
+                                                            int top,
+                                                            int bottom)
 {
-    const uint32_t frame_span = (last_frame >= first_frame) ? (last_frame - first_frame) : 0U;
-    uint32_t count = frame_span + 1U;
-    if (count > UI_TEMPLATE_WAVE_WT_LAYER_TARGET)
+    int y = center_y;
+    if (peak > 1.0f)
     {
-        count = UI_TEMPLATE_WAVE_WT_LAYER_TARGET;
+        const float scaled = (sample * (float)amplitude_half) / peak;
+        y = center_y - (int)((scaled >= 0.0f) ? (scaled + 0.5f) : (scaled - 0.5f));
     }
-    if (count > UI_TEMPLATE_WAVE_WT_MAX_LAYERS)
+    return ui_renderer_template_clamp_i32(y, top, bottom);
+}
+
+static int ui_renderer_template_wave_wavetable_trace_x(int x_start,
+                                                        int x_width,
+                                                        uint8_t point)
+{
+    const uint32_t point_span = UI_TEMPLATE_WAVE_WT_TRACE_POINTS - 1U;
+    const uint32_t x_span = (x_width > 1) ? (uint32_t)(x_width - 1) : 0U;
+    return x_start + (int)(((uint32_t)point * x_span) / point_span);
+}
+
+static int ui_renderer_template_wave_wavetable_depth_y(int inner_y, float depth)
+{
+    if (depth < 0.0f)
     {
-        count = UI_TEMPLATE_WAVE_WT_MAX_LAYERS;
+        depth = 0.0f;
     }
-    return (int)count;
+    else if (depth > 1.0f)
+    {
+        depth = 1.0f;
+    }
+    return inner_y + UI_TEMPLATE_WAVE_WT_CONTEXT_BASE_Y
+        + (int)((depth * (float)UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX) + 0.5f);
 }
 
 static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_slot,
-                                                               uint32_t first_frame,
-                                                               uint32_t last_frame,
+                                                               float start_value,
+                                                               float end_value,
+                                                               float start_frame_position,
+                                                               float end_frame_position,
                                                                const wavetable_slot_t *table,
                                                                const wavetable_preview_t *preview)
 {
@@ -3293,10 +3329,7 @@ static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_s
             || (table->frame_count == 0U)
             || (table->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
             || (preview->state != WAVETABLE_PREVIEW_READY)
-            || (preview->global_peak <= 1U)
-            || (first_frame >= table->frame_count)
-            || (last_frame >= table->frame_count)
-            || (last_frame < first_frame))
+            || (preview->global_peak <= 1U))
     {
         g_ui_renderer_template_wavetable_cache.valid = 0U;
         return 0U;
@@ -3304,58 +3337,47 @@ static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_s
 
     ui_renderer_template_wavetable_cache_t *const cache =
         &g_ui_renderer_template_wavetable_cache;
-    const uint8_t layer_count = (uint8_t)ui_renderer_template_wave_wavetable_layer_count(first_frame,
-                                                                                            last_frame);
-    const uint32_t frame_span = last_frame - first_frame;
-    const uint32_t layer_span = (layer_count > 1U) ? ((uint32_t)layer_count - 1U) : 1U;
+    const int top = UI_TEMPLATE_WAVE_WT_Y + 1;
+    const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
+    const float peak = (float)preview->global_peak;
 
     cache->valid = 0U;
     cache->global_slot = global_slot;
     cache->table_generation = table->generation;
     cache->preview_generation = preview->generation;
     cache->frame_count = table->frame_count;
-    cache->first_frame = first_frame;
-    cache->last_frame = last_frame;
     cache->global_peak = preview->global_peak;
-    cache->layer_count = layer_count;
+    cache->layer_count = UI_TEMPLATE_WAVE_WT_LAYER_TARGET;
+    cache->start_value = start_value;
+    cache->end_value = end_value;
+    cache->pos_valid = 0U;
 
-    for (uint8_t layer = 0U; layer < layer_count; ++layer)
+    for (uint8_t layer = 0U; layer < cache->layer_count; ++layer)
     {
-        const uint32_t frame = first_frame
-            + ((frame_span * (uint32_t)layer) / layer_span);
-        const uint32_t depth = (uint32_t)(layer_count - 1U - layer);
-        const uint32_t depth_span = (layer_count > 1U) ? ((uint32_t)layer_count - 1U) : 1U;
-        const uint32_t x_offset = (UI_TEMPLATE_WAVE_WT_DEPTH_X_PX * depth + (depth_span / 2U))
-            / depth_span;
-        const uint8_t point_count = (uint8_t)(UI_TEMPLATE_WAVE_WT_INNER_W - (int)x_offset);
-        const int center_y = UI_TEMPLATE_WAVE_WT_Y + 1
-            + 5
-            + (int)(((uint32_t)UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX * (uint32_t)layer
-                     + (layer_span / 2U)) / layer_span);
-        const int16_t *const src = &table->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
+        const float depth = (float)layer / (float)(cache->layer_count - 1U);
+        const int x_offset = (int)(((1.0f - depth) * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
+        const int x_start = UI_TEMPLATE_WAVE_WT_X + 1 + x_offset;
+        const int center_y = ui_renderer_template_wave_wavetable_depth_y(UI_TEMPLATE_WAVE_WT_Y + 1,
+                                                                          depth);
+        const float frame_position = start_frame_position
+            + ((end_frame_position - start_frame_position) * depth);
 
-        cache->x_start[layer] = (uint8_t)(UI_TEMPLATE_WAVE_WT_X + 1 + (int)x_offset);
-        cache->point_count[layer] = point_count;
-        for (uint8_t col = 0U; col < point_count; ++col)
+        cache->x_start[layer] = (uint8_t)x_start;
+        for (uint8_t point = 0U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
         {
-            uint32_t begin = ((uint32_t)col * WAVETABLE_FRAME_SAMPLE_COUNT) / point_count;
-            uint32_t end = (((uint32_t)col + 1U) * WAVETABLE_FRAME_SAMPLE_COUNT) / point_count;
-            const int32_t sample = ui_renderer_template_wave_wavetable_peak_sample(src,
-                                                                                     begin,
-                                                                                     end);
-            int y = center_y - (int)((sample * UI_TEMPLATE_WAVE_WT_AMP_HALF_PX)
-                                     / (int32_t)preview->global_peak);
-            const int top = UI_TEMPLATE_WAVE_WT_Y + 1;
-            const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
-            if (y < top)
-            {
-                y = top;
-            }
-            else if (y > bottom)
-            {
-                y = bottom;
-            }
-            cache->y[layer][col] = (int8_t)y;
+            const float sample_position = ((float)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U)
+                                           * (float)point)
+                / (float)(UI_TEMPLATE_WAVE_WT_TRACE_POINTS - 1U);
+            const float sample = ui_renderer_template_wave_wavetable_sample(table,
+                                                                             frame_position,
+                                                                             sample_position);
+            cache->y[layer][point] = (int8_t)ui_renderer_template_wave_wavetable_sample_to_y(
+                sample,
+                peak,
+                center_y,
+                UI_TEMPLATE_WAVE_WT_CONTEXT_AMP_HALF_PX,
+                top,
+                bottom);
         }
     }
 
@@ -3364,8 +3386,8 @@ static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_s
 }
 
 static uint8_t ui_renderer_template_wave_wavetable_cache_matches(uint16_t global_slot,
-                                                                 uint32_t first_frame,
-                                                                 uint32_t last_frame,
+                                                                 float start_value,
+                                                                 float end_value,
                                                                  const wavetable_slot_t *table,
                                                                  const wavetable_preview_t *preview)
 {
@@ -3376,148 +3398,145 @@ static uint8_t ui_renderer_template_wave_wavetable_cache_matches(uint16_t global
             && (cache->table_generation == table->generation)
             && (cache->preview_generation == preview->generation)
             && (cache->frame_count == table->frame_count)
-            && (cache->first_frame == first_frame)
-            && (cache->last_frame == last_frame)
-            && (cache->global_peak == preview->global_peak));
+            && (cache->global_peak == preview->global_peak)
+            && (cache->start_value == start_value)
+            && (cache->end_value == end_value));
+}
+
+static uint8_t ui_renderer_template_build_wave_wavetable_pos_cache(float pos_value,
+                                                                    float start_frame_position,
+                                                                    float end_frame_position,
+                                                                    const wavetable_slot_t *table,
+                                                                    const wavetable_preview_t *preview)
+{
+    ui_renderer_template_wavetable_cache_t *const cache =
+        &g_ui_renderer_template_wavetable_cache;
+    if ((cache->valid == 0U)
+            || (table == NULL)
+            || (preview == NULL)
+            || (preview->global_peak <= 1U))
+    {
+        cache->pos_valid = 0U;
+        return 0U;
+    }
+
+    const int top = UI_TEMPLATE_WAVE_WT_Y + 1;
+    const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
+    const float peak = (float)preview->global_peak;
+    const int x_offset = (int)(((1.0f - pos_value) * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
+    const int x_start = UI_TEMPLATE_WAVE_WT_X + 1 + x_offset;
+    const int center_y = ui_renderer_template_wave_wavetable_depth_y(UI_TEMPLATE_WAVE_WT_Y + 1,
+                                                                      pos_value);
+    const float frame_position = start_frame_position
+        + ((end_frame_position - start_frame_position) * pos_value);
+
+    cache->pos_value = pos_value;
+    cache->pos_x_start = (uint8_t)x_start;
+    for (uint8_t point = 0U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
+    {
+        const float sample_position = ((float)(WAVETABLE_FRAME_SAMPLE_COUNT - 1U)
+                                       * (float)point)
+            / (float)(UI_TEMPLATE_WAVE_WT_TRACE_POINTS - 1U);
+        const float sample = ui_renderer_template_wave_wavetable_sample(table,
+                                                                         frame_position,
+                                                                         sample_position);
+        cache->pos_y[point] = (int8_t)ui_renderer_template_wave_wavetable_sample_to_y(
+            sample,
+            peak,
+            center_y,
+            UI_TEMPLATE_WAVE_WT_POS_AMP_HALF_PX,
+            top,
+            bottom);
+    }
+    cache->pos_valid = 1U;
+    return 1U;
 }
 
 static void ui_renderer_template_draw_wave_wavetable_cache(void)
 {
     const ui_renderer_template_wavetable_cache_t *const cache =
         &g_ui_renderer_template_wavetable_cache;
-    if ((cache->valid == 0U) || (cache->layer_count == 0U))
+    if ((cache->valid == 0U) || (cache->layer_count != UI_TEMPLATE_WAVE_WT_LAYER_TARGET))
     {
         return;
     }
 
     for (uint8_t layer = 0U; layer < cache->layer_count; ++layer)
     {
-        const int x_start = cache->x_start[layer];
-        const int point_count = cache->point_count[layer];
-        int prev_x = x_start;
+        const float depth = (float)layer / (float)(cache->layer_count - 1U);
+        const int x_offset = (int)(((1.0f - depth) * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
+        const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - x_offset;
+        int prev_x = ui_renderer_template_wave_wavetable_trace_x(cache->x_start[layer],
+                                                                 x_width,
+                                                                 0U);
         int prev_y = cache->y[layer][0];
-        for (int col = 1; col < point_count; ++col)
+        for (uint8_t point = 1U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
         {
-            const int x = x_start + col;
-            const int y = cache->y[layer][col];
-            drv_display_draw_line(prev_x, prev_y, x, y);
+            const int x = ui_renderer_template_wave_wavetable_trace_x(cache->x_start[layer],
+                                                                        x_width,
+                                                                        point);
+            const int y = cache->y[layer][point];
+            if (((point + layer) & 1U) == 0U)
+            {
+                drv_display_draw_line(prev_x, prev_y, x, y);
+            }
             prev_x = x;
             prev_y = y;
         }
     }
 }
 
-static int ui_renderer_template_wave_wavetable_depth_coord(float depth,
-                                                            int inner_x,
-                                                            int inner_y,
-                                                            int *out_x,
-                                                            int *out_y)
+static void ui_renderer_template_clear_wave_wavetable_pos_halo(int x_start,
+                                                               int x_width,
+                                                               const int8_t *y)
 {
-    if ((out_x == NULL) || (out_y == NULL))
+    const int top = UI_TEMPLATE_WAVE_WT_Y + 1;
+    const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
+    drv_display_set_draw_color(0U);
+    int prev_x = ui_renderer_template_wave_wavetable_trace_x(x_start, x_width, 0U);
+    int prev_y = y[0];
+    for (uint8_t point = 1U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
     {
-        return 0;
-    }
-
-    if (depth < 0.0f)
-    {
-        depth = 0.0f;
-    }
-    else if (depth > 1.0f)
-    {
-        depth = 1.0f;
-    }
-
-    *out_x = inner_x + UI_TEMPLATE_WAVE_WT_DEPTH_X_PX
-        - (int)((depth * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
-    *out_y = inner_y + 5
-        + (int)((depth * (float)UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX) + 0.5f);
-    return 1;
-}
-
-static void ui_renderer_template_draw_wave_wavetable_depth_marker(int x,
-                                                                  int y,
-                                                                  int inner_x,
-                                                                  int inner_y,
-                                                                  int inner_w,
-                                                                  int inner_h,
-                                                                  uint8_t prominent)
-{
-    const int left = inner_x;
-    const int right = inner_x + inner_w - 1;
-    const int top = inner_y;
-    const int bottom = inner_y + inner_h - 1;
-    const int x0 = ui_renderer_template_clamp_i32(x - ((prominent != 0U) ? 2 : 1), left, right);
-    const int x1 = ui_renderer_template_clamp_i32(x, left, right);
-    const int x2 = ui_renderer_template_clamp_i32(x + ((prominent != 0U) ? 2 : 1), left, right);
-    const int y0 = ui_renderer_template_clamp_i32(y - 1, top, bottom);
-    const int y1 = ui_renderer_template_clamp_i32(y + 1, top, bottom);
-
-    drv_display_set_draw_color(2U);
-    if (prominent != 0U)
-    {
-        drv_display_draw_line(x0, y0, x1, y1);
-        drv_display_draw_line(x1, y1, x2, y0);
-    }
-    else
-    {
-        drv_display_draw_line(x0, y0, x2, y1);
+        const int x = ui_renderer_template_wave_wavetable_trace_x(x_start, x_width, point);
+        const int value_y = y[point];
+        const int y0 = ui_renderer_template_clamp_i32(prev_y - 1, top, bottom);
+        const int y1 = ui_renderer_template_clamp_i32(value_y - 1, top, bottom);
+        const int y2 = ui_renderer_template_clamp_i32(prev_y + 1, top, bottom);
+        const int y3 = ui_renderer_template_clamp_i32(value_y + 1, top, bottom);
+        drv_display_draw_line(prev_x, y0, x, y1);
+        drv_display_draw_line(prev_x, y2, x, y3);
+        prev_x = x;
+        prev_y = value_y;
     }
     drv_display_set_draw_color(1U);
 }
 
-static void ui_renderer_template_draw_wave_wavetable_depth_markers(float pos_value,
-                                                                   int inner_x,
-                                                                   int inner_y,
-                                                                   int inner_w,
-                                                                   int inner_h)
+static void ui_renderer_template_draw_wave_wavetable_pos_cache(void)
 {
-    int start_x = 0;
-    int start_y = 0;
-    int end_x = 0;
-    int end_y = 0;
-    int pos_x = 0;
-    int pos_y = 0;
-
-    if ((ui_renderer_template_wave_wavetable_depth_coord(0.0f,
-                                                          inner_x,
-                                                          inner_y,
-                                                          &start_x,
-                                                          &start_y) == 0)
-            || (ui_renderer_template_wave_wavetable_depth_coord(1.0f,
-                                                                  inner_x,
-                                                                  inner_y,
-                                                                  &end_x,
-                                                                  &end_y) == 0)
-            || (ui_renderer_template_wave_wavetable_depth_coord(pos_value,
-                                                                  inner_x,
-                                                                  inner_y,
-                                                                  &pos_x,
-                                                                  &pos_y) == 0))
+    const ui_renderer_template_wavetable_cache_t *const cache =
+        &g_ui_renderer_template_wavetable_cache;
+    if ((cache->valid == 0U) || (cache->pos_valid == 0U))
     {
         return;
     }
 
-    ui_renderer_template_draw_wave_wavetable_depth_marker(start_x,
-                                                           start_y,
-                                                           inner_x,
-                                                           inner_y,
-                                                           inner_w,
-                                                           inner_h,
-                                                           0U);
-    ui_renderer_template_draw_wave_wavetable_depth_marker(end_x,
-                                                           end_y,
-                                                           inner_x,
-                                                           inner_y,
-                                                           inner_w,
-                                                           inner_h,
-                                                           0U);
-    ui_renderer_template_draw_wave_wavetable_depth_marker(pos_x,
-                                                           pos_y,
-                                                           inner_x,
-                                                           inner_y,
-                                                           inner_w,
-                                                           inner_h,
-                                                           1U);
+    const int x_offset = (int)(((1.0f - cache->pos_value)
+                                * (float)UI_TEMPLATE_WAVE_WT_DEPTH_X_PX) + 0.5f);
+    const int x_width = UI_TEMPLATE_WAVE_WT_INNER_W - x_offset;
+    ui_renderer_template_clear_wave_wavetable_pos_halo(cache->pos_x_start,
+                                                       x_width,
+                                                       cache->pos_y);
+
+    int prev_x = ui_renderer_template_wave_wavetable_trace_x(cache->pos_x_start, x_width, 0U);
+    int prev_y = cache->pos_y[0];
+    for (uint8_t point = 1U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
+    {
+        const int x = ui_renderer_template_wave_wavetable_trace_x(cache->pos_x_start, x_width, point);
+        const int y = cache->pos_y[point];
+        drv_display_draw_line(prev_x, prev_y, x, y);
+        prev_x = x;
+        prev_y = y;
+    }
 }
 
 static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_value)
@@ -3773,12 +3792,6 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
 static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                              const ui_template_subpage_t *subpage)
 {
-    const int wave_x = UI_TEMPLATE_WAVE_WT_X;
-    const int wave_y = UI_TEMPLATE_WAVE_WT_Y;
-    const int inner_x = wave_x + 1;
-    const int inner_y = wave_y + 1;
-    const int inner_w = UI_TEMPLATE_WAVE_WT_INNER_W;
-    const int inner_h = UI_TEMPLATE_WAVE_WT_INNER_H;
     float table_value = 0.0f;
     float pos_value = 0.0f;
     float start_value = 0.0f;
@@ -3837,42 +3850,36 @@ static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_
     }
 
     const uint32_t max_frame = (table->frame_count > 1U) ? (table->frame_count - 1U) : 0U;
-    uint32_t first_frame = (uint32_t)((start_value * (float)max_frame) + 0.5f);
-    uint32_t last_frame = (uint32_t)((end_value * (float)max_frame) + 0.5f);
-    if (first_frame > max_frame)
-    {
-        first_frame = max_frame;
-    }
-    if (last_frame > max_frame)
-    {
-        last_frame = max_frame;
-    }
-    if (last_frame < first_frame)
-    {
-        const uint32_t tmp = first_frame;
-        first_frame = last_frame;
-        last_frame = tmp;
-    }
+    const float start_frame_position = start_value * (float)max_frame;
+    const float end_frame_position = end_value * (float)max_frame;
 
     if (ui_renderer_template_wave_wavetable_cache_matches(global_slot,
-                                                           first_frame,
-                                                           last_frame,
+                                                           start_value,
+                                                           end_value,
                                                            table,
                                                            preview) == 0U)
     {
         (void)ui_renderer_template_build_wave_wavetable_cache(global_slot,
-                                                              first_frame,
-                                                              last_frame,
+                                                              start_value,
+                                                              end_value,
+                                                              start_frame_position,
+                                                              end_frame_position,
                                                               table,
                                                               preview);
     }
 
+    if ((g_ui_renderer_template_wavetable_cache.pos_valid == 0U)
+            || (g_ui_renderer_template_wavetable_cache.pos_value != pos_value))
+    {
+        (void)ui_renderer_template_build_wave_wavetable_pos_cache(pos_value,
+                                                                   start_frame_position,
+                                                                   end_frame_position,
+                                                                   table,
+                                                                   preview);
+    }
+
     ui_renderer_template_draw_wave_wavetable_cache();
-    ui_renderer_template_draw_wave_wavetable_depth_markers(pos_value,
-                                                           inner_x,
-                                                           inner_y,
-                                                           inner_w,
-                                                           inner_h);
+    ui_renderer_template_draw_wave_wavetable_pos_cache();
 }
 
 static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_page_state_t *state,
