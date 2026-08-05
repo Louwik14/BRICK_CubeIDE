@@ -264,10 +264,9 @@ static note_fx_result_t note_fx_pipeline_budget_admit(note_event_t *event,
                 return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
             --g_note_fx_half_budget.off_remaining;
         }
-        else if (g_note_fx_half_budget.off_remaining != 0U)
-        {
-            --g_note_fx_half_budget.off_remaining;
-        }
+        /* The generated On already reserved this closure budget.  The
+         * matching Off consumes the reservation but must not charge it a
+         * second time (nor bypass the reserve when it is exhausted). */
         event->flags |= NOTE_EVENT_FLAG_BUDGET_ACCOUNTED;
     }
     else
