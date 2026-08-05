@@ -66,17 +66,17 @@
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_W (UI_TEMPLATE_SAMPLER_WAVE_W - 2)
 #define UI_TEMPLATE_SAMPLER_WAVE_INNER_H (UI_TEMPLATE_SAMPLER_WAVE_H - 2)
 #define UI_TEMPLATE_WAVE_WT_X       1
-#define UI_TEMPLATE_WAVE_WT_Y       UI_TEMPLATE_FRAME_Y
+#define UI_TEMPLATE_WAVE_WT_Y       12
 #define UI_TEMPLATE_WAVE_WT_W       126
-#define UI_TEMPLATE_WAVE_WT_H       31
+#define UI_TEMPLATE_WAVE_WT_H       36
 #define UI_TEMPLATE_WAVE_WT_INNER_W (UI_TEMPLATE_WAVE_WT_W - 2)
 #define UI_TEMPLATE_WAVE_WT_INNER_H (UI_TEMPLATE_WAVE_WT_H - 2)
 #define UI_TEMPLATE_WAVE_WT_LAYER_TARGET 8U
 #define UI_TEMPLATE_WAVE_WT_MAX_LAYERS   8U
 #define UI_TEMPLATE_WAVE_WT_TRACE_POINTS 96U
-#define UI_TEMPLATE_WAVE_WT_DEPTH_X_PX   8
-#define UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX   14
-#define UI_TEMPLATE_WAVE_WT_CONTEXT_BASE_Y 6
+#define UI_TEMPLATE_WAVE_WT_DEPTH_X_PX   10
+#define UI_TEMPLATE_WAVE_WT_DEPTH_Y_PX   18
+#define UI_TEMPLATE_WAVE_WT_CONTEXT_BASE_Y 9
 #define UI_TEMPLATE_WAVE_WT_CONTEXT_AMP_HALF_PX 2
 #define UI_TEMPLATE_WAVE_WT_POS_AMP_HALF_PX 3
 #define UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W (OLED_WIDTH - 2)
@@ -3499,12 +3499,18 @@ static void ui_renderer_template_clear_wave_wavetable_pos_halo(int x_start,
     {
         const int x = ui_renderer_template_wave_wavetable_trace_x(x_start, x_width, point);
         const int value_y = y[point];
-        const int y0 = ui_renderer_template_clamp_i32(prev_y - 1, top, bottom);
-        const int y1 = ui_renderer_template_clamp_i32(value_y - 1, top, bottom);
-        const int y2 = ui_renderer_template_clamp_i32(prev_y + 1, top, bottom);
-        const int y3 = ui_renderer_template_clamp_i32(value_y + 1, top, bottom);
+        const int y0 = ui_renderer_template_clamp_i32(prev_y - 2, top, bottom);
+        const int y1 = ui_renderer_template_clamp_i32(value_y - 2, top, bottom);
+        const int y2 = ui_renderer_template_clamp_i32(prev_y - 1, top, bottom);
+        const int y3 = ui_renderer_template_clamp_i32(value_y - 1, top, bottom);
+        const int y4 = ui_renderer_template_clamp_i32(prev_y + 1, top, bottom);
+        const int y5 = ui_renderer_template_clamp_i32(value_y + 1, top, bottom);
+        const int y6 = ui_renderer_template_clamp_i32(prev_y + 2, top, bottom);
+        const int y7 = ui_renderer_template_clamp_i32(value_y + 2, top, bottom);
         drv_display_draw_line(prev_x, y0, x, y1);
         drv_display_draw_line(prev_x, y2, x, y3);
+        drv_display_draw_line(prev_x, y4, x, y5);
+        drv_display_draw_line(prev_x, y6, x, y7);
         prev_x = x;
         prev_y = value_y;
     }
@@ -4536,8 +4542,9 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    char kit_label[44];
-    ui_renderer_template_format_active_kit_label(kit_label, sizeof(kit_label));
+    const ui_template_subpage_t *const active_subpage = ui_template_page_get_active_subpage(state);
+    const uint8_t compact_wave_header =
+        (ui_renderer_template_is_wave_wavetable_subpage(active_subpage) != 0U) ? 1U : 0U;
     drv_display_set_font(&FONT_4X6);
     const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
     const uint8_t bpm_w = (draw_bpm != 0U) ? drv_display_text_width(bpm_label) : 0U;
@@ -4553,9 +4560,18 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     drv_display_draw_text(cpu_x, 1U, cpu_avg_label);
 
-    ui_renderer_template_fit_text(kit_label, 42U);
-    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(kit_label)), 8U, kit_label);
-    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
+    if (compact_wave_header != 0U)
+    {
+        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 8U, pattern_label);
+    }
+    else
+    {
+        char kit_label[44];
+        ui_renderer_template_format_active_kit_label(kit_label, sizeof(kit_label));
+        ui_renderer_template_fit_text(kit_label, 42U);
+        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(kit_label)), 8U, kit_label);
+        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
+    }
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
