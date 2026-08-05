@@ -21,5 +21,6 @@ filtre supplementaire n'est utilise.
 `WARP TYPE` n'est pas une destination de modulation. `WARP AMT` reste un
 parametre de piste lent dans cette passe: le chemin de modulation directe
 actuel ne l'autorise pas. Les deux valeurs sont des champs de l'etat tone et
-suivent les copies, snapshots, patches et sauvegardes existants sans migration
-des anciens champs `PHASE`/`FLIP`.
+suivent les copies et snapshots courants. Les formats Pattern/Project passent
+en version 8, les formats Patch/Kit en version 5; les chargeurs refusent ainsi
+les anciens payloads contenant `PHASE`/`FLIP`, sans remapping implicite.

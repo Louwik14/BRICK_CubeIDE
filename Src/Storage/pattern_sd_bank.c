@@ -10,7 +10,7 @@
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
 #define PATTERN_MAGIC      0x31544150UL /* PAT1 */
-#define PATTERN_VERSION    7U /* Three MIDI FX slots; legacy payloads are rejected. */
+#define PATTERN_VERSION    8U /* Wave warp schema; older payloads are rejected. */
 #define PATTERN_WRITE_CHUNK_BYTES (512U * 8U)
 
 typedef struct __attribute__((packed))
