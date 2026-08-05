@@ -61,16 +61,6 @@ static inline float clampf_local(float v, float lo, float hi)
     return v;
 }
 
-static inline float smooth_changed_parameter(float current,
-                                             float target,
-                                             uint16_t *remaining)
-{
-    if(*remaining == 0U) return current;
-    current += (target - current) / (float)*remaining;
-    --(*remaining);
-    return (*remaining == 0U) ? target : current;
-}
-
 static inline float target_delay_samples(float time_s, float sample_rate)
 {
     const float max_delay = (float)(kDelayBufferSize - 2U);
@@ -84,7 +74,9 @@ static inline float read_delay(const float *buffer, uint32_t write_index, float 
     const uint32_t delay_i = (uint32_t)clamped;
     const float frac = clamped - (float)delay_i;
 
-    uint32_t idx_a = (write_index + kDelayBufferSize - delay_i) % kDelayBufferSize;
+    uint32_t idx_a = write_index + kDelayBufferSize - delay_i;
+    if(idx_a >= kDelayBufferSize)
+        idx_a -= kDelayBufferSize;
     uint32_t idx_b = (idx_a == 0U) ? (kDelayBufferSize - 1U) : (idx_a - 1U);
     const float a = buffer[idx_a];
     const float b = buffer[idx_b];
@@ -271,25 +263,58 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     float *const delay_buffer_l = fx_delay_shared_pool_left();
     float *const delay_buffer_r = fx_delay_shared_pool_right();
 
+    float feedback = g_delay.feedback;
+    float width = g_delay.width;
+    float volume = g_delay.volume;
+    uint16_t feedback_remaining = g_delay.feedback_smooth_remaining;
+    uint16_t width_remaining = g_delay.width_smooth_remaining;
+    uint16_t volume_remaining = g_delay.volume_smooth_remaining;
+    const float feedback_step = (feedback_remaining != 0U)
+        ? (g_delay.feedback_target - feedback) / (float)feedback_remaining : 0.0f;
+    const float width_step = (width_remaining != 0U)
+        ? (g_delay.width_target - width) / (float)width_remaining : 0.0f;
+    const float volume_step = (volume_remaining != 0U)
+        ? (g_delay.volume_target - volume) / (float)volume_remaining : 0.0f;
+    float time_l = g_delay.time_current_samples_l;
+    float time_r = g_delay.time_current_samples_r;
+    float hpf_l = g_delay.feedback_hpf_l;
+    float hpf_r = g_delay.feedback_hpf_r;
+    float hpf_prev_l = g_delay.feedback_hpf_prev_l;
+    float hpf_prev_r = g_delay.feedback_hpf_prev_r;
+    float lp_l = g_delay.feedback_lp_l;
+    float lp_r = g_delay.feedback_lp_r;
+    uint32_t write_index = g_delay.write_index;
+
     for(uint32_t i = 0U; i < frames; ++i)
     {
-        g_delay.feedback = smooth_changed_parameter(g_delay.feedback,
-                                                    g_delay.feedback_target,
-                                                    &g_delay.feedback_smooth_remaining);
-        g_delay.width = smooth_changed_parameter(g_delay.width,
-                                                 g_delay.width_target,
-                                                 &g_delay.width_smooth_remaining);
-        g_delay.volume = smooth_changed_parameter(g_delay.volume,
-                                                  g_delay.volume_target,
-                                                  &g_delay.volume_smooth_remaining);
-        const float fb = g_delay.feedback;
-        const float width = g_delay.width;
-        const float vol = g_delay.volume;
-        g_delay.time_current_samples_l += (target_l - g_delay.time_current_samples_l) * kTimeSmooth;
-        g_delay.time_current_samples_r += (target_r - g_delay.time_current_samples_r) * kTimeSmooth;
+        if(feedback_remaining != 0U)
+        {
+            feedback += feedback_step;
+            --feedback_remaining;
+            if(feedback_remaining == 0U)
+                feedback = g_delay.feedback_target;
+        }
+        if(width_remaining != 0U)
+        {
+            width += width_step;
+            --width_remaining;
+            if(width_remaining == 0U)
+                width = g_delay.width_target;
+        }
+        if(volume_remaining != 0U)
+        {
+            volume += volume_step;
+            --volume_remaining;
+            if(volume_remaining == 0U)
+                volume = g_delay.volume_target;
+        }
+        const float fb = feedback;
+        const float vol = volume;
+        time_l += (target_l - time_l) * kTimeSmooth;
+        time_r += (target_r - time_r) * kTimeSmooth;
 
-        const float dl = read_delay(delay_buffer_l, g_delay.write_index, g_delay.time_current_samples_l);
-        const float dr = read_delay(delay_buffer_r, g_delay.write_index, g_delay.time_current_samples_r);
+        const float dl = read_delay(delay_buffer_l, write_index, time_l);
+        const float dr = read_delay(delay_buffer_r, write_index, time_r);
 
         float fb_src_l = dl;
         float fb_src_r = dr;
@@ -301,28 +326,28 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
 
         if(hpf_active != 0U)
         {
-            fb_src_l = process_hpf(fb_src_l, hpf_a, &g_delay.feedback_hpf_l, &g_delay.feedback_hpf_prev_l);
-            fb_src_r = process_hpf(fb_src_r, hpf_a, &g_delay.feedback_hpf_r, &g_delay.feedback_hpf_prev_r);
+            fb_src_l = process_hpf(fb_src_l, hpf_a, &hpf_l, &hpf_prev_l);
+            fb_src_r = process_hpf(fb_src_r, hpf_a, &hpf_r, &hpf_prev_r);
         }
         else
         {
-            g_delay.feedback_hpf_prev_l = fb_src_l;
-            g_delay.feedback_hpf_prev_r = fb_src_r;
-            g_delay.feedback_hpf_l = fb_src_l;
-            g_delay.feedback_hpf_r = fb_src_r;
+            hpf_prev_l = fb_src_l;
+            hpf_prev_r = fb_src_r;
+            hpf_l = fb_src_l;
+            hpf_r = fb_src_r;
         }
 
         if(lpf_active != 0U)
         {
-            g_delay.feedback_lp_l += (fb_src_l - g_delay.feedback_lp_l) * lpf_a;
-            g_delay.feedback_lp_r += (fb_src_r - g_delay.feedback_lp_r) * lpf_a;
-            fb_src_l = g_delay.feedback_lp_l;
-            fb_src_r = g_delay.feedback_lp_r;
+            lp_l += (fb_src_l - lp_l) * lpf_a;
+            lp_r += (fb_src_r - lp_r) * lpf_a;
+            fb_src_l = lp_l;
+            fb_src_r = lp_r;
         }
         else
         {
-            g_delay.feedback_lp_l = fb_src_l;
-            g_delay.feedback_lp_r = fb_src_r;
+            lp_l = fb_src_l;
+            lp_r = fb_src_r;
         }
 
         float input_l = in_l[i];
@@ -332,8 +357,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             input_r = 0.0f;
         }
 
-        delay_buffer_l[g_delay.write_index] = input_l + (fb_src_l * fb);
-        delay_buffer_r[g_delay.write_index] = input_r + (fb_src_r * fb);
+        delay_buffer_l[write_index] = input_l + (fb_src_l * fb);
+        delay_buffer_r[write_index] = input_r + (fb_src_r * fb);
 
         float wet_l = 0.0f;
         float wet_r = 0.0f;
@@ -346,10 +371,26 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             rev_r[i] = wet_r * rev;
         }
 
-        g_delay.write_index++;
-        if(g_delay.write_index >= kDelayBufferSize)
+        write_index++;
+        if(write_index >= kDelayBufferSize)
         {
-            g_delay.write_index = 0U;
+            write_index = 0U;
         }
     }
+
+    g_delay.feedback = feedback;
+    g_delay.width = width;
+    g_delay.volume = volume;
+    g_delay.feedback_smooth_remaining = feedback_remaining;
+    g_delay.width_smooth_remaining = width_remaining;
+    g_delay.volume_smooth_remaining = volume_remaining;
+    g_delay.time_current_samples_l = time_l;
+    g_delay.time_current_samples_r = time_r;
+    g_delay.feedback_hpf_l = hpf_l;
+    g_delay.feedback_hpf_r = hpf_r;
+    g_delay.feedback_hpf_prev_l = hpf_prev_l;
+    g_delay.feedback_hpf_prev_r = hpf_prev_r;
+    g_delay.feedback_lp_l = lp_l;
+    g_delay.feedback_lp_r = lp_r;
+    g_delay.write_index = write_index;
 }
