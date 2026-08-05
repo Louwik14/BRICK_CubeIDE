@@ -1777,6 +1777,28 @@ static float clamp_pan(float pan)
     return pan;
 }
 
+static inline void mixer_advance_track_ramps(float *gain_cur,
+                                             float gain_step,
+                                             float *pan_cur,
+                                             float pan_step,
+                                             float *mute_gain_cur,
+                                             float mute_target,
+                                             float mute_step)
+{
+    *gain_cur += gain_step;
+    *pan_cur += pan_step;
+    if (*mute_gain_cur < mute_target)
+    {
+        *mute_gain_cur += mute_step;
+        if (*mute_gain_cur > mute_target) *mute_gain_cur = mute_target;
+    }
+    else if (*mute_gain_cur > mute_target)
+    {
+        *mute_gain_cur -= mute_step;
+        if (*mute_gain_cur < mute_target) *mute_gain_cur = mute_target;
+    }
+}
+
 /**
  * @brief Initialise l'état interne du mixer.
  *
@@ -3459,6 +3481,178 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             continue;
         }
 #endif
+
+        /*
+         * POLY_STEREO final fan-out.  The external poly buffers are already
+         * accumulated L/R, so keep them read-only and feed every active final
+         * destination from one pass.  Auxiliary capture/looper routes and
+         * diagnostics keep the historical materialized-buffer path.
+         */
+        uint8_t poly_stereo_fanout = 0U;
+        if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                && (diag_lane == 0U)
+                && (sample_capture_active == 0U)
+                && (looper_record_active == 0U)
+                && (looper_playback_mix_active == 0U)
+                && (mt->route_master != 0U)
+#if MIXER_HAS_CUE_BUS
+                && (mt->route_cue == 0U)
+#endif
+                )
+        {
+            uint8_t has_track_insert = 0U;
+            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+            {
+                if (mt->insert_slot[insert] >= 0)
+                {
+                    has_track_insert = 1U;
+                    break;
+                }
+            }
+            poly_stereo_fanout = (has_track_insert == 0U) ? 1U : 0U;
+        }
+
+        if (poly_stereo_fanout != 0U)
+        {
+            enum
+            {
+                POLY_FANOUT_MAIN = 1U,
+                POLY_FANOUT_REVERB = 2U,
+                POLY_FANOUT_DELAY = 4U
+            };
+            float gain_cur = mt->gain_current;
+            float pan_cur = mt->pan_current;
+            float mute_gain_cur = mt->mute_gain_current;
+            const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
+            const float gain_step = (mt->gain - gain_cur) * inv_frames;
+            const float pan_step = (mt->pan - pan_cur) * inv_frames;
+            const float mute_target = (mt->mute != 0U) ? 0.0f : 1.0f;
+            const float mute_step = 1.0f / 240.0f;
+            float send_cur[MIXER_NUM_SENDS] = {0.0f};
+            float send_step[MIXER_NUM_SENDS] = {0.0f};
+            uint8_t fanout_mode = POLY_FANOUT_MAIN;
+
+            if (send_bus_active != 0U)
+            {
+                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                {
+                    const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX)
+                                                    && (g_send_fx_slot[s] >= 0))
+                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
+                    send_cur[s] = mt->send_level_current[s];
+                    send_step[s] = (mt->send_level[s] - send_cur[s]) * inv_frames;
+                    if ((send_enabled != 0U)
+                            && !((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f)))
+                    {
+                        fanout_mode |= (s == MIXER_REVERB_SEND_INDEX)
+                            ? POLY_FANOUT_REVERB : POLY_FANOUT_DELAY;
+                    }
+                }
+            }
+
+            switch (fanout_mode)
+            {
+                case POLY_FANOUT_MAIN:
+                    for (uint32_t i = 0U; i < frames; ++i)
+                    {
+                        const float pan_for_mix = -pan_cur;
+                        const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                        const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                        const float gain_l = gain_cur * pan_l * mute_gain_cur;
+                        const float gain_r = gain_cur * pan_r * mute_gain_cur;
+                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        bus_main_l[i] += left_trimmed;
+                        bus_main_r[i] += right_trimmed;
+                        mixer_advance_track_ramps(&gain_cur, gain_step,
+                                                  &pan_cur, pan_step,
+                                                  &mute_gain_cur, mute_target, mute_step);
+                    }
+                    break;
+
+                case POLY_FANOUT_MAIN | POLY_FANOUT_REVERB:
+                    for (uint32_t i = 0U; i < frames; ++i)
+                    {
+                        const float pan_for_mix = -pan_cur;
+                        const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                        const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                        const float gain_l = gain_cur * pan_l * mute_gain_cur;
+                        const float gain_r = gain_cur * pan_r * mute_gain_cur;
+                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        bus_main_l[i] += left_trimmed;
+                        bus_main_r[i] += right_trimmed;
+                        send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
+                        mixer_advance_track_ramps(&gain_cur, gain_step,
+                                                  &pan_cur, pan_step,
+                                                  &mute_gain_cur, mute_target, mute_step);
+                    }
+                    break;
+
+                case POLY_FANOUT_MAIN | POLY_FANOUT_DELAY:
+                    for (uint32_t i = 0U; i < frames; ++i)
+                    {
+                        const float pan_for_mix = -pan_cur;
+                        const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                        const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                        const float gain_l = gain_cur * pan_l * mute_gain_cur;
+                        const float gain_r = gain_cur * pan_r * mute_gain_cur;
+                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        bus_main_l[i] += left_trimmed;
+                        bus_main_r[i] += right_trimmed;
+                        send_cur[MIXER_DELAY_SEND_INDEX] += send_step[MIXER_DELAY_SEND_INDEX];
+                        mixer_advance_track_ramps(&gain_cur, gain_step,
+                                                  &pan_cur, pan_step,
+                                                  &mute_gain_cur, mute_target, mute_step);
+                    }
+                    break;
+
+                case POLY_FANOUT_MAIN | POLY_FANOUT_REVERB | POLY_FANOUT_DELAY:
+                    for (uint32_t i = 0U; i < frames; ++i)
+                    {
+                        const float pan_for_mix = -pan_cur;
+                        const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                        const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                        const float gain_l = gain_cur * pan_l * mute_gain_cur;
+                        const float gain_r = gain_cur * pan_r * mute_gain_cur;
+                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        bus_main_l[i] += left_trimmed;
+                        bus_main_r[i] += right_trimmed;
+                        send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
+                        send_cur[MIXER_DELAY_SEND_INDEX] += send_step[MIXER_DELAY_SEND_INDEX];
+                        mixer_advance_track_ramps(&gain_cur, gain_step,
+                                                  &pan_cur, pan_step,
+                                                  &mute_gain_cur, mute_target, mute_step);
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+
+            mt->gain_current = mt->gain;
+            mt->pan_current = mt->pan;
+            mt->mute_gain_current = mute_gain_cur;
+            if (send_bus_active != 0U)
+            {
+                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                {
+                    mt->send_level_current[s] = mt->send_level[s];
+                }
+            }
+            continue;
+        }
 
         {
             float gain_cur = mt->gain_current;
