@@ -52,12 +52,21 @@ int16_t env_adsr_process_step(env_adsr_t *env)
 
 uint8_t env_adsr_process_vca_sample(env_adsr_t *env, float *out_gain)
 {
+    const env_adsr_peaks_stage_t stage_before = env_adsr_stage(env);
     const int16_t value = env_adsr_process_step(env);
     if (out_gain != 0)
     {
         *out_gain = (float)value * (1.0f / 32767.0f);
     }
-    return (env_adsr_stage(env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
+
+    /* A zero Q15 sample at the start of ATTACK is valid.  Only a release
+     * which actually reached IDLE may terminate the source contract. */
+    const uint8_t release_terminal =
+        ((stage_before == ENV_ADSR_PEAKS_STAGE_RELEASE)
+            && (env_adsr_stage(env) == ENV_ADSR_PEAKS_STAGE_IDLE)
+            && (value <= 0)) ? 1U : 0U;
+    return ((stage_before != ENV_ADSR_PEAKS_STAGE_IDLE)
+            && (release_terminal == 0U)) ? 1U : 0U;
 }
 
 int16_t env_adsr_process_advance(env_adsr_t *env,
