@@ -609,27 +609,22 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC1_MODEL:
         case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC3_MODEL:
-            *out_value = state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 5U)];
+            *out_value = state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)];
             return 1U;
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
-            *out_value = state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 5U)];
+            *out_value = state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)];
             return 1U;
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC3_TIMBRE:
-            *out_value = state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 5U)];
+            *out_value = state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)];
             return 1U;
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR:
-            *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 5U)];
-            return 1U;
-        case PARAM_STACK_OSC1_PARAM3:
-        case PARAM_STACK_OSC2_PARAM3:
-        case PARAM_STACK_OSC3_PARAM3:
-            *out_value = state->stack.param3[(uint8_t)((id - PARAM_STACK_OSC1_PARAM3) / 5U)];
+            *out_value = state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)];
             return 1U;
         case PARAM_STACK_OSC_DETUNE:
             *out_value = state->stack.osc_detune;
@@ -905,28 +900,23 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_STACK_OSC1_MODEL:
         case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC3_MODEL:
-            state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 5U)] =
+            state->stack.model[(uint8_t)((id - PARAM_STACK_OSC1_MODEL) / 4U)] =
                 clamp_value(value, 0.0f, (float)(BRICK6_STACK_MODEL_COUNT - 1U));
             return 1U;
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
-            state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 5U)] = clamp_value(value, -24.0f, 24.0f);
+            state->stack.tune[(uint8_t)((id - PARAM_STACK_OSC1_TUNE) / 4U)] = clamp_value(value, -24.0f, 24.0f);
             return 1U;
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC3_TIMBRE:
-            state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 5U)] = clamp_value(value, 0.0f, 1.0f);
+            state->stack.timbre[(uint8_t)((id - PARAM_STACK_OSC1_TIMBRE) / 4U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR:
-            state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 5U)] = clamp_value(value, 0.0f, 1.0f);
-            return 1U;
-        case PARAM_STACK_OSC1_PARAM3:
-        case PARAM_STACK_OSC2_PARAM3:
-        case PARAM_STACK_OSC3_PARAM3:
-            state->stack.param3[(uint8_t)((id - PARAM_STACK_OSC1_PARAM3) / 5U)] = clamp_value(value, 0.0f, 1.0f);
+            state->stack.color[(uint8_t)((id - PARAM_STACK_OSC1_COLOR) / 4U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_STACK_OSC_DETUNE:
             state->stack.osc_detune = clamp_value(value, 0.0f, 1.0f);
@@ -1588,8 +1578,15 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         if (note_fx_param == 3U)
         {
             float previous = 0.0f;
+            uint8_t requested_model = NOTE_FX_MODEL_OFF;
+            if ((value > 0.0f) && (value < 255.0f))
+            {
+                const uint8_t rounded = (uint8_t)(value + 0.5f);
+                requested_model = (rounded < NOTE_FX_MODEL_COUNT)
+                    ? rounded : NOTE_FX_MODEL_OFF;
+            }
             if ((note_fx_state_get_param(track, id, &previous) != 0U)
-                    && ((uint8_t)(previous + 0.5f) != (uint8_t)(clamped + 0.5f)))
+                    && ((uint8_t)(previous + 0.5f) != requested_model))
             {
                 const seq_track_id_t transition_track = track;
                 if (seq_play_scheduler_transition_tracks(
@@ -1598,7 +1595,9 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     return 0U;
             }
         }
-        if (note_fx_state_set_param(track, id, clamped) == 0U)
+        /* NoteFx owns the model-aware schema.  The static catalog is only the
+         * legacy ARP/p-lock descriptor and cannot clamp EUCLID LENGTH/PULSE. */
+        if (note_fx_state_set_param(track, id, value) == 0U)
         {
             if (note_fx_param == 3U)
             {

@@ -21,8 +21,6 @@ typedef enum
 {
     BRICK6_STACK_MODEL_SHAPE = 0,
     BRICK6_STACK_MODEL_TRIPLE_SAW,
-    BRICK6_STACK_MODEL_SINMORPH,
-    BRICK6_STACK_MODEL_TRIMORPH,
     BRICK6_STACK_MODEL_COUNT
 } brick6_stack_model_t;
 
@@ -48,13 +46,11 @@ typedef struct
     int16_t tune_cents;
     uint8_t timbre;
     uint8_t color;
-    uint8_t param3;
     uint8_t kernel_id;
     uint16_t level_q15;
     uint16_t level_current_q15;
     uint16_t timbre_q15;
     uint16_t color_q15;
-    uint16_t param3_q15;
     uint32_t phase;
     uint32_t phase_inc;
     uint32_t phase_inc_current;
@@ -79,7 +75,6 @@ void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, bric
 void brick6_stack_runtime_set_slot_tune(uint8_t instance_id, uint8_t slot, float semitones);
 void brick6_stack_runtime_set_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
 void brick6_stack_runtime_set_slot_color(uint8_t instance_id, uint8_t slot, float color);
-void brick6_stack_runtime_set_slot_param3(uint8_t instance_id, uint8_t slot, float param3);
 void brick6_stack_runtime_set_noise_level(uint8_t instance_id, float level);
 void brick6_stack_runtime_set_osc_detune(uint8_t instance_id, float detune);
 void brick6_stack_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled);
@@ -102,7 +97,6 @@ uint8_t brick6_stack_runtime_submit_slot_level(uint8_t instance_id, uint8_t slot
 uint8_t brick6_stack_runtime_submit_slot_tune(uint8_t instance_id, uint8_t slot, float semitones);
 uint8_t brick6_stack_runtime_submit_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
 uint8_t brick6_stack_runtime_submit_slot_color(uint8_t instance_id, uint8_t slot, float color);
-uint8_t brick6_stack_runtime_submit_slot_param3(uint8_t instance_id, uint8_t slot, float param3);
 uint8_t brick6_stack_runtime_submit_noise_level(uint8_t instance_id, float level);
 uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune);
 uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled);

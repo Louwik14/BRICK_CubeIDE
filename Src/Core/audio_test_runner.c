@@ -659,9 +659,6 @@ static void configure_engine_params(uint8_t track, const audio_test_case_t *test
             set_track_param(track, PARAM_STACK_OSC2_COLOR, test->color);
             set_track_param(track, PARAM_STACK_OSC3_TIMBRE, test->timbre);
             set_track_param(track, PARAM_STACK_OSC3_COLOR, test->color);
-            set_track_param(track, PARAM_STACK_OSC1_PARAM3, test->color);
-            set_track_param(track, PARAM_STACK_OSC2_PARAM3, test->color);
-            set_track_param(track, PARAM_STACK_OSC3_PARAM3, test->color);
             set_track_param(track, PARAM_STACK_OSC1_TUNE, 0.0f);
             set_track_param(track, PARAM_STACK_OSC2_TUNE, 0.0f);
             set_track_param(track, PARAM_STACK_OSC3_TUNE, 0.0f);

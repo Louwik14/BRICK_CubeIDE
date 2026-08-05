@@ -161,15 +161,12 @@ static uint8_t mod_destination_is_direct_stack(param_id_t dest)
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC1_COLOR:
-        case PARAM_STACK_OSC1_PARAM3:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC2_COLOR:
-        case PARAM_STACK_OSC2_PARAM3:
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_STACK_OSC3_TIMBRE:
         case PARAM_STACK_OSC3_COLOR:
-        case PARAM_STACK_OSC3_PARAM3:
             return 1U;
         default:
             return 0U;
@@ -575,11 +572,11 @@ static uint8_t mod_destination_stack_slot_for_id(param_id_t id, uint8_t *out_slo
         *out_param = 0U;
         return 1U;
     }
-    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_PARAM3))
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
     {
         const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
-        *out_slot = (uint8_t)(rel / 5U);
-        *out_param = (uint8_t)((rel % 5U) + 1U);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
         return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
     }
 
@@ -593,8 +590,6 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
         case 3U:
             switch ((brick6_stack_model_t)model)
             {
-                case BRICK6_STACK_MODEL_SINMORPH:
-                case BRICK6_STACK_MODEL_TRIMORPH: return "MORPH";
                 case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
                 default: return "TIMBRE";
@@ -602,18 +597,9 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
         case 4U:
             switch ((brick6_stack_model_t)model)
             {
-                case BRICK6_STACK_MODEL_SINMORPH:
-                case BRICK6_STACK_MODEL_TRIMORPH: return "TARGET";
                 case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
                 default: return "COLOR";
-            }
-        case 5U:
-            switch ((brick6_stack_model_t)model)
-            {
-                case BRICK6_STACK_MODEL_SINMORPH: return "ASYM";
-                case BRICK6_STACK_MODEL_TRIMORPH: return "SKEW";
-                default: return "PARAM3";
             }
         default:
             return NULL;
@@ -632,7 +618,7 @@ static uint8_t mod_destination_stack_label_for_track_param(uint8_t track, param_
     if ((mod_destination_stack_slot_for_id(dest, &slot, &slot_param) == 0U)
             || (slot >= BRICK6_STACK_SLOT_COUNT)
             || (slot_param < 3U)
-            || (slot_param > 5U))
+            || (slot_param > 4U))
     {
         return 0U;
     }
@@ -698,9 +684,6 @@ static uint8_t mod_destination_apply_stack_rt(uint8_t track,
             return 1U;
         case 4U:
             brick6_stack_runtime_set_slot_color(ctx->instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case 5U:
-            brick6_stack_runtime_set_slot_param3(ctx->instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -1447,9 +1430,6 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR: return "Col";
-        case PARAM_STACK_OSC1_PARAM3:
-        case PARAM_STACK_OSC2_PARAM3:
-        case PARAM_STACK_OSC3_PARAM3: return "P3";
         case PARAM_PRISM_TIMBRE: return "O1P1";
         case PARAM_PRISM_COLOR: return "O1P2";
         case PARAM_PRISM_MODULATION: return "O1AM";

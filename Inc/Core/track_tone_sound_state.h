@@ -63,7 +63,6 @@ typedef struct
         float tune[3];
         float timbre[3];
         float color[3];
-        float param3[3];
         float noise_level;
         float osc_detune;
         float phase_reset;
@@ -113,7 +112,7 @@ typedef struct
     } md;
 } track_tone_sound_state_t;
 
-_Static_assert(sizeof(track_tone_sound_state_t) == 460U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 448U,
                "track tone state layout changed");
 
 void track_tone_sound_state_init(void);

@@ -180,9 +180,9 @@ static const ui_template_family_t g_ui_template_tone_family_stack = {
     .family_title = "TONE 1/2",
     .nav_labels = { "OSC1", "OSC2", "OSC3", "LVL" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_PARAM3, PARAM_STACK_OSC1_MODEL } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_PARAM3, PARAM_STACK_OSC2_MODEL } } },
-        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_PARAM3, PARAM_STACK_OSC3_MODEL } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_MODEL, PARAM_COUNT } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_MODEL, PARAM_COUNT } } },
+        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_MODEL, PARAM_COUNT } } },
         { .title = "LVL", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
     },
     .default_subpage = 0U,
@@ -935,11 +935,11 @@ static uint8_t ui_page_template_tone_stack_slot_param(param_id_t id,
         *out_param = 0U;
         return 1U;
     }
-    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_PARAM3))
+    if ((id >= PARAM_STACK_OSC1_MODEL) && (id <= PARAM_STACK_OSC3_COLOR))
     {
         const uint8_t rel = (uint8_t)(id - PARAM_STACK_OSC1_MODEL);
-        *out_slot = (uint8_t)(rel / 5U);
-        *out_param = (uint8_t)((rel % 5U) + 1U);
+        *out_slot = (uint8_t)(rel / 4U);
+        *out_param = (uint8_t)((rel % 4U) + 1U);
         return (*out_slot < BRICK6_STACK_SLOT_COUNT) ? 1U : 0U;
     }
 
@@ -950,8 +950,6 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINMORPH:
-        case BRICK6_STACK_MODEL_TRIMORPH: return "MORPH";
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
         default: return "TIMBRE";
@@ -962,21 +960,9 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
 {
     switch ((brick6_stack_model_t)model)
     {
-        case BRICK6_STACK_MODEL_SINMORPH:
-        case BRICK6_STACK_MODEL_TRIMORPH: return "TARGET";
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
         default: return "COLOR";
-    }
-}
-
-static const char *ui_page_template_tone_stack_param3_label(uint8_t model)
-{
-    switch ((brick6_stack_model_t)model)
-    {
-        case BRICK6_STACK_MODEL_SINMORPH: return "ASYM";
-        case BRICK6_STACK_MODEL_TRIMORPH: return "SKEW";
-        default: return "PARAM3";
     }
 }
 
@@ -1037,7 +1023,7 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
         case 3U:
         {
             float model_value = 0.0f;
-            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
             name = ui_page_template_tone_stack_timbre_label((uint8_t)(model_value + 0.5f));
             break;
@@ -1045,52 +1031,21 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
         case 4U:
         {
             float model_value = 0.0f;
-            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
+            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
             name = ui_page_template_tone_stack_color_label((uint8_t)(model_value + 0.5f));
             break;
         }
-        default:
-        {
-            float model_value = 0.0f;
-            const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
-            (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            name = ui_page_template_tone_stack_param3_label((uint8_t)(model_value + 0.5f));
-            break;
-        }
+        default: name = "PARAM"; break;
     }
 
     if ((out_name != NULL) && (out_name_len > 0U))
     {
         (void)snprintf(out_name, out_name_len, "%s", (name != NULL) ? name : "-");
     }
-    if ((stack_param == 4U) && (out_value != NULL) && (out_value_len > 0U))
-    {
-        float model_value = 0.0f;
-        const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
-        (void)param_registry_get_track_value(model_param, active_track, &model_value);
-        const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
-        if (model == BRICK6_STACK_MODEL_SINMORPH)
-        {
-            static const char *const targets[] = { "FULL RECT", "HALF RECT", "TRIANGLE", "FOLD" };
-            uint8_t target = (uint8_t)(value * 3.0f + 0.5f);
-            if (target > 3U)
-            {
-                target = 3U;
-            }
-            (void)snprintf(out_value, out_value_len, "%s", targets[target]);
-        }
-        else if (model == BRICK6_STACK_MODEL_TRIMORPH)
-        {
-            static const char *const targets[] = { "PULSE", "SAW", "SQUARE" };
-            uint8_t target = (uint8_t)(value * 2.0f + 0.5f);
-            if (target > 2U)
-            {
-                target = 2U;
-            }
-            (void)snprintf(out_value, out_value_len, "%s", targets[target]);
-        }
-    }
+    (void)value;
+    (void)out_value;
+    (void)out_value_len;
     return 1U;
 }
 
@@ -1183,7 +1138,7 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
         return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
 
-    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 5U));
+    const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
     float model_value = 0.0f;
     if (param_registry_get_track_value(model_param, ui_get_active_track(), &model_value) == 0U)
     {
@@ -1192,12 +1147,6 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
 
     const brick6_stack_model_t model = (brick6_stack_model_t)(uint8_t)(model_value + 0.5f);
     if ((model == BRICK6_STACK_MODEL_SHAPE) && (stack_param == 4U))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
-    }
-    if (((model == BRICK6_STACK_MODEL_SINMORPH)
-            || (model == BRICK6_STACK_MODEL_TRIMORPH))
-            && ((stack_param == 3U) || (stack_param == 4U) || (stack_param == 5U)))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM;
     }
