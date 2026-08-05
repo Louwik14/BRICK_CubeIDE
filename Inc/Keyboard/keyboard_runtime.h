@@ -23,6 +23,10 @@ void keyboard_runtime_set_chord_override(bool enabled);
 void keyboard_runtime_set_mono_last(bool enabled);
 void keyboard_runtime_step_octave(int8_t delta);
 void keyboard_runtime_process_midi(const uint8_t *msg, size_t len, seq_clock_src_t source);
+void keyboard_runtime_process_midi_timed(const uint8_t *msg, size_t len,
+                                         seq_clock_src_t source,
+                                         uint32_t capture_tick,
+                                         uint32_t ingress_serial);
 void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity);
 void keyboard_runtime_process_hall_timed(uint8_t hall_index, bool pressed,
                                          uint8_t velocity, uint32_t capture_tick,

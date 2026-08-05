@@ -109,6 +109,8 @@ extern volatile uint32_t midi_usb_rx_drops;
 typedef struct {
   uint8_t data[3];
   uint8_t len;
+  uint32_t tim5_tick;
+  uint32_t ingress_serial;
 } midi_msg_t;
 
 /* ====================================================================== */
@@ -242,6 +244,10 @@ void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out);
  */
 void midi_internal_receive(const uint8_t *msg, size_t len);
 void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock_src_t source);
+void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
+                                          seq_clock_src_t source,
+                                          uint32_t tim5_tick,
+                                          uint32_t ingress_serial);
 
 /**
  * @brief Alimente la file RX USB (appel depuis l'ISR USB OUT).

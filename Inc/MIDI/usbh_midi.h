@@ -28,6 +28,11 @@ extern "C" {
 
 USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
                                         uint8_t packet[USBH_MIDI_PACKET_SIZE]);
+USBH_StatusTypeDef USBH_MIDI_ReadPacketWithTimestamp(
+    USBH_HandleTypeDef *phost,
+    uint8_t packet[USBH_MIDI_PACKET_SIZE],
+    uint32_t *tim5_tick,
+    uint32_t *ingress_serial);
 USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
                                       const uint8_t packet[USBH_MIDI_PACKET_SIZE]);
 bool USBH_MIDI_IsReady(USBH_HandleTypeDef *phost);

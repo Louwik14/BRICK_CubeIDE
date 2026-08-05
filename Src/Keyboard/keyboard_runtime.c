@@ -32,6 +32,9 @@
 static uint8_t g_keyboard_runtime_midi_held_count[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
 static uint8_t g_keyboard_runtime_midi_sustained_release[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
 static uint8_t g_keyboard_runtime_midi_sustain_down[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT];
+static uint8_t g_keyboard_runtime_timed_context_active;
+static uint32_t g_keyboard_runtime_capture_tick;
+static uint32_t g_keyboard_runtime_ingress_serial;
 
 void keyboard_runtime_all_notes_off(void);
 
@@ -42,6 +45,20 @@ static void keyboard_runtime_reset_midi_state(void)
     memset(g_keyboard_runtime_midi_sustain_down, 0, sizeof(g_keyboard_runtime_midi_sustain_down));
 }
 
+static void keyboard_runtime_send_to_engine(const uint8_t *msg, size_t len)
+{
+    if (g_keyboard_runtime_timed_context_active != 0U)
+    {
+        keyboard_engine_midi_receive_timed(msg, len,
+                                           g_keyboard_runtime_capture_tick,
+                                           g_keyboard_runtime_ingress_serial);
+    }
+    else
+    {
+        keyboard_engine_midi_receive(msg, len);
+    }
+}
+
 static void keyboard_runtime_send_note_off_to_engine(uint8_t channel_zero_based, uint8_t note)
 {
     const uint8_t msg[3] = {
@@ -49,7 +66,7 @@ static void keyboard_runtime_send_note_off_to_engine(uint8_t channel_zero_based,
         (uint8_t)(note & 0x7FU),
         0U
     };
-    keyboard_engine_midi_receive(msg, sizeof(msg));
+    keyboard_runtime_send_to_engine(msg, sizeof(msg));
 }
 
 static void keyboard_runtime_flush_sustained_notes(uint8_t channel_zero_based)
@@ -83,7 +100,7 @@ static void keyboard_runtime_handle_note_on(const uint8_t *msg, size_t len)
     }
     g_keyboard_runtime_midi_sustained_release[channel_zero_based][note] = 0U;
 
-    keyboard_engine_midi_receive(msg, len);
+    keyboard_runtime_send_to_engine(msg, len);
 }
 
 static void keyboard_runtime_handle_note_off(const uint8_t *msg, size_t len)
@@ -111,7 +128,7 @@ static void keyboard_runtime_handle_note_off(const uint8_t *msg, size_t len)
         return;
     }
 
-    keyboard_engine_midi_receive(msg, len);
+    keyboard_runtime_send_to_engine(msg, len);
 }
 
 static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len)
@@ -126,7 +143,7 @@ static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len
     if (seq_play_scheduler_transition_all(
             SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) == 0U)
         return;
-    keyboard_engine_midi_receive(msg, len);
+    keyboard_runtime_send_to_engine(msg, len);
     keyboard_engine_clear_source_occurrences_silent();
 }
 
@@ -136,6 +153,9 @@ void keyboard_runtime_init(void)
     keyboard_params_init();
     note_fx_pipeline_init();
     keyboard_runtime_reset_midi_state();
+    g_keyboard_runtime_timed_context_active = 0U;
+    g_keyboard_runtime_capture_tick = 0U;
+    g_keyboard_runtime_ingress_serial = 0U;
 }
 
 void keyboard_runtime_tick(void)
@@ -222,20 +242,32 @@ void keyboard_runtime_process_midi(const uint8_t *msg, size_t len, seq_clock_src
                 }
                 else
                 {
-                    keyboard_engine_midi_receive(msg, len);
+                    keyboard_runtime_send_to_engine(msg, len);
                 }
             }
             break;
 
         case 0xE0U:
             /* No dedicated pitch-bend hook in the current keyboard runtime. */
-            keyboard_engine_midi_receive(msg, len);
+            keyboard_runtime_send_to_engine(msg, len);
             break;
 
         default:
-            keyboard_engine_midi_receive(msg, len);
+            keyboard_runtime_send_to_engine(msg, len);
             break;
     }
+}
+
+void keyboard_runtime_process_midi_timed(const uint8_t *msg, size_t len,
+                                         seq_clock_src_t source,
+                                         uint32_t capture_tick,
+                                         uint32_t ingress_serial)
+{
+    g_keyboard_runtime_timed_context_active = 1U;
+    g_keyboard_runtime_capture_tick = capture_tick;
+    g_keyboard_runtime_ingress_serial = ingress_serial;
+    keyboard_runtime_process_midi(msg, len, source);
+    g_keyboard_runtime_timed_context_active = 0U;
 }
 
 void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity)

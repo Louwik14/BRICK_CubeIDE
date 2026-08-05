@@ -100,7 +100,11 @@ void midi_host_poll_bounded(uint32_t max_msgs)
 
   for (; n < max_msgs; n++)
   {
-    if (USBH_MIDI_ReadPacket(&hUsbHostHS, midi_host_rx_packet) != USBH_OK)
+    uint32_t tim5_tick = 0U;
+    uint32_t ingress_serial = 0U;
+    if (USBH_MIDI_ReadPacketWithTimestamp(&hUsbHostHS, midi_host_rx_packet,
+                                          &tim5_tick,
+                                          &ingress_serial) != USBH_OK)
     {
       break;
     }
@@ -112,7 +116,9 @@ void midi_host_poll_bounded(uint32_t max_msgs)
       continue;
     }
 
-    midi_internal_receive_with_source(&midi_host_rx_packet[1], length, SEQ_CLOCK_SRC_EXTERNAL_USB);
+    midi_internal_receive_with_timestamp(&midi_host_rx_packet[1], length,
+                                         SEQ_CLOCK_SRC_EXTERNAL_USB,
+                                         tim5_tick, ingress_serial);
     midi_send_raw(MIDI_DEST_USB, &midi_host_rx_packet[1], length);
   }
 

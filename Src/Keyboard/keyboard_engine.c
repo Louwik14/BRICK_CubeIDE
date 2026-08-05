@@ -57,6 +57,8 @@ typedef struct
 static keyboard_engine_source_occurrence_t
     g_keyboard_engine_source_occurrence[KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY];
 static uint32_t g_keyboard_engine_next_occurrence_id;
+static uint8_t g_keyboard_engine_timed_context_active;
+static uint32_t g_keyboard_engine_capture_tick;
 
 typedef struct
 {
@@ -492,6 +494,23 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
         owner_track, note, velocity, is_note_on, provenance, 0U, 0U);
 }
 
+static void keyboard_engine_send_note_for_current_context(
+    uint8_t owner_track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
+    note_event_provenance_t provenance)
+{
+    if (g_keyboard_engine_timed_context_active != 0U)
+    {
+        keyboard_engine_send_note_for_owner_track_with_capture(
+            owner_track, note, velocity, is_note_on, provenance, 1U,
+            g_keyboard_engine_capture_tick);
+    }
+    else
+    {
+        keyboard_engine_send_note_for_owner_track(owner_track, note, velocity,
+                                                   is_note_on, provenance);
+    }
+}
+
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                                                              uint8_t note,
                                                              uint8_t velocity,
@@ -529,8 +548,8 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
-        keyboard_engine_send_note_for_owner_track(track, note, velocity, is_note_on,
-                                                   NOTE_EVENT_SOURCE_KEY);
+        keyboard_engine_send_note_for_current_context(
+            track, note, velocity, is_note_on, NOTE_EVENT_SOURCE_KEY);
     }
 }
 
@@ -922,7 +941,7 @@ void keyboard_engine_clear_state_silent(void)
     memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
 }
 
-void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
+static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len)
 {
     if ((msg == NULL) || (len < 2U))
     {
@@ -979,14 +998,14 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
 
         if (is_note_on != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(track, note, velocity, 1U,
-                                                       NOTE_EVENT_SOURCE_MIDI);
+            keyboard_engine_send_note_for_current_context(
+                track, note, velocity, 1U, NOTE_EVENT_SOURCE_MIDI);
             continue;
         }
         if (is_note_off != 0U)
         {
-            keyboard_engine_send_note_for_owner_track(track, note, 0U, 0U,
-                                                       NOTE_EVENT_SOURCE_MIDI);
+            keyboard_engine_send_note_for_current_context(
+                track, note, 0U, 0U, NOTE_EVENT_SOURCE_MIDI);
             continue;
         }
 
@@ -996,4 +1015,20 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         }
     }
 
+}
+
+void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
+{
+    keyboard_engine_midi_receive_internal(msg, len);
+}
+
+void keyboard_engine_midi_receive_timed(const uint8_t *msg, size_t len,
+                                        uint32_t capture_tick,
+                                        uint32_t ingress_serial)
+{
+    g_keyboard_engine_timed_context_active = 1U;
+    g_keyboard_engine_capture_tick = capture_tick;
+    (void)ingress_serial;
+    keyboard_engine_midi_receive_internal(msg, len);
+    g_keyboard_engine_timed_context_active = 0U;
 }

@@ -34,6 +34,7 @@
   */
 
 #include "usbh_midi.h"
+#include "Core/live_clock.h"
 
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
@@ -64,6 +65,8 @@ typedef enum {
 
 typedef struct {
   uint8_t data[USBH_MIDI_PACKET_SIZE];
+  uint32_t tim5_tick;
+  uint32_t ingress_serial;
 } USBH_MIDI_PacketTypeDef;
 
 typedef struct {
@@ -79,6 +82,8 @@ typedef struct {
   USBH_MIDI_TxStateTypeDef tx_state;
   uint16_t rx_buffer_size;
   uint16_t rx_last_count;
+  uint32_t rx_transfer_tick;
+  uint32_t rx_ingress_serial;
   bool rx_busy;
   bool tx_busy;
   uint8_t rx_buffer[USBH_MIDI_RX_BUF_SIZE] USBH_MIDI_ALIGN_32;
@@ -365,7 +370,8 @@ static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
  * - init / main loop / tasklet selon le module.
  */
 static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
-                            const uint8_t packet[USBH_MIDI_PACKET_SIZE])
+                            const uint8_t packet[USBH_MIDI_PACKET_SIZE],
+                            uint32_t tim5_tick)
 {
   if (handle->rx_count >= USBH_MIDI_RX_QUEUE_LEN)
   {
@@ -376,6 +382,14 @@ static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
   handle->rx_queue[handle->rx_head].data[1] = packet[1];
   handle->rx_queue[handle->rx_head].data[2] = packet[2];
   handle->rx_queue[handle->rx_head].data[3] = packet[3];
+  uint32_t ingress_serial = handle->rx_ingress_serial + 1U;
+  if (ingress_serial == 0U)
+  {
+    ingress_serial = 1U;
+  }
+  handle->rx_ingress_serial = ingress_serial;
+  handle->rx_queue[handle->rx_head].tim5_tick = tim5_tick;
+  handle->rx_queue[handle->rx_head].ingress_serial = ingress_serial;
   handle->rx_head = (uint16_t)((handle->rx_head + 1U) % USBH_MIDI_RX_QUEUE_LEN);
   handle->rx_count++;
 }
@@ -447,6 +461,7 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       if (urb_state == USBH_URB_DONE)
       {
         handle->rx_last_count = USBH_LL_GetLastXferSize(phost, handle->InPipe);
+        handle->rx_transfer_tick = live_clock_capture_tick();
         handle->rx_busy = false;
         handle->rx_state = USBH_MIDI_RX_DONE;
         USBH_UsrLog("USBH_MIDI_RX_DONE: %u bytes", (unsigned int)handle->rx_last_count);
@@ -475,7 +490,8 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
            (offset + (USBH_MIDI_PACKET_SIZE - 1U)) < handle->rx_last_count;
            offset = (uint16_t)(offset + USBH_MIDI_PACKET_SIZE))
       {
-        USBH_MIDI_PushRx(handle, &handle->rx_buffer[offset]);
+        USBH_MIDI_PushRx(handle, &handle->rx_buffer[offset],
+                         handle->rx_transfer_tick);
       }
       handle->rx_state = USBH_MIDI_RX_RECEIVE;
       break;
@@ -598,6 +614,15 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
                                         uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
+  return USBH_MIDI_ReadPacketWithTimestamp(phost, packet, NULL, NULL);
+}
+
+USBH_StatusTypeDef USBH_MIDI_ReadPacketWithTimestamp(
+    USBH_HandleTypeDef *phost,
+    uint8_t packet[USBH_MIDI_PACKET_SIZE],
+    uint32_t *tim5_tick,
+    uint32_t *ingress_serial)
+{
   if ((phost == NULL) || (phost->pActiveClass == NULL) || (phost->pActiveClass != &USBH_MIDI_Class))
   {
     return USBH_FAIL;
@@ -614,6 +639,14 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
   packet[1] = handle->rx_queue[handle->rx_tail].data[1];
   packet[2] = handle->rx_queue[handle->rx_tail].data[2];
   packet[3] = handle->rx_queue[handle->rx_tail].data[3];
+  if (tim5_tick != NULL)
+  {
+    *tim5_tick = handle->rx_queue[handle->rx_tail].tim5_tick;
+  }
+  if (ingress_serial != NULL)
+  {
+    *ingress_serial = handle->rx_queue[handle->rx_tail].ingress_serial;
+  }
   handle->rx_tail = (uint16_t)((handle->rx_tail + 1U) % USBH_MIDI_RX_QUEUE_LEN);
   handle->rx_count--;
 

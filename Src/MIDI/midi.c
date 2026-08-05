@@ -32,6 +32,7 @@
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
+#include "Core/live_clock.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -167,6 +168,8 @@ static void midi_clock_hw_stop(void) {
 
 typedef struct {
   uint8_t bytes[4];
+  uint32_t tim5_tick;
+  uint32_t ingress_serial;
 } midi_usb_packet_t;
 
 static midi_usb_packet_t midi_usb_tx_queue[MIDI_USB_TX_QUEUE_LEN];
@@ -183,6 +186,7 @@ static volatile uint16_t midi_usb_rx_head = 0U;
 static volatile uint16_t midi_usb_rx_tail = 0U;
 static volatile uint16_t midi_usb_rx_count = 0U;
 static volatile uint16_t midi_usb_rx_high_water = 0U;
+static volatile uint32_t midi_usb_rx_ingress_serial = 0U;
 
 static volatile bool midi_usb_tx_deferred_pending = false;
 
@@ -441,7 +445,8 @@ static bool usb_tx_queue_push_front_realtime(const midi_usb_packet_t *packet) {
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static bool usb_rx_queue_push(const uint8_t packet[4]) {
+static bool usb_rx_queue_push(const uint8_t packet[4], uint32_t tim5_tick,
+                              uint32_t ingress_serial) {
   uint32_t primask = midi_enter_critical();
   if (midi_usb_rx_count >= MIDI_USB_RX_QUEUE_LEN) {
     midi_exit_critical(primask);
@@ -452,6 +457,8 @@ static bool usb_rx_queue_push(const uint8_t packet[4]) {
   midi_usb_rx_queue[midi_usb_rx_head].bytes[1] = packet[1];
   midi_usb_rx_queue[midi_usb_rx_head].bytes[2] = packet[2];
   midi_usb_rx_queue[midi_usb_rx_head].bytes[3] = packet[3];
+  midi_usb_rx_queue[midi_usb_rx_head].tim5_tick = tim5_tick;
+  midi_usb_rx_queue[midi_usb_rx_head].ingress_serial = ingress_serial;
 
   midi_usb_rx_head = (uint16_t)((midi_usb_rx_head + 1U) % MIDI_USB_RX_QUEUE_LEN);
   midi_usb_rx_count++;
@@ -676,7 +683,10 @@ static bool usb_midi_decode_packet(const uint8_t pkt[4], midi_msg_t *out) {
  * - init / main loop / tasklet selon le module.
  */
 static void midi_dispatch_rx_message(const midi_msg_t *msg) {
-  midi_internal_receive(msg->data, msg->len);
+  midi_internal_receive_with_timestamp(msg->data, msg->len,
+                                        SEQ_CLOCK_SRC_EXTERNAL_MIDI,
+                                        msg->tim5_tick,
+                                        msg->ingress_serial);
 
   if ((midi_rx_dest == MIDI_DEST_UART) || (midi_rx_dest == MIDI_DEST_BOTH)) {
     backend_din_send(msg->data, msg->len);
@@ -703,6 +713,8 @@ static uint32_t midi_process_usb_rx(void) {
 
     midi_msg_t msg;
     if (usb_midi_decode_packet(packet.bytes, &msg)) {
+      msg.tim5_tick = packet.tim5_tick;
+      msg.ingress_serial = packet.ingress_serial;
       midi_dispatch_rx_message(&msg);
       midi_rx_stats.usb_rx_decoded++;
     } else {
@@ -907,7 +919,10 @@ static void backend_din_send(const uint8_t *msg, size_t len) {
 /*                            API PUBLIQUE                                */
 /* ====================================================================== */
 
-void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock_src_t source) {
+void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
+                                           seq_clock_src_t source,
+                                           uint32_t tim5_tick,
+                                           uint32_t ingress_serial) {
   if ((msg == NULL) || (len == 0U)) {
     return;
   }
@@ -926,9 +941,22 @@ void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock
       seq_runtime_midi_stop_from_source(source);
       break;
     default:
-      keyboard_runtime_process_midi(msg, len, source);
+      if ((tim5_tick != 0U) || (ingress_serial != 0U))
+      {
+        keyboard_runtime_process_midi_timed(msg, len, source, tim5_tick,
+                                            ingress_serial);
+      }
+      else
+      {
+        keyboard_runtime_process_midi(msg, len, source);
+      }
       break;
   }
+}
+
+void midi_internal_receive_with_source(const uint8_t *msg, size_t len,
+                                       seq_clock_src_t source) {
+  midi_internal_receive_with_timestamp(msg, len, source, 0U, 0U);
 }
 
 __attribute__((weak)) void midi_internal_receive(const uint8_t *msg, size_t len) {
@@ -963,6 +991,7 @@ void midi_init(void) {
   midi_usb_rx_tail = 0U;
   midi_usb_rx_count = 0U;
   midi_usb_rx_high_water = 0U;
+  midi_usb_rx_ingress_serial = 0U;
 
   midi_usb_rx_drops = 0U;
   midi_usb_tx_deferred_pending = false;
@@ -1898,9 +1927,16 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
     return;
   }
 
+  const uint32_t tim5_tick = live_clock_capture_tick();
   size_t packets = len / 4U;
   for (size_t i = 0U; i < packets; i++) {
-    if (!usb_rx_queue_push(packet)) {
+    uint32_t ingress_serial = midi_usb_rx_ingress_serial + 1U;
+    if (ingress_serial == 0U)
+    {
+      ingress_serial = 1U;
+    }
+    midi_usb_rx_ingress_serial = ingress_serial;
+    if (!usb_rx_queue_push(packet, tim5_tick, ingress_serial)) {
       midi_usb_rx_drops++;
       midi_rx_stats.usb_rx_drops++;
     } else {

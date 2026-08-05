@@ -29,6 +29,9 @@ void keyboard_engine_all_notes_off_for_track(uint8_t track);
 void keyboard_engine_clear_source_occurrences_silent(void);
 void keyboard_engine_clear_state_silent(void);
 void keyboard_engine_midi_receive(const uint8_t *msg, size_t len);
+void keyboard_engine_midi_receive_timed(const uint8_t *msg, size_t len,
+                                        uint32_t capture_tick,
+                                        uint32_t ingress_serial);
 
 #ifdef __cplusplus
 }
