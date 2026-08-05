@@ -109,10 +109,6 @@ static const param_id_t g_seq_param_midi_fx_slot_to_id[SEQ_PARAM_MIDI_FX_SLOT_CO
     PARAM_MIDI_FX_S3_PARAM2,
     PARAM_MIDI_FX_S3_PARAM3,
     PARAM_MIDI_FX_S3_MODEL,
-    PARAM_MIDI_FX_S4_PARAM1,
-    PARAM_MIDI_FX_S4_PARAM2,
-    PARAM_MIDI_FX_S4_PARAM3,
-    PARAM_MIDI_FX_S4_MODEL
 };
 
 static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
@@ -192,11 +188,7 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_MIDI_FX_S3_PARAM1] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 8U },
     [PARAM_MIDI_FX_S3_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 9U },
     [PARAM_MIDI_FX_S3_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 10U },
-    [PARAM_MIDI_FX_S3_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 11U },
-    [PARAM_MIDI_FX_S4_PARAM1] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 12U },
-    [PARAM_MIDI_FX_S4_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 13U },
-    [PARAM_MIDI_FX_S4_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 14U },
-    [PARAM_MIDI_FX_S4_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 15U }
+    [PARAM_MIDI_FX_S3_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 11U }
 };
 
 typedef struct

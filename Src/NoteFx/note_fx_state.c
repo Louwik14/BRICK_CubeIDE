@@ -72,7 +72,7 @@ void note_fx_state_init(void)
 
 uint8_t note_fx_state_param_map(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
 {
-    if ((id < PARAM_MIDI_FX_S1_PARAM1) || (id > PARAM_MIDI_FX_S4_MODEL)
+    if ((id < PARAM_MIDI_FX_S1_PARAM1) || (id > PARAM_MIDI_FX_S3_MODEL)
             || (out_slot == 0) || (out_param == 0))
     {
         return 0U;

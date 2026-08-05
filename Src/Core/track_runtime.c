@@ -1819,10 +1819,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIDI_FX_S3_PARAM2:
         case PARAM_MIDI_FX_S3_PARAM3:
         case PARAM_MIDI_FX_S3_MODEL:
-        case PARAM_MIDI_FX_S4_PARAM1:
-        case PARAM_MIDI_FX_S4_PARAM2:
-        case PARAM_MIDI_FX_S4_PARAM3:
-        case PARAM_MIDI_FX_S4_MODEL:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIDI_FX;
             return rule;

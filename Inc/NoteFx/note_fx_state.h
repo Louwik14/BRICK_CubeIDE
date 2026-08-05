@@ -6,7 +6,7 @@
 #include "Param/param_store.h"
 
 #define NOTE_FX_TRACK_COUNT 8U
-#define NOTE_FX_SLOT_COUNT 4U
+#define NOTE_FX_SLOT_COUNT 3U
 #define NOTE_FX_PARAM_COUNT 4U
 
 typedef enum

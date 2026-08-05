@@ -9,7 +9,7 @@
 
 static const ui_template_family_t g_ui_template_midi_fx_family = {
     .family_title = "MIDI FX",
-    .nav_labels = { "SLOT 1", "SLOT 2", "SLOT 3", "SLOT 4" },
+    .nav_labels = { "SLOT 1", "SLOT 2", "SLOT 3", "-" },
     .subpages = {
         {
             .title = "SLOT 1",
@@ -24,8 +24,8 @@ static const ui_template_family_t g_ui_template_midi_fx_family = {
             .param_bank = { .params = { PARAM_MIDI_FX_S3_PARAM1, PARAM_MIDI_FX_S3_PARAM2, PARAM_MIDI_FX_S3_PARAM3, PARAM_MIDI_FX_S3_MODEL } },
         },
         {
-            .title = "SLOT 4",
-            .param_bank = { .params = { PARAM_MIDI_FX_S4_PARAM1, PARAM_MIDI_FX_S4_PARAM2, PARAM_MIDI_FX_S4_PARAM3, PARAM_MIDI_FX_S4_MODEL } },
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -85,7 +85,7 @@ static uint8_t ui_page_midi_fx_subpage_enabled(uint8_t subpage_index)
         return (subpage_index == 0U) ? 1U : 0U;
     }
 
-    return 1U;
+    return (subpage_index < NOTE_FX_SLOT_COUNT) ? 1U : 0U;
 }
 
 static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,

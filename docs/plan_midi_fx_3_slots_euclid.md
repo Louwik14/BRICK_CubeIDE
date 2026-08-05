@@ -621,4 +621,17 @@ La fermeture complète de l’étape reste conditionnée à D-019 : les sources 
 scripts référencés par `tests/CMakeLists.txt` ne sont pas présents dans le
 checkout courant. Aucun test absent n’a été inventé ni transformé en faux
 succès. Les validations host/H743, USB/moteur et restore/clipboard/p-lock
-restent donc prérequis avant l’étape 2.
+restent donc prérequis avant la clôture globale du nettoyage.
+
+**Étape 2 — passe de réduction du 2026-08-05 : exécutée.** L’autorité de
+cardinalité est désormais `NOTE_FX_SLOT_COUNT=3` ; les quatre IDs S4 et leur
+descripteur ont été supprimés, avec `PARAM_COUNT=319`. Les tableaux et boucles
+NoteFx suivent cette borne, le domaine p-lock MIDI FX passe de 16 à 12
+positions et le runtime de p-lock de 94 à 90 octets. La famille UI MIDI FX ne
+rend plus de quatrième slot sélectionnable. Aucune capacité audio ni alias S4
+n’a été créé. Les builds `build/Release` et `build/Premium` passent.
+
+La validation dynamique des snapshots, de la persistance, du clipboard, de
+l’Undo et des tests host reste reportée à l’étape 3/D-019 ; les références
+fonctionnelles S4 absentes du code courant ont été contrôlées par recherche
+négative.

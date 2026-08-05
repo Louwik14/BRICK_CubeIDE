@@ -29,16 +29,16 @@ _Static_assert(SEQ_PARAM_TONE_SLOT_OFFSET == 25U, "TONE p-lock offset changed");
 _Static_assert(SEQ_PARAM_PLAY_SLOT_OFFSET == 46U, "PLAY p-lock offset changed");
 _Static_assert(SEQ_PARAM_MOD_SLOT_OFFSET == 62U, "MOD p-lock offset changed");
 _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_OFFSET == 74U, "MIDI FX p-lock offset changed");
-_Static_assert(SEQ_PARAM_MIX_SLOT_OFFSET == 90U, "MIX p-lock offset changed");
-_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT == 94U, "runtime p-lock slot count changed");
+_Static_assert(SEQ_PARAM_MIX_SLOT_OFFSET == 86U, "MIX p-lock offset changed");
+_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT == 90U, "runtime p-lock slot count changed");
 _Static_assert(SEQ_PARAM_ENV_SLOT_COUNT <= 255U, "ENV p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_TONE_SLOT_COUNT <= 255U, "TONE p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_PLAY_SLOT_COUNT <= 255U, "PLAY p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MOD_SLOT_COUNT <= 255U, "MOD p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_COUNT <= 255U, "MIDI FX p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds slot type");
-_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 94U, "runtime p-lock bitmap size changed");
-_Static_assert((PARAM_MIDI_FX_S4_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 90U, "runtime p-lock bitmap size changed");
+_Static_assert((PARAM_MIDI_FX_S3_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
                "MIDI FX inverse table capacity changed");
 
 typedef enum
@@ -107,4 +107,3 @@ seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value);
 float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16);
 
 #endif /* SEQ_PARAM_IFACE_H */
-
