@@ -4,7 +4,6 @@
 
 #include "Audio/md_model.h"
 #include "Core/brick6_sampler_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
@@ -200,34 +199,6 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_deluge = {
-    .family_title = "TONE",
-    .nav_labels = { "MAIN", "SHAPE", "-", "-" },
-    .subpages = {
-        { .title = "MAIN", .param_bank = { .params = { PARAM_DELUGE_MODEL, PARAM_DELUGE_LEVEL, PARAM_DELUGE_TUNE, PARAM_DELUGE_FINE } } },
-        { .title = "SHAPE", .param_bank = { .params = { PARAM_DELUGE_WIDTH, PARAM_DELUGE_PHASE, PARAM_DELUGE_RETRIG, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-};
-
-static brick6_deluge_model_t ui_page_template_tone_deluge_active_model(void)
-{
-    float model_value = 0.0f;
-    if (param_registry_get_track_value(PARAM_DELUGE_MODEL, ui_get_active_track(), &model_value) == 0U)
-    {
-        return BRICK6_DELUGE_MODEL_SQUARE;
-    }
-
-    uint8_t model = (uint8_t)((model_value < 0.0f) ? 0.0f : model_value + 0.5f);
-    if (model >= (uint8_t)BRICK6_DELUGE_MODEL_COUNT)
-    {
-        model = (uint8_t)BRICK6_DELUGE_MODEL_SQUARE;
-    }
-    return (brick6_deluge_model_t)model;
-}
-
 typedef param_prism_label_value_kind_t ui_prism_value_kind_t;
 typedef param_prism_param_label_t ui_prism_param_label_t;
 
@@ -286,11 +257,6 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         if (model == 1U) return &g_ui_template_tone_family_master_comp_deluge;
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
-    }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_DELUGE))
-    {
-        return &g_ui_template_tone_family_deluge;
     }
     if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_STACK)
@@ -952,7 +918,8 @@ static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
-        default: return "TIMBRE";
+        case BRICK6_STACK_MODEL_SQUARE: return "PWM";
+        default: return NULL;
     }
 }
 
@@ -962,7 +929,7 @@ static const char *ui_page_template_tone_stack_color_label(uint8_t model)
     {
         case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
         case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
-        default: return "COLOR";
+        default: return NULL;
     }
 }
 
@@ -1153,61 +1120,6 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
-static uint8_t ui_page_template_tone_deluge_param_text(param_id_t id,
-                                                       float value,
-                                                       char *out_name,
-                                                       uint32_t out_name_len,
-                                                       char *out_value,
-                                                       uint32_t out_value_len)
-{
-    static const char *const k_model_labels[] = {
-        "SINE", "TRI", "SQUARE", "A-SQUARE", "SAW", "A-SAW"
-    };
-
-    if (id == PARAM_DELUGE_MODEL)
-    {
-        uint8_t model = (uint8_t)((value < 0.0f) ? 0.0f : value + 0.5f);
-        if (model >= (uint8_t)(sizeof(k_model_labels) / sizeof(k_model_labels[0])))
-        {
-            model = (uint8_t)BRICK6_DELUGE_MODEL_SQUARE;
-        }
-        if ((out_name != NULL) && (out_name_len > 0U)) { (void)snprintf(out_name, out_name_len, "MODEL"); }
-        if ((out_value != NULL) && (out_value_len > 0U)) { (void)snprintf(out_value, out_value_len, "%s", k_model_labels[model]); }
-        return 1U;
-    }
-
-    if (id == PARAM_DELUGE_WIDTH)
-    {
-        const brick6_deluge_model_t model = ui_page_template_tone_deluge_active_model();
-        const uint8_t is_square = (model == BRICK6_DELUGE_MODEL_SQUARE) ? 1U : 0U;
-        if ((out_name != NULL) && (out_name_len > 0U))
-        {
-            (void)snprintf(out_name, out_name_len, "%s", (is_square != 0U) ? "WIDTH" : "SKEW");
-        }
-        if ((out_value != NULL) && (out_value_len > 0U))
-        {
-            (void)snprintf(out_value, out_value_len, "%d%%", (int)(value * 100.0f + 0.5f));
-        }
-        return 1U;
-    }
-
-    if (id == PARAM_DELUGE_PHASE)
-    {
-        float retrig = 0.0f;
-        (void)param_registry_get_track_value(PARAM_DELUGE_RETRIG, ui_get_active_track(), &retrig);
-        if ((out_name != NULL) && (out_name_len > 0U)) { (void)snprintf(out_name, out_name_len, "PHASE"); }
-        if ((out_value != NULL) && (out_value_len > 0U))
-        {
-            (void)snprintf(out_value, out_value_len, "%ddeg%s",
-                           (int)(value + 0.5f),
-                           (retrig >= 0.5f) ? "" : " FREE");
-        }
-        return 1U;
-    }
-
-    return 0U;
-}
-
 static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 param_id_t id,
                                                 float value,
@@ -1217,14 +1129,6 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DELUGE)
-            && (ui_page_template_tone_deluge_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
-    {
-        (void)slot;
-        return 1U;
-    }
-
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE))
     {
@@ -1639,10 +1543,6 @@ void ui_page_template_tone_register_families(void)
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_STACK))
             {
                 family_template = &g_ui_template_tone_family_stack;
-            }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_DELUGE))
-            {
-                family_template = &g_ui_template_tone_family_deluge;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_RAM))
             {

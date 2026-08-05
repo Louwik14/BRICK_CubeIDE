@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "Audio/audio_track_diag.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/cpu_load.h"
@@ -45,15 +44,13 @@
 #define AUDIO_TEST_ENGINE_TRACKS SEQ_TRACK_COUNT
 #define AUDIO_TEST_NOTE_MAX 12U
 #define AUDIO_TEST_CAL_PRISM_MODELS BRICK6_PRISM_MODEL_COUNT
-#define AUDIO_TEST_CAL_STACK_MODELS 4U
-#define AUDIO_TEST_CAL_DELUGE_MODELS 6U
+#define AUDIO_TEST_CAL_STACK_MODELS 6U
 #define AUDIO_TEST_CAL_STACK_KEY_BASE AUDIO_TEST_CAL_PRISM_MODELS
-#define AUDIO_TEST_CAL_DELUGE_KEY_BASE (AUDIO_TEST_CAL_STACK_KEY_BASE + AUDIO_TEST_CAL_STACK_MODELS)
-#define AUDIO_TEST_CAL_WAVE_KEY (AUDIO_TEST_CAL_DELUGE_KEY_BASE + AUDIO_TEST_CAL_DELUGE_MODELS)
+#define AUDIO_TEST_CAL_WAVE_KEY (AUDIO_TEST_CAL_STACK_KEY_BASE + AUDIO_TEST_CAL_STACK_MODELS)
 #define AUDIO_TEST_CAL_SAMPLER_KEY (AUDIO_TEST_CAL_WAVE_KEY + 1U)
 #define AUDIO_TEST_CAL_DRUM_KEY_BASE (AUDIO_TEST_CAL_SAMPLER_KEY + 1U)
 #define AUDIO_TEST_CAL_MODEL_COUNT (AUDIO_TEST_CAL_DRUM_KEY_BASE + 2U)
-#define AUDIO_TEST_CAL_ENGINE_CASES 2586U
+#define AUDIO_TEST_CAL_ENGINE_CASES 2718U
 #define AUDIO_TEST_LEGACY_CASES 26U
 #define AUDIO_TEST_CAL_MAX_OBSERVATIONS 256U
 #define AUDIO_TEST_CAL_TARGET_DBFS (-18.0f)
@@ -62,7 +59,6 @@ typedef enum
 {
     TEST_ENGINE_PRISM = 0,
     TEST_ENGINE_STACK,
-    TEST_ENGINE_DELUGE,
     TEST_ENGINE_WAVE,
     TEST_ENGINE_SAMPLER,
     TEST_ENGINE_DRUM_MD,
@@ -369,18 +365,6 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
         }
         local = (uint16_t)(local - count);
     }
-    if (local < 18U)
-    {
-        out->engine = TEST_ENGINE_DELUGE;
-        out->model = (uint8_t)(local / 3U);
-        out->model_key = (uint8_t)(AUDIO_TEST_CAL_DELUGE_KEY_BASE + out->model);
-        out->notes[0] = notes[local % 3U];
-        (void)snprintf(out->name, sizeof(out->name), "DELUGE_%02u_N%u",
-                       (unsigned)out->model, (unsigned)out->notes[0]);
-        (void)snprintf(out->sources, sizeof(out->sources), "ONE");
-        return;
-    }
-    local = (uint16_t)(local - 18U);
     if (local < 9U)
     {
         out->engine = TEST_ENGINE_WAVE;
@@ -581,7 +565,6 @@ static uint8_t engine_family_type(test_engine_t engine,
     {
         case TEST_ENGINE_PRISM: *type = UI_TRACK_TYPE_PRISM; break;
         case TEST_ENGINE_STACK: *type = UI_TRACK_TYPE_STACK; break;
-        case TEST_ENGINE_DELUGE: *type = UI_TRACK_TYPE_DELUGE; break;
         case TEST_ENGINE_WAVE: *type = UI_TRACK_TYPE_WAVE; break;
         case TEST_ENGINE_SAMPLER:
             *family = UI_TRACK_FAMILY_SAMPLER;
@@ -665,12 +648,6 @@ static void configure_engine_params(uint8_t track, const audio_test_case_t *test
                             (test->oscillator_mode >= 3U) ? 0.02f : 0.0f);
             set_track_param(track, PARAM_STACK_NOISE_LEVEL, 0.0f);
             set_track_param(track, PARAM_STACK_PHASE_RESET, 1.0f);
-            break;
-        case TEST_ENGINE_DELUGE:
-            set_track_param(track, PARAM_DELUGE_MODEL, (float)test->model);
-            set_track_param(track, PARAM_DELUGE_LEVEL, 1.0f);
-            set_track_param(track, PARAM_DELUGE_PHASE, 0.0f);
-            set_track_param(track, PARAM_DELUGE_RETRIG, 1.0f);
             break;
         case TEST_ENGINE_WAVE:
             set_track_param(track, PARAM_WAVE_OSC1_TABLE,
@@ -868,7 +845,6 @@ static const char *test_engine_name(test_engine_t engine)
     {
         case TEST_ENGINE_PRISM: return "PRISM";
         case TEST_ENGINE_STACK: return "STACK";
-        case TEST_ENGINE_DELUGE: return "DELUGE";
         case TEST_ENGINE_WAVE: return "WAVE";
         case TEST_ENGINE_SAMPLER: return "SAMPLER";
         case TEST_ENGINE_DRUM_MD: return "DRUM";
@@ -887,16 +863,10 @@ static void model_identity(uint8_t key, test_engine_t *engine,
         *sound_type = (prism_is_random(key) != 0U)
             ? "NOISY_RANDOM" : "CONTINUOUS";
     }
-    else if (key < AUDIO_TEST_CAL_DELUGE_KEY_BASE)
+    else if (key < AUDIO_TEST_CAL_WAVE_KEY)
     {
         *engine = TEST_ENGINE_STACK;
         *model = (uint8_t)(key - AUDIO_TEST_CAL_STACK_KEY_BASE);
-        *sound_type = "CONTINUOUS";
-    }
-    else if (key < AUDIO_TEST_CAL_WAVE_KEY)
-    {
-        *engine = TEST_ENGINE_DELUGE;
-        *model = (uint8_t)(key - AUDIO_TEST_CAL_DELUGE_KEY_BASE);
         *sound_type = "CONTINUOUS";
     }
     else if (key == AUDIO_TEST_CAL_WAVE_KEY)

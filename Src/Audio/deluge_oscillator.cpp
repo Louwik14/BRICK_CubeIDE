@@ -21,18 +21,6 @@
 
 namespace
 {
-static const int16_t *const kSawTables[20] = {
-    NULL, NULL, NULL, NULL, NULL, NULL, sawWave215, sawWave153, sawWave109, sawWave76,
-    sawWave53, sawWave39, sawWave27, sawWave19, sawWave13, sawWave9, sawWave7, sawWave5,
-    sawWave3, sawWave1
-};
-
-static const int16_t *const kSquareTables[20] = {
-    NULL, NULL, NULL, NULL, NULL, NULL, squareWave215, squareWave153, squareWave109, squareWave76,
-    squareWave53, squareWave39, squareWave27, squareWave19, squareWave13, squareWave9, squareWave7,
-    squareWave5, squareWave3, squareWave1
-};
-
 static const int16_t *const kAnalogSquareTables[20] = {
     analogSquare_1722, analogSquare_1217, analogSquare_861, analogSquare_609, analogSquare_431,
     analogSquare_305, analogSquare_215, analogSquare_153, analogSquare_109, analogSquare_76,
@@ -106,26 +94,6 @@ static inline int32_t mul_s32_hi_rounded(int32_t a, int32_t b)
     return bits_to_i32((uint32_t)(rounded >> 32));
 }
 
-static inline int32_t q31_mul_round(int32_t a, int32_t b)
-{
-    const int64_t rounded = ((int64_t)a * (int64_t)b) + (INT64_C(1) << 30);
-    const int64_t divisor = INT64_C(1) << 31;
-    const int64_t result = (rounded >= 0)
-        ? (rounded / divisor)
-        : -(((-rounded) + divisor - 1) / divisor);
-    return sat_i32(result);
-}
-
-static inline int32_t qdmull_s16(int16_t a, int16_t b)
-{
-    return sat_i32((int64_t)a * (int64_t)b * 2);
-}
-
-static inline int32_t qdmlal_s16(int32_t accumulator, int16_t a, int16_t b)
-{
-    return sat_i32((int64_t)accumulator + ((int64_t)a * (int64_t)b * 2));
-}
-
 static inline int32_t triangle_small(uint32_t phase)
 {
     if (phase >= UINT32_C(0x80000000))
@@ -133,11 +101,6 @@ static inline int32_t triangle_small(uint32_t phase)
         phase = 0U - phase;
     }
     return bits_to_i32(phase - UINT32_C(0x40000000));
-}
-
-static inline int32_t square_small(uint32_t phase, uint32_t phase_width)
-{
-    return (phase >= phase_width) ? INT32_C(-1073741824) : INT32_C(1073741823);
 }
 
 static int32_t table_sample_q31(const int16_t *table, int32_t magnitude, uint32_t phase)
@@ -150,33 +113,6 @@ static int32_t table_sample_q31(const int16_t *table, int32_t magnitude, uint32_
     const int16_t difference = bits_to_i16((uint16_t)((int32_t)value2 - (int32_t)value1));
     return sat_i32(((int64_t)value1 * INT64_C(65536))
                    + ((int64_t)difference * (int64_t)strength * 2));
-}
-
-static int32_t pulse_table_sample_q31(const int16_t *table,
-                                      int32_t magnitude,
-                                      uint32_t phase,
-                                      uint32_t phase_to_add)
-{
-    const uint32_t phase_later = phase + phase_to_add;
-    const uint32_t index_a = phase >> (32 - magnitude);
-    const uint32_t index_b = phase_later >> (32 - magnitude);
-    const int16_t fraction_a = (int16_t)
-        ((uint16_t)(phase >> (32 - 16 - magnitude)) & UINT16_C(0x7FFF));
-    const int16_t fraction_b = (int16_t)
-        ((uint16_t)(phase_later >> (32 - 16 - magnitude)) & UINT16_C(0x7FFF));
-
-    const int16_t strength_a1 = bits_to_i16((uint16_t)fraction_a | UINT16_C(0x8000));
-    const int16_t strength_a2 = bits_to_i16(
-        (uint16_t)(UINT16_C(0x8000) - (uint16_t)strength_a1));
-    int32_t output_a = qdmull_s16(strength_a2, table[index_a + 1U]);
-    output_a = qdmlal_s16(output_a, strength_a1, table[index_a]);
-
-    const int16_t strength_b2 = fraction_b;
-    const int16_t strength_b1 = (int16_t)(INT16_MAX - strength_b2);
-    int32_t output_b = qdmull_s16(strength_b2, table[index_b + 1U]);
-    output_b = qdmlal_s16(output_b, strength_b1, table[index_b]);
-
-    return bits_to_i32((uint32_t)q31_mul_round(output_a, output_b) << 1);
 }
 
 static void get_table_number(uint32_t increment, int32_t *number, int32_t *magnitude)
@@ -217,10 +153,6 @@ static int32_t render_shape_sample(const render_shape_t *shape, uint32_t phase)
     if ((shape->type == DELUGE_OSC_TRIANGLE) && (shape->table == NULL))
     {
         return bits_to_i32((uint32_t)triangle_small(phase) << 1);
-    }
-    if ((shape->type == DELUGE_OSC_SAW) && (shape->table == NULL))
-    {
-        return asr_i32(bits_to_i32(phase), 1U);
     }
     return table_sample_q31(shape->table, shape->magnitude, phase);
 }
@@ -339,7 +271,6 @@ void deluge_oscillator_render(deluge_osc_type_t type,
     uint32_t retrigger_phase = 0U;
     uint32_t resetter_phase = 0U;
     uint32_t resetter_increment = 0U;
-    bool pulse_wave = false;
     int32_t table_number = 0;
     int32_t table_magnitude = 0;
 
@@ -350,25 +281,11 @@ void deluge_oscillator_render(deluge_osc_type_t type,
     else if (type != DELUGE_OSC_TRIANGLE)
     {
         uint32_t increment_for_table = phase_increment;
-        if (type == DELUGE_OSC_SQUARE)
-        {
-            pulse_wave = (pulse_width != 0U);
-            pulse_width += UINT32_C(0x80000000);
-            if (pulse_wave)
-            {
-                increment_for_table = (uint32_t)((double)phase_increment * 0.6);
-            }
-        }
         get_table_number(increment_for_table, &table_number, &table_magnitude);
-        if (type == DELUGE_OSC_SAW)
-        {
-            retrigger_phase += UINT32_C(0x80000000);
-        }
     }
 
-    if ((type != DELUGE_OSC_SQUARE) && (pulse_width != 0U))
+    if (pulse_width != 0U)
     {
-        pulse_wave = true;
         const uint32_t width_abs = (bits_to_i32(pulse_width) >= 0)
             ? pulse_width
             : (0U - pulse_width);
@@ -389,11 +306,7 @@ void deluge_oscillator_render(deluge_osc_type_t type,
         }
         else
         {
-            if (type == DELUGE_OSC_SAW)
-            {
-                resetter_phase += UINT32_C(0x80000000);
-            }
-            else if (type == DELUGE_OSC_SINE)
+            if (type == DELUGE_OSC_SINE)
             {
                 resetter_phase -= UINT32_C(0xC0000000);
             }
@@ -435,10 +348,6 @@ void deluge_oscillator_render(deluge_osc_type_t type,
                 else { shape.table = triangleWaveAntiAliasing1; shape.magnitude = 6; }
             }
         }
-        else if (type == DELUGE_OSC_SAW)
-        {
-            shape.table = (table_number < 6) ? NULL : kSawTables[table_number];
-        }
         else if (type == DELUGE_OSC_ANALOG_SAW)
         {
             shape.table = kAnalogSawTables[table_number];
@@ -448,7 +357,7 @@ void deluge_oscillator_render(deluge_osc_type_t type,
             shape.table = kAnalogSquareTables[table_number];
         }
 
-        if (((type == DELUGE_OSC_TRIANGLE) || (type == DELUGE_OSC_SAW))
+        if ((type == DELUGE_OSC_TRIANGLE)
                 && (shape.table == NULL))
         {
             render_crude_sync_scalar(type,
@@ -472,7 +381,6 @@ void deluge_oscillator_render(deluge_osc_type_t type,
                            resetter_increment,
                            divide,
                            retrigger_phase);
-        (void)pulse_wave;
         return;
     }
 
@@ -513,44 +421,8 @@ void deluge_oscillator_render(deluge_osc_type_t type,
         return;
     }
 
-    if ((type == DELUGE_OSC_SAW) && (table_number < 6))
-    {
-        for (uint32_t i = 0U; i < sample_count; ++i)
-        {
-            phase += phase_increment;
-            output[i] = asr_i32(bits_to_i32(phase), 1U);
-        }
-        return;
-    }
-
-    if ((type == DELUGE_OSC_SQUARE) && (table_number < 6))
-    {
-        for (uint32_t i = 0U; i < sample_count; ++i)
-        {
-            phase += phase_increment;
-            output[i] = square_small(phase, pulse_width);
-        }
-        return;
-    }
-
-    if ((type == DELUGE_OSC_SQUARE) && pulse_wave)
-    {
-        const int16_t *table = kSquareTables[table_number];
-        const uint32_t phase_to_add = 0U - (pulse_width >> 1);
-        phase >>= 1;
-        phase_increment >>= 1;
-        for (uint32_t i = 0U; i < sample_count; ++i)
-        {
-            phase += phase_increment;
-            output[i] = pulse_table_sample_q31(table, table_magnitude, phase, phase_to_add);
-        }
-        return;
-    }
-
     const int16_t *table = NULL;
-    if (type == DELUGE_OSC_SAW) { table = kSawTables[table_number]; }
-    else if (type == DELUGE_OSC_SQUARE) { table = kSquareTables[table_number]; }
-    else if (type == DELUGE_OSC_ANALOG_SAW) { table = kAnalogSawTables[table_number]; }
+    if (type == DELUGE_OSC_ANALOG_SAW) { table = kAnalogSawTables[table_number]; }
     else { table = kAnalogSquareTables[table_number]; }
 
     for (uint32_t i = 0U; i < sample_count; ++i)

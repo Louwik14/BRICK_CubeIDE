@@ -227,7 +227,6 @@ static const char *engine_name(const track_runtime_ctx_t *ctx)
         case TRACK_RUNTIME_ENGINE_DRUM: return "DRUM";
         case TRACK_RUNTIME_ENGINE_STACK: return "STACK";
         case TRACK_RUNTIME_ENGINE_WAVE: return "WAVE";
-        case TRACK_RUNTIME_ENGINE_DELUGE: return "DELUGE";
         default: return "INACTIVE";
     }
 }
@@ -270,10 +269,6 @@ static void capture_models(char *out, uint32_t size, uint8_t track,
                            (long)track_param_raw(PARAM_STACK_OSC1_MODEL, track),
                            (long)track_param_raw(PARAM_STACK_OSC2_MODEL, track),
                            (long)track_param_raw(PARAM_STACK_OSC3_MODEL, track));
-            break;
-        case TRACK_RUNTIME_ENGINE_DELUGE:
-            (void)snprintf(out, size, "%ld",
-                           (long)track_param_raw(PARAM_DELUGE_MODEL, track));
             break;
         case TRACK_RUNTIME_ENGINE_WAVE:
             (void)snprintf(out, size, "WT%ld/WT%ld",

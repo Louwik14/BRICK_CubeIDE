@@ -34,7 +34,7 @@ static uint8_t patch_sd_family_type_is_play_valid(uint8_t family, uint8_t type)
             return ((type == (uint8_t)UI_TRACK_TYPE_PRISM)
                     || (type == (uint8_t)UI_TRACK_TYPE_WAVE)
                     || (type == (uint8_t)UI_TRACK_TYPE_STACK)
-                    || (type == (uint8_t)UI_TRACK_TYPE_DELUGE)) ? 1U : 0U;
+                    ) ? 1U : 0U;
 
         case UI_TRACK_FAMILY_SAMPLER:
             return ((type == (uint8_t)UI_TRACK_TYPE_RAM)

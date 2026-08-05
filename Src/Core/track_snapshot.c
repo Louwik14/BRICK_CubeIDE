@@ -5,7 +5,6 @@
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"

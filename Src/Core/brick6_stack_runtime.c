@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "Core/brick6_stack_waveform.h"
+#include "Audio/deluge_oscillator.h"
 #include "Audio/audio_track_diag.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
@@ -29,7 +30,11 @@
 
 enum
 {
-    STACK_RENDERER_SHAPE = 0,
+    STACK_RENDERER_DELUGE_SINE = 0,
+    STACK_RENDERER_DELUGE_TRI,
+    STACK_RENDERER_DELUGE_SQUARE,
+    STACK_RENDERER_DELUGE_SAW,
+    STACK_RENDERER_SHAPE,
     STACK_RENDERER_TRIPLE_SAW,
     STACK_RENDERER_SILENT,
     STACK_RENDERER_COUNT
@@ -100,6 +105,18 @@ AUDIO_HOT static brick6_stack_runtime_command_t g_stack_command_queue[STACK_COMM
 AUDIO_HOT static volatile uint8_t g_stack_note_cancel_pending[BRICK6_STACK_MAX_INSTANCES];
 
 static const brick6_stack_model_desc_t k_stack_model_catalog[BRICK6_STACK_MODEL_COUNT] = {
+    [BRICK6_STACK_MODEL_SINE] = {
+        "SINE", BRICK6_STACK_FAMILY_DELUGE, BRICK6_STACK_KERNEL_DELUGE, STACK_RENDERER_DELUGE_SINE
+    },
+    [BRICK6_STACK_MODEL_TRI] = {
+        "TRI", BRICK6_STACK_FAMILY_DELUGE, BRICK6_STACK_KERNEL_DELUGE, STACK_RENDERER_DELUGE_TRI
+    },
+    [BRICK6_STACK_MODEL_SQUARE] = {
+        "SQUARE", BRICK6_STACK_FAMILY_DELUGE, BRICK6_STACK_KERNEL_DELUGE, STACK_RENDERER_DELUGE_SQUARE
+    },
+    [BRICK6_STACK_MODEL_SAW] = {
+        "SAW", BRICK6_STACK_FAMILY_DELUGE, BRICK6_STACK_KERNEL_DELUGE, STACK_RENDERER_DELUGE_SAW
+    },
     [BRICK6_STACK_MODEL_SHAPE] = {
         "SHAPE", BRICK6_STACK_FAMILY_PHASE, BRICK6_STACK_KERNEL_PHASE_BASIC, STACK_RENDERER_SHAPE
     },
@@ -529,6 +546,71 @@ static int16_t brick6_stack_wave_shape(stack_osc_slot_t *slot)
     return brick6_stack_waveform_shape(slot->phase, slot->timbre_q15, slot->color_q15);
 }
 
+static uint32_t brick6_stack_deluge_pulse_width(uint16_t timbre_q15)
+{
+    const int32_t bipolar = ((int32_t)timbre_q15 * 2) - 32767;
+    return (uint32_t)((int64_t)bipolar * 65536LL);
+}
+
+static void brick6_stack_runtime_render_deluge(stack_osc_slot_t *slot,
+                                               int32_t *acc,
+                                               uint8_t frames,
+                                               uint16_t effective_level,
+                                               deluge_osc_type_t type,
+                                               uint8_t pulse_width_from_timbre)
+{
+    if ((slot == NULL) || (acc == NULL) || (frames == 0U))
+    {
+        return;
+    }
+
+    int32_t samples[BRICK6_STACK_RENDER_BLOCK_SIZE];
+    deluge_oscillator_render(type,
+                             samples,
+                             frames,
+                             slot->phase_inc,
+                             (pulse_width_from_timbre != 0U)
+                                 ? brick6_stack_deluge_pulse_width(slot->timbre_q15) : 0U,
+                             &slot->phase);
+    for (uint8_t i = 0U; i < frames; ++i)
+    {
+        const int16_t sample_q15 = brick6_stack_sat16(samples[i] >> 16);
+        acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
+    }
+}
+
+static void brick6_stack_runtime_render_deluge_sine(stack_osc_slot_t *slot,
+                                                    int32_t *acc,
+                                                    uint8_t frames,
+                                                    uint16_t effective_level)
+{
+    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_SINE, 0U);
+}
+
+static void brick6_stack_runtime_render_deluge_tri(stack_osc_slot_t *slot,
+                                                   int32_t *acc,
+                                                   uint8_t frames,
+                                                   uint16_t effective_level)
+{
+    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_TRIANGLE, 0U);
+}
+
+static void brick6_stack_runtime_render_deluge_square(stack_osc_slot_t *slot,
+                                                      int32_t *acc,
+                                                      uint8_t frames,
+                                                      uint16_t effective_level)
+{
+    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_ANALOG_SQUARE, 1U);
+}
+
+static void brick6_stack_runtime_render_deluge_saw(stack_osc_slot_t *slot,
+                                                   int32_t *acc,
+                                                   uint8_t frames,
+                                                   uint16_t effective_level)
+{
+    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_ANALOG_SAW, 0U);
+}
+
 static void brick6_stack_runtime_render_shape(stack_osc_slot_t *slot,
                                                  int32_t *acc,
                                                  uint8_t frames,
@@ -570,6 +652,10 @@ static void brick6_stack_runtime_advance_slot_free_running(stack_osc_slot_t *slo
 
     switch (slot->renderer_id)
     {
+        case STACK_RENDERER_DELUGE_SINE:
+        case STACK_RENDERER_DELUGE_TRI:
+        case STACK_RENDERER_DELUGE_SQUARE:
+        case STACK_RENDERER_DELUGE_SAW:
         case STACK_RENDERER_SHAPE:
             slot->phase += slot->phase_inc * (uint32_t)frames;
             break;
@@ -619,6 +705,10 @@ typedef void (*brick6_stack_slot_renderer_t)(stack_osc_slot_t *slot,
                                              uint16_t effective_level);
 
 static const brick6_stack_slot_renderer_t k_stack_renderers[STACK_RENDERER_COUNT] = {
+    brick6_stack_runtime_render_deluge_sine,
+    brick6_stack_runtime_render_deluge_tri,
+    brick6_stack_runtime_render_deluge_square,
+    brick6_stack_runtime_render_deluge_saw,
     brick6_stack_runtime_render_shape,
     brick6_stack_runtime_render_triple_saw,
     brick6_stack_runtime_render_silent,

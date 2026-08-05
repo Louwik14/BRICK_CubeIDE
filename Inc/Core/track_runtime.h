@@ -34,8 +34,7 @@ typedef enum
     TRACK_RUNTIME_ENGINE_PRISM,
     TRACK_RUNTIME_ENGINE_DRUM,
     TRACK_RUNTIME_ENGINE_STACK,
-    TRACK_RUNTIME_ENGINE_WAVE,
-    TRACK_RUNTIME_ENGINE_DELUGE
+    TRACK_RUNTIME_ENGINE_WAVE
 } track_runtime_engine_t;
 
 typedef enum
@@ -83,7 +82,6 @@ typedef enum
     TRACK_RUNTIME_TYPE_MULTI,
     TRACK_RUNTIME_TYPE_STACK,
     TRACK_RUNTIME_TYPE_WAVE,
-    TRACK_RUNTIME_TYPE_DELUGE,
     TRACK_RUNTIME_TYPE_EXTERNAL,
     TRACK_RUNTIME_TYPE_OTHER
 } track_runtime_type_t;
@@ -139,7 +137,6 @@ typedef struct
     uint8_t prism_tracks;
     uint8_t stack_tracks;
     uint8_t wave_tracks;
-    uint8_t deluge_tracks;
 } track_runtime_synth_usage_t;
 
 typedef enum

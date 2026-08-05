@@ -67,10 +67,7 @@ static const char *const g_looper_play_labels[] = {"Off", "Auto", NULL};
 static const char *const g_prism_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Toy", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
 _Static_assert((sizeof(g_prism_edit_labels) / sizeof(g_prism_edit_labels[0])) - 1U == BRICK6_PRISM_MODEL_COUNT,
                "Prism labels and active model count must stay aligned");
-static const char *const g_stack_model_labels[] = {"SHAPE", "TRIPLE SAW", NULL};
-static const char *const g_deluge_model_labels[] = {
-    "SINE", "TRI", "SQUARE", "A-SQUARE", "SAW", "A-SAW", NULL
-};
+static const char *const g_stack_model_labels[] = {"SINE", "TRI", "SQUARE", "SAW", "SHAPE", "TRIPLE SAW", NULL};
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
 #if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_track_family_labels[] = {"Off", "-", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
@@ -387,14 +384,6 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_WAVE_SAMPLE_INTERP, "SAMPLE", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_WAVE_POS_UPDATE, "POSUPD", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_wave_pos_update_labels, NULL),
     PARAM_DESC_EX(PARAM_WAVE_POS_SMOOTH, "SMOOTH", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_MODEL, "MODEL", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_deluge_model_labels, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_LEVEL, "LEVEL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_TUNE, "TUNE", PARAM_TYPE_FLOAT, -48.0f, 48.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_FINE, "FINE", PARAM_TYPE_FLOAT, -100.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "ct", NULL, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_WIDTH, "WIDTH", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.02f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_PHASE, "PHASE", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "deg", NULL, NULL),
-    PARAM_DESC_EX(PARAM_DELUGE_RETRIG, "RETRIG", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
-
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),
     PARAM_DESC_EX(PARAM_MIDI_CC1_1, "CC16", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_1),
     PARAM_DESC_EX(PARAM_MIDI_CC1_2, "CC17", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_2),

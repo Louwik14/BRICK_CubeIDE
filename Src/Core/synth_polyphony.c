@@ -5,7 +5,6 @@
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "stm32h7xx.h"
@@ -84,11 +83,9 @@ static void synth_polyphony_reset_slot(uint8_t slot)
     brick6_braids_runtime_all_notes_off(slot);
     brick6_stack_runtime_all_notes_off(slot);
     brick6_wave_runtime_all_notes_off(slot);
-    brick6_deluge_runtime_all_notes_off(slot);
     brick6_braids_runtime_reset_instance(slot);
     brick6_stack_runtime_reset_instance(slot);
     brick6_wave_runtime_reset_instance(slot);
-    brick6_deluge_runtime_reset_instance(slot);
     mixer_synth_voice_slot_reset(slot);
 }
 
@@ -101,7 +98,6 @@ static void synth_polyphony_silence_slot(uint8_t slot)
     brick6_stack_runtime_clear_trigger(slot);
     brick6_wave_runtime_all_notes_off(slot);
     brick6_wave_runtime_clear_trigger(slot);
-    brick6_deluge_runtime_all_notes_off(slot);
     mixer_synth_voice_slot_reset(slot);
 }
 

@@ -8,13 +8,15 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum
 {
     DELUGE_OSC_SINE = 0,
     DELUGE_OSC_TRIANGLE,
-    DELUGE_OSC_SQUARE,
     DELUGE_OSC_ANALOG_SQUARE,
-    DELUGE_OSC_SAW,
     DELUGE_OSC_ANALOG_SAW
 } deluge_osc_type_t;
 
@@ -24,3 +26,7 @@ void deluge_oscillator_render(deluge_osc_type_t type,
                               uint32_t phase_increment,
                               uint32_t pulse_width,
                               uint32_t *phase);
+
+#ifdef __cplusplus
+}
+#endif

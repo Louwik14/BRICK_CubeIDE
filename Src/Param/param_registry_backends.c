@@ -3,7 +3,6 @@
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -747,127 +746,6 @@ uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
     brick6_wave_runtime_set_pos_update(ctx->instance_id,
                                        (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(state->wave.pos_update, 0.0f, 3.0f) + 0.5f));
     brick6_wave_runtime_set_pos_smooth(ctx->instance_id, (state->wave.pos_smooth >= 0.5f) ? 1U : 0U);
-    return 1U;
-}
-
-uint8_t param_backend_apply_tone_deluge(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
-{
-    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            || (ctx->instance_id >= BRICK6_DELUGE_VOICE_INSTANCE_COUNT))
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_DELUGE_MODEL:
-        {
-            const brick6_deluge_model_t model =
-                (brick6_deluge_model_t)(uint8_t)(param_backend_clamp_value(
-                    value, 0.0f, (float)(BRICK6_DELUGE_MODEL_COUNT - 1U)) + 0.5f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                const uint8_t was_square =
-                    ((uint8_t)(state->deluge.model + 0.5f)
-                     == (uint8_t)BRICK6_DELUGE_MODEL_SQUARE) ? 1U : 0U;
-                const uint8_t is_square =
-                    (model == BRICK6_DELUGE_MODEL_SQUARE) ? 1U : 0U;
-                if ((was_square != 0U) && (is_square == 0U))
-                {
-                    const float bipolar = (state->deluge.width * 2.0f) - 1.0f;
-                    state->deluge.width = (bipolar < 0.0f) ? -bipolar : bipolar;
-                }
-                else if ((was_square == 0U) && (is_square != 0U))
-                {
-                    state->deluge.width = 0.5f + (state->deluge.width * 0.5f);
-                }
-                state->deluge.model = (float)(uint8_t)model;
-                mod_matrix_resync_base_on_authoritative_write(
-                    track, PARAM_DELUGE_WIDTH, state->deluge.width);
-            }
-            brick6_deluge_runtime_set_model(ctx->instance_id, model);
-            mod_destination_catalog_invalidate_track(track);
-            return 1U;
-        }
-        case PARAM_DELUGE_LEVEL:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.level = clamped; }
-            brick6_deluge_runtime_set_level(ctx->instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_DELUGE_TUNE:
-        {
-            const float clamped = param_backend_clamp_value(value, -48.0f, 48.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.tune = clamped; }
-            brick6_deluge_runtime_set_tune(ctx->instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_DELUGE_FINE:
-        {
-            const float clamped = param_backend_clamp_value(value, -100.0f, 100.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.fine = clamped; }
-            brick6_deluge_runtime_set_fine(ctx->instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_DELUGE_WIDTH:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.width = clamped; }
-            brick6_deluge_runtime_set_width(ctx->instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_DELUGE_PHASE:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 360.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.phase = clamped; }
-            brick6_deluge_runtime_set_phase(ctx->instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_DELUGE_RETRIG:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL)) { state->deluge.retrig = clamped; }
-            brick6_deluge_runtime_set_retrig(ctx->instance_id, (clamped >= 0.5f) ? 1U : 0U);
-            return 1U;
-        }
-        default:
-            return 0U;
-    }
-}
-
-uint8_t param_backend_reapply_tone_deluge_runtime(uint8_t track)
-{
-    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((state == NULL)
-            || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            || (ctx->instance_id >= BRICK6_DELUGE_VOICE_INSTANCE_COUNT))
-    {
-        return 0U;
-    }
-
-    brick6_deluge_runtime_set_model(
-        ctx->instance_id,
-        (brick6_deluge_model_t)(uint8_t)(param_backend_clamp_value(
-            state->deluge.model, 0.0f, (float)(BRICK6_DELUGE_MODEL_COUNT - 1U)) + 0.5f));
-    brick6_deluge_runtime_set_level(ctx->instance_id,
-                                    param_backend_clamp_value(state->deluge.level, 0.0f, 1.0f));
-    brick6_deluge_runtime_set_tune(ctx->instance_id,
-                                   param_backend_clamp_value(state->deluge.tune, -48.0f, 48.0f));
-    brick6_deluge_runtime_set_fine(ctx->instance_id,
-                                   param_backend_clamp_value(state->deluge.fine, -100.0f, 100.0f));
-    brick6_deluge_runtime_set_width(ctx->instance_id,
-                                    param_backend_clamp_value(state->deluge.width, 0.0f, 1.0f));
-    brick6_deluge_runtime_set_phase(ctx->instance_id,
-                                    param_backend_clamp_value(state->deluge.phase, 0.0f, 360.0f));
-    brick6_deluge_runtime_set_retrig(ctx->instance_id, (state->deluge.retrig >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 

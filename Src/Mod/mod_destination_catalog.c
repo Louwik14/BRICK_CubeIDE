@@ -4,7 +4,6 @@
 #include "Audio/drum_synth.h"
 #include "Audio/md_model.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
@@ -183,44 +182,6 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
         case PARAM_WAVE_OSC2_POS:
         case PARAM_WAVE_OSC2_LEVEL:
         case PARAM_WAVE_OSC2_TUNE:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t mod_destination_deluge_model_for_track(uint8_t track, brick6_deluge_model_t *out_model)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (out_model == NULL))
-    {
-        return 0U;
-    }
-
-    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
-    if (tone == NULL)
-    {
-        return 0U;
-    }
-
-    uint8_t model = (uint8_t)(mod_destination_clampf(tone->deluge.model,
-                                                     0.0f,
-                                                     (float)(BRICK6_DELUGE_MODEL_COUNT - 1U)) + 0.5f);
-    if (model >= (uint8_t)BRICK6_DELUGE_MODEL_COUNT)
-    {
-        model = (uint8_t)BRICK6_DELUGE_MODEL_SQUARE;
-    }
-    *out_model = (brick6_deluge_model_t)model;
-    return 1U;
-}
-
-static uint8_t mod_destination_deluge_param_is_continuous(param_id_t dest)
-{
-    switch (dest)
-    {
-        case PARAM_DELUGE_LEVEL:
-        case PARAM_DELUGE_TUNE:
-        case PARAM_DELUGE_FINE:
-        case PARAM_DELUGE_WIDTH:
             return 1U;
         default:
             return 0U;
@@ -592,14 +553,15 @@ static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot
             {
                 case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
-                default: return "TIMBRE";
+                case BRICK6_STACK_MODEL_SQUARE: return "PWM";
+                default: return NULL;
             }
         case 4U:
             switch ((brick6_stack_model_t)model)
             {
                 case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
                 case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
-                default: return "COLOR";
+                default: return NULL;
             }
         default:
             return NULL;
@@ -725,59 +687,6 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
         case PARAM_WAVE_OSC2_TUNE:
             brick6_wave_runtime_set_osc_tune(ctx->instance_id, 1U, mod_destination_clampf(value, -60.0f, 60.0f));
             return 1U;
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t mod_destination_apply_deluge_rt(uint8_t track,
-                                               param_id_t dest,
-                                               const track_runtime_ctx_t *ctx,
-                                               float value)
-{
-    (void)track;
-
-    if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            || (ctx->instance_id >= BRICK6_DELUGE_MAX_INSTANCES))
-    {
-        return 0U;
-    }
-
-    switch (dest)
-    {
-        case PARAM_DELUGE_LEVEL:
-            brick6_deluge_runtime_set_level(ctx->instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_DELUGE_TUNE:
-            brick6_deluge_runtime_set_tune(ctx->instance_id, mod_destination_clampf(value, -48.0f, 48.0f));
-            return 1U;
-        case PARAM_DELUGE_FINE:
-            brick6_deluge_runtime_set_fine(ctx->instance_id, mod_destination_clampf(value, -100.0f, 100.0f));
-            return 1U;
-        case PARAM_DELUGE_WIDTH:
-        {
-            brick6_deluge_model_t model = BRICK6_DELUGE_MODEL_SQUARE;
-            if (mod_destination_deluge_model_for_track(track, &model) == 0U)
-            {
-                return 0U;
-            }
-            const float clamped = (model == BRICK6_DELUGE_MODEL_SQUARE)
-                ? mod_destination_clampf(value, 0.0f, 1.0f)
-                : mod_destination_clampf(value, -1.0f, 1.0f);
-            const track_tone_sound_state_t *const tone =
-                track_tone_sound_state_get_const(track);
-            if ((tone != NULL) && (clamped == tone->deluge.width))
-            {
-                brick6_deluge_runtime_set_width(ctx->instance_id, clamped);
-            }
-            else
-            {
-                brick6_deluge_runtime_set_width_modulated(ctx->instance_id, clamped);
-            }
-            return 1U;
-        }
         default:
             return 0U;
     }
@@ -909,10 +818,6 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     {
         return mod_destination_apply_wave_rt(track, dest, ctx, value);
     }
-    if (mod_destination_deluge_param_is_continuous(dest) != 0U)
-    {
-        return mod_destination_apply_deluge_rt(track, dest, ctx, value);
-    }
     if (mod_destination_is_direct_drum(dest) != 0U)
     {
         return mod_destination_apply_drum_rt(track, dest, ctx, value);
@@ -959,10 +864,6 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_WAVE)
         {
             return mod_destination_is_direct_wave(dest);
-        }
-        if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DELUGE)
-        {
-            return mod_destination_deluge_param_is_continuous(dest);
         }
         if ((dest == PARAM_LOOPER_ARM)
                 || (dest == PARAM_LOOPER_LEN)
@@ -1287,27 +1188,6 @@ static const char *mod_destination_wave_label_for_param(param_id_t dest)
     }
 }
 
-static const char *mod_destination_deluge_label_for_track_param(uint8_t track, param_id_t dest)
-{
-    switch (dest)
-    {
-        case PARAM_DELUGE_LEVEL: return "LEVEL";
-        case PARAM_DELUGE_TUNE: return "TUNE";
-        case PARAM_DELUGE_FINE: return "FINE";
-        case PARAM_DELUGE_WIDTH:
-        {
-            brick6_deluge_model_t model = BRICK6_DELUGE_MODEL_SQUARE;
-            if (mod_destination_deluge_model_for_track(track, &model) == 0U)
-            {
-                return NULL;
-            }
-            return (model == BRICK6_DELUGE_MODEL_SQUARE) ? "WIDTH" : "SKEW";
-        }
-        default:
-            return NULL;
-    }
-}
-
 static const char *mod_destination_prism_label_for_param(param_id_t dest)
 {
     switch (dest)
@@ -1370,11 +1250,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
             name = mod_destination_wave_label_for_param(dest);
             if (name == NULL)
             {
-                name = mod_destination_deluge_label_for_track_param(track, dest);
-                if (name == NULL)
-                {
-                    name = param_registry[dest].name;
-                }
+                name = param_registry[dest].name;
             }
         }
     }
@@ -1498,11 +1374,7 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     {
         if (mod_destination_stack_label_for_track_param(track, dest, &label) == 0U)
         {
-            label = mod_destination_deluge_label_for_track_param(track, dest);
-            if (label == NULL)
-            {
-                (void)param_prism_label_for_track_param(track, dest, &label);
-            }
+            (void)param_prism_label_for_track_param(track, dest, &label);
         }
     }
     if (label == NULL)

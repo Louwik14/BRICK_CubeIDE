@@ -60,7 +60,6 @@ typedef enum
     PATCH_ASSIGN_TYPE_PRISM,
     PATCH_ASSIGN_TYPE_WAVE,
     PATCH_ASSIGN_TYPE_STACK,
-    PATCH_ASSIGN_TYPE_DELUGE,
     PATCH_ASSIGN_TYPE_RAM,
     PATCH_ASSIGN_TYPE_STREAM,
     PATCH_ASSIGN_TYPE_MULTI,
@@ -167,7 +166,6 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_PRISM: return "PRISM";
         case PATCH_ASSIGN_TYPE_WAVE: return "WAVE";
         case PATCH_ASSIGN_TYPE_STACK: return "STACK";
-        case PATCH_ASSIGN_TYPE_DELUGE: return "DELUGE";
         case PATCH_ASSIGN_TYPE_RAM: return "RAM";
         case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
         case PATCH_ASSIGN_TYPE_MULTI: return "MULTI";
@@ -199,7 +197,6 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui
                 case UI_TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
                 case UI_TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
                 case UI_TRACK_TYPE_STACK: return PATCH_ASSIGN_TYPE_STACK;
-                case UI_TRACK_TYPE_DELUGE: return PATCH_ASSIGN_TYPE_DELUGE;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
@@ -239,8 +236,7 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
         case PATCH_ASSIGN_FAMILY_SYNTH:
             return ((type == PATCH_ASSIGN_TYPE_PRISM)
                     || (type == PATCH_ASSIGN_TYPE_WAVE)
-                    || (type == PATCH_ASSIGN_TYPE_STACK)
-                    || (type == PATCH_ASSIGN_TYPE_DELUGE)) ? 1U : 0U;
+                    || (type == PATCH_ASSIGN_TYPE_STACK)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             return ((type == PATCH_ASSIGN_TYPE_RAM)
@@ -327,8 +323,6 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
             return (type == UI_TRACK_TYPE_WAVE) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STACK:
             return (type == UI_TRACK_TYPE_STACK) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_DELUGE:
-            return (type == UI_TRACK_TYPE_DELUGE) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_RAM:
             return (type == UI_TRACK_TYPE_RAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STREAM:

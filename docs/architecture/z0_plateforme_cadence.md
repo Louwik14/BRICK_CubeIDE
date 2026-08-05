@@ -152,10 +152,10 @@
 - Les startups reellement compilees `Board/LowCost/Generated/Startup/startup_stm32h743xx.s` et `Board/Premium/Generated/Startup/startup_stm32h743xx.s` copient `.itcm_text` depuis Flash vers ITCM juste apres `SystemInit()` et avant la copie `.data`, le zero `.bss`, les constructeurs C++ et `main()`.
 - Les caches I/D ne sont actives que plus tard dans `main()`, donc cette copie ne necessite pas de maintenance cache locale. L'MPU courant ne declare pas de region ITCM XN et `HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT)` garde l'ITCM executable par defaut.
 
-## Addendum 2026-07-29 - init runtime Synth/DELUGE
+## Addendum 2026-08-05 - primitives Deluge integrees a Stack
 
-- `brick6_app_init()` initialise `brick6_deluge_runtime_init()` apres Prism, Stack et Wave, avant `brick6_audio_runtime_init()` et `audio_start()`.
-- DELUGE remplace en place l'ancien runtime de test Daisy; l'ordre et la semantique des autres moteurs restent inchanges.
+- Les primitives oscillateur Deluge retenues sont rendues par Stack sous les modeles `SINE`, `TRI`, `SQUARE` et `SAW`; aucun moteur Deluge selectable ni initialisation runtime separee ne subsiste.
+- Les tables anti-alias et le renderer interne Deluge restent compiles uniquement comme dependances de ces modeles Stack; Prism, Wave et les autres moteurs gardent leurs chemins propres.
 
 ## 1. Perimetre
 

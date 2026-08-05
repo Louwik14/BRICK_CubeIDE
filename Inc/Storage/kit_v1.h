@@ -54,7 +54,6 @@ typedef enum
     KIT_V1_LABEL_SN,
     KIT_V1_LABEL_HH,
     KIT_V1_LABEL_WV,
-    KIT_V1_LABEL_DL,
     KIT_V1_LABEL_UNKNOWN
 } kit_v1_label_code_t;
 

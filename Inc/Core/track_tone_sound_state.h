@@ -82,16 +82,6 @@ typedef struct
         float pos_update;
         float pos_smooth;
     } wave;
-    struct
-    {
-        float model;
-        float level;
-        float tune;
-        float fine;
-        float width;
-        float phase;
-        float retrig;
-    } deluge;
     float midi_program;
     float midi_cc[12];
     struct
@@ -112,7 +102,7 @@ typedef struct
     } md;
 } track_tone_sound_state_t;
 
-_Static_assert(sizeof(track_tone_sound_state_t) == 448U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 420U,
                "track tone state layout changed");
 
 void track_tone_sound_state_init(void);

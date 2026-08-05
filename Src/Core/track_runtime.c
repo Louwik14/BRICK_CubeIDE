@@ -118,8 +118,6 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_MULTI;
         case UI_TRACK_TYPE_STACK:
             return TRACK_RUNTIME_TYPE_STACK;
-        case UI_TRACK_TYPE_DELUGE:
-            return TRACK_RUNTIME_TYPE_DELUGE;
         case UI_TRACK_TYPE_EXTERNAL:
             return TRACK_RUNTIME_TYPE_EXTERNAL;
 
@@ -337,16 +335,6 @@ static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_POS_SMOOTH
 };
 
-static const param_id_t g_track_runtime_tone_slots_deluge[] = {
-    PARAM_DELUGE_MODEL,
-    PARAM_DELUGE_LEVEL,
-    PARAM_DELUGE_TUNE,
-    PARAM_DELUGE_FINE,
-    PARAM_DELUGE_WIDTH,
-    PARAM_DELUGE_PHASE,
-    PARAM_DELUGE_RETRIG
-};
-
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_GAIN,
@@ -414,8 +402,6 @@ _Static_assert((sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtim
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "STACK TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "WAVE TONE slots exceed compact capacity");
-_Static_assert((sizeof(g_track_runtime_tone_slots_deluge) / sizeof(g_track_runtime_tone_slots_deluge[0]))
-                   <= SEQ_PARAM_TONE_SLOT_COUNT, "DELUGE TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_sampler) / sizeof(g_track_runtime_tone_slots_sampler[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "SAMPLER TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]))
@@ -455,11 +441,6 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_WAVE:
             *out_table = g_track_runtime_tone_slots_wave;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]));
-            return 1U;
-
-        case TRACK_RUNTIME_TYPE_DELUGE:
-            *out_table = g_track_runtime_tone_slots_deluge;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_deluge) / sizeof(g_track_runtime_tone_slots_deluge[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_RAM:
@@ -603,7 +584,6 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         case TRACK_RUNTIME_ENGINE_PRISM:
         case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_WAVE:
-        case TRACK_RUNTIME_ENGINE_DELUGE:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -621,8 +601,7 @@ uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
     }
     if ((ctx != NULL) && ((ctx->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->engine == TRACK_RUNTIME_ENGINE_DELUGE)))
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)))
         return synth_polyphony_get_voice_count(ctx->track_id);
     return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
 }
@@ -641,8 +620,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
     }
     if ((descriptor->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (descriptor->engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (descriptor->engine == TRACK_RUNTIME_ENGINE_WAVE)
-            || (descriptor->engine == TRACK_RUNTIME_ENGINE_DELUGE))
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_WAVE))
         return synth_polyphony_get_voice_count(descriptor->instance_id);
 
     switch ((track_runtime_engine_t)descriptor->engine)
@@ -654,7 +632,6 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_PRISM:
         case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_WAVE:
-        case TRACK_RUNTIME_ENGINE_DELUGE:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -678,8 +655,7 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE))
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         return 1U;
     }
@@ -880,16 +856,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (type == TRACK_RUNTIME_TYPE_DELUGE)
-    {
-        if (synth_polyphony_set_track_active(ctx->track_id, 1U,
-                (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE) == 0U)
-        { track_runtime_set_quota_blocked(ctx); return; }
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DELUGE,
-                                synth_polyphony_get_slot(ctx->track_id, 0U));
-        return;
-    }
-
     (void)synth_polyphony_set_track_active(ctx->track_id, 0U, 0U);
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
@@ -962,7 +928,6 @@ static void track_runtime_recompute_synth_usage(void)
             case TRACK_RUNTIME_ENGINE_PRISM: usage.prism_tracks++; break;
             case TRACK_RUNTIME_ENGINE_STACK: usage.stack_tracks++; break;
             case TRACK_RUNTIME_ENGINE_WAVE: usage.wave_tracks++; break;
-            case TRACK_RUNTIME_ENGINE_DELUGE: usage.deluge_tracks++; break;
             default: break;
         }
     }
@@ -1007,20 +972,6 @@ static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
     if ((current_is_wave != 0U) && (previous_engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         (void)param_backend_reapply_tone_wave_runtime(current_ctx->track_id);
-    }
-}
-
-static void track_runtime_reset_deluge_if_owner_changed(uint8_t previous_engine,
-                                                       uint8_t previous_instance,
-                                                       const track_runtime_ctx_t *current_ctx)
-{
-    (void)previous_instance;
-    const uint8_t current_is_deluge = ((current_ctx != NULL)
-            && (current_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && (current_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)) ? 1U : 0U;
-    if ((current_is_deluge != 0U) && (previous_engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE))
-    {
-        (void)param_backend_reapply_tone_deluge_runtime(current_ctx->track_id);
     }
 }
 
@@ -1155,7 +1106,6 @@ void track_runtime_refresh_all(void)
                 case TRACK_RUNTIME_ENGINE_PRISM: synth_usage.prism_tracks++; break;
                 case TRACK_RUNTIME_ENGINE_STACK: synth_usage.stack_tracks++; break;
                 case TRACK_RUNTIME_ENGINE_WAVE: synth_usage.wave_tracks++; break;
-                case TRACK_RUNTIME_ENGINE_DELUGE: synth_usage.deluge_tracks++; break;
                 default: break;
             }
         }
@@ -1182,8 +1132,6 @@ void track_runtime_refresh_all(void)
             (void)param_backend_reapply_tone_stack_runtime(track);
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             (void)param_backend_reapply_tone_wave_runtime(track);
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-            (void)param_backend_reapply_tone_deluge_runtime(track);
     }
 
     g_track_runtime_synth_usage = synth_usage;
@@ -1268,7 +1216,6 @@ void track_runtime_refresh_track(uint8_t track)
         track_runtime_reset_prism_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_reset_stack_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_reset_wave_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
-        track_runtime_reset_deluge_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         if ((previous_engine == (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
                 && (g_track_runtime_ctx[track].engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER))
         {
@@ -1688,13 +1635,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_WAVE_SAMPLE_INTERP:
         case PARAM_WAVE_POS_UPDATE:
         case PARAM_WAVE_POS_SMOOTH:
-        case PARAM_DELUGE_MODEL:
-        case PARAM_DELUGE_LEVEL:
-        case PARAM_DELUGE_TUNE:
-        case PARAM_DELUGE_FINE:
-        case PARAM_DELUGE_WIDTH:
-        case PARAM_DELUGE_PHASE:
-        case PARAM_DELUGE_RETRIG:
         case PARAM_MIDI_PROGRAM:
         case PARAM_MIDI_CC1_1:
         case PARAM_MIDI_CC1_2:

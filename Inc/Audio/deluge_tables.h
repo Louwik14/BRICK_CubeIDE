@@ -19,36 +19,6 @@ extern const int16_t triangleWaveAntiAliasing9[];
 extern const int16_t triangleWaveAntiAliasing15[];
 extern const int16_t triangleWaveAntiAliasing21[];
 
-extern const int16_t sawWave1[];
-extern const int16_t sawWave3[];
-extern const int16_t sawWave5[];
-extern const int16_t sawWave7[];
-extern const int16_t sawWave9[];
-extern const int16_t sawWave13[];
-extern const int16_t sawWave19[];
-extern const int16_t sawWave27[];
-extern const int16_t sawWave39[];
-extern const int16_t sawWave53[];
-extern const int16_t sawWave76[];
-extern const int16_t sawWave109[];
-extern const int16_t sawWave153[];
-extern const int16_t sawWave215[];
-
-extern const int16_t squareWave1[];
-extern const int16_t squareWave3[];
-extern const int16_t squareWave5[];
-extern const int16_t squareWave7[];
-extern const int16_t squareWave9[];
-extern const int16_t squareWave13[];
-extern const int16_t squareWave19[];
-extern const int16_t squareWave27[];
-extern const int16_t squareWave39[];
-extern const int16_t squareWave53[];
-extern const int16_t squareWave76[];
-extern const int16_t squareWave109[];
-extern const int16_t squareWave153[];
-extern const int16_t squareWave215[];
-
 extern const int16_t mysterySynthASaw_153[];
 extern const int16_t mysterySynthASaw_215[];
 extern const int16_t mysterySynthASaw_305[];

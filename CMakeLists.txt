@@ -547,7 +547,6 @@ set(LOWCOST_AUDIO_LTO_SOURCES
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_deluge_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c
@@ -563,7 +562,6 @@ set(LOWCOST_AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_deluge_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c

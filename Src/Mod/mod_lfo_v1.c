@@ -152,8 +152,6 @@ static ui_track_type_t mod_lfo_ui_type_from_ctx(const track_runtime_ctx_t *ctx)
             return UI_TRACK_TYPE_WAVE;
         case TRACK_RUNTIME_TYPE_STACK:
             return UI_TRACK_TYPE_STACK;
-        case TRACK_RUNTIME_TYPE_DELUGE:
-            return UI_TRACK_TYPE_DELUGE;
         case TRACK_RUNTIME_TYPE_DRUM_MD:
             return UI_TRACK_TYPE_DRUM_MD;
         case TRACK_RUNTIME_TYPE_MIDI:

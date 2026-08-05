@@ -19,7 +19,6 @@
 #include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -447,89 +446,6 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         *out_wave_tracks = wave_tracks;
     }
 }
-static void brick6_render_deluge_tracks(uint32_t frames, uint8_t *out_deluge_tracks)
-{
-    static float deluge_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t deluge_tracks = 0U;
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DELUGE)
-                || (track_runtime_is_audio_routable(track) == 0U))
-        {
-            continue;
-        }
-
-        const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
-        if (voice_count == 0U)
-            continue;
-        if (voice_count > 1U)
-        {
-            uint8_t published = 0U;
-            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
-            if (renderable == 0U)
-                continue;
-            if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
-                continue;
-            while (renderable != 0U)
-            {
-                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
-                renderable &= (uint8_t)(renderable - 1U);
-                const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
-                brick6_deluge_runtime_sync_voice(ctx->instance_id, instance);
-                if ((brick6_deluge_runtime_prepare_block(instance, frames, 1U) == 0U)
-                        || (brick6_deluge_runtime_render_instance(instance, deluge_tmp, frames) == 0U))
-                    memset(deluge_tmp, 0, frames * sizeof(float));
-                const uint8_t running = mixer_process_external_poly_voice(
-                    ctx->mix_track_id, track, voice, deluge_tmp, frames,
-                    synth_polyphony_get_voice_pan(track, voice));
-                published = 1U;
-                if (running == 0U)
-                    synth_polyphony_voice_release_complete(track, voice);
-            }
-            if (published != 0U)
-            {
-                mixer_commit_external_poly(ctx->mix_track_id, frames);
-                deluge_tracks++;
-            }
-            continue;
-        }
-
-        if (brick6_deluge_runtime_prepare_block(
-                ctx->instance_id,
-                frames,
-                mixer_track_vca_requires_source(ctx->mix_track_id)) == 0U)
-        {
-            continue;
-        }
-
-        float *direct_mono = NULL;
-        if (mixer_begin_external_mono_native(ctx->mix_track_id, frames, &direct_mono) != 0U)
-        {
-            if (brick6_deluge_runtime_render_instance(ctx->instance_id, direct_mono, frames) != 0U)
-            {
-                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
-                deluge_tracks++;
-            }
-            continue;
-        }
-
-        if (brick6_deluge_runtime_render_instance(ctx->instance_id, deluge_tmp, frames) != 0U)
-        {
-            mixer_submit_external_mono_native(ctx->mix_track_id, deluge_tmp, frames);
-            deluge_tracks++;
-        }
-    }
-
-    if (out_deluge_tracks != NULL)
-    {
-        *out_deluge_tracks = deluge_tracks;
-    }
-}
-
 static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_tracks)
 {
     static float stack_tmp[AUDIO_BLOCK_SIZE];
@@ -682,13 +598,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t wave_tracks = 0U;
         brick6_render_wave_tracks(frames, &wave_tracks);
         (void)wave_tracks;
-    }
-
-    if (synth_usage.deluge_tracks != 0U)
-    {
-        uint8_t deluge_tracks = 0U;
-        brick6_render_deluge_tracks(frames, &deluge_tracks);
-        (void)deluge_tracks;
     }
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))

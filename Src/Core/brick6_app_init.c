@@ -32,7 +32,6 @@
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_braids_runtime.h"
-#include "Core/brick6_deluge_runtime.h"
 #include "brick6_looper_runtime.h"
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
@@ -148,7 +147,6 @@ void brick6_app_init(void)
     brick6_braids_runtime_init();
     brick6_stack_runtime_init();
     brick6_wave_runtime_init();
-    brick6_deluge_runtime_init();
     mixer_set_master(0.0f);
 
     brick6_audio_runtime_init();
