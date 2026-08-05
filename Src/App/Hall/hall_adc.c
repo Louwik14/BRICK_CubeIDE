@@ -5,6 +5,7 @@
 #endif
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
+#include "Core/live_clock.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -52,6 +53,7 @@ static void hall_mux_select(uint8_t index)
 static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
+    const uint32_t tim5_tick = live_clock_capture_tick();
 #if !defined(BRICK6_VARIANT_LOWCOST)
     const uint32_t head = hall_fifo_head;
     const uint32_t tail = hall_fifo_tail;
@@ -62,16 +64,10 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
     hall_sample_count[key] = sample_count;
     board_surface_update_lane(key, raw, sample_count);
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-    /*
-     * Low-cost Hall samples are already produced from the ADC DMA callback.
-     * Process the bounded per-key state machine here so audio load cannot
-     * postpone attack detection behind the application superloop backlog.
-     * Note routing remains outside the IRQ through the existing pending flags.
-     */
-    hall_engine_process_sample(key, raw, sample_count);
-    return;
-#else
+    /* Both boards run the same bounded detector in the acquisition callback.
+     * The Premium raw FIFO below is diagnostic-only and never gates music. */
+    hall_engine_process_sample(key, raw, sample_count, tim5_tick);
+#if !defined(BRICK6_VARIANT_LOWCOST)
     if (depth >= HALL_SAMPLE_FIFO_SIZE)
     {
         hall_fifo_drop_count++;
@@ -85,6 +81,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
         entry->key = key;
         entry->raw = raw;
         entry->sample_count = sample_count;
+        entry->tim5_tick = tim5_tick;
 
         __DMB();
         hall_fifo_head = head + 1U;
@@ -96,6 +93,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
         }
     }
 #endif
+
 }
 
 static void hall_adc_process_pair(void)

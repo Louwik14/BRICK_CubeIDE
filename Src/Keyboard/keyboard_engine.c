@@ -420,11 +420,10 @@ static int8_t keyboard_engine_find_source_occurrence(uint8_t owner_track,
     return selected;
 }
 
-static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
-                                                      uint8_t note,
-                                                      uint8_t velocity,
-                                                      uint8_t is_note_on,
-                                                      note_event_provenance_t provenance)
+static void keyboard_engine_send_note_for_owner_track_with_capture(
+    uint8_t owner_track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
+    note_event_provenance_t provenance, uint8_t capture_tick_valid,
+    uint32_t capture_tick)
 {
     int8_t index = -1;
     uint32_t occurrence_id = 0U;
@@ -456,9 +455,13 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
 
-    const note_fx_result_t result = note_fx_pipeline_submit_source_occurrence(
-        owner_track, note, velocity, is_note_on,
-        NOTE_FX_SAMPLE_TIME_AUDIO_OWNER, provenance, occurrence_id);
+    const note_fx_result_t result = (capture_tick_valid != 0U)
+        ? note_fx_pipeline_submit_source_capture_tick(
+            owner_track, note, velocity, is_note_on, capture_tick,
+            provenance, occurrence_id)
+        : note_fx_pipeline_submit_source_occurrence(
+            owner_track, note, velocity, is_note_on,
+            NOTE_FX_SAMPLE_TIME_AUDIO_OWNER, provenance, occurrence_id);
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
         return;
 
@@ -477,6 +480,16 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
     {
         g_keyboard_engine_source_occurrence[(uint8_t)index].active = 0U;
     }
+}
+
+static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
+                                                      uint8_t note,
+                                                      uint8_t velocity,
+                                                      uint8_t is_note_on,
+                                                      note_event_provenance_t provenance)
+{
+    keyboard_engine_send_note_for_owner_track_with_capture(
+        owner_track, note, velocity, is_note_on, provenance, 0U, 0U);
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -755,7 +768,11 @@ void keyboard_engine_note_off(uint8_t note)
     keyboard_engine_note_off_internal(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note);
 }
 
-void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity)
+static void keyboard_engine_note_on_for_track_internal(uint8_t track,
+                                                        uint8_t note,
+                                                        uint8_t velocity,
+                                                        uint8_t capture_tick_valid,
+                                                        uint32_t capture_tick)
 {
     if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
@@ -778,11 +795,30 @@ void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velo
         return;
     }
 
-    keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, 1U,
-                                      NOTE_EVENT_SOURCE_KEY);
+    keyboard_engine_send_note_for_owner_track_with_capture(
+        owner_track, note, velocity, 1U, NOTE_EVENT_SOURCE_KEY,
+        capture_tick_valid, capture_tick);
 }
 
-void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
+void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity)
+{
+    keyboard_engine_note_on_for_track_internal(track, note, velocity, 0U, 0U);
+}
+
+void keyboard_engine_note_on_for_track_timed(uint8_t track, uint8_t note,
+                                             uint8_t velocity,
+                                             uint32_t capture_tick,
+                                             uint32_t ingress_serial)
+{
+    (void)ingress_serial;
+    keyboard_engine_note_on_for_track_internal(track, note, velocity, 1U,
+                                                capture_tick);
+}
+
+static void keyboard_engine_note_off_for_track_internal(uint8_t track,
+                                                         uint8_t note,
+                                                         uint8_t capture_tick_valid,
+                                                         uint32_t capture_tick)
 {
     if ((track >= UI_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
     {
@@ -802,8 +838,22 @@ void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
         return;
     }
 
-    keyboard_engine_send_note_for_owner_track(owner_track, note, 0U, 0U,
-                                      NOTE_EVENT_SOURCE_KEY);
+    keyboard_engine_send_note_for_owner_track_with_capture(
+        owner_track, note, 0U, 0U, NOTE_EVENT_SOURCE_KEY,
+        capture_tick_valid, capture_tick);
+}
+
+void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
+{
+    keyboard_engine_note_off_for_track_internal(track, note, 0U, 0U);
+}
+
+void keyboard_engine_note_off_for_track_timed(uint8_t track, uint8_t note,
+                                              uint32_t capture_tick,
+                                              uint32_t ingress_serial)
+{
+    (void)ingress_serial;
+    keyboard_engine_note_off_for_track_internal(track, note, 1U, capture_tick);
 }
 
 void keyboard_engine_all_notes_off_for_track(uint8_t track)

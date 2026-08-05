@@ -243,6 +243,14 @@ void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t vel
     keyboard_input_process_hall(hall_index, pressed, velocity);
 }
 
+void keyboard_runtime_process_hall_timed(uint8_t hall_index, bool pressed,
+                                         uint8_t velocity, uint32_t capture_tick,
+                                         uint32_t ingress_serial)
+{
+    keyboard_input_process_hall_timed(hall_index, pressed, velocity,
+                                      capture_tick, ingress_serial);
+}
+
 void keyboard_runtime_all_notes_off(void)
 {
     keyboard_runtime_reset_midi_state();

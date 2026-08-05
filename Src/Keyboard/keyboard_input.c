@@ -47,6 +47,9 @@ static uint8_t g_lowcost_key_consumed[LOWCOST_KEY_COUNT];
 static keyboard_input_note_owner_t
     g_keyboard_input_note_owner[128U][KEYBOARD_INPUT_OWNER_STACK_DEPTH];
 static uint8_t g_keyboard_input_note_owner_count[128U];
+static uint8_t g_keyboard_input_timed_context_active;
+static uint32_t g_keyboard_input_capture_tick;
+static uint32_t g_keyboard_input_ingress_serial;
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
@@ -365,7 +368,16 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
     }
 
     keyboard_input_note_owner_push(note, active_track);
-    keyboard_engine_note_on_for_track(active_track, note, velocity);
+    if (g_keyboard_input_timed_context_active != 0U)
+    {
+        keyboard_engine_note_on_for_track_timed(active_track, note, velocity,
+                                                g_keyboard_input_capture_tick,
+                                                g_keyboard_input_ingress_serial);
+    }
+    else
+    {
+        keyboard_engine_note_on_for_track(active_track, note, velocity);
+    }
 }
 
 static void keyboard_input_note_off_sink(uint8_t note)
@@ -376,7 +388,16 @@ static void keyboard_input_note_off_sink(uint8_t note)
         return;
     }
 
-    keyboard_engine_note_off_for_track(owner.track, note);
+    if (g_keyboard_input_timed_context_active != 0U)
+    {
+        keyboard_engine_note_off_for_track_timed(owner.track, note,
+                                                 g_keyboard_input_capture_tick,
+                                                 g_keyboard_input_ingress_serial);
+    }
+    else
+    {
+        keyboard_engine_note_off_for_track(owner.track, note);
+    }
 }
 
 static void keyboard_input_all_notes_off_sink(void)
@@ -394,6 +415,9 @@ static void keyboard_input_all_notes_off_sink(void)
 void keyboard_input_init(void)
 {
     memset(g_keyboard_input_note_owner_count, 0, sizeof(g_keyboard_input_note_owner_count));
+    g_keyboard_input_timed_context_active = 0U;
+    g_keyboard_input_capture_tick = 0U;
+    g_keyboard_input_ingress_serial = 0U;
     const ui_keyboard_note_sink_t sink = {
         .note_on = keyboard_input_note_on_sink,
         .note_off = keyboard_input_note_off_sink,
@@ -415,4 +439,15 @@ void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t veloc
 
     ui_keyboard_app_set_velocity(velocity);
     kbd_input_mapper_process((uint8_t)(hall_index + 1U), pressed);
+}
+
+void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,
+                                       uint8_t velocity, uint32_t capture_tick,
+                                       uint32_t ingress_serial)
+{
+    g_keyboard_input_timed_context_active = 1U;
+    g_keyboard_input_capture_tick = capture_tick;
+    g_keyboard_input_ingress_serial = ingress_serial;
+    keyboard_input_process_hall(hall_index, pressed, velocity);
+    g_keyboard_input_timed_context_active = 0U;
 }

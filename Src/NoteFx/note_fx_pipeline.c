@@ -6,6 +6,7 @@
 #include "Seq/seq_play_scheduler.h"
 #include "NoteFx/note_fx_engine.h"
 #include "NoteFx/note_fx_state.h"
+#include "Core/live_clock.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime_exec.h"
 
@@ -54,6 +55,8 @@ typedef struct
     uint8_t reserved;
     uint64_t sample_time;
     uint32_t source_occurrence_id;
+    uint32_t capture_tick;
+    uint8_t capture_tick_valid;
     note_fx_transition_policy_t policy;
     note_fx_event_t event;
     uint8_t note;
@@ -823,6 +826,35 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
         : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
 }
 
+note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
+    uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
+    uint32_t capture_tick, note_event_provenance_t provenance,
+    uint32_t source_occurrence_id)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (note >= 128U)
+            || (provenance >= NOTE_EVENT_SOURCE_COUNT)
+            || (source_occurrence_id == 0U))
+    {
+        return NOTE_EVENT_RESULT_DROPPED_POLICY;
+    }
+
+    const note_fx_command_t command = {
+        .kind = NOTE_FX_COMMAND_SOURCE_RAW,
+        .track = track,
+        .note = note,
+        .velocity = velocity,
+        .is_note_on = (is_note_on != 0U) ? 1U : 0U,
+        .provenance = (uint8_t)provenance,
+        .sample_time = NOTE_FX_SAMPLE_TIME_AUDIO_OWNER,
+        .source_occurrence_id = source_occurrence_id,
+        .capture_tick = capture_tick,
+        .capture_tick_valid = 1U
+    };
+    return (note_fx_pipeline_enqueue(&command) != 0U)
+        ? NOTE_EVENT_RESULT_ACCEPTED
+        : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+}
+
 static void note_fx_pipeline_cleanup_track_owner(uint8_t track)
 {
     if (track >= NOTE_FX_TRACK_COUNT)
@@ -937,14 +969,25 @@ static void note_fx_pipeline_release_source_reservation(
 static note_fx_result_t note_fx_pipeline_apply_source_raw_command(
     const note_fx_command_t *command)
 {
-    const note_fx_result_t result = note_fx_pipeline_submit_source_audio(
-        command->track,
-        command->note,
-        command->velocity,
-        command->is_note_on,
-        command->sample_time,
-        (note_event_provenance_t)command->provenance,
-        command->source_occurrence_id);
+    uint64_t sample_time = command->sample_time;
+    note_fx_result_t result;
+    if ((command->capture_tick_valid != 0U)
+            && !live_clock_tim5_to_sample_time(command->capture_tick,
+                                                &sample_time))
+    {
+        result = NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+    }
+    else
+    {
+        result = note_fx_pipeline_submit_source_audio(
+            command->track,
+            command->note,
+            command->velocity,
+            command->is_note_on,
+            sample_time,
+            (note_event_provenance_t)command->provenance,
+            command->source_occurrence_id);
+    }
 
     if (command->is_note_on != 0U)
     {

@@ -54,6 +54,10 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint64_t sample_time, note_event_provenance_t provenance,
     uint32_t source_occurrence_id);
+note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
+    uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
+    uint32_t capture_tick, note_event_provenance_t provenance,
+    uint32_t source_occurrence_id);
 /* Returns non-zero only while an FX-owned occurrence is still current in the
  * audio owner.  Terminal admission uses this to reject stale generated On. */
 uint8_t note_fx_pipeline_is_generated_occurrence_current(

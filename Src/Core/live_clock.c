@@ -130,6 +130,11 @@ bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
     return true;
 }
 
+uint32_t live_clock_capture_tick(void)
+{
+    return TIM5->CNT;
+}
+
 uint32_t live_clock_get_tim5_hz(void)
 {
     return g_tim5_hz;

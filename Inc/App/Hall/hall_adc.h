@@ -10,6 +10,7 @@ typedef struct
     uint8_t  key;
     uint16_t raw;
     uint32_t sample_count;
+    uint32_t tim5_tick;
 } hall_adc_sample_t;
 
 void hall_adc_init(void);

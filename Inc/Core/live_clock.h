@@ -32,6 +32,9 @@ bool live_clock_read_anchor(live_clock_anchor_t *out_anchor);
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
                                     uint64_t *out_sample_time);
 
+/* Capture the acquisition clock without exposing timer ownership to producers. */
+uint32_t live_clock_capture_tick(void);
+
 uint32_t live_clock_get_tim5_hz(void);
 
 #endif

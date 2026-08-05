@@ -101,7 +101,8 @@ void hall_engine_set_user_velocity_profile(const hall_user_velocity_profile_t *p
 void hall_engine_get_user_velocity_profile(hall_user_velocity_profile_t *profile);
 uint8_t hall_engine_user_velocity_profile_is_valid(void);
 
-void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count);
+void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count,
+                                uint32_t tim5_tick);
 void hall_engine_process(void);
 
 uint16_t hall_engine_get_raw(uint8_t key);
@@ -119,6 +120,7 @@ uint8_t hall_engine_consume_note_on(uint8_t key);
 uint8_t hall_engine_consume_note_off(uint8_t key);
 uint8_t hall_engine_consume_edge(uint8_t key, uint8_t *pressed,
                                  uint8_t *velocity);
+void hall_engine_acknowledge_edge(uint8_t key, uint8_t pressed);
 uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture);
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);
 

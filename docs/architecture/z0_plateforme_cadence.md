@@ -7,7 +7,7 @@
 - `hall_keyboard_bridge_process()` reste hors IRQ: il consomme les drapeaux pending, applique les regles UI/injection puis publie vers le pipeline clavier. Aucun appel UI, MIDI, Note-FX ou moteur audio n'est effectue depuis l'IRQ Hall.
 - L'IRQ audio conserve sa priorite superieure. Le traitement Hall accepte son jitter de preemption audio, mais ne peut plus etre repousse par les services SD, UI, USB ou autres travaux cooperatifs de la superloop.
 - Validation materielle: sur la cible Low-Cost testee, le passage du traitement Hall dans l'IRQ a supprime la latence perceptible, y compris sous la charge audio qui amplifiait auparavant le retard.
-- Premium conserve le chemin historique `FIFO ADC -> hall_loop_process() -> hall_engine_process_sample()` et sa borne de depilement; l'ecart de contexte est volontaire et conditionne par `BRICK6_VARIANT_LOWCOST`.
+- Premium suit désormais le même chemin borné que Low-Cost dans le callback ADC DMA. Sa FIFO ADC brute reste disponible pour le diagnostic uniquement; elle ne participe plus à la décision musicale.
 
 ## Addendum 2026-08-01 - attributs MPU de la SDRAM externe
 
