@@ -6,6 +6,16 @@ Document d’audit et de planification pour le HEAD `3767b8805` (`sampler: final
 
 Le nettoyage NoteFx/scheduler de référence est l’omnibus `bbeaab1fb` (`stable`). Les commits placés entre cet omnibus et le HEAD courant concernent le sampler/audio mono ; aucune correction NoteFx identifiée dans cette passe ne les rend obsolètes.
 
+## État après interruption de l’étape 3
+
+Contrôle effectué sur le HEAD réel `7253ef172` (`perf: fuse Multi sampler VCA and accumulation`), sans considérer les rapports comme une preuve. Les commits ciblés sont `752c1faf4` pour l’étape 1, `1d1cdaa75` pour l’étape 2 et `3c9002bc0` pour la passe initiale de l’étape 3. Le commit sampler/audio `7253ef172` et les autres modifications déjà présentes hors périmètre sont conservés.
+
+- **Étape 1 : PARTIELLE.** Le sample live passe par le marqueur owner audio, la garde de génération FX au terminal, l’admission mono par occurrence, le compteur d’overflow clock et la suppression des wrappers terminal sont bien présents. Restent la preuve des admissions des moteurs internes exposant encore des API `void`, la politique de defaults au restore (`D-017`), les mesures et `D-019` : les sources/scripts NoteFx référencés par `tests/CMakeLists.txt` manquent au checkout.
+- **Étape 2 : CONFORME sur la structure.** `NOTE_FX_SLOT_COUNT=3`, `PARAM_COUNT=319`, p-lock MIDI FX `12`, runtime p-lock `90`, UI S1..S3 et recherches négatives S4 sont cohérents. Aucun appel audio ni alias S4 n’a été ajouté. Les preuves dynamiques restent dépendantes de `D-019`.
+- **Étape 3 : finalisée après correction.** Les changements UI, p-lock, Pattern/Project v7, snapshots, clipboard et priorité `MODEL` avant paramètres dépendants sont conservés. Toute extension Undo/Redo des paramètres ou modèles MIDI FX a été retirée : `undo_v2` reste séquence-only.
+
+La prochaine étape non fermée est donc l’**étape corrective 1R**, avant toute étape 4 et avant toute implémentation EUCLID. Cette passe n’implémente ni modèle, ni masque, ni runtime EUCLID.
+
 ## 1. Verdict
 
 ### `NON PRÊT — DETTES STRUCTURELLES OUVERTES`
@@ -38,7 +48,7 @@ L’audit a recoupé `Inc/NoteFx/*`, `Src/NoteFx/*`, `Src/Seq/seq_play_scheduler
 | Identité source et retrigger | ARP et ledgers utilisent token + génération ; le terminal conserve `(track, occurrence_id, generation)`. | Présent structurellement ; vérifier l’autorité de génération au nouvel On et les backends. |
 | Timestamp audio | STEP utilise le sample d’événement ; le live prend le sample de timeline avant consommation de la commande. | D-009 ouverte ; prérequis obligatoire. |
 | Owner runtime | `g_note_fx_commands[32]`, mutations owner audio, snapshots de piste et budgets de demi-buffer existent. | Présent structurellement ; interleavings et temps de section critique non mesurés. |
-| Chaîne | `note_fx_pipeline_stage_emit()` continue au stage suivant ; seul le stage terminal appelle le scheduler. | La chaîne actuelle est bien `0 → 1 → 2 → 3 → 4`, mais elle contient quatre slots MIDI FX. Elle doit devenir `0 → 1 → 2 → 3`. Tests d’ordre requis. |
+| Chaîne | `note_fx_pipeline_stage_emit()` continue au stage suivant ; seul le stage terminal appelle le scheduler. | La chaîne courante à trois slots est `0 → 1 → 2 → 3 → terminal` ; tests d’ordre et de continuation encore requis. |
 | Note Off et réserves | Fermetures globales avant les nouveaux On, réserve Off et owned conservé si refus. | Contrat présent ; exhaustion et retry non prouvés. |
 | Terminal | Masques interne/MIDI distincts, ledger exact et MIDI USB avec réserve Off/génération de connexion. | D-014 ouverte pour les moteurs internes ; D-004 reste à fermer. |
 | Clock/source switch | `seq_runtime_set_clock_source()` demande la transition `SOURCE_SWITCH` avant de modifier l’autorité clock. | Correctif structurel présent ; matrice dynamique et pending saturé à tester. |
@@ -74,19 +84,19 @@ Le plan de nettoyage historique indique que les anciens problèmes « premier AR
 
 | Zone | Fichier / symbole courant | Rôle et consommateurs | Hypothèse actuelle |
 |---|---|---|---|
-| Contrat de cardinalité | `Inc/NoteFx/note_fx_state.h`, `NOTE_FX_SLOT_COUNT` | Dimensionne l’état par piste, les boucles d’initialisation et les appels state/pipeline/engine. | 4 slots. |
-| État de base | `note_fx_track_state_t.value[track][slot][param]` | Base persistée dans Pattern, copiée dans snapshots et utilisée par restore/duplication. | 4 × 4 octets par piste. |
+| Contrat de cardinalité | `Inc/NoteFx/note_fx_state.h`, `NOTE_FX_SLOT_COUNT` | Dimensionne l’état par piste, les boucles d’initialisation et les appels state/pipeline/engine. | 3 slots dans le HEAD contrôlé. |
+| État de base | `note_fx_track_state_t.value[track][slot][param]` | Base persistée dans Pattern, copiée dans snapshots et utilisée par restore/duplication. | `sizeof(note_fx_track_state_t)=12` octets par piste. |
 | Modèles | `note_fx_model_t`, `g_note_fx_model_defaults` | Defaults, clamp, validation, reset de MODEL. | OFF et ARP seulement ; aucun EUCLID. |
-| Runtime | `Src/NoteFx/note_fx_engine.c:g_slot[8][NOTE_FX_SLOT_COUNT]` | ARP, owned, génération et deadline par instance. | 8 × 4 runtime slots ; pas de masque Euclid. |
-| Overrides | `note_fx_pipeline.c:g_note_fx_override_valid/value` | Valeurs de base/p-lock/runtime envoyées à l’owner. | 8 × 4 × 4 octets par tableau. |
-| Pipeline | `note_fx_pipeline_stage_emit()` et `note_fx_pipeline_process()` | Stage source, continuations, budget ON/OFF, terminal. | Stage source + quatre FX + terminal stage 4. |
+| Runtime | `Src/NoteFx/note_fx_engine.c:g_slot[8][NOTE_FX_SLOT_COUNT]` | ARP, owned, génération et deadline par instance. | Map Release/Premium : `0x3240` = 12 864 octets, soit 24 instances de 536 octets ; pas de masque Euclid. |
+| Overrides | `note_fx_pipeline.c:g_note_fx_override_valid/value` | Valeurs de base/p-lock/runtime envoyées à l’owner. | Map : `0x60` = 96 octets par tableau, 192 cumulés pour 8×3×4. |
+| Pipeline | `note_fx_pipeline_stage_emit()` et `note_fx_pipeline_process()` | Stage source, continuations, budget ON/OFF, terminal. | Stage source + trois FX + terminal stage 3. |
 | Paramètres | `Param/param_store.h`, `PARAM_MIDI_FX_S1...S4_*` | IDs contigus, `PARAM_COUNT`, registre et `track_runtime`. | 16 IDs MIDI FX après les paramètres persistants. |
 | Registre | `Src/Param/param_registry_catalog.c` | Quatre descripteurs par slot, labels RATE/STYLE/RANGE/MODEL. | Quatre pages et deux modèles. |
-| Runtime param | `Src/Core/track_runtime.c` | Domaine et capacité MIDI FX pour tous les S1..S4. | Les quatre slots sont dans le même domaine. |
-| P-lock | `Inc/Seq/seq_types.h`, `Src/Seq/seq_param_iface.c` | Pool compact, inverse mapping, offsets, flags base/runtime et apply lock. | 16 positions MIDI FX, offset 74, runtime total 94. |
-| UI | `Src/UI/pages/ui_page_midi_fx.c` | Navigation SLOT1..SLOT4, quatre subpages, rendu virtuel RATE/STYLE/RANGE/MODEL. | Quatre slots affichés et adressables. |
+| Runtime param | `Src/Core/track_runtime.c` | Domaine et capacité MIDI FX pour tous les S1..S3. | Les trois slots sont dans le même domaine ; aucun S4 fonctionnel. |
+| P-lock | `Inc/Seq/seq_types.h`, `Src/Seq/seq_param_iface.c` | Pool compact, inverse mapping, offsets, flags base/runtime et apply lock. | 12 positions MIDI FX, offset 74, runtime total 90 ; map : état `0xB40` = 2 880 octets, flags `0x5A` = 90 octets. |
+| UI | `Src/UI/pages/ui_page_midi_fx.c` | Navigation SLOT1..SLOT3 ; l’infrastructure générique peut garder une quatrième subpage non adressable. | Trois slots affichés et adressables. |
 | Clipboard | `Src/UI/ui_core_clipboard.c`, `track_snapshot.c` | Clipboard page/ensemble par IDs et clipboard piste par `track_snapshot_t`. | Les IDs et la structure snapshot portent encore S4. |
-| Persistence | `Inc/Storage/pattern_live_ram.h:PatternSaveV1`, `project_v1.h` | `note_fx[8]`, indirectement inclus dans Pattern/Project ; chargement vérifie `sizeof(PatternSaveV1)`. | 128 octets pour les huit états MIDI FX. |
+| Persistence | `Inc/Storage/pattern_live_ram.h:PatternSaveV1`, `project_v1.h` | `note_fx[8]`, indirectement inclus dans Pattern/Project ; chargement vérifie `sizeof(PatternSaveV1)`. | Mesure compilée : `PatternSaveV1.note_fx=96` octets ; `sizeof(PatternSaveV1)=110 332` octets. |
 | Reset / duplication | `pattern_live_ram.c`, `track_snapshot.c`, `param_registry*` | Capture, normalize, reset et application à l’owner. | Boucles `NOTE_FX_SLOT_COUNT` et état complet à revalider. |
 | Undo/Redo | `Src/Storage/undo_v2.c` | Snapshots structurels des steps. | Aucun état NoteFx de base pris en charge actuellement. |
 | Capacité de piste | `track_topology` et `TRACK_CAPABILITY_MIDI_FX` | Détermine les pistes Play autorisées. | La capacité « possède des MIDI FX » reste pertinente ; elle ne doit pas encoder le nombre 4. |
@@ -115,20 +125,24 @@ Le changement doit être une réduction réelle de cardinalité, pas un quatriè
 
 Les anciens IDs S4 ne sont pas réutilisés pour l’audio. Comme le projet est en prototypage, la table V1 courante est recompilée et les payloads qui ne correspondent plus à `sizeof(PatternSaveV1)` sont refusés par le chargeur courant ; aucune migration ou conversion silencieuse de l’ancien slot 4 n’est ajoutée.
 
-### Quantification prévisionnelle
+### Quantification relevée sur le HEAD contrôlé
 
-Les valeurs sont des estimations statiques à confirmer par `sizeof`, map et `.map` après implémentation :
+Les valeurs ci-dessous viennent des types compilés et des maps Release Low-Cost/Premium disponibles ; aucune économie non mesurée n’est présentée comme une mesure.
 
-| Ressource | HEAD 4 slots | Cible 3 slots | Libération estimée |
+| Ressource | Référence 4 slots | HEAD contrôlé à 3 slots | Mesure / variation |
 |---|---:|---:|---:|
-| État NoteFx par piste | 16 octets | 12 octets | 4 octets/piste, 32 octets pour 8 pistes. |
-| `PatternSaveV1.note_fx` | 128 octets | 96 octets | 32 octets par objet Pattern. Project V1 bénéficie de la même réduction indirecte. |
-| `track_snapshot_t.note_fx` | 16 octets | 12 octets | 4 octets par snapshot. |
-| Runtime `g_slot` | 8 × 4 × environ 532 octets selon ABI | 8 × 3 | environ 4 256 octets. À confirmer par `sizeof(note_fx_slot_runtime_t)` et map. |
-| Overrides pipeline | 2 × 8 × 4 × 4 octets | 2 × 8 × 3 × 4 | 64 octets. |
-| P-lock runtime state | 94 slots × 8 × 4 octets | 90 slots × 8 × 4 | 128 octets. |
-| Bitmaps base/runtime | 94 octets chacun | 90 octets chacun | 8 octets cumulés. |
+| État NoteFx par piste | HEAD : `sizeof(note_fx_track_state_t)=16` | HEAD contrôlé : `sizeof(note_fx_track_state_t)=12` | 4 octets/piste, 32 octets pour 8 pistes. |
+| `PatternSaveV1.note_fx` | 128 octets | 96 octets | 32 octets par objet Pattern ; `sizeof(PatternSaveV1)=110 332` octets mesuré. |
+| `track_snapshot_t.note_fx` | 16 octets | 12 octets | `sizeof(track_snapshot_t)=17 900` octets mesuré ; 4 octets par snapshot. |
+| Runtime `g_slot` | comparaison historique non mesurée ici | map Release/Premium : 24 × 536 = 12 864 octets (`0x3240`) | `sizeof(note_fx_slot_runtime_t)=536` octets déduit de `g_slot[8][3]` et confirmé par map. |
+| Overrides pipeline | 2 × 8 × 4 × 4 octets | 2 × 8 × 3 × 4 = 192 octets | économie mesurée par dimensions : 64 octets. |
+| P-lock runtime state | comparaison historique non mesurée ici | 90 × 8 × 4 = 2 880 octets (`0xB40`) | flags base/runtime : 90 octets chacun (`0x5A`). |
 | Positions p-lock MIDI FX | 16 par piste | 12 par piste | 4 adresses par piste, soit 32 adresses logiques. |
+
+Les lectures de map après la correction courante donnent `RAM_D2=102 144` octets
+pour Release Low-Cost et `RAM_D2=108 640` octets pour Premium. Aucun map propre
+du HEAD quatre slots n’est disponible dans l’arbre pour calculer une différence
+totale fiable ; seule la variation par dimensions/types ci-dessus est affirmée.
 | IDs paramètres MIDI FX | S1..S4 = 16 | S1..S3 = 12 | 4 IDs et 4 descripteurs ; `PARAM_COUNT` attendu 323 → 319 si aucun autre tail change. |
 
 Le runtime Euclid ajoutera ses champs par instance ; l’économie du slot retiré ne doit donc pas être annoncée comme une marge nette avant mesure de l’implémentation. Le budget doit comparer le target complet « 3 slots dont 0..3 EUCLID » au HEAD courant.
@@ -175,7 +189,7 @@ Le schéma de base reste quatre octets logiques par slot :
 | Paramètre 3 | RANGE | DIV | Euclid : ordinal de l’autorité de division, défaut 1/16. |
 | MODEL | ARP/OFF | EUCLID | Sélecteur générique. |
 
-La base appliquée, et non la valeur brute reçue par une UI ou un p-lock, est l’autorité. Toute application de `LENGTH` recalcule immédiatement `PULSE=min(PULSE,LENGTH)` avant publication. Cette valeur effective est celle relue par UI, sauvegardée, copiée, dupliquée et placée dans l’Undo si l’Undo NoteFx est activé.
+La base appliquée, et non la valeur brute reçue par une UI ou un p-lock, est l’autorité. Toute application de `LENGTH` recalcule immédiatement `PULSE=min(PULSE,LENGTH)` avant publication. Cette valeur effective est celle relue par UI, sauvegardée, copiée et dupliquée ; les paramètres MIDI FX restent hors Undo/Redo.
 
 Le catalogue `Seq/seq_division_catalog` est la seule autorité de labels, rapports et conversion sample. Le runtime ne doit pas copier la table ARP actuelle dans EUCLID. Le défaut doit être exprimé par l’ordinal canonique correspondant à `1/16`, pas par une valeur sample ou un index local non documenté.
 
@@ -189,6 +203,12 @@ EUCLID personnalisé → ARP → defaults ARP
 ```
 
 Aucune valeur personnalisée de l’ancien modèle ne doit être conservée dans une banque parallèle ni réinterprétée. Restore, clipboard, duplication, p-lock MODEL et paramètre direct doivent passer par cette même normalisation.
+
+### Paramètre Euclid et changement de modèle : deux contrats distincts
+
+Une modification de `LENGTH`, `PULSE` ou `DIV` à l’intérieur du modèle EUCLID est une modification de configuration du même slot : elle conserve le modèle, applique le clamp concerné, reconfigure le runtime selon la section 9 et ne doit jamais être traitée comme un changement de modèle. En V1, ces paramètres ne sont pas p-lockables et aucune modification de paramètre ou de modèle MIDI FX n’est enregistrée dans Undo/Redo.
+
+Une modification de `MODEL` est une transition de modèle : elle charge exclusivement les defaults complets du modèle cible, ferme et purge le runtime du slot concerné selon la politique de la section 12, puis publie un état normalisé. Elle est p-lockable selon le contrat central, mais reste elle aussi hors Undo/Redo. Dans les deux cas, save/load, reset, duplication et clipboard transportent l’état de base normalisé ; aucun runtime n’est persisté.
 
 ## 8. Sémantique des notes strictement actives
 
@@ -317,7 +337,7 @@ Le format courant persiste uniquement les valeurs de base des trois slots : 3 ×
 
 Le clipboard piste/ensemble/page doit copier les trois slots par les APIs communes et repasser par la normalisation modèle. L’ordre de collage d’un slot est MODEL/defaults puis valeurs autorisées du modèle, sans réintroduire les valeurs du modèle source. Le clipboard séquence ne doit pas inventer une persistance de runtime Euclid.
 
-L’Undo v2 actuel est limité aux snapshots de steps et ne couvre pas les paramètres NoteFx. L’étape 3 doit décider et implémenter une entrée de transaction de base NoteFx si le produit exige Undo/Redo des changements MODEL/LENGTH/PULSE/DIV ; c’est la recommandation. Cette entrée ne capture que l’état de base normalisé et demande au runtime une reconfiguration sûre. Si l’Undo NoteFx est explicitement reporté, ce report doit être visible dans l’UI/documentation et les validations, sans prétendre que l’Undo existant couvre Euclid.
+L’Undo v2 reste limité aux snapshots de steps. Les paramètres et modèles MIDI FX, y compris `MODEL`, `LENGTH`, `PULSE` et `DIV`, sont explicitement hors Undo/Redo ; aucune transaction NoteFx et aucune capture du runtime ne doit être ajoutée. Cette exclusion ne s’applique pas aux contrats de save/load, reset, duplication et clipboard, qui restent obligatoires et utilisent l’état de base normalisé.
 
 ## 14. Point futur Live Record post-FX
 
@@ -363,6 +383,14 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 - **Documentation :** audits de dette et architecture scheduler/terminal, pas `docs/plan_midi_fx_3_slots_euclid.md` sauf mise à jour du statut d’exécution.
 - **Commit recommandé :** `fix: close residual note fx scheduler debts`.
 
+### Étape corrective 1R — Rouvrir les preuves de nettoyage avant EUCLID
+
+- **Objectif :** fermer les écarts réellement constatés de l’étape 1 sans réécrire son commit et sans ajouter EUCLID.
+- **État :** NON FERMÉE ; elle est la prochaine étape tant que `D-014`, `D-017` ou `D-019` restent ouverts.
+- **Actions :** rendre l’admission des backends internes observable ou documenter un adapter d’admission explicite ; imposer les defaults cibles lors de tout restore de modèle ; restaurer ou enregistrer uniquement les tests réellement présents ; relever la matrice owner/terminal et les budgets.
+- **Critères de fin :** tests host compilables et exécutables depuis le checkout, preuve des quatre combinaisons d’admission et des interleavings owner, restore modèle conforme, mesures Low-Cost/Premium enregistrées. Aucun runtime EUCLID n’est requis pour fermer 1R.
+- **Dépendances :** aucune ; 1R bloque les étapes 4 à 10.
+
 ### Étape 2 — Réduire les autorités de données à trois slots
 
 - **Objectif :** supprimer le slot 4 des constantes, structures, runtime et IDs de base.
@@ -378,16 +406,16 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 - **Documentation :** inventaire de cardinalité et architecture de données.
 - **Commit recommandé :** `refactor: reduce midi fx data authorities to three slots`.
 
-### Étape 3 — Réduire UI, p-locks, persistance, clipboard et Undo
+### Étape 3 — Réduire UI, p-locks, persistance, clipboard et contrat hors Undo
 
 - **Objectif :** rendre toutes les surfaces utilisateur et de stockage cohérentes avec S1..S3.
 - **Dettes/prérequis :** D-017, D-019 ; étape 2.
 - **Fichiers/symboles probables :** `Src/UI/pages/ui_page_midi_fx.c`, `Src/UI/ui_core_clipboard.c`, `Inc/Seq/seq_types.h`, `Inc/Seq/seq_param_iface.h`, `Src/Seq/seq_param_iface.c`, `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `Inc/Core/track_snapshot.h`, `Src/Core/track_snapshot.c`, `Src/Storage/project_sd_bank.c`, `Src/Storage/pattern_sd_bank.c`, `Src/Storage/undo_v2.c` et leurs tests.
-- **Changements précis :** navigation/labels/rendering limitées à 3 ; p-lock 16→12, offsets/runtime flags recalculés ; S4 non mapable/non restaurable ; Pattern/Project V1 et snapshots redimensionnés ; clipboard via état normalisé ; ajouter une transaction Undo/Redo NoteFx de base si le produit l’exige, recommandation retenue ici, sans runtime.
+- **Changements précis :** navigation/labels/rendering limitées à 3 ; p-lock 16→12, offsets/runtime flags recalculés ; S4 non mapable/non restaurable ; Pattern/Project V1 et snapshots redimensionnés ; clipboard via état normalisé avec `MODEL` avant ses paramètres dépendants ; paramètres et modèles MIDI FX explicitement hors Undo/Redo.
 - **Invariants :** aucun slot 4 dans UI, p-lock, masque, sauvegarde, duplication ou restauration ; ancien payload quatre slots non migré ; la valeur effective clamped est copiée et restaurée.
 - **Hors périmètre :** modèle EUCLID et moteur audio futur.
 - **Dépendances :** étape 2.
-- **Validations statiques/dynamiques :** CTest de tailles et round-trip V1 ; copy/paste page/track/ensemble ; duplication ; Undo/Redo base ; tentative S4 et payload ancien rejetés ; navigation trois slots.
+- **Validations statiques/dynamiques :** tailles et round-trip V1 ; copy/paste page/track/ensemble ; duplication/reset ; absence d’entrée NoteFx dans Undo/Redo ; tentative S4 et payload ancien rejetés ; navigation trois slots.
 - **Builds :** Release Low-Cost, Release Premium.
 - **Critères de fin :** `SEQ_PARAM_MIDI_FX_SLOT_COUNT=12`, runtime total et flags cohérents, Pattern/Project/snapshot round-trip vert, aucune valeur S4 appliquée.
 - **Documentation :** architecture persistence/UI et contrat de format courant.
@@ -437,6 +465,12 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 - **Critères de fin :** une instance produit uniquement des pulses pour des sources encore actives, avec deadlines monotones et phase conforme aux vecteurs.
 - **Documentation :** runtime EUCLID, timeline et règles de phase.
 - **Commit recommandé :** `feat: add strict active euclid runtime`.
+
+### Jalon 6M — Mesure runtime précoce avant intégration terminale
+
+Ce jalon est obligatoire après la phase minimale de l’étape 6, avant toute implémentation de l’étape 7 et avant le fan-out terminal complet. Il ne justifie aucune capacité par hypothèse : relever `sizeof` et la map du runtime Euclid, puis instrumenter DWT max/p99, cycles, high-water, IRQ audio, marge et placement mémoire pour une instance, trois instances sur une piste, huit pistes à une instance, `PULSE=LENGTH`, division rapide et 16 sources strict-actives. La mesure doit aussi couvrir la reconfiguration `LENGTH/PULSE/DIV` et le split de demi-buffer.
+
+Le résultat est un point de décision : conserver, réduire ou refuser une borne doit être motivé par la mesure et sa marge H743. Les mesures de terminal, USB, saturation et trois EUCLID sur huit pistes restent à l’étape 9 ; aucune intégration terminale complète ne doit précéder ce jalon.
 
 ### Étape 7 — Générer les paires Note On/Off et continuer la chaîne
 
@@ -519,6 +553,8 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 | Phase | Ajout/retrait source | phase conservée tant qu’une source reste active ; reset seulement idle→nouvelle source. | Runtime |
 | Phase | Changement LENGTH/PULSE | sorties fermées, masque reconstruit, phase 0, Off avant nouvel On. | Runtime |
 | Horloge | Changement DIV | owned fermés, deadlines anciennes stale, période nouvelle exacte. | Runtime |
+| Configuration | Paramètre EUCLID LENGTH/PULSE/DIV | même modèle, clamp/reconfiguration selon section 9, aucun p-lock V1 et aucune entrée Undo/Redo. | Host/UI + Runtime |
+| Configuration | Changement MODEL | transition de modèle distincte, defaults complets cibles, purge du slot seul, aucune entrée Undo/Redo. | Host/UI + Runtime |
 | Horloge | Tempo/clock source | Off existants inchangés, futures deadlines cohérentes, pas de double clock. | Target |
 | Paires | Off/On au même sample | Off terminal et owned traité avant nouvel On. | Runtime |
 | Paires | Saturation 0/1/2 places | paire refusée sans On orphelin, compteur exact. | Host |
@@ -536,7 +572,7 @@ Les étapes fonctionnelles requièrent les builds `Release Low-Cost` et `Release
 | P-lock | Euclid L/P/DIV | refus central, état base/runtime inchangé. | Host/UI |
 | P-lock | Euclid MODEL | changement transactionnel et defaults cibles. | Host/UI |
 | Persistance | save/load | `16/4/1/16` et valeurs clamped round-trip, aucun runtime. | Host/target |
-| Undo | base NoteFx | undo/redo de la transaction si activé ; sinon limitation explicitement signalée. | Host/UI |
+| Undo | paramètres/modèles MIDI FX | aucune transaction NoteFx, aucun runtime capturé ; save/load, reset, duplication et clipboard restent testés séparément. | Static + Host/UI |
 | Charge | 8 pistes × 3 Euclid × 16 sources | quotas, high-water, cycles et refus documentés. | H743 |
 | Charge | DIV rapide / masque plein | absence d’underrun et fermetures exactes. | H743 |
 | Charge | USB/moteur saturés | admissions réelles, Off prioritaires, aucune note pendante. | H743 |
@@ -586,7 +622,7 @@ Les décisions produit de la section 3 ne sont pas renégociables. Les seules d�
 
 1. **Sous-ensemble UI de DIV.** Le catalogue canonique contient actuellement huit divisions ARP, dont les ternaires, tandis que certaines pages utilisent un sous-ensemble de quatre divisions. Recommandation : exposer les huit choix canoniques à EUCLID pour éviter une limitation arbitraire et garder `1/16` comme défaut ; si l’ergonomie impose quatre choix, créer un sous-ensemble explicite du catalogue, jamais une table locale.
 2. **Capacité finale des quotas/fan-out.** Le target produit autorise trois EUCLID ; le nombre d’On par demi-buffer, le terminal 64 et le budget H743 doivent être confirmés par mesure. Recommandation : commencer avec trois sans plafond spécial, mesurer, puis documenter toute borne nécessaire avec cause et marge.
-3. **Undo NoteFx V1.** L’Undo v2 actuel ne porte pas les paramètres NoteFx. Recommandation : ajouter une transaction de base normalisée pour MODEL et les trois paramètres, sans capturer le runtime ; à défaut, reporter explicitement cette fonction avant d’exposer une promesse UI.
+3. **Undo NoteFx V1 — décision figée.** Les paramètres et modèles MIDI FX restent hors Undo/Redo, sans transaction ni capture du runtime. Save/load, reset, duplication et clipboard restent obligatoires et doivent manipuler l’état de base normalisé.
 4. **Ancrage après tempo/clock change sans transition destructive.** La règle proposée conserve les Off déjà planifiés et recalcule les deadlines futures au prochain boundary. Recommandation : garder cette règle et la figer par test H743 ; toute autre ancre doit être motivée par une observation audible et documentée.
 
 Il n’y a pas de décision ouverte sur un slot audio fonctionnel, une migration historique, ROTATE/GATE, le latch, le mute, l’indépendance des admissions ou le seam Live Record : ces points sont déjà figés hors périmètre.
@@ -595,8 +631,9 @@ Il n’y a pas de décision ouverte sur un slot audio fonctionnel, une migration
 
 ```text
 1 prérequis nettoyage
+  → 1R preuves correctives (non fermée)
   → 2 autorités de données 4→3
-  → 3 UI / p-lock / persistence / clipboard / Undo
+  → 3 UI / p-lock / persistence / clipboard / hors Undo
   → 4 modèle et defaults Euclid
   → 5 masque pur borné
   → 6 runtime strict-actif / phase / deadlines
@@ -631,19 +668,20 @@ positions et le runtime de p-lock de 94 à 90 octets. La famille UI MIDI FX ne
 rend plus de quatrième slot sélectionnable. Aucune capacité audio ni alias S4
 n’a été créé. Les builds `build/Release` et `build/Premium` passent.
 
-La validation dynamique des snapshots, de la persistance, du clipboard, de
-l’Undo et des tests host reste reportée à l’étape 3/D-019 ; les références
+La validation dynamique des snapshots, de la persistance, du clipboard et des
+tests host reste reportée à l’étape 3/D-019 ; les références
 fonctionnelles S4 absentes du code courant ont été contrôlées par recherche
 négative.
 
-**Étape 3 — passe UI/format/clipboard/Undo du 2026-08-05 : exécutée sur le
-chemin courant.** Les formats Pattern et Project passent en version 7 et
-rejettent les payloads antérieurs ; les structures Pattern, Project et
-snapshots utilisent déjà l’état `NOTE_FX_SLOT_COUNT=3`. Les p-locks courants
-restent bornés à 12 positions et les validations de chargement refusent les
-slots non supportés. Le collage MIDI FX applique `MODEL` avant ses paramètres
-dépendants et la base normalisée des trois slots est maintenant couverte par
-une transaction Undo/Redo sans capture du runtime.
+**Étape 3 — passe UI/format/clipboard du 2026-08-05 : finalisée après
+correction.** Les formats Pattern et Project passent en version 7 et rejettent
+les payloads antérieurs ; les structures Pattern, Project et snapshots utilisent
+déjà l’état `NOTE_FX_SLOT_COUNT=3`. Les p-locks courants restent bornés à 12
+positions et les validations de chargement refusent les slots non supportés. Le
+collage MIDI FX applique `MODEL` avant ses paramètres dépendants et la base
+normalisée des trois slots est persistée, copiée, dupliquée et réinitialisée.
+Les extensions Undo/Redo des paramètres ou modèles MIDI FX ont été retirées ;
+`undo_v2` reste séquence-only.
 
 Les builds `build/Release` et `build/Premium` passent. La matrice dynamique
 host/round-trip et les tests dédiés restent bloqués par D-019 : les sources

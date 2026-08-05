@@ -14,7 +14,7 @@ Les remplacements en masse valident toutes les familles, types, capacités Loope
 
 ## Séquence
 
-`seq_model` contient huit modèles identiques de 64 steps et un pool de 1024 p-locks par piste. Chaque piste Play possède exactement trois slots MIDI FX (`S1..S3`) ; le scheduler, le live record, le mute, le stop et le panic sont bornés par les mêmes huit index. `undo_v2` conserve huit transactions maximum, séquence ou état de base MIDI FX, et prévalide l'espace nécessaire avant toute application.
+`seq_model` contient huit modèles identiques de 64 steps et un pool de 1024 p-locks par piste. Chaque piste Play possède exactement trois slots MIDI FX (`S1..S3`) ; le scheduler, le live record, le mute, le stop et le panic sont bornés par les mêmes huit index. `undo_v2` conserve huit transactions maximum pour les mutations de séquence uniquement ; l'état de base MIDI FX est persistant et copiable, mais reste hors Undo/Redo.
 
 ## UI
 

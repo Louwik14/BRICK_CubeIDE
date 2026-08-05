@@ -12,7 +12,6 @@
 #include "ui_macro_interaction.h"
 #include "Storage/project_v1.h"
 #include "Storage/memory_layout.h"
-#include "Storage/undo_v2.h"
 #include "Core/engine_tasklet.h"
 #include "Core/track_snapshot.h"
 #include "NoteFx/note_fx_state.h"
@@ -77,38 +76,6 @@ static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_
 
     *out_param = param;
     return 1U;
-}
-
-static uint8_t ui_core_clipboard_begin_note_fx_undo(const param_id_t *params, uint8_t count)
-{
-    if (params == 0)
-    {
-        return 0U;
-    }
-
-    for (uint8_t i = 0U; i < count; ++i)
-    {
-        uint8_t param = 0U;
-        if (ui_core_clipboard_note_fx_param_kind(params[i], &param) != 0U)
-        {
-            return (undo_v2_begin_note_fx_transaction() == UNDO_V2_STATUS_OK) ? 1U : 0U;
-        }
-    }
-
-    return 0U;
-}
-
-static void ui_core_clipboard_finish_note_fx_undo(uint8_t started)
-{
-    if (started == 0U)
-    {
-        return;
-    }
-
-    if (undo_v2_commit_note_fx_transaction() != UNDO_V2_STATUS_OK)
-    {
-        undo_v2_cancel_transaction();
-    }
 }
 
 static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, const char *message)
@@ -387,8 +354,6 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         return;
     }
 
-    const uint8_t note_fx_undo_started = ui_core_clipboard_begin_note_fx_undo(params, count);
-
     /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
@@ -421,7 +386,6 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         }
     }
     param_registry_batch_end();
-    ui_core_clipboard_finish_note_fx_undo(note_fx_undo_started);
 }
 
 static uint8_t ui_core_clipboard_copy_track(uint8_t track)
@@ -531,7 +495,6 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     uint8_t applied = 0U;
     uint8_t common = 0U;
-    const uint8_t note_fx_undo_started = ui_core_clipboard_begin_note_fx_undo(target_params, target_count);
     /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
@@ -583,8 +546,6 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
         }
     }
     param_registry_batch_end();
-    ui_core_clipboard_finish_note_fx_undo(note_fx_undo_started);
-
     *out_common_count = common;
 
     return applied;

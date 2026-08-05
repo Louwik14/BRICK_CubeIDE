@@ -6,4 +6,4 @@ Les ensembles de piste `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI FX` p
 
 `SHIFT + STEP 16` ouvre prioritairement la page Master globale, y compris sur Low-Cost, sans modifier la piste active. Cette page expose reverb, delay et compresseur; elle n'a ni séquence, mute, clipboard de piste ou Undo. Settings reste accessible par son bouton dédié.
 
-Les clipboards Track/Page/Ensemble transportent des états de slots. Un collage MIDI FX applique `MODEL` avant ses paramètres dépendants afin de conserver un état normalisé ; sa modification de base est undoable sans capturer le runtime. Un collage Track conserve exactement l'entrée External demandée et échoue en cas de conflit au lieu de déplacer ou normaliser un propriétaire.
+Les clipboards Track/Page/Ensemble transportent des états de slots. Un collage MIDI FX applique `MODEL` avant ses paramètres dépendants afin de conserver un état normalisé ; les paramètres et modèles MIDI FX restent hors Undo/Redo, sans capturer le runtime. Un collage Track conserve exactement l'entrée External demandée et échoue en cas de conflit au lieu de déplacer ou normaliser un propriétaire.
