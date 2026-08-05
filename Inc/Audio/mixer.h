@@ -119,6 +119,7 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s);
 void mixer_set_track_vca_decay(uint32_t track_id, float decay_s);
 void mixer_set_track_vca_sustain(uint32_t track_id, float sustain);
 void mixer_set_track_vca_release(uint32_t track_id, float release_s);
+void mixer_set_track_vca_env_type(uint32_t track_id, uint8_t type);
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled);
 void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard);
 /*

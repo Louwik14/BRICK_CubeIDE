@@ -165,6 +165,7 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
         PARAM_VCA_DECAY,
         PARAM_VCA_SUSTAIN,
         PARAM_VCA_RELEASE,
+        PARAM_VCA_ENV_TYPE,
         PARAM_ENV_RETRIG_VCA
     };
 

@@ -63,6 +63,7 @@ typedef struct
     float vca_decay;
     float vca_sustain;
     float vca_release;
+    float vca_env_type;
     float env_retrig_filter;
     float env_retrig_vca;
     float env_retrig_mod;

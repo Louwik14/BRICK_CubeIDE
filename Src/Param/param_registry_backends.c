@@ -10,6 +10,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
+#include "Audio/vca_env.h"
 #include "Core/track_mute.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
@@ -40,6 +41,7 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
                      || (id == PARAM_VCA_DECAY)
                      || (id == PARAM_VCA_SUSTAIN)
                      || (id == PARAM_VCA_RELEASE)
+                     || (id == PARAM_VCA_ENV_TYPE)
                      || (id == PARAM_ENV_RETRIG_VCA));
 }
 
@@ -1304,6 +1306,20 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                 state->env_retrig_vca = (float)hard;
             }
             mixer_set_track_vca_retrigger_hard(ctx->mix_track_id, hard);
+            return 1U;
+        }
+
+        case PARAM_VCA_ENV_TYPE:
+        {
+            const uint8_t type = (value >= 0.5f)
+                               ? (uint8_t)VCA_ENV_TYPE_LINEAR
+                               : (uint8_t)VCA_ENV_TYPE_DAISY;
+            track_sound_state_t *state = track_sound_state_get(track);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->vca_env_type = (float)type;
+            }
+            mixer_set_track_vca_env_type(ctx->mix_track_id, type);
             return 1U;
         }
 

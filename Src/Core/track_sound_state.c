@@ -44,6 +44,7 @@ void track_sound_state_make_default(track_sound_state_t *state)
     state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
     state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;
     state->vca_release = param_registry[PARAM_VCA_RELEASE].default_value;
+    state->vca_env_type = param_registry[PARAM_VCA_ENV_TYPE].default_value;
     state->env_retrig_filter = param_registry[PARAM_ENV_RETRIG_FILTER].default_value;
     state->env_retrig_vca = param_registry[PARAM_ENV_RETRIG_VCA].default_value;
     state->env_retrig_mod = param_registry[PARAM_ENV_RETRIG_MOD].default_value;

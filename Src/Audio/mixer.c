@@ -24,6 +24,7 @@
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
+#include "vca_env.h"
 #include "fx_biquad_filter.h"
 #include "fx_delay_dual.h"
 #include "fx_delay_stereo.h"
@@ -71,6 +72,7 @@ typedef struct {
     fx_biquad_filter_mono_t biquad_mono;
     env_adsr_t filter_env;
     env_adsr_t vca_env;
+    vca_env_t synth_vca_env;
     fx_dj_eq3_t eq3;
     fx_dj_eq3_mono_t eq3_mono;
     float sample_rate;
@@ -99,6 +101,7 @@ typedef struct {
     uint8_t vca_gate;
     uint8_t filter_retrigger_hard;
     uint8_t vca_retrigger_hard;
+    uint8_t synth_vca_type;
     float vca_env_value;
     float filter_env_value;
     int16_t filter_env_prepared_first[AUDIO_BLOCK_SIZE / 8U];
@@ -241,10 +244,11 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
     env_adsr_set_decay(&dst->filter_env, src->filter_env.decay);
     env_adsr_set_sustain(&dst->filter_env, src->filter_env.sustain);
     env_adsr_set_release(&dst->filter_env, src->filter_env.release);
-    env_adsr_set_attack(&dst->vca_env, src->vca_env.attack);
-    env_adsr_set_decay(&dst->vca_env, src->vca_env.decay);
-    env_adsr_set_sustain(&dst->vca_env, src->vca_env.sustain);
-    env_adsr_set_release(&dst->vca_env, src->vca_env.release);
+    vca_env_set_attack(&dst->synth_vca_env, src->synth_vca_env.attack_time);
+    vca_env_set_decay(&dst->synth_vca_env, src->synth_vca_env.decay_time);
+    vca_env_set_sustain(&dst->synth_vca_env, src->synth_vca_env.sustain);
+    vca_env_set_release(&dst->synth_vca_env, src->synth_vca_env.release_time);
+    dst->synth_vca_type = src->synth_vca_type;
     dst->config_version = src->config_version;
     if (previous_type != dst->type)
     {
@@ -658,6 +662,12 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_peaks(1.0f));
     env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
     env_adsr_reset(&filter->vca_env);
+    vca_env_init(&filter->synth_vca_env, filter->sample_rate);
+    vca_env_set_attack(&filter->synth_vca_env, 0.001f);
+    vca_env_set_decay(&filter->synth_vca_env, 0.001f);
+    vca_env_set_sustain(&filter->synth_vca_env, 1.0f);
+    vca_env_set_release(&filter->synth_vca_env, 0.001f);
+    filter->synth_vca_type = (uint8_t)VCA_ENV_TYPE_DAISY;
 
     mixer_track_filter_reset_dsp(filter);
 }
@@ -2494,8 +2504,13 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
     const uint16_t next = mixer_track_filter_time_s_to_peaks(attack_s, filter->sample_rate);
-    if (filter->vca_env.attack == next) return;
-    env_adsr_set_attack(&filter->vca_env, next);
+    const float synth_next = (attack_s < 0.0f) ? 0.0f : attack_s;
+    if ((filter->vca_env.attack == next)
+            && (filter->synth_vca_env.attack_time == synth_next))
+        return;
+    if (filter->vca_env.attack != next)
+        env_adsr_set_attack(&filter->vca_env, next);
+    vca_env_set_attack(&filter->synth_vca_env, attack_s);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2506,8 +2521,13 @@ void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
     const uint16_t next = mixer_track_filter_time_s_to_peaks(decay_s, filter->sample_rate);
-    if (filter->vca_env.decay == next) return;
-    env_adsr_set_decay(&filter->vca_env, next);
+    const float synth_next = (decay_s < 0.0f) ? 0.0f : decay_s;
+    if ((filter->vca_env.decay == next)
+            && (filter->synth_vca_env.decay_time == synth_next))
+        return;
+    if (filter->vca_env.decay != next)
+        env_adsr_set_decay(&filter->vca_env, next);
+    vca_env_set_decay(&filter->synth_vca_env, decay_s);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2518,8 +2538,14 @@ void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
     const uint16_t next = mixer_track_filter_sustain_to_peaks(sustain);
-    if (filter->vca_env.sustain == next) return;
-    env_adsr_set_sustain(&filter->vca_env, next);
+    const float synth_next = (sustain <= 0.0f) ? 0.0f
+                           : ((sustain >= 1.0f) ? 1.0f : sustain);
+    if ((filter->vca_env.sustain == next)
+            && (filter->synth_vca_env.sustain == synth_next))
+        return;
+    if (filter->vca_env.sustain != next)
+        env_adsr_set_sustain(&filter->vca_env, next);
+    vca_env_set_sustain(&filter->synth_vca_env, sustain);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2530,8 +2556,28 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
     const uint16_t next = mixer_track_filter_time_s_to_peaks(release_s, filter->sample_rate);
-    if (filter->vca_env.release == next) return;
-    env_adsr_set_release(&filter->vca_env, next);
+    const float synth_next = (release_s < 0.0f) ? 0.0f : release_s;
+    if ((filter->vca_env.release == next)
+            && (filter->synth_vca_env.release_time == synth_next))
+        return;
+    if (filter->vca_env.release != next)
+        env_adsr_set_release(&filter->vca_env, next);
+    vca_env_set_release(&filter->synth_vca_env, release_s);
+    mixer_track_filter_touch_config(filter);
+}
+
+void mixer_set_track_vca_env_type(uint32_t track_id, uint8_t type)
+{
+    if (track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *const filter = &g_track_filters[track_id];
+    const uint8_t next = (type == (uint8_t)VCA_ENV_TYPE_LINEAR)
+                       ? (uint8_t)VCA_ENV_TYPE_LINEAR
+                       : (uint8_t)VCA_ENV_TYPE_DAISY;
+    if (filter->synth_vca_type == next)
+        return;
+    filter->synth_vca_type = next;
     mixer_track_filter_touch_config(filter);
 }
 
@@ -3001,27 +3047,38 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
     uint32_t i = 0U;
     const uint8_t poly_initialized =
         g_external_poly_initialized[mix_track_id];
-    for (; i < frames; ++i)
-    {
-        float vca = 0.0f;
-        if (env_adsr_process_vca_sample(&filter->vca_env, &vca) == 0U)
-        {
-            break;
-        }
-        filter->vca_env_value = vca;
-        const float scaled = mono[i] * vca;
-        const float attenuated = scaled * attenuated_pan;
-        if (poly_initialized == 0U)
-        {
-            attenuated_output[i] = attenuated;
-            unit_output[i] = scaled;
-        }
-        else
-        {
-            attenuated_output[i] += attenuated;
-            unit_output[i] += scaled;
-        }
+#define MIXER_PROCESS_POLY_VOICE_LOOP(_process_sample) \
+    for (; i < frames; ++i) \
+    { \
+        float vca = 0.0f; \
+        if ((_process_sample)(&filter->synth_vca_env, &vca) == 0U) \
+        { \
+            break; \
+        } \
+        filter->vca_env_value = vca; \
+        const float scaled = mono[i] * vca; \
+        const float attenuated = scaled * attenuated_pan; \
+        if (poly_initialized == 0U) \
+        { \
+            attenuated_output[i] = attenuated; \
+            unit_output[i] = scaled; \
+        } \
+        else \
+        { \
+            attenuated_output[i] += attenuated; \
+            unit_output[i] += scaled; \
+        } \
     }
+
+    if (filter->synth_vca_env.type == VCA_ENV_TYPE_LINEAR)
+    {
+        MIXER_PROCESS_POLY_VOICE_LOOP(vca_env_process_linear);
+    }
+    else
+    {
+        MIXER_PROCESS_POLY_VOICE_LOOP(vca_env_process_daisy);
+    }
+#undef MIXER_PROCESS_POLY_VOICE_LOOP
     if (poly_initialized == 0U)
     {
         if (i < frames)
@@ -3040,7 +3097,7 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
         memset(&mono[i], 0, (frames - i) * sizeof(float));
         filter->vca_env_value = 0.0f;
     }
-    return (env_adsr_stage(&filter->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE);
+    return (vca_env_stage(&filter->synth_vca_env) != VCA_ENV_IDLE);
 }
 
 void mixer_commit_external_poly(uint32_t track_id, uint32_t frames)
@@ -3075,7 +3132,10 @@ void mixer_track_poly_note_on(uint32_t poly_track_id,
     filter->vca_note_count = 1U;
     filter->vca_note_active = 1U;
     filter->vca_gate = 1U;
-    env_adsr_retrigger(&filter->vca_env, filter->vca_retrigger_hard != 0U);
+    vca_env_set_type(&filter->synth_vca_env,
+                     (vca_env_type_t)filter->synth_vca_type);
+    vca_env_retrigger(&filter->synth_vca_env,
+                      filter->vca_retrigger_hard != 0U);
 }
 
 void mixer_track_poly_note_off(uint32_t poly_track_id, uint8_t voice, uint8_t note)
@@ -3088,7 +3148,7 @@ void mixer_track_poly_note_off(uint32_t poly_track_id, uint8_t voice, uint8_t no
     filter->vca_note_active = 0U;
     filter->vca_note_count = 0U;
     filter->vca_gate = 0U;
-    env_adsr_gate_off(&filter->vca_env);
+    vca_env_gate_off(&filter->synth_vca_env);
 }
 
 void mixer_track_poly_all_notes_off(uint32_t poly_track_id)
@@ -3103,7 +3163,7 @@ void mixer_track_poly_all_notes_off(uint32_t poly_track_id)
             filter->vca_note_count = 0U;
             filter->vca_gate = 0U;
             env_adsr_gate_off(&filter->filter_env);
-            env_adsr_gate_off(&filter->vca_env);
+            vca_env_gate_off(&filter->synth_vca_env);
         }
     }
 }

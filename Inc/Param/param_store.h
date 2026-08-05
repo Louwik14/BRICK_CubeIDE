@@ -271,7 +271,7 @@ enum {
     PARAM_SAMPLER_CLIP_HOP,
     PARAM_SAMPLER_CLIP_SEARCH,
     PARAM_SAMPLER_CLIP_BEAT_RESYNC,
-    PARAM_RESERVED_250,
+    PARAM_VCA_ENV_TYPE,
     PARAM_RESERVED_251,
     PARAM_RESERVED_252,
     PARAM_RESERVED_253,
@@ -365,7 +365,6 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
         case PARAM_RESERVED_035:
         case PARAM_RESERVED_036:
         case PARAM_RESERVED_037:
-        case PARAM_RESERVED_250:
         case PARAM_RESERVED_251:
         case PARAM_RESERVED_252:
         case PARAM_RESERVED_253:

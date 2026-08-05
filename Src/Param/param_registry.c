@@ -447,6 +447,9 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
         case PARAM_VCA_RELEASE:
             *out_value = state->vca_release;
             return 1U;
+        case PARAM_VCA_ENV_TYPE:
+            *out_value = state->vca_env_type;
+            return 1U;
         case PARAM_ENV_RETRIG_FILTER:
             *out_value = state->env_retrig_filter;
             return 1U;

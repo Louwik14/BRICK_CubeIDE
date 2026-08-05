@@ -257,6 +257,7 @@ static uint8_t track_runtime_param_is_vca(param_id_t param)
                      || (param == PARAM_VCA_DECAY)
                      || (param == PARAM_VCA_SUSTAIN)
                      || (param == PARAM_VCA_RELEASE)
+                     || (param == PARAM_VCA_ENV_TYPE)
                      || (param == PARAM_ENV_RETRIG_VCA));
 }
 
@@ -1546,6 +1547,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
         case PARAM_VCA_RELEASE:
+        case PARAM_VCA_ENV_TYPE:
         case PARAM_ENV_RETRIG_VCA:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;

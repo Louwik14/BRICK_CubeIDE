@@ -34,11 +34,11 @@ static ui_template_family_t g_ui_template_env_family_audio = {
 
 static const ui_template_family_t g_ui_template_env_family_retrig = {
     .family_title = "ENV 2/2",
-    .nav_labels = { "RETRIG", "-", "-", "-" },
+    .nav_labels = { "MODE", "-", "-", "-" },
     .subpages = {
         {
-            .title = "RETRIG",
-            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_FILTER_KEYTRK } },
+            .title = "MODE",
+            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_VCA_ENV_TYPE } },
         },
         {
             .title = "-",
