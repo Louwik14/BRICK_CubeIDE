@@ -235,7 +235,7 @@ uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value
     {
         case 0U:
         {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 38.0f);
+            const float clamped = param_backend_clamp_value(value, 0.0f, (float)BRICK6_PRISM_LAST_MODEL);
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->prism.edit[osc] = (float)(uint8_t)(clamped + 0.5f);

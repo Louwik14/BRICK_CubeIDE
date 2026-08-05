@@ -20,7 +20,7 @@ constexpr float kBraidsPitchCoarseRange = 48.0f;
 constexpr float kBraidsPitchFineRange = 2.0f;
 constexpr float kBraidsPitchFmRange = 24.0f;
 constexpr float kBraidsReleaseCoeff = 0.995f;
-constexpr float kBraidsEditMax = 38.0f;
+constexpr float kBraidsEditMax = (float)BRICK6_PRISM_LAST_MODEL;
 constexpr float kBraidsSampleRate = 48000.0f;
 constexpr float kBraidsTailMinSeconds = 0.001f;
 constexpr float kBraidsTailMaxSeconds = 5.0f;
@@ -54,11 +54,6 @@ static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
     braids::MACRO_OSC_SHAPE_FM,
     braids::MACRO_OSC_SHAPE_FEEDBACK_FM,
     braids::MACRO_OSC_SHAPE_CHAOTIC_FEEDBACK_FM,
-    braids::MACRO_OSC_SHAPE_STRUCK_BELL,
-    braids::MACRO_OSC_SHAPE_STRUCK_DRUM,
-    braids::MACRO_OSC_SHAPE_KICK,
-    braids::MACRO_OSC_SHAPE_CYMBAL,
-    braids::MACRO_OSC_SHAPE_SNARE,
     braids::MACRO_OSC_SHAPE_WAVETABLES,
     braids::MACRO_OSC_SHAPE_WAVE_MAP,
     braids::MACRO_OSC_SHAPE_WAVE_LINE,
@@ -71,6 +66,9 @@ static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
     braids::MACRO_OSC_SHAPE_DIGITAL_MODULATION,
     braids::MACRO_OSC_SHAPE_QUESTION_MARK,
 };
+
+static_assert((sizeof(kBraidsShapeMap) / sizeof(kBraidsShapeMap[0])) == BRICK6_PRISM_MODEL_COUNT,
+              "Prism catalogue and Braids shape map must stay compact and aligned");
 
 typedef struct
 {

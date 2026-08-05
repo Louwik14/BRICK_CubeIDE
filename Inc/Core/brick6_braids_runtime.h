@@ -31,6 +31,8 @@ typedef struct
 
 #define BRICK6_BRAIDS_MAX_INSTANCES 8U
 #define BRICK6_BRAIDS_VOICE_INSTANCE_COUNT 16U
+#define BRICK6_PRISM_MODEL_COUNT 34U
+#define BRICK6_PRISM_LAST_MODEL (BRICK6_PRISM_MODEL_COUNT - 1U)
 
 void brick6_braids_runtime_init(void);
 void brick6_braids_runtime_reset_instance(uint8_t instance_id);

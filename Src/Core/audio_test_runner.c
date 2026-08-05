@@ -6,6 +6,7 @@
 
 #include "Audio/audio_track_diag.h"
 #include "Core/brick6_deluge_runtime.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/cpu_load.h"
 #include "Core/track_runtime.h"
@@ -43,11 +44,16 @@
     (AUDIO_TEST_FX_TAIL_EARLY_MS + AUDIO_TEST_FX_TAIL_LATE_MS)
 #define AUDIO_TEST_ENGINE_TRACKS SEQ_TRACK_COUNT
 #define AUDIO_TEST_NOTE_MAX 12U
-#define AUDIO_TEST_CAL_PRISM_MODELS 39U
+#define AUDIO_TEST_CAL_PRISM_MODELS BRICK6_PRISM_MODEL_COUNT
 #define AUDIO_TEST_CAL_STACK_MODELS 4U
 #define AUDIO_TEST_CAL_DELUGE_MODELS 6U
-#define AUDIO_TEST_CAL_MODEL_COUNT 53U
-#define AUDIO_TEST_CAL_ENGINE_CASES 2901U
+#define AUDIO_TEST_CAL_STACK_KEY_BASE AUDIO_TEST_CAL_PRISM_MODELS
+#define AUDIO_TEST_CAL_DELUGE_KEY_BASE (AUDIO_TEST_CAL_STACK_KEY_BASE + AUDIO_TEST_CAL_STACK_MODELS)
+#define AUDIO_TEST_CAL_WAVE_KEY (AUDIO_TEST_CAL_DELUGE_KEY_BASE + AUDIO_TEST_CAL_DELUGE_MODELS)
+#define AUDIO_TEST_CAL_SAMPLER_KEY (AUDIO_TEST_CAL_WAVE_KEY + 1U)
+#define AUDIO_TEST_CAL_DRUM_KEY_BASE (AUDIO_TEST_CAL_SAMPLER_KEY + 1U)
+#define AUDIO_TEST_CAL_MODEL_COUNT (AUDIO_TEST_CAL_DRUM_KEY_BASE + 2U)
+#define AUDIO_TEST_CAL_ENGINE_CASES 2586U
 #define AUDIO_TEST_LEGACY_CASES 26U
 #define AUDIO_TEST_CAL_MAX_OBSERVATIONS 256U
 #define AUDIO_TEST_CAL_TARGET_DBFS (-18.0f)
@@ -230,17 +236,12 @@ static void all_test_notes_off(void)
     keyboard_engine_all_notes_off();
 }
 
-static uint8_t prism_is_percussive(uint8_t model)
-{
-    return ((model >= 23U) && (model <= 27U)) ? 1U : 0U;
-}
-
 static uint8_t prism_is_random(uint8_t model)
 {
     switch (model)
     {
-        case 22U: case 26U: case 27U: case 32U: case 33U:
-        case 34U: case 35U: case 36U: case 38U:
+        case 22U: case 27U: case 28U: case 29U: case 30U:
+        case 31U: case 33U:
             return 1U;
         default:
             return 0U;
@@ -314,10 +315,8 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
             out->color = tone_values[out->color_setting][1];
             out->source_count =
                 (out->oscillator_mode == 0U) ? 1U : 2U;
-            out->sound_type = (prism_is_percussive(model) != 0U)
-                ? TEST_SOUND_PERCUSSIVE
-                : ((prism_is_random(model) != 0U)
-                    ? TEST_SOUND_NOISY_RANDOM : TEST_SOUND_CONTINUOUS);
+            out->sound_type = (prism_is_random(model) != 0U)
+                ? TEST_SOUND_NOISY_RANDOM : TEST_SOUND_CONTINUOUS;
             (void)snprintf(out->name, sizeof(out->name),
                            "PRISM_%02u_N%u_T%u_O%u_R%u",
                            (unsigned)model, (unsigned)out->notes[0],
@@ -341,7 +340,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
             const uint16_t base = (uint16_t)(local % 75U);
             out->engine = TEST_ENGINE_STACK;
             out->model = model;
-            out->model_key = (uint8_t)(39U + model);
+            out->model_key = (uint8_t)(AUDIO_TEST_CAL_STACK_KEY_BASE + model);
             out->repetition = (uint8_t)(local / 75U + 1U);
             out->oscillator_mode = (uint8_t)(base / 15U);
             const uint8_t tone = (uint8_t)(base % 15U);
@@ -374,7 +373,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     {
         out->engine = TEST_ENGINE_DELUGE;
         out->model = (uint8_t)(local / 3U);
-        out->model_key = (uint8_t)(43U + out->model);
+        out->model_key = (uint8_t)(AUDIO_TEST_CAL_DELUGE_KEY_BASE + out->model);
         out->notes[0] = notes[local % 3U];
         (void)snprintf(out->name, sizeof(out->name), "DELUGE_%02u_N%u",
                        (unsigned)out->model, (unsigned)out->notes[0]);
@@ -385,7 +384,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     if (local < 9U)
     {
         out->engine = TEST_ENGINE_WAVE;
-        out->model_key = 49U;
+        out->model_key = AUDIO_TEST_CAL_WAVE_KEY;
         out->oscillator_mode = (uint8_t)(local / 3U);
         out->source_count =
             (out->oscillator_mode == 0U) ? 1U : 2U;
@@ -404,7 +403,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     if (local < 3U)
     {
         out->engine = TEST_ENGINE_SAMPLER;
-        out->model_key = 50U;
+        out->model_key = AUDIO_TEST_CAL_SAMPLER_KEY;
         out->notes[0] = notes[local];
         out->sound_type = TEST_SOUND_PERCUSSIVE;
         (void)snprintf(out->name, sizeof(out->name), "SAMPLER_N%u",
@@ -416,7 +415,7 @@ static void build_engine_case(uint16_t index, audio_test_case_t *out)
     out->engine = (local < 3U) ? TEST_ENGINE_DRUM_MD
                                : TEST_ENGINE_DRUM_ANALOG;
     out->model = (local < 3U) ? 0U : 1U;
-    out->model_key = (uint8_t)(51U + out->model);
+    out->model_key = (uint8_t)(AUDIO_TEST_CAL_DRUM_KEY_BASE + out->model);
     out->notes[0] = notes[local % 3U];
     out->sound_type = TEST_SOUND_PERCUSSIVE;
     (void)snprintf(out->name, sizeof(out->name), "%s_N%u",
@@ -855,12 +854,6 @@ static float track_stage_weighted(
 
 static const char *sound_type_name(const audio_test_case_t *test)
 {
-    if ((test->engine == TEST_ENGINE_PRISM)
-        && (prism_is_random(test->model) != 0U)
-        && (prism_is_percussive(test->model) != 0U))
-    {
-        return "PERCUSSIVE_RANDOM";
-    }
     switch (test->sound_type)
     {
         case TEST_SOUND_PERCUSSIVE: return "PERCUSSIVE";
@@ -887,35 +880,32 @@ static const char *test_engine_name(test_engine_t engine)
 static void model_identity(uint8_t key, test_engine_t *engine,
                            uint8_t *model, const char **sound_type)
 {
-    if (key < 39U)
+    if (key < AUDIO_TEST_CAL_STACK_KEY_BASE)
     {
         *engine = TEST_ENGINE_PRISM;
         *model = key;
-        *sound_type = (prism_is_percussive(key) != 0U)
-            ? ((prism_is_random(key) != 0U)
-                ? "PERCUSSIVE_RANDOM" : "PERCUSSIVE")
-            : ((prism_is_random(key) != 0U)
-                ? "NOISY_RANDOM" : "CONTINUOUS");
+        *sound_type = (prism_is_random(key) != 0U)
+            ? "NOISY_RANDOM" : "CONTINUOUS";
     }
-    else if (key < 43U)
+    else if (key < AUDIO_TEST_CAL_DELUGE_KEY_BASE)
     {
         *engine = TEST_ENGINE_STACK;
-        *model = (uint8_t)(key - 39U);
+        *model = (uint8_t)(key - AUDIO_TEST_CAL_STACK_KEY_BASE);
         *sound_type = "CONTINUOUS";
     }
-    else if (key < 49U)
+    else if (key < AUDIO_TEST_CAL_WAVE_KEY)
     {
         *engine = TEST_ENGINE_DELUGE;
-        *model = (uint8_t)(key - 43U);
+        *model = (uint8_t)(key - AUDIO_TEST_CAL_DELUGE_KEY_BASE);
         *sound_type = "CONTINUOUS";
     }
-    else if (key == 49U)
+    else if (key == AUDIO_TEST_CAL_WAVE_KEY)
     {
         *engine = TEST_ENGINE_WAVE;
         *model = 0U;
         *sound_type = "CONTINUOUS";
     }
-    else if (key == 50U)
+    else if (key == AUDIO_TEST_CAL_SAMPLER_KEY)
     {
         *engine = TEST_ENGINE_SAMPLER;
         *model = 0U;
@@ -923,9 +913,9 @@ static void model_identity(uint8_t key, test_engine_t *engine,
     }
     else
     {
-        *engine = (key == 51U) ? TEST_ENGINE_DRUM_MD
+        *engine = (key == AUDIO_TEST_CAL_DRUM_KEY_BASE) ? TEST_ENGINE_DRUM_MD
                                : TEST_ENGINE_DRUM_ANALOG;
-        *model = (uint8_t)(key - 51U);
+        *model = (uint8_t)(key - AUDIO_TEST_CAL_DRUM_KEY_BASE);
         *sound_type = "PERCUSSIVE";
     }
 }

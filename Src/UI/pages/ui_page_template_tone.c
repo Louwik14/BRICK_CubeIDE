@@ -564,7 +564,7 @@ static void ui_page_template_tone_prism_format_interval(uint8_t edit_index,
     {
         q7 = ((int32_t)raw - 16384L) >> 2;
     }
-    else if ((edit_index == 33U) && (id == PARAM_PRISM_COLOR))
+    else if ((edit_index == 28U) && (id == PARAM_PRISM_COLOR))
     {
         q7 = ((int32_t)raw - 16384L) >> 1;
     }
@@ -634,7 +634,7 @@ static void ui_page_template_tone_prism_format_morph(uint8_t edit_index,
     {
         ui_page_template_tone_prism_format_vowel(raw, out, out_len);
     }
-    else if ((edit_index == 32U) && (id == PARAM_PRISM_COLOR))
+    else if ((edit_index == 27U) && (id == PARAM_PRISM_COLOR))
     {
         ui_page_template_tone_prism_format_noise_mix(raw, out, out_len);
     }
@@ -665,7 +665,7 @@ static void ui_page_template_tone_prism_format_stepped(uint8_t edit_index,
                                                       out,
                                                       out_len);
     }
-    else if ((edit_index == 30U) && (id == PARAM_PRISM_COLOR))
+    else if ((edit_index == 25U) && (id == PARAM_PRISM_COLOR))
     {
         static const char *const k_labels[] = { "SMTH", "XFADE", "ROUGH", "LOFI" };
         uint8_t index = (uint8_t)(raw >> 13);
@@ -675,7 +675,7 @@ static void ui_page_template_tone_prism_format_stepped(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%s", k_labels[index]);
     }
-    else if ((edit_index == 34U) && (id == PARAM_PRISM_COLOR))
+    else if ((edit_index == 29U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t steps = (uint8_t)(1U + (raw >> 10));
         if (steps == 1U)
@@ -696,7 +696,7 @@ static void ui_page_template_tone_prism_format_enum(uint8_t edit_index,
                                                    char *out,
                                                    uint32_t out_len)
 {
-    if ((edit_index == 28U) && (id == PARAM_PRISM_COLOR))
+    if ((edit_index == 23U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t bank = (uint8_t)(((uint32_t)raw * 20U) >> 15);
         if (bank > 19U)
@@ -705,7 +705,7 @@ static void ui_page_template_tone_prism_format_enum(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%u/20", (unsigned int)(bank + 1U));
     }
-    else if ((edit_index == 31U) && (id == PARAM_PRISM_COLOR))
+    else if ((edit_index == 26U) && (id == PARAM_PRISM_COLOR))
     {
         uint8_t chord = (uint8_t)(raw >> 11);
         if (chord > 16U)

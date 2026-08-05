@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "Core/track_tone_sound_state.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Param/param_registry.h"
 
 static const param_prism_param_label_t g_prism_param_labels[] = {
@@ -29,11 +30,6 @@ static const param_prism_param_label_t g_prism_param_labels[] = {
     { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
     { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
     { "Chaos", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
-    { "Decay", "Inharm", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
-    { "Decay", "ToneNz", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
-    { "Decay", "Tone", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
-    { "Cutoff", "NzMix", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
-    { "Body", "Snappy", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "WTbl", "Bank", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_ENUM },
     { "X", "Y", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "WTbl", "Interp", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
@@ -46,6 +42,9 @@ static const param_prism_param_label_t g_prism_param_labels[] = {
     { "Baud", "Data", PARAM_PRISM_LABEL_VALUE_RATE, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "Speed", "Noise", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
 };
+
+_Static_assert((sizeof(g_prism_param_labels) / sizeof(g_prism_param_labels[0])) == BRICK6_PRISM_MODEL_COUNT,
+               "Prism parameter labels and active model count must stay aligned");
 
 uint8_t param_prism_label_count(void)
 {
