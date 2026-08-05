@@ -143,24 +143,37 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         {
             const uint8_t multi_mono_native =
                 brick6_sampler_runtime_track_is_mono_native(ctx->track_id);
-            memset(sampler_tmp_l, 0, frames * sizeof(float));
-            memset(sampler_tmp_r, 0, frames * sizeof(float));
-            brick6_sampler_runtime_render_multi_track(ctx,
-                                                       sampler_tmp_l,
-                                                       sampler_tmp_r,
-                                                       frames);
             if (multi_mono_native != 0U)
             {
-                mixer_submit_external_multi_mono(ctx->mix_track_id,
-                                                 sampler_tmp_l,
-                                                 frames);
+                float *direct_mono = NULL;
+                if (mixer_begin_external_multi_mono(ctx->mix_track_id,
+                                                    frames,
+                                                    &direct_mono) != 0U)
+                {
+                    memset(direct_mono, 0, frames * sizeof(float));
+                    brick6_sampler_runtime_render_multi_track_mono(ctx,
+                                                                    direct_mono,
+                                                                    frames);
+                    mixer_commit_external_multi_mono(ctx->mix_track_id, frames);
+                }
             }
             else
             {
-                mixer_submit_external_multi_stereo(ctx->mix_track_id,
-                                                   sampler_tmp_l,
-                                                   sampler_tmp_r,
-                                                   frames);
+                float *direct_l = NULL;
+                float *direct_r = NULL;
+                if (mixer_begin_external_multi_stereo(ctx->mix_track_id,
+                                                      frames,
+                                                      &direct_l,
+                                                      &direct_r) != 0U)
+                {
+                    memset(direct_l, 0, frames * sizeof(float));
+                    memset(direct_r, 0, frames * sizeof(float));
+                    brick6_sampler_runtime_render_multi_track(ctx,
+                                                              direct_l,
+                                                              direct_r,
+                                                              frames);
+                    mixer_commit_external_multi_stereo(ctx->mix_track_id, frames);
+                }
             }
             sampler_tracks++;
             continue;

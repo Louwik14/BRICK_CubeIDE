@@ -1663,25 +1663,6 @@ void mixer_multi_filter_process(uint32_t track_id,
         }
     }
 
-    if (slot->vca_enabled != 0U)
-    {
-        uint32_t frame = 0U;
-        for (; frame < frames; ++frame)
-        {
-            float vca = 0.0f;
-            if (env_adsr_process_vca_sample(&slot->vca_env, &vca) == 0U)
-            {
-                break;
-            }
-            left[frame] *= vca;
-            right[frame] *= vca;
-        }
-        if (frame < frames)
-        {
-            memset(&left[frame], 0, (frames - frame) * sizeof(float));
-            memset(&right[frame], 0, (frames - frame) * sizeof(float));
-        }
-    }
 }
 
 void mixer_multi_filter_process_mono(uint32_t track_id,
@@ -1731,23 +1712,6 @@ void mixer_multi_filter_process_mono(uint32_t track_id,
         }
     }
 
-    if (slot->vca_enabled != 0U)
-    {
-        uint32_t frame = 0U;
-        for (; frame < frames; ++frame)
-        {
-            float vca = 0.0f;
-            if (env_adsr_process_vca_sample(&slot->vca_env, &vca) == 0U)
-            {
-                break;
-            }
-            mono[frame] *= vca;
-        }
-        if (frame < frames)
-        {
-            memset(&mono[frame], 0, (frames - frame) * sizeof(float));
-        }
-    }
 }
 
 /**
@@ -2786,66 +2750,6 @@ void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
     g_external_track_enabled[track_id] = 1U;
 }
 
-void __attribute__((used)) mixer_submit_external_multi_stereo(uint32_t track_id,
-                                                              const float *left,
-                                                              const float *right,
-                                                              uint32_t frames)
-{
-    if ((track_id >= MIXER_MAX_TRACKS) || (left == NULL) || (right == NULL))
-    {
-        return;
-    }
-
-    if (frames > AUDIO_BLOCK_SIZE)
-    {
-        frames = AUDIO_BLOCK_SIZE;
-    }
-
-    if (g_external_track_enabled[track_id] != 0U)
-    {
-        return;
-    }
-
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        g_external_track_l[track_id][i] = left[i];
-        g_external_track_r[track_id][i] = right[i];
-    }
-
-    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MULTI_STEREO;
-    g_external_track_frames_valid[track_id] = (uint16_t)frames;
-    g_external_track_enabled[track_id] = 1U;
-}
-
-void __attribute__((used)) mixer_submit_external_multi_mono(uint32_t track_id,
-                                                            const float *mono,
-                                                            uint32_t frames)
-{
-    if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))
-    {
-        return;
-    }
-
-    if (frames > AUDIO_BLOCK_SIZE)
-    {
-        frames = AUDIO_BLOCK_SIZE;
-    }
-
-    if (g_external_track_enabled[track_id] != 0U)
-    {
-        return;
-    }
-
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        g_external_track_mono[track_id][i] = mono[i];
-    }
-
-    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MULTI_MONO;
-    g_external_track_frames_valid[track_id] = (uint16_t)frames;
-    g_external_track_enabled[track_id] = 1U;
-}
-
 uint8_t __attribute__((used)) mixer_begin_external_mono_native(uint32_t track_id,
                                                                uint32_t frames,
                                                                float **out_mono)
@@ -2879,6 +2783,44 @@ void __attribute__((used)) mixer_commit_external_mono_native(uint32_t track_id, 
     }
 
     g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MONO_NATIVE;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
+uint8_t __attribute__((used)) mixer_begin_external_multi_mono(uint32_t track_id,
+                                                              uint32_t frames,
+                                                              float **out_mono)
+{
+    if (out_mono != NULL)
+    {
+        *out_mono = NULL;
+    }
+
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (out_mono == NULL)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return 0U;
+    }
+
+    *out_mono = g_external_track_mono[track_id];
+    return 1U;
+}
+
+void __attribute__((used)) mixer_commit_external_multi_mono(uint32_t track_id,
+                                                            uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return;
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MULTI_MONO;
     g_external_track_frames_valid[track_id] = (uint16_t)frames;
     g_external_track_enabled[track_id] = 1U;
 }
@@ -2923,6 +2865,51 @@ void __attribute__((used)) mixer_commit_external_stereo(uint32_t track_id, uint3
     }
 
     g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
+uint8_t __attribute__((used)) mixer_begin_external_multi_stereo(uint32_t track_id,
+                                                                uint32_t frames,
+                                                                float **out_left,
+                                                                float **out_right)
+{
+    if (out_left != NULL)
+    {
+        *out_left = NULL;
+    }
+    if (out_right != NULL)
+    {
+        *out_right = NULL;
+    }
+
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (out_left == NULL)
+            || (out_right == NULL)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return 0U;
+    }
+
+    *out_left = g_external_track_l[track_id];
+    *out_right = g_external_track_r[track_id];
+    return 1U;
+}
+
+void __attribute__((used)) mixer_commit_external_multi_stereo(uint32_t track_id,
+                                                              uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return;
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MULTI_STEREO;
     g_external_track_frames_valid[track_id] = (uint16_t)frames;
     g_external_track_enabled[track_id] = 1U;
 }

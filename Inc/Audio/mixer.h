@@ -162,17 +162,14 @@ void mixer_snap_track_runtime_state(uint32_t track_id);
 void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_stereo(uint32_t track_id, const float *left, const float *right, uint32_t frames);
-void mixer_submit_external_multi_stereo(uint32_t track_id,
-                                        const float *left,
-                                        const float *right,
-                                        uint32_t frames);
-void mixer_submit_external_multi_mono(uint32_t track_id,
-                                      const float *mono,
-                                      uint32_t frames);
 uint8_t mixer_begin_external_mono_native(uint32_t track_id,
                                          uint32_t frames,
                                          float **out_mono);
 void mixer_commit_external_mono_native(uint32_t track_id, uint32_t frames);
+uint8_t mixer_begin_external_multi_mono(uint32_t track_id,
+                                        uint32_t frames,
+                                        float **out_mono);
+void mixer_commit_external_multi_mono(uint32_t track_id, uint32_t frames);
 uint8_t mixer_begin_external_poly(uint32_t track_id, uint32_t frames);
 uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
                                           uint32_t poly_track_id,
@@ -196,6 +193,11 @@ uint8_t mixer_begin_external_stereo(uint32_t track_id,
                                     float **out_left,
                                     float **out_right);
 void mixer_commit_external_stereo(uint32_t track_id, uint32_t frames);
+uint8_t mixer_begin_external_multi_stereo(uint32_t track_id,
+                                          uint32_t frames,
+                                          float **out_left,
+                                          float **out_right);
+void mixer_commit_external_multi_stereo(uint32_t track_id, uint32_t frames);
 
 void mixer_process(StereoTrack *tracks,
                    uint32_t track_count,

@@ -257,17 +257,10 @@ static void brick6_sampler_runtime_multi_assign_spread_index(
     brick6_sampler_voice_t *voice,
     uint8_t track_id);
 static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id);
-static void brick6_sampler_runtime_multi_apply_spread(
+static void brick6_sampler_runtime_multi_get_spread_pan(
     const brick6_sampler_voice_t *voice,
-    float *left,
-    float *right,
-    uint32_t frames);
-static void brick6_sampler_runtime_multi_project_mono(
-    const brick6_sampler_voice_t *voice,
-    const float *mono,
-    float *left,
-    float *right,
-    uint32_t frames);
+    float *out_pan_l,
+    float *out_pan_r);
 static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count);
 static float brick6_sampler_runtime_velocity_gain(uint8_t velocity);
 static uint32_t brick6_sampler_runtime_ratio_to_q16(float ratio);
@@ -3905,52 +3898,23 @@ static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id)
     }
 }
 
-static void brick6_sampler_runtime_multi_apply_spread(
+static void brick6_sampler_runtime_multi_get_spread_pan(
     const brick6_sampler_voice_t *voice,
-    float *left,
-    float *right,
-    uint32_t frames)
+    float *out_pan_l,
+    float *out_pan_r)
 {
-    if ((voice == NULL) || (left == NULL) || (right == NULL) || (frames == 0U)
-        || (voice->owner_track_id >= SEQ_TRACK_COUNT))
+    if ((out_pan_l == NULL) || (out_pan_r == NULL))
     {
         return;
     }
 
-    const uint8_t count = brick6_sampler_runtime_multi_voice_limit(voice->owner_track_id);
-    const float spread = g_sampler_multi_track_state[voice->owner_track_id].spread;
-    if ((count <= 1U) || (spread <= 0.0f) || (voice->spread_index >= count))
+    *out_pan_l = 1.0f;
+    *out_pan_r = 1.0f;
+    if ((voice == NULL) || (voice->owner_track_id >= SEQ_TRACK_COUNT))
     {
         return;
     }
 
-    const float position = ((((float)voice->spread_index / (float)(count - 1U))
-                             * 2.0f) - 1.0f) * spread;
-    const float pan_for_mix = -position;
-    const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
-    const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-    for (uint32_t frame = 0U; frame < frames; ++frame)
-    {
-        left[frame] *= pan_l;
-        right[frame] *= pan_r;
-    }
-}
-
-static void brick6_sampler_runtime_multi_project_mono(
-    const brick6_sampler_voice_t *voice,
-    const float *mono,
-    float *left,
-    float *right,
-    uint32_t frames)
-{
-    if ((voice == NULL) || (mono == NULL) || (left == NULL) || (right == NULL)
-        || (frames == 0U) || (voice->owner_track_id >= SEQ_TRACK_COUNT))
-    {
-        return;
-    }
-
-    float pan_l = 1.0f;
-    float pan_r = 1.0f;
     const uint8_t count = brick6_sampler_runtime_multi_voice_limit(voice->owner_track_id);
     const float spread = g_sampler_multi_track_state[voice->owner_track_id].spread;
     if ((count > 1U) && (spread > 0.0f) && (voice->spread_index < count))
@@ -3958,15 +3922,8 @@ static void brick6_sampler_runtime_multi_project_mono(
         const float position = ((((float)voice->spread_index / (float)(count - 1U))
                                  * 2.0f) - 1.0f) * spread;
         const float pan_for_mix = -position;
-        pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
-        pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-    }
-
-    for (uint32_t frame = 0U; frame < frames; ++frame)
-    {
-        const float sample = mono[frame];
-        left[frame] += sample * pan_l;
-        right[frame] += sample * pan_r;
+        *out_pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+        *out_pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
     }
 }
 
@@ -4567,6 +4524,14 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
         (common_plan.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
             ? MULTI_VOICE_DSP_FORMAT_STEREO
             : MULTI_VOICE_DSP_FORMAT_MONO;
+    uint8_t mix_track = UINT8_MAX;
+    if ((track_runtime_get_mix_target_track(track_id, &mix_track) == 0U)
+        || (mix_track >= MIXER_MAX_TRACKS))
+    {
+        sample_voice_reader_reset(&multi_voice->reader);
+        multi_voice->trigger_order = 0U;
+        return 0U;
+    }
     if (multi_voice_dsp_acquire(multi_handle,
                                 dsp_format,
                                 (float)BRICK6_SAMPLER_RAM_OUTPUT_SAMPLE_RATE_HZ,
@@ -4579,7 +4544,6 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     }
     multi_voice->dsp_slot = dsp_slot;
     multi_voice_dsp_slot_t *const dsp_state = multi_voice_dsp_get(dsp_slot);
-    uint8_t mix_track = 0U;
     if (dsp_state == NULL)
     {
         sample_voice_reader_reset(&multi_voice->reader);
@@ -4587,10 +4551,6 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
         multi_voice->dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
         multi_voice->trigger_order = 0U;
         return 0U;
-    }
-    if (track_runtime_get_mix_target_track(track_id, &mix_track) != 0U)
-    {
-        mixer_multi_filter_note_on(mix_track, dsp_state, note);
     }
     sample_stream_manager_active_state_reset(&multi_voice->stream_state);
     const sample_stream_active_desc_t reserve_desc = {
@@ -4696,6 +4656,9 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     multi_voice->last_out_r = 0.0f;
     multi_voice->last_out_valid = 0U;
     multi_voice->start_fade_remaining = 0U;
+    /* Arm the voice-local envelopes only after every fallible admission step
+     * has succeeded and all ownership/state fields describe this generation. */
+    mixer_multi_filter_note_on(mix_track, dsp_state, note);
     if ((local_start_fade != 0U) || (g_sampler_multi_alloc_stole_voice != 0U))
     {
         brick6_sampler_runtime_start_declick_fade_in(multi_voice);
@@ -7372,11 +7335,23 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
                                                 dsp_state,
                                                 voice_l,
                                                 frames);
-                brick6_sampler_runtime_multi_project_mono(multi_voice,
-                                                          voice_l,
-                                                          out_l,
-                                                          out_r,
-                                                          frames);
+                float pan_l = 1.0f;
+                float pan_r = 1.0f;
+                brick6_sampler_runtime_multi_get_spread_pan(multi_voice,
+                                                            &pan_l,
+                                                            &pan_r);
+                for (uint32_t frame = 0U; frame < frames; ++frame)
+                {
+                    float vca = 1.0f;
+                    if ((dsp_state->vca_enabled != 0U)
+                        && (env_adsr_process_vca_sample(&dsp_state->vca_env,
+                                                        &vca) == 0U))
+                    {
+                        break;
+                    }
+                    out_l[frame] += voice_l[frame] * vca * pan_l;
+                    out_r[frame] += voice_l[frame] * vca * pan_r;
+                }
             }
             else
             {
@@ -7388,14 +7363,22 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
                                            voice_l,
                                            voice_r,
                                            frames);
-                brick6_sampler_runtime_multi_apply_spread(multi_voice,
-                                                          voice_l,
-                                                          voice_r,
-                                                          frames);
+                float pan_l = 1.0f;
+                float pan_r = 1.0f;
+                brick6_sampler_runtime_multi_get_spread_pan(multi_voice,
+                                                            &pan_l,
+                                                            &pan_r);
                 for (uint32_t frame = 0U; frame < frames; ++frame)
                 {
-                    out_l[frame] += voice_l[frame];
-                    out_r[frame] += voice_r[frame];
+                    float vca = 1.0f;
+                    if ((dsp_state->vca_enabled != 0U)
+                        && (env_adsr_process_vca_sample(&dsp_state->vca_env,
+                                                        &vca) == 0U))
+                    {
+                        break;
+                    }
+                    out_l[frame] += voice_l[frame] * vca * pan_l;
+                    out_r[frame] += voice_r[frame] * vca * pan_r;
                 }
             }
             if (mixer_multi_voice_vca_requires_source(dsp_state) == 0U)
@@ -7406,6 +7389,70 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
     }
 
     brick6_sampler_runtime_mix_declick_tails(ctx->track_id, out_l, out_r, frames);
+}
+
+void brick6_sampler_runtime_render_multi_track_mono(const track_runtime_ctx_t *ctx,
+                                                    float *out_mono,
+                                                    uint32_t frames)
+{
+    if ((ctx == NULL) || (out_mono == NULL) || (frames == 0U)
+        || (frames > AUDIO_BLOCK_SIZE)
+        || (ctx->track_id >= SEQ_TRACK_COUNT)
+        || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+        || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        || ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI)
+        || (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) == 0U))
+    {
+        return;
+    }
+
+    float voice_mono[AUDIO_BLOCK_SIZE];
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+    {
+        brick6_sampler_voice_t *const multi_voice = &g_sampler_multi_voice[i];
+        if ((multi_voice->owner_track_id != ctx->track_id)
+            || ((multi_voice->active == 0U)
+                && (multi_voice->dsp_slot == MULTI_VOICE_DSP_SLOT_INDEX_INVALID)))
+        {
+            continue;
+        }
+
+        multi_voice_dsp_slot_t *const dsp_state =
+            multi_voice_dsp_get(multi_voice->dsp_slot);
+        if ((dsp_state == NULL)
+            || (dsp_state->format != (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO)
+            || (brick6_sampler_runtime_multi_voice_format_compatible(multi_voice) == 0U))
+        {
+            brick6_sampler_runtime_multi_stop_voice(
+                multi_voice,
+                (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
+            continue;
+        }
+
+        memset(voice_mono, 0, frames * sizeof(float));
+        brick6_sampler_render_multi_mono(multi_voice, voice_mono, frames);
+        mixer_multi_filter_process_mono(ctx->mix_track_id,
+                                        dsp_state,
+                                        voice_mono,
+                                        frames);
+        for (uint32_t frame = 0U; frame < frames; ++frame)
+        {
+            float vca = 1.0f;
+            if ((dsp_state->vca_enabled != 0U)
+                && (env_adsr_process_vca_sample(&dsp_state->vca_env, &vca) == 0U))
+            {
+                break;
+            }
+            out_mono[frame] += voice_mono[frame] * vca;
+        }
+
+        if (mixer_multi_voice_vca_requires_source(dsp_state) == 0U)
+        {
+            brick6_sampler_runtime_multi_stop_voice_after_vca(multi_voice);
+        }
+    }
+
+    brick6_sampler_runtime_mix_declick_tails_mono(ctx->track_id, out_mono, frames);
 }
 
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
