@@ -34,7 +34,6 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/brick6_sampler_multi_contract.h"
-#include "Core/brick6_wave_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
@@ -740,24 +739,21 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     const param_desc_t *desc = &param_registry[param];
     *out_min = desc->min;
     *out_max = desc->max;
-    if ((param == PARAM_WAVE_OSC1_WARP_AMT) || (param == PARAM_WAVE_OSC2_WARP_AMT))
+    if ((param == PARAM_WAVE_OSC1_TABLE) || (param == PARAM_WAVE_OSC2_TABLE))
     {
-        const param_id_t type_id = (param == PARAM_WAVE_OSC1_WARP_AMT)
-            ? PARAM_WAVE_OSC1_WARP_TYPE
-            : PARAM_WAVE_OSC2_WARP_TYPE;
-        float type_value = 0.0f;
-        if (param_registry_get_track_value(type_id, track, &type_value) != 0U)
+        const uint16_t first = sample_global_pool_find_first_ready(SAMPLE_GLOBAL_KIND_WAVETABLE);
+        const uint16_t last = sample_global_pool_find_next_ready(SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                                                  SAMPLE_GLOBAL_POOL_INVALID_INDEX,
+                                                                  -1);
+        if ((first == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+                || (last == SAMPLE_GLOBAL_POOL_INVALID_INDEX))
         {
-            const uint8_t type = (uint8_t)(type_value + 0.5f);
-            if ((type != (uint8_t)BRICK6_WAVE_WARP_BEND)
-                    && (type != (uint8_t)BRICK6_WAVE_WARP_SKEW))
-            {
-                *out_min = 0.0f;
-            }
+            return 0U;
         }
+        *out_min = (float)first;
+        *out_max = (float)last;
         return 1U;
     }
-
     if (param == PARAM_CFG_TRACK)
     {
         *out_max = (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U);
@@ -1321,6 +1317,42 @@ static float ui_param_apply_delta_value(param_id_t param,
                                         float max_value,
                                         uint8_t shift_down)
 {
+    if ((param == PARAM_WAVE_OSC1_TABLE) || (param == PARAM_WAVE_OSC2_TABLE))
+    {
+        if (delta == 0)
+        {
+            return current_value;
+        }
+        const int8_t direction = (delta > 0) ? 1 : -1;
+        uint16_t current = (current_value >= 0.0f)
+            ? (uint16_t)(current_value + 0.5f)
+            : SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        const sample_global_slot_t *const slot = sample_global_pool_get_slot(current);
+        if ((slot == NULL) || (slot->kind != SAMPLE_GLOBAL_KIND_WAVETABLE)
+                || (slot->state != SAMPLE_GLOBAL_STATE_READY))
+        {
+            current = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            if (direction < 0)
+            {
+                current = sample_global_pool_find_next_ready(SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                                              SAMPLE_GLOBAL_POOL_INVALID_INDEX,
+                                                              -1);
+            }
+        }
+        const uint16_t count = (uint16_t)((delta < 0) ? -delta : delta);
+        for (uint16_t i = 0U; i < count; ++i)
+        {
+            const uint16_t next = sample_global_pool_find_next_ready(SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                                                      current,
+                                                                      direction);
+            if (next == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            {
+                break;
+            }
+            current = next;
+        }
+        return (current == SAMPLE_GLOBAL_POOL_INVALID_INDEX) ? current_value : (float)current;
+    }
     if ((param == PARAM_WAVE_OSC1_TUNE) || (param == PARAM_WAVE_OSC2_TUNE))
     {
         const float step = (shift_down != 0U) ? 0.01f : 1.0f;

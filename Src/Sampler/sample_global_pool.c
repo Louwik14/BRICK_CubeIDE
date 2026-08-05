@@ -126,6 +126,36 @@ uint16_t sample_global_pool_find_free_slot(void)
     return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
 }
 
+uint16_t sample_global_pool_find_first_ready(sample_global_kind_t kind)
+{
+    return sample_global_pool_find_next_ready(kind, SAMPLE_GLOBAL_POOL_INVALID_INDEX, 1);
+}
+
+uint16_t sample_global_pool_find_next_ready(sample_global_kind_t kind,
+                                            uint16_t current,
+                                            int8_t direction)
+{
+    if ((sample_global_kind_valid(kind) == 0U) || (direction == 0))
+    {
+        return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    }
+
+    int32_t index = (current == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+        ? ((direction > 0) ? 0 : ((int32_t)SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1))
+        : (int32_t)current + ((direction > 0) ? 1 : -1);
+    const int32_t end = (direction > 0) ? (int32_t)SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS : -1;
+    while (index != end)
+    {
+        const sample_global_slot_t *const slot = &g_sample_global_pool[index];
+        if ((slot->kind == kind) && (slot->state == SAMPLE_GLOBAL_STATE_READY))
+        {
+            return (uint16_t)index;
+        }
+        index += (direction > 0) ? 1 : -1;
+    }
+    return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+}
+
 uint8_t sample_global_pool_find_by_backend(sample_global_kind_t kind,
                                            uint16_t backend_index,
                                            uint16_t *out_global_index)

@@ -635,35 +635,27 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_WAVE_OSC1_TABLE:
         case PARAM_WAVE_OSC2_TABLE:
-            *out_value = state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 8U)];
+            *out_value = state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 6U)];
             return 1U;
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
-            *out_value = state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 8U)];
+            *out_value = state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 6U)];
             return 1U;
         case PARAM_WAVE_OSC1_START:
         case PARAM_WAVE_OSC2_START:
-            *out_value = state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 8U)];
+            *out_value = state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 6U)];
             return 1U;
         case PARAM_WAVE_OSC1_END:
         case PARAM_WAVE_OSC2_END:
-            *out_value = state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 8U)];
+            *out_value = state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 6U)];
             return 1U;
         case PARAM_WAVE_OSC1_LEVEL:
         case PARAM_WAVE_OSC2_LEVEL:
-            *out_value = state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 8U)];
+            *out_value = state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 6U)];
             return 1U;
         case PARAM_WAVE_OSC1_TUNE:
         case PARAM_WAVE_OSC2_TUNE:
-            *out_value = state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)];
-            return 1U;
-        case PARAM_WAVE_OSC1_WARP_TYPE:
-        case PARAM_WAVE_OSC2_WARP_TYPE:
-            *out_value = state->wave.warp_type[(uint8_t)((id - PARAM_WAVE_OSC1_WARP_TYPE) / 8U)];
-            return 1U;
-        case PARAM_WAVE_OSC1_WARP_AMT:
-        case PARAM_WAVE_OSC2_WARP_AMT:
-            *out_value = state->wave.warp_amt[(uint8_t)((id - PARAM_WAVE_OSC1_WARP_AMT) / 8U)];
+            *out_value = state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 6U)];
             return 1U;
         case PARAM_WAVE_FRAME_INTERP:
             *out_value = state->wave.frame_interp;
@@ -920,51 +912,28 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_WAVE_OSC1_TABLE:
         case PARAM_WAVE_OSC2_TABLE:
-            state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 8U)] = clamp_value(value, 0.0f, param_registry[id].max);
+            state->wave.table[(uint8_t)((id - PARAM_WAVE_OSC1_TABLE) / 6U)] = clamp_value(value, 0.0f, param_registry[id].max);
             return 1U;
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
-            state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 6U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_WAVE_OSC1_START:
         case PARAM_WAVE_OSC2_START:
-            state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 6U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_WAVE_OSC1_END:
         case PARAM_WAVE_OSC2_END:
-            state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            state->wave.end[(uint8_t)((id - PARAM_WAVE_OSC1_END) / 6U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_WAVE_OSC1_LEVEL:
         case PARAM_WAVE_OSC2_LEVEL:
-            state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 8U)] = clamp_value(value, 0.0f, 1.0f);
+            state->wave.level[(uint8_t)((id - PARAM_WAVE_OSC1_LEVEL) / 6U)] = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_WAVE_OSC1_TUNE:
         case PARAM_WAVE_OSC2_TUNE:
-            state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 8U)] = clamp_value(value, -60.0f, 60.0f);
+            state->wave.tune[(uint8_t)((id - PARAM_WAVE_OSC1_TUNE) / 6U)] = clamp_value(value, -60.0f, 60.0f);
             return 1U;
-        case PARAM_WAVE_OSC1_WARP_TYPE:
-        case PARAM_WAVE_OSC2_WARP_TYPE:
-        {
-            const uint8_t osc = (uint8_t)((id - PARAM_WAVE_OSC1_WARP_TYPE) / 8U);
-            const float type = clamp_value(value, 0.0f, (float)(BRICK6_WAVE_WARP_TYPE_COUNT - 1U));
-            state->wave.warp_type[osc] = type;
-            if (((uint8_t)(type + 0.5f) != (uint8_t)BRICK6_WAVE_WARP_BEND)
-                    && ((uint8_t)(type + 0.5f) != (uint8_t)BRICK6_WAVE_WARP_SKEW))
-            {
-                state->wave.warp_amt[osc] = clamp_value(state->wave.warp_amt[osc], 0.0f, 1.0f);
-            }
-            return 1U;
-        }
-        case PARAM_WAVE_OSC1_WARP_AMT:
-        case PARAM_WAVE_OSC2_WARP_AMT:
-        {
-            const uint8_t osc = (uint8_t)((id - PARAM_WAVE_OSC1_WARP_AMT) / 8U);
-            const uint8_t type = (uint8_t)(state->wave.warp_type[osc] + 0.5f);
-            const float min_value = ((type == (uint8_t)BRICK6_WAVE_WARP_BEND)
-                                     || (type == (uint8_t)BRICK6_WAVE_WARP_SKEW)) ? -1.0f : 0.0f;
-            state->wave.warp_amt[osc] = clamp_value(value, min_value, 1.0f);
-            return 1U;
-        }
         case PARAM_WAVE_FRAME_INTERP:
             state->wave.frame_interp = clamp_value(value, 0.0f, 1.0f);
             return 1U;

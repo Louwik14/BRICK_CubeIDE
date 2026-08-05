@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define KIT_SD_FILE_MAGIC   0x544B3642UL /* B6KT */
-#define KIT_SD_FILE_VERSION 5U /* Wave warp schema; older payloads are rejected. */
+#define KIT_SD_FILE_VERSION 6U /* Wave tone layout; older payloads are rejected. */
 
 typedef enum
 {

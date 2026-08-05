@@ -6,6 +6,7 @@
 #include "Param/param_registry.h"
 #include "Storage/memory_layout.h"
 #include "Seq/seq_types.h"
+#include "Sampler/sample_global_pool.h"
 
 SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_COUNT];
 
@@ -97,22 +98,22 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->stack.noise_level = param_registry[PARAM_STACK_NOISE_LEVEL].default_value;
     state->stack.osc_detune = param_registry[PARAM_STACK_OSC_DETUNE].default_value;
     state->stack.phase_reset = param_registry[PARAM_STACK_PHASE_RESET].default_value;
-    state->wave.table[0] = param_registry[PARAM_WAVE_OSC1_TABLE].default_value;
+    const uint16_t first_wavetable = sample_global_pool_find_first_ready(SAMPLE_GLOBAL_KIND_WAVETABLE);
+    const float default_table = (first_wavetable != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+        ? (float)first_wavetable
+        : param_registry[PARAM_WAVE_OSC1_TABLE].default_value;
+    state->wave.table[0] = default_table;
     state->wave.pos[0] = param_registry[PARAM_WAVE_OSC1_POS].default_value;
     state->wave.start[0] = param_registry[PARAM_WAVE_OSC1_START].default_value;
     state->wave.end[0] = param_registry[PARAM_WAVE_OSC1_END].default_value;
     state->wave.level[0] = param_registry[PARAM_WAVE_OSC1_LEVEL].default_value;
     state->wave.tune[0] = param_registry[PARAM_WAVE_OSC1_TUNE].default_value;
-    state->wave.warp_type[0] = param_registry[PARAM_WAVE_OSC1_WARP_TYPE].default_value;
-    state->wave.warp_amt[0] = param_registry[PARAM_WAVE_OSC1_WARP_AMT].default_value;
-    state->wave.table[1] = param_registry[PARAM_WAVE_OSC2_TABLE].default_value;
+    state->wave.table[1] = default_table;
     state->wave.pos[1] = param_registry[PARAM_WAVE_OSC2_POS].default_value;
     state->wave.start[1] = param_registry[PARAM_WAVE_OSC2_START].default_value;
     state->wave.end[1] = param_registry[PARAM_WAVE_OSC2_END].default_value;
     state->wave.level[1] = param_registry[PARAM_WAVE_OSC2_LEVEL].default_value;
     state->wave.tune[1] = param_registry[PARAM_WAVE_OSC2_TUNE].default_value;
-    state->wave.warp_type[1] = param_registry[PARAM_WAVE_OSC2_WARP_TYPE].default_value;
-    state->wave.warp_amt[1] = param_registry[PARAM_WAVE_OSC2_WARP_AMT].default_value;
     state->wave.frame_interp = param_registry[PARAM_WAVE_FRAME_INTERP].default_value;
     state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
     state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;

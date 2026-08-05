@@ -55,6 +55,10 @@ void sample_global_pool_init(void);
 void sample_global_pool_reset(void);
 
 uint16_t sample_global_pool_find_free_slot(void);
+uint16_t sample_global_pool_find_first_ready(sample_global_kind_t kind);
+uint16_t sample_global_pool_find_next_ready(sample_global_kind_t kind,
+                                            uint16_t current,
+                                            int8_t direction);
 uint8_t sample_global_pool_find_by_backend(sample_global_kind_t kind,
                                            uint16_t backend_index,
                                            uint16_t *out_global_index);

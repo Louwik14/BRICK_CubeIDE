@@ -20,17 +20,6 @@ extern "C" {
 
 typedef enum
 {
-    BRICK6_WAVE_WARP_OFF = 0,
-    BRICK6_WAVE_WARP_BEND,
-    BRICK6_WAVE_WARP_SKEW,
-    BRICK6_WAVE_WARP_FOLD,
-    BRICK6_WAVE_WARP_REPEAT,
-    BRICK6_WAVE_WARP_QUANTIZE,
-    BRICK6_WAVE_WARP_TYPE_COUNT
-} brick6_wave_warp_type_t;
-
-typedef enum
-{
     BRICK6_WAVE_POS_UPDATE_FULL = 0,
     BRICK6_WAVE_POS_UPDATE_8,
     BRICK6_WAVE_POS_UPDATE_16,
@@ -53,10 +42,8 @@ typedef struct
     uint32_t phase;
     uint32_t phase_inc;
     uint32_t phase_inc_current;
-    uint32_t mipmap_effective_phase_inc;
+    uint32_t mipmap_phase_inc;
     uint8_t mipmap_band;
-    uint8_t warp_type;
-    float warp_amt;
 } brick6_wave_runtime_osc_t;
 
 typedef struct
@@ -93,10 +80,6 @@ void brick6_wave_runtime_set_osc_tune(uint8_t instance_id, uint8_t osc, float se
 void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos);
 void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float start);
 void brick6_wave_runtime_set_osc_end(uint8_t instance_id, uint8_t osc, float end);
-void brick6_wave_runtime_set_osc_warp_type(uint8_t instance_id,
-                                           uint8_t osc,
-                                           brick6_wave_warp_type_t type);
-void brick6_wave_runtime_set_osc_warp_amt(uint8_t instance_id, uint8_t osc, float amount);
 void brick6_wave_runtime_set_frame_interp(uint8_t instance_id, uint8_t enabled);
 void brick6_wave_runtime_set_sample_interp(uint8_t instance_id, uint8_t enabled);
 void brick6_wave_runtime_set_pos_update(uint8_t instance_id, brick6_wave_pos_update_t update);

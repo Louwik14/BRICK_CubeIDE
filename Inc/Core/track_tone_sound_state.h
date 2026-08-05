@@ -75,8 +75,6 @@ typedef struct
         float end[2];
         float level[2];
         float tune[2];
-        float warp_type[2];
-        float warp_amt[2];
         float frame_interp;
         float sample_interp;
         float pos_update;
@@ -102,7 +100,7 @@ typedef struct
     } md;
 } track_tone_sound_state_t;
 
-_Static_assert(sizeof(track_tone_sound_state_t) == 420U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 404U,
                "track tone state layout changed");
 
 void track_tone_sound_state_init(void);

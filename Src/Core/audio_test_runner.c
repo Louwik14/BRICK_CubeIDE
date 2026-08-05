@@ -660,10 +660,6 @@ static void configure_engine_params(uint8_t track, const audio_test_case_t *test
             set_track_param(track, PARAM_WAVE_OSC1_TUNE, 0.0f);
             set_track_param(track, PARAM_WAVE_OSC2_TUNE,
                             (test->oscillator_mode == 2U) ? 0.12f : 0.0f);
-            set_track_param(track, PARAM_WAVE_OSC1_WARP_TYPE, 0.0f);
-            set_track_param(track, PARAM_WAVE_OSC1_WARP_AMT, 0.0f);
-            set_track_param(track, PARAM_WAVE_OSC2_WARP_TYPE, 0.0f);
-            set_track_param(track, PARAM_WAVE_OSC2_WARP_AMT, 0.0f);
             break;
         case TEST_ENGINE_SAMPLER:
             set_track_param(track, PARAM_SAMPLER_SAMPLE,
