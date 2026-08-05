@@ -3318,6 +3318,148 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames, diag_lane);
         }
 
+#if defined(BRICK6_VARIANT_LOWCOST)
+        /*
+         * Low-cost mono-native fan-out.  Keep the historical L/R path when
+         * an insert, diagnostic, or auxiliary capture/looper route needs the
+         * materialized stereo buffers.  The direct path preserves the same
+         * post-pan L/R values and the existing stereo send contracts, but
+         * accumulates every destination while the source sample is live.
+         */
+        uint8_t direct_mono_fanout = 0U;
+        if ((is_mono_native_lane != 0U)
+                && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                && (diag_lane == 0U)
+                && (sample_capture_active == 0U)
+                && (looper_record_active == 0U)
+                && (looper_playback_mix_active == 0U))
+        {
+            uint8_t has_track_insert = 0U;
+            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+            {
+                if (mt->insert_slot[insert] >= 0)
+                {
+                    has_track_insert = 1U;
+                    break;
+                }
+            }
+            direct_mono_fanout = (has_track_insert == 0U) ? 1U : 0U;
+        }
+
+        if (direct_mono_fanout != 0U)
+        {
+            float gain_cur = mt->gain_current;
+            float pan_cur = mt->pan_current;
+            float mute_gain_cur = mt->mute_gain_current;
+            const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
+            const float gain_step = (mt->gain - gain_cur) * inv_frames;
+            const float pan_step = (mt->pan - pan_cur) * inv_frames;
+            const float mute_target = (mt->mute != 0U) ? 0.0f : 1.0f;
+            const float mute_step = 1.0f / 240.0f;
+            const uint8_t track_vca_enabled =
+                (g_track_filters[t].vca_enabled != 0U) ? 1U : 0U;
+            uint8_t vca_running = track_vca_enabled;
+            float send_cur[MIXER_NUM_SENDS] = {0.0f};
+            float send_step[MIXER_NUM_SENDS] = {0.0f};
+            uint8_t send_enabled[MIXER_NUM_SENDS] = {0U};
+
+            if (send_bus_active != 0U)
+            {
+                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                {
+                    send_cur[s] = mt->send_level_current[s];
+                    send_step[s] = (mt->send_level[s] - send_cur[s]) * inv_frames;
+                    send_enabled[s] = (((s != MIXER_DELAY_SEND_INDEX)
+                                        && (g_send_fx_slot[s] >= 0))
+                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
+                }
+            }
+
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                /* Keep the historical ramp and pan equations/order. */
+                const float pan_for_mix = -pan_cur;
+                const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                float vca_gain = 1.0f;
+                if (track_vca_enabled != 0U)
+                {
+                    if (vca_running != 0U)
+                    {
+                        vca_running = env_adsr_process_vca_sample(
+                            &g_track_filters[t].vca_env, &vca_gain);
+                    }
+                    else
+                    {
+                        vca_gain = 0.0f;
+                    }
+                    g_track_filters[t].vca_env_value = vca_gain;
+                }
+
+                const float sample_processed =
+                    mono[i] * (gain_cur * mute_gain_cur * vca_gain);
+                const float left = sample_processed * pan_l;
+                const float right = sample_processed * pan_r;
+                const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
+                const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
+
+                if (send_bus_active != 0U)
+                {
+                    for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                    {
+                        if ((send_enabled[s] != 0U)
+                                && !((send_cur[s] <= 0.0f)
+                                    && (mt->send_level[s] <= 0.0f)))
+                        {
+                            send_l[s][i] += left_trimmed * send_cur[s];
+                            send_r[s][i] += right_trimmed * send_cur[s];
+                            send_cur[s] += send_step[s];
+                        }
+                    }
+                }
+
+                if (mt->route_master != 0U)
+                {
+                    bus_main_l[i] += left_trimmed;
+                    bus_main_r[i] += right_trimmed;
+                }
+#if MIXER_HAS_CUE_BUS
+                if (mt->route_cue != 0U)
+                {
+                    bus_cue_l[i] += left_trimmed;
+                    bus_cue_r[i] += right_trimmed;
+                }
+#endif
+
+                gain_cur += gain_step;
+                pan_cur += pan_step;
+                if (mute_gain_cur < mute_target)
+                {
+                    mute_gain_cur += mute_step;
+                    if (mute_gain_cur > mute_target) mute_gain_cur = mute_target;
+                }
+                else if (mute_gain_cur > mute_target)
+                {
+                    mute_gain_cur -= mute_step;
+                    if (mute_gain_cur < mute_target) mute_gain_cur = mute_target;
+                }
+            }
+
+            mt->gain_current = mt->gain;
+            mt->pan_current = mt->pan;
+            mt->mute_gain_current = mute_gain_cur;
+            if (send_bus_active != 0U)
+            {
+                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                {
+                    mt->send_level_current[s] = mt->send_level[s];
+                }
+            }
+            continue;
+        }
+#endif
+
         {
             float gain_cur = mt->gain_current;
             float pan_cur = mt->pan_current;
