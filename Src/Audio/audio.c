@@ -22,6 +22,7 @@
 #include "audio_float.h"
 #include "engine_tasklet.h"
 #include "cpu_load.h"
+#include "Core/live_clock.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
@@ -326,6 +327,7 @@ static void process_half(uint32_t half_index)
  */
 void audio_init(void)
 {
+    live_clock_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 
@@ -416,6 +418,8 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
+        live_clock_audio_publish_anchor(
+            seq_runtime_exec_get_audio_timeline_sample());
         cpu_load_irq_begin();
 
         process_half(0);
@@ -455,6 +459,8 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
+        live_clock_audio_publish_anchor(
+            seq_runtime_exec_get_audio_timeline_sample());
         cpu_load_irq_begin();
 
         process_half(1);
