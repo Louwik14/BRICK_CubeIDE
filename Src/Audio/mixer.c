@@ -519,6 +519,10 @@ static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filte
     cutoff_hz = clampf_local(cutoff_hz,
                              MIXER_FILTER_CUTOFF_MIN_HZ,
                              MIXER_FILTER_CUTOFF_MAX_HZ);
+    if (filter->eg_amount == 0.0f)
+    {
+        return cutoff_hz;
+    }
     const float env_value = clampf_local(env, 0.0f, 1.0f);
     if(filter->eg_amount >= 0.0f)
     {
@@ -896,6 +900,7 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float keytrack_ratio_start)
 {
     uint32_t i = 0U;
+    const uint8_t filter_env_modulated = (filter->eg_amount != 0.0f) ? 1U : 0U;
     while(i < frames)
     {
         uint32_t chunk = frames - i;
@@ -922,9 +927,13 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
             terminal_value =
                 env_adsr_process_advance(&filter->filter_env, chunk, &first_value);
         }
-        const float env_first = (float)first_value * (1.0f / 32767.0f);
-        const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
-        const float env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
+        float env = 0.0f;
+        if (filter_env_modulated != 0U)
+        {
+            const float env_first = (float)first_value * (1.0f / 32767.0f);
+            const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
+            env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
+        }
         const float progress = (float)(i + chunk) / (float)frames;
         const float base_hz = cutoff_start_hz
             + ((filter->cutoff_hz - cutoff_start_hz) * progress);
@@ -961,6 +970,7 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
                                                          float keytrack_ratio_start)
 {
     uint32_t i = 0U;
+    const uint8_t filter_env_modulated = (filter->eg_amount != 0.0f) ? 1U : 0U;
     while(i < frames)
     {
         uint32_t chunk = frames - i;
@@ -987,9 +997,13 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
             terminal_value =
                 env_adsr_process_advance(&filter->filter_env, chunk, &first_value);
         }
-        const float env_first = (float)first_value * (1.0f / 32767.0f);
-        const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
-        const float env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
+        float env = 0.0f;
+        if (filter_env_modulated != 0U)
+        {
+            const float env_first = (float)first_value * (1.0f / 32767.0f);
+            const float env_terminal = (float)terminal_value * (1.0f / 32767.0f);
+            env = (prepared != 0U) ? env_first : (0.5f * (env_first + env_terminal));
+        }
         const float progress = (float)(i + chunk) / (float)frames;
         const float base_hz = cutoff_start_hz
             + ((filter->cutoff_hz - cutoff_start_hz) * progress);
@@ -1455,6 +1469,10 @@ static float mixer_multi_filter_compute_modulated_cutoff(
     cutoff_hz = clampf_local(cutoff_hz,
                              MIXER_FILTER_CUTOFF_MIN_HZ,
                              MIXER_FILTER_CUTOFF_MAX_HZ);
+    if (slot->eg_amount == 0.0f)
+    {
+        return cutoff_hz;
+    }
     const float env_value = clampf_local(env, 0.0f, 1.0f);
     if (slot->eg_amount >= 0.0f)
     {
@@ -1480,6 +1498,7 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
     const float cutoff_mod_start_hz = slot->cutoff_mod_hz;
     const float resonance_start = slot->resonance;
     const float keytrack_ratio_start = slot->keytrack_ratio;
+    const uint8_t filter_env_modulated = (slot->eg_amount != 0.0f) ? 1U : 0U;
     uint32_t offset = 0U;
     while (offset < frames)
     {
@@ -1492,8 +1511,12 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
         int16_t first_value = 0;
         const int16_t terminal_value =
             env_adsr_process_advance(&slot->filter_env, chunk, &first_value);
-        const float env = 0.5f * ((float)first_value + (float)terminal_value)
-                        * (1.0f / 32767.0f);
+        float env = 0.0f;
+        if (filter_env_modulated != 0U)
+        {
+            env = 0.5f * ((float)first_value + (float)terminal_value)
+                * (1.0f / 32767.0f);
+        }
         const float progress = (float)(offset + chunk) / (float)frames;
         const float base_hz = cutoff_start_hz
             + ((slot->cutoff_hz - cutoff_start_hz) * progress);

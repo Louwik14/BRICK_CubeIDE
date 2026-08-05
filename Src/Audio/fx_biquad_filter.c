@@ -133,6 +133,46 @@ static inline float fx_filter_tpt_sample(float input,
                                        mode_remaining, input, v2, v1, high, c);
 }
 
+static inline float fx_filter_tpt_sample_lp(float input,
+                                            float *ic1eq,
+                                            float *ic2eq,
+                                            const fx_biquad_filter_coeffs_t *c)
+{
+    const float v3 = input - *ic2eq;
+    const float v1 = (c->a1 * *ic1eq) + (c->a2 * v3);
+    const float v2 = *ic2eq + (c->a2 * *ic1eq) + (c->a3 * v3);
+    *ic1eq = (2.0f * v1) - *ic1eq;
+    *ic2eq = (2.0f * v2) - *ic2eq;
+    return v2 * c->lp_gain;
+}
+
+static inline float fx_filter_tpt_sample_bp(float input,
+                                            float *ic1eq,
+                                            float *ic2eq,
+                                            const fx_biquad_filter_coeffs_t *c)
+{
+    const float v3 = input - *ic2eq;
+    const float v1 = (c->a1 * *ic1eq) + (c->a2 * v3);
+    const float v2 = *ic2eq + (c->a2 * *ic1eq) + (c->a3 * v3);
+    *ic1eq = (2.0f * v1) - *ic1eq;
+    *ic2eq = (2.0f * v2) - *ic2eq;
+    return v1 * c->bp_gain;
+}
+
+static inline float fx_filter_tpt_sample_hp(float input,
+                                            float *ic1eq,
+                                            float *ic2eq,
+                                            const fx_biquad_filter_coeffs_t *c)
+{
+    const float v3 = input - *ic2eq;
+    const float v1 = (c->a1 * *ic1eq) + (c->a2 * v3);
+    const float v2 = *ic2eq + (c->a2 * *ic1eq) + (c->a3 * v3);
+    const float high = input - (c->k * v1) - v2;
+    *ic1eq = (2.0f * v1) - *ic1eq;
+    *ic2eq = (2.0f * v2) - *ic2eq;
+    return high * c->hp_gain;
+}
+
 static inline float fx_filter_apply_bypass(float dry,
                                            float wet,
                                            float *mix,
@@ -148,6 +188,189 @@ static inline float fx_filter_apply_bypass(float dry,
         if(*remaining == 0U) *mix = target;
     }
     return wet + ((dry - wet) * *mix);
+}
+
+static inline void fx_filter_stereo_process_lp(fx_biquad_filter_t *filter,
+                                                float *left,
+                                                float *right,
+                                                uint32_t frames,
+                                                const fx_biquad_filter_coeffs_t *c,
+                                                uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            left[i] = fx_filter_tpt_sample_lp(left[i], &filter->ic1eq_l,
+                                               &filter->ic2eq_l, c);
+            right[i] = fx_filter_tpt_sample_lp(right[i], &filter->ic1eq_r,
+                                                &filter->ic2eq_r, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry_l = left[i];
+        const float dry_r = right[i];
+        const float wet_l = fx_filter_tpt_sample_lp(dry_l, &filter->ic1eq_l,
+                                                    &filter->ic2eq_l, c);
+        const float wet_r = fx_filter_tpt_sample_lp(dry_r, &filter->ic1eq_r,
+                                                    &filter->ic2eq_r, c);
+        left[i] = fx_filter_apply_bypass(dry_l, wet_l, &filter->bypass_mix,
+                                         &filter->bypass_xfade_remaining,
+                                         filter->bypass);
+        right[i] = wet_r + ((dry_r - wet_r) * filter->bypass_mix);
+    }
+}
+
+static inline void fx_filter_stereo_process_bp(fx_biquad_filter_t *filter,
+                                                float *left,
+                                                float *right,
+                                                uint32_t frames,
+                                                const fx_biquad_filter_coeffs_t *c,
+                                                uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            left[i] = fx_filter_tpt_sample_bp(left[i], &filter->ic1eq_l,
+                                               &filter->ic2eq_l, c);
+            right[i] = fx_filter_tpt_sample_bp(right[i], &filter->ic1eq_r,
+                                                &filter->ic2eq_r, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry_l = left[i];
+        const float dry_r = right[i];
+        const float wet_l = fx_filter_tpt_sample_bp(dry_l, &filter->ic1eq_l,
+                                                    &filter->ic2eq_l, c);
+        const float wet_r = fx_filter_tpt_sample_bp(dry_r, &filter->ic1eq_r,
+                                                    &filter->ic2eq_r, c);
+        left[i] = fx_filter_apply_bypass(dry_l, wet_l, &filter->bypass_mix,
+                                         &filter->bypass_xfade_remaining,
+                                         filter->bypass);
+        right[i] = wet_r + ((dry_r - wet_r) * filter->bypass_mix);
+    }
+}
+
+static inline void fx_filter_stereo_process_hp(fx_biquad_filter_t *filter,
+                                                float *left,
+                                                float *right,
+                                                uint32_t frames,
+                                                const fx_biquad_filter_coeffs_t *c,
+                                                uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            left[i] = fx_filter_tpt_sample_hp(left[i], &filter->ic1eq_l,
+                                               &filter->ic2eq_l, c);
+            right[i] = fx_filter_tpt_sample_hp(right[i], &filter->ic1eq_r,
+                                                &filter->ic2eq_r, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry_l = left[i];
+        const float dry_r = right[i];
+        const float wet_l = fx_filter_tpt_sample_hp(dry_l, &filter->ic1eq_l,
+                                                    &filter->ic2eq_l, c);
+        const float wet_r = fx_filter_tpt_sample_hp(dry_r, &filter->ic1eq_r,
+                                                    &filter->ic2eq_r, c);
+        left[i] = fx_filter_apply_bypass(dry_l, wet_l, &filter->bypass_mix,
+                                         &filter->bypass_xfade_remaining,
+                                         filter->bypass);
+        right[i] = wet_r + ((dry_r - wet_r) * filter->bypass_mix);
+    }
+}
+
+static inline void fx_filter_mono_process_lp(fx_biquad_filter_mono_t *filter,
+                                              float *samples,
+                                              uint32_t frames,
+                                              const fx_biquad_filter_coeffs_t *c,
+                                              uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            samples[i] = fx_filter_tpt_sample_lp(samples[i], &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry = samples[i];
+        const float wet = fx_filter_tpt_sample_lp(dry, &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        samples[i] = fx_filter_apply_bypass(dry, wet, &filter->bypass_mix,
+                                            &filter->bypass_xfade_remaining,
+                                            filter->bypass);
+    }
+}
+
+static inline void fx_filter_mono_process_bp(fx_biquad_filter_mono_t *filter,
+                                              float *samples,
+                                              uint32_t frames,
+                                              const fx_biquad_filter_coeffs_t *c,
+                                              uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            samples[i] = fx_filter_tpt_sample_bp(samples[i], &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry = samples[i];
+        const float wet = fx_filter_tpt_sample_bp(dry, &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        samples[i] = fx_filter_apply_bypass(dry, wet, &filter->bypass_mix,
+                                            &filter->bypass_xfade_remaining,
+                                            filter->bypass);
+    }
+}
+
+static inline void fx_filter_mono_process_hp(fx_biquad_filter_mono_t *filter,
+                                              float *samples,
+                                              uint32_t frames,
+                                              const fx_biquad_filter_coeffs_t *c,
+                                              uint8_t apply_bypass)
+{
+    if(apply_bypass == 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            samples[i] = fx_filter_tpt_sample_hp(samples[i], &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        }
+        return;
+    }
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float dry = samples[i];
+        const float wet = fx_filter_tpt_sample_hp(dry, &filter->ic1eq,
+                                                  &filter->ic2eq, c);
+        samples[i] = fx_filter_apply_bypass(dry, wet, &filter->bypass_mix,
+                                            &filter->bypass_xfade_remaining,
+                                            filter->bypass);
+    }
 }
 
 static void fx_filter_stereo_reset_states(fx_biquad_filter_t *filter)
@@ -263,22 +486,49 @@ void fx_biquad_filter_process_block(fx_biquad_filter_t *filter,
     if((filter->bypass != 0U) && (filter->bypass_xfade_remaining == 0U)) return;
 
     const fx_biquad_filter_coeffs_t c = filter->current;
-    for(uint32_t i = 0U; i < frames; ++i)
+    if(filter->mode_xfade_remaining == 0U)
     {
-        const float dry_l = left[i];
-        const float dry_r = right[i];
-        const float wet_l = fx_filter_tpt_sample(dry_l, &filter->ic1eq_l, &filter->ic2eq_l,
-                                                 &c, filter->mode, filter->previous_mode,
-                                                 filter->mode_via_dry,
-                                                 filter->mode_xfade_remaining);
-        const float wet_r = fx_filter_tpt_sample(dry_r, &filter->ic1eq_r, &filter->ic2eq_r,
-                                                 &c, filter->mode, filter->previous_mode,
-                                                 filter->mode_via_dry,
-                                                 filter->mode_xfade_remaining);
-        left[i] = fx_filter_apply_bypass(dry_l, wet_l, &filter->bypass_mix,
-                                         &filter->bypass_xfade_remaining, filter->bypass);
-        right[i] = wet_r + ((dry_r - wet_r) * filter->bypass_mix);
-        if(filter->mode_xfade_remaining != 0U) --filter->mode_xfade_remaining;
+        const uint8_t apply_bypass =
+            (uint8_t)((filter->bypass != 0U)
+                   || (filter->bypass_xfade_remaining != 0U));
+        switch((fx_biquad_filter_mode_t)filter->mode)
+        {
+            case FX_BIQUAD_FILTER_MODE_HP:
+                fx_filter_stereo_process_hp(filter, left, right, frames, &c,
+                                             apply_bypass);
+                break;
+
+            case FX_BIQUAD_FILTER_MODE_BP:
+                fx_filter_stereo_process_bp(filter, left, right, frames, &c,
+                                             apply_bypass);
+                break;
+
+            case FX_BIQUAD_FILTER_MODE_LP:
+            default:
+                fx_filter_stereo_process_lp(filter, left, right, frames, &c,
+                                             apply_bypass);
+                break;
+        }
+    }
+    else
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            const float dry_l = left[i];
+            const float dry_r = right[i];
+            const float wet_l = fx_filter_tpt_sample(dry_l, &filter->ic1eq_l, &filter->ic2eq_l,
+                                                     &c, filter->mode, filter->previous_mode,
+                                                     filter->mode_via_dry,
+                                                     filter->mode_xfade_remaining);
+            const float wet_r = fx_filter_tpt_sample(dry_r, &filter->ic1eq_r, &filter->ic2eq_r,
+                                                     &c, filter->mode, filter->previous_mode,
+                                                     filter->mode_via_dry,
+                                                     filter->mode_xfade_remaining);
+            left[i] = fx_filter_apply_bypass(dry_l, wet_l, &filter->bypass_mix,
+                                             &filter->bypass_xfade_remaining, filter->bypass);
+            right[i] = wet_r + ((dry_r - wet_r) * filter->bypass_mix);
+            --filter->mode_xfade_remaining;
+        }
     }
     if(filter->mode_xfade_remaining == 0U) filter->previous_mode = filter->mode;
     if((filter->bypass != 0U) && (filter->bypass_xfade_remaining == 0U)
@@ -386,17 +636,44 @@ void fx_biquad_filter_mono_process_block(fx_biquad_filter_mono_t *filter,
     if((filter->bypass != 0U) && (filter->bypass_xfade_remaining == 0U)) return;
 
     const fx_biquad_filter_coeffs_t c = filter->current;
-    for(uint32_t i = 0U; i < frames; ++i)
+    if(filter->mode_xfade_remaining == 0U)
     {
-        const float dry = samples[i];
-        const float wet = fx_filter_tpt_sample(dry, &filter->ic1eq, &filter->ic2eq,
-                                               &c, filter->mode, filter->previous_mode,
-                                               filter->mode_via_dry,
-                                               filter->mode_xfade_remaining);
-        samples[i] = fx_filter_apply_bypass(dry, wet, &filter->bypass_mix,
-                                            &filter->bypass_xfade_remaining,
-                                            filter->bypass);
-        if(filter->mode_xfade_remaining != 0U) --filter->mode_xfade_remaining;
+        const uint8_t apply_bypass =
+            (uint8_t)((filter->bypass != 0U)
+                   || (filter->bypass_xfade_remaining != 0U));
+        switch((fx_biquad_filter_mode_t)filter->mode)
+        {
+            case FX_BIQUAD_FILTER_MODE_HP:
+                fx_filter_mono_process_hp(filter, samples, frames, &c,
+                                           apply_bypass);
+                break;
+
+            case FX_BIQUAD_FILTER_MODE_BP:
+                fx_filter_mono_process_bp(filter, samples, frames, &c,
+                                           apply_bypass);
+                break;
+
+            case FX_BIQUAD_FILTER_MODE_LP:
+            default:
+                fx_filter_mono_process_lp(filter, samples, frames, &c,
+                                           apply_bypass);
+                break;
+        }
+    }
+    else
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            const float dry = samples[i];
+            const float wet = fx_filter_tpt_sample(dry, &filter->ic1eq, &filter->ic2eq,
+                                                   &c, filter->mode, filter->previous_mode,
+                                                   filter->mode_via_dry,
+                                                   filter->mode_xfade_remaining);
+            samples[i] = fx_filter_apply_bypass(dry, wet, &filter->bypass_mix,
+                                                &filter->bypass_xfade_remaining,
+                                                filter->bypass);
+            --filter->mode_xfade_remaining;
+        }
     }
     if(filter->mode_xfade_remaining == 0U) filter->previous_mode = filter->mode;
     if((filter->bypass != 0U) && (filter->bypass_xfade_remaining == 0U)
