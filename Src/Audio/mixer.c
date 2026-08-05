@@ -2983,9 +2983,19 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
 
     mixer_poly_filter_sync_config(filter, &g_track_filters[mix_track_id]);
     (void)mixer_track_filter_process_block_mono(filter, mono, frames);
-    const float pan_for_mix = -clamp_pan(voice_pan);
+    const float clamped_pan = clamp_pan(voice_pan);
+    const float pan_for_mix = -clamped_pan;
     const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
     const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+    float *unit_output = g_external_track_l[mix_track_id];
+    float *attenuated_output = g_external_track_r[mix_track_id];
+    float attenuated_pan = pan_r;
+    if (clamped_pan < 0.0f)
+    {
+        unit_output = g_external_track_r[mix_track_id];
+        attenuated_output = g_external_track_l[mix_track_id];
+        attenuated_pan = pan_l;
+    }
     uint32_t i = 0U;
     for (; i < frames; ++i)
     {
@@ -2995,10 +3005,9 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
             break;
         }
         filter->vca_env_value = vca;
-        const float voice_l = mono[i] * vca * pan_l;
-        const float voice_r = mono[i] * vca * pan_r;
-        g_external_track_l[mix_track_id][i] += voice_l;
-        g_external_track_r[mix_track_id][i] += voice_r;
+        const float scaled = mono[i] * vca;
+        attenuated_output[i] += scaled * attenuated_pan;
+        unit_output[i] += scaled;
     }
     if (i < frames)
     {
