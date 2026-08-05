@@ -50,7 +50,7 @@ static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_typ
 static void brick6_render_synth_tracks(uint32_t frames,
                                        uint8_t *out_drum_tracks)
 {
-    static float drum_tmp[AUDIO_BLOCK_SIZE];
+    static float drum_fallback[AUDIO_BLOCK_SIZE];
     uint8_t drum_tracks = 0U;
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -75,8 +75,25 @@ static void brick6_render_synth_tracks(uint32_t frames,
                 continue;
             }
 
-            drum_synth_process_block_for_instance(ctx->instance_id, drum_tmp, frames);
-            mixer_submit_external_mono_native(ctx->mix_track_id, drum_tmp, frames);
+            float *direct_mono = NULL;
+            if (mixer_begin_external_mono_native(ctx->mix_track_id,
+                                                 frames,
+                                                 &direct_mono) != 0U)
+            {
+                drum_synth_process_block_for_instance(ctx->instance_id,
+                                                      direct_mono,
+                                                      frames);
+                mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+            }
+            else
+            {
+                drum_synth_process_block_for_instance(ctx->instance_id,
+                                                      drum_fallback,
+                                                      frames);
+                mixer_submit_external_mono_native(ctx->mix_track_id,
+                                                  drum_fallback,
+                                                  frames);
+            }
             drum_tracks++;
             continue;
         }
@@ -179,21 +196,55 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
             continue;
         }
 
-        if (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) != 0U)
+        if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
         {
-            float *direct_mono = NULL;
-            if (mixer_begin_external_mono_native(ctx->mix_track_id,
-                                                 frames,
-                                                 &direct_mono) != 0U)
+            if (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) != 0U)
+            {
+                float *direct_mono = NULL;
+                if (mixer_begin_external_mono_native(ctx->mix_track_id,
+                                                     frames,
+                                                     &direct_mono) != 0U)
                 {
                     memset(direct_mono, 0, frames * sizeof(float));
                     brick6_sampler_runtime_render_stream_track_mono(ctx,
                                                                     direct_mono,
                                                                     frames);
                     mixer_commit_external_mono_native(ctx->mix_track_id, frames);
+                    sampler_tracks++;
+                    continue;
+                }
+            }
+
+            float *direct_l = NULL;
+            float *direct_r = NULL;
+            if (mixer_begin_external_stereo(ctx->mix_track_id,
+                                            frames,
+                                            &direct_l,
+                                            &direct_r) != 0U)
+            {
+                memset(direct_l, 0, frames * sizeof(float));
+                memset(direct_r, 0, frames * sizeof(float));
+                brick6_sampler_runtime_render_stream_track(ctx,
+                                                            direct_l,
+                                                            direct_r,
+                                                            frames);
+                mixer_commit_external_stereo(ctx->mix_track_id, frames);
                 sampler_tracks++;
                 continue;
             }
+
+            memset(sampler_tmp_l, 0, frames * sizeof(float));
+            memset(sampler_tmp_r, 0, frames * sizeof(float));
+            brick6_sampler_runtime_render_stream_track(ctx,
+                                                        sampler_tmp_l,
+                                                        sampler_tmp_r,
+                                                        frames);
+            mixer_submit_external_stereo(ctx->mix_track_id,
+                                         sampler_tmp_l,
+                                         sampler_tmp_r,
+                                         frames);
+            sampler_tracks++;
+            continue;
         }
 
         memset(sampler_tmp_l, 0, frames * sizeof(float));
