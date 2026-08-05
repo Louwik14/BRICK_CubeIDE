@@ -1168,10 +1168,10 @@ void mod_matrix_process_track_ramped(uint8_t track,
                                      elapsed_frames,
                                      discontinuous,
                                      &dst->ramp);
-        (void)mod_destination_catalog_apply_rt(track,
-                                               (param_id_t)dst->destination,
-                                               ctx,
-                                               dst->ramp.current);
+        (void)mod_destination_catalog_apply_ramp_rt(track,
+                                                    (param_id_t)dst->destination,
+                                                    ctx,
+                                                    &dst->ramp);
     }
 }
 

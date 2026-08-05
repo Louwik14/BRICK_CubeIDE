@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Core/track_runtime.h"
+#include "Mod/mod_ramp.h"
 #include "Param/param_store.h"
 #include "ui_core.h"
 
@@ -19,6 +20,10 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
                                          param_id_t dest,
                                          const track_runtime_ctx_t *ctx,
                                          float value);
+uint8_t mod_destination_catalog_apply_ramp_rt(uint8_t track,
+                                              param_id_t dest,
+                                              const track_runtime_ctx_t *ctx,
+                                              const mod_destination_ramp_t *ramp);
 uint8_t mod_destination_catalog_supported_fast(uint8_t track,
                                                param_id_t dest,
                                                ui_track_family_t family,

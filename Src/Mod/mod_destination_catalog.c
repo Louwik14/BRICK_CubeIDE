@@ -830,6 +830,67 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     return param_registry_apply_track_value_rt_fast(dest, track, value);
 }
 
+static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_MIX_LEVEL:
+        case PARAM_MIX_PAN:
+        case PARAM_MIX_SEND1:
+        case PARAM_MIX_SEND2:
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_SAMPLER_GAIN:
+        case PARAM_SAMPLER_TUNE:
+        case PARAM_SAMPLER_CLIP_PITCH:
+        case PARAM_PRISM_COARSE:
+        case PARAM_PRISM_LEVEL:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_OSC2_LEVEL:
+        case PARAM_STACK_OSC1_LEVEL:
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC2_LEVEL:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC3_LEVEL:
+        case PARAM_STACK_OSC3_TUNE:
+        case PARAM_WAVE_OSC1_POS:
+        case PARAM_WAVE_OSC1_LEVEL:
+        case PARAM_WAVE_OSC1_TUNE:
+        case PARAM_WAVE_OSC2_POS:
+        case PARAM_WAVE_OSC2_LEVEL:
+        case PARAM_WAVE_OSC2_TUNE:
+        case PARAM_DRUM_TRX_BD_PITCH:
+        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+uint8_t mod_destination_catalog_apply_ramp_rt(uint8_t track,
+                                              param_id_t dest,
+                                              const track_runtime_ctx_t *ctx,
+                                              const mod_destination_ramp_t *ramp)
+{
+    if (ramp == NULL)
+    {
+        return 0U;
+    }
+
+    const uint8_t applied = mod_destination_catalog_apply_rt(track,
+                                                              dest,
+                                                              ctx,
+                                                              ramp->current);
+    if ((applied != 0U)
+            && (ramp->discontinuous == 0U)
+            && (ramp->frames > 1U)
+            && (mod_destination_is_continuous_rampable(dest) != 0U))
+    {
+        return mod_destination_catalog_apply_rt(track, dest, ctx, ramp->end);
+    }
+    return applied;
+}
+
 static uint8_t mod_destination_is_internal_lfo_param(param_id_t id)
 {
     switch (id)
