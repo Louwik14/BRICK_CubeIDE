@@ -647,7 +647,10 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
         && (sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_RAM,
                                                ram_slot,
                                                &global_slot) == 0U)
-        && sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS)
+        && ((sample_global_pool_find_free_slot() == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_RAM,
+                                                     ram_slot,
+                                                     1U) == 0U)))
     {
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
@@ -865,7 +868,10 @@ sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
     if ((sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_RAM,
                                             ram_slot,
                                             cost) == 0U)
-        || (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+        || (sample_global_pool_find_free_slot() == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+        || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_RAM,
+                                                 ram_slot,
+                                                 1U) == 0U))
     {
         return SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL;
     }

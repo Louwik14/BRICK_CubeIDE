@@ -26,6 +26,7 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
 
@@ -534,9 +535,14 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
             if ((result != MULTI_SAMPLE_LOAD_ALREADY_READY)
                 && (slot->global_index < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
             {
+                const multi_sample_instrument_t *const instrument =
+                    multi_sample_pool_get_instrument(slot->slot_index);
                 (void)sample_global_pool_register_multi_loading_at((uint16_t)slot->global_index,
                                                                    slot->slot_index,
-                                                                   slot->path);
+                                                                   slot->path,
+                                                                   (instrument != 0)
+                                                                       ? instrument->sample_count
+                                                                       : 1U);
             }
             g_project_multi_restore_diag.restore_load_requested = 1U;
         }

@@ -299,7 +299,7 @@ static const char *ui_page_settings_multi_load_error_label(multi_sample_load_res
 static void ui_page_settings_flash_sample_header_slots(void);
 static void ui_page_settings_flash_sample_header_memory(void);
 static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames);
-static uint16_t ui_page_settings_global_slot_count_used(void);
+static uint16_t ui_page_settings_global_entry_count_used(void);
 static void ui_page_settings_draw_progress_bar(uint8_t x,
                                                uint8_t y,
                                                uint8_t w,
@@ -1544,7 +1544,7 @@ static void ui_page_settings_sample_catalog_refresh_action(uint8_t rebuild)
 
 static int16_t ui_page_settings_sample_find_free_slot(void)
 {
-    if (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS)
+    if (sample_global_pool_get_used_entries() >= sample_global_pool_get_entry_capacity())
     {
         return -1;
     }
@@ -2113,7 +2113,7 @@ static void ui_page_settings_ram_copy_left(uint8_t shift_down)
         return;
     }
 
-    if (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS)
+    if (sample_global_pool_get_used_entries() >= sample_global_pool_get_entry_capacity())
     {
         ui_page_settings_flash_sample_header_slots();
         ui_page_settings_status("POOL FULL");
@@ -2210,7 +2210,7 @@ static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
         return;
     }
 
-    if (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS)
+    if (sample_global_pool_get_used_entries() >= sample_global_pool_get_entry_capacity())
     {
         ui_page_settings_flash_sample_header_slots();
         ui_page_settings_status("POOL FULL");
@@ -2425,16 +2425,16 @@ static uint32_t ui_page_settings_global_memory_used_bytes(void)
     return sample_global_pool_get_used_bytes();
 }
 
-static uint16_t ui_page_settings_global_slot_count_used(void)
+static uint16_t ui_page_settings_global_entry_count_used(void)
 {
-    return sample_global_pool_get_used_slots();
+    return sample_global_pool_get_used_entries();
 }
 
 static void ui_page_settings_draw_global_sample_header(const char *title)
 {
     ui_page_settings_draw_sample_header(title,
-                                        ui_page_settings_global_slot_count_used(),
-                                        sample_global_pool_get_active_slot_capacity(),
+                                        ui_page_settings_global_entry_count_used(),
+                                        sample_global_pool_get_entry_capacity(),
                                         ui_page_settings_global_memory_used_bytes(),
                                         SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
 }

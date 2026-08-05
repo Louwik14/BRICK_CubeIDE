@@ -515,7 +515,10 @@ bool sample_pool_load(uint16_t id, const char *path)
         sample_audio_format_from_channels(next_desc.channels));
     uint16_t existing_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM, id, &existing_global) == 0U)
-        && (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+        && ((sample_global_pool_find_free_slot() == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_STREAM,
+                                                     id,
+                                                     1U) == 0U)))
     {
         sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_DENIED);
         return false;
@@ -582,7 +585,12 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     desc->valid = 1U;
     g_sample_slot_by_sample[id] = (int16_t)id;
-    (void)sample_global_pool_register_stream(id, desc->path, product_cost, 0);
+    if (sample_global_pool_register_stream(id, desc->path, product_cost, 0) == 0U)
+    {
+        sample_pool_clear(id);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_DENIED);
+        return false;
+    }
     sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     return true;

@@ -358,7 +358,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_MULTI,
                                             instrument_id,
                                             &existing_global) == 0U)
-        && (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+        && (sample_global_pool_find_free_slot() == SAMPLE_GLOBAL_POOL_INVALID_INDEX))
     {
         g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_POOL_FAIL;
         return MULTI_SAMPLE_LOAD_POOL_FAIL;
@@ -375,6 +375,13 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         multi_sample_pool_get_instrument(instrument_id);
     if ((instrument == 0) || (instrument->sample_count != index.sample_count)
         || (instrument->sample_count == 0U))
+    {
+        multi_loader_set_error(MULTI_SAMPLE_LOAD_POOL_FAIL, MULTI_SAMPLE_POOL_INVALID_ID);
+        return MULTI_SAMPLE_LOAD_POOL_FAIL;
+    }
+    if (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_MULTI,
+                                            instrument_id,
+                                            instrument->sample_count) == 0U)
     {
         multi_loader_set_error(MULTI_SAMPLE_LOAD_POOL_FAIL, MULTI_SAMPLE_POOL_INVALID_ID);
         return MULTI_SAMPLE_LOAD_POOL_FAIL;
@@ -559,6 +566,7 @@ void multi_sample_service_load(uint32_t byte_budget)
             || (sample_global_pool_register_multi(g_multi_load_diag.instrument_id,
                                                   instrument->index_path,
                                                   (uint32_t)required_pages_total * SAMPLE_PAGE_BYTES,
+                                                  instrument->sample_count,
                                                   0)
                 == 0U))
         {

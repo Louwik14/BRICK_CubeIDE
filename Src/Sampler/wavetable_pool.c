@@ -1459,6 +1459,13 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
         wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
         return WAVETABLE_RESULT_INVALID_ARG;
     }
+    if (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_WAVETABLE,
+                                            wavetable_slot,
+                                            1U) == 0U)
+    {
+        wavetable_pool_set_last(WAVETABLE_RESULT_GLOBAL_SLOT_FULL);
+        return WAVETABLE_RESULT_GLOBAL_SLOT_FULL;
+    }
 
     char *const cache_path = g_wavetable_transaction_paths[0];
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
