@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Core/track_runtime.h"
+#include "Mod/mod_ramp.h"
 #include "Param/param_store.h"
 #include "Seq/seq_types.h"
 #include "ui_core.h"
@@ -75,10 +76,26 @@ void mod_matrix_process_track(uint8_t track,
                               const track_runtime_ctx_t *ctx,
                               const float source_values[MOD_MATRIX_SOURCE_COUNT],
                               const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT]);
+void mod_matrix_process_track_ramped(uint8_t track,
+                                     const track_runtime_ctx_t *ctx,
+                                     const float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                     const float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                     const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                     const uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT],
+                                     uint32_t elapsed_frames);
 void mod_matrix_process_operators(uint8_t track,
                                   float source_values[MOD_MATRIX_SOURCE_COUNT],
                                   uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
                                   uint32_t elapsed_frames);
+void mod_matrix_process_operators_ramped(uint8_t track,
+                                         float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                         float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                         uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                         uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT],
+                                         uint32_t elapsed_frames);
+uint8_t mod_matrix_get_destination_ramp(uint8_t track,
+                                        param_id_t destination,
+                                        mod_destination_ramp_t *out_ramp);
 void mod_matrix_release_track(uint8_t track,
                               ui_track_family_t family,
                               ui_track_type_t type,

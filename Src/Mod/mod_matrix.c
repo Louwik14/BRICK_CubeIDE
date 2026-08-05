@@ -13,8 +13,10 @@ typedef struct
     uint16_t destination;
     float base_value;
     float sum;
+    float sum_end;
     float min_value;
     float max_value;
+    mod_destination_ramp_t ramp;
 } mod_matrix_runtime_destination_t;
 
 typedef struct
@@ -253,8 +255,10 @@ static void mod_matrix_release_destination(uint8_t track,
     dst->destination = (uint16_t)MOD_DESTINATION_NONE;
     dst->base_value = 0.0f;
     dst->sum = 0.0f;
+    dst->sum_end = 0.0f;
     dst->min_value = 0.0f;
     dst->max_value = 127.0f;
+    dst->ramp = (mod_destination_ramp_t){0};
 }
 
 static mod_matrix_runtime_destination_t *mod_matrix_find_runtime_destination(mod_matrix_runtime_track_t *rt,
@@ -364,8 +368,11 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->valid = 1U;
         dst->destination = (uint16_t)destination;
         dst->base_value = base;
+        dst->sum = 0.0f;
+        dst->sum_end = 0.0f;
         dst->min_value = desc->min;
         dst->max_value = desc->max;
+        dst->ramp = (mod_destination_ramp_t){0};
     }
 
     *out_dst = dst;
@@ -890,12 +897,18 @@ static uint8_t mod_matrix_slew_direct_cycle(const track_sound_state_t *state, ui
     return 0U;
 }
 
-void mod_matrix_process_operators(uint8_t track,
-                                  float source_values[MOD_MATRIX_SOURCE_COUNT],
-                                  uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
-                                  uint32_t elapsed_frames)
+void mod_matrix_process_operators_ramped(uint8_t track,
+                                         float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                         float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                         uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                         uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT],
+                                         uint32_t elapsed_frames)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (source_values == NULL) || (source_valid == NULL))
+    if ((track >= SEQ_TRACK_COUNT)
+            || (source_start == NULL)
+            || (source_end == NULL)
+            || (source_valid == NULL)
+            || (source_discontinuous == NULL))
     {
         return;
     }
@@ -915,56 +928,100 @@ void mod_matrix_process_operators(uint8_t track,
     {
         const uint8_t src_a = state->mod_multi[op].source_a;
         const uint8_t src_b = state->mod_multi[op].source_b;
-        float a = 0.0f;
-        float b = 0.0f;
+        float a_start = 0.0f;
+        float b_start = 0.0f;
+        float a_end = 0.0f;
+        float b_end = 0.0f;
         const uint8_t invalid_src = (uint8_t)((src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
                                              || (src_a == (uint8_t)MOD_MATRIX_SOURCE_MULTI2)
                                              || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI1)
                                              || (src_b == (uint8_t)MOD_MATRIX_SOURCE_MULTI2));
         if ((invalid_src == 0U)
-                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src_a, &a) != 0U)
-                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src_b, &b) != 0U))
+                && (mod_matrix_get_operator_source_value(rt, source_start, source_valid, src_a, &a_start) != 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_start, source_valid, src_b, &b_start) != 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_end, source_valid, src_a, &a_end) != 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_end, source_valid, src_b, &b_end) != 0U))
         {
-            rt->multi[op] = mod_matrix_clampf(a * b, -1.0f, 1.0f);
+            const float start = mod_matrix_clampf(a_start * b_start, -1.0f, 1.0f);
+            const float end = mod_matrix_clampf(a_end * b_end, -1.0f, 1.0f);
+            const uint8_t output = (op == 0U)
+                ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1
+                : (uint8_t)MOD_MATRIX_SOURCE_MULTI2;
+            rt->multi[op] = end;
             rt->multi_valid[op] = 1U;
-            source_values[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1 : (uint8_t)MOD_MATRIX_SOURCE_MULTI2] = rt->multi[op];
-            source_valid[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1 : (uint8_t)MOD_MATRIX_SOURCE_MULTI2] = 1U;
+            source_start[output] = start;
+            source_end[output] = end;
+            source_valid[output] = 1U;
+            source_discontinuous[output] = (uint8_t)(source_discontinuous[src_a]
+                || source_discontinuous[src_b]);
         }
         else
         {
             rt->multi_valid[op] = 0U;
+            source_discontinuous[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_MULTI1 : (uint8_t)MOD_MATRIX_SOURCE_MULTI2] = 0U;
         }
     }
 
     for (uint8_t op = 0U; op < 2U; ++op)
     {
         const uint8_t src = state->mod_slew[op].source;
-        float input = 0.0f;
+        float input_start = 0.0f;
+        float input_end = 0.0f;
         if ((mod_matrix_slew_direct_cycle(state, op) == 0U)
-                && (mod_matrix_get_operator_source_value(rt, source_values, source_valid, src, &input) != 0U))
+                && (mod_matrix_get_operator_source_value(rt, source_start, source_valid, src, &input_start) != 0U)
+                && (mod_matrix_get_operator_source_value(rt, source_end, source_valid, src, &input_end) != 0U))
         {
             const float amount = mod_matrix_clampf(state->mod_slew[op].amount, 0.0f, 1.0f);
             const float tau_frames = 16.0f + (amount * amount * 48000.0f);
             const float elapsed = (elapsed_frames == 0U) ? 1.0f : (float)elapsed_frames;
             const float coeff = (amount <= 0.0f) ? 1.0f : (elapsed / (tau_frames + elapsed));
+            float start = input_start;
             if (rt->slew_valid[op] == 0U)
             {
-                rt->slew[op] = input;
+                rt->slew[op] = input_start;
             }
             else
             {
-                rt->slew[op] += (input - rt->slew[op]) * coeff;
+                start = rt->slew[op];
             }
-            rt->slew[op] = mod_matrix_clampf(rt->slew[op], -1.0f, 1.0f);
+            const float end = mod_matrix_clampf(start + (input_end - start) * coeff, -1.0f, 1.0f);
+            rt->slew[op] = end;
             rt->slew_valid[op] = 1U;
-            source_values[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2] = rt->slew[op];
-            source_valid[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2] = 1U;
+            const uint8_t output = (op == 0U)
+                ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1
+                : (uint8_t)MOD_MATRIX_SOURCE_SLEW2;
+            source_start[output] = start;
+            source_end[output] = end;
+            source_valid[output] = 1U;
+            source_discontinuous[output] = source_discontinuous[src];
         }
         else
         {
             rt->slew_valid[op] = 0U;
+            source_discontinuous[(op == 0U) ? (uint8_t)MOD_MATRIX_SOURCE_SLEW1 : (uint8_t)MOD_MATRIX_SOURCE_SLEW2] = 0U;
         }
     }
+}
+
+void mod_matrix_process_operators(uint8_t track,
+                                  float source_values[MOD_MATRIX_SOURCE_COUNT],
+                                  uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                  uint32_t elapsed_frames)
+{
+    if ((source_values == NULL) || (source_valid == NULL))
+    {
+        return;
+    }
+
+    float source_end[MOD_MATRIX_SOURCE_COUNT];
+    uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT] = {0U};
+    memcpy(source_end, source_values, sizeof(source_end));
+    mod_matrix_process_operators_ramped(track,
+                                        source_values,
+                                        source_end,
+                                        source_valid,
+                                        source_discontinuous,
+                                        elapsed_frames);
 }
 
 uint8_t mod_matrix_source_has_active_route(uint8_t track,
@@ -1014,12 +1071,19 @@ uint8_t mod_matrix_source_has_active_route(uint8_t track,
     return 0U;
 }
 
-void mod_matrix_process_track(uint8_t track,
-                              const track_runtime_ctx_t *ctx,
-                              const float source_values[MOD_MATRIX_SOURCE_COUNT],
-                              const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT])
+void mod_matrix_process_track_ramped(uint8_t track,
+                                     const track_runtime_ctx_t *ctx,
+                                     const float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                     const float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                     const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
+                                     const uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT],
+                                     uint32_t elapsed_frames)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (source_values == NULL) || (source_valid == NULL))
+    if ((track >= SEQ_TRACK_COUNT)
+            || (source_start == NULL)
+            || (source_end == NULL)
+            || (source_valid == NULL)
+            || (source_discontinuous == NULL))
     {
         return;
     }
@@ -1036,6 +1100,7 @@ void mod_matrix_process_track(uint8_t track,
     for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
     {
         rt->destinations[i].sum = 0.0f;
+        rt->destinations[i].sum_end = 0.0f;
     }
 
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
@@ -1061,7 +1126,9 @@ void mod_matrix_process_track(uint8_t track,
 
         const uint8_t dst_index = (uint8_t)(dst - &rt->destinations[0]);
         touched[dst_index] = 1U;
-        dst->sum += source_values[source] * (s->depth / 127.0f) * (dst->max_value - dst->min_value);
+        const float scale = (s->depth / 127.0f) * (dst->max_value - dst->min_value);
+        dst->sum += source_start[source] * scale;
+        dst->sum_end += source_end[source] * scale;
     }
 
     for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
@@ -1077,9 +1144,77 @@ void mod_matrix_process_track(uint8_t track,
             continue;
         }
 
-        const float value = mod_matrix_clampf(dst->base_value + dst->sum, dst->min_value, dst->max_value);
-        (void)mod_destination_catalog_apply_rt(track, (param_id_t)dst->destination, ctx, value);
+        const float start = mod_matrix_clampf(dst->base_value + dst->sum,
+                                              dst->min_value,
+                                              dst->max_value);
+        const float end = mod_matrix_clampf(dst->base_value + dst->sum_end,
+                                            dst->min_value,
+                                            dst->max_value);
+        uint8_t discontinuous = 0U;
+        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+        {
+            const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
+            if ((s != NULL)
+                    && (mod_matrix_slot_is_effective(track, s, family, type, ctx) != 0U)
+                    && ((param_id_t)s->destination == (param_id_t)dst->destination)
+                    && (source_discontinuous[s->source] != 0U))
+            {
+                discontinuous = 1U;
+                break;
+            }
+        }
+        mod_destination_ramp_prepare(start,
+                                     end,
+                                     elapsed_frames,
+                                     discontinuous,
+                                     &dst->ramp);
+        (void)mod_destination_catalog_apply_rt(track,
+                                               (param_id_t)dst->destination,
+                                               ctx,
+                                               dst->ramp.current);
     }
+}
+
+void mod_matrix_process_track(uint8_t track,
+                              const track_runtime_ctx_t *ctx,
+                              const float source_values[MOD_MATRIX_SOURCE_COUNT],
+                              const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT])
+{
+    if ((source_values == NULL) || (source_valid == NULL))
+    {
+        return;
+    }
+
+    float source_end[MOD_MATRIX_SOURCE_COUNT];
+    uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT] = {0U};
+    memcpy(source_end, source_values, sizeof(source_end));
+    mod_matrix_process_track_ramped(track,
+                                    ctx,
+                                    source_values,
+                                    source_end,
+                                    source_valid,
+                                    source_discontinuous,
+                                    1U);
+}
+
+uint8_t mod_matrix_get_destination_ramp(uint8_t track,
+                                        param_id_t destination,
+                                        mod_destination_ramp_t *out_ramp)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (destination >= PARAM_COUNT) || (out_ramp == NULL))
+    {
+        return 0U;
+    }
+
+    const mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[track], destination);
+    if ((dst == NULL) || (dst->valid == 0U))
+    {
+        return 0U;
+    }
+
+    *out_ramp = dst->ramp;
+    return 1U;
 }
 
 void mod_matrix_release_track(uint8_t track,

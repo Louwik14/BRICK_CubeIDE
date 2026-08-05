@@ -60,6 +60,8 @@ typedef struct
     uint8_t active;
     mod_lfo_ramp_t ramp;
     uint8_t ramp_valid;
+    float ramp_end;
+    uint8_t ramp_discontinuous;
     uint8_t temp_valid_mask;
     track_mod_lfo_state_t temp;
 } mod_lfo_runtime_state_t;
@@ -340,6 +342,8 @@ static void mod_lfo_prepare_ramp(mod_lfo_runtime_state_t *rt,
     }
 
     rt->ramp_valid = 0U;
+    rt->ramp_end = 0.0f;
+    rt->ramp_discontinuous = 0U;
     uint32_t remaining = frames;
     while (remaining > 0U)
     {
@@ -367,6 +371,8 @@ static void mod_lfo_prepare_ramp(mod_lfo_runtime_state_t *rt,
             rt->ramp = ramp;
             rt->ramp_valid = 1U;
         }
+        rt->ramp_end = ramp.start + (ramp.step * (float)(ramp.frames - 1U));
+        rt->ramp_discontinuous = (uint8_t)(rt->ramp_discontinuous || (ramp.transition != 0U));
 
         const uint32_t phase_before = rt->phase;
         rt->phase = ramp.phase_after;
@@ -484,11 +490,14 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
         const ui_track_family_t family = mod_lfo_ui_family_from_ctx(ctx);
         const ui_track_type_t type = mod_lfo_ui_type_from_ctx(ctx);
         float source_values[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
+        float source_end[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
         uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT] = {0U};
+        uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT] = {0U};
 
         if (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV3, family, type, ctx) != 0U)
         {
             source_values[MOD_MATRIX_SOURCE_ENV3] = mod_env3_process_track(track, elapsed_frames);
+            source_end[MOD_MATRIX_SOURCE_ENV3] = source_values[MOD_MATRIX_SOURCE_ENV3];
             source_valid[MOD_MATRIX_SOURCE_ENV3] = 1U;
         }
         if ((ctx != NULL)
@@ -496,6 +505,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 && (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_VCA, family, type, ctx) != 0U))
         {
             source_values[MOD_MATRIX_SOURCE_ENV_VCA] = mixer_get_track_vca_env_value(ctx->mix_track_id);
+            source_end[MOD_MATRIX_SOURCE_ENV_VCA] = source_values[MOD_MATRIX_SOURCE_ENV_VCA];
             source_valid[MOD_MATRIX_SOURCE_ENV_VCA] = 1U;
         }
         if (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_FLT, family, type, ctx) != 0U)
@@ -505,6 +515,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             {
                 source_values[MOD_MATRIX_SOURCE_ENV_FLT] =
                     mixer_prepare_track_filter_env_source(filter_track, elapsed_frames);
+                source_end[MOD_MATRIX_SOURCE_ENV_FLT] = source_values[MOD_MATRIX_SOURCE_ENV_FLT];
                 source_valid[MOD_MATRIX_SOURCE_ENV_FLT] = 1U;
             }
         }
@@ -555,6 +566,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             {
                 rt->current = mod_lfo_wave(shape_id, 0xFFFFFFFFU, rt);
                 source_values[(uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo] = rt->current;
+                source_end[(uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo] = rt->current;
                 source_valid[(uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo] = 1U;
                 continue;
             }
@@ -564,6 +576,8 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if ((trig == MOD_LFO_TRIG_HOLD) && (rt->hold_valid != 0U))
             {
                 rt->current = rt->hold_value;
+                rt->ramp_end = rt->hold_value;
+                rt->ramp_discontinuous = 0U;
             }
             else
             {
@@ -598,11 +612,26 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 
             const uint8_t source = (uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo;
             source_values[source] = rt->current;
+            source_end[source] = (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
+                ? rt->current
+                : rt->ramp_end;
             source_valid[source] = 1U;
+            source_discontinuous[source] = rt->ramp_discontinuous;
         }
 
-        mod_matrix_process_operators(track, source_values, source_valid, elapsed_frames);
-        mod_matrix_process_track(track, ctx, source_values, source_valid);
+        mod_matrix_process_operators_ramped(track,
+                                            source_values,
+                                            source_end,
+                                            source_valid,
+                                            source_discontinuous,
+                                            elapsed_frames);
+        mod_matrix_process_track_ramped(track,
+                                        ctx,
+                                        source_values,
+                                        source_end,
+                                        source_valid,
+                                        source_discontinuous,
+                                        elapsed_frames);
     }
 }
 
@@ -635,6 +664,8 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
             g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].ramp_end = 0.0f;
+            g_mod_lfo_runtime[track][lfo].ramp_discontinuous = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
             g_mod_lfo_runtime[track][lfo].temp = (track_mod_lfo_state_t){0};
         }
@@ -670,6 +701,8 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
             g_mod_lfo_runtime[track][lfo].active = 0U;
             g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].ramp_end = 0.0f;
+            g_mod_lfo_runtime[track][lfo].ramp_discontinuous = 0U;
             g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
         }
     }
