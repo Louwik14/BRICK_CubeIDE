@@ -1,18 +1,18 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "Sampler/sample_page_cache.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-sample_page_load_result_t sample_stream_backend_contiguous_read_page(
+sample_page_load_result_t sample_stream_decoder_decode_page(
     const sample_page_stream_info_t *info,
     const sample_page_load_target_t *target,
-    uint8_t *scratch,
-    uint32_t scratch_capacity,
-    const uint8_t **out_source,
-    uint32_t *out_source_bytes);
+    const uint8_t *source,
+    uint32_t source_bytes);
 
 #ifdef __cplusplus
 }
