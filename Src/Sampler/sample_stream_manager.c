@@ -5,6 +5,7 @@
 
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_multi_stream_diag.h"
+#include "Sampler/sample_stream_admission.h"
 #include "Sampler/sample_stream_contract.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_publish.h"
@@ -618,6 +619,7 @@ void sample_stream_manager_reset(void)
     sample_stream_request_queue_init();
     g_sample_stream_request_clock = 0U;
     sample_stream_scheduler_init(0);
+    sample_stream_admission_init(0);
 #if BRICK6_STREAM_TRACE
     g_sample_stream_service_physical_reads = 0U;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -670,6 +672,7 @@ void sample_stream_manager_release_owner(uint8_t owner_kind,
     {
         return;
     }
+    sample_stream_admission_release_owner(owner_kind, owner_id, owner_generation);
     sample_page_cache_release_window_owner(owner_kind, owner_id, owner_generation);
     sd_access_gate_set_streaming_critical(sample_page_cache_has_window_locks());
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
@@ -1147,6 +1150,29 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
     if (desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_NONE)
     {
         return 0U;
+    }
+
+    if ((desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE)
+        || (desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE))
+    {
+        sample_page_stream_info_t stream_info;
+        if (sample_page_cache_get_stream_info_key(desc->key, &stream_info) == 0U)
+        {
+            return 0U;
+        }
+        const sample_stream_admission_demand_t demand = {
+            .key = desc->key,
+            .step_q16 = desc->step_q16,
+            .owner_generation = desc->owner_generation,
+            .horizon_frames = desc->horizon_frames,
+            .block_align = stream_info.info.block_align,
+            .owner_kind = desc->owner_kind,
+            .owner_id = desc->owner_id,
+        };
+        if (sample_stream_admission_try_reserve(&demand) != SAMPLE_STREAM_ADMISSION_OK)
+        {
+            return 0U;
+        }
     }
 
     const sample_audio_format_t format = sample_audio_format_or_stereo(desc->format);
