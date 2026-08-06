@@ -130,6 +130,28 @@ bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
     return true;
 }
 
+bool live_clock_tim5_to_guarded_sample_time(uint32_t capture_tick,
+                                            uint64_t *out_sample_time)
+{
+    uint64_t sample_time = 0ULL;
+    if (!live_clock_tim5_to_sample_time(capture_tick, &sample_time))
+    {
+        return false;
+    }
+
+    if (sample_time > (UINT64_MAX - (uint64_t)LIVE_GUARD_SAMPLES))
+    {
+        sample_time = UINT64_MAX;
+    }
+    else
+    {
+        sample_time += (uint64_t)LIVE_GUARD_SAMPLES;
+    }
+
+    *out_sample_time = sample_time;
+    return true;
+}
+
 uint32_t live_clock_capture_tick(void)
 {
     return TIM5->CNT;

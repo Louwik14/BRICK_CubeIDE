@@ -887,6 +887,19 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t note,
                                   uint8_t velocity)
 {
+    seq_runtime_live_rec_note_on_at_sample(source,
+                                           channel_zero_based,
+                                           note,
+                                           velocity,
+                                           seq_runtime_get_now_sample());
+}
+
+void seq_runtime_live_rec_note_on_at_sample(seq_live_rec_source_t source,
+                                            uint8_t channel_zero_based,
+                                            uint8_t note,
+                                            uint8_t velocity,
+                                            uint64_t sample_time)
+{
     if (seq_live_rec_session_consume_trigger_start_note_on() != 0U)
     {
         g_seq_runtime_trigger_start_bypass = 1U;
@@ -898,18 +911,29 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                           note,
                                           velocity,
                                           &g_seq_runtime,
-                                          seq_runtime_get_now_sample());
+                                          sample_time);
 }
 
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note)
 {
+    seq_runtime_live_rec_note_off_at_sample(source,
+                                            channel_zero_based,
+                                            note,
+                                            seq_runtime_get_now_sample());
+}
+
+void seq_runtime_live_rec_note_off_at_sample(seq_live_rec_source_t source,
+                                             uint8_t channel_zero_based,
+                                             uint8_t note,
+                                             uint64_t sample_time)
+{
     seq_live_rec_session_live_rec_note_off(source,
                                            channel_zero_based,
                                            note,
                                            &g_seq_runtime,
-                                           seq_runtime_get_now_sample());
+                                           sample_time);
 }
 
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)

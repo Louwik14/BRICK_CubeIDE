@@ -122,9 +122,18 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
                                   uint8_t velocity);
+void seq_runtime_live_rec_note_on_at_sample(seq_live_rec_source_t source,
+                                            uint8_t channel_zero_based,
+                                            uint8_t note,
+                                            uint8_t velocity,
+                                            uint64_t sample_time);
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note);
+void seq_runtime_live_rec_note_off_at_sample(seq_live_rec_source_t source,
+                                             uint8_t channel_zero_based,
+                                             uint8_t note,
+                                             uint64_t sample_time);
 /* Notification surface from MIDI input / transport source. */
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);

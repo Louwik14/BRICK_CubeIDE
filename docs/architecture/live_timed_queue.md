@@ -52,3 +52,19 @@ Hall, USB Device et USB Host. Le sample final est donc la capture TIM5 convertie
 plus cette garde. Si l'ingestion dépasse cette échéance, l'événement est clampé
 au premier sample encore modifiable et les diagnostics `late`/retard maximal
 le signalent ; l'audio déjà rendu n'est jamais réécrit.
+
+## Live Recording
+
+Le Live Recording recoit le meme sample absolu corrige que le pipeline live : les
+chemins Hall et MIDI timestamps transmettent le sample d'acquisition converti
+par TIM5 et majore de `LIVE_GUARD_SAMPLES`. Les anciens appels sans timestamp
+restent des wrappers de compatibilite pour les chemins non temps reel.
+
+Le note-on et le note-off d'une occurrence utilisent cette meme timeline ; la
+longueur est donc calculee depuis le sample du note-off et le sample de depart.
+Le calcul existant de position musicale et de microtiming est conserve : la
+position reelle et le microtiming sont derives du sample d'acquisition, puis les
+regles de grille/quantification deja en vigueur decident explicitement de la
+position a ecrire. Les retriggers, l'identite d'occurrence et le bouclage restent
+geres par la session de recording ; l'heure du superloop n'est plus utilisee
+pour les entrees Hall/MIDI timestampes.
