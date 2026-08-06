@@ -127,9 +127,9 @@ static uint8_t live_parameter_audio_runtime_apply_target(
 
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
     {
-        return param_registry_apply_track_value_rt_fast(event->parameter_id,
-                                                         event->track,
-                                                         value);
+        return param_registry_apply_track_value_audio(event->parameter_id,
+                                                       event->track,
+                                                       value);
     }
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
     {

@@ -1144,7 +1144,8 @@ static uint8_t param_track_exec_authorize(const param_track_exec_ctx_t *ctx)
     return param_backend_track_supports_midi_tone_descriptor(&ctx->resolved.descriptor);
 }
 
-static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
+static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
+                                              uint8_t update_base_state)
 {
     if (ctx == NULL)
     {
@@ -1189,7 +1190,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
     return param_backend_apply_track_value(ctx->track,
                                            ctx->id,
                                            ctx->clamped,
-                                           (ctx->rt_fast == 0U) ? 1U : 0U);
+                                           update_base_state);
 }
 
 static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *ctx, uint8_t applied)
@@ -1263,7 +1264,10 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
         return 0U;
     }
 
-    return param_track_exec_sync_after_apply(&ctx, param_track_exec_apply_backend(&ctx));
+    return param_track_exec_sync_after_apply(&ctx,
+                                             param_track_exec_apply_backend(
+                                                 &ctx,
+                                                 (ctx.rt_fast == 0U) ? 1U : 0U));
 }
 
 static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, float clamped)
@@ -1451,6 +1455,59 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     }
 
     return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
+}
+
+uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value)
+{
+    if ((id >= PARAM_COUNT)
+            || (track >= SEQ_TRACK_COUNT)
+            || (param_id_is_reserved(id) != 0U))
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[id];
+    const float clamped = clamp_value(value, desc->min, desc->max);
+
+    if (param_filter_is_param(id) != 0U)
+    {
+        const uint8_t applied = param_filter_apply_value(id,
+                                                          track,
+                                                          clamped,
+                                                          1U,
+                                                          0U);
+        if (applied != 0U)
+        {
+            param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+        }
+        return applied;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG))
+    {
+        return 0U;
+    }
+
+    param_track_exec_ctx_t ctx;
+    if (param_track_exec_ctx_build(&ctx, track, id, clamped, rule, 1U) == 0U)
+    {
+        return 0U;
+    }
+    if (param_track_exec_authorize(&ctx) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t applied = param_track_exec_apply_backend(&ctx, 1U);
+    if (applied != 0U)
+    {
+        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+    }
+    return applied;
 }
 
 uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)

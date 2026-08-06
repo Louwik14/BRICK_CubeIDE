@@ -106,6 +106,9 @@ void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t trac
 void param_registry_clear_track_runtime_state(uint8_t track);
 /* Fast path reserved for RT modulation, not a general apply entry point. */
 uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value);
+/* Audio-owner track target path: updates the runtime backend and the
+ * audio-authoritative track cache without UI/storage side effects. */
+uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value);
 /* Audio-owner target path: applies a global backend without touching the UI
  * parameter store from the audio IRQ. */
 uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value);
