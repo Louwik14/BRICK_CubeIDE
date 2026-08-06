@@ -72,3 +72,24 @@ value. The command ring is fixed at 64 entries and drops newest commands on
 saturation with an observable counter. It is a control-side bridge for the
 future audio-owned queue; sample-time conversion and DSP application remain
 later passes.
+
+## Audio-owned parameter schedule
+
+The control-side `live_parameter_event_t` ring is drained into a separate,
+fixed-width `live_parameter_audio_event_t` schedule. The handoff is the only
+place that calls `live_clock_tim5_to_guarded_sample_time()`: the resulting
+`effective_sample_time` is retained with the original capture tick and ingress
+serial, so audio performs no second TIM5 conversion.
+
+The schedule is independent from the NoteFx live-note queue. Audio asks both
+queues only for their next deadline and shortens the current render segment to
+the earliest one. At the segment boundary notes are processed first; due
+parameter events then move to an audio-owned FIFO for the sample-accurate
+application seam of the next pass. Encoder traffic therefore has no access to
+note capacity, note-off, or panic budgets.
+
+Every detent is retained while capacity is available. If the parameter schedule
+is genuinely saturated, only successive unapplied events for the same target
+may coalesce to the newest target; unrelated events are reported as drops.
+Late and stale conversions, schedule saturation, coalescing, and due-FIFO
+saturation are exposed through `live_parameter_audio_queue_get_diag()`.

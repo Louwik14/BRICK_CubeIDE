@@ -1,5 +1,6 @@
 #include "Core/encoder_control_dispatcher.h"
 
+#include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_event.h"
 #include "Core/track_runtime.h"
 #include "encoders.h"
@@ -108,6 +109,7 @@ static encoder_control_shadow_t *encoder_control_shadow_find(encoder_control_sha
 void encoder_control_dispatcher_init(void)
 {
     live_parameter_event_init();
+    live_parameter_audio_queue_init();
 }
 
 uint8_t encoder_control_dispatcher_service(const ui_param_encoder_context_t *context)
@@ -190,5 +192,8 @@ uint8_t encoder_control_dispatcher_service(const ui_param_encoder_context_t *con
         }
     }
 
+    /* Handoff is bounded and keeps capture conversion out of the encoder/UI
+     * resolver.  The converted events belong to the audio-owned schedule. */
+    (void)live_parameter_audio_queue_drain();
     return submitted;
 }

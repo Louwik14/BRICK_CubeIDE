@@ -1,9 +1,11 @@
 #include "Core/live_parameter_event.h"
+#include "Core/live_parameter_audio_queue.h"
 
 #include <assert.h>
 
 int main(void)
 {
+    assert(sizeof(live_parameter_audio_event_t) == 32U);
     const float values[] = { -24.0f, -0.01f, 0.0f, 0.5f, 127.0f };
 
     for (unsigned int i = 0U; i < (sizeof(values) / sizeof(values[0])); ++i)

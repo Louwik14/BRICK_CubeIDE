@@ -23,6 +23,7 @@
 #include "engine_tasklet.h"
 #include "cpu_load.h"
 #include "Core/live_clock.h"
+#include "Core/live_parameter_audio_queue.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
@@ -123,6 +124,7 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
     {
         const uint64_t now = sample_time + cursor;
         note_fx_pipeline_process(now, 1U, seq_runtime_get_samples_per_step_q16());
+        (void)live_parameter_audio_queue_consume_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = note_fx_pipeline_frames_until_deadline(now, remaining);
         if (span == 0U)
@@ -276,6 +278,8 @@ static void process_half(uint32_t half_index)
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
         uint16_t block_frames = audio_seq_collect_frames_until_next_internal_pulse(remaining);
         block_frames = note_fx_pipeline_frames_until_deadline(
+            seq_runtime_exec_get_audio_timeline_sample(), block_frames);
+        block_frames = live_parameter_audio_queue_frames_until_deadline(
             seq_runtime_exec_get_audio_timeline_sample(), block_frames);
         if (block_frames == 0U)
         {
