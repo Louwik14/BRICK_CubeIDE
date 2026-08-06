@@ -1420,6 +1420,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
         io_command.stream_info = stream_info;
         sample_stream_io_result_t io_result;
         sample_stream_io_execute(&io_command, &io_result);
+        if (io_result.read_bytes > consumed)
+        {
+            consumed = io_result.read_bytes;
+        }
         g_sample_stream_service_fatfs_ops += io_result.fatfs_ops;
 #if BRICK6_STREAM_TRACE
         g_sample_stream_service_physical_reads += io_result.physical_reads;

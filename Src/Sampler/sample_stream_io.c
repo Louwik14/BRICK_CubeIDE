@@ -10,9 +10,12 @@
 #include "ff.h"
 
 #define SAMPLE_STREAM_IO_FILE_OPEN_COOKIE (0x5354524DU)
-#define SAMPLE_STREAM_IO_CHUNK_BYTES (4096U)
+#ifndef BRICK6_STREAM_READ_CHUNK_KIB
+#define BRICK6_STREAM_READ_CHUNK_KIB (4U)
+#endif
+#define SAMPLE_STREAM_IO_MAX_CHUNK_BYTES (32768U)
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
-#define SAMPLE_STREAM_IO_SCRATCH_BYTES \
+#define SAMPLE_STREAM_IO_READ_SCRATCH_BYTES \
     (SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES)
 
 typedef struct
@@ -36,7 +39,31 @@ SDRAM_STREAM_SERVICE static sample_stream_io_reader_t
     g_sample_stream_io_readers[SAMPLE_STREAM_MAX_ACTIVE];
 SDRAM_STREAM_SERVICE static char
     g_sample_stream_io_paths[SAMPLE_STREAM_MAX_ACTIVE][SAMPLE_PAGE_CACHE_PATH_MAX];
-SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_scratch[SAMPLE_STREAM_IO_SCRATCH_BYTES];
+SDRAM_STREAM_SCRATCH static uint8_t
+    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_MAX_CHUNK_BYTES];
+SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_page_scratch[SAMPLE_PAGE_BYTES];
+static sample_audio_key_t g_sample_stream_io_cache_key;
+static uint32_t g_sample_stream_io_cache_registration_epoch;
+static FSIZE_t g_sample_stream_io_cache_offset;
+static uint32_t g_sample_stream_io_cache_bytes;
+static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
+    (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
+
+static uint8_t sample_stream_io_chunk_valid(sample_stream_read_chunk_kib_t chunk_kib)
+{
+    return ((chunk_kib == SAMPLE_STREAM_READ_CHUNK_4_KIB)
+            || (chunk_kib == SAMPLE_STREAM_READ_CHUNK_8_KIB)
+            || (chunk_kib == SAMPLE_STREAM_READ_CHUNK_16_KIB)
+            || (chunk_kib == SAMPLE_STREAM_READ_CHUNK_32_KIB)) ? 1U : 0U;
+}
+
+static void sample_stream_io_invalidate_read_cache(void)
+{
+    memset(&g_sample_stream_io_cache_key, 0, sizeof(g_sample_stream_io_cache_key));
+    g_sample_stream_io_cache_registration_epoch = 0U;
+    g_sample_stream_io_cache_offset = 0U;
+    g_sample_stream_io_cache_bytes = 0U;
+}
 
 static char *sample_stream_io_reader_path(sample_stream_io_reader_t *reader)
 {
@@ -187,10 +214,16 @@ void sample_stream_io_init(void)
 {
     memset(g_sample_stream_io_readers, 0, sizeof(g_sample_stream_io_readers));
     memset(g_sample_stream_io_paths, 0, sizeof(g_sample_stream_io_paths));
+    sample_stream_io_invalidate_read_cache();
+    if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
+    {
+        g_sample_stream_io_chunk_kib = SAMPLE_STREAM_READ_CHUNK_4_KIB;
+    }
 }
 
 void sample_stream_io_reset(void)
 {
+    sample_stream_io_invalidate_read_cache();
     for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
     {
         sample_stream_io_clear_reader(&g_sample_stream_io_readers[i]);
@@ -199,6 +232,10 @@ void sample_stream_io_reset(void)
 
 void sample_stream_io_release_key(sample_audio_key_t key)
 {
+    if (sample_audio_key_equal(&g_sample_stream_io_cache_key, &key) != 0U)
+    {
+        sample_stream_io_invalidate_read_cache();
+    }
     sample_stream_io_reader_t *const reader = sample_stream_io_find_reader(key);
     if (reader != 0)
     {
@@ -214,6 +251,25 @@ uint32_t sample_stream_io_active_reader_count(void)
         count += (g_sample_stream_io_readers[i].in_use != 0U) ? 1U : 0U;
     }
     return count;
+}
+
+uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib)
+{
+    if (sample_stream_io_chunk_valid(chunk_kib) == 0U)
+    {
+        return 0U;
+    }
+    if (g_sample_stream_io_chunk_kib != chunk_kib)
+    {
+        g_sample_stream_io_chunk_kib = chunk_kib;
+        sample_stream_io_invalidate_read_cache();
+    }
+    return 1U;
+}
+
+sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void)
+{
+    return g_sample_stream_io_chunk_kib;
 }
 
 void sample_stream_io_execute(const sample_stream_io_command_t *command,
@@ -238,19 +294,21 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
         return;
     }
 
-    const uint8_t *source = g_sample_stream_io_scratch;
+    const uint8_t *source = g_sample_stream_io_page_scratch;
     if ((command->stream_info.raw_pcm24 == 0U)
         && (command->stream_info.stream_safe.valid != 0U)
         && (command->stream_info.stream_safe.backend_kind
             == (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS))
     {
         out_result->load_result = sample_stream_backend_contiguous_read_page(
-            &command->stream_info, &command->target, g_sample_stream_io_scratch,
-            sizeof(g_sample_stream_io_scratch), &source, &out_result->source_bytes);
+            &command->stream_info, &command->target, g_sample_stream_io_read_scratch,
+            sizeof(g_sample_stream_io_read_scratch), &source, &out_result->source_bytes);
         if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
         {
+            sample_stream_io_invalidate_read_cache();
             out_result->backend = 1U;
             out_result->physical_reads = 1U;
+            out_result->read_bytes = out_result->source_bytes;
         }
     }
 
@@ -265,38 +323,82 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
         const FSIZE_t offset = (FSIZE_t)command->stream_info.data_offset
                               + ((FSIZE_t)command->target.start_frame
                                  * command->stream_info.info.block_align);
-        if (reader->current_file_offset != offset)
-        {
-            out_result->fatfs_ops++;
-            if (f_lseek(&reader->file, offset) != FR_OK)
-            {
-                out_result->fatfs_ops += sample_stream_io_close_reader(reader);
-                out_result->load_result = SAMPLE_PAGE_LOAD_SEEK_FAILED;
-                return;
-            }
-        }
-
         uint32_t bytes_read = 0U;
         while (bytes_read < source_bytes)
         {
-            uint32_t request = source_bytes - bytes_read;
-            if (request > SAMPLE_STREAM_IO_CHUNK_BYTES)
+            const FSIZE_t cursor = offset + bytes_read;
+            const uint8_t cache_matches =
+                (uint8_t)((g_sample_stream_io_cache_bytes != 0U)
+                    && (sample_audio_key_equal(&g_sample_stream_io_cache_key,
+                                               &command->target.key) != 0U)
+                    && (g_sample_stream_io_cache_registration_epoch
+                        == command->stream_info.registration_epoch)
+                    && (cursor >= g_sample_stream_io_cache_offset)
+                    && (cursor < (g_sample_stream_io_cache_offset
+                                  + g_sample_stream_io_cache_bytes)));
+            if (cache_matches != 0U)
             {
-                request = SAMPLE_STREAM_IO_CHUNK_BYTES;
+                const uint32_t cache_position = (uint32_t)(cursor - g_sample_stream_io_cache_offset);
+                uint32_t available = g_sample_stream_io_cache_bytes - cache_position;
+                const uint32_t needed = source_bytes - bytes_read;
+                if (available > needed)
+                {
+                    available = needed;
+                }
+                memcpy(&g_sample_stream_io_page_scratch[bytes_read],
+                       &g_sample_stream_io_read_scratch[cache_position], available);
+                bytes_read += available;
+                continue;
+            }
+
+            if (reader->current_file_offset != cursor)
+            {
+                out_result->fatfs_ops++;
+                if (f_lseek(&reader->file, cursor) != FR_OK)
+                {
+                    out_result->fatfs_ops += sample_stream_io_close_reader(reader);
+                    out_result->load_result = SAMPLE_PAGE_LOAD_SEEK_FAILED;
+                    return;
+                }
+            }
+
+            uint32_t request = (uint32_t)g_sample_stream_io_chunk_kib * 1024U;
+            const uint64_t source_end = (uint64_t)command->stream_info.data_offset
+                                        + ((uint64_t)command->stream_info.total_frames
+                                           * command->stream_info.info.block_align);
+            if ((uint64_t)cursor >= source_end)
+            {
+                out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+                return;
+            }
+            const uint64_t remaining_file_bytes = source_end - (uint64_t)cursor;
+            if ((uint64_t)request > remaining_file_bytes)
+            {
+                request = (uint32_t)remaining_file_bytes;
+            }
+            if (request == 0U)
+            {
+                out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+                return;
             }
             UINT actual = 0U;
             out_result->fatfs_ops++;
             out_result->physical_reads++;
-            if ((f_read(&reader->file, &g_sample_stream_io_scratch[bytes_read], request,
-                        &actual) != FR_OK) || (actual != request))
+            if ((f_read(&reader->file, g_sample_stream_io_read_scratch, request, &actual) != FR_OK)
+                || (actual != request))
             {
                 out_result->fatfs_ops += sample_stream_io_close_reader(reader);
                 out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
                 return;
             }
-            bytes_read += actual;
+            g_sample_stream_io_cache_key = command->target.key;
+            out_result->read_bytes += actual;
+            g_sample_stream_io_cache_registration_epoch =
+                command->stream_info.registration_epoch;
+            g_sample_stream_io_cache_offset = cursor;
+            g_sample_stream_io_cache_bytes = actual;
+            reader->current_file_offset = cursor + actual;
         }
-        reader->current_file_offset = offset + source_bytes;
         out_result->load_result = SAMPLE_PAGE_LOAD_OK;
     }
 
