@@ -594,6 +594,17 @@ set(LOWCOST_AUDIO_O3_SOURCES
 set_source_files_properties(${LOWCOST_AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
+
+# GCC 13.3 LTO can emit a corrupted .init_array relocation for the sole
+# non-trivial global C++ initializer in the diagnostic image. Keep this TU at
+# Release optimization while making its constructor relocation ordinary.
+if(BRICK6_MULTI_STREAM_DIAG AND BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN)
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
+        PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;-fno-lto"
+    )
+endif()
+
 set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
     COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
 )
