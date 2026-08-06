@@ -11,6 +11,7 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_request_queue.h"
 #include "Sampler/sample_stream_scheduler.h"
+#include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
 
@@ -603,6 +604,7 @@ static void sample_stream_manager_init_storage_once(void)
     g_sample_stream_pending = sample_stream_request_queue_entries();
     sample_stream_io_init();
     sample_stream_request_queue_init();
+    sample_stream_transport_init();
     g_sample_stream_manager_initialized = 1U;
 }
 
@@ -616,6 +618,7 @@ void sample_stream_manager_reset(void)
 {
     sample_stream_manager_init_storage_once();
     sample_stream_io_reset();
+    sample_stream_transport_init();
     sample_stream_request_queue_init();
     g_sample_stream_request_clock = 0U;
     sample_stream_scheduler_init(0);
@@ -1445,7 +1448,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         io_command.target = target;
         io_command.stream_info = stream_info;
         sample_stream_io_result_t io_result;
-        sample_stream_io_execute(&io_command, &io_result);
+        sample_stream_transport_execute_monocore(&io_command, &io_result);
         if (io_result.read_bytes > consumed)
         {
             consumed = io_result.read_bytes;
