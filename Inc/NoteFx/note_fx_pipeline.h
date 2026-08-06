@@ -2,6 +2,7 @@
 #define NOTE_FX_PIPELINE_H
 
 #include <stdint.h>
+#include "Core/live_event.h"
 #include "NoteFx/note_fx_event.h"
 #include "NoteFx/note_fx_state.h"
 
@@ -56,8 +57,21 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
     uint32_t source_occurrence_id);
 note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
-    uint32_t capture_tick, note_event_provenance_t provenance,
+    uint32_t capture_tick, uint32_t ingress_serial,
+    note_event_provenance_t provenance,
     uint32_t source_occurrence_id);
+
+typedef struct
+{
+    uint32_t late_count;
+    uint32_t stale_count;
+    uint32_t queue_drop_count;
+    uint64_t max_lateness_samples;
+    uint16_t depth;
+    uint16_t high_water;
+} note_fx_live_queue_diag_t;
+
+void note_fx_pipeline_get_live_queue_diag(note_fx_live_queue_diag_t *out_diag);
 /* Returns non-zero only while an FX-owned occurrence is still current in the
  * audio owner.  Terminal admission uses this to reject stale generated On. */
 uint8_t note_fx_pipeline_is_generated_occurrence_current(

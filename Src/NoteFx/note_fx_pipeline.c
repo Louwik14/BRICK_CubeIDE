@@ -28,6 +28,8 @@ static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 static note_fx_pipeline_diag_t g_note_fx_pipeline_diag[NOTE_FX_TRACK_COUNT];
 
 #define NOTE_FX_COMMAND_CAPACITY 32U
+#define NOTE_FX_LIVE_QUEUE_CAPACITY (NOTE_FX_COMMAND_CAPACITY - 1U)
+#define NOTE_FX_LIVE_STALE_THRESHOLD_SAMPLES 48000ULL
 #define NOTE_FX_SOURCE_RESERVATION_CAPACITY \
     (NOTE_FX_TRACK_COUNT * NOTE_FX_ARP_MAX_SOURCES)
 
@@ -55,6 +57,7 @@ typedef struct
     uint8_t reserved;
     uint64_t sample_time;
     uint32_t source_occurrence_id;
+    uint32_t ingress_serial;
     uint32_t capture_tick;
     uint8_t capture_tick_valid;
     note_fx_transition_policy_t policy;
@@ -85,6 +88,14 @@ static uint8_t g_note_fx_source_reservation_count;
 static note_fx_command_t
     g_note_fx_pending_closure[NOTE_FX_SOURCE_RESERVATION_CAPACITY];
 static uint8_t g_note_fx_pending_closure_count;
+static live_note_event_t g_note_fx_live_queue[NOTE_FX_LIVE_QUEUE_CAPACITY];
+static uint8_t g_note_fx_live_queue_count;
+static uint16_t g_note_fx_live_queue_high_water;
+static uint32_t g_note_fx_live_late_count;
+static uint32_t g_note_fx_live_stale_count;
+static uint32_t g_note_fx_live_queue_drop_count;
+static uint64_t g_note_fx_live_max_lateness_samples;
+static uint32_t g_note_fx_live_fallback_serial;
 
 typedef struct
 {
@@ -591,12 +602,20 @@ void note_fx_pipeline_init(void)
     memset(g_note_fx_source_reservation, 0,
            sizeof(g_note_fx_source_reservation));
     memset(g_note_fx_pending_closure, 0, sizeof(g_note_fx_pending_closure));
+    memset(g_note_fx_live_queue, 0, sizeof(g_note_fx_live_queue));
     g_note_fx_command_head = 0U;
     g_note_fx_command_tail = 0U;
     g_note_fx_command_high_water = 0U;
     g_note_fx_command_drop_count = 0U;
     g_note_fx_source_reservation_count = 0U;
     g_note_fx_pending_closure_count = 0U;
+    g_note_fx_live_queue_count = 0U;
+    g_note_fx_live_queue_high_water = 0U;
+    g_note_fx_live_late_count = 0U;
+    g_note_fx_live_stale_count = 0U;
+    g_note_fx_live_queue_drop_count = 0U;
+    g_note_fx_live_max_lateness_samples = 0U;
+    g_note_fx_live_fallback_serial = 0U;
     memset(&g_note_fx_half_budget, 0, sizeof(g_note_fx_half_budget));
     g_note_fx_last_half_emissions = 0U;
     g_note_fx_max_half_emissions = 0U;
@@ -828,7 +847,8 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
 
 note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
-    uint32_t capture_tick, note_event_provenance_t provenance,
+    uint32_t capture_tick, uint32_t ingress_serial,
+    note_event_provenance_t provenance,
     uint32_t source_occurrence_id)
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (note >= 128U)
@@ -847,6 +867,7 @@ note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
         .provenance = (uint8_t)provenance,
         .sample_time = NOTE_FX_SAMPLE_TIME_AUDIO_OWNER,
         .source_occurrence_id = source_occurrence_id,
+        .ingress_serial = ingress_serial,
         .capture_tick = capture_tick,
         .capture_tick_valid = 1U
     };
@@ -966,28 +987,143 @@ static void note_fx_pipeline_release_source_reservation(
     note_fx_pipeline_exit_critical(primask);
 }
 
-static note_fx_result_t note_fx_pipeline_apply_source_raw_command(
-    const note_fx_command_t *command)
+static uint8_t note_fx_pipeline_live_source_for_provenance(
+    note_event_provenance_t provenance)
 {
-    uint64_t sample_time = command->sample_time;
-    note_fx_result_t result;
-    if ((command->capture_tick_valid != 0U)
-            && !live_clock_tim5_to_sample_time(command->capture_tick,
-                                                &sample_time))
+    return (provenance == NOTE_EVENT_SOURCE_KEY)
+        ? LIVE_EVENT_SOURCE_HALL
+        : LIVE_EVENT_SOURCE_MIDI_DEVICE;
+}
+
+static uint8_t note_fx_pipeline_live_event_precedes(
+    const live_note_event_t *left, const live_note_event_t *right)
+{
+    if (left->sample_time != right->sample_time)
+        return (left->sample_time < right->sample_time) ? 1U : 0U;
+    return (left->ingress_serial < right->ingress_serial) ? 1U : 0U;
+}
+
+static uint8_t note_fx_pipeline_live_enqueue(
+    const live_note_event_t *event)
+{
+    if ((event == NULL)
+            || (g_note_fx_live_queue_count >= NOTE_FX_LIVE_QUEUE_CAPACITY))
     {
-        result = NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+        ++g_note_fx_live_queue_drop_count;
+        return 0U;
     }
-    else
+
+    uint8_t index = g_note_fx_live_queue_count;
+    while ((index > 0U)
+            && note_fx_pipeline_live_event_precedes(
+                event, &g_note_fx_live_queue[(uint8_t)(index - 1U)]))
     {
-        result = note_fx_pipeline_submit_source_audio(
-            command->track,
-            command->note,
-            command->velocity,
-            command->is_note_on,
-            sample_time,
+        g_note_fx_live_queue[index] = g_note_fx_live_queue[(uint8_t)(index - 1U)];
+        --index;
+    }
+    g_note_fx_live_queue[index] = *event;
+    ++g_note_fx_live_queue_count;
+    if (g_note_fx_live_queue_count > g_note_fx_live_queue_high_water)
+        g_note_fx_live_queue_high_water = g_note_fx_live_queue_count;
+    return 1U;
+}
+
+static note_fx_result_t note_fx_pipeline_submit_live_command(
+    const note_fx_command_t *command, uint64_t now)
+{
+    if (command->capture_tick_valid == 0U)
+    {
+        return note_fx_pipeline_submit_source_audio(
+            command->track, command->note, command->velocity,
+            command->is_note_on, command->sample_time,
             (note_event_provenance_t)command->provenance,
             command->source_occurrence_id);
     }
+
+    uint64_t sample_time = 0U;
+    if (!live_clock_tim5_to_sample_time(command->capture_tick, &sample_time))
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+
+    if (sample_time < now)
+    {
+        const uint64_t lateness = now - sample_time;
+        ++g_note_fx_live_late_count;
+        if (lateness > g_note_fx_live_max_lateness_samples)
+            g_note_fx_live_max_lateness_samples = lateness;
+        if (lateness > NOTE_FX_LIVE_STALE_THRESHOLD_SAMPLES)
+            ++g_note_fx_live_stale_count;
+        sample_time = now;
+    }
+
+    live_note_event_t event = {
+        .sample_time = sample_time,
+        .ingress_serial = command->ingress_serial,
+        .occurrence_id = command->source_occurrence_id,
+        .type = (command->is_note_on != 0U)
+            ? LIVE_NOTE_EVENT_ON : LIVE_NOTE_EVENT_OFF,
+        .source = note_fx_pipeline_live_source_for_provenance(
+            (note_event_provenance_t)command->provenance),
+        .track = command->track,
+        .note = command->note,
+        .velocity = command->velocity
+    };
+    if (event.ingress_serial == 0U)
+    {
+        ++g_note_fx_live_fallback_serial;
+        if (g_note_fx_live_fallback_serial == 0U)
+            ++g_note_fx_live_fallback_serial;
+        event.ingress_serial = g_note_fx_live_fallback_serial;
+    }
+    return (note_fx_pipeline_live_enqueue(&event) != 0U)
+        ? NOTE_EVENT_RESULT_ACCEPTED : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+}
+
+static void note_fx_pipeline_apply_due_live_events(uint64_t now)
+{
+    while ((g_note_fx_live_queue_count != 0U)
+            && (g_note_fx_live_queue[0].sample_time <= now))
+    {
+        const live_note_event_t event = g_note_fx_live_queue[0];
+        for (uint8_t i = 1U; i < g_note_fx_live_queue_count; ++i)
+            g_note_fx_live_queue[(uint8_t)(i - 1U)] = g_note_fx_live_queue[i];
+        --g_note_fx_live_queue_count;
+
+        const note_event_provenance_t provenance =
+            (event.source == LIVE_EVENT_SOURCE_HALL)
+                ? NOTE_EVENT_SOURCE_KEY : NOTE_EVENT_SOURCE_MIDI;
+        note_fx_command_t command = {
+            .kind = NOTE_FX_COMMAND_SOURCE_RAW,
+            .track = event.track,
+            .note = event.note,
+            .velocity = event.velocity,
+            .is_note_on = (event.type == LIVE_NOTE_EVENT_ON) ? 1U : 0U,
+            .provenance = (uint8_t)provenance,
+            .sample_time = now,
+            .source_occurrence_id = event.occurrence_id,
+            .ingress_serial = event.ingress_serial
+        };
+        const note_fx_result_t result = note_fx_pipeline_submit_source_audio(
+            command.track, command.note, command.velocity, command.is_note_on,
+            now, provenance, command.source_occurrence_id);
+        if (command.is_note_on != 0U)
+        {
+            if (result != NOTE_EVENT_RESULT_ACCEPTED)
+                note_fx_pipeline_release_source_reservation(&command);
+        }
+        else if ((result != NOTE_EVENT_RESULT_ACCEPTED)
+                && (result != NOTE_EVENT_RESULT_REJECTED_STALE))
+        {
+            (void)note_fx_pipeline_pending_closure_add(&command);
+        }
+    }
+}
+
+static note_fx_result_t note_fx_pipeline_apply_source_raw_command(
+    const note_fx_command_t *command)
+{
+    const uint64_t now = seq_runtime_exec_get_audio_timeline_sample();
+    const note_fx_result_t result =
+        note_fx_pipeline_submit_live_command(command, now);
 
     if (command->is_note_on != 0U)
     {
@@ -1181,6 +1317,7 @@ void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                               uint32_t samples_per_step_q16)
 {
     note_fx_pipeline_apply_pending_commands();
+    note_fx_pipeline_apply_due_live_events(block_start);
     note_fx_engine_process(block_start, frames, samples_per_step_q16,
                            note_fx_pipeline_stage_emit, 0);
 }
@@ -1188,10 +1325,29 @@ void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
 uint16_t note_fx_pipeline_frames_until_deadline(uint64_t block_start,
                                                 uint16_t max_frames)
 {
-    const uint64_t deadline = note_fx_engine_next_deadline();
+    uint64_t deadline = note_fx_engine_next_deadline();
+    if ((g_note_fx_live_queue_count != 0U)
+            && (g_note_fx_live_queue[0].sample_time < deadline))
+    {
+        deadline = g_note_fx_live_queue[0].sample_time;
+    }
     if ((deadline <= block_start) || (deadline >= block_start + max_frames))
     {
         return max_frames;
     }
     return (uint16_t)(deadline - block_start);
+}
+
+void note_fx_pipeline_get_live_queue_diag(note_fx_live_queue_diag_t *out_diag)
+{
+    if (out_diag == NULL)
+        return;
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    out_diag->late_count = g_note_fx_live_late_count;
+    out_diag->stale_count = g_note_fx_live_stale_count;
+    out_diag->queue_drop_count = g_note_fx_live_queue_drop_count;
+    out_diag->max_lateness_samples = g_note_fx_live_max_lateness_samples;
+    out_diag->depth = g_note_fx_live_queue_count;
+    out_diag->high_water = g_note_fx_live_queue_high_water;
+    note_fx_pipeline_exit_critical(primask);
 }

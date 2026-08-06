@@ -23,6 +23,29 @@ typedef struct
     uint8_t source;
 } live_event_t;
 
+typedef enum
+{
+    LIVE_NOTE_EVENT_OFF = 0,
+    LIVE_NOTE_EVENT_ON = 1
+} live_note_event_type_t;
+
+/* Audio-owned timed queue item. It is fixed-size, pointer-free and therefore
+ * directly transferable to a future shared M4/M7 event queue. */
+typedef struct
+{
+    uint64_t sample_time;
+    uint32_t ingress_serial;
+    uint32_t occurrence_id;
+    uint8_t type;
+    uint8_t source;
+    uint8_t track;
+    uint8_t note;
+    uint8_t velocity;
+} live_note_event_t;
+
+_Static_assert(sizeof(live_note_event_t) == 24U,
+               "live_note_event_t must remain a fixed 24-byte event");
+
 _Static_assert(sizeof(live_event_t) == 16U,
                "live_event_t must remain a fixed 16-byte shared event");
 
