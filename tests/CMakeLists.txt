@@ -60,6 +60,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME note_fx_state_restore COMMAND note_fx_state_restore_test)
 endif()
 
+add_executable(live_parameter_event_test
+    live_parameter_event_test.c
+)
+target_include_directories(live_parameter_event_test PRIVATE ../Inc)
+target_include_directories(live_parameter_event_test PRIVATE ../Inc/Param)
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME live_parameter_event COMMAND live_parameter_event_test)
+endif()
+
 add_test(NAME note_fx_step1_static_validation
          COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                  -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step1_static_validation.ps1)

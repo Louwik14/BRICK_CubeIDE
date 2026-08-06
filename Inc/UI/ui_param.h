@@ -20,6 +20,15 @@ typedef struct
 
 typedef struct
 {
+    param_id_t parameter_id;
+    uint8_t scope;
+    uint8_t track;
+    uint8_t slot;
+    float value;
+} ui_param_encoder_target_t;
+
+typedef struct
+{
     uint8_t seq_context_active;
     uint8_t has_ref_step;
     uint8_t ref_track;
@@ -40,6 +49,9 @@ void ui_param_clear_value_flash(void);
 void ui_param_sync_active_bank_values(void);
 void ui_param_sync_active_track_mirror_from_runtime(void);
 void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
+void ui_param_capture_encoder_context_for_state(ui_param_encoder_context_t *out_ctx,
+                                                uint8_t active_track,
+                                                uint8_t shift_down);
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx);
 void ui_param_end_encoder_edit_group(void);
 void ui_param_note_user_value_flash(uint8_t slot,
@@ -56,6 +68,11 @@ uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param);
 uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *ctx,
                                              uint8_t encoder,
                                              int16_t delta);
+uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
+                                        uint8_t encoder,
+                                        int8_t direction,
+                                        float current_value,
+                                        ui_param_encoder_target_t *out_target);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track);
 void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t *frame_ctx);

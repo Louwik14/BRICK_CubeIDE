@@ -45,3 +45,30 @@ The event format and ring contract are deliberately pointer-free and fixed
 width so the producer can later move to M4/shared RAM without changing the M7
 consumer contract. Cache protocol, HSEM and the actual M4/M7 split remain out
 of scope here.
+
+## Encoder detent to parameter command
+
+`encoder_control_dispatcher_service()` consumes the validated detent ring at
+the control-context boundary: first before the out-of-queue shift/track input
+mirror is updated, and again at the start of `ui_core_tick()` for detents
+captured after that boundary. Button/page events generated during the tick are
+dispatched afterwards. This is the control-ordering contract: a page, track or
+modifier context change is applied only after the already-captured detents have
+been resolved, so a late UI render cannot rebind an older detent to another
+target.
+
+`ENC_PAGE` remains navigation-only. Parameter encoders whose bank entry is an
+audio/runtime parameter produce one `live_parameter_event_t` per accepted
+detent. The event stores the captured TIM5 tick and ingress serial, the
+resolved parameter/scope/track, and a canonical final `SET_TARGET` value; the
+value is stored as float bits in the fixed `int32_t` field. Structural and
+sequence controls continue through the legacy UI path and do not enter this
+DSP command stream.
+
+The dispatcher uses a bounded 32-detent drain, matching the capture ring
+capacity, and keeps a small per-tick value shadow so a burst emits successive
+canonical targets instead of repeatedly resolving from the pre-burst UI
+value. The command ring is fixed at 64 entries and drops newest commands on
+saturation with an observable counter. It is a control-side bridge for the
+future audio-owned queue; sample-time conversion and DSP application remain
+later passes.

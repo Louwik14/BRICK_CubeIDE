@@ -58,6 +58,7 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+#include "Core/encoder_control_dispatcher.h"
 #include "Core/track_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_state.h"
@@ -714,6 +715,8 @@ void ui_core_init(void)
 
     ui_core_runtime_bridge_sync_active_track_mirror();
 
+    encoder_control_dispatcher_init();
+
     ui_bootstrap_init();
 }
 
@@ -726,6 +729,12 @@ void ui_core_service_track_selection_inputs(void)
      * - Keeps modifier mirrors (shift_down / track_select_armed) coherent with raw
      *   button state, so downstream queued handlers read fresh flags.
      */
+    ui_param_encoder_context_t pre_input_encoder_context;
+    ui_param_capture_encoder_context_for_state(&pre_input_encoder_context,
+                                               g_ui_track_state.active_track,
+                                               g_ui_track_state.shift_down);
+    (void)encoder_control_dispatcher_service(&pre_input_encoder_context);
+
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     const uint8_t shift_down = button_down(BTN_SHIFT);
     const uint8_t track_modifier_down = (mute_active == 0U) ? button_down(UI_TRACK_MOD_BUTTON) : 0U;
@@ -811,6 +820,7 @@ void ui_core_tick(void)
 
     ui_param_capture_encoder_context(&encoder_ctx);
     track_runtime_refresh_track(encoder_ctx.active_track);
+    (void)encoder_control_dispatcher_service(&encoder_ctx);
     param_registry_batch_begin();
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 

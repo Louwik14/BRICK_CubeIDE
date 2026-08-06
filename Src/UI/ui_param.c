@@ -590,10 +590,24 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
         return;
     }
 
+    ui_param_capture_encoder_context_for_state(out_ctx,
+                                               ui_get_active_track(),
+                                               (uint8_t)(button_down(BTN_SHIFT) != 0U));
+}
+
+void ui_param_capture_encoder_context_for_state(ui_param_encoder_context_t *out_ctx,
+                                                uint8_t active_track,
+                                                uint8_t shift_down)
+{
+    if (out_ctx == 0)
+    {
+        return;
+    }
+
     out_ctx->bank = g_ui_param.bank;
     out_ctx->valid = g_ui_param.valid;
-    out_ctx->active_track = ui_get_active_track();
-    out_ctx->shift_down = (uint8_t)(button_down(BTN_SHIFT) != 0U);
+    out_ctx->active_track = active_track;
+    out_ctx->shift_down = (shift_down != 0U) ? 1U : 0U;
 }
 
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx)
@@ -1779,5 +1793,50 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        UI_PARAM_VALUE_FLASH_DIRECT);
     }
     (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
+    return 1U;
+}
+
+uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
+                                        uint8_t encoder,
+                                        int8_t direction,
+                                        float current_value,
+                                        ui_param_encoder_target_t *out_target)
+{
+    if ((ctx == 0) || (ctx->valid == 0U) || (out_target == 0)
+            || (encoder == 0U) || (encoder >= 4U)
+            || ((direction != -1) && (direction != 1)))
+    {
+        return 0U;
+    }
+
+    const param_id_t param = ctx->bank.params[encoder];
+    if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const uint8_t edit_track = ui_param_resolve_effective_edit_track(param, ctx->active_track);
+    const param_desc_t *const desc = &param_registry[param];
+    const float edit_step = ui_param_encoder_edit_step(desc, ctx);
+    float min_value = 0.0f;
+    float max_value = 0.0f;
+    if (ui_param_resolve_edit_bounds(param, edit_track, &min_value, &max_value) == 0U)
+    {
+        return 0U;
+    }
+
+    const float value = ui_param_apply_delta_value(param,
+                                                   current_value,
+                                                   direction,
+                                                   edit_step,
+                                                   min_value,
+                                                   max_value,
+                                                   ctx->shift_down);
+
+    out_target->parameter_id = param;
+    out_target->scope = (ui_param_is_track_scoped(param) != 0U) ? 1U : 0U;
+    out_target->track = (ui_param_is_track_scoped(param) != 0U) ? edit_track : 0xFFU;
+    out_target->slot = 0xFFU;
+    out_target->value = value;
     return 1U;
 }
