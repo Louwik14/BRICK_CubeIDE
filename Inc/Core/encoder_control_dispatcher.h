@@ -6,6 +6,6 @@
 #include "UI/ui_param.h"
 
 void encoder_control_dispatcher_init(void);
-uint8_t encoder_control_dispatcher_service(const ui_param_encoder_context_t *context);
+uint8_t encoder_control_dispatcher_service(void);
 
 #endif /* BRICK6_ENCODER_CONTROL_DISPATCHER_H */

@@ -212,6 +212,8 @@ static void ui_core_set_active_track(uint8_t track)
     }
 
     (void)ui_core_select_active_track(track);
+    ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                     g_ui_track_state.shift_down);
     ui_core_runtime_bridge_sync_active_track_context(1U);
 }
 
@@ -414,21 +416,24 @@ uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16)
 
 static void ui_core_update_shift_state(uint8_t shift_down)
 {
-    if ((shift_down != 0U) && (g_ui_track_state.shift_down == 0U))
+    const uint8_t normalized = (shift_down != 0U) ? 1U : 0U;
+    if (g_ui_track_state.shift_down != normalized)
     {
-        g_ui_track_state.shift_down = 1U;
-        return;
-    }
-
-    if ((shift_down == 0U) && (g_ui_track_state.shift_down != 0U))
-    {
-        g_ui_track_state.shift_down = 0U;
+        g_ui_track_state.shift_down = normalized;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
     }
 }
 
 static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
 {
-    g_ui_track_state.track_select_armed = (track_modifier_down != 0U) ? 1U : 0U;
+    const uint8_t normalized = (track_modifier_down != 0U) ? 1U : 0U;
+    if (g_ui_track_state.track_select_armed != normalized)
+    {
+        g_ui_track_state.track_select_armed = normalized;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
+    }
 }
 
 static void ui_core_macro_overlay_reset(void)
@@ -531,24 +536,32 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 1U;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
         return;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 0U;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
         return;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
         g_ui_track_state.track_select_armed = 1U;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
         return;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
         g_ui_track_state.track_select_armed = 0U;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
         return;
     }
 }
@@ -729,11 +742,7 @@ void ui_core_service_track_selection_inputs(void)
      * - Keeps modifier mirrors (shift_down / track_select_armed) coherent with raw
      *   button state, so downstream queued handlers read fresh flags.
      */
-    ui_param_encoder_context_t pre_input_encoder_context;
-    ui_param_capture_encoder_context_for_state(&pre_input_encoder_context,
-                                               g_ui_track_state.active_track,
-                                               g_ui_track_state.shift_down);
-    (void)encoder_control_dispatcher_service(&pre_input_encoder_context);
+    (void)encoder_control_dispatcher_service();
 
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     const uint8_t shift_down = button_down(BTN_SHIFT);
@@ -746,6 +755,8 @@ void ui_core_service_track_selection_inputs(void)
     else
     {
         g_ui_track_state.track_select_armed = 0U;
+        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+                                         g_ui_track_state.shift_down);
     }
 
     hall_surface_refresh();
@@ -820,7 +831,7 @@ void ui_core_tick(void)
 
     ui_param_capture_encoder_context(&encoder_ctx);
     track_runtime_refresh_track(encoder_ctx.active_track);
-    (void)encoder_control_dispatcher_service(&encoder_ctx);
+    (void)encoder_control_dispatcher_service();
     param_registry_batch_begin();
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 

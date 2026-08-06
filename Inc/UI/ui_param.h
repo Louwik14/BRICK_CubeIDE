@@ -52,6 +52,7 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
 void ui_param_capture_encoder_context_for_state(ui_param_encoder_context_t *out_ctx,
                                                 uint8_t active_track,
                                                 uint8_t shift_down);
+void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down);
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx);
 void ui_param_end_encoder_edit_group(void);
 void ui_param_note_user_value_flash(uint8_t slot,
@@ -75,6 +76,21 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
                                         ui_param_encoder_target_t *out_target);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track);
+uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
+                                               uint8_t track,
+                                               float *out_value);
+uint8_t ui_param_accept_audio_owned_command(param_id_t param,
+                                            uint8_t scope,
+                                            uint8_t track,
+                                            float value);
+uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
+                                                     uint8_t scope,
+                                                     uint8_t track,
+                                                     uint8_t slot,
+                                                     uint8_t shift_down,
+                                                     int8_t direction,
+                                                     float current_value,
+                                                     ui_param_encoder_target_t *out_target);
 void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t *frame_ctx);
 uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_feedback_frame_t *frame_ctx,
                                                        param_id_t param,

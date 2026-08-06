@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include "param_store.h"
+
 static uint8_t g_encoder_states[ENC_COUNT];
 static uint32_t g_fake_tim5_tick;
 
@@ -84,6 +86,36 @@ static void test_fast_multiple_encoder_order(void)
     assert(encoders_hw_pop_detent_event(&event) == 0U);
 }
 
+static void test_binding_snapshot_and_audio_route(void)
+{
+    encoder_detent_event_t event;
+    encoder_binding_snapshot_t snapshot = { 0 };
+
+    encoders_hw_init();
+    snapshot.entry[0] = encoder_binding_pack(PARAM_VCA_ATTACK,
+                                             1U,
+                                             2U,
+                                             0xFFU,
+                                             1U,
+                                             ENCODER_BINDING_ROUTE_AUDIO,
+                                             0U,
+                                             1U);
+    encoders_set_binding_snapshot(&snapshot);
+    rotate_positive(0U, 500U);
+
+    assert(encoders_hw_pop_detent_event(&event) != 0U);
+    const uint32_t binding = event.binding.entry[0];
+    assert(encoder_binding_parameter(binding) == PARAM_VCA_ATTACK);
+    assert(encoder_binding_scope(binding) == 1U);
+    assert(encoder_binding_track(binding) == 2U);
+    assert(encoder_binding_slot(binding) == 0xFFU);
+    assert(encoder_binding_shift_down(binding) == 1U);
+    assert(encoder_binding_track_modifier_down(binding) == 0U);
+    assert(encoder_binding_route(binding) == ENCODER_BINDING_ROUTE_AUDIO);
+    assert(encoder_binding_valid(binding) != 0U);
+    assert(encoders_hw_get_delta(0U) == 0);
+}
+
 static void test_deterministic_overflow(void)
 {
     encoder_detent_event_t event;
@@ -109,6 +141,7 @@ int main(void)
 {
     test_slow_direction_and_timestamp();
     test_fast_multiple_encoder_order();
+    test_binding_snapshot_and_audio_route();
     test_deterministic_overflow();
     return 0;
 }

@@ -18,6 +18,8 @@ static volatile uint32_t enc_detent_head;
 static volatile uint32_t enc_detent_tail;
 static volatile uint32_t enc_detent_overflow_count;
 static uint32_t enc_detent_ingress_serial;
+static encoder_binding_snapshot_t enc_binding_buffers[2];
+static volatile uint8_t enc_binding_active;
 
 static const int8_t quad_table[16] = {
      0, -1, +1,  0,
@@ -43,29 +45,57 @@ static uint32_t encoders_hw_next_ingress_serial(void)
     return serial;
 }
 
-static void encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
+void encoders_set_binding_snapshot(const encoder_binding_snapshot_t *snapshot)
+{
+    if (snapshot == 0)
+    {
+        return;
+    }
+
+    const uint8_t active = (uint8_t)(enc_binding_active & 1U);
+    const uint8_t next = (uint8_t)(active ^ 1U);
+    enc_binding_buffers[next] = *snapshot;
+    __DMB();
+    enc_binding_active = next;
+}
+
+static void encoders_hw_read_binding_snapshot(encoder_binding_snapshot_t *out_snapshot)
+{
+    const uint8_t active = (uint8_t)(enc_binding_active & 1U);
+    __DMB();
+    *out_snapshot = enc_binding_buffers[active];
+}
+
+static uint8_t encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
 {
     const uint32_t capture_tick = live_clock_capture_tick();
     const uint32_t ingress_serial = encoders_hw_next_ingress_serial();
+    encoder_binding_snapshot_t binding;
+    encoders_hw_read_binding_snapshot(&binding);
     const uint32_t head = enc_detent_head;
     const uint32_t tail = enc_detent_tail;
+    const uint8_t keep_legacy_delta =
+        (encoder_binding_route(binding.entry[encoder]) == ENCODER_BINDING_ROUTE_AUDIO)
+            ? 0U : 1U;
 
     if ((uint32_t)(head - tail) >= ENCODER_DETENT_QUEUE_CAPACITY)
     {
         /* Drop newest: accepted events retain their original order. */
         enc_detent_overflow_count++;
-        return;
+        return keep_legacy_delta;
     }
 
     encoder_detent_event_t *const event =
         &enc_detent_queue[head & (ENCODER_DETENT_QUEUE_CAPACITY - 1U)];
     event->capture_tick = capture_tick;
     event->ingress_serial = ingress_serial;
+    event->binding = binding;
     event->direction = direction;
     event->encoder_id = encoder;
     event->reserved = 0U;
     __DMB();
     enc_detent_head = head + 1U;
+    return keep_legacy_delta;
 }
 
 static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition)
@@ -83,13 +113,16 @@ static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition
 
     const int8_t direction = (increment > 0) ? 1 : -1;
     int16_t detents = (increment > 0) ? increment : (int16_t)-increment;
+    int16_t legacy_detents = 0;
     while (detents > 0)
     {
-        encoders_hw_publish_detent(encoder, direction);
+        legacy_detents = (int16_t)(legacy_detents
+            + (int16_t)encoders_hw_publish_detent(encoder, direction));
         detents--;
     }
 
-    const int32_t sum = (int32_t)enc_raw_delta[encoder] + (int32_t)increment;
+    const int32_t sum = (int32_t)enc_raw_delta[encoder]
+                      + ((int32_t)direction * (int32_t)legacy_detents);
     if (sum > (int32_t)INT16_MAX)
     {
         enc_raw_delta[encoder] = INT16_MAX;
@@ -110,6 +143,9 @@ void encoders_hw_init(void)
     enc_detent_tail = 0U;
     enc_detent_overflow_count = 0U;
     enc_detent_ingress_serial = 0U;
+    enc_binding_buffers[0] = (encoder_binding_snapshot_t){ 0 };
+    enc_binding_buffers[1] = (encoder_binding_snapshot_t){ 0 };
+    enc_binding_active = 0U;
 
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
     {

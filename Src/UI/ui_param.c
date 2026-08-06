@@ -34,10 +34,12 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/live_parameter_migration.h"
+#include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
+#include "encoders.h"
 #include "param_store.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Storage/memory_layout.h"
@@ -163,6 +165,63 @@ static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
         param_store_set_active(param, value);
     }
     return 1U;
+}
+
+void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
+{
+    encoder_binding_snapshot_t snapshot = { 0 };
+
+    for (uint8_t encoder = 0U; encoder < ENCODER_BINDING_ENCODER_COUNT; ++encoder)
+    {
+        param_id_t parameter = PARAM_COUNT;
+        uint8_t scope = LIVE_PARAMETER_EVENT_SCOPE_GLOBAL;
+        uint8_t track = 0U;
+        const uint8_t slot = 0xFFU;
+        encoder_binding_route_t route = ENCODER_BINDING_ROUTE_LEGACY;
+        uint8_t valid = 0U;
+        const uint8_t track_modifier_down = (ui_is_track_modifier_held() != 0U) ? 1U : 0U;
+
+        if ((g_ui_param.valid != 0U) && (g_ui_param.bank.params[encoder] < PARAM_COUNT))
+        {
+            parameter = g_ui_param.bank.params[encoder];
+            valid = 1U;
+            if (ui_param_is_track_scoped(parameter) != 0U)
+            {
+                scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
+                track = ui_param_resolve_effective_edit_track(parameter, active_track);
+            }
+            if (live_parameter_is_audio_owned(parameter) != 0U)
+            {
+                route = ENCODER_BINDING_ROUTE_AUDIO;
+            }
+        }
+
+        snapshot.entry[encoder] = encoder_binding_pack((uint16_t)parameter,
+                                                       scope,
+                                                       track,
+                                                       slot,
+                                                       shift_down,
+                                                       route,
+                                                       valid);
+    }
+
+    encoders_set_binding_snapshot(&snapshot);
+}
+
+uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
+                                               uint8_t track,
+                                               float *out_value)
+{
+    return ui_param_audio_owned_shadow_get(param, track, out_value);
+}
+
+uint8_t ui_param_accept_audio_owned_command(param_id_t param,
+                                            uint8_t scope,
+                                            uint8_t track,
+                                            float value)
+{
+    const uint8_t shadow_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
+    return ui_param_audio_owned_shadow_set(param, shadow_track, value, 0U);
 }
 
 static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
@@ -524,6 +583,8 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
         g_ui_param_bank_track = 0xFFU;
         ui_param_clear_value_flash();
         ui_param_reset_stepped_encoder_accum();
+        ui_param_publish_encoder_binding(ui_get_active_track(),
+                                         (uint8_t)(button_down(BTN_SHIFT) != 0U));
         return;
     }
 
@@ -548,6 +609,9 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
         ui_param_clear_value_flash();
         ui_param_reset_stepped_encoder_accum();
     }
+
+    ui_param_publish_encoder_binding(active_track,
+                                     (uint8_t)(button_down(BTN_SHIFT) != 0U));
 }
 
 void ui_param_invalidate_bank(void)
@@ -556,6 +620,8 @@ void ui_param_invalidate_bank(void)
     g_ui_param_bank_track = 0xFFU;
     ui_param_clear_value_flash();
     ui_param_reset_stepped_encoder_accum();
+    ui_param_publish_encoder_binding(ui_get_active_track(),
+                                     (uint8_t)(button_down(BTN_SHIFT) != 0U));
 }
 
 void ui_param_sync_active_bank_values(void)
@@ -1949,5 +2015,57 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
     out_target->track = (ui_param_is_track_scoped(param) != 0U) ? edit_track : 0xFFU;
     out_target->slot = 0xFFU;
     out_target->value = value;
+    return 1U;
+}
+
+uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
+                                                     uint8_t scope,
+                                                     uint8_t track,
+                                                     uint8_t slot,
+                                                     uint8_t shift_down,
+                                                     int8_t direction,
+                                                     float current_value,
+                                                     ui_param_encoder_target_t *out_target)
+{
+    if ((out_target == 0) || (param >= PARAM_COUNT)
+            || ((direction != -1) && (direction != 1)))
+    {
+        return 0U;
+    }
+
+    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) && (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    ui_param_encoder_context_t binding_context = {
+        .bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        .valid = 1U,
+        .active_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U,
+        .shift_down = (shift_down != 0U) ? 1U : 0U
+    };
+    const param_desc_t *const desc = &param_registry[param];
+    const float edit_step = ui_param_encoder_edit_step(desc, &binding_context);
+    float min_value = 0.0f;
+    float max_value = 0.0f;
+    if (ui_param_resolve_edit_bounds(param,
+                                     binding_context.active_track,
+                                     &min_value,
+                                     &max_value) == 0U)
+    {
+        return 0U;
+    }
+
+    out_target->parameter_id = param;
+    out_target->scope = scope;
+    out_target->track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0xFFU;
+    out_target->slot = slot;
+    out_target->value = ui_param_apply_delta_value(param,
+                                                   current_value,
+                                                   direction,
+                                                   edit_step,
+                                                   min_value,
+                                                   max_value,
+                                                   binding_context.shift_down);
     return 1U;
 }

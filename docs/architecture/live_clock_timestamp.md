@@ -25,12 +25,13 @@ provided the capture-to-anchor interval remains below `2^31` timer ticks.
 
 ## Validated encoder detents
 
-The quadrature decoder keeps the existing accumulated delta for UI navigation,
-but also publishes one fixed-width `encoder_detent_event_t` for every complete
-validated increment. Publication occurs in the encoder fast-poll IRQ, after the
-transition count reaches a detent and before the UI consumes any delta. The
-event carries only `direction`, `capture_tick`, `ingress_serial` and
-`encoder_id` (plus a reserved field); it contains no pointer or allocation.
+The quadrature decoder publishes one fixed-width `encoder_detent_event_t` for
+every complete validated increment. Publication occurs in the encoder fast-poll
+IRQ, after the transition count reaches a detent and before the UI consumes any
+delta. The event carries `direction`, `capture_tick`, `ingress_serial`,
+`encoder_id` and a pointer-free binding snapshot. Each snapshot entry packs the
+parameter/action, scope, resolved track, slot, SHIFT and track-modifier states,
+route and validity.
 
 The validated-detent stream is a 32-entry single-producer/single-consumer ring.
 The IRQ is the producer, the future control/audio bridge is the consumer, and
@@ -43,8 +44,9 @@ not consume or create a DSP event in this pass.
 
 The event format and ring contract are deliberately pointer-free and fixed
 width so the producer can later move to M4/shared RAM without changing the M7
-consumer contract. Cache protocol, HSEM and the actual M4/M7 split remain out
-of scope here.
+consumer contract. The UI publishes the four-entry binding through a bounded
+double buffer; TIM7 reads one complete buffer and never locks or retries. Cache
+protocol, HSEM and the actual M4/M7 split remain out of scope here.
 
 ## Encoder detent to parameter command
 
@@ -52,10 +54,9 @@ of scope here.
 the control-context boundary: first before the out-of-queue shift/track input
 mirror is updated, and again at the start of `ui_core_tick()` for detents
 captured after that boundary. Button/page events generated during the tick are
-dispatched afterwards. This is the control-ordering contract: a page, track or
-modifier context change is applied only after the already-captured detents have
-been resolved, so a late UI render cannot rebind an older detent to another
-target.
+dispatched afterwards. The dispatcher uses the binding embedded in each
+detent; it never rereads the current page, track or SHIFT state. A later UI
+change therefore cannot rebind an older detent to another target.
 
 `ENC_PAGE` remains navigation-only. Parameter encoders whose bank entry is an
 audio/runtime parameter produce one `live_parameter_event_t` per accepted
@@ -66,12 +67,13 @@ sequence controls continue through the legacy UI path and do not enter this
 DSP command stream.
 
 The dispatcher uses a bounded 32-detent drain, matching the capture ring
-capacity, and keeps a small per-tick value shadow so a burst emits successive
-canonical targets instead of repeatedly resolving from the pre-burst UI
-value. The command ring is fixed at 64 entries and drops newest commands on
-saturation with an observable counter. It is a control-side bridge for the
-future audio-owned queue; sample-time conversion and DSP application remain
-later passes.
+capacity, and keeps a small per-target value shadow so a burst emits successive
+canonical targets instead of repeatedly resolving from the pre-burst UI value.
+The UI shadow advances only after the command ring accepts the event; a rejected
+command leaves it unchanged. Audio-routed detents are excluded from the legacy
+delta accumulator, while navigation, structural and multi-track modifier
+bindings remain there. The command ring is fixed at 64 entries and drops newest
+commands on saturation with an observable counter.
 
 ## Audio-owned parameter schedule
 

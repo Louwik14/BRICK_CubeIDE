@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "Core/brick_build_config.h"
+#include "Core/encoder_binding.h"
 
 typedef enum
 {
@@ -25,12 +26,13 @@ typedef struct
 {
     uint32_t capture_tick;
     uint32_t ingress_serial;
+    encoder_binding_snapshot_t binding;
     int8_t direction;
     uint8_t encoder_id;
     uint16_t reserved;
 } encoder_detent_event_t;
 
-_Static_assert(sizeof(encoder_detent_event_t) == 12U,
+_Static_assert(sizeof(encoder_detent_event_t) == 28U,
                "encoder detent event ABI must remain fixed-width");
 
 void encoders_init(void);
@@ -39,6 +41,8 @@ void encoders_update(uint32_t dt_ms);
 int16_t encoder_get_delta(uint8_t encoder);
 int16_t encoder_consume_delta(uint8_t encoder);
 void encoder_reset_delta(uint8_t encoder);
+
+void encoders_set_binding_snapshot(const encoder_binding_snapshot_t *snapshot);
 
 /* The timer-poll IRQ is the single producer and the caller the single
  * consumer. Saturation drops the newest event and increments the counter. */
