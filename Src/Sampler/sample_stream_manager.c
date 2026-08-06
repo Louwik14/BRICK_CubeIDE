@@ -704,19 +704,19 @@ static uint8_t sample_stream_manager_candidate_is_better(uint8_t have_best,
     {
         return 1U;
     }
-    if (deadline_frames < best_deadline_frames)
-    {
-        return 1U;
-    }
-    if (deadline_frames > best_deadline_frames)
-    {
-        return 0U;
-    }
     if (priority > best_priority)
     {
         return 1U;
     }
     if (priority < best_priority)
+    {
+        return 0U;
+    }
+    if (deadline_frames < best_deadline_frames)
+    {
+        return 1U;
+    }
+    if (deadline_frames > best_deadline_frames)
     {
         return 0U;
     }
@@ -1366,7 +1366,9 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
             sample_stream_manager_page_deadline_frames(desc, page_index);
 
         sample_stream_priority_t priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
-        if (state_before != SAMPLE_PAGE_READY)
+        const uint8_t is_loop_owner =
+            (desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP) ? 1U : 0U;
+        if ((state_before != SAMPLE_PAGE_READY) && (is_loop_owner == 0U))
         {
             if (high_priority_assigned == 0U)
             {
@@ -1397,8 +1399,7 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
             continue;
         }
 
-        if ((sample_page_cache_get_page_state_key(desc->key, page_index) == SAMPLE_PAGE_QUEUED)
-            && (sample_stream_manager_find_pending_key(desc->key, page_index) == 0))
+        if (sample_page_cache_get_page_state_key(desc->key, page_index) == SAMPLE_PAGE_QUEUED)
         {
             if (sample_stream_manager_note_pending_key(desc->key,
                                                        page_index,
@@ -1509,7 +1510,9 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
             sample_stream_manager_page_deadline_frames(desc, page_index);
 
         sample_stream_priority_t priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
-        if (state_before != SAMPLE_PAGE_READY)
+        const uint8_t is_loop_owner =
+            (desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP) ? 1U : 0U;
+        if ((state_before != SAMPLE_PAGE_READY) && (is_loop_owner == 0U))
         {
             if (high_priority_assigned == 0U)
             {
