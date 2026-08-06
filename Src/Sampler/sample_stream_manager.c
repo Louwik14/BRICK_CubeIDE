@@ -6,6 +6,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_multi_stream_diag.h"
 #include "Sampler/sample_stream_backend_contiguous.h"
+#include "Sampler/sample_stream_contract.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
@@ -70,7 +71,8 @@ typedef struct
     uint32_t registration_epoch;
     uint32_t page_index;
     uint32_t requested_at;
-    uint32_t deadline_frames;
+    sample_stream_audio_frame_t created_audio_frame;
+    sample_stream_audio_frame_t consume_deadline_audio_frame;
     uint32_t owner_generation;
     uint16_t sample_id;
     uint16_t reserved;
@@ -94,8 +96,10 @@ _Static_assert((offsetof(sample_stream_pending_t, page_index) % 4U) == 0U,
                "stream pending page_index must be 32-bit aligned");
 _Static_assert((offsetof(sample_stream_pending_t, requested_at) % 4U) == 0U,
                "stream pending requested_at must be 32-bit aligned");
-_Static_assert((offsetof(sample_stream_pending_t, deadline_frames) % 4U) == 0U,
-               "stream pending deadline_frames must be 32-bit aligned");
+_Static_assert((offsetof(sample_stream_pending_t, created_audio_frame) % 8U) == 0U,
+               "stream pending creation time must be 64-bit aligned");
+_Static_assert((offsetof(sample_stream_pending_t, consume_deadline_audio_frame) % 8U) == 0U,
+               "stream pending deadline must be 64-bit aligned");
 _Static_assert((offsetof(sample_stream_pending_t, owner_generation) % 4U) == 0U,
                "stream pending owner_generation must be 32-bit aligned");
 _Static_assert((sizeof(sample_stream_pending_t) % 4U) == 0U,
@@ -136,6 +140,17 @@ static uint16_t sample_stream_trace_pending_count(void)
     return (count > UINT16_MAX) ? UINT16_MAX : (uint16_t)count;
 }
 
+static uint32_t sample_stream_trace_frames_until(sample_stream_audio_frame_t now,
+                                                 sample_stream_audio_frame_t deadline)
+{
+    if (deadline <= now)
+    {
+        return 0U;
+    }
+    const uint64_t remaining = deadline - now;
+    return (remaining > UINT32_MAX) ? UINT32_MAX : (uint32_t)remaining;
+}
+
 static sample_stream_trace_op_t *sample_stream_trace_begin_pending(
     sample_stream_pending_t *pending,
     const sample_stream_active_desc_t *owner)
@@ -151,11 +166,14 @@ static sample_stream_trace_op_t *sample_stream_trace_begin_pending(
     op->key = pending->key;
     op->page_index = pending->page_index;
     op->reader_position = (owner != 0) ? owner->current_frame : 0U;
-    op->frames_remaining = pending->deadline_frames;
-    op->deadline_frames = pending->deadline_frames;
+    op->created_audio_frame = pending->created_audio_frame;
+    op->consume_deadline_audio_frame = pending->consume_deadline_audio_frame;
+    op->frames_remaining = sample_stream_trace_frames_until(
+        pending->created_audio_frame, pending->consume_deadline_audio_frame);
+    op->deadline_frames = op->frames_remaining;
     op->request_cycle = sample_stream_trace_cycle();
     const uint64_t deadline_cycles =
-        ((uint64_t)pending->deadline_frames * (uint64_t)SystemCoreClock) / 48000ULL;
+        ((uint64_t)op->deadline_frames * (uint64_t)SystemCoreClock) / 48000ULL;
     op->deadline_cycle = op->request_cycle + (uint32_t)deadline_cycles;
     op->role = pending->role;
     op->priority = pending->priority;
@@ -198,6 +216,7 @@ static void sample_stream_trace_trigger(sample_stream_trace_trigger_t trigger,
     g_sample_stream_trace.trigger_page = page_index;
     g_sample_stream_trace.trigger_reader_position = reader_position;
     g_sample_stream_trace.trigger_frames_remaining = frames_remaining;
+    g_sample_stream_trace.trigger_audio_frame = sample_stream_time_now();
     g_sample_stream_trace.trigger_cycle = sample_stream_trace_cycle();
     g_sample_stream_trace.frozen = 1U;
 }
@@ -280,9 +299,7 @@ static uint32_t sample_stream_manager_page_deadline_frames(const sample_stream_a
         return UINT32_MAX;
     }
 
-    const uint64_t output_distance =
-        ((uint64_t)source_distance * SAMPLE_STREAM_STEP_Q16_ONE) / desc->step_q16;
-    return (output_distance > UINT32_MAX) ? UINT32_MAX : (uint32_t)output_distance;
+    return sample_stream_time_source_to_output_frames(source_distance, desc->step_q16);
 }
 
 static void sample_stream_manager_close_reader(sample_stream_reader_t *reader)
@@ -595,6 +612,9 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
     sample_stream_pending_t *free_slot = 0;
     sample_page_load_target_t target;
     const uint8_t target_valid = sample_page_cache_get_load_target_key(key, page_index, &target);
+    const sample_stream_audio_frame_t now_audio_frame = sample_stream_time_now();
+    const sample_stream_audio_frame_t candidate_deadline =
+        sample_stream_time_deadline_after(now_audio_frame, deadline_frames);
 
     if (sample_stream_manager_pending_budget_allows(key, page_index, owner) == 0U)
     {
@@ -631,18 +651,19 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
                 }
                 continue;
             }
-            const uint32_t old_deadline = pending->deadline_frames;
+            const sample_stream_audio_frame_t old_deadline =
+                pending->consume_deadline_audio_frame;
             if ((uint8_t)priority > pending->priority)
             {
                 pending->priority = (uint8_t)priority;
             }
-            if (deadline_frames < pending->deadline_frames)
+            if (candidate_deadline < pending->consume_deadline_audio_frame)
             {
-                pending->deadline_frames = deadline_frames;
+                pending->consume_deadline_audio_frame = candidate_deadline;
             }
             if ((owner != 0)
                 && ((pending->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_NONE)
-                    || (deadline_frames <= old_deadline)))
+                    || (candidate_deadline <= old_deadline)))
             {
                 pending->owner_kind = owner->owner_kind;
                 pending->owner_id = owner->owner_id;
@@ -653,15 +674,17 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
             {
                 pending->role = owner->role;
             }
-            const uint32_t now = sample_stream_trace_cycle();
-            const uint64_t deadline_cycles =
-                ((uint64_t)deadline_frames * (uint64_t)SystemCoreClock) / 48000ULL;
             sample_stream_trace_op_t *const op = sample_stream_trace_pending_op(pending);
             if (op != 0)
             {
-                op->deadline_frames = pending->deadline_frames;
-                op->frames_remaining = pending->deadline_frames;
-                op->deadline_cycle = now + (uint32_t)deadline_cycles;
+                op->consume_deadline_audio_frame = pending->consume_deadline_audio_frame;
+                op->deadline_frames = sample_stream_trace_frames_until(
+                    op->created_audio_frame, pending->consume_deadline_audio_frame);
+                op->frames_remaining = sample_stream_trace_frames_until(
+                    now_audio_frame, pending->consume_deadline_audio_frame);
+                const uint64_t deadline_cycles =
+                    ((uint64_t)op->frames_remaining * (uint64_t)SystemCoreClock) / 48000ULL;
+                op->deadline_cycle = sample_stream_trace_cycle() + (uint32_t)deadline_cycles;
                 if (owner != 0)
                 {
                     op->reader_position = owner->current_frame;
@@ -689,7 +712,8 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
             free_slot->registration_epoch = target.registration_epoch;
         }
         free_slot->requested_at = ++g_sample_stream_request_clock;
-        free_slot->deadline_frames = deadline_frames;
+        free_slot->created_audio_frame = now_audio_frame;
+        free_slot->consume_deadline_audio_frame = candidate_deadline;
         if (owner != 0)
         {
             free_slot->owner_kind = owner->owner_kind;
@@ -812,11 +836,11 @@ static uint16_t sample_stream_manager_fair_distance_pending(const sample_stream_
 
 static uint8_t sample_stream_manager_candidate_is_better(uint8_t have_best,
                                                          sample_stream_priority_t priority,
-                                                         uint32_t deadline_frames,
+                                                         sample_stream_audio_frame_t deadline_audio_frame,
                                                          uint16_t fair_distance,
                                                          uint32_t age,
                                                          sample_stream_priority_t best_priority,
-                                                         uint32_t best_deadline_frames,
+                                                         sample_stream_audio_frame_t best_deadline_audio_frame,
                                                          uint16_t best_fair_distance,
                                                          uint32_t best_age)
 {
@@ -832,11 +856,11 @@ static uint8_t sample_stream_manager_candidate_is_better(uint8_t have_best,
     {
         return 0U;
     }
-    if (deadline_frames < best_deadline_frames)
+    if (deadline_audio_frame < best_deadline_audio_frame)
     {
         return 1U;
     }
-    if (deadline_frames > best_deadline_frames)
+    if (deadline_audio_frame > best_deadline_audio_frame)
     {
         return 0U;
     }
@@ -859,7 +883,7 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
     uint8_t found = 0U;
     uint32_t scan_count = 0U;
     uint32_t best_age = 0U;
-    uint32_t best_deadline_frames = UINT32_MAX;
+    sample_stream_audio_frame_t best_deadline_audio_frame = SAMPLE_STREAM_AUDIO_FRAME_NEVER;
     uint16_t best_fair_distance = UINT16_MAX;
     sample_stream_priority_t best_priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
     sample_page_load_target_t best_target;
@@ -910,17 +934,17 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
 
         if (sample_stream_manager_candidate_is_better(found,
                                                       priority,
-                                                      pending->deadline_frames,
+                                                      pending->consume_deadline_audio_frame,
                                                       fair_distance,
                                                       age,
                                                       best_priority,
-                                                      best_deadline_frames,
+                                                      best_deadline_audio_frame,
                                                       best_fair_distance,
                                                       best_age) != 0U)
         {
             best_target = target;
             best_priority = priority;
-            best_deadline_frames = pending->deadline_frames;
+            best_deadline_audio_frame = pending->consume_deadline_audio_frame;
             best_fair_distance = fair_distance;
             best_age = age;
             best_owner_kind = pending->owner_kind;
@@ -1881,6 +1905,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         const uint32_t physical_reads_before = g_sample_stream_service_physical_reads;
         if (traced_op != 0)
         {
+            traced_op->selected_audio_frame = sample_stream_time_now();
             traced_op->select_cycle = select_cycle;
             traced_op->read_begin_cycle = select_cycle;
             traced_op->pending_global = sample_stream_trace_pending_count();
@@ -1892,9 +1917,20 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 g_sample_stream_trace.max_wait_cycles = wait_cycles;
             }
             if ((traced_pending != 0)
-                && ((int32_t)(select_cycle - traced_op->deadline_cycle) > 0))
+                && (traced_op->selected_audio_frame
+                    > traced_pending->consume_deadline_audio_frame))
             {
-                const uint32_t late_cycles = select_cycle - traced_op->deadline_cycle;
+                const uint64_t late_frames = traced_op->selected_audio_frame
+                                             - traced_pending->consume_deadline_audio_frame;
+                const uint64_t late_cycles_64 =
+                    (late_frames * (uint64_t)SystemCoreClock) / 48000ULL;
+                const uint32_t late_cycles = (late_cycles_64 > UINT32_MAX)
+                                                 ? UINT32_MAX
+                                                 : (uint32_t)late_cycles_64;
+                if (late_frames > g_sample_stream_trace.max_deadline_late_frames)
+                {
+                    g_sample_stream_trace.max_deadline_late_frames = late_frames;
+                }
                 if (late_cycles > g_sample_stream_trace.max_deadline_late_cycles)
                 {
                     g_sample_stream_trace.max_deadline_late_cycles = late_cycles;
@@ -1912,6 +1948,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
         (void)sample_page_cache_set_page_state_key(target.key,
                                                    target.page_index,
                                                    SAMPLE_PAGE_LOADING);
+#if BRICK6_STREAM_TRACE
+        if (traced_op != 0)
+        {
+            traced_op->in_flight_audio_frame = sample_stream_time_now();
+        }
+#endif
         if ((stream_info.raw_pcm24 == 0U)
             && (stream_info.stream_safe.backend_kind
                 == (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS)
@@ -2058,6 +2100,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         {
             traced_op->read_end_cycle = sample_stream_trace_cycle();
             traced_op->ready_cycle = traced_op->read_end_cycle;
+            traced_op->ready_audio_frame = sample_stream_time_now();
             traced_op->backend = used_contiguous_backend;
             traced_op->physical_reads = (uint8_t)(g_sample_stream_service_physical_reads
                                                    - physical_reads_before);
@@ -2068,7 +2111,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 g_sample_stream_trace.max_read_cycles = read_cycles;
             }
             if ((traced_pending != 0)
-                && ((int32_t)(traced_op->select_cycle - traced_op->deadline_cycle) > 0))
+                && (traced_op->selected_audio_frame
+                    > traced_pending->consume_deadline_audio_frame))
             {
                 sample_stream_trace_trigger(SAMPLE_STREAM_TRACE_TRIGGER_LATE_SELECTION,
                                             target.key,

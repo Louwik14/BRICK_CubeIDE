@@ -35,6 +35,11 @@ typedef enum
 typedef struct
 {
     sample_audio_key_t key;
+    uint64_t created_audio_frame;
+    uint64_t consume_deadline_audio_frame;
+    uint64_t selected_audio_frame;
+    uint64_t in_flight_audio_frame;
+    uint64_t ready_audio_frame;
     uint32_t page_index;
     uint32_t reader_position;
     uint32_t frames_remaining;
@@ -69,6 +74,7 @@ typedef struct
     uint32_t trigger_page;
     uint32_t trigger_reader_position;
     uint32_t trigger_frames_remaining;
+    uint64_t trigger_audio_frame;
     uint32_t trigger_cycle;
     uint32_t write_index;
     uint32_t count;
@@ -76,6 +82,7 @@ typedef struct
     uint32_t max_wait_cycles;
     uint32_t max_service_interval_cycles;
     uint32_t max_deadline_late_cycles;
+    uint64_t max_deadline_late_frames;
     uint32_t max_backlog;
     uint32_t file_changes;
     uint32_t max_pages_per_service;
