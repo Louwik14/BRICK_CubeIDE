@@ -6,6 +6,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_time.h"
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx.h"
@@ -60,6 +61,9 @@ void brick6_stream_service_task_poll(void)
         || (sd_access_gate_bulk_exclusive_active() != 0U))
     {
         g_brick6_stream_service_stats.busy_poll_count++;
+#if BRICK6_STREAM_BENCH
+        sample_stream_benchmark_note_blocked_poll();
+#endif
         return;
     }
 

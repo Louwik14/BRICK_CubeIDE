@@ -4,6 +4,10 @@
 
 #include "Sampler/sample_page_cache.h"
 
+#ifndef BRICK6_STREAM_BENCH
+#define BRICK6_STREAM_BENCH (0)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,6 +28,11 @@ typedef struct
     uint16_t fatfs_ops;
     uint8_t physical_reads;
     uint8_t backend;
+#if BRICK6_STREAM_BENCH
+    uint8_t file_opens;
+    uint8_t seeks;
+    uint16_t read_cache_hits;
+#endif
 } sample_stream_io_result_t;
 
 typedef enum

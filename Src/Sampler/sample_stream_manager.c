@@ -6,6 +6,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_multi_stream_diag.h"
 #include "Sampler/sample_stream_admission.h"
+#include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_contract.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_publish.h"
@@ -623,6 +624,9 @@ void sample_stream_manager_reset(void)
     g_sample_stream_request_clock = 0U;
     sample_stream_scheduler_init(0);
     sample_stream_admission_init(0);
+#if BRICK6_STREAM_BENCH
+    sample_stream_benchmark_reset();
+#endif
 #if BRICK6_STREAM_TRACE
     g_sample_stream_service_physical_reads = 0U;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -1315,6 +1319,9 @@ void sample_stream_manager_service(uint32_t byte_budget)
     }
 
     const uint32_t start_tick = HAL_GetTick();
+#if BRICK6_STREAM_BENCH
+    const uint32_t benchmark_service_begin_cycle = DWT->CYCCNT;
+#endif
 #if BRICK6_STREAM_TRACE
     const uint32_t service_cycle = sample_stream_trace_cycle();
     const uint32_t service_interval = service_cycle - g_sample_stream_last_service_cycle;
@@ -1448,7 +1455,29 @@ void sample_stream_manager_service(uint32_t byte_budget)
         io_command.target = target;
         io_command.stream_info = stream_info;
         sample_stream_io_result_t io_result;
+#if BRICK6_STREAM_BENCH
+        const uint32_t benchmark_io_begin_cycle = DWT->CYCCNT;
+#endif
         sample_stream_transport_execute_monocore(&io_command, &io_result);
+#if BRICK6_STREAM_BENCH
+        uint32_t benchmark_backlog = 0U;
+        for (uint32_t benchmark_i = 0U; benchmark_i < SAMPLE_STREAM_PENDING_MAX;
+             ++benchmark_i)
+        {
+            benchmark_backlog +=
+                (g_sample_stream_pending[benchmark_i].active != 0U) ? 1U : 0U;
+        }
+        sample_stream_benchmark_note_io(
+            target.key,
+            &io_result,
+            DWT->CYCCNT - benchmark_io_begin_cycle,
+            (g_sample_stream_selected_decision.waited_frames > UINT32_MAX)
+                ? UINT32_MAX
+                : (uint32_t)g_sample_stream_selected_decision.waited_frames,
+            benchmark_backlog,
+            (sample_stream_time_now()
+             > g_sample_stream_selected_decision.consume_deadline_audio_frame) ? 1U : 0U);
+#endif
         if (io_result.read_bytes > consumed)
         {
             consumed = io_result.read_bytes;
@@ -1554,6 +1583,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
             break;
         }
     }
+#if BRICK6_STREAM_BENCH
+    sample_stream_benchmark_note_service(
+        pages_this_call, DWT->CYCCNT - benchmark_service_begin_cycle);
+#endif
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)

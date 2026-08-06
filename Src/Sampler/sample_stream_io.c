@@ -320,6 +320,12 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
             out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
             return;
         }
+#if BRICK6_STREAM_BENCH
+        if (out_result->fatfs_ops != 0U)
+        {
+            out_result->file_opens = 1U;
+        }
+#endif
         const FSIZE_t offset = (FSIZE_t)command->stream_info.data_offset
                               + ((FSIZE_t)command->target.start_frame
                                  * command->stream_info.info.block_align);
@@ -348,12 +354,18 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
                 memcpy(&g_sample_stream_io_page_scratch[bytes_read],
                        &g_sample_stream_io_read_scratch[cache_position], available);
                 bytes_read += available;
+#if BRICK6_STREAM_BENCH
+                out_result->read_cache_hits++;
+#endif
                 continue;
             }
 
             if (reader->current_file_offset != cursor)
             {
                 out_result->fatfs_ops++;
+#if BRICK6_STREAM_BENCH
+                out_result->seeks++;
+#endif
                 if (f_lseek(&reader->file, cursor) != FR_OK)
                 {
                     out_result->fatfs_ops += sample_stream_io_close_reader(reader);
