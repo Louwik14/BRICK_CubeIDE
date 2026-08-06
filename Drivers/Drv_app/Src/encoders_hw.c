@@ -1,6 +1,7 @@
 #include "encoders_hw.h"
 
 #include "Board/board_controls.h"
+#include "Core/live_clock.h"
 
 #include "cmsis_gcc.h"
 
@@ -9,6 +10,14 @@
 static uint8_t enc_prev_state[ENC_COUNT];
 static volatile int16_t enc_raw_delta[ENC_COUNT];
 static int8_t enc_transition_residual[ENC_COUNT];
+
+/* SPSC queue: the fast-poll IRQ publishes and one consumer pops. */
+static encoder_detent_event_t enc_detent_queue[ENCODER_DETENT_QUEUE_CAPACITY]
+    __attribute__((aligned(32)));
+static volatile uint32_t enc_detent_head;
+static volatile uint32_t enc_detent_tail;
+static volatile uint32_t enc_detent_overflow_count;
+static uint32_t enc_detent_ingress_serial;
 
 static const int8_t quad_table[16] = {
      0, -1, +1,  0,
@@ -22,6 +31,43 @@ static uint8_t enc_read_state(uint8_t encoder)
     return board_controls_encoder_state(encoder);
 }
 
+static uint32_t encoders_hw_next_ingress_serial(void)
+{
+    uint32_t serial = enc_detent_ingress_serial + 1U;
+    if (serial == 0U)
+    {
+        serial = 1U;
+    }
+
+    enc_detent_ingress_serial = serial;
+    return serial;
+}
+
+static void encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
+{
+    const uint32_t capture_tick = live_clock_capture_tick();
+    const uint32_t ingress_serial = encoders_hw_next_ingress_serial();
+    const uint32_t head = enc_detent_head;
+    const uint32_t tail = enc_detent_tail;
+
+    if ((uint32_t)(head - tail) >= ENCODER_DETENT_QUEUE_CAPACITY)
+    {
+        /* Drop newest: accepted events retain their original order. */
+        enc_detent_overflow_count++;
+        return;
+    }
+
+    encoder_detent_event_t *const event =
+        &enc_detent_queue[head & (ENCODER_DETENT_QUEUE_CAPACITY - 1U)];
+    event->capture_tick = capture_tick;
+    event->ingress_serial = ingress_serial;
+    event->direction = direction;
+    event->encoder_id = encoder;
+    event->reserved = 0U;
+    __DMB();
+    enc_detent_head = head + 1U;
+}
+
 static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition)
 {
     const int16_t total = (int16_t)enc_transition_residual[encoder] + (int16_t)transition;
@@ -33,6 +79,14 @@ static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition
     if (increment == 0)
     {
         return;
+    }
+
+    const int8_t direction = (increment > 0) ? 1 : -1;
+    int16_t detents = (increment > 0) ? increment : (int16_t)-increment;
+    while (detents > 0)
+    {
+        encoders_hw_publish_detent(encoder, direction);
+        detents--;
     }
 
     const int32_t sum = (int32_t)enc_raw_delta[encoder] + (int32_t)increment;
@@ -52,6 +106,11 @@ static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition
 
 void encoders_hw_init(void)
 {
+    enc_detent_head = 0U;
+    enc_detent_tail = 0U;
+    enc_detent_overflow_count = 0U;
+    enc_detent_ingress_serial = 0U;
+
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
     {
         enc_prev_state[i] = enc_read_state(i);
@@ -111,4 +170,36 @@ int16_t encoders_hw_get_delta(uint8_t encoder)
     __enable_irq();
 
     return delta;
+}
+
+uint8_t encoders_hw_pop_detent_event(encoder_detent_event_t *out_event)
+{
+    if (out_event == 0)
+    {
+        return 0U;
+    }
+
+    const uint32_t tail = enc_detent_tail;
+    if (tail == enc_detent_head)
+    {
+        return 0U;
+    }
+
+    *out_event = enc_detent_queue[tail & (ENCODER_DETENT_QUEUE_CAPACITY - 1U)];
+    __DMB();
+    enc_detent_tail = tail + 1U;
+    return 1U;
+}
+
+uint32_t encoders_hw_get_detent_pending_count(void)
+{
+    const uint32_t pending = enc_detent_head - enc_detent_tail;
+    return (pending <= ENCODER_DETENT_QUEUE_CAPACITY)
+        ? pending
+        : ENCODER_DETENT_QUEUE_CAPACITY;
+}
+
+uint32_t encoders_hw_get_detent_overflow_count(void)
+{
+    return enc_detent_overflow_count;
 }

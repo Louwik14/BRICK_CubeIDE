@@ -3,6 +3,27 @@ project(brick6_note_fx_step1_tests C)
 
 enable_testing()
 
+add_executable(encoder_detent_test
+    encoder_detent_test.c
+    ../Drivers/Drv_app/Src/encoders_hw.c
+)
+target_compile_definitions(encoder_detent_test PRIVATE
+    BRICK6_VARIANT_LOWCOST
+    LOWCOST_ENCODER_TYPE=BOARD_ENCODER_TYPE_MECHANICAL_24_DETENTS
+)
+target_include_directories(encoder_detent_test PRIVATE
+    stubs
+    ../Inc
+    ../Drivers/Drv_app/Inc
+    ../Drivers/CMSIS/Include
+)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(encoder_detent_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME encoder_detent COMMAND encoder_detent_test)
+endif()
+
 add_executable(mod_lfo_segment_test
     mod_lfo_segment_test.c
     ../Src/Mod/mod_lfo_segment.c

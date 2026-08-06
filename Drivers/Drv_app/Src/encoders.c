@@ -234,6 +234,21 @@ void encoder_reset_delta(uint8_t encoder)
     enc_accumulated_delta[encoder] = 0;
 }
 
+uint8_t encoder_detent_event_pop(encoder_detent_event_t *out_event)
+{
+    return encoders_hw_pop_detent_event(out_event);
+}
+
+uint32_t encoder_detent_event_pending_count(void)
+{
+    return encoders_hw_get_detent_pending_count();
+}
+
+uint32_t encoder_detent_event_overflow_count(void)
+{
+    return encoders_hw_get_detent_overflow_count();
+}
+
 #if BRICK_TEST_BUILD
 uint8_t encoder_test_inject_delta(uint8_t encoder, int16_t delta)
 {
