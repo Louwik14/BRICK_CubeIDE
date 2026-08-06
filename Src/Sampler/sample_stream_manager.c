@@ -8,6 +8,7 @@
 #include "Sampler/sample_stream_backend_contiguous.h"
 #include "Sampler/sample_stream_contract.h"
 #include "Sampler/sample_stream_request_queue.h"
+#include "Sampler/sample_stream_scheduler.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
@@ -94,9 +95,8 @@ static sample_stream_pending_t *g_sample_stream_pending;
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_fatfs_io_buffer[4096U];
 static uint32_t g_sample_stream_request_clock;
 static uint32_t g_sample_stream_service_fatfs_ops;
-static uint16_t g_sample_stream_next_sample_id;
-static uint8_t g_sample_stream_next_owner_id;
 static sample_stream_pending_t *g_sample_stream_selected_pending;
+static sample_stream_scheduler_decision_t g_sample_stream_selected_decision;
 static uint8_t g_sample_stream_manager_initialized;
 #if BRICK6_STREAM_TRACE
 static uint32_t g_sample_stream_service_physical_reads;
@@ -763,101 +763,25 @@ static void sample_stream_manager_repair_queued_pages(void)
     }
 }
 
-static uint16_t sample_stream_manager_fair_distance_pending(const sample_stream_pending_t *pending)
-{
-    if (pending == 0)
-    {
-        return UINT16_MAX;
-    }
-
-    if (pending->owner_kind != (uint8_t)SAMPLE_STREAM_OWNER_NONE)
-    {
-        return (pending->owner_id >= g_sample_stream_next_owner_id)
-                   ? (uint16_t)(pending->owner_id - g_sample_stream_next_owner_id)
-                   : (uint16_t)(SAMPLE_STREAM_MAX_ACTIVE
-                                - g_sample_stream_next_owner_id
-                                + pending->owner_id);
-    }
-
-    if (pending->key.domain != SAMPLE_AUDIO_DOMAIN_CLASSIC)
-    {
-        return UINT16_MAX;
-    }
-
-    return (pending->key.object_id >= g_sample_stream_next_sample_id)
-               ? (uint16_t)(pending->key.object_id - g_sample_stream_next_sample_id)
-               : (uint16_t)(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY
-                            - g_sample_stream_next_sample_id
-                            + pending->key.object_id);
-}
-
-static uint8_t sample_stream_manager_candidate_is_better(uint8_t have_best,
-                                                         sample_stream_priority_t priority,
-                                                         sample_stream_audio_frame_t deadline_audio_frame,
-                                                         uint16_t fair_distance,
-                                                         uint32_t age,
-                                                         sample_stream_priority_t best_priority,
-                                                         sample_stream_audio_frame_t best_deadline_audio_frame,
-                                                         uint16_t best_fair_distance,
-                                                         uint32_t best_age)
-{
-    if (have_best == 0U)
-    {
-        return 1U;
-    }
-    if (priority > best_priority)
-    {
-        return 1U;
-    }
-    if (priority < best_priority)
-    {
-        return 0U;
-    }
-    if (deadline_audio_frame < best_deadline_audio_frame)
-    {
-        return 1U;
-    }
-    if (deadline_audio_frame > best_deadline_audio_frame)
-    {
-        return 0U;
-    }
-    if (fair_distance < best_fair_distance)
-    {
-        return 1U;
-    }
-    if (fair_distance > best_fair_distance)
-    {
-        return 0U;
-    }
-    return (age > best_age) ? 1U : 0U;
-}
-
 static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_target,
                                                sample_stream_priority_t *out_priority)
 {
     g_sample_stream_selected_pending = 0;
+    memset(&g_sample_stream_selected_decision, 0, sizeof(g_sample_stream_selected_decision));
 
-    uint8_t found = 0U;
-    uint32_t scan_count = 0U;
-    uint32_t best_age = 0U;
-    sample_stream_audio_frame_t best_deadline_audio_frame = SAMPLE_STREAM_AUDIO_FRAME_NEVER;
-    uint16_t best_fair_distance = UINT16_MAX;
-    sample_stream_priority_t best_priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
-    sample_page_load_target_t best_target;
-    uint8_t best_owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_NONE;
-    uint8_t best_owner_id = 0U;
-    uint8_t pending_seen = 0U;
-    sample_stream_pending_t *best_pending = 0;
-
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    for (;;)
     {
-        scan_count++;
-        sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
-        if (pending->active == 0U)
+        sample_stream_scheduler_decision_t decision;
+        if (sample_stream_scheduler_pick(g_sample_stream_pending,
+                                         SAMPLE_STREAM_PENDING_MAX,
+                                         sample_stream_time_now(),
+                                         &decision) == 0U)
         {
-            continue;
+            return 0U;
         }
-        pending_seen = 1U;
+
+        sample_stream_pending_t *const pending =
+            &g_sample_stream_pending[decision.entry_index];
 
         sample_page_load_target_t target;
         if (sample_page_cache_get_load_target_key(pending->key,
@@ -885,58 +809,19 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
             sample_stream_manager_drop_pending_slot(pending, SAMPLE_STREAM_PENDING_REASON_CANCEL);
             continue;
         }
-        const uint16_t fair_distance =
-            sample_stream_manager_fair_distance_pending(pending);
-        const uint32_t age = g_sample_stream_request_clock - pending->requested_at;
 
-        if (sample_stream_manager_candidate_is_better(found,
-                                                      priority,
-                                                      pending->consume_deadline_audio_frame,
-                                                      fair_distance,
-                                                      age,
-                                                      best_priority,
-                                                      best_deadline_audio_frame,
-                                                      best_fair_distance,
-                                                      best_age) != 0U)
-        {
-            best_target = target;
-            best_priority = priority;
-            best_deadline_audio_frame = pending->consume_deadline_audio_frame;
-            best_fair_distance = fair_distance;
-            best_age = age;
-            best_owner_kind = pending->owner_kind;
-            best_owner_id = pending->owner_id;
-            best_pending = pending;
-            found = 1U;
-        }
-    }
-
-    if (found != 0U)
-    {
         if (out_target != 0)
         {
-            *out_target = best_target;
+            *out_target = target;
         }
         if (out_priority != 0)
         {
-            *out_priority = best_priority;
+            *out_priority = priority;
         }
-        if (best_owner_kind != (uint8_t)SAMPLE_STREAM_OWNER_NONE)
-        {
-            g_sample_stream_next_owner_id =
-                (uint8_t)((best_owner_id + 1U) % SAMPLE_STREAM_MAX_ACTIVE);
-        }
-        else
-        {
-            g_sample_stream_next_sample_id =
-                (uint16_t)((best_target.key.object_id + 1U) % SAMPLE_CACHE_HOT_SAMPLE_CAPACITY);
-        }
-        g_sample_stream_selected_pending = best_pending;
+        g_sample_stream_selected_pending = pending;
+        g_sample_stream_selected_decision = decision;
         return 1U;
     }
-
-    (void)pending_seen;
-    return 0U;
 }
 
 static float sample_stream_manager_decode_s24_le(const uint8_t *src)
@@ -1110,8 +995,7 @@ void sample_stream_manager_reset(void)
     }
     sample_stream_request_queue_init();
     g_sample_stream_request_clock = 0U;
-    g_sample_stream_next_sample_id = 0U;
-    g_sample_stream_next_owner_id = 0U;
+    sample_stream_scheduler_init(0);
 #if BRICK6_STREAM_TRACE
     g_sample_stream_service_physical_reads = 0U;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -1864,6 +1748,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
         const uint32_t physical_reads_before = g_sample_stream_service_physical_reads;
         if (traced_op != 0)
         {
+            traced_op->dispatch_deadline_audio_frame =
+                g_sample_stream_selected_decision.dispatch_deadline_audio_frame;
+            traced_op->scheduler_waited_frames =
+                g_sample_stream_selected_decision.waited_frames;
+            traced_op->starvation_guard_applied =
+                g_sample_stream_selected_decision.starvation_guard_applied;
             traced_op->selected_audio_frame = sample_stream_time_now();
             traced_op->select_cycle = select_cycle;
             traced_op->read_begin_cycle = select_cycle;

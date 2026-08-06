@@ -37,6 +37,8 @@ typedef struct
     sample_audio_key_t key;
     uint64_t created_audio_frame;
     uint64_t consume_deadline_audio_frame;
+    uint64_t dispatch_deadline_audio_frame;
+    uint64_t scheduler_waited_frames;
     uint64_t selected_audio_frame;
     uint64_t in_flight_audio_frame;
     uint64_t ready_audio_frame;
@@ -61,6 +63,7 @@ typedef struct
     uint8_t backend;
     uint8_t physical_reads;
     uint8_t success;
+    uint8_t starvation_guard_applied;
     uint8_t reserved;
 } sample_stream_trace_op_t;
 
