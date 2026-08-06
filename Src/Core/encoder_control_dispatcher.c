@@ -1,6 +1,7 @@
 #include "Core/encoder_control_dispatcher.h"
 
 #include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_runtime.h"
 #include "Core/live_parameter_event.h"
 #include "Core/track_runtime.h"
 #include "encoders.h"
@@ -110,6 +111,7 @@ void encoder_control_dispatcher_init(void)
 {
     live_parameter_event_init();
     live_parameter_audio_queue_init();
+    live_parameter_audio_runtime_init();
 }
 
 uint8_t encoder_control_dispatcher_service(const ui_param_encoder_context_t *context)

@@ -84,12 +84,26 @@ serial, so audio performs no second TIM5 conversion.
 The schedule is independent from the NoteFx live-note queue. Audio asks both
 queues only for their next deadline and shortens the current render segment to
 the earliest one. At the segment boundary notes are processed first; due
-parameter events then move to an audio-owned FIFO for the sample-accurate
-application seam of the next pass. Encoder traffic therefore has no access to
-note capacity, note-off, or panic budgets.
+parameter events then apply their new target before the following render span.
+Encoder traffic therefore has no access to note capacity, note-off, or panic
+budgets.
 
 Every detent is retained while capacity is available. If the parameter schedule
 is genuinely saturated, only successive unapplied events for the same target
 may coalesce to the newest target; unrelated events are reported as drops.
 Late and stale conversions, schedule saturation, coalescing, and due-FIFO
 saturation are exposed through `live_parameter_audio_queue_get_diag()`.
+
+## Sample-accurate target application
+
+At each segment start the audio owner drains only parameter events whose
+`effective_sample_time` is due. The event target is applied before rendering
+that sample, so an event in the middle of a DMA half changes the render at the
+corresponding sample offset rather than at the next UI or audio block.
+
+`live_parameter_audio_runtime` keeps one bounded state per target with the
+current value, target, increment, remaining samples, and last sample time. A
+retarget first advances from the value actually reached, then creates a new
+bounded ramp to the new target; it never restarts from the former target.
+The existing DSP backends remain responsible for their parameter-specific
+smoothing while the audio runtime owns event ordering and ramp continuity.

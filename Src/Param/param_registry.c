@@ -1453,6 +1453,31 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
 }
 
+uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
+{
+    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[id];
+    const float clamped = clamp_value(value, desc->min, desc->max);
+    if (desc->apply == NULL)
+    {
+        return 0U;
+    }
+
+    desc->apply(clamped);
+    return 1U;
+}
+
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
 {
     if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))

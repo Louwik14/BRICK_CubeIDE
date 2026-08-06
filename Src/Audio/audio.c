@@ -24,6 +24,7 @@
 #include "cpu_load.h"
 #include "Core/live_clock.h"
 #include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_runtime.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
@@ -125,12 +126,14 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
         const uint64_t now = sample_time + cursor;
         note_fx_pipeline_process(now, 1U, seq_runtime_get_samples_per_step_q16());
         (void)live_parameter_audio_queue_consume_due(now);
+        (void)live_parameter_audio_runtime_apply_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = note_fx_pipeline_frames_until_deadline(now, remaining);
         if (span == 0U)
         {
             span = 1U;
         }
+        live_parameter_audio_runtime_process(now, span);
         audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
                                   &tx[cursor * AUDIO_WORDS_PER_FRAME], span);
         cursor += span;
