@@ -29,3 +29,16 @@ n'est jamais réécrit.
 Le producteur ne dépend que de l'API d'ingestion et d'un événement copiable.
 Le format peut donc être placé ultérieurement en RAM partagée M4/M7 sans
 modifier le moteur Hall ni le consommateur audio.
+
+## Segmentation et NoteFx
+
+La file live alimente le même calcul de frontière que le séquenceur et que les
+échéances internes de NoteFx. Le préfixe audio est rendu jusqu'au deadline,
+l'événement source est soumis avec son `sample_time` absolu, puis le suffixe est
+rendu. Les événements NoteFx générés conservent leur échéance absolue et
+`note_fx_pipeline_frames_until_deadline()` l'expose au scheduler.
+
+Une note immédiate d'un MIDI FX reprend le timestamp de sa source. Une note
+retardée ou une échéance d'arpège est traitée par le moteur NoteFx à son sample
+absolu. Les événements séquencés restent dans leur propre flux ordonné ; aucun
+ordre global note-off avant note-on n'est imposé aux événements live.

@@ -1098,13 +1098,13 @@ static void note_fx_pipeline_apply_due_live_events(uint64_t now)
             .velocity = event.velocity,
             .is_note_on = (event.type == LIVE_NOTE_EVENT_ON) ? 1U : 0U,
             .provenance = (uint8_t)provenance,
-            .sample_time = now,
+            .sample_time = event.sample_time,
             .source_occurrence_id = event.occurrence_id,
             .ingress_serial = event.ingress_serial
         };
         const note_fx_result_t result = note_fx_pipeline_submit_source_audio(
             command.track, command.note, command.velocity, command.is_note_on,
-            now, provenance, command.source_occurrence_id);
+            event.sample_time, provenance, command.source_occurrence_id);
         if (command.is_note_on != 0U)
         {
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
