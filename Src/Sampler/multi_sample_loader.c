@@ -194,19 +194,65 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_active = 0U;
 }
 
-static uint8_t multi_loader_sample_required_pages(uint32_t total_frames, uint16_t channels)
+typedef struct
 {
+    uint32_t start_first;
+    uint32_t start_last;
+    uint32_t loop_first;
+    uint32_t loop_last;
+    uint8_t has_loop_span;
+    uint8_t unique_pages;
+} multi_loader_boundary_pages_t;
+
+static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
+    uint32_t total_frames,
+    uint16_t channels,
+    uint8_t has_loop,
+    uint32_t loop_begin,
+    uint32_t loop_end)
+{
+    multi_loader_boundary_pages_t result = {0};
     if (total_frames == 0U)
     {
-        return 0U;
+        return result;
     }
 
     const uint32_t contract_frames =
         (total_frames < SAMPLE_PREP_MIN_READY_FRAMES) ? total_frames
-                                                      : SAMPLE_PREP_MIN_READY_FRAMES;
+                                                       : SAMPLE_PREP_MIN_READY_FRAMES;
     const sample_audio_format_t format = sample_audio_format_or_stereo(
         sample_audio_format_from_channels(channels));
-    uint32_t pages = sample_audio_format_required_page_count(format, contract_frames);
+    result.start_first = 0U;
+    result.start_last = sample_audio_format_page_index_from_frame(format, contract_frames - 1U);
+    uint32_t pages = result.start_last + 1U;
+
+    if ((has_loop != 0U) && (loop_end > loop_begin) && (loop_end <= total_frames))
+    {
+        uint32_t loop_ready_end = loop_begin + SAMPLE_PREP_MIN_READY_FRAMES;
+        if ((loop_ready_end < loop_begin) || (loop_ready_end > loop_end))
+        {
+            loop_ready_end = loop_end;
+        }
+        result.loop_first = sample_audio_format_page_index_from_frame(format,
+                                                                       loop_begin);
+        result.loop_last = sample_audio_format_page_index_from_frame(format,
+                                                                      loop_ready_end - 1U);
+        result.has_loop_span = 1U;
+        const uint32_t loop_pages = result.loop_last - result.loop_first + 1U;
+        uint32_t overlap = 0U;
+        if ((result.loop_first <= result.start_last) && (result.loop_last >= result.start_first))
+        {
+            const uint32_t overlap_first = (result.loop_first > result.start_first)
+                                               ? result.loop_first
+                                               : result.start_first;
+            const uint32_t overlap_last = (result.loop_last < result.start_last)
+                                              ? result.loop_last
+                                              : result.start_last;
+            overlap = overlap_last - overlap_first + 1U;
+        }
+        pages += loop_pages - overlap;
+    }
+
     const uint32_t max_budget_pages =
         SAMPLE_PREP_MULTI_BUDGET_BYTES / SAMPLE_PAGE_BYTES;
     if (pages > max_budget_pages)
@@ -217,7 +263,8 @@ static uint8_t multi_loader_sample_required_pages(uint32_t total_frames, uint16_
     {
         pages = UINT8_MAX;
     }
-    return (uint8_t)pages;
+    result.unique_pages = (uint8_t)pages;
+    return result;
 }
 
 static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
@@ -236,9 +283,13 @@ static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
 
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
-        const uint16_t pages =
-            (uint16_t)multi_loader_sample_required_pages(index->samples[i].total_frames,
-                                                          index->samples[i].channels);
+        const multi_sample_index_sample_t *const sample = &index->samples[i];
+        const uint16_t pages = (uint16_t)multi_loader_sample_boundary_pages(
+            sample->total_frames,
+            sample->channels,
+            sample->has_loop,
+            sample->loop_begin,
+            sample->loop_end).unique_pages;
         if (pages == 0U)
         {
             if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
@@ -428,9 +479,13 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
             return MULTI_SAMPLE_LOAD_REGISTER_FAIL;
         }
 
-        const uint8_t required_pages =
-            multi_loader_sample_required_pages(sample->total_frames, sample->channels);
-        for (uint8_t page = 0U; page < required_pages; ++page)
+        const multi_loader_boundary_pages_t boundaries =
+            multi_loader_sample_boundary_pages(sample->total_frames,
+                                               sample->channels,
+                                               sample->has_loop,
+                                               sample->loop_begin,
+                                               sample->loop_end);
+        for (uint32_t page = boundaries.start_first; page <= boundaries.start_last; ++page)
         {
             if (sample_stream_manager_request_page_key_alloc(
                     key,
@@ -449,6 +504,26 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
                 return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
             }
             g_multi_load_diag.pages_requested++;
+        }
+        if (boundaries.has_loop_span != 0U)
+        {
+            for (uint32_t page = boundaries.loop_first; page <= boundaries.loop_last; ++page)
+            {
+                if ((page >= boundaries.start_first) && (page <= boundaries.start_last))
+                {
+                    continue;
+                }
+                if ((sample_stream_manager_request_page_key_alloc(
+                         key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
+                    || (sample_page_cache_pin_page_key_alloc(
+                            key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U))
+                {
+                    multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE,
+                                           multi_sample_id);
+                    return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
+                }
+                g_multi_load_diag.pages_requested++;
+            }
         }
     }
 
@@ -524,11 +599,16 @@ void multi_sample_service_load(uint32_t byte_budget)
             return;
         }
 
-        const uint8_t required_pages =
-            multi_loader_sample_required_pages(sample->total_frames, sample->channels);
+        const multi_loader_boundary_pages_t boundaries =
+            multi_loader_sample_boundary_pages(sample->total_frames,
+                                               sample->channels,
+                                               sample->has_loop,
+                                               sample->loop_begin,
+                                               sample->loop_end);
+        const uint8_t required_pages = boundaries.unique_pages;
         uint8_t sample_ready = 1U;
         required_pages_total += required_pages;
-        for (uint8_t page = 0U; page < required_pages; ++page)
+        for (uint32_t page = boundaries.start_first; page <= boundaries.start_last; ++page)
         {
             const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page);
             if (state == SAMPLE_PAGE_READY)
@@ -545,6 +625,33 @@ void multi_sample_service_load(uint32_t byte_budget)
                     g_multi_load_diag.pages_ready = ready_pages;
                     g_multi_load_diag.samples_ready = ready_samples;
                     return;
+                }
+            }
+        }
+        if (boundaries.has_loop_span != 0U)
+        {
+            for (uint32_t page = boundaries.loop_first; page <= boundaries.loop_last; ++page)
+            {
+                if ((page >= boundaries.start_first) && (page <= boundaries.start_last))
+                {
+                    continue;
+                }
+                const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page);
+                if (state == SAMPLE_PAGE_READY)
+                {
+                    ready_pages++;
+                }
+                else
+                {
+                    sample_ready = 0U;
+                    if (state == SAMPLE_PAGE_ERROR)
+                    {
+                        sample_stream_manager_release_key(key);
+                        multi_loader_set_error(MULTI_SAMPLE_LOAD_PAGE_ERROR, multi_sample_id);
+                        g_multi_load_diag.pages_ready = ready_pages;
+                        g_multi_load_diag.samples_ready = ready_samples;
+                        return;
+                    }
                 }
             }
         }

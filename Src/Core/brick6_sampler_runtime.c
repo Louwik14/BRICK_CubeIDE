@@ -962,6 +962,37 @@ static uint8_t brick6_sampler_runtime_start_gate_check(
     return 0U;
 }
 
+static uint8_t brick6_sampler_runtime_loop_gate_check(const sample_play_plan_t *plan)
+{
+    if ((plan == NULL) || (plan->loop_mode != (uint8_t)SAMPLE_PLAY_LOOP_FORWARD)
+        || (plan->loop_end <= plan->loop_begin))
+    {
+        return 1U;
+    }
+    const sample_audio_format_t format = sample_audio_format_or_stereo(plan->format);
+    uint32_t ready_end = plan->loop_begin + SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES;
+    if ((ready_end < plan->loop_begin) || (ready_end > plan->loop_end))
+    {
+        ready_end = plan->loop_end;
+    }
+    const uint32_t first_page = sample_audio_format_page_index_from_frame(format,
+                                                                           plan->loop_begin);
+    const uint32_t last_page = sample_audio_format_page_index_from_frame(format,
+                                                                          ready_end - 1U);
+    uint8_t ready = 1U;
+    for (uint32_t page = first_page; page <= last_page; ++page)
+    {
+        if (sample_page_cache_get_page_state_key(plan->key, page) != SAMPLE_PAGE_READY)
+        {
+            ready = 0U;
+            (void)sample_stream_manager_request_page_key_alloc(plan->key,
+                                                               page,
+                                                               SAMPLE_PAGE_ALLOC_SLOT_PERMANENT);
+        }
+    }
+    return ready;
+}
+
 static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_play_plan(
     const brick6_sample_common_trigger_t *trigger,
     sample_resolved_source_t *out_source,
@@ -3686,11 +3717,13 @@ static uint8_t brick6_sampler_runtime_multi_prefetch_voice(brick6_sampler_voice_
         .current_frame = current_frame,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
+        .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
         .direction = 1,
         .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
                                         sample_audio_format_or_stereo(voice->play_plan.format))
                                     - 1U),
         .request_current_page = 1U,
+        .role = (uint8_t)SAMPLE_STREAM_ROLE_CURRENT,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
         .owner_generation = voice->trigger_order,
@@ -3728,11 +3761,13 @@ static uint8_t brick6_sampler_runtime_multi_prefetch_loop_begin(brick6_sampler_v
         .current_frame = voice->play_plan.loop_begin,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
+        .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
         .direction = 1,
         .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
                                         sample_audio_format_or_stereo(voice->play_plan.format))
                                     - 1U),
         .request_current_page = 1U,
+        .role = (uint8_t)SAMPLE_STREAM_ROLE_LOOP,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
         .owner_generation = voice->trigger_order,
@@ -3767,11 +3802,13 @@ static void brick6_sampler_runtime_multi_prefetch_trigger(brick6_sampler_voice_t
         .current_frame = 0U,
         .end_frame = voice->region_end,
         .step_q16 = voice->play_plan.step_q16,
+        .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
         .direction = 1,
         .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
                                         sample_audio_format_or_stereo(voice->play_plan.format))
                                     - 1U),
         .request_current_page = 1U,
+        .role = (uint8_t)SAMPLE_STREAM_ROLE_START,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(voice),
         .owner_generation = voice->trigger_order,
@@ -4614,6 +4651,19 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
         sample_stream_manager_active_state_reset(&multi_voice->loop_stream_state);
         return 0U;
     }
+    if (brick6_sampler_runtime_loop_gate_check(&common_plan) == 0U)
+    {
+        brick6_sampler_runtime_multi_release_voice_stream_owner(multi_voice);
+        sample_voice_reader_reset(&multi_voice->reader);
+        multi_voice->active = 0U;
+        multi_voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+        multi_voice->trigger_order = 0U;
+        multi_voice->owner_track_id = UINT8_MAX;
+        multi_voice->release_pending = 0U;
+        sample_stream_manager_active_state_reset(&multi_voice->stream_state);
+        sample_stream_manager_active_state_reset(&multi_voice->loop_stream_state);
+        return 0U;
+    }
 
     sample_voice_reader_reset(&multi_voice->reader);
     if (sample_voice_reader_bind_play_plan(&multi_voice->reader,
@@ -4685,11 +4735,13 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
         .current_frame = common_plan.start_frame,
         .end_frame = common_plan.region_end,
         .step_q16 = common_plan.step_q16,
+        .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
         .direction = (common_plan.direction != 0U) ? -1 : 1,
         .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
                                         sample_audio_format_or_stereo(common_plan.format))
                                     - 1U),
         .request_current_page = 1U,
+        .role = (uint8_t)SAMPLE_STREAM_ROLE_START,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
         .owner_id = brick6_sampler_runtime_multi_voice_index(multi_voice),
         .owner_generation = multi_voice->trigger_order,
@@ -4725,11 +4777,13 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
             .current_frame = common_plan.loop_begin,
             .end_frame = common_plan.region_end,
             .step_q16 = common_plan.step_q16,
+            .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
             .direction = 1,
             .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(
                                             sample_audio_format_or_stereo(common_plan.format))
                                         - 1U),
             .request_current_page = 1U,
+            .role = (uint8_t)SAMPLE_STREAM_ROLE_LOOP,
             .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP,
             .owner_id = brick6_sampler_runtime_multi_voice_index(multi_voice),
             .owner_generation = multi_voice->trigger_order,

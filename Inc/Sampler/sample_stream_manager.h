@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_trace.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,9 +38,11 @@ typedef struct
     uint32_t current_frame;
     uint32_t end_frame;
     uint32_t step_q16;
+    uint32_t horizon_frames;
     int8_t direction;
     uint8_t lookahead_pages;
     uint8_t request_current_page;
+    uint8_t role;
     uint8_t owner_kind;
     uint8_t owner_id;
     uint32_t owner_generation;
@@ -79,6 +82,10 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
 uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_desc_t *desc);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
+void sample_stream_manager_trace_consume_miss(sample_audio_key_t key,
+                                              uint32_t page_index,
+                                              uint32_t reader_position,
+                                              uint32_t frames_remaining);
 #if defined(BRICK6_MULTI_STREAM_DIAG)
 void sample_stream_manager_get_debug_stats(uint8_t current_owner_kind,
                                            uint8_t current_owner_id,

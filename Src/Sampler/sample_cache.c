@@ -71,6 +71,10 @@ static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
                                                         const sample_cache_desc_t *desc);
 static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
                                                     const sample_cache_desc_t *desc);
+static uint8_t sample_cache_stream_window_ready(uint16_t sample_id,
+                                                const sample_cache_desc_t *desc,
+                                                uint32_t frame_index,
+                                                int8_t direction);
 
 static uint8_t *sample_cache_io_buffer(void)
 {
@@ -259,11 +263,13 @@ static uint8_t sample_cache_voice_reserve_start_window(const sample_cache_voice_
         .frames_per_page = desc->frames_per_page,
         .registration_epoch = desc->registration_epoch,
         .step_q16 = SAMPLE_STREAM_STEP_Q16_ONE,
+        .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
         .direction = voice->direction,
         .lookahead_pages = (voice->direction < 0)
                                ? (uint8_t)(sample_audio_format_window_pages(desc->format) - 1U)
                                : (uint8_t)(sample_audio_format_window_pages(desc->format) - 1U),
         .request_current_page = 1U,
+        .role = (uint8_t)SAMPLE_STREAM_ROLE_START,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE,
         .owner_id = voice->voice_id,
         .owner_generation = voice->generation,
@@ -981,6 +987,52 @@ static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
     return 1U;
 }
 
+static uint8_t sample_cache_stream_window_ready(uint16_t sample_id,
+                                                const sample_cache_desc_t *desc,
+                                                uint32_t frame_index,
+                                                int8_t direction)
+{
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (desc == 0)
+        || (desc->total_frames == 0U) || (frame_index >= desc->total_frames))
+    {
+        return 0U;
+    }
+    if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
+    {
+        return sample_cache_frame_available(desc, frame_index);
+    }
+
+    const uint32_t current_page = sample_audio_format_page_index_from_frame(desc->format,
+                                                                             frame_index);
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    const uint32_t pages = sample_audio_format_window_pages(desc->format);
+    for (uint32_t ahead = 0U; ahead < pages; ++ahead)
+    {
+        uint32_t page = current_page;
+        if (direction < 0)
+        {
+            if (current_page < ahead)
+            {
+                break;
+            }
+            page = current_page - ahead;
+        }
+        else
+        {
+            page = current_page + ahead;
+            if (page > last_page)
+            {
+                break;
+            }
+        }
+        if (sample_page_cache_get_page_state(sample_id, page) != SAMPLE_PAGE_READY)
+        {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
 static uint8_t sample_cache_any_voice_active(uint16_t sample_id)
 {
     for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
@@ -1020,9 +1072,11 @@ static void sample_cache_queue_active_stream_pages(void)
             .current_frame = voice->frame_pos,
             .end_frame = desc->total_frames,
             .step_q16 = SAMPLE_STREAM_STEP_Q16_ONE,
+            .horizon_frames = SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES,
             .direction = voice->direction,
             .lookahead_pages = (uint8_t)(sample_audio_format_window_pages(desc->format) - 1U),
             .request_current_page = 1U,
+            .role = (uint8_t)SAMPLE_STREAM_ROLE_CURRENT,
             .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE,
             .owner_id = voice->voice_id,
             .owner_generation = voice->generation,
@@ -1606,6 +1660,14 @@ uint8_t sample_cache_start_voice_at(uint16_t sample_id, uint8_t voice_id, uint32
     sample_cache_voice_bind(voice, sample_id, frame_index);
     voice->voice_id = voice_id;
     if (sample_cache_voice_reserve_start_window(voice, desc) == 0U)
+    {
+        sample_cache_voice_release(voice);
+        return 0U;
+    }
+    if (sample_cache_stream_window_ready(sample_id,
+                                         desc,
+                                         frame_index,
+                                         voice->direction) == 0U)
     {
         sample_cache_voice_release(voice);
         return 0U;

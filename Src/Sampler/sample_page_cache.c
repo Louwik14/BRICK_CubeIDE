@@ -6,6 +6,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_stream_fatfs_map.h"
+#include "Sampler/sample_stream_manager.h"
 #include "stm32h7xx.h"
 
 #define SAMPLE_PAGE_WINDOW_LOCK_MAX (SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2U)
@@ -1144,6 +1145,14 @@ uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
     if ((page == 0) || (page->state != SAMPLE_PAGE_READY) || (page->data == 0))
     {
         sample_page_cache_unlock(primask);
+#if BRICK6_STREAM_TRACE
+        const sample_audio_format_t format = sample_page_cache_format_key(key);
+        sample_stream_manager_trace_consume_miss(
+            key,
+            page_index,
+            sample_audio_format_page_start_frame(format, page_index),
+            0U);
+#endif
         return 0U;
     }
 
