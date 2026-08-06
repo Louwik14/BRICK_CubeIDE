@@ -30,7 +30,6 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Seq/seq_runtime_exec.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include <string.h>
 
@@ -68,12 +67,6 @@ static uint8_t keyboard_engine_capture_sample_for_recording(uint32_t capture_tic
     if (!live_clock_tim5_to_guarded_sample_time(capture_tick, out_sample))
     {
         return 0U;
-    }
-
-    const uint64_t now_sample = seq_runtime_exec_get_audio_timeline_sample();
-    if (*out_sample < now_sample)
-    {
-        *out_sample = now_sample;
     }
 
     return 1U;
