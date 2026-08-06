@@ -18,6 +18,19 @@
             }
         },
         {
+            "name": "DebugDiag",
+            "inherits": "common-ninja-arm",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS_DEBUG": "-g3",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g3",
+                "BRICK6_VARIANT": "lowcost",
+                "BRICK_TEST_BUILD": "OFF",
+                "BRICK6_MULTI_STREAM_DIAG": "ON",
+                "BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN": "ON"
+            }
+        },
+        {
             "name": "Release",
             "inherits": "common-ninja-arm",
             "cacheVariables": {
@@ -58,6 +71,10 @@
         {
             "name": "Debug",
             "configurePreset": "Debug"
+        },
+        {
+            "name": "DebugDiag",
+            "configurePreset": "DebugDiag"
         },
         {
             "name": "Release",

@@ -100,7 +100,7 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
 __attribute__((naked)) void HardFault_Handler(void)
 {
   __asm volatile(
@@ -131,7 +131,7 @@ __attribute__((naked)) void HardFault_Handler(void)
 /**
   * @brief This function handles Memory management fault.
   */
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
 __attribute__((naked)) void MemManage_Handler(void)
 {
   __asm volatile(
@@ -162,7 +162,7 @@ __attribute__((naked)) void MemManage_Handler(void)
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
 __attribute__((naked)) void BusFault_Handler(void)
 {
   __asm volatile(
@@ -193,7 +193,7 @@ __attribute__((naked)) void BusFault_Handler(void)
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
 __attribute__((naked)) void UsageFault_Handler(void)
 {
   __asm volatile(

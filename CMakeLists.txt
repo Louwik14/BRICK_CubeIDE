@@ -22,6 +22,12 @@ option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
 option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
+option(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN
+       "Use Release code generation for the Debug Multi stream diagnostic build"
+       OFF)
+
+set(BRICK6_RELEASE_LIKE_CONFIG
+    "$<OR:$<CONFIG:Release>,$<AND:$<CONFIG:Debug>,$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>")
 
 # --------------------------------------------------------------------------
 # Standards
@@ -40,6 +46,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 # Default build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
+endif()
+
+if(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # The diagnostic image keeps DWARF but removes the toolchain Debug -Og.
+    set(CMAKE_C_FLAGS_DEBUG "-g3")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g3")
 endif()
 
 # --------------------------------------------------------------------------
@@ -384,6 +396,11 @@ set(BRICK_TEST_ONLY_SOURCES
 
 if(NOT BRICK_TEST_BUILD)
     list(APPEND EXCLUDED_SOURCES ${BRICK_TEST_ONLY_SOURCES})
+    if(BRICK6_MULTI_STREAM_DIAG)
+        list(REMOVE_ITEM EXCLUDED_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/crash_capsule.c"
+        )
+    endif()
 endif()
 
 set(ALL_USER_SOURCES
@@ -476,7 +493,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    $<$<CONFIG:Debug>:DEBUG>
+    $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:DEBUG>
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")
@@ -498,18 +515,18 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wall
     --specs=nano.specs
 
-    $<$<CONFIG:Debug>:-Og>
+    $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:-Og>
     $<$<CONFIG:Debug>:-g3>
-    $<$<CONFIG:Release>:-O1>
+    $<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>
 
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-ffast-math>
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fsingle-precision-constant>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-ffast-math>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-fsingle-precision-constant>
     $<$<COMPILE_LANGUAGE:C>:-fstack-usage>
 
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-fno-math-errno>
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-ffast-math>
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-fsingle-precision-constant>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:CXX>>:-fno-math-errno>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:CXX>>:-ffast-math>
+    $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:CXX>>:-fsingle-precision-constant>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
@@ -524,7 +541,7 @@ set(ALL_CPP_SOURCES ${ALL_TARGET_SOURCES})
 list(FILTER ALL_CPP_SOURCES INCLUDE REGEX ".*\\.(cpp|cc|cxx)$")
 
 set_source_files_properties(${ALL_CPP_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O2>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
 )
 
 # Braids only: favor IRQ throughput and enable cross-TU optimization in Release.
@@ -536,7 +553,7 @@ set(BRAIDS_O3_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp"
 )
 set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
 # Audio Low-Cost: keep LTO scoped to audio, DSP/modulation and synth runtime.
@@ -559,7 +576,7 @@ set(LOWCOST_AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
 )
 set_source_files_properties(${LOWCOST_AUDIO_LTO_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-flto>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 set(LOWCOST_AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
@@ -575,7 +592,7 @@ set(LOWCOST_AUDIO_O3_SOURCES
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
 )
 set_source_files_properties(${LOWCOST_AUDIO_O3_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
     COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
@@ -591,7 +608,7 @@ if(BRICK6_VARIANT STREQUAL "lowcost")
         "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/voice_manager.c"
     )
     set_source_files_properties(${LOWCOST_SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
-        COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>;$<$<CONFIG:Release>:-flto>"
+        COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
     )
 
 endif()
@@ -601,12 +618,12 @@ set(STORAGE_ALL_SOURCES ${SRC_STORAGE_SRC})
 list(FILTER STORAGE_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 
 set_source_files_properties(${STORAGE_ALL_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O0>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
 )
 
 # U8g2 en O0
 set_source_files_properties(${U8G2_SRC} PROPERTIES
-    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O0>"
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
 )
 list(FILTER AUDIO_C_SOURCES INCLUDE REGEX ".*\\.c$")
 
@@ -635,7 +652,8 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
-    $<$<CONFIG:Release>:-flto>
+    $<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>
+    $<$<AND:$<CONFIG:Debug>,$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>:-g3>
 )
 
 # C++ linker because project contains cpp files

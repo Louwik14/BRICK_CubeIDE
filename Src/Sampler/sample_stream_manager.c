@@ -2085,6 +2085,7 @@ void sample_multi_stream_diag_capture_failure(
     g_sample_multi_stream_diag_frozen = 1U;
 }
 
+__attribute__((noinline, used, externally_visible))
 void sample_multi_stream_diag_capture_fault(const uint32_t *stack_pointer,
                                             uint32_t exc_return,
                                             uint32_t fault_type)
