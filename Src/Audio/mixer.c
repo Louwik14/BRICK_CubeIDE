@@ -209,6 +209,34 @@ static mixer_track_filter_t *mixer_poly_filter(uint32_t poly_track_id, uint8_t v
         ? &g_poly_filters_hot[index] : NULL;
 }
 
+static void mixer_poly_filter_apply_vca_config(uint32_t track_id,
+                                               const mixer_track_filter_t *src)
+{
+    if (src == NULL)
+    {
+        return;
+    }
+    for (uint8_t voice = 0U; voice < SYNTH_POLYPHONY_MAX_VOICES; ++voice)
+    {
+        mixer_track_filter_t *const poly_filter = mixer_poly_filter(track_id, voice);
+        if (poly_filter == NULL)
+        {
+            continue;
+        }
+        vca_env_set_attack(&poly_filter->synth_vca_env,
+                           src->synth_vca_env.attack_time);
+        vca_env_set_decay(&poly_filter->synth_vca_env,
+                          src->synth_vca_env.decay_time);
+        vca_env_set_sustain(&poly_filter->synth_vca_env,
+                            src->synth_vca_env.sustain);
+        vca_env_set_release(&poly_filter->synth_vca_env,
+                            src->synth_vca_env.release_time);
+        poly_filter->synth_vca_type = src->synth_vca_type;
+        vca_env_set_type(&poly_filter->synth_vca_env,
+                         (vca_env_type_t)src->synth_vca_type);
+    }
+}
+
 static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
                                           const mixer_track_filter_t *src)
 {
@@ -249,6 +277,8 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
     vca_env_set_sustain(&dst->synth_vca_env, src->synth_vca_env.sustain);
     vca_env_set_release(&dst->synth_vca_env, src->synth_vca_env.release_time);
     dst->synth_vca_type = src->synth_vca_type;
+    vca_env_set_type(&dst->synth_vca_env,
+                     (vca_env_type_t)dst->synth_vca_type);
     dst->config_version = src->config_version;
     if (previous_type != dst->type)
     {
@@ -2511,6 +2541,7 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
     if (filter->vca_env.attack != next)
         env_adsr_set_attack(&filter->vca_env, next);
     vca_env_set_attack(&filter->synth_vca_env, attack_s);
+    mixer_poly_filter_apply_vca_config(track_id, filter);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2528,6 +2559,7 @@ void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
     if (filter->vca_env.decay != next)
         env_adsr_set_decay(&filter->vca_env, next);
     vca_env_set_decay(&filter->synth_vca_env, decay_s);
+    mixer_poly_filter_apply_vca_config(track_id, filter);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2546,6 +2578,7 @@ void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
     if (filter->vca_env.sustain != next)
         env_adsr_set_sustain(&filter->vca_env, next);
     vca_env_set_sustain(&filter->synth_vca_env, sustain);
+    mixer_poly_filter_apply_vca_config(track_id, filter);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2563,6 +2596,7 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
     if (filter->vca_env.release != next)
         env_adsr_set_release(&filter->vca_env, next);
     vca_env_set_release(&filter->synth_vca_env, release_s);
+    mixer_poly_filter_apply_vca_config(track_id, filter);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -2578,6 +2612,8 @@ void mixer_set_track_vca_env_type(uint32_t track_id, uint8_t type)
     if (filter->synth_vca_type == next)
         return;
     filter->synth_vca_type = next;
+    vca_env_set_type(&filter->synth_vca_env, (vca_env_type_t)next);
+    mixer_poly_filter_apply_vca_config(track_id, filter);
     mixer_track_filter_touch_config(filter);
 }
 

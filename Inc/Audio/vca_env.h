@@ -35,6 +35,7 @@ typedef struct
     float release_target;
     float linear_increment;
     uint32_t samples_remaining;
+    bool sustain_transition_active;
     bool gate;
 } vca_env_t;
 

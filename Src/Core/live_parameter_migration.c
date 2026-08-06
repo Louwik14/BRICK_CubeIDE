@@ -8,6 +8,7 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
         case PARAM_VCA_RELEASE:
+        case PARAM_VCA_ENV_TYPE:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
         case PARAM_MIX_LEVEL:

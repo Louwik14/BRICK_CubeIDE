@@ -80,13 +80,65 @@ static int16_t interpolate_q15(int16_t a, int16_t b, uint16_t t)
     return (int16_t)((int32_t)a + ((delta * (int32_t)t) >> 16));
 }
 
-static void start_attack(env_adsr_peaks_t *env, bool hard_reset)
+static void prepare_release_from_level(env_adsr_peaks_t *env, float level)
 {
-    env->start_value = (hard_reset || env->stage == ENV_ADSR_PEAKS_STAGE_IDLE) ? 0 : env->value;
-    env->target_value = ENV_ADSR_Q15_MAX;
+    env->start_value = (int16_t)level;
+    env->target_value = 0;
     env->phase = 0;
+    env->phase_increment = env->release_increment;
+    env->release_level = level;
+    const uint32_t duration_samples =
+        (env->phase_increment != 0u)
+            ? ((UINT32_MAX / env->phase_increment) + 1u)
+            : 1u;
+    const float multiplier = powf(ENV_ADSR_RELEASE_END_RATIO,
+                                  1.0f / (float)duration_samples);
+    env->release_coefficient = 1.0f - multiplier;
+    if (!(env->release_coefficient > 0.0f))
+        env->release_coefficient = 1.0f;
+    else if (env->release_coefficient > 1.0f)
+        env->release_coefficient = 1.0f;
+    env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
+}
+
+static void prepare_attack_from_current(env_adsr_peaks_t *env)
+{
+    env->start_value = env->value;
+    env->target_value = ENV_ADSR_Q15_MAX;
+    env->phase = 0u;
     env->phase_increment = env->attack_increment;
     env->stage = ENV_ADSR_PEAKS_STAGE_ATTACK;
+}
+
+static void prepare_decay_from_current(env_adsr_peaks_t *env)
+{
+    if (env->value == (int16_t)env->sustain)
+    {
+        if (env->gate_high)
+        {
+            env->stage = ENV_ADSR_PEAKS_STAGE_SUSTAIN;
+            env->phase = 0u;
+            env->phase_increment = 0u;
+        }
+        else
+        {
+            prepare_release_from_level(env, (float)env->value);
+        }
+        return;
+    }
+
+    env->start_value = env->value;
+    env->target_value = (int16_t)env->sustain;
+    env->phase = 0u;
+    env->phase_increment = env->decay_increment;
+    env->stage = ENV_ADSR_PEAKS_STAGE_DECAY;
+}
+
+static void start_attack(env_adsr_peaks_t *env, bool hard_reset)
+{
+    if (hard_reset || env->stage == ENV_ADSR_PEAKS_STAGE_IDLE)
+        env->value = 0;
+    prepare_attack_from_current(env);
 }
 
 void env_adsr_peaks_init(env_adsr_peaks_t *env, float sample_rate)
@@ -123,23 +175,31 @@ void env_adsr_peaks_set_attack(env_adsr_peaks_t *env, uint16_t attack)
 {
     env->attack = attack;
     env->attack_increment = phase_increment_from_time(env, env->attack);
+    if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
+        prepare_attack_from_current(env);
 }
 
 void env_adsr_peaks_set_decay(env_adsr_peaks_t *env, uint16_t decay)
 {
     env->decay = decay;
     env->decay_increment = phase_increment_from_time(env, env->decay);
+    if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
+        prepare_decay_from_current(env);
 }
 
 void env_adsr_peaks_set_sustain(env_adsr_peaks_t *env, uint16_t sustain)
 {
     env->sustain = clamp_u16(sustain, 0u, ENV_ADSR_Q15_MAX);
+    if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
+        prepare_decay_from_current(env);
 }
 
 void env_adsr_peaks_set_release(env_adsr_peaks_t *env, uint16_t release)
 {
     env->release = release;
     env->release_increment = phase_increment_from_time(env, env->release);
+    if(env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
+        prepare_release_from_level(env, env->release_level);
 }
 
 void env_adsr_peaks_gate_on(env_adsr_peaks_t *env)
@@ -152,25 +212,7 @@ void env_adsr_peaks_gate_off(env_adsr_peaks_t *env)
 {
     env->gate_high = false;
     if(env->stage != ENV_ADSR_PEAKS_STAGE_IDLE && env->stage != ENV_ADSR_PEAKS_STAGE_RELEASE)
-    {
-        env->start_value = env->value;
-        env->target_value = 0;
-        env->phase = 0;
-        env->phase_increment = env->release_increment;
-        env->release_level = (float)env->value;
-        const uint32_t duration_samples =
-            (env->phase_increment != 0u)
-                ? ((UINT32_MAX / env->phase_increment) + 1u)
-                : 1u;
-        const float multiplier = powf(ENV_ADSR_RELEASE_END_RATIO,
-                                      1.0f / (float)duration_samples);
-        env->release_coefficient = 1.0f - multiplier;
-        if(!(env->release_coefficient > 0.0f))
-            env->release_coefficient = 1.0f;
-        else if(env->release_coefficient > 1.0f)
-            env->release_coefficient = 1.0f;
-        env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
-    }
+        prepare_release_from_level(env, (float)env->value);
 }
 
 void env_adsr_peaks_retrigger(env_adsr_peaks_t *env, bool hard_reset)
@@ -238,12 +280,8 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
     {
         if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
         {
-            env->start_value = ENV_ADSR_Q15_MAX;
-            env->target_value = (int16_t)env->sustain;
-            env->phase = 0;
-            env->phase_increment = env->decay_increment;
-            env->stage = ENV_ADSR_PEAKS_STAGE_DECAY;
             env->value = ENV_ADSR_Q15_MAX;
+            prepare_decay_from_current(env);
         }
         else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
         {
@@ -254,12 +292,8 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
             }
             else
             {
-                env->start_value = (int16_t)env->sustain;
-                env->target_value = 0;
-                env->phase = 0;
-                env->phase_increment = env->release_increment;
-                env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
                 env->value = (int16_t)env->sustain;
+                prepare_release_from_level(env, (float)env->value);
             }
         }
     }
@@ -345,12 +379,8 @@ int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
 
         if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
         {
-            env->start_value = ENV_ADSR_Q15_MAX;
-            env->target_value = (int16_t)env->sustain;
-            env->phase = 0u;
-            env->phase_increment = env->decay_increment;
-            env->stage = ENV_ADSR_PEAKS_STAGE_DECAY;
             env->value = ENV_ADSR_Q15_MAX;
+            prepare_decay_from_current(env);
         }
         else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
         {
@@ -361,12 +391,8 @@ int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
             }
             else
             {
-                env->start_value = (int16_t)env->sustain;
-                env->target_value = 0;
-                env->phase = 0u;
-                env->phase_increment = env->release_increment;
-                env->stage = ENV_ADSR_PEAKS_STAGE_RELEASE;
                 env->value = (int16_t)env->sustain;
+                prepare_release_from_level(env, (float)env->value);
             }
         }
         else

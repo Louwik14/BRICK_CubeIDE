@@ -117,7 +117,7 @@ set to the audio authority:
 
 | Group | Parameters | Runtime contract |
 | --- | --- | --- |
-| VCA envelope | `PARAM_VCA_ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE` | Active track voices and new voices see the target; the existing VCA envelope keeps its current phase/level, and no VCA calculation is segmented here. |
+| VCA envelope | `PARAM_VCA_ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`, `ENV_TYPE` | Active track voices and new voices see the target; the existing VCA envelope keeps its current phase/level/gate, and a live type change retargets the active trajectory without restarting the voice. |
 | Filter | `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE` | Active and new voices use the track target; mixer filter smoothing continues from its current value. |
 | Mix | `PARAM_MIX_LEVEL`, `PAN`, `SEND1`, `SEND2` | Active and new track audio uses the target; the audio runtime ramp state starts from the reached value. |
 | Wave position | `PARAM_WAVE_OSC1_POS`, `PARAM_WAVE_OSC2_POS` | Active wave runtime and future voices share the target; position smoothing remains owned by the wave backend. |
@@ -161,3 +161,18 @@ reserves the complete group, so the audio segment boundary cannot expose a
 half-paste. Structural and continuous parameters are collected separately:
 structural values keep their existing transition contract, while migrated
 continuous values are applied by the audio owner at the shared boundary.
+
+## Active VCA envelope retargeting (pass 7C)
+
+The synth VCA owns the active voice level and phase. Live Attack, Decay and
+Release changes rebuild only the current stage trajectory from the level
+already reached. A Sustain change during DECAY rebuilds the target and
+increment immediately; a Sustain change after the decay boundary uses a
+bounded transition to the new target, with no note restart or gate change.
+
+Both DAISY and LINEAR active trajectories follow the same retargeting contract.
+Changing `PARAM_VCA_ENV_TYPE` updates the track envelope and every allocated
+poly voice, preserving level, stage and gate. New voices inherit the track
+configuration at note-on. The sampler/paraphonic peak envelope applies the
+same live Attack/Decay/Sustain/Release retargeting; it has no DAISY/LINEAR
+type selector and therefore has no type migration contract.

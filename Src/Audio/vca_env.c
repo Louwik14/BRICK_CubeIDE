@@ -34,6 +34,11 @@ static float vca_env_clamp_level(float level)
     return level;
 }
 
+static uint8_t vca_env_level_reached(float level, float target)
+{
+    return (uint8_t)(fabsf(level - target) <= 0.000001f);
+}
+
 static float vca_env_coefficient(float time_seconds,
                                  float sample_rate,
                                  float ratio)
@@ -48,6 +53,7 @@ static float vca_env_coefficient(float time_seconds,
 
 static void vca_env_prepare_attack(vca_env_t *env)
 {
+    env->sustain_transition_active = false;
     env->attack_target = 1.01f;
     env->samples_remaining = vca_env_time_to_samples(env, env->attack_time);
 
@@ -60,6 +66,7 @@ static void vca_env_prepare_attack(vca_env_t *env)
 
 static void vca_env_prepare_decay(vca_env_t *env)
 {
+    env->sustain_transition_active = false;
     env->samples_remaining = vca_env_time_to_samples(env, env->decay_time);
 
     if (env->type == VCA_ENV_TYPE_LINEAR)
@@ -71,6 +78,7 @@ static void vca_env_prepare_decay(vca_env_t *env)
 
 static void vca_env_prepare_release(vca_env_t *env)
 {
+    env->sustain_transition_active = false;
     env->release_target = -0.01f;
     env->samples_remaining = vca_env_time_to_samples(env, env->release_time);
 
@@ -92,6 +100,74 @@ static void vca_env_prepare_release(vca_env_t *env)
     {
         env->linear_increment = -env->level
                               / (float)env->samples_remaining;
+    }
+}
+
+static void vca_env_prepare_sustain_transition(vca_env_t *env)
+{
+    if (vca_env_level_reached(env->level, env->sustain) != 0U)
+    {
+        env->level = env->sustain;
+        env->samples_remaining = 0U;
+        env->linear_increment = 0.0f;
+        env->sustain_transition_active = false;
+        return;
+    }
+
+    env->samples_remaining = vca_env_time_to_samples(env, env->decay_time);
+    if (env->type == VCA_ENV_TYPE_LINEAR)
+    {
+        env->linear_increment = (env->sustain - env->level)
+                              / (float)env->samples_remaining;
+    }
+    env->sustain_transition_active = true;
+}
+
+static void vca_env_refresh_daisy_law(vca_env_t *env,
+                                      vca_env_stage_t stage,
+                                      uint32_t remaining)
+{
+    const float time_seconds = (float)remaining / env->sample_rate;
+    switch (stage)
+    {
+        case VCA_ENV_ATTACK:
+            env->attack_coefficient = vca_env_coefficient(
+                time_seconds,
+                env->sample_rate,
+                1.0f - (1.0f / env->attack_target));
+            break;
+        case VCA_ENV_DECAY:
+            env->decay_coefficient = vca_env_coefficient(
+                time_seconds,
+                env->sample_rate,
+                expf(-1.0f));
+            break;
+        case VCA_ENV_SUSTAIN:
+            if (env->sustain_transition_active)
+            {
+                env->decay_coefficient = vca_env_coefficient(
+                    time_seconds,
+                    env->sample_rate,
+                    expf(-1.0f));
+            }
+            break;
+        case VCA_ENV_RELEASE:
+        {
+            if (env->level <= 0.0f)
+            {
+                env->release_coefficient = 1.0f;
+                break;
+            }
+            const float ratio = (-env->release_target)
+                              / (env->level - env->release_target);
+            env->release_coefficient = vca_env_coefficient(
+                time_seconds,
+                env->sample_rate,
+                ratio);
+            break;
+        }
+        default:
+            break;
     }
 }
 
@@ -136,6 +212,7 @@ void vca_env_init(vca_env_t *env, float sample_rate)
         env->sample_rate,
         expf(-1.0f));
     env->release_coefficient = 1.0f;
+    env->sustain_transition_active = false;
     vca_env_reset(env);
 }
 
@@ -149,6 +226,7 @@ void vca_env_reset(vca_env_t *env)
     env->level = 0.0f;
     env->linear_increment = 0.0f;
     env->samples_remaining = 0U;
+    env->sustain_transition_active = false;
     env->gate = false;
     vca_env_prepare_stage(env);
 }
@@ -157,8 +235,45 @@ void vca_env_set_type(vca_env_t *env, vca_env_type_t type)
 {
     if (env != NULL)
     {
-        env->type = (type == VCA_ENV_TYPE_LINEAR)
+        const vca_env_type_t next = (type == VCA_ENV_TYPE_LINEAR)
                   ? VCA_ENV_TYPE_LINEAR : VCA_ENV_TYPE_DAISY;
+        if (env->type == next)
+        {
+            return;
+        }
+        const uint32_t remaining = (env->samples_remaining != 0U)
+                                  ? env->samples_remaining : 1U;
+        env->type = next;
+        if (next == VCA_ENV_TYPE_LINEAR)
+        {
+            switch (env->stage)
+            {
+                case VCA_ENV_ATTACK:
+                    env->linear_increment = (1.0f - env->level)
+                                          / (float)remaining;
+                    break;
+                case VCA_ENV_DECAY:
+                    env->linear_increment = (env->sustain - env->level)
+                                          / (float)remaining;
+                    break;
+                case VCA_ENV_SUSTAIN:
+                    if (env->sustain_transition_active)
+                    {
+                        env->linear_increment = (env->sustain - env->level)
+                                              / (float)remaining;
+                    }
+                    break;
+                case VCA_ENV_RELEASE:
+                    env->linear_increment = -env->level / (float)remaining;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else
+        {
+            vca_env_refresh_daisy_law(env, env->stage, remaining);
+        }
     }
 }
 
@@ -210,6 +325,11 @@ void vca_env_set_decay(vca_env_t *env, float time_seconds)
     {
         vca_env_prepare_decay(env);
     }
+    else if ((env->stage == VCA_ENV_SUSTAIN)
+             && (env->sustain_transition_active != false))
+    {
+        vca_env_prepare_sustain_transition(env);
+    }
 }
 
 void vca_env_set_sustain(vca_env_t *env, float sustain)
@@ -217,6 +337,14 @@ void vca_env_set_sustain(vca_env_t *env, float sustain)
     if (env != NULL)
     {
         env->sustain = vca_env_clamp_level(sustain);
+        if (env->stage == VCA_ENV_DECAY)
+        {
+            vca_env_prepare_decay(env);
+        }
+        else if (env->stage == VCA_ENV_SUSTAIN)
+        {
+            vca_env_prepare_sustain_transition(env);
+        }
     }
 }
 
@@ -303,7 +431,26 @@ uint8_t vca_env_process_daisy(vca_env_t *env, float *out_gain)
             }
             break;
         case VCA_ENV_SUSTAIN:
-            env->level = env->sustain;
+            if (env->sustain_transition_active)
+            {
+                env->level += env->decay_coefficient
+                            * (env->sustain - env->level);
+                if ((env->samples_remaining <= 1U)
+                        || (vca_env_level_reached(env->level, env->sustain) != 0U))
+                {
+                    env->level = env->sustain;
+                    env->samples_remaining = 0U;
+                    env->sustain_transition_active = false;
+                }
+                else
+                {
+                    --env->samples_remaining;
+                }
+            }
+            else
+            {
+                env->level = env->sustain;
+            }
             break;
         case VCA_ENV_RELEASE:
             env->level += env->release_coefficient
@@ -350,7 +497,25 @@ uint8_t vca_env_process_linear(vca_env_t *env, float *out_gain)
             }
             break;
         case VCA_ENV_SUSTAIN:
-            env->level = env->sustain;
+            if (env->sustain_transition_active)
+            {
+                env->level += env->linear_increment;
+                if ((env->samples_remaining <= 1U)
+                        || (vca_env_level_reached(env->level, env->sustain) != 0U))
+                {
+                    env->level = env->sustain;
+                    env->samples_remaining = 0U;
+                    env->sustain_transition_active = false;
+                }
+                else
+                {
+                    --env->samples_remaining;
+                }
+            }
+            else
+            {
+                env->level = env->sustain;
+            }
             break;
         case VCA_ENV_RELEASE:
             env->level += env->linear_increment;
