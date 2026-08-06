@@ -4,6 +4,37 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Core/live_parameter_event.h"
+
+#define LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS 64U
+
+/* Fixed, pointer-free control payload for clipboard/restore transactions. */
+typedef struct
+{
+    uint16_t parameter_id;
+    uint8_t scope;
+    uint8_t track;
+    uint8_t slot;
+    uint8_t reserved;
+    uint16_t flags;
+    int32_t value;
+} live_parameter_audio_bulk_item_t;
+
+typedef struct
+{
+    uint32_t capture_tick;
+    uint8_t source;
+    uint8_t count;
+    uint16_t reserved;
+    live_parameter_audio_bulk_item_t item[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+} live_parameter_audio_bulk_t;
+
+_Static_assert(sizeof(live_parameter_audio_bulk_item_t) == 12U,
+               "live_parameter_audio_bulk_item_t must remain fixed-width");
+_Static_assert(sizeof(live_parameter_audio_bulk_t)
+                   == (8U + (LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS * 12U)),
+               "live_parameter_audio_bulk_t must remain pointer-free");
+
 /* The converted event remains pointer-free after it crosses the control
  * boundary.  effective_sample_time is the only timestamp used by audio. */
 typedef struct
@@ -43,6 +74,7 @@ typedef struct
     uint32_t queue_drop_count;
     uint32_t coalesced_count;
     uint32_t due_drop_count;
+    uint32_t bulk_reject_count;
     uint64_t max_lateness_samples;
 } live_parameter_audio_queue_diag_t;
 
@@ -51,6 +83,10 @@ void live_parameter_audio_queue_init(void);
 /* Control-side handoff: converts capture_tick exactly once and schedules the
  * resulting event by effective sample time. */
 uint16_t live_parameter_audio_queue_drain(void);
+
+/* Submit a complete fixed-size transaction.  Conversion, capacity checking
+ * and publication are all-or-nothing; the caller retains no queue pointer. */
+bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *bulk);
 
 /* Audio-side deadline and due handoff.  The due FIFO is deliberately separate
  * from the note queue and is the application seam for the next pass. */

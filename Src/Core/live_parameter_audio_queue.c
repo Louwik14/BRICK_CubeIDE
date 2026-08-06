@@ -2,6 +2,7 @@
 
 #include "Core/live_clock.h"
 #include "Core/live_parameter_event.h"
+#include "Core/live_parameter_migration.h"
 #include "memory_layout.h"
 #include "Seq/seq_runtime_exec.h"
 #include "stm32h7xx_hal.h"
@@ -16,6 +17,7 @@ static volatile uint16_t g_live_parameter_audio_scheduled_count;
 static volatile uint16_t g_live_parameter_audio_due_head;
 static volatile uint16_t g_live_parameter_audio_due_tail;
 static volatile uint16_t g_live_parameter_audio_due_count;
+static volatile uint32_t g_live_parameter_audio_bulk_serial;
 static live_parameter_audio_queue_diag_t g_live_parameter_audio_diag;
 
 static uint32_t live_parameter_audio_enter_critical(void)
@@ -94,6 +96,79 @@ static uint8_t live_parameter_audio_schedule(
     return 1U;
 }
 
+static uint8_t live_parameter_audio_schedule_bulk(
+    const live_parameter_audio_event_t *events,
+    uint8_t count)
+{
+    if ((events == 0) || (count == 0U)
+            || (count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+    {
+        return 0U;
+    }
+
+    const uint32_t primask = live_parameter_audio_enter_critical();
+    const uint16_t scheduled_count = g_live_parameter_audio_scheduled_count;
+    if (((uint32_t)scheduled_count + count) > LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY)
+    {
+        g_live_parameter_audio_diag.bulk_reject_count++;
+        live_parameter_audio_exit_critical(primask);
+        return 0U;
+    }
+
+    for (uint8_t item = 0U; item < count; ++item)
+    {
+        const live_parameter_audio_event_t *const event = &events[item];
+        uint16_t index = g_live_parameter_audio_scheduled_count;
+        while ((index != 0U)
+               && ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
+                    > event->effective_sample_time)
+                   || ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
+                        == event->effective_sample_time)
+                       && (g_live_parameter_audio_scheduled[index - 1U].ingress_serial
+                           > event->ingress_serial))))
+        {
+            g_live_parameter_audio_scheduled[index] =
+                g_live_parameter_audio_scheduled[index - 1U];
+            --index;
+        }
+        g_live_parameter_audio_scheduled[index] = *event;
+        ++g_live_parameter_audio_scheduled_count;
+    }
+
+    if (g_live_parameter_audio_scheduled_count > g_live_parameter_audio_diag.high_water)
+        g_live_parameter_audio_diag.high_water = g_live_parameter_audio_scheduled_count;
+    live_parameter_audio_exit_critical(primask);
+    return 1U;
+}
+
+static uint8_t live_parameter_audio_convert_capture(uint32_t capture_tick,
+                                                    uint64_t *out_effective_sample_time)
+{
+    if (live_clock_tim5_to_guarded_sample_time(capture_tick,
+                                               out_effective_sample_time) == 0U)
+    {
+        const uint32_t primask = live_parameter_audio_enter_critical();
+        g_live_parameter_audio_diag.conversion_drop_count++;
+        live_parameter_audio_exit_critical(primask);
+        return 0U;
+    }
+
+    const uint64_t now = seq_runtime_exec_get_audio_timeline_sample();
+    if (*out_effective_sample_time < now)
+    {
+        const uint64_t lateness = now - *out_effective_sample_time;
+        const uint32_t primask = live_parameter_audio_enter_critical();
+        g_live_parameter_audio_diag.late_count++;
+        if (lateness > g_live_parameter_audio_diag.max_lateness_samples)
+            g_live_parameter_audio_diag.max_lateness_samples = lateness;
+        if (lateness > LIVE_PARAMETER_AUDIO_STALE_THRESHOLD_SAMPLES)
+            g_live_parameter_audio_diag.stale_count++;
+        live_parameter_audio_exit_critical(primask);
+        *out_effective_sample_time = now;
+    }
+    return 1U;
+}
+
 void live_parameter_audio_queue_init(void)
 {
     const uint32_t primask = live_parameter_audio_enter_critical();
@@ -102,6 +177,7 @@ void live_parameter_audio_queue_init(void)
     g_live_parameter_audio_due_head = 0U;
     g_live_parameter_audio_due_tail = 0U;
     g_live_parameter_audio_due_count = 0U;
+    g_live_parameter_audio_bulk_serial = 0U;
     g_live_parameter_audio_diag = (live_parameter_audio_queue_diag_t){ 0 };
 
     live_parameter_audio_exit_critical(primask);
@@ -118,28 +194,9 @@ uint16_t live_parameter_audio_queue_drain(void)
             break;
 
         uint64_t effective_sample_time = 0U;
-        if (live_clock_tim5_to_guarded_sample_time(control_event.capture_tick,
-                                                   &effective_sample_time) == 0U)
-        {
-            const uint32_t primask = live_parameter_audio_enter_critical();
-            g_live_parameter_audio_diag.conversion_drop_count++;
-            live_parameter_audio_exit_critical(primask);
+        if (live_parameter_audio_convert_capture(control_event.capture_tick,
+                                                 &effective_sample_time) == 0U)
             continue;
-        }
-
-        const uint64_t now = seq_runtime_exec_get_audio_timeline_sample();
-        if (effective_sample_time < now)
-        {
-            const uint64_t lateness = now - effective_sample_time;
-            const uint32_t primask = live_parameter_audio_enter_critical();
-            g_live_parameter_audio_diag.late_count++;
-            if (lateness > g_live_parameter_audio_diag.max_lateness_samples)
-                g_live_parameter_audio_diag.max_lateness_samples = lateness;
-            if (lateness > LIVE_PARAMETER_AUDIO_STALE_THRESHOLD_SAMPLES)
-                g_live_parameter_audio_diag.stale_count++;
-            live_parameter_audio_exit_critical(primask);
-            effective_sample_time = now;
-        }
 
         const live_parameter_audio_event_t audio_event = {
             .effective_sample_time = effective_sample_time,
@@ -158,6 +215,75 @@ uint16_t live_parameter_audio_queue_drain(void)
     }
 
     return drained;
+}
+
+bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *bulk)
+{
+    if ((bulk == 0) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+    {
+        return false;
+    }
+
+    uint64_t effective_sample_time = 0U;
+    if (live_parameter_audio_convert_capture(bulk->capture_tick,
+                                             &effective_sample_time) == 0U)
+    {
+        const uint32_t primask = live_parameter_audio_enter_critical();
+        g_live_parameter_audio_diag.bulk_reject_count++;
+        live_parameter_audio_exit_critical(primask);
+        return false;
+    }
+
+    live_parameter_audio_event_t events[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    const uint32_t serial_primask = live_parameter_audio_enter_critical();
+    const uint32_t serial_base = 0x80000000U
+                               | g_live_parameter_audio_bulk_serial;
+    g_live_parameter_audio_bulk_serial += LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS;
+    live_parameter_audio_exit_critical(serial_primask);
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+    {
+        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        if ((item->parameter_id >= PARAM_COUNT)
+                || (live_parameter_is_audio_owned((param_id_t)item->parameter_id) == 0U))
+        {
+            const uint32_t primask = live_parameter_audio_enter_critical();
+            g_live_parameter_audio_diag.bulk_reject_count++;
+            live_parameter_audio_exit_critical(primask);
+            return false;
+        }
+
+        for (uint8_t previous = 0U; previous < i; ++previous)
+        {
+            if ((events[previous].parameter_id == item->parameter_id)
+                    && (events[previous].scope == item->scope)
+                    && (events[previous].track == item->track)
+                    && (events[previous].slot == item->slot))
+            {
+                const uint32_t primask = live_parameter_audio_enter_critical();
+                g_live_parameter_audio_diag.bulk_reject_count++;
+                live_parameter_audio_exit_critical(primask);
+                return false;
+            }
+        }
+
+        events[i] = (live_parameter_audio_event_t){
+            .effective_sample_time = effective_sample_time,
+            .capture_tick = bulk->capture_tick,
+            .ingress_serial = serial_base + i,
+            .parameter_id = item->parameter_id,
+            .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+            .scope = item->scope,
+            .track = item->track,
+            .slot = item->slot,
+            .flags = live_parameter_event_bulk_flags(item->flags, i, bulk->count),
+            .value = item->value
+        };
+    }
+
+    if (live_parameter_audio_schedule_bulk(events, bulk->count) == 0U)
+        return false;
+    return true;
 }
 
 uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
@@ -188,29 +314,61 @@ uint16_t live_parameter_audio_queue_consume_due(uint64_t now)
     while ((g_live_parameter_audio_scheduled_count != 0U)
            && (g_live_parameter_audio_scheduled[0].effective_sample_time <= now))
     {
-        if (g_live_parameter_audio_due_count >= LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY)
+        uint8_t group_count = 1U;
+        if ((g_live_parameter_audio_scheduled[0].source == LIVE_PARAMETER_EVENT_SOURCE_BULK)
+                && ((g_live_parameter_audio_scheduled[0].flags
+                     & LIVE_PARAMETER_EVENT_FLAG_BULK) != 0U))
         {
-            g_live_parameter_audio_diag.due_drop_count++;
+            group_count = live_parameter_event_bulk_count(
+                g_live_parameter_audio_scheduled[0].flags);
+            if ((group_count == 0U) || (group_count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+                group_count = 1U;
+            if (((uint16_t)group_count > g_live_parameter_audio_scheduled_count))
+                break;
+            for (uint8_t i = 0U; i < group_count; ++i)
+            {
+                const live_parameter_audio_event_t *const event =
+                    &g_live_parameter_audio_scheduled[i];
+                if ((event->source != LIVE_PARAMETER_EVENT_SOURCE_BULK)
+                        || (live_parameter_event_bulk_count(event->flags) != group_count)
+                        || (live_parameter_event_bulk_index(event->flags) != i)
+                        || (event->effective_sample_time
+                            != g_live_parameter_audio_scheduled[0].effective_sample_time))
+                {
+                    group_count = 1U;
+                    break;
+                }
+            }
+        }
+
+        if ((uint32_t)g_live_parameter_audio_due_count + group_count
+                > LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY)
+        {
+            g_live_parameter_audio_diag.due_drop_count += group_count;
             break;
         }
 
-        const uint16_t due_index =
-            (uint16_t)(g_live_parameter_audio_due_head & LIVE_PARAMETER_AUDIO_QUEUE_MASK);
-        g_live_parameter_audio_due[due_index] = g_live_parameter_audio_scheduled[0];
-        g_live_parameter_audio_due_head = (uint16_t)(g_live_parameter_audio_due_head + 1U);
-        g_live_parameter_audio_due_count++;
+        for (uint8_t item = 0U; item < group_count; ++item)
+        {
+            const uint16_t due_index =
+                (uint16_t)(g_live_parameter_audio_due_head & LIVE_PARAMETER_AUDIO_QUEUE_MASK);
+            g_live_parameter_audio_due[due_index] = g_live_parameter_audio_scheduled[item];
+            g_live_parameter_audio_due_head = (uint16_t)(g_live_parameter_audio_due_head + 1U);
+            g_live_parameter_audio_due_count++;
+        }
         if (g_live_parameter_audio_due_count > g_live_parameter_audio_diag.due_high_water)
             g_live_parameter_audio_diag.due_high_water = g_live_parameter_audio_due_count;
 
-        --g_live_parameter_audio_scheduled_count;
+        g_live_parameter_audio_scheduled_count =
+            (uint16_t)(g_live_parameter_audio_scheduled_count - group_count);
         for (uint16_t index = 0U;
              index < g_live_parameter_audio_scheduled_count;
              ++index)
         {
             g_live_parameter_audio_scheduled[index] =
-                g_live_parameter_audio_scheduled[index + 1U];
+                g_live_parameter_audio_scheduled[index + group_count];
         }
-        ++consumed;
+        consumed = (uint16_t)(consumed + group_count);
     }
 
     live_parameter_audio_exit_critical(primask);

@@ -27,6 +27,15 @@ typedef struct
     track_snapshot_step_locks_t step_locks[SEQ_MAX_STEPS];
 } track_snapshot_sequence_t;
 
+#define TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS 64U
+
+typedef struct
+{
+    uint16_t parameter_id;
+    uint16_t reserved;
+    float value;
+} track_snapshot_audio_owned_item_t;
+
 typedef struct
 {
     uint8_t valid;
@@ -38,6 +47,9 @@ typedef struct
     float poly_spread;
     track_sound_state_t sound;
     track_tone_sound_state_t tone;
+    uint8_t audio_owned_count;
+    uint8_t audio_owned_reserved[3];
+    track_snapshot_audio_owned_item_t audio_owned[TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS];
     note_fx_track_state_t note_fx;
     track_snapshot_sequence_t sequence;
     uint8_t seq_div;

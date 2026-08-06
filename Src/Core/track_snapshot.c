@@ -10,6 +10,9 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/live_clock.h"
+#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_migration.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
 #include "Core/synth_polyphony.h"
@@ -25,6 +28,7 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
 #include "UI/ui_active_track_sync.h"
+#include "UI/ui_param.h"
 
 #define TRACK_SNAPSHOT_LOCK_NONE 0xFFFFU
 
@@ -221,10 +225,62 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
     seq_runtime_set_track_swing((seq_track_id_t)track, snapshot->seq_swing);
 }
 
-static void track_snapshot_reapply_track_params(uint8_t track)
+static uint8_t track_snapshot_reapply_track_params(uint8_t track,
+                                                   const track_snapshot_t *snapshot)
 {
+    if ((snapshot == 0) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
     track_runtime_refresh_track(track);
     mod_matrix_rebuild_route_cache_track(track);
+
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 0U
+    };
+    for (uint8_t i = 0U; i < snapshot->audio_owned_count; ++i)
+    {
+        const track_snapshot_audio_owned_item_t *const item =
+            &snapshot->audio_owned[i];
+        if ((item->parameter_id >= PARAM_COUNT)
+                || (live_parameter_is_audio_owned((param_id_t)item->parameter_id) == 0U)
+                || (track_runtime_get_effective_param_status(
+                        track, (param_id_t)item->parameter_id)
+                    != TRACK_RUNTIME_PARAM_ALLOWED))
+        {
+            continue;
+        }
+        if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
+        {
+            return 0U;
+        }
+        live_parameter_audio_bulk_item_t *const target = &bulk.item[bulk.count++];
+        target->parameter_id = item->parameter_id;
+        target->scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
+        target->track = track;
+        target->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
+        target->reserved = 0U;
+        target->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                   | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
+        target->value = live_parameter_event_encode_float(item->value);
+    }
+
+    if ((bulk.count != 0U)
+            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+    {
+        return 0U;
+    }
+    for (uint8_t i = 0U; i < bulk.count; ++i)
+    {
+        const live_parameter_audio_bulk_item_t *const item = &bulk.item[i];
+        (void)ui_param_accept_audio_owned_command((param_id_t)item->parameter_id,
+                                                  item->scope,
+                                                  item->track,
+                                                  live_parameter_event_decode_float(item->value));
+    }
 
     param_registry_batch_begin();
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
@@ -238,7 +294,8 @@ static void track_snapshot_reapply_track_params(uint8_t track)
         {
             continue;
         }
-        if (id == PARAM_LOOPER_PLAY)
+        if ((id == PARAM_LOOPER_PLAY)
+                || (live_parameter_is_audio_owned(id) != 0U))
         {
             continue;
         }
@@ -254,6 +311,32 @@ static void track_snapshot_reapply_track_params(uint8_t track)
         }
     }
     param_registry_batch_end();
+    return 1U;
+}
+
+static void track_snapshot_capture_audio_owned_values(uint8_t track,
+                                                       track_snapshot_t *snapshot)
+{
+    snapshot->audio_owned_count = 0U;
+    for (uint16_t raw_id = 0U;
+         (raw_id < (uint16_t)PARAM_COUNT)
+             && (snapshot->audio_owned_count < TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS);
+         ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        if (live_parameter_is_audio_owned(id) == 0U)
+        {
+            continue;
+        }
+        float value = param_registry[id].default_value;
+        (void)param_registry_get_track_value(id, track, &value);
+        snapshot->audio_owned[snapshot->audio_owned_count++] =
+            (track_snapshot_audio_owned_item_t){
+                .parameter_id = raw_id,
+                .reserved = 0U,
+                .value = value
+            };
+    }
 }
 
 uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
@@ -289,6 +372,7 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     }
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
+    track_snapshot_capture_audio_owned_values(track, out_snapshot);
     if ((track < NOTE_FX_TRACK_COUNT)
             && (note_fx_state_capture_track(track, &out_snapshot->note_fx) == 0U))
     {
@@ -321,6 +405,12 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     out_snapshot->poly_spread = 0.0f;
     track_sound_state_make_default(&out_snapshot->sound);
     track_tone_sound_state_make_default(&out_snapshot->tone);
+    track_snapshot_capture_audio_owned_values(track, out_snapshot);
+    for (uint8_t i = 0U; i < out_snapshot->audio_owned_count; ++i)
+    {
+        out_snapshot->audio_owned[i].value =
+            param_registry[out_snapshot->audio_owned[i].parameter_id].default_value;
+    }
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         out_snapshot->note_fx.value[slot][0] = 2U;
@@ -513,7 +603,10 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
 
     track_snapshot_apply_sequence(target_track, snapshot);
-    track_snapshot_reapply_track_params(target_track);
+    if (track_snapshot_reapply_track_params(target_track, snapshot) == 0U)
+    {
+        goto restore_done;
+    }
     ui_active_track_sync_full_after_reconfigure();
     apply_ok = 1U;
 

@@ -26,7 +26,8 @@ _Static_assert(sizeof(live_parameter_event_t) == 20U,
 
 typedef enum
 {
-    LIVE_PARAMETER_EVENT_SOURCE_ENCODER = 0U
+    LIVE_PARAMETER_EVENT_SOURCE_ENCODER = 0U,
+    LIVE_PARAMETER_EVENT_SOURCE_BULK = 1U
 } live_parameter_event_source_t;
 
 typedef enum
@@ -40,9 +41,42 @@ enum
 {
     LIVE_PARAMETER_EVENT_FLAG_SET_TARGET = (uint16_t)(1U << 0),
     LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS = (uint16_t)(1U << 1),
+    LIVE_PARAMETER_EVENT_FLAG_BULK = (uint16_t)(1U << 2),
+    LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_SHIFT = 3U,
+    LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_MASK = (uint16_t)(0x3FU << LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_SHIFT),
+    LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT = 9U,
+    LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_MASK = (uint16_t)(0x3FU << LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT),
     LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT = 8U,
     LIVE_PARAMETER_EVENT_FLAG_ENCODER_MASK = (uint16_t)(0x03U << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)
 };
+
+static inline uint16_t live_parameter_event_bulk_flags(uint16_t flags,
+                                                       uint8_t index,
+                                                       uint8_t count)
+{
+    flags = (uint16_t)(flags | LIVE_PARAMETER_EVENT_FLAG_BULK);
+    flags = (uint16_t)(flags & (uint16_t)~(LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_MASK
+                                           | LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_MASK));
+    flags = (uint16_t)(flags | ((uint16_t)(index & 0x3FU)
+                                << LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_SHIFT));
+    const uint8_t encoded_count = (count == 64U) ? 0U : count;
+    flags = (uint16_t)(flags | ((uint16_t)(encoded_count & 0x3FU)
+                                << LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT));
+    return flags;
+}
+
+static inline uint8_t live_parameter_event_bulk_index(uint16_t flags)
+{
+    return (uint8_t)((flags & LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_MASK)
+                     >> LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_SHIFT);
+}
+
+static inline uint8_t live_parameter_event_bulk_count(uint16_t flags)
+{
+    const uint8_t encoded_count = (uint8_t)((flags & LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_MASK)
+                                            >> LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT);
+    return (encoded_count == 0U) ? 64U : encoded_count;
+}
 
 #define LIVE_PARAMETER_EVENT_INVALID_INDEX 0xFFU
 #define LIVE_PARAMETER_EVENT_QUEUE_CAPACITY 64U

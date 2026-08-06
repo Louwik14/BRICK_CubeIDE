@@ -14,6 +14,9 @@
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
 #include "Core/track_snapshot.h"
+#include "Core/live_clock.h"
+#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_migration.h"
 #include "NoteFx/note_fx_state.h"
 #include "param_registry.h"
 #include "Core/track_runtime.h"
@@ -345,17 +348,69 @@ static uint8_t ui_core_clipboard_is_active_page_button_held(void)
     return (button_down(active_page_button) != 0U) ? 1U : 0U;
 }
 
-static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
-                                                      const param_id_t *params,
-                                                      uint8_t count)
+static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
+                                          param_id_t id,
+                                          uint8_t track,
+                                          float value)
 {
-    if (params == 0)
+    if ((bulk == 0) || (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
+            || (id >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    const uint8_t scope = (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+        ? LIVE_PARAMETER_EVENT_SCOPE_GLOBAL : LIVE_PARAMETER_EVENT_SCOPE_TRACK;
+    const uint8_t event_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
+    live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
+    item->parameter_id = (uint16_t)id;
+    item->scope = scope;
+    item->track = event_track;
+    item->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
+    item->reserved = 0U;
+    item->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                             | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
+    item->value = live_parameter_event_encode_float(value);
+    return 1U;
+}
+
+static void ui_core_clipboard_bulk_accept_shadow(const live_parameter_audio_bulk_t *bulk)
+{
+    if (bulk == 0)
     {
         return;
     }
 
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+    {
+        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        const param_id_t id = (param_id_t)item->parameter_id;
+        const float value = live_parameter_event_decode_float(item->value);
+        (void)ui_param_accept_audio_owned_command(id,
+                                                  item->scope,
+                                                  item->track,
+                                                  value);
+    }
+}
+
+static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
+                                                         const param_id_t *params,
+                                                         uint8_t count)
+{
+    if (params == 0)
+    {
+        return 0U;
+    }
+
     /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
     track_runtime_refresh_track(track);
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 0U
+    };
+    uint8_t direct_applied = 0U;
     param_registry_batch_begin();
     for (uint8_t pass = 0U; pass < 2U; ++pass)
     {
@@ -374,18 +429,37 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
             if (id < PARAM_COUNT)
             {
                 const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-                if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                if (live_parameter_is_audio_owned(id) != 0U)
+                {
+                    if (ui_core_clipboard_bulk_add(&bulk, id, track,
+                                                   param_registry[id].min) == 0U)
+                    {
+                        param_registry_batch_end();
+                        return 0U;
+                    }
+                }
+                else if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
                 {
                     param_set(id, param_registry[id].min);
+                    direct_applied = 1U;
                 }
                 else
                 {
-                    (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+                    direct_applied = (uint8_t)(direct_applied
+                        | (param_registry_apply_track_value(id, track,
+                                                             param_registry[id].min) != 0U));
                 }
             }
         }
     }
     param_registry_batch_end();
+    if ((bulk.count != 0U)
+            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+    {
+        return direct_applied;
+    }
+    ui_core_clipboard_bulk_accept_shadow(&bulk);
+    return (uint8_t)((direct_applied != 0U) || (bulk.count != 0U));
 }
 
 static uint8_t ui_core_clipboard_copy_track(uint8_t track)
@@ -497,7 +571,11 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t common = 0U;
     /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
     track_runtime_refresh_track(track);
-    param_registry_batch_begin();
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 0U
+    };
 
     /* MODEL is applied before the three model-dependent values so the target
      * slot is normalized once, then receives the copied values. */
@@ -533,6 +611,51 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
             }
 
             ++common;
+            if (live_parameter_is_audio_owned(target) != 0U)
+            {
+                if (ui_core_clipboard_bulk_add(&bulk, target, track, value) == 0U)
+                {
+                    *out_common_count = common;
+                    return 0U;
+                }
+            }
+        }
+    }
+    const uint8_t bulk_accepted = (bulk.count == 0U)
+        ? 1U : (live_parameter_audio_queue_submit_bulk(&bulk) != false);
+    if (bulk_accepted != 0U)
+    {
+        ui_core_clipboard_bulk_accept_shadow(&bulk);
+        applied = (uint8_t)(applied + bulk.count);
+    }
+
+    /* Structural/non-audio values keep their existing transition contract and
+     * are deliberately applied outside the continuous audio transaction. */
+    param_registry_batch_begin();
+    for (uint8_t pass = 0U; pass < 2U; ++pass)
+    {
+        for (uint8_t i = 0U; i < target_count; ++i)
+        {
+            const param_id_t target = target_params[i];
+            uint8_t found = 0U;
+            float value = 0.0f;
+            for (uint8_t src = 0U; src < clipboard->param_count; ++src)
+            {
+                if (clipboard->params[src] == target)
+                {
+                    value = clipboard->values[src];
+                    found = 1U;
+                    break;
+                }
+            }
+            if ((found == 0U) || (live_parameter_is_audio_owned(target) != 0U))
+                continue;
+            uint8_t note_fx_param = 0U;
+            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(target, &note_fx_param);
+            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
+            if (((pass == 0U) && (is_note_fx_model == 0U))
+                    || ((pass == 1U) && (is_note_fx_model != 0U)))
+                continue;
             const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
             if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
             {
@@ -773,9 +896,9 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        const uint8_t cleared = ui_core_clipboard_clear_param_list_to_min(track, params, count);
         ui_edit_context_sync_active_track(0U);
-        ui_core_clipboard_feedback(feedback, "ENS CLEARED");
+        ui_core_clipboard_feedback(feedback, (cleared != 0U) ? "ENS CLEARED" : "ENS INCOMP");
         return 1U;
     }
 
@@ -846,9 +969,9 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        const uint8_t cleared = ui_core_clipboard_clear_param_list_to_min(track, params, count);
         ui_edit_context_sync_active_track(0U);
-        ui_core_clipboard_feedback(feedback, "PAGE CLEARED");
+        ui_core_clipboard_feedback(feedback, (cleared != 0U) ? "PAGE CLEARED" : "PAGE INCOMP");
         return 1U;
     }
 

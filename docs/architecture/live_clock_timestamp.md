@@ -142,3 +142,22 @@ The audio runtime is the only live writer for migrated DSP targets. Its target
 application commits the track cache after the backend write, while structural,
 selector, sequence, ADC and MIDI parameters retain their existing UI/model
 command paths.
+
+## Grouped control transactions (pass 7B)
+
+Clipboard clear and paste operations collect their audio-owned values in one
+bounded `live_parameter_audio_bulk_t` payload. The payload contains only fixed
+width parameter IDs, scope/track/slot, flags and float bits; it contains no UI
+pointer, callback or private address. TIM5 is captured once when the operation
+is validated, and the common guarded conversion is performed once by the
+audio-queue authority. All members receive one effective sample time and a
+deterministic in-transaction order.
+
+The schedule reserves the complete group before publishing any member. If the
+capacity is insufficient, the complete transaction is rejected and
+`bulk_reject_count` is incremented; no member shadow is advanced. Notes,
+note-off and panic remain on their separate priority queue. Due transfer also
+reserves the complete group, so the audio segment boundary cannot expose a
+half-paste. Structural and continuous parameters are collected separately:
+structural values keep their existing transition contract, while migrated
+continuous values are applied by the audio owner at the shared boundary.
