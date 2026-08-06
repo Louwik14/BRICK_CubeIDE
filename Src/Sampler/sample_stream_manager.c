@@ -7,6 +7,7 @@
 #include "Sampler/sample_multi_stream_diag.h"
 #include "Sampler/sample_stream_backend_contiguous.h"
 #include "Sampler/sample_stream_contract.h"
+#include "Sampler/sample_stream_request_queue.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
@@ -34,6 +35,8 @@ _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY
                "stream manager hot scan range must fit in page-cache ids");
 _Static_assert(SAMPLE_STREAM_MAX_ACTIVE <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
+_Static_assert(SAMPLE_STREAM_PENDING_MAX == SAMPLE_STREAM_REQUEST_QUEUE_CAPACITY,
+               "manager and request queue capacities must match");
 #endif
 
 typedef enum
@@ -62,30 +65,7 @@ typedef struct
     FIL file;
 } sample_stream_reader_t;
 
-typedef struct
-{
-    sample_audio_key_t key;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
-    uint32_t frames_per_page;
-    uint32_t registration_epoch;
-    uint32_t page_index;
-    uint32_t requested_at;
-    sample_stream_audio_frame_t created_audio_frame;
-    sample_stream_audio_frame_t consume_deadline_audio_frame;
-    uint32_t owner_generation;
-    uint16_t sample_id;
-    uint16_t reserved;
-    uint8_t active;
-    uint8_t priority;
-    uint8_t owner_kind;
-    uint8_t owner_id;
-    uint8_t role;
-#if BRICK6_STREAM_TRACE
-    uint8_t trace_slot;
-    uint8_t trace_valid;
-#endif
-} sample_stream_pending_t;
+typedef sample_stream_request_entry_t sample_stream_pending_t;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert((offsetof(sample_stream_reader_t, key) % 4U) == 0U,
@@ -110,7 +90,7 @@ _Static_assert(_Alignof(sample_stream_pending_t) >= 4U,
 
 SDRAM_STREAM_SERVICE static sample_stream_reader_t g_sample_stream_readers[SAMPLE_STREAM_MAX_ACTIVE];
 SDRAM_STREAM_SERVICE static char g_sample_stream_reader_paths[SAMPLE_STREAM_MAX_ACTIVE][SAMPLE_PAGE_CACHE_PATH_MAX];
-SDRAM_STREAM_SERVICE static sample_stream_pending_t g_sample_stream_pending[SAMPLE_STREAM_PENDING_MAX];
+static sample_stream_pending_t *g_sample_stream_pending;
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_fatfs_io_buffer[4096U];
 static uint32_t g_sample_stream_request_clock;
 static uint32_t g_sample_stream_service_fatfs_ops;
@@ -609,124 +589,101 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
                                                       uint32_t deadline_frames,
                                                       const sample_stream_active_desc_t *owner)
 {
-    sample_stream_pending_t *free_slot = 0;
     sample_page_load_target_t target;
     const uint8_t target_valid = sample_page_cache_get_load_target_key(key, page_index, &target);
     const sample_stream_audio_frame_t now_audio_frame = sample_stream_time_now();
     const sample_stream_audio_frame_t candidate_deadline =
         sample_stream_time_deadline_after(now_audio_frame, deadline_frames);
 
-    if (sample_stream_manager_pending_budget_allows(key, page_index, owner) == 0U)
+    if ((target_valid == 0U)
+        || (sample_stream_manager_pending_budget_allows(key, page_index, owner) == 0U))
     {
         return 0U;
     }
 
+    /* Discard a stale registration before publishing the new immutable demand. */
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
     {
         sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
-        if (pending->active == 0U)
+        if ((pending->active != 0U)
+            && (sample_audio_key_equal(&pending->key, &key) != 0U)
+            && (pending->page_index == page_index)
+            && ((pending->format != target.format)
+                || (pending->stride_floats != target.stride_floats)
+                || (pending->frames_per_page != target.frames_per_page)
+                || ((pending->registration_epoch != 0U)
+                    && (pending->registration_epoch != target.registration_epoch))))
         {
-            if (free_slot == 0)
-            {
-                free_slot = pending;
-            }
-            continue;
+            sample_stream_manager_drop_pending_slot(pending,
+                                                    SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+            break;
         }
+    }
 
-        if ((sample_audio_key_equal(&pending->key, &key) != 0U)
-            && (pending->page_index == page_index))
-        {
-            if ((target_valid != 0U)
-                && ((pending->format != target.format)
-                    || (pending->stride_floats != target.stride_floats)
-                    || (pending->frames_per_page != target.frames_per_page)
-                    || ((pending->registration_epoch != 0U)
-                        && (pending->registration_epoch != target.registration_epoch))))
-            {
-                sample_stream_manager_drop_pending_slot(pending,
-                                                        SAMPLE_STREAM_PENDING_REASON_ORPHAN);
-                if (free_slot == 0)
-                {
-                    free_slot = pending;
-                }
-                continue;
-            }
-            const sample_stream_audio_frame_t old_deadline =
-                pending->consume_deadline_audio_frame;
-            if ((uint8_t)priority > pending->priority)
-            {
-                pending->priority = (uint8_t)priority;
-            }
-            if (candidate_deadline < pending->consume_deadline_audio_frame)
-            {
-                pending->consume_deadline_audio_frame = candidate_deadline;
-            }
-            if ((owner != 0)
-                && ((pending->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_NONE)
-                    || (candidate_deadline <= old_deadline)))
-            {
-                pending->owner_kind = owner->owner_kind;
-                pending->owner_id = owner->owner_id;
-                pending->owner_generation = owner->owner_generation;
-            }
+    sample_stream_request_contract_t request;
+    memset(&request, 0, sizeof(request));
+    request.domain = (uint8_t)key.domain;
+    request.object_id = key.object_id;
+    request.page_index = page_index;
+    request.registration_epoch = target.registration_epoch;
+    request.created_audio_frame = now_audio_frame;
+    request.consume_deadline_audio_frame = candidate_deadline;
+    request.format = (uint8_t)target.format;
+    request.flags = (uint8_t)priority;
+    request.role = (owner != 0) ? owner->role : (uint8_t)SAMPLE_STREAM_ROLE_SPECULATIVE;
+    if (owner != 0)
+    {
+        request.owner_kind = owner->owner_kind;
+        request.owner_id = owner->owner_id;
+        request.owner_generation = owner->owner_generation;
+    }
+
+    const sample_stream_request_geometry_t geometry = {
+        .format = target.format,
+        .stride_floats = target.stride_floats,
+        .frames_per_page = target.frames_per_page,
+    };
+
+    sample_stream_request_entry_t *published = 0;
+    const sample_stream_request_publish_result_t publish_result =
+        sample_stream_request_queue_publish(&request, &geometry, &published);
+    if ((publish_result == SAMPLE_STREAM_REQUEST_FULL) || (published == 0))
+    {
+        return 0U;
+    }
+    if (publish_result == SAMPLE_STREAM_REQUEST_INSERTED)
+    {
+        published->requested_at = ++g_sample_stream_request_clock;
+    }
+
 #if BRICK6_STREAM_TRACE
+    if (publish_result == SAMPLE_STREAM_REQUEST_INSERTED)
+    {
+        (void)sample_stream_trace_begin_pending(published, owner);
+    }
+    else
+    {
+        sample_stream_trace_op_t *const op = sample_stream_trace_pending_op(published);
+        if (op != 0)
+        {
+            op->consume_deadline_audio_frame = published->consume_deadline_audio_frame;
+            op->deadline_frames = sample_stream_trace_frames_until(
+                op->created_audio_frame, published->consume_deadline_audio_frame);
+            op->frames_remaining = sample_stream_trace_frames_until(
+                now_audio_frame, published->consume_deadline_audio_frame);
+            const uint64_t deadline_cycles =
+                ((uint64_t)op->frames_remaining * (uint64_t)SystemCoreClock) / 48000ULL;
+            op->deadline_cycle = sample_stream_trace_cycle() + (uint32_t)deadline_cycles;
             if (owner != 0)
             {
-                pending->role = owner->role;
+                op->reader_position = owner->current_frame;
             }
-            sample_stream_trace_op_t *const op = sample_stream_trace_pending_op(pending);
-            if (op != 0)
-            {
-                op->consume_deadline_audio_frame = pending->consume_deadline_audio_frame;
-                op->deadline_frames = sample_stream_trace_frames_until(
-                    op->created_audio_frame, pending->consume_deadline_audio_frame);
-                op->frames_remaining = sample_stream_trace_frames_until(
-                    now_audio_frame, pending->consume_deadline_audio_frame);
-                const uint64_t deadline_cycles =
-                    ((uint64_t)op->frames_remaining * (uint64_t)SystemCoreClock) / 48000ULL;
-                op->deadline_cycle = sample_stream_trace_cycle() + (uint32_t)deadline_cycles;
-                if (owner != 0)
-                {
-                    op->reader_position = owner->current_frame;
-                }
-                op->priority = pending->priority;
-                op->role = pending->role;
-            }
-#endif
-            return 1U;
+            op->priority = published->priority;
+            op->role = published->role;
         }
     }
-
-    if (free_slot != 0)
-    {
-        free_slot->active = 1U;
-        free_slot->priority = (uint8_t)priority;
-        free_slot->key = key;
-        free_slot->sample_id = key.object_id;
-        free_slot->page_index = page_index;
-        if (target_valid != 0U)
-        {
-            free_slot->format = target.format;
-            free_slot->stride_floats = target.stride_floats;
-            free_slot->frames_per_page = target.frames_per_page;
-            free_slot->registration_epoch = target.registration_epoch;
-        }
-        free_slot->requested_at = ++g_sample_stream_request_clock;
-        free_slot->created_audio_frame = now_audio_frame;
-        free_slot->consume_deadline_audio_frame = candidate_deadline;
-        if (owner != 0)
-        {
-            free_slot->owner_kind = owner->owner_kind;
-            free_slot->owner_id = owner->owner_id;
-            free_slot->owner_generation = owner->owner_generation;
-            free_slot->role = owner->role;
-        }
-#if BRICK6_STREAM_TRACE
-        (void)sample_stream_trace_begin_pending(free_slot, owner);
 #endif
-        return 1U;
-    }
-    return 0U;
+    return 1U;
 }
 
 static uint8_t sample_stream_manager_note_requested_page_key(sample_audio_key_t key,
@@ -1131,9 +1088,10 @@ static void sample_stream_manager_init_storage_once(void)
         return;
     }
 
+    g_sample_stream_pending = sample_stream_request_queue_entries();
     memset(g_sample_stream_readers, 0, sizeof(g_sample_stream_readers));
     memset(g_sample_stream_reader_paths, 0, sizeof(g_sample_stream_reader_paths));
-    memset(g_sample_stream_pending, 0, sizeof(g_sample_stream_pending));
+    sample_stream_request_queue_init();
     g_sample_stream_manager_initialized = 1U;
 }
 
@@ -1150,7 +1108,7 @@ void sample_stream_manager_reset(void)
     {
         sample_stream_manager_clear_reader(&g_sample_stream_readers[i]);
     }
-    memset(g_sample_stream_pending, 0, sizeof(g_sample_stream_pending));
+    sample_stream_request_queue_init();
     g_sample_stream_request_clock = 0U;
     g_sample_stream_next_sample_id = 0U;
     g_sample_stream_next_owner_id = 0U;
