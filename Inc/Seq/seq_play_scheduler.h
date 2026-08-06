@@ -105,6 +105,10 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
  */
 void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t *event);
 note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_t *event);
+/* Audio-owner panic closure.  It closes terminal admissions without using the
+ * ordinary scheduler/NoteFx command queue.  Returns zero while a terminal
+ * close must be retried on a later audio call. */
+uint8_t seq_play_scheduler_panic_audio(uint64_t first_renderable_sample);
 /*
  * Contract surface:
  * - post-commit notifications from runtime/transport.

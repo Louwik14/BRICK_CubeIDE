@@ -53,6 +53,28 @@ plus cette garde. Si l'ingestion dépasse cette échéance, l'événement est cl
 au premier sample encore modifiable et les diagnostics `late`/retard maximal
 le signalent ; l'audio déjà rendu n'est jamais réécrit.
 
+## Panic MIDI prioritaire
+
+Les controles MIDI CC120 et CC123 ne sont pas inseres dans la file ordinaire.
+`note_fx_pipeline_request_panic()` publie une commande scalaire prioritaire,
+toujours disponible, sans pointeur ni allocation. La demande est ordonnee par
+l'audio au premier sample encore modifiable, avant les evenements ordinaires
+du meme offset.
+
+Le proprietaire audio invalide les commandes et echeances anterieures,
+supprime les sorties ARP/NoteFx en attente, puis ferme les admissions
+terminales via `seq_play_scheduler_panic_audio()`. Si un arret terminal ne
+peut pas etre admis au premier passage, la commande prioritaire reste active
+et est retentee au passage audio suivant; aucune note n'est abandonnee au
+profit d'une insertion forcee dans la file ordinaire. Le traitement est
+idempotent.
+
+Les commandes publiees apres la demande portent l'epoch suivant et ne sont
+pas purgees. Une nouvelle note recue apres le panic peut donc etre appliquee
+normalement apres la frontiere de fermeture. Le chemin MIDI ne ferme jamais
+directement une voix ou un moteur; NoteFx/audio reste l'unique autorite de
+fermeture.
+
 ## Live Recording
 
 Le Live Recording recoit le meme sample absolu corrige que le pipeline live : les

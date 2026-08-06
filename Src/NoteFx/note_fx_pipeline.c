@@ -26,6 +26,11 @@ static note_fx_source_record_t
     g_note_fx_source_ledger[NOTE_FX_TRACK_COUNT][NOTE_FX_ARP_MAX_SOURCES];
 static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 static note_fx_pipeline_diag_t g_note_fx_pipeline_diag[NOTE_FX_TRACK_COUNT];
+/* Commands carry the epoch observed at publication.  A panic advances the
+ * epoch, so commands published after the request survive the owner purge. */
+static uint32_t g_note_fx_panic_epoch = 1U;
+static volatile uint8_t g_note_fx_panic_pending;
+static uint8_t g_note_fx_panic_active;
 
 #define NOTE_FX_COMMAND_CAPACITY 32U
 #define NOTE_FX_LIVE_QUEUE_CAPACITY (NOTE_FX_COMMAND_CAPACITY - 1U)
@@ -60,6 +65,7 @@ typedef struct
     uint32_t ingress_serial;
     uint32_t capture_tick;
     uint8_t capture_tick_valid;
+    uint32_t panic_epoch;
     note_fx_transition_policy_t policy;
     note_fx_event_t event;
     uint8_t note;
@@ -164,6 +170,48 @@ static int16_t note_fx_pipeline_find_free_source_reservation_locked(void)
             return (int16_t)i;
     }
     return -1;
+}
+
+static void note_fx_pipeline_release_source_reservation_locked(int16_t index);
+
+static void note_fx_pipeline_rebuild_source_reservations_locked(void)
+{
+    memset(g_note_fx_source_reservation, 0,
+           sizeof(g_note_fx_source_reservation));
+    g_note_fx_source_reservation_count = 0U;
+    uint8_t cursor = g_note_fx_command_tail;
+    while (cursor != g_note_fx_command_head)
+    {
+        const note_fx_command_t *const command = &g_note_fx_commands[cursor];
+        if ((command->kind == NOTE_FX_COMMAND_SOURCE_RAW)
+                && (command->is_note_on != 0U))
+        {
+            const int16_t free_index =
+                note_fx_pipeline_find_free_source_reservation_locked();
+            if (free_index >= 0)
+            {
+                g_note_fx_source_reservation[(uint8_t)free_index] =
+                    (note_fx_source_reservation_t){
+                        .active = 1U,
+                        .track = command->track,
+                        .provenance = command->provenance,
+                        .occurrence_id = command->source_occurrence_id
+                    };
+                ++g_note_fx_source_reservation_count;
+            }
+        }
+        else if ((command->kind == NOTE_FX_COMMAND_SOURCE_RAW)
+                 && (command->is_note_on == 0U))
+        {
+            const int16_t reservation_index =
+                note_fx_pipeline_find_source_reservation_locked(
+                    command->track, command->provenance,
+                    command->source_occurrence_id);
+            note_fx_pipeline_release_source_reservation_locked(
+                reservation_index);
+        }
+        cursor = (uint8_t)((cursor + 1U) % NOTE_FX_COMMAND_CAPACITY);
+    }
 }
 
 static void note_fx_pipeline_release_source_reservation_locked(int16_t index)
@@ -309,6 +357,9 @@ static uint8_t note_fx_pipeline_enqueue(const note_fx_command_t *command)
     }
 
     const uint32_t primask = note_fx_pipeline_enter_critical();
+    note_fx_command_t queued_command = *command;
+    queued_command.panic_epoch = g_note_fx_panic_epoch;
+    command = &queued_command;
     if ((command->kind == NOTE_FX_COMMAND_TRANSITION_TRACK)
             || (command->kind == NOTE_FX_COMMAND_TRANSITION_ALL))
     {
@@ -459,6 +510,7 @@ static uint8_t note_fx_pipeline_enqueue_batch(const note_fx_command_t *commands,
     for (uint8_t i = 0U; i < count; ++i)
     {
         g_note_fx_commands[head] = commands[i];
+        g_note_fx_commands[head].panic_epoch = g_note_fx_panic_epoch;
         head = (uint8_t)((head + 1U) % NOTE_FX_COMMAND_CAPACITY);
     }
     __DMB();
@@ -1217,6 +1269,84 @@ static void note_fx_pipeline_apply_pending_commands(void)
     }
 }
 
+uint8_t note_fx_pipeline_request_panic(void)
+{
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    ++g_note_fx_panic_epoch;
+    if (g_note_fx_panic_epoch == 0U)
+        g_note_fx_panic_epoch = 1U;
+    g_note_fx_panic_pending = 1U;
+    note_fx_pipeline_exit_critical(primask);
+    return 1U;
+}
+
+static void note_fx_pipeline_purge_for_panic_owner(uint32_t panic_epoch)
+{
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    uint8_t read_index = g_note_fx_command_tail;
+    uint8_t write_index = g_note_fx_command_tail;
+    while (read_index != g_note_fx_command_head)
+    {
+        const note_fx_command_t command = g_note_fx_commands[read_index];
+        read_index = (uint8_t)((read_index + 1U) % NOTE_FX_COMMAND_CAPACITY);
+        if (command.panic_epoch != panic_epoch)
+            continue;
+        g_note_fx_commands[write_index] = command;
+        write_index = (uint8_t)((write_index + 1U) % NOTE_FX_COMMAND_CAPACITY);
+    }
+    g_note_fx_command_head = write_index;
+    memset(g_note_fx_pending_closure, 0, sizeof(g_note_fx_pending_closure));
+    g_note_fx_pending_closure_count = 0U;
+    memset(g_note_fx_source_ledger, 0, sizeof(g_note_fx_source_ledger));
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
+        ++g_note_fx_source_generation[track];
+        if (g_note_fx_source_generation[track] == 0U)
+            g_note_fx_source_generation[track] = 1U;
+    }
+    memset(g_note_fx_live_queue, 0, sizeof(g_note_fx_live_queue));
+    g_note_fx_live_queue_count = 0U;
+    note_fx_pipeline_rebuild_source_reservations_locked();
+    g_note_fx_panic_pending = 0U;
+    note_fx_pipeline_exit_critical(primask);
+}
+
+static uint8_t note_fx_pipeline_apply_panic_owner(uint64_t first_renderable_sample)
+{
+    uint8_t requested = 0U;
+    uint32_t panic_epoch = 0U;
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    if (g_note_fx_panic_pending != 0U)
+    {
+        g_note_fx_panic_active = 1U;
+        requested = 1U;
+        panic_epoch = g_note_fx_panic_epoch;
+    }
+    else if (g_note_fx_panic_active != 0U)
+    {
+        requested = 1U;
+    }
+    note_fx_pipeline_exit_critical(primask);
+
+    if (requested == 0U)
+        return 0U;
+    if (panic_epoch != 0U)
+        note_fx_pipeline_purge_for_panic_owner(panic_epoch);
+
+    if (seq_play_scheduler_panic_audio(first_renderable_sample) == 0U)
+        return 1U;
+
+    /* Terminal admissions have already emitted their stops.  This cleanup
+     * only resets NoteFx/ARP ownership and cannot create a second voice path. */
+    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+        note_fx_engine_cleanup(track, first_renderable_sample, NULL, NULL);
+
+    const uint32_t complete_primask = note_fx_pipeline_enter_critical();
+    g_note_fx_panic_active = 0U;
+    note_fx_pipeline_exit_critical(complete_primask);
+    return 1U;
+}
+
 void note_fx_pipeline_begin_audio_half(uint16_t frames)
 {
     memset(&g_note_fx_half_budget, 0, sizeof(g_note_fx_half_budget));
@@ -1317,6 +1447,8 @@ void note_fx_pipeline_reset_all_runtime_overrides(void)
 void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                               uint32_t samples_per_step_q16)
 {
+    if (note_fx_pipeline_apply_panic_owner(block_start) != 0U)
+        return;
     note_fx_pipeline_apply_pending_commands();
     note_fx_pipeline_apply_due_live_events(block_start);
     note_fx_engine_process(block_start, frames, samples_per_step_q16,
@@ -1326,6 +1458,13 @@ void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
 uint16_t note_fx_pipeline_frames_until_deadline(uint64_t block_start,
                                                 uint16_t max_frames)
 {
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    const uint8_t panic_pending = (uint8_t)(
+        (g_note_fx_panic_pending != 0U) || (g_note_fx_panic_active != 0U));
+    note_fx_pipeline_exit_critical(primask);
+    if (panic_pending != 0U)
+        return (max_frames != 0U) ? 1U : 0U;
+
     uint64_t deadline = note_fx_engine_next_deadline();
     if ((g_note_fx_live_queue_count != 0U)
             && (g_note_fx_live_queue[0].sample_time < deadline))

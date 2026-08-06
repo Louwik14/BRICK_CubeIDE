@@ -129,6 +129,7 @@ SEQ_STATE_D2 static seq_play_active_occurrence_t
 static uint8_t g_seq_play_track_generation[TRACK_TOPOLOGY_TRACK_COUNT];
 static uint8_t g_seq_play_track_suspended[TRACK_TOPOLOGY_TRACK_COUNT];
 static uint8_t g_seq_play_track_closing[TRACK_TOPOLOGY_TRACK_COUNT];
+static uint8_t g_seq_play_panic_active;
 static seq_terminal_admission_t
     g_seq_terminal_admission[TRACK_TOPOLOGY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
 static uint32_t g_seq_engine_mono_occurrence[TRACK_TOPOLOGY_TRACK_COUNT];
@@ -932,6 +933,76 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
                                          occurrence_id, event->generation);
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
+
+uint8_t seq_play_scheduler_panic_audio(uint64_t first_renderable_sample)
+{
+    if (g_seq_play_panic_active == 0U)
+    {
+        const uint32_t primask = seq_play_scheduler_enter_critical();
+        g_seq_play_panic_active = 1U;
+        g_seq_play_event_count = 0U;
+        memset(g_seq_play_active_occurrence, 0,
+               sizeof(g_seq_play_active_occurrence));
+        g_seq_play_diag.active_occurrence_count = 0U;
+        memset(g_seq_engine_mono_occurrence, 0,
+               sizeof(g_seq_engine_mono_occurrence));
+        for (seq_track_id_t track = 0U;
+             track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
+        {
+            g_seq_play_track_closing[track] = 1U;
+            g_seq_play_track_suspended[track] = 0U;
+            seq_play_scheduler_next_track_generation(track);
+        }
+        seq_play_scheduler_next_generation();
+        seq_play_scheduler_exit_critical(primask);
+    }
+
+    uint8_t all_closed = 1U;
+    for (seq_track_id_t track = 0U;
+         track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
+    {
+        for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
+        {
+            const seq_terminal_admission_t record =
+                g_seq_terminal_admission[track][i];
+            if (record.active == 0U)
+                continue;
+
+            const note_fx_event_t off = {
+                .sample_abs = first_renderable_sample,
+                .track = track,
+                .destination_id = record.channel,
+                .note = record.note,
+                .velocity = 0U,
+                .kind = NOTE_EVENT_KIND_OFF,
+                .provenance = NOTE_EVENT_SOURCE_FX,
+                .stage = NOTE_EVENT_STAGE_TERMINAL,
+                .flags = NOTE_EVENT_FLAG_TERMINAL,
+                .source_token = record.occurrence_id,
+                .occurrence_id = record.occurrence_id,
+                .generation = record.generation
+            };
+            const note_fx_result_t result =
+                seq_play_scheduler_dispatch_terminal_event(&off);
+            if ((result != NOTE_EVENT_RESULT_ACCEPTED)
+                    && (result != NOTE_EVENT_RESULT_REJECTED_STALE))
+            {
+                all_closed = 0U;
+            }
+        }
+    }
+
+    if (all_closed == 0U)
+        return 0U;
+
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    memset(g_seq_terminal_admission, 0, sizeof(g_seq_terminal_admission));
+    memset(g_seq_play_track_closing, 0, sizeof(g_seq_play_track_closing));
+    g_seq_play_panic_active = 0U;
+    seq_play_scheduler_exit_critical(primask);
+    seq_output_guard_reset();
+    return 1U;
+}
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
                                                               seq_step_id_t step,
                                                               param_id_t param_id)
@@ -1030,6 +1101,7 @@ void seq_play_scheduler_init(void)
     g_seq_play_audio_half_remaining = 0U;
     g_seq_play_audio_half_used = 0U;
     g_seq_play_audio_half_high_water = 0U;
+    g_seq_play_panic_active = 0U;
     g_seq_play_diag = (seq_play_scheduler_diag_t){0};
     for (uint8_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
     {

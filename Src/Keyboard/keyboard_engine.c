@@ -1018,6 +1018,13 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
     const uint8_t is_note_off = ((type == 0x80U) || ((type == 0x90U) && (velocity == 0U))) ? 1U : 0U;
     const uint8_t is_all_notes_off = ((is_cc_msg != 0U) && ((cc == 123U) || (cc == 120U))) ? 1U : 0U;
 
+    if (is_all_notes_off != 0U)
+    {
+        (void)note_fx_pipeline_request_panic();
+        keyboard_engine_clear_source_occurrences_silent();
+        return;
+    }
+
     if (is_note_on != 0U)
     {
         if (g_keyboard_engine_timed_context_active != 0U)
@@ -1099,10 +1106,6 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
             continue;
         }
 
-        if (is_all_notes_off != 0U)
-        {
-            keyboard_engine_all_notes_off_for_owner(track);
-        }
     }
 
 }

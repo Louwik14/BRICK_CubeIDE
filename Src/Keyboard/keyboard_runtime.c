@@ -140,11 +140,9 @@ static void keyboard_runtime_handle_all_notes_off(const uint8_t *msg, size_t len
         memset(g_keyboard_runtime_midi_sustained_release[channel_zero_based], 0, sizeof(g_keyboard_runtime_midi_sustained_release[channel_zero_based]));
         g_keyboard_runtime_midi_sustain_down[channel_zero_based] = 0U;
     }
-    if (seq_play_scheduler_transition_all(
-            SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) == 0U)
-        return;
+    /* MIDI CC120/123 enters the priority NoteFx/audio-owned panic path.  It
+     * must not compete with the ordinary transition queue. */
     keyboard_runtime_send_to_engine(msg, len);
-    keyboard_engine_clear_source_occurrences_silent();
 }
 
 void keyboard_runtime_init(void)

@@ -20,6 +20,10 @@
 #define NOTE_FX_SAMPLE_TIME_AUDIO_OWNER UINT64_MAX
 
 void note_fx_pipeline_init(void);
+/* Priority control path for MIDI panic (CC 120/123).  The request is
+ * pointer-free and never consumes an ordinary NoteFx command slot; audio
+ * owns the actual purge and terminal closure. */
+uint8_t note_fx_pipeline_request_panic(void);
 typedef struct
 {
     uint32_t accepted;
