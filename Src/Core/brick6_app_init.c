@@ -38,6 +38,7 @@
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/brick6_stream_service_task.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_mute.h"
 #include "brick6_sampler_bootstrap.h"
@@ -178,6 +179,7 @@ void brick6_app_init(void)
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
 #endif
+    brick6_stream_service_task_init();
     (void)audio_start();
 
     cpu_load_reset_peak();
@@ -212,8 +214,7 @@ void brick6_app_process(void)
     }
     else
     {
-        brick6_sampler_runtime_queue_stream_pages();
-        sample_cache_service(32768U);
+        brick6_stream_service_task_poll();
         multi_record_writer_service(16384U);
 #if BRICK_TEST_BUILD
         audio_test_csv_service();
@@ -240,6 +241,7 @@ void brick6_app_process(void)
             waveform_cache_service(8192U);
             sd_preview_process();
         }
+        brick6_stream_service_task_poll();
     }
     pattern_live_service();
     brick6_master_control_process();

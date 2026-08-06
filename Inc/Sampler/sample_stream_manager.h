@@ -52,8 +52,9 @@ typedef struct
 /*
  * STREAM facade.
  *
- * Owns Sampler STREAM SD policy and persistent readers. service() must stay
- * outside audio IRQ and be called only while the sample-cache SD gate is held.
+ * Owns Sampler STREAM request policy and scheduling. The dedicated I/O stage
+ * owns persistent readers. service() stays outside audio IRQ and is called only
+ * while the sample-cache SD gate is held.
  */
 void sample_stream_manager_init(void);
 void sample_stream_manager_reset(void);

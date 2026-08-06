@@ -38,6 +38,7 @@
 #include "Seq/seq_play_scheduler.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "Sampler/sample_stream_time.h"
+#include "Core/brick6_stream_service_task.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -433,6 +434,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
         process_half(0);
 
         sample_stream_time_advance_from_audio_irq(AUDIO_FRAMES_PER_HALF);
+        brick6_stream_service_task_notify_audio_irq();
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
@@ -476,6 +478,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         process_half(1);
 
         sample_stream_time_advance_from_audio_irq(AUDIO_FRAMES_PER_HALF);
+        brick6_stream_service_task_notify_audio_irq();
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
