@@ -1880,6 +1880,86 @@ uint8_t sample_page_cache_has_window_locks(void)
     return 0U;
 }
 
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+uint8_t sample_page_cache_get_window_page_debug(sample_audio_key_t key,
+                                                uint32_t page_index,
+                                                uint8_t owner_kind,
+                                                uint8_t owner_id,
+                                                uint32_t owner_generation,
+                                                sample_page_window_debug_t *out_debug)
+{
+    if (out_debug == 0)
+    {
+        return 0U;
+    }
+
+    memset(out_debug, 0, sizeof(*out_debug));
+    out_debug->page_index = page_index;
+    out_debug->slot_index = UINT16_MAX;
+    out_debug->state = SAMPLE_PAGE_EMPTY;
+
+    const uint32_t primask = sample_page_cache_lock();
+    const sample_page_desc_t *const page = sample_page_cache_find_page_key(key, page_index);
+    if (page == 0)
+    {
+        sample_page_cache_unlock(primask);
+        return 0U;
+    }
+
+    out_debug->generation = page->generation;
+    out_debug->slot_index = (uint16_t)(page - g_sample_page_desc);
+    out_debug->frame_count = (page->frame_count > UINT16_MAX)
+                                 ? UINT16_MAX
+                                 : (uint16_t)page->frame_count;
+    out_debug->use_count = page->use_count;
+    out_debug->window_pin_count = page->window_pin_count;
+    out_debug->state = page->state;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_WINDOW_LOCK_MAX; ++i)
+    {
+        const sample_page_window_lock_t *const lock = &g_sample_page_window_lock[i];
+        if ((lock->used != 0U)
+            && (lock->slot_index == out_debug->slot_index)
+            && (lock->owner_kind == owner_kind)
+            && (lock->owner_id == owner_id)
+            && (lock->owner_generation == owner_generation))
+        {
+            out_debug->owner_lock_count = (lock->lock_count > UINT8_MAX)
+                                              ? UINT8_MAX
+                                              : (uint8_t)lock->lock_count;
+            break;
+        }
+    }
+    sample_page_cache_unlock(primask);
+    return 1U;
+}
+
+uint32_t sample_page_cache_debug_count_window_locks(void)
+{
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_WINDOW_LOCK_MAX; ++i)
+    {
+        if (g_sample_page_window_lock[i].used != 0U)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+uint32_t sample_page_cache_debug_count_free_pages(void)
+{
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        if (g_sample_page_desc[i].state == SAMPLE_PAGE_EMPTY)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+#endif
+
 uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index)
 {
     return sample_page_cache_request_page_key(sample_audio_key_classic(sample_id), page_index);

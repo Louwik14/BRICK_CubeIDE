@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_multi_stream_diag.h"
 #include "Sampler/sample_stream_backend_contiguous.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
@@ -107,6 +108,12 @@ static uint16_t g_sample_stream_next_sample_id;
 static uint8_t g_sample_stream_next_owner_id;
 static sample_stream_pending_t *g_sample_stream_selected_pending;
 static uint8_t g_sample_stream_manager_initialized;
+
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+SDRAM_STREAM_SERVICE volatile sample_multi_stream_diag_snapshot_t g_sample_multi_stream_diag;
+volatile uint32_t g_sample_multi_stream_diag_frozen;
+static volatile uint32_t g_sample_multi_stream_diag_breakpoint_seen;
+#endif
 
 
 static char *sample_stream_manager_reader_path(sample_stream_reader_t *reader)
@@ -1246,6 +1253,41 @@ static void sample_stream_manager_active_state_note(sample_stream_active_state_t
     }
 }
 
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+static void sample_stream_manager_diag_capture_failure(
+    const sample_stream_active_desc_t *desc,
+    uint32_t failure_result,
+    sample_multi_stream_diag_code_t code)
+{
+    if (desc == 0)
+    {
+        return;
+    }
+
+    const uint8_t is_loop =
+        (desc->owner_kind == (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP) ? 1U : 0U;
+    SAMPLE_MULTI_STREAM_DIAG_CAPTURE_FAILURE(
+        desc->key,
+        desc->key.object_id,
+        desc->owner_id,
+        1U,
+        1U,
+        3U,
+        is_loop ? (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE : desc->owner_kind,
+        desc->owner_id,
+        desc->owner_generation,
+        is_loop ? desc->owner_kind : (uint8_t)SAMPLE_STREAM_OWNER_MULTI_LOOP,
+        desc->owner_id,
+        desc->owner_generation,
+        desc->format,
+        desc->current_frame,
+        is_loop ? UINT32_MAX : desc->current_frame,
+        is_loop ? desc->current_frame : UINT32_MAX,
+        failure_result,
+        code);
+}
+#endif
+
 uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc_t *desc)
 {
     if ((desc == 0) || (desc->end_frame == 0U) || (desc->current_frame >= desc->end_frame))
@@ -1368,6 +1410,15 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
                     desc->state, page_index, priority, desc->direction);
                 requested = 1U;
             }
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+            else
+            {
+                sample_stream_manager_diag_capture_failure(
+                    desc,
+                    (uint32_t)state_before,
+                    SAMPLE_MULTI_STREAM_DIAG_QUEUE_PAGE_REQUEST);
+            }
+#endif
             continue;
         }
 
@@ -1390,6 +1441,14 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
                 desc->state, page_index, priority, desc->direction);
             requested = 1U;
         }
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+        else
+        {
+            sample_stream_manager_diag_capture_failure(desc,
+                                                       0U,
+                                                       SAMPLE_MULTI_STREAM_DIAG_QUEUE_PAGE_REQUEST);
+        }
+#endif
     }
 
     return requested;
@@ -1436,6 +1495,11 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
             sample_page_cache_get_page_state_key(desc->key, page_index);
         if (state_before == SAMPLE_PAGE_ERROR)
         {
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+            sample_stream_manager_diag_capture_failure(desc,
+                                                       (uint32_t)state_before,
+                                                       SAMPLE_MULTI_STREAM_DIAG_RESERVE_PAGE_REQUEST);
+#endif
             sample_stream_manager_release_owner(desc->owner_kind,
                                                 desc->owner_id,
                                                 desc->owner_generation);
@@ -1471,6 +1535,12 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
                                                                      desc,
                                                                      SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
             {
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+                sample_stream_manager_diag_capture_failure(
+                    desc,
+                    (uint32_t)state_before,
+                    SAMPLE_MULTI_STREAM_DIAG_RESERVE_PAGE_REQUEST);
+#endif
                 sample_stream_manager_release_owner(desc->owner_kind,
                                                     desc->owner_id,
                                                     desc->owner_generation);
@@ -1485,6 +1555,12 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
                                                               deadline_frames,
                                                               desc) == 0U)
             {
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+                sample_stream_manager_diag_capture_failure(
+                    desc,
+                    (uint32_t)state_before,
+                    SAMPLE_MULTI_STREAM_DIAG_RESERVE_PAGE_REQUEST);
+#endif
                 sample_stream_manager_release_owner(desc->owner_kind,
                                                     desc->owner_id,
                                                     desc->owner_generation);
@@ -1498,6 +1574,11 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
                                                       desc->owner_id,
                                                       desc->owner_generation) == 0U)
         {
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+            sample_stream_manager_diag_capture_failure(desc,
+                                                       0U,
+                                                       SAMPLE_MULTI_STREAM_DIAG_RESERVE_WINDOW_LOCK);
+#endif
             sample_stream_manager_release_owner(desc->owner_kind,
                                                 desc->owner_id,
                                                 desc->owner_generation);
@@ -1777,3 +1858,290 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
 
     return 0U;
 }
+
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+void sample_stream_manager_get_debug_stats(uint8_t current_owner_kind,
+                                           uint8_t current_owner_id,
+                                           uint32_t current_generation,
+                                           uint8_t loop_owner_kind,
+                                           uint8_t loop_owner_id,
+                                           uint32_t loop_generation,
+                                           uint32_t *out_pending_global,
+                                           uint32_t *out_pending_current_owner,
+                                           uint32_t *out_pending_loop_owner,
+                                           uint32_t *out_readers_active)
+{
+    uint32_t pending_global = 0U;
+    uint32_t pending_current = 0U;
+    uint32_t pending_loop = 0U;
+    uint32_t readers_active = 0U;
+
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        const sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
+        if (pending->active == 0U)
+        {
+            continue;
+        }
+        pending_global++;
+        if ((pending->owner_kind == current_owner_kind)
+            && (pending->owner_id == current_owner_id)
+            && (pending->owner_generation == current_generation))
+        {
+            pending_current++;
+        }
+        if ((pending->owner_kind == loop_owner_kind)
+            && (pending->owner_id == loop_owner_id)
+            && (pending->owner_generation == loop_generation))
+        {
+            pending_loop++;
+        }
+    }
+
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
+    {
+        if (g_sample_stream_readers[i].in_use != 0U)
+        {
+            readers_active++;
+        }
+    }
+
+    if (out_pending_global != 0)
+    {
+        *out_pending_global = pending_global;
+    }
+    if (out_pending_current_owner != 0)
+    {
+        *out_pending_current_owner = pending_current;
+    }
+    if (out_pending_loop_owner != 0)
+    {
+        *out_pending_loop_owner = pending_loop;
+    }
+    if (out_readers_active != 0)
+    {
+        *out_readers_active = readers_active;
+    }
+}
+
+static void sample_multi_stream_diag_fill_pages(
+    volatile sample_multi_stream_diag_page_t *out_pages,
+    sample_audio_key_t key,
+    uint32_t first_page,
+    uint32_t page_count,
+    uint8_t owner_kind,
+    uint8_t owner_id,
+    uint32_t owner_generation,
+    uint32_t *out_acquired)
+{
+    uint32_t acquired = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_MULTI_STREAM_DIAG_MAX_WINDOW_PAGES; ++i)
+    {
+        memset((void *)&out_pages[i], 0, sizeof(out_pages[i]));
+        out_pages[i].page_index = UINT32_MAX;
+        if (i >= page_count)
+        {
+            continue;
+        }
+
+        sample_page_window_debug_t page;
+        if (sample_page_cache_get_window_page_debug(key,
+                                                    first_page + i,
+                                                    owner_kind,
+                                                    owner_id,
+                                                    owner_generation,
+                                                    &page) == 0U)
+        {
+            out_pages[i].page_index = first_page + i;
+            continue;
+        }
+        out_pages[i].page_index = page.page_index;
+        out_pages[i].generation = page.generation;
+        out_pages[i].slot_index = page.slot_index;
+        out_pages[i].frame_count = page.frame_count;
+        out_pages[i].use_count = page.use_count;
+        out_pages[i].window_pin_count = page.window_pin_count;
+        out_pages[i].state = (uint8_t)page.state;
+        out_pages[i].owner_lock_count = page.owner_lock_count;
+        if (page.owner_lock_count != 0U)
+        {
+            acquired++;
+        }
+    }
+    if (out_acquired != 0)
+    {
+        *out_acquired = acquired;
+    }
+}
+
+__attribute__((noinline, used, externally_visible))
+void sample_multi_stream_diag_capture_failure(
+    sample_audio_key_t key,
+    uint16_t sample_id,
+    uint8_t voice_index,
+    uint8_t voice_active,
+    uint8_t reader_active,
+    uint8_t source_kind,
+    uint8_t current_owner_kind,
+    uint8_t current_owner_id,
+    uint32_t current_generation,
+    uint8_t loop_owner_kind,
+    uint8_t loop_owner_id,
+    uint32_t loop_generation,
+    sample_audio_format_t format,
+    uint32_t position_frame,
+    uint32_t current_frame,
+    uint32_t loop_frame,
+    uint32_t failure_result,
+    sample_multi_stream_diag_code_t code)
+{
+    if (g_sample_multi_stream_diag_frozen != 0U)
+    {
+        return;
+    }
+
+    memset((void *)&g_sample_multi_stream_diag, 0, sizeof(g_sample_multi_stream_diag));
+    g_sample_multi_stream_diag.magic = SAMPLE_MULTI_STREAM_DIAG_MAGIC;
+    g_sample_multi_stream_diag.code = (uint32_t)code;
+    g_sample_multi_stream_diag.failure_result = failure_result;
+    g_sample_multi_stream_diag.sample_id = sample_id;
+    g_sample_multi_stream_diag.key_domain = key.domain;
+    g_sample_multi_stream_diag.key_object_id = key.object_id;
+    g_sample_multi_stream_diag.voice_index = voice_index;
+    g_sample_multi_stream_diag.voice_active = voice_active;
+    g_sample_multi_stream_diag.reader_active = reader_active;
+    g_sample_multi_stream_diag.source_kind = source_kind;
+    g_sample_multi_stream_diag.current_owner_kind = current_owner_kind;
+    g_sample_multi_stream_diag.current_owner_id = current_owner_id;
+    g_sample_multi_stream_diag.current_generation = current_generation;
+    g_sample_multi_stream_diag.loop_owner_kind = loop_owner_kind;
+    g_sample_multi_stream_diag.loop_owner_id = loop_owner_id;
+    g_sample_multi_stream_diag.loop_generation = loop_generation;
+    g_sample_multi_stream_diag.format = (uint32_t)sample_audio_format_or_stereo(format);
+    g_sample_multi_stream_diag.position_frame = position_frame;
+    g_sample_multi_stream_diag.current_page = UINT32_MAX;
+    g_sample_multi_stream_diag.loop_page = UINT32_MAX;
+
+    const sample_audio_format_t safe_format = sample_audio_format_or_stereo(format);
+    const uint32_t window_pages = sample_audio_format_window_pages(safe_format);
+    uint32_t acquired = 0U;
+    if (current_frame != UINT32_MAX)
+    {
+        g_sample_multi_stream_diag.current_page =
+            sample_audio_format_page_index_from_frame(safe_format, current_frame);
+        g_sample_multi_stream_diag.current_expected_pages = window_pages;
+        sample_multi_stream_diag_fill_pages(g_sample_multi_stream_diag.current_pages,
+                                             key,
+                                             g_sample_multi_stream_diag.current_page,
+                                             window_pages,
+                                             current_owner_kind,
+                                             current_owner_id,
+                                             current_generation,
+                                             &acquired);
+        g_sample_multi_stream_diag.current_acquired_pages = acquired;
+    }
+    if (loop_frame != UINT32_MAX)
+    {
+        g_sample_multi_stream_diag.loop_page =
+            sample_audio_format_page_index_from_frame(safe_format, loop_frame);
+        g_sample_multi_stream_diag.loop_expected_pages = window_pages;
+        sample_multi_stream_diag_fill_pages(g_sample_multi_stream_diag.loop_pages,
+                                             key,
+                                             g_sample_multi_stream_diag.loop_page,
+                                             window_pages,
+                                             loop_owner_kind,
+                                             loop_owner_id,
+                                             loop_generation,
+                                             &acquired);
+        g_sample_multi_stream_diag.loop_acquired_pages = acquired;
+    }
+
+    uint32_t pending_global = 0U;
+    uint32_t pending_current = 0U;
+    uint32_t pending_loop = 0U;
+    uint32_t readers_active = 0U;
+    sample_stream_manager_get_debug_stats(current_owner_kind,
+                                           current_owner_id,
+                                           current_generation,
+                                           loop_owner_kind,
+                                           loop_owner_id,
+                                           loop_generation,
+                                           &pending_global,
+                                           &pending_current,
+                                           &pending_loop,
+                                           &readers_active);
+    g_sample_multi_stream_diag.pending_global = pending_global;
+    g_sample_multi_stream_diag.pending_current_owner = pending_current;
+    g_sample_multi_stream_diag.pending_loop_owner = pending_loop;
+    g_sample_multi_stream_diag.readers_active = readers_active;
+    g_sample_multi_stream_diag.locks_used = sample_page_cache_debug_count_window_locks();
+    g_sample_multi_stream_diag.pages_free = sample_page_cache_debug_count_free_pages();
+    g_sample_multi_stream_diag.pc = (uint32_t)(uintptr_t)__builtin_return_address(0);
+    uintptr_t link_register = 0U;
+    __asm volatile("mov %0, lr" : "=r"(link_register));
+    g_sample_multi_stream_diag.lr = (uint32_t)link_register;
+    g_sample_multi_stream_diag.frozen = 1U;
+    __DMB();
+    g_sample_multi_stream_diag_frozen = 1U;
+}
+
+void sample_multi_stream_diag_capture_fault(const uint32_t *stack_pointer,
+                                            uint32_t exc_return,
+                                            uint32_t fault_type)
+{
+    const uint32_t extended_words = ((exc_return & (1UL << 4U)) == 0U) ? 18U : 0U;
+    const uintptr_t begin = (uintptr_t)stack_pointer;
+    const uintptr_t end = begin + ((uintptr_t)(extended_words + 8U) * sizeof(uint32_t));
+
+    g_sample_multi_stream_diag.fault_type = fault_type;
+    g_sample_multi_stream_diag.exc_return = exc_return;
+    g_sample_multi_stream_diag.cfsr = SCB->CFSR;
+    g_sample_multi_stream_diag.hfsr = SCB->HFSR;
+    g_sample_multi_stream_diag.bfar = SCB->BFAR;
+    g_sample_multi_stream_diag.mmfar = SCB->MMFAR;
+    if ((stack_pointer != 0)
+        && (end >= begin)
+        && (((begin >= 0x20000000UL) && (end <= 0x20020000UL))
+            || ((begin >= 0x24000000UL) && (end <= 0x24080000UL))
+            || ((begin >= 0x30000000UL) && (end <= 0x30048000UL))
+            || ((begin >= 0x38000000UL) && (end <= 0x38010000UL))))
+    {
+        const uint32_t *const frame = stack_pointer + extended_words;
+        g_sample_multi_stream_diag.stacked_r0 = frame[0];
+        g_sample_multi_stream_diag.stacked_r1 = frame[1];
+        g_sample_multi_stream_diag.stacked_r2 = frame[2];
+        g_sample_multi_stream_diag.stacked_r3 = frame[3];
+        g_sample_multi_stream_diag.stacked_r12 = frame[4];
+        g_sample_multi_stream_diag.stacked_lr = frame[5];
+        g_sample_multi_stream_diag.stacked_pc = frame[6];
+        g_sample_multi_stream_diag.stacked_xpsr = frame[7];
+        g_sample_multi_stream_diag.pc = frame[6];
+        g_sample_multi_stream_diag.lr = frame[5];
+    }
+
+    if (g_sample_multi_stream_diag_frozen == 0U)
+    {
+        g_sample_multi_stream_diag.magic = SAMPLE_MULTI_STREAM_DIAG_MAGIC;
+        g_sample_multi_stream_diag.code = (uint32_t)SAMPLE_MULTI_STREAM_DIAG_FAULT;
+        g_sample_multi_stream_diag.failure_result = fault_type;
+        g_sample_multi_stream_diag.frozen = 1U;
+        __DMB();
+        g_sample_multi_stream_diag_frozen = 1U;
+    }
+}
+
+uint8_t sample_multi_stream_diag_breakpoint_pending(void)
+{
+    return ((g_sample_multi_stream_diag_frozen != 0U)
+            && (g_sample_multi_stream_diag_breakpoint_seen == 0U)) ? 1U : 0U;
+}
+
+__attribute__((noinline, used, externally_visible))
+void sample_multi_stream_diag_breakpoint(void)
+{
+    if (g_sample_multi_stream_diag_frozen != 0U)
+    {
+        g_sample_multi_stream_diag_breakpoint_seen = 1U;
+    }
+}
+#endif

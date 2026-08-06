@@ -21,6 +21,8 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
+option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
+
 # --------------------------------------------------------------------------
 # Standards
 # --------------------------------------------------------------------------
@@ -470,6 +472,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     USE_HAL_DRIVER
     STM32H743xx
     BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
+    $<$<BOOL:${BRICK6_MULTI_STREAM_DIAG}>:BRICK6_MULTI_STREAM_DIAG>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

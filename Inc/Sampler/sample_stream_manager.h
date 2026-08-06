@@ -79,6 +79,18 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
 uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_desc_t *desc);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+void sample_stream_manager_get_debug_stats(uint8_t current_owner_kind,
+                                           uint8_t current_owner_id,
+                                           uint32_t current_generation,
+                                           uint8_t loop_owner_kind,
+                                           uint8_t loop_owner_id,
+                                           uint32_t loop_generation,
+                                           uint32_t *out_pending_global,
+                                           uint32_t *out_pending_current_owner,
+                                           uint32_t *out_pending_loop_owner,
+                                           uint32_t *out_readers_active);
+#endif
 
 #ifdef __cplusplus
 }

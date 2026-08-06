@@ -83,6 +83,18 @@ typedef struct
     uint32_t owner_generation;
 } sample_page_window_owner_t;
 
+typedef struct
+{
+    uint32_t page_index;
+    uint32_t generation;
+    uint16_t slot_index;
+    uint16_t frame_count;
+    uint16_t use_count;
+    uint16_t window_pin_count;
+    sample_page_state_t state;
+    uint8_t owner_lock_count;
+} sample_page_window_debug_t;
+
 typedef enum
 {
     SAMPLE_PAGE_BLOCK_OK = 0,
@@ -260,6 +272,16 @@ void sample_page_cache_release_window_owner_outside_key(uint8_t owner_kind,
                                                         uint32_t first_page,
                                                         uint32_t last_page);
 uint8_t sample_page_cache_has_window_locks(void);
+#if defined(BRICK6_MULTI_STREAM_DIAG)
+uint8_t sample_page_cache_get_window_page_debug(sample_audio_key_t key,
+                                                uint32_t page_index,
+                                                uint8_t owner_kind,
+                                                uint8_t owner_id,
+                                                uint32_t owner_generation,
+                                                sample_page_window_debug_t *out_debug);
+uint32_t sample_page_cache_debug_count_window_locks(void);
+uint32_t sample_page_cache_debug_count_free_pages(void);
+#endif
 
 /*
  * Command API: queues or records explicit intent only.
