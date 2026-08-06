@@ -4,6 +4,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Board/board_audio_format.h"
+
+/* One complete SAI half is the bounded normal transport guard: an input
+ * captured just after an anchor is consumed at the following audio boundary.
+ * Keep this value common to Hall, USB Device and USB Host live sources. */
+#define LIVE_GUARD_SAMPLES BOARD_AUDIO_FRAMES_PER_HALF
+
 /*
  * The capture clock is TIM5. The audio clock remains the absolute sample
  * timeline owned by the SAI audio IRQ. Producers must never read that

@@ -1044,6 +1044,12 @@ static note_fx_result_t note_fx_pipeline_submit_live_command(
     if (!live_clock_tim5_to_sample_time(command->capture_tick, &sample_time))
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
 
+    /* Convert the capture instant into a constant transport deadline. */
+    if (sample_time > (UINT64_MAX - (uint64_t)LIVE_GUARD_SAMPLES))
+        sample_time = UINT64_MAX;
+    else
+        sample_time += (uint64_t)LIVE_GUARD_SAMPLES;
+
     if (sample_time < now)
     {
         const uint64_t lateness = now - sample_time;

@@ -25,5 +25,5 @@ behavior.
 The timestamp and serial cross the MIDI parser, `midi.c`, keyboard runtime,
 keyboard engine, and NoteFx source command. Note-on, note-off, and note-on with
 velocity zero use the same path. The audio owner performs TIM5-to-sample
-conversion; exact timed-file sorting and block segmentation remain later-pass
-responsibilities. MIDI output is unchanged.
+conversion, applies the common fixed `LIVE_GUARD_SAMPLES`, and feeds the shared
+timed queue and scheduler segmentation. MIDI output is unchanged.

@@ -42,3 +42,13 @@ Une note immédiate d'un MIDI FX reprend le timestamp de sa source. Une note
 retardée ou une échéance d'arpège est traitée par le moteur NoteFx à son sample
 absolu. Les événements séquencés restent dans leur propre flux ordonné ; aucun
 ordre global note-off avant note-on n'est imposé aux événements live.
+
+## Garde de transport fixe
+
+`LIVE_GUARD_SAMPLES` vaut une demi-zone SAI (`BOARD_AUDIO_FRAMES_PER_HALF`,
+64 samples sur les deux cartes). Cette valeur couvre la frontière audio normale
+entre la capture et la prochaine consommation, avec une politique identique pour
+Hall, USB Device et USB Host. Le sample final est donc la capture TIM5 convertie
+plus cette garde. Si l'ingestion dépasse cette échéance, l'événement est clampé
+au premier sample encore modifiable et les diagnostics `late`/retard maximal
+le signalent ; l'audio déjà rendu n'est jamais réécrit.
