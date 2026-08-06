@@ -1740,7 +1740,7 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
         page_owner.role = (uint8_t)role;
 
         if ((state_before != SAMPLE_PAGE_READY) && (state_before != SAMPLE_PAGE_QUEUED)
-            && (state_before != SAMPLE_PAGE_LOADING))
+            && (state_before != SAMPLE_PAGE_IN_FLIGHT))
         {
             if (sample_stream_manager_request_page_with_priority_key(desc->key,
                                                                      page_index,
@@ -1889,6 +1889,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         FIL *fp = 0;
         uint8_t fallback_open = 0U;
         uint8_t used_contiguous_backend = 0U;
+        sample_page_load_token_t load_token;
 
         const FSIZE_t offset = (FSIZE_t)stream_info.data_offset
                               + ((FSIZE_t)target.start_frame
@@ -1945,9 +1946,13 @@ void sample_stream_manager_service(uint32_t byte_budget)
         g_sample_stream_last_selected_key = target.key;
         g_sample_stream_last_selected_key_valid = 1U;
 #endif
-        (void)sample_page_cache_set_page_state_key(target.key,
-                                                   target.page_index,
-                                                   SAMPLE_PAGE_LOADING);
+        if (sample_page_cache_begin_in_flight(&target, &load_token) == 0U)
+        {
+            sample_stream_manager_clear_pending_key(target.key,
+                                                    target.page_index,
+                                                    SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+            continue;
+        }
 #if BRICK6_STREAM_TRACE
         if (traced_op != 0)
         {
@@ -1979,9 +1984,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
             {
                 if (sample_stream_manager_open_reader(reader) == 0U)
                 {
-                    (void)sample_page_cache_set_page_state_key(target.key,
-                                                               target.page_index,
-                                                               SAMPLE_PAGE_ERROR);
+                    (void)sample_page_cache_finish_in_flight(
+                        &load_token, SAMPLE_PAGE_FINISH_ERROR);
                     sample_stream_manager_clear_pending_key(target.key,
                                                             target.page_index,
                                                             SAMPLE_STREAM_PENDING_REASON_CANCEL);
@@ -1995,9 +1999,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 const FRESULT open_fr = f_open(&fallback_file, stream_info.path, FA_READ);
                 if (open_fr != FR_OK)
                 {
-                    (void)sample_page_cache_set_page_state_key(target.key,
-                                                               target.page_index,
-                                                               SAMPLE_PAGE_ERROR);
+                    (void)sample_page_cache_finish_in_flight(
+                        &load_token, SAMPLE_PAGE_FINISH_ERROR);
                     sample_stream_manager_clear_pending_key(target.key,
                                                             target.page_index,
                                                             SAMPLE_STREAM_PENDING_REASON_CANCEL);
@@ -2029,9 +2032,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
                         reader->current_file_offset = 0U;
                         reader->last_page_index = UINT32_MAX;
                     }
-                    (void)sample_page_cache_set_page_state_key(target.key,
-                                                           target.page_index,
-                                                           SAMPLE_PAGE_ERROR);
+                    (void)sample_page_cache_finish_in_flight(
+                        &load_token, SAMPLE_PAGE_FINISH_ERROR);
                     sample_stream_manager_clear_pending_key(target.key,
                                                             target.page_index,
                                                             SAMPLE_STREAM_PENDING_REASON_CANCEL);
@@ -2074,9 +2076,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 traced_op->success = 0U;
             }
 #endif
-            (void)sample_page_cache_set_page_state_key(target.key,
-                                                   target.page_index,
-                                                   SAMPLE_PAGE_ERROR);
+            (void)sample_page_cache_finish_in_flight(&load_token,
+                                                     SAMPLE_PAGE_FINISH_ERROR);
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_CANCEL);
@@ -2092,9 +2093,14 @@ void sample_stream_manager_service(uint32_t byte_budget)
             return;
         }
 
-        (void)sample_page_cache_set_page_state_key(target.key,
-                                                   target.page_index,
-                                                   SAMPLE_PAGE_READY);
+        if (sample_page_cache_finish_in_flight(&load_token,
+                                               SAMPLE_PAGE_FINISH_READY) == 0U)
+        {
+            sample_stream_manager_clear_pending_key(target.key,
+                                                    target.page_index,
+                                                    SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+            return;
+        }
 #if BRICK6_STREAM_TRACE
         if (traced_op != 0)
         {

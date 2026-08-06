@@ -22,7 +22,7 @@ typedef enum
 {
     SAMPLE_PAGE_EMPTY = 0,
     SAMPLE_PAGE_QUEUED,
-    SAMPLE_PAGE_LOADING,
+    SAMPLE_PAGE_IN_FLIGHT,
     SAMPLE_PAGE_READY,
     SAMPLE_PAGE_ERROR
 } sample_page_state_t;
@@ -45,6 +45,8 @@ typedef struct
     uint16_t window_pin_count;
     uint16_t reserved;
     uint32_t generation;
+    uint8_t load_cancel_requested;
+    uint8_t lifecycle_reserved[3];
     uint32_t last_touch;
 } sample_page_desc_t;
 
@@ -141,8 +143,30 @@ typedef struct
     uint16_t stride_floats;
     uint32_t frames_per_page;
     uint32_t registration_epoch;
+    uint32_t page_generation;
     float *frames_interleaved;
 } sample_page_load_target_t;
+
+typedef struct
+{
+    sample_audio_key_t key;
+    uint32_t page_index;
+    uint32_t page_generation;
+    uint32_t registration_epoch;
+    uint16_t slot_index;
+    uint16_t reserved;
+} sample_page_load_token_t;
+
+typedef enum
+{
+    SAMPLE_PAGE_FINISH_READY = 0,
+    SAMPLE_PAGE_FINISH_ERROR
+} sample_page_finish_result_t;
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(sizeof(sample_page_load_token_t) == 20U,
+               "page load token ABI must remain 20 bytes");
+#endif
 
 typedef enum
 {
@@ -248,6 +272,12 @@ uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
 uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
                                               uint32_t page_index,
                                               sample_page_load_target_t *out_target);
+uint8_t sample_page_cache_begin_in_flight(const sample_page_load_target_t *target,
+                                          sample_page_load_token_t *out_token);
+uint8_t sample_page_cache_finish_in_flight(const sample_page_load_token_t *token,
+                                           sample_page_finish_result_t result);
+uint8_t sample_page_cache_cancel_in_flight_key(sample_audio_key_t key,
+                                               uint32_t page_index);
 uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
     sample_audio_key_t key,
     uint32_t page_index,

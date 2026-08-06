@@ -761,6 +761,7 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
                                             const multi_sample_desc_t *sample)
 {
     sample_page_load_target_t targets[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
+    sample_page_load_token_t tokens[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
     uint32_t target_bytes[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
     uint32_t batch_bytes = 0U;
     uint32_t target_count = 0U;
@@ -796,6 +797,19 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
         return 0U;
     }
 
+    for (uint32_t i = 0U; i < target_count; ++i)
+    {
+        if (sample_page_cache_begin_in_flight(&targets[i], &tokens[i]) == 0U)
+        {
+            for (uint32_t j = 0U; j < i; ++j)
+            {
+                (void)sample_page_cache_finish_in_flight(&tokens[j],
+                                                         SAMPLE_PAGE_FINISH_ERROR);
+            }
+            return 0U;
+        }
+    }
+
     UINT bytes_read = 0U;
     if ((f_read(&g_multi_bulk.file,
                 g_multi_bulk_read_buffer,
@@ -803,6 +817,11 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
                 &bytes_read) != FR_OK)
         || (bytes_read != batch_bytes))
     {
+        for (uint32_t i = 0U; i < target_count; ++i)
+        {
+            (void)sample_page_cache_finish_in_flight(&tokens[i],
+                                                     SAMPLE_PAGE_FINISH_ERROR);
+        }
         return 0U;
     }
     g_multi_load_diag.read_calls++;
@@ -820,6 +839,11 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
     if ((decode_block == 0) || (sample->block_align != expected_block_align)
         || (sample_audio_format_is_valid(expected_format) == 0U))
     {
+        for (uint32_t i = 0U; i < target_count; ++i)
+        {
+            (void)sample_page_cache_finish_in_flight(&tokens[i],
+                                                     SAMPLE_PAGE_FINISH_ERROR);
+        }
         return 0U;
     }
 
@@ -831,6 +855,11 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
             || (targets[i].stride_floats
                 != sample_audio_format_stride_floats(expected_format)))
         {
+            for (uint32_t j = i; j < target_count; ++j)
+            {
+                (void)sample_page_cache_finish_in_flight(&tokens[j],
+                                                         SAMPLE_PAGE_FINISH_ERROR);
+            }
             return 0U;
         }
         decode_block(&g_multi_bulk_read_buffer[read_offset],
@@ -838,10 +867,14 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
                      targets[i].frame_count);
         read_offset += target_bytes[i];
         __DMB();
-        if (sample_page_cache_set_page_state_key(key,
-                                                 targets[i].page_index,
-                                                 SAMPLE_PAGE_READY) == 0U)
+        if (sample_page_cache_finish_in_flight(&tokens[i],
+                                               SAMPLE_PAGE_FINISH_READY) == 0U)
         {
+            for (uint32_t j = i + 1U; j < target_count; ++j)
+            {
+                (void)sample_page_cache_finish_in_flight(&tokens[j],
+                                                         SAMPLE_PAGE_FINISH_ERROR);
+            }
             return 0U;
         }
         if (plan->pages_remaining != 0U)

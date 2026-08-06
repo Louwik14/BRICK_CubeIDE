@@ -195,7 +195,7 @@ static sample_play_plan_ready_count_t sample_play_plan_count_ready_pages(
         {
             ++count.ready_pages;
         }
-        else if ((state == SAMPLE_PAGE_QUEUED) || (state == SAMPLE_PAGE_LOADING))
+        else if ((state == SAMPLE_PAGE_QUEUED) || (state == SAMPLE_PAGE_IN_FLIGHT))
         {
             ++count.pending_pages;
             if (count.first_pending_page == SAMPLE_PLAY_PLAN_PAGE_NONE)
