@@ -125,3 +125,18 @@ set to the audio authority:
 Selectors for engine/model, filter type, routing, effect type/mode/time,
 phase reset and Wave position policy are deliberately not migrated here.
 ADC, MIDI and other non-listed parameters retain their existing command path.
+
+## Single authority after pass 6
+
+The migrated set is declared once by `live_parameter_is_audio_owned()` and is
+shared by the encoder dispatcher, UI value surface and registry query surface.
+For these parameters, the UI encoder path updates only a cold UI shadow and
+submits the timestamped command. It no longer calls the DSP backend, marks the
+audio parameter dirty, or reads a private voice value. Track queries resolve
+from the audio-authoritative runtime target cache; global queries resolve from
+the UI logical shadow until the audio command is applied.
+
+The audio runtime is the only live writer for migrated DSP targets. Its target
+application commits the track cache after the backend write, while structural,
+selector, sequence, ADC and MIDI parameters retain their existing UI/model
+command paths.

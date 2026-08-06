@@ -195,6 +195,7 @@ list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_event.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_migration.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_snapshot.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"

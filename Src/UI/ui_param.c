@@ -33,11 +33,14 @@
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/live_parameter_migration.h"
 #include "Core/brick6_sampler_multi_contract.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
 #include "param_store.h"
+#include "Param/param_registry_runtime_state.h"
+#include "Storage/memory_layout.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Sampler/multi_sample_pool.h"
@@ -72,6 +75,8 @@ static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
 static uint8_t g_ui_param_bank_track = 0xFFU;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
+UI_STATE_SDRAM static float g_ui_audio_owned_shadow[SEQ_TRACK_COUNT][PARAM_COUNT];
+UI_STATE_SDRAM static uint8_t g_ui_audio_owned_shadow_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
 
 typedef struct
 {
@@ -99,6 +104,66 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         float value,
                                         uint8_t track,
                                         uint8_t update_active_mirror);
+
+static uint8_t ui_param_audio_owned_shadow_get(param_id_t param,
+                                               uint8_t track,
+                                               float *out_value)
+{
+    if ((out_value == 0) || (param >= PARAM_COUNT)
+            || (live_parameter_is_audio_owned(param) == 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t scoped = ui_param_is_track_scoped(param);
+    const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
+    if (shadow_track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    if (g_ui_audio_owned_shadow_valid[shadow_track][param] == 0U)
+    {
+        float value = param_store_get_active(param);
+        if ((scoped != 0U)
+                && (param_registry_runtime_cache_get(track, param, &value) == 0U))
+        {
+            value = param_registry[param].default_value;
+        }
+        g_ui_audio_owned_shadow[shadow_track][param] = value;
+        g_ui_audio_owned_shadow_valid[shadow_track][param] = 1U;
+    }
+
+    *out_value = g_ui_audio_owned_shadow[shadow_track][param];
+    return 1U;
+}
+
+static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
+                                               uint8_t track,
+                                               float value,
+                                               uint8_t update_active_mirror)
+{
+    if ((param >= PARAM_COUNT)
+            || (live_parameter_is_audio_owned(param) == 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t scoped = ui_param_is_track_scoped(param);
+    const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
+    if (shadow_track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    g_ui_audio_owned_shadow[shadow_track][param] = value;
+    g_ui_audio_owned_shadow_valid[shadow_track][param] = 1U;
+    if (update_active_mirror != 0U)
+    {
+        param_store_set_active(param, value);
+    }
+    return 1U;
+}
 
 static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
 {
@@ -515,6 +580,16 @@ void ui_param_sync_active_bank_values(void)
             continue;
         }
 
+        if (live_parameter_is_audio_owned(id) != 0U)
+        {
+            float value = 0.0f;
+            if (ui_param_audio_owned_shadow_get(id, active_track, &value) != 0U)
+            {
+                param_store_set_active(id, value);
+            }
+            continue;
+        }
+
         if (ui_param_is_track_scoped(id) != 0U)
         {
             /* Query seam: sync the UI mirror from the track-aware value surface. */
@@ -556,6 +631,16 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
 
         if ((id >= PARAM_FILTER_TYPE) && (id <= PARAM_FILTER_DECIMATOR_RATE2))
         {
+            continue;
+        }
+
+        if (live_parameter_is_audio_owned(id) != 0U)
+        {
+            float value = 0.0f;
+            if (ui_param_audio_owned_shadow_get(id, active_track, &value) != 0U)
+            {
+                param_store_set_active(id, value);
+            }
             continue;
         }
 
@@ -836,6 +921,10 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     active_track = ui_param_resolve_effective_edit_track(param, active_track);
 
     float value = 0.0f;
+    if (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U)
+    {
+        return value;
+    }
     if (ui_param_get_seq_runtime_track_value(param, active_track, &value) != 0U)
     {
         return value;
@@ -860,6 +949,10 @@ float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_t
 
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value)
 {
+    if (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U)
+    {
+        return 1U;
+    }
     if (ui_param_get_seq_runtime_track_value(param, track, out_value) != 0U)
     {
         return 1U;
@@ -999,6 +1092,24 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         uint8_t track,
                                         uint8_t update_active_mirror)
 {
+    (void)encoder;
+
+    if (live_parameter_is_audio_owned(param) != 0U)
+    {
+        const param_desc_t *const desc = &param_registry[param];
+        float edit_min = desc->min;
+        float edit_max = desc->max;
+        if (ui_param_is_track_scoped(param) != 0U)
+        {
+            (void)ui_param_resolve_edit_bounds(param, track, &edit_min, &edit_max);
+        }
+        const float clamped = ui_param_clamp(value, edit_min, edit_max);
+        return ui_param_audio_owned_shadow_set(param,
+                                               track,
+                                               clamped,
+                                               update_active_mirror);
+    }
+
     if (ui_param_is_seq_runtime_track_param(param) != 0U)
     {
         const param_desc_t *const desc = &param_registry[param];

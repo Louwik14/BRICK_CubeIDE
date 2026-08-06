@@ -3,6 +3,7 @@
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_event.h"
 #include "Param/param_registry.h"
+#include "Param/param_registry_runtime_state.h"
 #include "param_store.h"
 #include "memory_layout.h"
 
@@ -106,9 +107,10 @@ static uint8_t live_parameter_audio_runtime_read_current(
 
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
     {
-        return param_registry_get_track_value(event->parameter_id,
-                                               event->track,
-                                               out_value);
+        return param_registry_runtime_get_or_default(param_registry,
+                                                     event->parameter_id,
+                                                     event->track,
+                                                     out_value);
     }
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
     {

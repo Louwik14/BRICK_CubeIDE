@@ -39,6 +39,7 @@
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
+#include "Core/live_parameter_migration.h"
 #include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
@@ -1286,6 +1287,18 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     if ((id >= PARAM_COUNT) || (out_value == NULL))
     {
         return 0U;
+    }
+
+    /* Audio-owned parameters expose only their authoritative target cache.
+     * This keeps UI and control queries away from private voice/backend state. */
+    if (live_parameter_is_audio_owned(id) != 0U)
+    {
+        if ((track >= SEQ_TRACK_COUNT)
+                || (param_registry_runtime_cache_get(track, id, out_value) == 0U))
+        {
+            *out_value = param_registry[id].default_value;
+        }
+        return 1U;
     }
 
     uint8_t note_fx_slot = 0U;

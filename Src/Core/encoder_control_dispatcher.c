@@ -3,6 +3,7 @@
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_audio_runtime.h"
 #include "Core/live_parameter_event.h"
+#include "Core/live_parameter_migration.h"
 #include "encoders.h"
 
 #define ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK ENCODER_DETENT_QUEUE_CAPACITY
@@ -14,79 +15,6 @@ typedef struct
     float value;
     uint8_t valid;
 } encoder_control_shadow_t;
-
-static uint8_t encoder_control_parameter_is_migrated_audio(param_id_t parameter)
-{
-    switch (parameter)
-    {
-        /* Active VCA/filter contracts. */
-        case PARAM_VCA_ATTACK:
-        case PARAM_VCA_DECAY:
-        case PARAM_VCA_SUSTAIN:
-        case PARAM_VCA_RELEASE:
-        case PARAM_FILTER_CUTOFF:
-        case PARAM_FILTER_RESONANCE:
-
-        /* Track mix controls. */
-        case PARAM_MIX_LEVEL:
-        case PARAM_MIX_PAN:
-        case PARAM_MIX_SEND1:
-        case PARAM_MIX_SEND2:
-
-        /* Continuous Wave position, Prism and Stack controls. */
-        case PARAM_WAVE_OSC1_POS:
-        case PARAM_WAVE_OSC2_POS:
-        case PARAM_PRISM_FINE:
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_FM:
-        case PARAM_PRISM_TIMBRE:
-        case PARAM_PRISM_MODULATION:
-        case PARAM_PRISM_COLOR:
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_FINE:
-        case PARAM_PRISM_OSC2_COARSE:
-        case PARAM_PRISM_OSC2_FM:
-        case PARAM_PRISM_OSC2_TIMBRE:
-        case PARAM_PRISM_OSC2_MODULATION:
-        case PARAM_PRISM_OSC2_COLOR:
-        case PARAM_PRISM_OSC2_LEVEL:
-        case PARAM_STACK_OSC1_LEVEL:
-        case PARAM_STACK_OSC2_LEVEL:
-        case PARAM_STACK_OSC3_LEVEL:
-        case PARAM_STACK_NOISE_LEVEL:
-        case PARAM_STACK_OSC1_TUNE:
-        case PARAM_STACK_OSC1_TIMBRE:
-        case PARAM_STACK_OSC1_COLOR:
-        case PARAM_STACK_OSC2_TUNE:
-        case PARAM_STACK_OSC2_TIMBRE:
-        case PARAM_STACK_OSC2_COLOR:
-        case PARAM_STACK_OSC3_TUNE:
-        case PARAM_STACK_OSC3_TIMBRE:
-        case PARAM_STACK_OSC3_COLOR:
-        case PARAM_STACK_OSC_DETUNE:
-
-        /* Continuous delay/reverb controls.  Type/routing/time selectors stay
-         * on their structural command path. */
-        case PARAM_MIX_REVERB_WET:
-        case PARAM_MIX_REVERB_ROOM_SIZE:
-        case PARAM_MIX_REVERB_DAMPING:
-        case PARAM_MIX_REVERB_WIDTH:
-        case PARAM_MIX_REVERB_HPF:
-        case PARAM_MIX_REVERB_LPF:
-        case PARAM_MIX_DELAY_WIDTH:
-        case PARAM_MIX_DELAY_FEEDBACK:
-        case PARAM_MIX_DELAY_SPECTRAL_POSITION:
-        case PARAM_MIX_DELAY_SPECTRAL_WIDTH:
-        case PARAM_MIX_DELAY_FBW:
-        case PARAM_MIX_DELAY_MOD:
-        case PARAM_MIX_DELAY_MOD_RATE:
-        case PARAM_MIX_DELAY_REV:
-        case PARAM_MIX_DELAY_VOL:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
 
 static void encoder_control_shadow_reset(encoder_control_shadow_t *shadow)
 {
@@ -154,7 +82,7 @@ uint8_t encoder_control_dispatcher_service(const ui_param_encoder_context_t *con
         }
 
         const param_id_t parameter = context->bank.params[detent.encoder_id];
-        if (encoder_control_parameter_is_migrated_audio(parameter) == 0U)
+        if (live_parameter_is_audio_owned(parameter) == 0U)
         {
             /* Unmigrated, structural, sequence and navigation controls stay on
              * their existing UI/structural command paths. */
