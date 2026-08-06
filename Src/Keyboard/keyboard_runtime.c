@@ -20,6 +20,7 @@
 #include "Keyboard/keyboard_input.h"
 #include "NoteFx/note_fx_pipeline.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_runtime.h"
 #include "Seq/seq_play_scheduler.h"
 
 #include "ui_core.h"
@@ -158,6 +159,7 @@ void keyboard_runtime_init(void)
 
 void keyboard_runtime_tick(void)
 {
+    seq_runtime_live_rec_drain_effective();
     ui_keyboard_app_tick(0U);
 
 }

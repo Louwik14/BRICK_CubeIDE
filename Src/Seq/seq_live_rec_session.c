@@ -33,6 +33,7 @@ typedef struct
     int8_t start_mictim;
     uint64_t start_sample;
     uint64_t start_sample_quantized;
+    uint32_t occurrence_id;
 } seq_live_rec_session_pending_note_t;
 
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_armed;
@@ -138,6 +139,44 @@ static uint64_t seq_live_rec_session_compute_quantized_on_sample(seq_step_id_t c
 
     write_step_sample_q16 += seq_live_rec_session_mictim_positive_offset_q16(mictim, sps_q16);
     return write_step_sample_q16 >> 16;
+}
+
+static int8_t seq_live_rec_session_apply_track_quant(seq_track_id_t track,
+                                                     int8_t mictim)
+{
+    uint8_t quant = 0U;
+    (void)seq_runtime_get_track_quant(track, &quant);
+    if (quant == 0U)
+    {
+        return mictim;
+    }
+    if (quant >= 100U)
+    {
+        return 0;
+    }
+    return (int8_t)(((int32_t)mictim * (int32_t)(100U - quant)) / 100);
+}
+
+static uint64_t seq_live_rec_session_compute_recorded_sample(seq_track_id_t track,
+                                                             seq_step_id_t current_step,
+                                                             seq_step_id_t write_step,
+                                                             int8_t mictim,
+                                                             const seq_runtime_state_t *runtime_state,
+                                                             uint64_t effective_sample)
+{
+    uint8_t quant = 0U;
+    (void)seq_runtime_get_track_quant(track, &quant);
+    if (quant == 0U)
+    {
+        return effective_sample;
+    }
+
+    return seq_live_rec_session_compute_quantized_on_sample(
+        current_step,
+        write_step,
+        seq_live_rec_session_apply_track_quant(track, mictim),
+        runtime_state->samples_per_step_q16,
+        runtime_state->step_sample_q16);
 }
 
 static void seq_live_rec_session_compute_step_and_mictim(seq_track_id_t track,
@@ -369,8 +408,10 @@ static void seq_live_rec_session_finalize_pending(seq_live_rec_session_pending_n
     }
 
     const uint64_t effective_start_sample = pending->start_sample_quantized;
-    const uint64_t duration_samples = (stop_sample >= effective_start_sample)
-                                            ? (stop_sample - effective_start_sample)
+    const uint64_t effective_stop_sample = (stop_sample >= effective_start_sample)
+                                             ? stop_sample : effective_start_sample;
+    const uint64_t duration_samples = (effective_stop_sample >= effective_start_sample)
+                                            ? (effective_stop_sample - effective_start_sample)
                                             : 0U;
     const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
     const uint64_t duration_q16 = duration_samples << 16;
@@ -421,7 +462,8 @@ static int32_t seq_live_rec_session_alloc_pending_slot(void)
 static int32_t seq_live_rec_session_find_pending_for_note(seq_track_id_t track,
                                                           seq_live_rec_source_t source,
                                                           uint8_t channel_zero_based,
-                                                          uint8_t note)
+                                                          uint8_t note,
+                                                          uint32_t occurrence_id)
 {
     for (uint8_t i = 0U; i < 64U; ++i)
     {
@@ -430,6 +472,11 @@ static int32_t seq_live_rec_session_find_pending_for_note(seq_track_id_t track,
             || (g_seq_live_rec_pending[i].channel != channel_zero_based)
             || (g_seq_live_rec_pending[i].note != note)
             || (g_seq_live_rec_pending[i].source != (uint8_t)source))
+        {
+            continue;
+        }
+        if ((occurrence_id != 0U)
+            && (g_seq_live_rec_pending[i].occurrence_id != occurrence_id))
         {
             continue;
         }
@@ -935,7 +982,8 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
                                            uint8_t note,
                                            uint8_t velocity,
                                            const seq_runtime_state_t *runtime_state,
-                                           uint64_t now_sample)
+                                           uint64_t now_sample,
+                                           uint32_t occurrence_id)
 {
     if ((runtime_state == 0)
         || (seq_live_rec_session_is_live_rec_active() == 0U)
@@ -986,7 +1034,8 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         const int32_t same_source_pending = seq_live_rec_session_find_pending_for_note(track,
                                                                                        source,
                                                                                        channel_zero_based,
-                                                                                       note);
+                                                                                       note,
+                                                                                       occurrence_id);
         if (same_source_pending >= 0)
         {
             seq_live_rec_session_finalize_slot(same_source_pending,
@@ -1027,6 +1076,7 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         const param_id_t vel_param = seq_live_rec_session_play_param_vel((uint8_t)voice);
         const param_id_t len_param = seq_live_rec_session_play_param_len((uint8_t)voice);
         const param_id_t mictim_param = seq_live_rec_session_play_param_mictim((uint8_t)voice);
+        const int8_t recorded_mictim = seq_live_rec_session_apply_track_quant(track, mictim);
 
         seq_live_rec_session_saved_param_t saved_note;
         seq_live_rec_session_saved_param_t saved_vel;
@@ -1050,7 +1100,7 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         const uint8_t micro_ok = seq_live_rec_session_upsert_play_param(track,
                                                                          write_step,
                                                                          mictim_param,
-                                                                         (float)mictim);
+                                                                         (float)recorded_mictim);
         if ((note_ok == 0U) || (vel_ok == 0U) || (micro_ok == 0U))
         {
             (void)seq_live_rec_session_restore_play_param(track, write_step, note_param, &saved_note);
@@ -1073,11 +1123,13 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         g_seq_live_rec_pending[pending_slot].start_mictim = mictim;
         g_seq_live_rec_pending[pending_slot].start_sample = now_sample;
         g_seq_live_rec_pending[pending_slot].start_sample_quantized =
-                seq_live_rec_session_compute_quantized_on_sample(step,
-                                                                 write_step,
-                                                                 mictim,
-                                                                 runtime_state->samples_per_step_q16,
-                                                                 runtime_state->step_sample_q16);
+                seq_live_rec_session_compute_recorded_sample(track,
+                                                              step,
+                                                              write_step,
+                                                              mictim,
+                                                              runtime_state,
+                                                              now_sample);
+        g_seq_live_rec_pending[pending_slot].occurrence_id = occurrence_id;
     }
 }
 
@@ -1085,7 +1137,8 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                             uint8_t channel_zero_based,
                                             uint8_t note,
                                             const seq_runtime_state_t *runtime_state,
-                                            uint64_t now_sample)
+                                            uint64_t now_sample,
+                                            uint32_t occurrence_id)
 {
     if ((runtime_state == 0)
         || (seq_live_rec_session_is_live_rec_active() == 0U)
@@ -1111,14 +1164,30 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
         const int32_t pending_slot = seq_live_rec_session_find_pending_for_note(track,
                                                                                  source,
                                                                                  channel_zero_based,
-                                                                                 note);
+                                                                                 note,
+                                                                                 occurrence_id);
         if (pending_slot < 0)
         {
             continue;
         }
 
+        seq_step_id_t stop_step = runtime_state->play_step[track];
+        int8_t stop_mictim = 0;
+        seq_live_rec_session_compute_step_and_mictim(track,
+                                                     &stop_step,
+                                                     &stop_mictim,
+                                                     runtime_state->samples_per_step_q16,
+                                                     runtime_state->step_sample_q16,
+                                                     now_sample);
+        const uint64_t recorded_stop_sample =
+            seq_live_rec_session_compute_recorded_sample(track,
+                                                          runtime_state->play_step[track],
+                                                          stop_step,
+                                                          stop_mictim,
+                                                          runtime_state,
+                                                          now_sample);
         seq_live_rec_session_finalize_slot(pending_slot,
-                                           now_sample,
+                                           recorded_stop_sample,
                                            runtime_state->samples_per_step_q16);
     }
 }

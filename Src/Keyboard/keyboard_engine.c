@@ -26,7 +26,6 @@
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Core/track_mute.h"
-#include "Core/live_clock.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -61,16 +60,6 @@ static uint8_t g_keyboard_engine_timed_context_active;
 static uint32_t g_keyboard_engine_capture_tick;
 static uint32_t g_keyboard_engine_ingress_serial;
 
-static uint8_t keyboard_engine_capture_sample_for_recording(uint32_t capture_tick,
-                                                            uint64_t *out_sample)
-{
-    if (!live_clock_tim5_to_guarded_sample_time(capture_tick, out_sample))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
 typedef struct
 {
     uint8_t note;
@@ -819,22 +808,7 @@ static void keyboard_engine_note_on_for_track_internal(uint8_t track,
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     keyboard_engine_live_rec_push_track_channel(owner_track, note, channel);
-    if (capture_tick_valid != 0U)
-    {
-        uint64_t sample_time = 0ULL;
-        if (keyboard_engine_capture_sample_for_recording(capture_tick, &sample_time) != 0U)
-        {
-            seq_runtime_live_rec_note_on_at_sample(SEQ_LIVE_REC_SRC_INTERNAL,
-                                                   channel, note, velocity,
-                                                   sample_time);
-        }
-        else
-        {
-            seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL,
-                                         channel, note, velocity);
-        }
-    }
-    else
+    if (capture_tick_valid == 0U)
     {
         seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, channel, note, velocity);
     }
@@ -880,22 +854,7 @@ static void keyboard_engine_note_off_for_track_internal(uint8_t track,
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     const uint8_t note_on_channel =
         keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
-    if (capture_tick_valid != 0U)
-    {
-        uint64_t sample_time = 0ULL;
-        if (keyboard_engine_capture_sample_for_recording(capture_tick, &sample_time) != 0U)
-        {
-            seq_runtime_live_rec_note_off_at_sample(SEQ_LIVE_REC_SRC_INTERNAL,
-                                                    note_on_channel, note,
-                                                    sample_time);
-        }
-        else
-        {
-            seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL,
-                                          note_on_channel, note);
-        }
-    }
-    else
+    if (capture_tick_valid == 0U)
     {
         seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL,
                                       note_on_channel, note);
@@ -1027,23 +986,7 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
 
     if (is_note_on != 0U)
     {
-        if (g_keyboard_engine_timed_context_active != 0U)
-        {
-            uint64_t sample_time = 0ULL;
-            if (keyboard_engine_capture_sample_for_recording(
-                    g_keyboard_engine_capture_tick, &sample_time) != 0U)
-            {
-                seq_runtime_live_rec_note_on_at_sample(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                                       channel, note, velocity,
-                                                       sample_time);
-            }
-            else
-            {
-                seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                             channel, note, velocity);
-            }
-        }
-        else
+        if (g_keyboard_engine_timed_context_active == 0U)
         {
             seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_EXTERNAL,
                                          channel, note, velocity);
@@ -1051,23 +994,7 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
     }
     else if (is_note_off != 0U)
     {
-        if (g_keyboard_engine_timed_context_active != 0U)
-        {
-            uint64_t sample_time = 0ULL;
-            if (keyboard_engine_capture_sample_for_recording(
-                    g_keyboard_engine_capture_tick, &sample_time) != 0U)
-            {
-                seq_runtime_live_rec_note_off_at_sample(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                                        channel, note,
-                                                        sample_time);
-            }
-            else
-            {
-                seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                              channel, note);
-            }
-        }
-        else
+        if (g_keyboard_engine_timed_context_active == 0U)
         {
             seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL,
                                           channel, note);

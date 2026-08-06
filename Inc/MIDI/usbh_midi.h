@@ -36,6 +36,7 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacketWithTimestamp(
 USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
                                       const uint8_t packet[USBH_MIDI_PACKET_SIZE]);
 bool USBH_MIDI_IsReady(USBH_HandleTypeDef *phost);
+uint32_t USBH_MIDI_GetRxOverflowCount(void);
 
 extern USBH_ClassTypeDef USBH_MIDI_Class;
 

@@ -36,6 +36,8 @@
 #include "usbh_midi.h"
 #include "Core/live_clock.h"
 
+static volatile uint32_t g_usbh_midi_rx_overflow_count;
+
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
 #endif
@@ -375,6 +377,7 @@ static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
 {
   if (handle->rx_count >= USBH_MIDI_RX_QUEUE_LEN)
   {
+    ++g_usbh_midi_rx_overflow_count;
     return;
   }
 
@@ -392,6 +395,11 @@ static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
   handle->rx_queue[handle->rx_head].ingress_serial = ingress_serial;
   handle->rx_head = (uint16_t)((handle->rx_head + 1U) % USBH_MIDI_RX_QUEUE_LEN);
   handle->rx_count++;
+}
+
+uint32_t USBH_MIDI_GetRxOverflowCount(void)
+{
+  return g_usbh_midi_rx_overflow_count;
 }
 
 /**

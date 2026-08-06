@@ -34,6 +34,7 @@
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
+#define SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY 128U
 
 /* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())
@@ -49,6 +50,23 @@ SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_TRACK_COUNT];
 SEQ_STATE_D2 static seq_runtime_diag_t g_seq_runtime_diag;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
+typedef struct
+{
+    uint64_t effective_sample_time;
+    uint32_t ingress_serial;
+    uint32_t occurrence_id;
+    uint8_t source;
+    uint8_t is_note_on;
+    uint8_t channel;
+    uint8_t note;
+    uint8_t velocity;
+} seq_runtime_live_rec_event_t;
+static seq_runtime_live_rec_event_t
+    g_seq_runtime_live_rec_queue[SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY];
+static volatile uint8_t g_seq_runtime_live_rec_head;
+static volatile uint8_t g_seq_runtime_live_rec_tail;
+static volatile uint8_t g_seq_runtime_live_rec_count;
+static uint32_t g_seq_runtime_live_rec_drop_count;
 static uint8_t g_seq_runtime_trigger_start_bypass;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
@@ -256,6 +274,11 @@ void seq_runtime_init(void)
     g_seq_internal_time_tick = 0U;
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     g_seq_runtime_diag = (seq_runtime_diag_t){0};
+    g_seq_runtime_live_rec_head = 0U;
+    g_seq_runtime_live_rec_tail = 0U;
+    g_seq_runtime_live_rec_count = 0U;
+    g_seq_runtime_live_rec_drop_count = 0U;
+    memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
     seq_play_scheduler_init();
     seq_output_guard_init();
@@ -545,6 +568,11 @@ void seq_runtime_diag_reset(void)
 {
     const uint32_t primask = seq_runtime_enter_critical();
     g_seq_runtime_diag = (seq_runtime_diag_t){0};
+    g_seq_runtime_live_rec_head = 0U;
+    g_seq_runtime_live_rec_tail = 0U;
+    g_seq_runtime_live_rec_count = 0U;
+    g_seq_runtime_live_rec_drop_count = 0U;
+    memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     seq_runtime_exit_critical(primask);
 }
 
@@ -556,6 +584,7 @@ void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag)
     }
 
     const uint32_t primask = seq_runtime_enter_critical();
+    g_seq_runtime_diag.live_rec_event_drop_count = g_seq_runtime_live_rec_drop_count;
     *out_diag = g_seq_runtime_diag;
     seq_runtime_exit_critical(primask);
 }
@@ -911,7 +940,8 @@ void seq_runtime_live_rec_note_on_at_sample(seq_live_rec_source_t source,
                                           note,
                                           velocity,
                                           &g_seq_runtime,
-                                          sample_time);
+                                          sample_time,
+                                          0U);
 }
 
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
@@ -933,9 +963,141 @@ void seq_runtime_live_rec_note_off_at_sample(seq_live_rec_source_t source,
                                            channel_zero_based,
                                            note,
                                            &g_seq_runtime,
-                                           sample_time);
+                                           sample_time,
+                                           0U);
 }
 
+static void seq_runtime_live_rec_note_on_at_sample_occurrence(seq_live_rec_source_t source,
+                                                               uint8_t channel_zero_based,
+                                                               uint8_t note,
+                                                               uint8_t velocity,
+                                                               uint64_t sample_time,
+                                                               uint32_t occurrence_id)
+{
+    if (seq_live_rec_session_consume_trigger_start_note_on() != 0U)
+    {
+        g_seq_runtime_trigger_start_bypass = 1U;
+        seq_runtime_start();
+    }
+
+    seq_live_rec_session_live_rec_note_on(source,
+                                          channel_zero_based,
+                                          note,
+                                          velocity,
+                                          &g_seq_runtime,
+                                          sample_time,
+                                          occurrence_id);
+}
+
+static void seq_runtime_live_rec_note_off_at_sample_occurrence(seq_live_rec_source_t source,
+                                                                uint8_t channel_zero_based,
+                                                                uint8_t note,
+                                                                uint64_t sample_time,
+                                                                uint32_t occurrence_id)
+{
+    seq_live_rec_session_live_rec_note_off(source,
+                                           channel_zero_based,
+                                           note,
+                                           &g_seq_runtime,
+                                           sample_time,
+                                           occurrence_id);
+}
+uint8_t seq_runtime_live_rec_submit_effective(seq_live_rec_source_t source,
+                                              uint8_t is_note_on,
+                                              uint8_t channel_zero_based,
+                                              uint8_t note,
+                                              uint8_t velocity,
+                                              uint64_t effective_sample_time,
+                                              uint32_t ingress_serial,
+                                              uint32_t occurrence_id)
+{
+    if ((source > SEQ_LIVE_REC_SRC_EXTERNAL) || (note >= 128U)
+        || ((is_note_on != 0U) && (velocity == 0U)))
+    {
+        return 0U;
+    }
+
+    const uint32_t primask = seq_runtime_enter_critical();
+    for (uint8_t i = 0U; i < g_seq_runtime_live_rec_count; ++i)
+    {
+        const uint8_t index = (uint8_t)((g_seq_runtime_live_rec_tail + i)
+                                        % SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY);
+        const seq_runtime_live_rec_event_t *const queued =
+            &g_seq_runtime_live_rec_queue[index];
+        if ((ingress_serial != 0U)
+            && (queued->ingress_serial == ingress_serial)
+            && (queued->source == (uint8_t)source)
+            && (queued->is_note_on == ((is_note_on != 0U) ? 1U : 0U))
+            && (queued->channel == channel_zero_based)
+            && (queued->note == note))
+        {
+            seq_runtime_exit_critical(primask);
+            return 1U;
+        }
+    }
+
+    if (g_seq_runtime_live_rec_count >= SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY)
+    {
+        ++g_seq_runtime_live_rec_drop_count;
+        seq_runtime_exit_critical(primask);
+        return 0U;
+    }
+
+    seq_runtime_live_rec_event_t *const event =
+        &g_seq_runtime_live_rec_queue[g_seq_runtime_live_rec_head];
+    *event = (seq_runtime_live_rec_event_t){
+        .effective_sample_time = effective_sample_time,
+        .ingress_serial = ingress_serial,
+        .occurrence_id = occurrence_id,
+        .source = (uint8_t)source,
+        .is_note_on = (is_note_on != 0U) ? 1U : 0U,
+        .channel = channel_zero_based,
+        .note = note,
+        .velocity = velocity
+    };
+    g_seq_runtime_live_rec_head = (uint8_t)((g_seq_runtime_live_rec_head + 1U)
+                                            % SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY);
+    ++g_seq_runtime_live_rec_count;
+    seq_runtime_exit_critical(primask);
+    return 1U;
+}
+
+void seq_runtime_live_rec_drain_effective(void)
+{
+    for (;;)
+    {
+        seq_runtime_live_rec_event_t event;
+        const uint32_t primask = seq_runtime_enter_critical();
+        if (g_seq_runtime_live_rec_count == 0U)
+        {
+            seq_runtime_exit_critical(primask);
+            return;
+        }
+        event = g_seq_runtime_live_rec_queue[g_seq_runtime_live_rec_tail];
+        g_seq_runtime_live_rec_tail = (uint8_t)((g_seq_runtime_live_rec_tail + 1U)
+                                                 % SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY);
+        --g_seq_runtime_live_rec_count;
+        seq_runtime_exit_critical(primask);
+
+        if (event.is_note_on != 0U)
+        {
+            seq_runtime_live_rec_note_on_at_sample_occurrence((seq_live_rec_source_t)event.source,
+                                                               event.channel,
+                                                               event.note,
+                                                               event.velocity,
+                                                               event.effective_sample_time,
+                                                               event.occurrence_id);
+        }
+        else
+        {
+            seq_runtime_live_rec_note_off_at_sample_occurrence((seq_live_rec_source_t)event.source,
+                                                                event.channel,
+                                                                event.note,
+                                                                event.effective_sample_time,
+                                                                event.occurrence_id);
+        }
+    }
+}
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
 {
     if (track >= SEQ_TRACK_COUNT)

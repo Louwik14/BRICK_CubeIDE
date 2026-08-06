@@ -81,6 +81,7 @@ typedef struct
     uint32_t external_pulses_coalesced;
     uint32_t external_pulses_overflowed;
     uint16_t max_external_pulses_per_block;
+    uint32_t live_rec_event_drop_count;
 } seq_runtime_diag_t;
 
 /*
@@ -134,6 +135,16 @@ void seq_runtime_live_rec_note_off_at_sample(seq_live_rec_source_t source,
                                              uint8_t channel_zero_based,
                                              uint8_t note,
                                              uint64_t sample_time);
+/* Audio-owned effective-time handoff; drained outside the audio IRQ. */
+uint8_t seq_runtime_live_rec_submit_effective(seq_live_rec_source_t source,
+                                              uint8_t is_note_on,
+                                              uint8_t channel_zero_based,
+                                              uint8_t note,
+                                              uint8_t velocity,
+                                              uint64_t effective_sample_time,
+                                              uint32_t ingress_serial,
+                                              uint32_t occurrence_id);
+void seq_runtime_live_rec_drain_effective(void);
 /* Notification surface from MIDI input / transport source. */
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);

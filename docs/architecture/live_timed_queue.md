@@ -77,16 +77,32 @@ fermeture.
 
 ## Live Recording
 
-Le Live Recording recoit le meme sample absolu corrige que le pipeline live : les
-chemins Hall et MIDI timestamps transmettent le sample d'acquisition converti
-par TIM5 et majore de `LIVE_GUARD_SAMPLES`. Les anciens appels sans timestamp
-restent des wrappers de compatibilite pour les chemins non temps reel.
+L'autorite temporelle est unique et lineaire :
 
-Le note-on et le note-off d'une occurrence utilisent cette meme timeline ; la
-longueur est donc calculee depuis le sample du note-off et le sample de depart.
-Le calcul existant de position musicale et de microtiming est conserve : la
-position reelle et le microtiming sont derives du sample d'acquisition, puis les
-regles de grille/quantification deja en vigueur decident explicitement de la
-position a ecrire. Les retriggers, l'identite d'occurrence et le bouclage restent
-geres par la session de recording ; l'heure du superloop n'est plus utilisee
-pour les entrees Hall/MIDI timestampes.
+`TIM5 capture -> conversion audio -> garde -> clamp au premier sample rendu -> effective_sample_time`
+
+La conversion, la garde et le clamp sont effectues une seule fois par la file
+live audio-owned. Cette valeur effective est partagee par l'application audio,
+le note-on, le note-off, le calcul de duree et la conversion vers la position
+musicale du Live Recording. Le recording ne relit donc pas la timeline audio et
+ne recalcule pas d'echeance.
+
+Le transfert audio vers le Live Recording est borne, fixe et sans pointeur. Les
+evenements Hall/MIDI timestampes sont draines hors de l'IRQ audio ; les appels
+sans timestamp restent uniquement les wrappers de compatibilite des chemins
+non temps reel. L'`occurrence_id` est conserve pour apparier les retriggers et
+les note-off.
+
+La quantification est appliquee une seule fois, uniquement a la representation
+enregistree : quantification OFF conserve la position et le microtiming issus de
+`effective_sample_time`; quantification ON applique la grille active du track
+au resultat musical. Elle ne modifie jamais le sample entendu ni
+`effective_sample_time`.
+
+Les paquets Host rejetes au point de saturation de sa file RX incrementent le
+diagnostic Host `USBH_MIDI_GetRxOverflowCount()` ; ce compteur est distinct des
+compteurs Device et NoteFx et aucun log n'est produit dans le chemin chaud.
+
+`NOTE_FX_SAMPLE_TIME_AUDIO_OWNER` reste uniquement le marqueur de compatibilite
+des soumissions non timestampes. Il ne doit jamais etre utilise pour resoudre
+l'heure d'un evenement Hall/MIDI capture.

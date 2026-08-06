@@ -37,11 +37,13 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
                                            uint8_t note,
                                            uint8_t velocity,
                                            const seq_runtime_state_t *runtime_state,
-                                           uint64_t now_sample);
+                                           uint64_t now_sample,
+                                           uint32_t occurrence_id);
 void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                             uint8_t channel_zero_based,
                                             uint8_t note,
                                             const seq_runtime_state_t *runtime_state,
-                                            uint64_t now_sample);
+                                            uint64_t now_sample,
+                                            uint32_t occurrence_id);
 
 #endif /* SEQ_LIVE_REC_SESSION_H */

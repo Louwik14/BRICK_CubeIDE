@@ -3,6 +3,7 @@
 #include "stm32h7xx.h"
 
 #define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_runtime.h"
 #include "Seq/seq_play_scheduler.h"
 #include "NoteFx/note_fx_engine.h"
 #include "NoteFx/note_fx_state.h"
@@ -1127,8 +1128,22 @@ static note_fx_result_t note_fx_pipeline_submit_live_command(
             ++g_note_fx_live_fallback_serial;
         event.ingress_serial = g_note_fx_live_fallback_serial;
     }
-    return (note_fx_pipeline_live_enqueue(&event) != 0U)
-        ? NOTE_EVENT_RESULT_ACCEPTED : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+    if (note_fx_pipeline_live_enqueue(&event) == 0U)
+    {
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+    }
+
+    (void)seq_runtime_live_rec_submit_effective(
+        (event.source == LIVE_EVENT_SOURCE_HALL)
+            ? SEQ_LIVE_REC_SRC_INTERNAL : SEQ_LIVE_REC_SRC_EXTERNAL,
+        (event.type == LIVE_NOTE_EVENT_ON) ? 1U : 0U,
+        track_runtime_get_midi_channel_zero_based(event.track),
+        event.note,
+        event.velocity,
+        event.sample_time,
+        event.ingress_serial,
+        event.occurrence_id);
+    return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
 static void note_fx_pipeline_apply_due_live_events(uint64_t now)
