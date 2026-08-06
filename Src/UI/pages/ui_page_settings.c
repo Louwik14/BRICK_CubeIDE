@@ -2373,6 +2373,13 @@ static void ui_page_settings_multi_prepare_poll(void)
     const multi_sample_instrument_state_t state =
         multi_sample_pool_get_state(g_ui_settings.confirm_slot);
 
+    if (diag.state == MULTI_SAMPLE_INSTRUMENT_ERROR)
+    {
+        ui_page_settings_multi_prepare_finish(
+            ui_page_settings_multi_load_error_label(diag.last_error));
+        return;
+    }
+
     if (state == MULTI_SAMPLE_INSTRUMENT_LOADING)
     {
         g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
@@ -2658,6 +2665,10 @@ static const char *ui_page_settings_multi_load_error_label(multi_sample_load_res
             return "CACHE FULL";
         case MULTI_SAMPLE_LOAD_PAGE_ERROR:
             return "PAGE FAIL";
+        case MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE:
+            return "STOP AUDIO";
+        case MULTI_SAMPLE_LOAD_CANCELLED:
+            return "CANCEL";
         default:
             return "LOAD FAIL";
     }
@@ -3927,6 +3938,11 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
         {
             if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
             {
+                if (ev->id == (uint8_t)BTN_PAGE_1)
+                {
+                    (void)multi_sample_cancel_load();
+                    ui_page_settings_multi_prepare_finish("CANCEL");
+                }
                 return;
             }
             if (ev->id == (uint8_t)BTN_PAGE_2)
@@ -4841,6 +4857,7 @@ static void ui_page_settings_render_multi_browser(void)
                                            6U,
                                            g_ui_settings.multi_prepare_progress_done,
                                            g_ui_settings.multi_prepare_progress_total);
+        ui_page_settings_draw_page_footer("CANCEL");
         drv_display_set_font(&FONT_5X7);
         return;
     }

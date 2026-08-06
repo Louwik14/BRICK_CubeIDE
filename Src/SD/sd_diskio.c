@@ -52,6 +52,32 @@
  */
 #define SD_READ_BOUNCE_BLOCK_COUNT 8U
 
+static volatile sd_diskio_read_metrics_t g_sd_diskio_read_metrics;
+
+void sd_diskio_read_metrics_reset(void)
+{
+  memset((void *)&g_sd_diskio_read_metrics, 0, sizeof(g_sd_diskio_read_metrics));
+}
+
+void sd_diskio_read_metrics_get(sd_diskio_read_metrics_t *out_metrics)
+{
+  if (out_metrics != 0)
+  {
+    *out_metrics = g_sd_diskio_read_metrics;
+  }
+}
+
+static void sd_diskio_read_metrics_note(UINT blocks)
+{
+  const uint32_t bytes = (uint32_t)blocks * SD_DEFAULT_BLOCK_SIZE;
+  g_sd_diskio_read_metrics.read_transactions++;
+  g_sd_diskio_read_metrics.read_bytes += bytes;
+  if (bytes > g_sd_diskio_read_metrics.max_read_bytes)
+  {
+    g_sd_diskio_read_metrics.max_read_bytes = bytes;
+  }
+}
+
 /*
  * Depending on the use case, the SD card initialization could be done at the
  * application level: if it is the case define the flag below to disable
@@ -304,6 +330,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
      */
     dcache_invalidate_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
+    sd_diskio_read_metrics_note(count);
     if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
                              (uint32_t) (sector),
                              count) == MSD_OK)
@@ -368,6 +395,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
          */
         dcache_invalidate_by_addr_aligned(scratch, bounce_bytes);
 #endif
+        sd_diskio_read_metrics_note(bounce_count);
         ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch,
                                    (uint32_t)(sector + blocks_done),
                                    bounce_count);

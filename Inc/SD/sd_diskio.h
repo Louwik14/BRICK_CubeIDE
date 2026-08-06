@@ -28,11 +28,22 @@
 /* USER CODE END firstSection */
 
 /* Includes ------------------------------------------------------------------*/
+#include "ff_gen_drv.h"
 #include "bsp_driver_sd.h"
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 extern const Diskio_drvTypeDef  SD_Driver;
+
+typedef struct
+{
+  uint32_t read_transactions;
+  uint32_t read_bytes;
+  uint32_t max_read_bytes;
+} sd_diskio_read_metrics_t;
+
+void sd_diskio_read_metrics_reset(void);
+void sd_diskio_read_metrics_get(sd_diskio_read_metrics_t *out_metrics);
 
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */

@@ -22,7 +22,9 @@ typedef enum
     MULTI_SAMPLE_LOAD_REGISTER_FAIL,
     MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE,
     MULTI_SAMPLE_LOAD_PAGE_ERROR,
-    MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED
+    MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED,
+    MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE,
+    MULTI_SAMPLE_LOAD_CANCELLED
 } multi_sample_load_result_t;
 
 typedef struct
@@ -38,6 +40,19 @@ typedef struct
     uint16_t last_failed_sample;
     multi_sample_load_result_t last_error;
     multi_sample_instrument_state_t state;
+    uint16_t pages_remaining;
+    uint16_t samples_remaining;
+    uint32_t elapsed_ms;
+    uint32_t file_opens;
+    uint32_t seeks;
+    uint32_t read_calls;
+    uint32_t physical_reads;
+    uint32_t bytes_read;
+    uint32_t physical_bytes;
+    uint32_t max_read_bytes;
+    uint32_t decode_cycles;
+    uint32_t service_passes;
+    uint32_t legacy_rescans_avoided;
 } multi_sample_load_diag_t;
 
 multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,
@@ -45,6 +60,7 @@ multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,
 void multi_sample_service_load(uint32_t byte_budget);
 uint8_t multi_sample_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_load_has_pending(void);
+uint8_t multi_sample_cancel_load(void);
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
 
 #ifdef __cplusplus

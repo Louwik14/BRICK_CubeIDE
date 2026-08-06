@@ -248,6 +248,14 @@ uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
 uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
                                               uint32_t page_index,
                                               sample_page_load_target_t *out_target);
+uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
+    sample_audio_key_t key,
+    uint32_t page_index,
+    sample_page_alloc_type_t alloc_type);
+uint8_t sample_page_cache_get_bulk_load_target_key(
+    sample_audio_key_t key,
+    uint32_t page_index,
+    sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
                                          uint32_t page_index,
                                          sample_page_state_t state);
@@ -348,6 +356,12 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
                                                      const wav_info_t *info,
                                                      uint32_t total_frames,
                                                      uint32_t data_offset);
+uint8_t sample_page_cache_register_stream_sample_key_no_map(
+    sample_audio_key_t key,
+    const char *path,
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset);
 uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
                                                            const char *path,
                                                            uint32_t total_frames);

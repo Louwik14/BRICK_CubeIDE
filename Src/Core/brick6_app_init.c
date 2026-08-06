@@ -206,33 +206,40 @@ void brick6_app_process(void)
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
-    brick6_sampler_runtime_queue_stream_pages();
-    sample_cache_service(32768U);
-    multi_record_writer_service(16384U);
-#if BRICK_TEST_BUILD
-    audio_test_csv_service();
-    monkey_test_log_service();
-    audio_test_runner_tick();
-    audio_test2_service();
-    monkey_test_tick();
-#endif
-    if (looper_storage_raw_export_is_active() != 0U)
+    if (multi_sample_load_has_pending() != 0U)
     {
-        looper_storage_raw_export_service(516096U);
+        multi_sample_service_load(0U);
     }
     else
     {
-        brick6_sampler_runtime_service();
-        sampler_ram_pool_waveform_service(4096U);
-        brick6_looper_runtime_service(8192U);
-        if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+        brick6_sampler_runtime_queue_stream_pages();
+        sample_cache_service(32768U);
+        multi_record_writer_service(16384U);
+#if BRICK_TEST_BUILD
+        audio_test_csv_service();
+        monkey_test_log_service();
+        audio_test_runner_tick();
+        audio_test2_service();
+        monkey_test_tick();
+#endif
+        if (looper_storage_raw_export_is_active() != 0U)
         {
-            looper_storage_raw_export_service(8192U);
-            multi_sample_service_load((ui_boot_loading_is_active() != 0U) ? 4096U : 32768U);
+            looper_storage_raw_export_service(516096U);
         }
-        pattern_load_service(4096U);
-        waveform_cache_service(8192U);
-        sd_preview_process();
+        else
+        {
+            brick6_sampler_runtime_service();
+            sampler_ram_pool_waveform_service(4096U);
+            brick6_looper_runtime_service(8192U);
+            if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+            {
+                looper_storage_raw_export_service(8192U);
+                multi_sample_service_load(32768U);
+            }
+            pattern_load_service(4096U);
+            waveform_cache_service(8192U);
+            sd_preview_process();
+        }
     }
     pattern_live_service();
     brick6_master_control_process();
