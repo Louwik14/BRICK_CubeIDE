@@ -77,6 +77,8 @@ typedef struct
     uint8_t phase_reset_pending;
     float osc_level;
     float osc_level_current;
+    float parameter_timbre_current;
+    float parameter_color_current;
     float pitch_current_q7;
     braids::MacroOscillator oscillator;
 } brick6_braids_runtime_osc_t;
@@ -202,6 +204,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
         osc->phase_reset_pending = 0U;
         osc->osc_level = (osc_index == 0U) ? 1.0f : 0.0f;
         osc->osc_level_current = osc->osc_level;
+        osc->parameter_timbre_current = osc->voice.timbre;
+        osc->parameter_color_current = osc->voice.color;
         osc->oscillator.Init();
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
         osc->pitch_current_q7 = (float)brick6_braids_runtime_pitch_to_q7(&osc->voice);
@@ -545,6 +549,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
     float osc_level_start[kBraidsOscCount];
     float osc_level_step[kBraidsOscCount];
     float pitch_target_q7[kBraidsOscCount];
+    float parameter_timbre_target[kBraidsOscCount];
+    float parameter_color_target[kBraidsOscCount];
     uint8_t any_osc_level = 0U;
     uint8_t audible_mask = 0U;
     uint8_t levels_stable = 1U;
@@ -578,11 +584,17 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
     }
     for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
     {
+        brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
+        parameter_timbre_target[osc_index] = brick6_braids_runtime_clamp(
+            osc->voice.timbre + ((osc->voice.modulation - 0.5f) * 0.5f),
+            0.0f,
+            1.0f);
+        parameter_color_target[osc_index] = brick6_braids_runtime_clamp(
+            osc->voice.color, 0.0f, 1.0f);
         if ((audible_mask & (uint8_t)(1U << osc_index)) == 0U)
         {
             continue;
         }
-        brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
         osc->voice.note = instance->note;
         osc->voice.velocity = instance->velocity;
         osc->voice.active_note = instance->active_note;
@@ -591,10 +603,6 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         pitch_target_q7[osc_index] =
             (float)brick6_braids_runtime_pitch_to_q7(&osc->voice);
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
-        osc->oscillator.set_parameters(
-            brick6_braids_runtime_float_to_u15(
-                osc->voice.timbre + ((osc->voice.modulation - 0.5f) * 0.5f)),
-            brick6_braids_runtime_float_to_u15(osc->voice.color));
     }
     uint32_t offset = 0U;
     uint8_t sync_block[kBraidsRenderBlockSize] = {};
@@ -641,7 +649,16 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                     : ((float)render_count / (float)remaining);
             osc->pitch_current_q7 +=
                 (pitch_target_q7[osc_index] - osc->pitch_current_q7) * pitch_progress;
+            osc->parameter_timbre_current +=
+                (parameter_timbre_target[osc_index] - osc->parameter_timbre_current)
+                * pitch_progress;
+            osc->parameter_color_current +=
+                (parameter_color_target[osc_index] - osc->parameter_color_current)
+                * pitch_progress;
             osc->oscillator.set_pitch((int16_t)(osc->pitch_current_q7 + 0.5f));
+            osc->oscillator.set_parameters(
+                brick6_braids_runtime_float_to_u15(osc->parameter_timbre_current),
+                brick6_braids_runtime_float_to_u15(osc->parameter_color_current));
             const uint8_t *const sync_input =
                 (osc->phase_reset_enabled != 0U) ? sync_block : NULL;
             osc->oscillator.Render(
@@ -714,6 +731,10 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
     {
         instance->osc[osc_index].osc_level_current =
             instance->osc[osc_index].osc_level;
+        instance->osc[osc_index].parameter_timbre_current =
+            parameter_timbre_target[osc_index];
+        instance->osc[osc_index].parameter_color_current =
+            parameter_color_target[osc_index];
     }
     if ((instance->gate == 0U) && (instance->tail_samples_remaining == 0U) && (instance->level <= 1.0e-5f))
     {

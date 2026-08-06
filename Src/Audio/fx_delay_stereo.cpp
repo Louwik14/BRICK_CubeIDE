@@ -32,10 +32,12 @@ typedef struct
     float width;
     float width_target;
     float reverb_send;
+    float reverb_send_target;
     float volume;
     float volume_target;
     uint16_t feedback_smooth_remaining;
     uint16_t width_smooth_remaining;
+    uint16_t reverb_send_smooth_remaining;
     uint16_t volume_smooth_remaining;
     float feedback_hpf_l;
     float feedback_hpf_r;
@@ -130,10 +132,12 @@ extern "C" void fx_delay_stereo_global_init(float sample_rate)
     g_delay.width = 0.0f;
     g_delay.width_target = 0.0f;
     g_delay.reverb_send = 0.0f;
+    g_delay.reverb_send_target = 0.0f;
     g_delay.volume = 0.0f;
     g_delay.volume_target = 0.0f;
     g_delay.feedback_smooth_remaining = 0U;
     g_delay.width_smooth_remaining = 0U;
+    g_delay.reverb_send_smooth_remaining = 0U;
     g_delay.volume_smooth_remaining = 0U;
     g_delay.feedback_hpf_l = 0.0f;
     g_delay.feedback_hpf_r = 0.0f;
@@ -210,7 +214,10 @@ extern "C" void fx_delay_stereo_global_set_width(float width)
 
 extern "C" void fx_delay_stereo_global_set_reverb_send(float reverb_send)
 {
-    g_delay.reverb_send = clampf_local(reverb_send, 0.0f, 1.0f);
+    const float target = clampf_local(reverb_send, 0.0f, 1.0f);
+    if(fabsf(target - g_delay.reverb_send_target) <= 1.0e-7f) return;
+    g_delay.reverb_send_target = target;
+    g_delay.reverb_send_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
 extern "C" void fx_delay_stereo_global_set_volume(float volume)
@@ -225,7 +232,7 @@ extern "C" uint8_t fx_delay_stereo_global_is_active(void)
 {
     return ((g_delay.volume_target > 0.0f)
          || (g_delay.volume > 0.0f)
-         || (g_delay.reverb_send > 0.0f)) ? 1U : 0U;
+         || (g_delay.reverb_send_target > 0.0f)) ? 1U : 0U;
 }
 
 extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
@@ -258,7 +265,6 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     }
     const float hpf_a = g_delay.cached_hpf_a;
     const float lpf_a = g_delay.cached_lpf_a;
-    const float rev = g_delay.reverb_send;
     const uint8_t has_rev = ((rev_l != 0) && (rev_r != 0)) ? 1U : 0U;
     float *const delay_buffer_l = fx_delay_shared_pool_left();
     float *const delay_buffer_r = fx_delay_shared_pool_right();
@@ -268,11 +274,15 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     float volume = g_delay.volume;
     uint16_t feedback_remaining = g_delay.feedback_smooth_remaining;
     uint16_t width_remaining = g_delay.width_smooth_remaining;
+    uint16_t reverb_send_remaining = g_delay.reverb_send_smooth_remaining;
     uint16_t volume_remaining = g_delay.volume_smooth_remaining;
     const float feedback_step = (feedback_remaining != 0U)
         ? (g_delay.feedback_target - feedback) / (float)feedback_remaining : 0.0f;
     const float width_step = (width_remaining != 0U)
         ? (g_delay.width_target - width) / (float)width_remaining : 0.0f;
+    float reverb_send = g_delay.reverb_send;
+    const float reverb_send_step = (reverb_send_remaining != 0U)
+        ? (g_delay.reverb_send_target - reverb_send) / (float)reverb_send_remaining : 0.0f;
     const float volume_step = (volume_remaining != 0U)
         ? (g_delay.volume_target - volume) / (float)volume_remaining : 0.0f;
     float time_l = g_delay.time_current_samples_l;
@@ -300,6 +310,13 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             --width_remaining;
             if(width_remaining == 0U)
                 width = g_delay.width_target;
+        }
+        if(reverb_send_remaining != 0U)
+        {
+            reverb_send += reverb_send_step;
+            --reverb_send_remaining;
+            if(reverb_send_remaining == 0U)
+                reverb_send = g_delay.reverb_send_target;
         }
         if(volume_remaining != 0U)
         {
@@ -367,8 +384,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
         out_r[i] = wet_r * vol;
         if(has_rev != 0U)
         {
-            rev_l[i] = wet_l * rev;
-            rev_r[i] = wet_r * rev;
+            rev_l[i] = wet_l * reverb_send;
+            rev_r[i] = wet_r * reverb_send;
         }
 
         write_index++;
@@ -383,6 +400,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     g_delay.volume = volume;
     g_delay.feedback_smooth_remaining = feedback_remaining;
     g_delay.width_smooth_remaining = width_remaining;
+    g_delay.reverb_send = reverb_send;
+    g_delay.reverb_send_smooth_remaining = reverb_send_remaining;
     g_delay.volume_smooth_remaining = volume_remaining;
     g_delay.time_current_samples_l = time_l;
     g_delay.time_current_samples_r = time_r;

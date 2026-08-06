@@ -3,8 +3,6 @@
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_event.h"
 #include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
-#include "param_store.h"
 #include "memory_layout.h"
 
 typedef struct
@@ -15,10 +13,7 @@ typedef struct
     uint8_t slot;
     uint16_t parameter_id;
     uint16_t reserved;
-    float current;
     float target;
-    float increment;
-    uint32_t remaining_samples;
     uint64_t last_sample_time;
 } live_parameter_audio_runtime_slot_t;
 
@@ -62,62 +57,13 @@ live_parameter_audio_runtime_find_slot(const live_parameter_audio_event_t *event
             return slot;
         if ((free_slot == 0) && (slot->valid == 0U))
             free_slot = slot;
-        if ((slot->valid != 0U)
-                && (slot->remaining_samples == 0U)
-                && (slot->last_sample_time < reusable_age))
+        if ((slot->valid != 0U) && (slot->last_sample_time < reusable_age))
         {
             reusable_slot = slot;
             reusable_age = slot->last_sample_time;
         }
     }
     return (free_slot != 0) ? free_slot : reusable_slot;
-}
-
-static void live_parameter_audio_runtime_advance_to(
-    live_parameter_audio_runtime_slot_t *slot,
-    uint64_t sample_time)
-{
-    if ((slot == 0) || (slot->valid == 0U) || (sample_time <= slot->last_sample_time))
-        return;
-
-    uint64_t elapsed = sample_time - slot->last_sample_time;
-    if (slot->remaining_samples != 0U)
-    {
-        if (elapsed > (uint64_t)slot->remaining_samples)
-            elapsed = (uint64_t)slot->remaining_samples;
-
-        slot->current += slot->increment * (float)elapsed;
-        slot->remaining_samples -= (uint32_t)elapsed;
-        if (slot->remaining_samples == 0U)
-        {
-            slot->current = slot->target;
-            slot->increment = 0.0f;
-        }
-    }
-
-    slot->last_sample_time = sample_time;
-}
-
-static uint8_t live_parameter_audio_runtime_read_current(
-    const live_parameter_audio_event_t *event,
-    float *out_value)
-{
-    if ((event == 0) || (out_value == 0) || (event->parameter_id >= PARAM_COUNT))
-        return 0U;
-
-    if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-    {
-        return param_registry_runtime_get_or_default(param_registry,
-                                                     event->parameter_id,
-                                                     event->track,
-                                                     out_value);
-    }
-    if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
-    {
-        *out_value = param_get(event->parameter_id);
-        return 1U;
-    }
-    return 0U;
 }
 
 static uint8_t live_parameter_audio_runtime_apply_target(
@@ -159,22 +105,11 @@ static uint8_t live_parameter_audio_runtime_apply_event(
     if ((new_slot != 0U)
             || (live_parameter_audio_runtime_slot_matches(slot, event) == 0U))
     {
-        float current = 0.0f;
-        if (live_parameter_audio_runtime_read_current(event, &current) == 0U)
-        {
-            g_live_parameter_audio_runtime_diag.rejected_count++;
-            return 0U;
-        }
-
         slot->valid = 1U;
         slot->scope = event->scope;
         slot->track = event->track;
         slot->slot = event->slot;
         slot->parameter_id = event->parameter_id;
-        slot->current = live_parameter_audio_runtime_clamp(event->parameter_id, current);
-        slot->target = slot->current;
-        slot->increment = 0.0f;
-        slot->remaining_samples = 0U;
         slot->last_sample_time = now;
         if (new_slot != 0U)
         {
@@ -189,7 +124,6 @@ static uint8_t live_parameter_audio_runtime_apply_event(
     }
     else
     {
-        live_parameter_audio_runtime_advance_to(slot, now);
         g_live_parameter_audio_runtime_diag.retarget_count++;
     }
 
@@ -199,18 +133,6 @@ static uint8_t live_parameter_audio_runtime_apply_event(
             ? live_parameter_event_decode_float(event->value)
             : (float)event->value);
     slot->target = target;
-    if (slot->current == target)
-    {
-        slot->current = target;
-        slot->increment = 0.0f;
-        slot->remaining_samples = 0U;
-    }
-    else
-    {
-        slot->increment = (target - slot->current)
-                        / (float)LIVE_PARAMETER_AUDIO_RUNTIME_RAMP_SAMPLES;
-        slot->remaining_samples = LIVE_PARAMETER_AUDIO_RUNTIME_RAMP_SAMPLES;
-    }
     slot->last_sample_time = now;
 
     if (live_parameter_audio_runtime_apply_target(event, target) == 0U)
@@ -251,18 +173,8 @@ uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
 void live_parameter_audio_runtime_process(uint64_t block_start,
                                           uint16_t frames)
 {
-    if (frames == 0U)
-        return;
-
-    uint64_t block_end = block_start + (uint64_t)frames;
-    if (block_end < block_start)
-        block_end = UINT64_MAX;
-
-    for (uint16_t i = 0U; i < LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY; ++i)
-    {
-        live_parameter_audio_runtime_advance_to(
-            &g_live_parameter_audio_runtime_slots[i], block_end);
-    }
+    (void)block_start;
+    (void)frames;
 }
 
 void live_parameter_audio_runtime_get_diag(

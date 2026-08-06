@@ -57,6 +57,8 @@ typedef struct
     uint16_t level_current_q15;
     uint16_t timbre_q15;
     uint16_t color_q15;
+    uint16_t timbre_current_q15;
+    uint16_t color_current_q15;
     uint32_t phase;
     uint32_t phase_inc;
     uint32_t phase_inc_current;

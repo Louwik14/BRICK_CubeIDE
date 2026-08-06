@@ -469,6 +469,8 @@ static void brick6_stack_runtime_init_slot(stack_osc_slot_t *slot, uint8_t enabl
     slot->color = 127U;
     slot->timbre_q15 = 16384U;
     slot->color_q15 = 16384U;
+    slot->timbre_current_q15 = slot->timbre_q15;
+    slot->color_current_q15 = slot->color_q15;
     slot->phase_inc = brick6_stack_note_to_phase_inc(STACK_DEFAULT_NOTE);
     slot->phase_inc_current = slot->phase_inc;
     slot->phase2 = 0x55555555UL;
@@ -830,14 +832,18 @@ static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
                     * (uint32_t)instance->voice.velocity_q15) >> 15);
             level_energy_q30 += (uint32_t)effective_level * (uint32_t)effective_level;
             if ((osc->level_current_q15 == osc->level_q15)
-                    && (osc->phase_inc_current == osc->phase_inc))
+                    && (osc->phase_inc_current == osc->phase_inc)
+                    && (osc->timbre_current_q15 == osc->timbre_q15)
+                    && (osc->color_current_q15 == osc->color_q15))
             {
                 brick6_stack_runtime_render_slot_chunk(osc,
                                                        acc,
                                                        frames,
                                                        effective_level);
             }
-            else if (osc->phase_inc_current == osc->phase_inc)
+            else if ((osc->phase_inc_current == osc->phase_inc)
+                    && (osc->timbre_current_q15 == osc->timbre_q15)
+                    && (osc->color_current_q15 == osc->color_q15))
             {
                 int32_t slot_acc[BRICK6_STACK_RENDER_BLOCK_SIZE] = {0};
                 const int32_t level_delta =
@@ -864,11 +870,19 @@ static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
                     (int32_t)osc->level_q15 - (int32_t)osc->level_current_q15;
                 const int64_t pitch_delta =
                     (int64_t)osc->phase_inc - (int64_t)osc->phase_inc_current;
+                const int32_t timbre_delta =
+                    (int32_t)osc->timbre_q15 - (int32_t)osc->timbre_current_q15;
+                const int32_t color_delta =
+                    (int32_t)osc->color_q15 - (int32_t)osc->color_current_q15;
                 const uint32_t pitch_start = osc->phase_inc_current;
                 brick6_stack_exact_ramp_t level_ramp;
                 brick6_stack_exact_ramp_t pitch_ramp;
+                brick6_stack_exact_ramp_t timbre_ramp;
+                brick6_stack_exact_ramp_t color_ramp;
                 brick6_stack_exact_ramp_init(&level_ramp, level_delta, frames);
                 brick6_stack_exact_ramp_init(&pitch_ramp, pitch_delta, frames);
+                brick6_stack_exact_ramp_init(&timbre_ramp, timbre_delta, frames);
+                brick6_stack_exact_ramp_init(&color_ramp, color_delta, frames);
                 for (uint8_t i = 0U; i < frames; ++i)
                 {
                     const uint16_t level_here = (uint16_t)(
@@ -876,6 +890,10 @@ static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
                         + (int32_t)brick6_stack_exact_ramp_next(&level_ramp));
                     osc->phase_inc = (uint32_t)((int64_t)pitch_start
                         + brick6_stack_exact_ramp_next(&pitch_ramp));
+                    osc->timbre_q15 = (uint16_t)((int32_t)osc->timbre_current_q15
+                        + (int32_t)brick6_stack_exact_ramp_next(&timbre_ramp));
+                    osc->color_q15 = (uint16_t)((int32_t)osc->color_current_q15
+                        + (int32_t)brick6_stack_exact_ramp_next(&color_ramp));
                     const uint16_t effective_here = (uint16_t)(
                         ((uint32_t)level_here
                             * (uint32_t)instance->voice.velocity_q15) >> 15);
@@ -886,6 +904,8 @@ static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
                     (uint32_t)((int64_t)pitch_start + pitch_delta);
                 osc->level_current_q15 = osc->level_q15;
                 osc->phase_inc_current = osc->phase_inc;
+                osc->timbre_current_q15 = osc->timbre_q15;
+                osc->color_current_q15 = osc->color_q15;
             }
         }
     }

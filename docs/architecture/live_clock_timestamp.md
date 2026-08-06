@@ -103,12 +103,11 @@ At each segment start the audio owner drains only parameter events whose
 that sample, so an event in the middle of a DMA half changes the render at the
 corresponding sample offset rather than at the next UI or audio block.
 
-`live_parameter_audio_runtime` keeps one bounded state per target with the
-current value, target, increment, remaining samples, and last sample time. A
-retarget first advances from the value actually reached, then creates a new
-bounded ramp to the new target; it never restarts from the former target.
-The existing DSP backends remain responsible for their parameter-specific
-smoothing while the audio runtime owns event ordering and ramp continuity.
+`live_parameter_audio_runtime` keeps the target and application diagnostics per
+target. It does not fabricate a generic current/increment/remaining-samples
+ramp: after the exact event boundary, the DSP owner receives the target and
+owns any parameter-specific transition. This prevents a central ramp from
+being mistaken for audio smoothing when the backend already owns the signal.
 
 ## Encoder parameter migration matrix
 
@@ -176,3 +175,25 @@ poly voice, preserving level, stage and gate. New voices inherit the track
 configuration at note-on. The sampler/paraphonic peak envelope applies the
 same live Attack/Decay/Sustain/Release retargeting; it has no DAISY/LINEAR
 type selector and therefore has no type migration contract.
+
+## Audio-owned smoothing contract (pass 7D)
+
+The audio runtime is an event scheduler and target dispatcher, not a second DSP
+engine. The migrated parameters are classified by their real owner:
+
+| Parameters | Contract | Scope |
+| --- | --- | --- |
+| Track level, pan, sends; filter cutoff/resonance | A — mixer current/target ramps from the reached value | Track mix/filter, active and new audio |
+| Wave OSC1/OSC2 position | A when position smoothing is enabled; B immediate when the selected quality policy disables it | Wave voice/runtime |
+| Prism fine/coarse/FM; Prism timbre/modulation/color/level | A — pitch and level use existing ramps; timbre/color move at Braids render-subblock cadence | Active/new oscillator voices |
+| Stack levels/noise, tune/detune; timbre/color | A — exact per-frame level/pitch/timbre/color ramps | Active/new oscillator voices |
+| VCA Attack/Decay/Sustain/Release/EnvType | A/D — active envelope retargeting preserves current level, phase and gate; type is a trajectory contract, not a generic ramp | Active voices and new voices |
+| Reverb wet/room/damping/width/HPF/LPF | A — effect wrapper advances target over its bounded smoothing span | Global track effect |
+| Delay width/feedback/volume and REV send | A — delay engine sample smoothing | Global delay effect |
+| Delay FBW and spectral position/width; Wave model/phase/reset selectors | B/D — routing/topology or derived filter-window changes are applied at their engine boundary; they are not naively interpolated | Global/voice structural state |
+
+For category A, a new target starts from the value actually reached by the
+owning DSP state. Category B is an intentional immediate or boundary update;
+category D is latched or structural. There is no generic duplicate lissage in
+the timestamp runtime. The fixed-width target command remains pointer-free and
+preserves the future M4 producer/M7 DSP-owner contract.

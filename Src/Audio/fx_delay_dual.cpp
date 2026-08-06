@@ -224,10 +224,12 @@ typedef struct
     float mod_depth_smooth;
     float mod_phase;
     float reverb_send;
+    float reverb_send_target;
     float volume;
     float volume_target;
     uint16_t feedback_smooth_remaining;
     uint16_t width_smooth_remaining;
+    uint16_t reverb_send_smooth_remaining;
     uint16_t volume_smooth_remaining;
     delay_line_t delay_l;
     delay_line_t delay_r;
@@ -299,14 +301,18 @@ __attribute__((noinline)) static void process_dual_kernel(const float *in_l,
 {
     float feedback = g_dual.feedback;
     float width = g_dual.width;
+    float reverb_send = g_dual.reverb_send;
     float volume = g_dual.volume;
     uint16_t feedback_remaining = g_dual.feedback_smooth_remaining;
     uint16_t width_remaining = g_dual.width_smooth_remaining;
+    uint16_t reverb_send_remaining = g_dual.reverb_send_smooth_remaining;
     uint16_t volume_remaining = g_dual.volume_smooth_remaining;
     const float feedback_step = (feedback_remaining != 0U)
         ? (g_dual.feedback_target - feedback) / (float)feedback_remaining : 0.0f;
     const float width_step = (width_remaining != 0U)
         ? (g_dual.width_target - width) / (float)width_remaining : 0.0f;
+    const float reverb_send_step = (reverb_send_remaining != 0U)
+        ? (g_dual.reverb_send_target - reverb_send) / (float)reverb_send_remaining : 0.0f;
     const float volume_step = (volume_remaining != 0U)
         ? (g_dual.volume_target - volume) / (float)volume_remaining : 0.0f;
 
@@ -343,6 +349,13 @@ __attribute__((noinline)) static void process_dual_kernel(const float *in_l,
             --width_remaining;
             if(width_remaining == 0U)
                 width = g_dual.width_target;
+        }
+        if(reverb_send_remaining != 0U)
+        {
+            reverb_send += reverb_send_step;
+            --reverb_send_remaining;
+            if(reverb_send_remaining == 0U)
+                reverb_send = g_dual.reverb_send_target;
         }
         if(volume_remaining != 0U)
         {
@@ -530,16 +543,18 @@ __attribute__((noinline)) static void process_dual_kernel(const float *in_l,
         out_r[i] = sanitize_output_sample(wet_r * volume);
         if(cfg.has_rev != 0U)
         {
-            rev_l[i] = sanitize_output_sample(wet_l * cfg.reverb_send);
-            rev_r[i] = sanitize_output_sample(wet_r * cfg.reverb_send);
+            rev_l[i] = sanitize_output_sample(wet_l * reverb_send);
+            rev_r[i] = sanitize_output_sample(wet_r * reverb_send);
         }
     }
 
     g_dual.feedback = feedback;
     g_dual.width = width;
+    g_dual.reverb_send = reverb_send;
     g_dual.volume = volume;
     g_dual.feedback_smooth_remaining = feedback_remaining;
     g_dual.width_smooth_remaining = width_remaining;
+    g_dual.reverb_send_smooth_remaining = reverb_send_remaining;
     g_dual.volume_smooth_remaining = volume_remaining;
     g_dual.time_l_samples = time_l;
     g_dual.time_r_samples = time_r;
@@ -669,7 +684,10 @@ extern "C" void fx_delay_dual_global_set_mod_rate(float rate_hz)
 
 extern "C" void fx_delay_dual_global_set_reverb_send(float reverb_send)
 {
-    g_dual.reverb_send = clampf_local(reverb_send, 0.0f, 1.0f);
+    const float target = clampf_local(reverb_send, 0.0f, 1.0f);
+    if(fabsf(target - g_dual.reverb_send_target) <= 1.0e-7f) return;
+    g_dual.reverb_send_target = target;
+    g_dual.reverb_send_smooth_remaining = (uint16_t)kParamSmoothSamples;
 }
 
 extern "C" void fx_delay_dual_global_set_volume(float volume)
@@ -684,7 +702,7 @@ extern "C" uint8_t fx_delay_dual_global_is_active(void)
 {
     return ((g_dual.volume_target > 0.0f)
          || (g_dual.volume > 0.0f)
-         || (g_dual.reverb_send > 0.0f)) ? 1U : 0U;
+         || (g_dual.reverb_send_target > 0.0f)) ? 1U : 0U;
 }
 
 extern "C" void fx_delay_dual_global_process_block(const float *in_l,

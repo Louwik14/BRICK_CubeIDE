@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #define LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY 64U
-#define LIVE_PARAMETER_AUDIO_RUNTIME_RAMP_SAMPLES 64U
 
 typedef struct
 {
@@ -21,7 +20,7 @@ void live_parameter_audio_runtime_init(void);
 /* Apply all events already due at the current audio sample. */
 uint16_t live_parameter_audio_runtime_apply_due(uint64_t now);
 
-/* Advance the audio-owned current values across a rendered span. */
+/* Kept as an audio-span seam; DSP-owned ramps advance in their own engines. */
 void live_parameter_audio_runtime_process(uint64_t block_start,
                                           uint16_t frames);
 
