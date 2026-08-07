@@ -6,6 +6,11 @@
 #include "Core/track_sound_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Param/param_registry.h"
+#include "Seq/seq_types.h"
+
+/* GROUP children own their modulation matrix and runtime cache. */
+#undef SEQ_TRACK_COUNT
+#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
 typedef struct
 {

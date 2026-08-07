@@ -15,6 +15,10 @@
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
+/* Modulation state is owned by sequence lanes, including GROUP children. */
+#undef SEQ_TRACK_COUNT
+#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
 #define MOD_LFO_LEGACY_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))

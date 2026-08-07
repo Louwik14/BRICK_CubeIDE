@@ -7,6 +7,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry.h"
@@ -15,6 +16,10 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_types.h"
 #include "mixer.h"
+
+/* Destination catalogs and MIDI-CC caches are lane-scoped. */
+#undef SEQ_TRACK_COUNT
+#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
 typedef struct
 {
@@ -84,6 +89,52 @@ static uint8_t mod_destination_is_direct_filter(param_id_t dest)
         default:
             return 0U;
     }
+}
+
+static ui_track_family_t mod_destination_family_for_track(
+    uint8_t track, const track_runtime_ctx_t *ctx)
+{
+    if (track < SEQ_MAIN_TRACK_COUNT)
+    {
+        return ui_get_track_family(track);
+    }
+
+    if (ctx == NULL)
+    {
+        return UI_TRACK_FAMILY_OFF;
+    }
+
+    switch ((track_runtime_family_t)ctx->family)
+    {
+        case TRACK_RUNTIME_FAMILY_SYNTH:
+            return UI_TRACK_FAMILY_SYNTH;
+        case TRACK_RUNTIME_FAMILY_SAMPLER:
+            return UI_TRACK_FAMILY_SAMPLER;
+        case TRACK_RUNTIME_FAMILY_DRUM:
+            return UI_TRACK_FAMILY_DRUM;
+        case TRACK_RUNTIME_FAMILY_MIDI:
+            return UI_TRACK_FAMILY_MIDI;
+        case TRACK_RUNTIME_FAMILY_EXTERNAL:
+            return UI_TRACK_FAMILY_EXTERNAL;
+        default:
+            return UI_TRACK_FAMILY_OFF;
+    }
+}
+
+static ui_track_type_t mod_destination_type_for_track(
+    uint8_t track, const track_runtime_ctx_t *ctx)
+{
+    if (track < SEQ_MAIN_TRACK_COUNT)
+    {
+        return ui_get_track_type(track);
+    }
+
+    if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_RAM))
+    {
+        return UI_TRACK_TYPE_RAM;
+    }
+
+    return UI_TRACK_TYPE_NONE;
 }
 
 static uint8_t mod_destination_is_direct_vca(param_id_t dest)
@@ -1059,7 +1110,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                     || (track_runtime_is_audio_routable(ctx->track_id) == 0U)
-                    || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
+                    || (ctx->mix_track_id >= SEQ_MAIN_TRACK_COUNT))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1142,8 +1193,8 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
 
     track_runtime_refresh_track(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
+    const ui_track_family_t family = mod_destination_family_for_track(track, ctx);
+    const ui_track_type_t type = mod_destination_type_for_track(track, ctx);
     mod_destination_cache_t *const cache = &g_mod_destination_cache[track];
 
     if (mod_destination_cache_matches_context(cache, family, type, ctx) != 0U)

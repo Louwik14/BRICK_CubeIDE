@@ -9,6 +9,10 @@
 #include "Param/param_filter.h"
 #include "Seq/seq_types.h"
 
+/* ENV3 is per sequence lane, not per physical UI track. */
+#undef SEQ_TRACK_COUNT
+#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+
 #define MOD_ENV3_AUDIO_SAMPLE_RATE 48000.0f
 
 typedef struct
