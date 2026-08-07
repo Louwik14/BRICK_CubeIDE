@@ -212,3 +212,16 @@ historiques acquittent eux-mêmes leurs APIs `void`. Les interleavings, la
 saturation, l’exécution hôte et le coût H743 restent à mesurer. Un test C de
 restore et une validation statique sont maintenant présents dans le CMake ;
 les interleavings owner, la saturation et les mesures H743 restent ouvertes.
+
+## Addendum 2026-08-05 - consolidation étapes 6 à 10
+
+Le runtime EUCLID applique maintenant ce micro-contrat avec trois slots par
+piste, 16 sources fixes et 16 owned fixes par instance. Le pipeline expose les
+admissions/refus On et Off générés, l'utilisation de la réserve Off et le
+high-water par demi-buffer ; le moteur expose les high-water et causes de
+refus par slot. La borne logique est 8 x 3 x 16 sources/owned, sans allocation.
+
+La validation statique de consolidation est enregistrée dans
+tests/note_fx_step10_consolidation_validation.ps1 et les builds Release
+Low-Cost/Premium passent. Les mesures DWT/p99, marge IRQ et underrun H743 sont
+explicitement hors de cette passe et restent ouvertes.

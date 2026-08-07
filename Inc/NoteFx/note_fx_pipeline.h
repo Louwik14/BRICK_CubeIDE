@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "Core/live_event.h"
 #include "NoteFx/note_fx_event.h"
+#include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_state.h"
 
 #define NOTE_FX_HALF_BUFFER_FRAMES 64U
@@ -13,6 +14,14 @@
     ((NOTE_FX_TRACK_COUNT * NOTE_FX_HALF_ON_QUOTA_PER_TRACK) \
      + NOTE_FX_HALF_OFF_RESERVE)
 #define NOTE_FX_HALF_COMMAND_QUOTA 32U
+#define NOTE_FX_PIPELINE_MAX_STAGE_FANOUT NOTE_FX_SLOT_COUNT
+#define NOTE_FX_PIPELINE_MAX_EUCLID_SOURCES_PER_TRACK \
+    (NOTE_FX_SLOT_COUNT * NOTE_FX_ARP_MAX_SOURCES)
+
+_Static_assert(NOTE_FX_PIPELINE_MAX_STAGE_FANOUT == 3U,
+               "NoteFx stage fan-out must match the three MIDI FX slots");
+_Static_assert(NOTE_FX_HALF_OFF_RESERVE >= NOTE_FX_HALF_ON_QUOTA_PER_TRACK,
+               "generated On quota must retain an Off reserve");
 
 /* A live source is queued by a non-audio producer.  The audio owner resolves
  * this marker at command consumption so the event sample is the application
@@ -35,8 +44,13 @@ typedef struct
     uint32_t continuation_drop_count;
     uint32_t budget_on_drop_count;
     uint32_t budget_off_drop_count;
+    uint32_t generated_on_admitted;
+    uint32_t generated_off_admitted;
+    uint32_t generated_on_refused;
+    uint32_t generated_off_refused;
     uint16_t half_emissions_last;
     uint16_t half_emissions_high_water;
+    uint16_t half_off_used_high_water;
     uint8_t max_stage_reached;
 } note_fx_pipeline_diag_t;
 

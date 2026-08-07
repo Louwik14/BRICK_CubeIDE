@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:24:16:sample_stream_needs_slot_index	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:54:17:sample_stream_needs_frames_per_page	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:64:16:sample_stream_needs_loop_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:134:16:sample_stream_needs_contains	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:279:9:sample_stream_needs_build	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:365:6:sample_stream_needs_registry_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:371:9:sample_stream_needs_registry_update	336	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:434:9:sample_stream_needs_registry_read	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:465:6:sample_stream_needs_registry_drop	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:485:9:sample_stream_needs_registry_contains	224	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:504:9:sample_stream_needs_registry_has_other_need	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:540:9:sample_stream_needs_registry_contains_any	232	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:574:9:sample_stream_needs_registry_has_active	216	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:598:10:sample_stream_needs_registry_count_active	216	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c:617:6:sample_stream_needs_get_shadow_stats	4	static

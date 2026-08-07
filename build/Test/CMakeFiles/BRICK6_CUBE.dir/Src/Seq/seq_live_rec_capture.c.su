@@ -10,5 +10,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_captu
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:571:6:seq_live_rec_capture_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:576:6:seq_live_rec_capture_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:581:6:seq_live_rec_capture_flush	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:589:6:seq_live_rec_capture_note_on	136	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:589:6:seq_live_rec_capture_note_on	128	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:755:6:seq_live_rec_capture_note_off	40	static

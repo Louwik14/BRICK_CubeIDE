@@ -24,7 +24,13 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 };
 
 static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
-static uint8_t g_ui_last_subpage_by_page[UI_PAGE_COUNT];
+
+/*
+ * Keep the local page independently for each (ensemble, subset) pair instead
+ * of sharing one value per ensemble page.
+ */
+#define UI_NAVIGATION_MAX_TEMPLATE_SUBSETS 4U
+static uint8_t g_ui_last_subpage_by_subset[UI_PAGE_COUNT][UI_NAVIGATION_MAX_TEMPLATE_SUBSETS];
 
 static void ui_navigation_refresh_active_track_runtime(void)
 {
@@ -327,14 +333,18 @@ void ui_navigation_sync_created_track_destination(void)
     }
 }
 
-void ui_navigation_remember_template_subpage(uint8_t page_id, uint8_t subpage_index)
+void ui_navigation_remember_template_subpage(uint8_t page_id,
+                                              uint8_t subset_index,
+                                              uint8_t subpage_index)
 {
-    if ((ui_navigation_is_ensemble_page(page_id) == 0U) || (subpage_index >= 4U))
+    if ((ui_navigation_is_ensemble_page(page_id) == 0U)
+            || (subset_index >= UI_NAVIGATION_MAX_TEMPLATE_SUBSETS)
+            || (subpage_index >= 4U))
     {
         return;
     }
 
-    g_ui_last_subpage_by_page[page_id] = subpage_index;
+    g_ui_last_subpage_by_subset[page_id][subset_index] = subpage_index;
 }
 
 void ui_navigation_restore_current_template_subpage(void)
@@ -351,7 +361,13 @@ void ui_navigation_restore_current_template_subpage(void)
         return;
     }
 
+    const ui_template_page_state_t *state = (const ui_template_page_state_t *)page->context;
+    const uint8_t subset_index = state->navigation_subset;
+    const uint8_t last_subpage = (subset_index < UI_NAVIGATION_MAX_TEMPLATE_SUBSETS)
+            ? g_ui_last_subpage_by_subset[page_id][subset_index]
+            : 0U;
+
     g_ui_requested_ensemble_page = page_id;
     ui_template_page_select_nearest_subpage((ui_template_page_state_t *)page->context,
-                                            g_ui_last_subpage_by_page[page_id]);
+                                            last_subpage);
 }

@@ -48,6 +48,10 @@ typedef struct
     uint32_t terminal_on_midi_admitted;
     uint32_t terminal_on_midi_refused;
     uint32_t terminal_off_refused;
+    uint32_t terminal_capacity_refusal_count;
+    uint32_t terminal_off_retry_count;
+    uint16_t terminal_active_count;
+    uint16_t terminal_high_water;
 } seq_play_scheduler_diag_t;
 
 typedef enum

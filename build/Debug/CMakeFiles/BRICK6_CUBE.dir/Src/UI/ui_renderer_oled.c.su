@@ -1,3 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:44:6:ui_renderer_oled_draw	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:69:6:ui_renderer_oled_service_poll	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:83:9:ui_renderer_oled_is_rendering	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:38:20:ui_audio_boot_error_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:65:6:ui_renderer_oled_draw	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:103:6:ui_renderer_oled_service_poll	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c:117:9:ui_renderer_oled_is_rendering	0	static

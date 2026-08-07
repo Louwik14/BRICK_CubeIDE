@@ -374,3 +374,21 @@ owner et les mesures DWT Low-Cost/Premium restent à exécuter. Les builds
 `Release` relèvent FLASH 1 098 780, DTCMRAM 104 064, RAM_D1 416 320 et RAM_D2
 102 144 octets ; `Premium` relève FLASH 1 086 184, DTCMRAM 105 088, RAM_D1
 469 536 et RAM_D2 108 640 octets.
+
+## Addendum 2026-08-05 - consolidation finale de l'implementation EUCLID
+
+Les étapes 2 à 9 sont maintenant représentées dans le code courant : trois
+slots fonctionnels, modèle EUCLID, masque borné, runtime strict-actif, chaîne
+terminal hand-off, transitions model-aware et bornes multi-EUCLID. Les
+capacités fixes sont 8 pistes x 3 slots x 16 sources/owned ; les diagnostics
+suivent les high-water et causes de refus par slot, les admissions On/Off du
+pipeline et la capacité terminale 64 du scheduler.
+
+Le script tests/note_fx_step10_consolidation_validation.ps1 est enregistré
+dans CTest avec les tests de masque, runtime et restore présents. La passe
+statique réussit et les builds Release Low-Cost/Premium réussissent. Le test
+runtime est compilé/linké avec la toolchain ARM ; l'exécution host n'est pas
+disponible dans l'environnement courant. Les essais USB/moteur, la matrice
+dynamique complète et les mesures H743 restent explicitement ouvertes ; le
+verdict est donc "implementation structurellement conforme, validation cible
+différée", et non une preuve hard-RT ou matérielle.

@@ -89,6 +89,8 @@ typedef struct
     uint32_t detail_build_next_frame;
     uint8_t route_mask[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t audio_hook_enabled;
+    uint32_t threshold_pcm24;
+    uint8_t trigger_pending;
     uint8_t last_take_notified;
     uint8_t rec_edit_enter_deferred_services;
     uint8_t rec_edit_first_render_pending;
@@ -242,6 +244,7 @@ typedef struct
 #endif
 
 static sample_capture_model_t g_sample_capture;
+static volatile sample_capture_live_summary_t g_sample_capture_live_summary;
 UI_HOT_DTCM static sample_capture_line_hot_t g_sample_capture_line_hot;
 STORAGE_STATE_SDRAM static sample_capture_editor_audio_cache_t g_sample_capture_editor_cache;
 STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;
@@ -267,6 +270,35 @@ STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
 
 static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
+
+static uint32_t sample_capture_threshold_dbfs_to_pcm24(int16_t threshold_dbfs)
+{
+    if(threshold_dbfs < SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN)
+    {
+        threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN;
+    }
+    if(threshold_dbfs > SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX)
+    {
+        threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX;
+    }
+
+    const float linear = powf(10.0f, (float)threshold_dbfs * 0.05f);
+    const float scaled = linear * (float)SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE;
+    return (scaled >= (float)SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE)
+        ? SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE
+        : (uint32_t)(scaled + 0.5f);
+}
+
+static uint8_t sample_capture_mic_source_available(sample_capture_arm_t arm)
+{
+#if defined(BRICK6_VARIANT_LOWCOST)
+    (void)arm;
+    return (uint8_t)(g_sample_capture.state.mic_enabled != 0U);
+#else
+    (void)arm;
+    return 0U;
+#endif
+}
 
 #if SAMPLE_CAPTURE_DEBUG_UART
 static void sample_capture_debug_log(const char *fmt, ...)
@@ -2660,7 +2692,8 @@ static uint8_t sample_capture_start_now(void)
         sd_preview_stop();
     }
 
-    if(sample_capture_has_route() == 0U)
+    if((sample_capture_has_route() == 0U)
+            && (sample_capture_mic_source_available(g_sample_capture.state.arm) == 0U))
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
         return 0U;
@@ -2695,6 +2728,7 @@ static uint8_t sample_capture_start_now(void)
     g_sample_capture.state.planned_frames = frame_limit;
     g_sample_capture.state.recording = 1U;
     g_sample_capture.state.armed_pending = 0U;
+    g_sample_capture.trigger_pending = 0U;
     g_sample_capture.state.take_valid = 0U;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_RECORDING;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
@@ -2725,7 +2759,9 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
         sample_capture_set_audio_hook_enabled(0U);
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
+        g_sample_capture.trigger_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        sample_capture_live_summary_reset();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
         return;
@@ -2733,7 +2769,9 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
 
     g_sample_capture.state.recording = 0U;
     g_sample_capture.state.armed_pending = 0U;
+    g_sample_capture.trigger_pending = 0U;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+    sample_capture_live_summary_reset();
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
     sample_capture_debug_log("WRITER_FINAL_READY path=%s frames=%lu\r\n",
@@ -2850,6 +2888,65 @@ uint8_t sample_capture_audio_hook_is_enabled(void)
     return g_sample_capture.audio_hook_enabled;
 }
 
+uint8_t sample_capture_recorder_is_active(void)
+{
+    /* The writer hook is disabled as soon as capture enters STOPPING. */
+    return g_sample_capture.audio_hook_enabled;
+}
+
+void sample_capture_live_summary_reset(void)
+{
+    g_sample_capture_live_summary.peak_pcm24 = 0U;
+    g_sample_capture_live_summary.block_sequence = 0U;
+    g_sample_capture_live_summary.valid = 0U;
+    g_sample_capture_live_summary.trigger_latched = 0U;
+}
+
+void sample_capture_live_publish_peak_from_irq(uint32_t peak_pcm24)
+{
+    if(peak_pcm24 > SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE)
+    {
+        peak_pcm24 = SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE;
+    }
+    g_sample_capture_live_summary.peak_pcm24 = peak_pcm24;
+    g_sample_capture_live_summary.block_sequence++;
+    g_sample_capture_live_summary.valid = 1U;
+
+    if((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.trigger_pending == 0U)
+            && (g_sample_capture_live_summary.trigger_latched == 0U)
+            && (peak_pcm24 >= g_sample_capture.threshold_pcm24))
+    {
+        g_sample_capture_live_summary.trigger_latched = 1U;
+    }
+}
+
+void sample_capture_live_latch_trigger_from_irq(void)
+{
+    g_sample_capture_live_summary.trigger_latched = 1U;
+}
+
+uint8_t sample_capture_live_take_trigger(void)
+{
+    const uint8_t latched = g_sample_capture_live_summary.trigger_latched;
+    g_sample_capture_live_summary.trigger_latched = 0U;
+    return latched;
+}
+
+void sample_capture_live_get_summary(sample_capture_live_summary_t *out_summary)
+{
+    if(out_summary == 0)
+    {
+        return;
+    }
+    out_summary->peak_pcm24 = g_sample_capture_live_summary.peak_pcm24;
+    out_summary->block_sequence = g_sample_capture_live_summary.block_sequence;
+    out_summary->valid = g_sample_capture_live_summary.valid;
+    out_summary->trigger_latched = g_sample_capture_live_summary.trigger_latched;
+}
+
 void sample_capture_model_init(void)
 {
     memset(&g_sample_capture, 0, sizeof(g_sample_capture));
@@ -2858,8 +2955,14 @@ void sample_capture_model_init(void)
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.len_bars = 1U;
     g_sample_capture.state.quant = SAMPLE_CAPTURE_QUANT_NOW;
+    g_sample_capture.state.threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT;
+    g_sample_capture.threshold_pcm24 =
+        sample_capture_threshold_dbfs_to_pcm24(SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT);
+    g_sample_capture.state.mic_enabled = 1U;
+    g_sample_capture.state.live_monitor_enabled = 0U;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
+    sample_capture_live_summary_reset();
     sample_capture_waveform_reset();
     sample_capture_detail_reset();
 }
@@ -2930,8 +3033,15 @@ uint8_t sample_capture_model_source_track_is_enabled(uint8_t track)
 
 uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
 {
+    if(arm >= SAMPLE_CAPTURE_ARM_COUNT)
+    {
+        return 0U;
+    }
+
     if(arm == SAMPLE_CAPTURE_ARM_OFF)
     {
+        sample_capture_live_summary_reset();
+        g_sample_capture.trigger_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.armed_pending = 0U;
         if(g_sample_capture.state.recording != 0U)
@@ -2952,13 +3062,16 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
         return 0U;
     }
-    if(sample_capture_has_route() == 0U)
+    if((sample_capture_has_route() == 0U)
+            && (sample_capture_mic_source_available(arm) == 0U))
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
         return 0U;
     }
 
-    g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_REC;
+    sample_capture_live_summary_reset();
+    g_sample_capture.trigger_pending = 0U;
+    g_sample_capture.state.arm = arm;
     g_sample_capture.state.armed_pending = 0U;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
@@ -2971,20 +3084,16 @@ uint8_t sample_capture_model_step_arm(int16_t delta)
     {
         return 0U;
     }
-    if(delta > 0)
+    int16_t next = (int16_t)g_sample_capture.state.arm + ((delta > 0) ? 1 : -1);
+    if(next < (int16_t)SAMPLE_CAPTURE_ARM_OFF)
     {
-        if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
-        {
-            return 0U;
-        }
-        return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_REC);
+        next = (int16_t)SAMPLE_CAPTURE_ARM_COUNT - 1;
     }
-
-    if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_OFF)
+    else if(next >= (int16_t)SAMPLE_CAPTURE_ARM_COUNT)
     {
-        return 0U;
+        next = (int16_t)SAMPLE_CAPTURE_ARM_OFF;
     }
-    return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
+    return sample_capture_model_set_arm((sample_capture_arm_t)next);
 }
 
 uint8_t sample_capture_model_step_len(int16_t delta)
@@ -3033,6 +3142,76 @@ uint8_t sample_capture_model_step_quant(int16_t delta)
     }
     g_sample_capture.state.quant = (sample_capture_quant_t)next;
     return 1U;
+}
+
+uint8_t sample_capture_model_set_threshold_dbfs(int16_t threshold_dbfs)
+{
+    if(threshold_dbfs < SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN)
+    {
+        threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN;
+    }
+    if(threshold_dbfs > SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX)
+    {
+        threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX;
+    }
+    g_sample_capture.state.threshold_dbfs = (int8_t)threshold_dbfs;
+    g_sample_capture.threshold_pcm24 = sample_capture_threshold_dbfs_to_pcm24(threshold_dbfs);
+    return 1U;
+}
+
+int8_t sample_capture_model_get_threshold_dbfs(void)
+{
+    return g_sample_capture.state.threshold_dbfs;
+}
+
+uint8_t sample_capture_model_step_threshold(int16_t delta)
+{
+    if(delta == 0)
+    {
+        return 0U;
+    }
+    return sample_capture_model_set_threshold_dbfs(
+        (int16_t)g_sample_capture.state.threshold_dbfs + delta * SAMPLE_CAPTURE_THRESHOLD_DBFS_STEP);
+}
+
+uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.mic_enabled = (enabled != 0U) ? 1U : 0U;
+    return 1U;
+}
+
+uint8_t sample_capture_model_mic_is_enabled(void)
+{
+    return g_sample_capture.state.mic_enabled;
+}
+
+uint8_t sample_capture_model_toggle_mic(void)
+{
+    return sample_capture_model_set_mic_enabled(
+        (g_sample_capture.state.mic_enabled == 0U) ? 1U : 0U);
+}
+
+uint8_t sample_capture_model_set_live_monitor_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.live_monitor_enabled = (enabled != 0U) ? 1U : 0U;
+    return 1U;
+}
+
+uint8_t sample_capture_model_live_monitor_is_enabled(void)
+{
+    return g_sample_capture.state.live_monitor_enabled;
+}
+
+uint8_t sample_capture_model_live_bus_required(void)
+{
+    if(g_sample_capture.state.live_monitor_enabled != 0U)
+    {
+        return 1U;
+    }
+
+    return (uint8_t)((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+        && (g_sample_capture.state.armed_pending != 0U)
+        && (g_sample_capture.state.recording == 0U));
 }
 
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)
@@ -3789,7 +3968,9 @@ void sample_capture_model_service(void)
         sample_capture_set_audio_hook_enabled(0U);
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
+        g_sample_capture.trigger_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        sample_capture_live_summary_reset();
         sample_capture_set_error((status.error == MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE
             : SAMPLE_CAPTURE_ERROR_SD_IO);
@@ -3822,7 +4003,8 @@ void sample_capture_model_service(void)
         g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
     }
 
-    if((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+    if(((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+            || (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG))
             && (g_sample_capture.state.recording == 0U)
             && (g_sample_capture.state.armed_pending == 0U)
             && (rec_global_armed != 0U))
@@ -3839,15 +4021,28 @@ void sample_capture_model_service(void)
             && (rec_global_armed == 0U))
     {
         g_sample_capture.state.armed_pending = 0U;
-        if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
-        {
-            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
-        }
+        g_sample_capture.trigger_pending = 0U;
+        sample_capture_live_summary_reset();
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
     }
 
     if((g_sample_capture.state.armed_pending != 0U)
             && (g_sample_capture.state.recording == 0U)
             && (rec_global_armed != 0U)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (g_sample_capture.trigger_pending == 0U)
+            && (sample_capture_live_take_trigger() != 0U))
+    {
+        g_sample_capture.trigger_pending = 1U;
+        sample_capture_capture_wait_baseline();
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
+    }
+
+    /* Keep the historical ARM REC start path intact. */
+    if((g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (rec_global_armed != 0U)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
             && (transport_running != 0U)
             && (sample_capture_quant_is_due(transport_started) != 0U))
     {
@@ -3855,6 +4050,24 @@ void sample_capture_model_service(void)
         {
             g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
             g_sample_capture.state.armed_pending = 0U;
+        }
+    }
+
+    if((g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (rec_global_armed != 0U)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (g_sample_capture.trigger_pending != 0U)
+            && ((g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+                || (transport_running != 0U))
+            && (sample_capture_quant_is_due(transport_started) != 0U))
+    {
+        if(sample_capture_start_now() == 0U)
+        {
+            g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+            g_sample_capture.state.armed_pending = 0U;
+            g_sample_capture.trigger_pending = 0U;
+            sample_capture_live_summary_reset();
         }
     }
 

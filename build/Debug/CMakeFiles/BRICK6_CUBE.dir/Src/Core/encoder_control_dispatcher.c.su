@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/encoder_control_dispatcher.c:24:13:encoder_control_shadow_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/encoder_control_dispatcher.c:34:34:encoder_control_shadow_find	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/encoder_control_dispatcher.c:67:6:encoder_control_dispatcher_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/encoder_control_dispatcher.c:74:9:encoder_control_dispatcher_service	120	static

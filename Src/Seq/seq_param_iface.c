@@ -823,6 +823,33 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
     return 1U;
 }
 
+uint8_t seq_param_iface_get_runtime_value(seq_track_id_t track,
+                                          uint8_t set_id,
+                                          seq_param_slot_t param_slot,
+                                          seq_value16_t *out_value16)
+{
+    if ((out_value16 == 0)
+            || (seq_param_iface_is_slot_addressable(track, set_id,
+                                                     param_slot) == 0U))
+    {
+        return 0U;
+    }
+
+    seq_param_slot_state_t *const state =
+        seq_param_iface_state_at(track, set_id, param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
+    if (seq_param_get_runtime_locked(track, set_id, param_slot) != 0U)
+    {
+        *out_value16 = state->runtime_value;
+        return 1U;
+    }
+    return seq_param_iface_get_base_value(track, set_id, param_slot,
+                                          out_value16);
+}
+
 uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        uint8_t set_id,
                                        seq_param_slot_t param_slot,
@@ -912,7 +939,8 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    seq_value16_t value16)
 {
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
+    if (seq_param_iface_slot_is_supported_internal(track, set_id,
+                                                    param_slot, 0U) == 0U)
     {
         return 0U;
     }
@@ -987,7 +1015,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      seq_value16_t base_value16)
 {
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
+    /* Restoring an already-active lock is not a new p-lock admission.  It
+     * must remain possible when the target model is EUCLID and the old lock
+     * was created while the slot was ARP/OFF. */
+    if (seq_param_iface_slot_is_supported_internal(track, set_id,
+                                                    param_slot, 1U) == 0U)
     {
         return 0U;
     }

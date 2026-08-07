@@ -236,7 +236,7 @@ file(GLOB SRC_SD_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/*.cpp"
 )
 
-file(GLOB SRC_SAMPLER_SRC
+file(GLOB SRC_SAMPLER_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/*.cpp"
 )
@@ -378,7 +378,7 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
 # --------------------------------------------------------------------------
 set(EXCLUDED_SOURCES "")
 
-file(GLOB SRC_NOTE_FX_SRC
+file(GLOB SRC_NOTE_FX_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/*.cpp"
 )

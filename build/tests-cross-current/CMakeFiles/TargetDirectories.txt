@@ -1,0 +1,10 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/encoder_detent_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/mod_lfo_segment_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/mod_matrix_ramp_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/note_fx_state_restore_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/note_fx_euclid_mask_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/note_fx_euclid_runtime_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/live_parameter_event_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/edit_cache.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/CMakeFiles/rebuild_cache.dir

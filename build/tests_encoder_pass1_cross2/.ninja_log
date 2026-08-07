@@ -1,0 +1,12 @@
+# ninja log v5
+4	122	8077224810457569	CMakeFiles/encoder_detent_test.dir/encoder_detent_test.c.obj	c632587b07b24b3e
+7	130	8077224810457569	CMakeFiles/encoder_detent_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c.obj	47ff6c48d0e9baec
+3	73	8077224880762951	build.ninja	fa4befd4254a2ea1
+3	119	8077224882092730	CMakeFiles/encoder_detent_test.dir/encoder_detent_test.c.obj	28c5596891684dd8
+5	131	8077224882092730	CMakeFiles/encoder_detent_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c.obj	f81ac0a34fdf37a3
+131	255	8077224883425325	encoder_detent_test.elf	15494f68d5874e16
+3	265	8077224996051946	CMakeFiles/encoder_detent_test.dir/encoder_detent_test.c.obj	28c5596891684dd8
+7	280	8077224996312627	CMakeFiles/encoder_detent_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c.obj	f81ac0a34fdf37a3
+281	646	8077224999337582	encoder_detent_test.elf	15494f68d5874e16
+3	118	8077226910019861	CMakeFiles/encoder_detent_test.dir/encoder_detent_test.c.obj	28c5596891684dd8
+119	219	8077226910867761	encoder_detent_test.elf	15494f68d5874e16

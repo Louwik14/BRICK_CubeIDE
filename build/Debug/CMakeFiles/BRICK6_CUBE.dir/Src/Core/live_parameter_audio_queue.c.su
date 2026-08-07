@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:23:17:live_parameter_audio_enter_critical	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:31:13:live_parameter_audio_exit_critical	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:37:16:live_parameter_audio_same_target	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:48:16:live_parameter_audio_schedule	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:99:16:live_parameter_audio_schedule_bulk	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:144:16:live_parameter_audio_convert_capture	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:172:6:live_parameter_audio_queue_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:186:10:live_parameter_audio_queue_drain	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:220:6:live_parameter_audio_queue_submit_bulk	2088	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:289:10:live_parameter_audio_queue_frames_until_deadline	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:309:10:live_parameter_audio_queue_consume_due	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:378:6:live_parameter_audio_queue_pop_due	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:400:10:live_parameter_audio_queue_scheduled_depth	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:408:10:live_parameter_audio_queue_due_depth	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:416:6:live_parameter_audio_queue_get_diag	16	static

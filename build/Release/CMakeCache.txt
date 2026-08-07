@@ -23,6 +23,13 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
 
+//Capture the first Multi stream failure for GDB
+BRICK6_MULTI_STREAM_DIAG:BOOL=OFF
+
+//Use Release code generation for the Debug Multi stream diagnostic
+// build
+BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN:BOOL=OFF
+
 //Firmware product variant
 BRICK6_VARIANT:STRING=lowcost
 
@@ -91,7 +98,7 @@ CMAKE_C_COMPILER_AR:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.s
 CMAKE_C_COMPILER_RANLIB:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/arm-none-eabi-gcc-ranlib.exe
 
 //Flags used by the C compiler during all build types.
-CMAKE_C_FLAGS:STRING=
+CMAKE_C_FLAGS:STRING=-DBRICK6_STREAM_BENCH=0 -DBRICK6_STREAM_TRACE=0 -DBRICK6_STREAM_AUDIT=0
 
 //Flags used by the C compiler during DEBUG builds.
 CMAKE_C_FLAGS_DEBUG:STRING=-g

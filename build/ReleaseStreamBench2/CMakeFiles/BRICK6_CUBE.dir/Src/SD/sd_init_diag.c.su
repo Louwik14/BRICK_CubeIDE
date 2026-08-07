@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:6:13:sd_init_diag_capture_regs	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:23:6:sd_init_diag_reset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:39:6:sd_init_diag_stage	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:50:6:sd_init_diag_command_sent	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:65:6:sd_init_diag_command_result	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_init_diag.c:76:6:sd_init_diag_hal_result	8	static

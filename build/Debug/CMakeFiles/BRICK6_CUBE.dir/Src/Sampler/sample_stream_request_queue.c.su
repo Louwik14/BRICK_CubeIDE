@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_request_queue.c:10:6:sample_stream_request_queue_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_request_queue.c:15:32:sample_stream_request_queue_entries	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_request_queue.c:20:38:sample_stream_request_queue_entries_const	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_request_queue.c:25:40:sample_stream_request_queue_publish	40	static

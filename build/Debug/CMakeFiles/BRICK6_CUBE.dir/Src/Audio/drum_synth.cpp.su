@@ -1,20 +1,29 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:92:14:float {anonymous}::md_fast_exp2(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:118:14:float {anonymous}::md_expmap(float, float, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:128:13:void {anonymous}::md_trx_env_trigger(md_trx_env_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:133:14:float {anonymous}::md_trx_env_process(md_trx_env_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:123:13:void {anonymous}::md_trx_env_prepare(md_trx_env_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:144:13:void {anonymous}::md_trx_bd_prepare(drum_synth_instance_t*)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:166:13:void {anonymous}::md_trx_bd_reset(drum_synth_instance_t*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:174:13:void {anonymous}::md_trx_bd_note_on(drum_synth_instance_t*, uint8_t, uint8_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:197:13:void {anonymous}::md_trx_bd_render(drum_synth_instance_t*, float*, uint32_t)	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/dsp.h:43:14:float stmlib::Interpolate(const float*, float, float)	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:102:15:void plaits::SineOscillator::Next(float, float, float*, float*)	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/drums/analog_bass_drum.h:49:8:void plaits::AnalogBassDrum::Init()	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:53:13:void {anonymous}::drum_instance_reset_params(drum_synth_instance_t*)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:66:13:void {anonymous}::drum_instance_init(drum_synth_instance_t*)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:74:13:void {anonymous}::drum_instance_ensure_init(drum_synth_instance_t*)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:83:6:void drum_synth_init(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:93:9:uint8_t drum_synth_set_model_for_instance(uint8_t, drum_model_id_t)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:121:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:133:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:155:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:161:6:void drum_synth_all_notes_off_for_instance(uint8_t)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:231:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:264:6:void drum_synth_all_notes_off_all()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:237:13:void {anonymous}::drum_instance_reset_params(drum_synth_instance_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:256:13:void {anonymous}::drum_instance_init(drum_synth_instance_t*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:263:13:void {anonymous}::drum_instance_ensure_init(drum_synth_instance_t*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:272:6:void drum_synth_init(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:282:9:uint8_t drum_synth_set_model_for_instance(uint8_t, drum_model_id_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:322:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:334:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:365:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:371:6:void drum_synth_all_notes_off_for_instance(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:460:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:523:6:void drum_synth_all_notes_off_all()	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:223:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:250:15:void stmlib::Svf::Process(float, float*, float*) [with stmlib::FilterMode mode_1 = stmlib::FILTER_MODE_BAND_PASS; stmlib::FilterMode mode_2 = stmlib::FILTER_MODE_LOW_PASS]	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/drums/analog_bass_drum.h:74:8:void plaits::AnalogBassDrum::Render(bool, bool, float, float, float, float, float, float, float*, size_t)	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:175:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:392:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	56	static

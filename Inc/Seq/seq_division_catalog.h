@@ -5,6 +5,7 @@
 
 #define SEQ_DIVISION_ARP_COUNT 8U
 #define SEQ_DIVISION_TRACK_UI_COUNT 4U
+#define SEQ_DIVISION_ARP_DEFAULT_INDEX 2U /* 1/16 */
 
 typedef struct
 {

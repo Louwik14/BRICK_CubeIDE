@@ -27,7 +27,7 @@ CMAKE_PROJECT_DESCRIPTION:STATIC=
 CMAKE_PROJECT_HOMEPAGE_URL:STATIC=
 
 //Value Computed by CMake
-CMAKE_PROJECT_NAME:STATIC=brick6_filter_tests
+CMAKE_PROJECT_NAME:STATIC=brick6_note_fx_step1_tests
 
 //Value Computed by CMake
 brick6_filter_tests_BINARY_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests
@@ -37,6 +37,15 @@ brick6_filter_tests_IS_TOP_LEVEL:STATIC=ON
 
 //Value Computed by CMake
 brick6_filter_tests_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests
+
+//Value Computed by CMake
+brick6_note_fx_step1_tests_BINARY_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests
+
+//Value Computed by CMake
+brick6_note_fx_step1_tests_IS_TOP_LEVEL:STATIC=ON
+
+//Value Computed by CMake
+brick6_note_fx_step1_tests_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests
 
 
 ########################

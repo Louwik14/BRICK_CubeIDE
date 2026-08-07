@@ -23,6 +23,13 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
 
+//Capture the first Multi stream failure for GDB
+BRICK6_MULTI_STREAM_DIAG:BOOL=ON
+
+//Use Release code generation for the Debug Multi stream diagnostic
+// build
+BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN:BOOL=OFF
+
 //Firmware product variant
 BRICK6_VARIANT:STRING=lowcost
 

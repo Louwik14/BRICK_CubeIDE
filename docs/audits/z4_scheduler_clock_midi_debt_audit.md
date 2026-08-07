@@ -194,3 +194,15 @@ lease interne bornée et non un acquittement backend ; le ledger sépare toujour
 test de restore réellement présent et la validation statique du contrat. La
 validation dynamique des quatre combinaisons, des interleavings owner et la
 mesure DWT Low-Cost/Premium restent ouvertes.
+
+## Addendum 2026-08-05 - consolidation terminale EUCLID
+
+Le scheduler expose désormais la capacité terminale fixe de 64 occurrences,
+son high-water, les refus de capacité et les retries Off. Le hand-off du stage
+3 est explicite et les admissions internes/MIDI restent indépendantes. Le
+pipeline conserve la paire On/Off bornée et la priorité des fermetures.
+
+La validation statique de consolidation est enregistrée avec les tests NoteFx
+présents ; elle ne remplace pas les essais USB, moteur plein, interleavings
+owner ni la mesure H743, qui restent différés conformément à la consigne de la
+passe courante.

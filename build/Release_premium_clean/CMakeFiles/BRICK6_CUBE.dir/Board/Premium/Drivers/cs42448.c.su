@@ -1,4 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:92:26:cs42448_write_reg	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:130:26:cs42448_read_reg	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:141:25:cs42448_verify_reg	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:197:18:CS42448_Init	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:152:25:cs42448_verify_reg	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:92:26:cs42448_write_reg	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:141:18:CS42448_ReadReg	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Drivers/cs42448.c:208:18:CS42448_Init	56	static

@@ -3409,7 +3409,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         for(uint32_t i = 0U; i < frames; ++i)
         {
             sample_capture_l[i] += tracks[0].L[i];
-            sample_capture_r[i] += tracks[0].L[i];
+            sample_capture_r[i] += tracks[0].R[i];
         }
     }
 #endif

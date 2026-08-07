@@ -7,6 +7,7 @@
  */
 #define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
+
 #include "Storage/memory_layout.h"
 
 #include <stdint.h>
@@ -37,6 +38,8 @@
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 512U
 #define SEQ_PLAY_SCHEDULER_ACTIVE_TOKEN_CAPACITY SAMPLER_MULTI_MAX_GLOBAL_VOICES
 
+_Static_assert(SEQ_OUTPUT_GUARD_MAX_OCCURRENCES == 64U,
+               "terminal admission capacity changed");
 
 
 typedef enum
@@ -130,7 +133,7 @@ static uint8_t g_seq_play_track_generation[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_track_suspended[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_track_closing[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_panic_active;
-static seq_terminal_admission_t
+SEQ_STATE_D2 static seq_terminal_admission_t
     g_seq_terminal_admission[SEQ_LANE_CAPACITY][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
 static uint32_t g_seq_engine_mono_occurrence[SEQ_LANE_CAPACITY];
 static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
@@ -851,6 +854,7 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
         if (free_index < 0)
         {
             ++g_seq_play_diag.terminal_on_internal_refused;
+            ++g_seq_play_diag.terminal_capacity_refusal_count;
             return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
         }
 
@@ -867,7 +871,10 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
         else
             ++g_seq_play_diag.terminal_on_midi_refused;
         if ((internal_admitted == 0U) && (midi_dest_mask == 0U))
+        {
+            ++g_seq_play_diag.terminal_capacity_refusal_count;
             return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+        }
 
         g_seq_terminal_admission[event->track][free_index] = (seq_terminal_admission_t){
             .active = 1U,
@@ -880,6 +887,12 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
             .midi_transport_generation = ((midi_dest_mask & MIDI_ADMISSION_USB) != 0U)
                 ? midi_usb_transport_generation() : 0U
         };
+        if (g_seq_play_diag.terminal_active_count < 0xFFFFU)
+            ++g_seq_play_diag.terminal_active_count;
+        if (g_seq_play_diag.terminal_active_count
+                > g_seq_play_diag.terminal_high_water)
+            g_seq_play_diag.terminal_high_water =
+                g_seq_play_diag.terminal_active_count;
         (void)seq_output_guard_note_on_seen_mask(
             event->track, event->note, occurrence_id, event->generation,
             midi_dest_mask);
@@ -926,9 +939,12 @@ note_fx_result_t seq_play_scheduler_dispatch_terminal_event(const note_fx_event_
     if ((record->internal_admitted != 0U) || (record->midi_dest_mask != 0U))
     {
         ++g_seq_play_diag.terminal_off_refused;
+        ++g_seq_play_diag.terminal_off_retry_count;
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
     record->active = 0U;
+    if (g_seq_play_diag.terminal_active_count > 0U)
+        --g_seq_play_diag.terminal_active_count;
     (void)seq_output_guard_note_off_seen(event->track, record->note,
                                          occurrence_id, event->generation);
     return NOTE_EVENT_RESULT_ACCEPTED;
@@ -1113,6 +1129,7 @@ void seq_play_scheduler_init(void)
     memset(g_seq_engine_mono_occurrence, 0,
            sizeof(g_seq_engine_mono_occurrence));
     g_seq_play_diag.active_occurrence_count = 0U;
+    g_seq_play_diag.terminal_active_count = 0U;
     memset(g_seq_play_track_suspended, 0, sizeof(g_seq_play_track_suspended));
     memset(g_seq_play_track_closing, 0, sizeof(g_seq_play_track_closing));
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
@@ -1127,6 +1144,7 @@ void seq_play_scheduler_terminal_reset(void)
     memset(g_seq_terminal_admission, 0, sizeof(g_seq_terminal_admission));
     memset(g_seq_engine_mono_occurrence, 0,
            sizeof(g_seq_engine_mono_occurrence));
+    g_seq_play_diag.terminal_active_count = 0U;
     seq_play_scheduler_exit_critical(primask);
 }
 
@@ -1438,8 +1456,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     seq_lane_descriptor_t lane;
     if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
             || (lane.active == 0U)
-            || (lane.can_emit_notes == 0U)
-)
+            || (lane.can_emit_notes == 0U))
     {
         return;
     }

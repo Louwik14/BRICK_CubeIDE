@@ -1,7 +1,7 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/cmake/stm32cubemx/../../Drivers/CMSIS/Include/core_cm7.h:2156:34:__NVIC_SystemReset	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:102:13:MPU_Config	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:131:13:lowcost_bootloader_shift_step16_service	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:409:6:Error_Handler	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:309:6:SystemClock_Config	120	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:368:6:PeriphCommonClock_Config	200	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:182:5:main	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:104:13:MPU_Config	40	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:160:13:lowcost_bootloader_shift_step16_service	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:438:6:Error_Handler	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:338:6:SystemClock_Config	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:397:6:PeriphCommonClock_Config	200	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Generated/Src/main.c:211:5:main	16	static,ignoring_inline_asm

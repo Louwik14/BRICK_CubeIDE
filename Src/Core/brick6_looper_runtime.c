@@ -647,7 +647,7 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     {
         page_count = BRICK6_LOOPER_PREFETCH_PAGES;
     }
-    (void)sample_page_cache_request_start_pages_key_alloc(state->cache_key,
+    (void)sample_page_cache_reserve_start_pages_key_alloc(state->cache_key,
                                                           0U,
                                                           page_count,
                                                           SAMPLE_PAGE_ALLOC_MARGIN);
@@ -703,7 +703,7 @@ static void looper_request_playhead_pages(const brick6_looper_track_state_t *sta
     const uint32_t first_page = playhead / SAMPLE_PAGE_FRAMES;
     for(uint32_t i = 0U; i < BRICK6_LOOPER_PREFETCH_PAGES; ++i)
     {
-        (void)sample_page_cache_request_page_key_alloc(state->cache_key,
+        (void)sample_page_cache_reserve_page_key_alloc(state->cache_key,
                                                        (first_page + i) % page_count,
                                                        SAMPLE_PAGE_ALLOC_MARGIN);
     }
@@ -1086,7 +1086,7 @@ uint8_t brick6_looper_runtime_has_pending_sd_work(void)
         }
     }
 
-    return sample_page_cache_has_queued_domain_range(SAMPLE_AUDIO_DOMAIN_LOOPER,
+    return sample_page_cache_has_reserved_domain_range(SAMPLE_AUDIO_DOMAIN_LOOPER,
                                                      0U,
                                                      BRICK6_LOOPER_TRACK_CAP);
 }

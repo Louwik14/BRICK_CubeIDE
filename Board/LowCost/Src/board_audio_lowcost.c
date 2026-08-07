@@ -255,25 +255,13 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
                               uint32_t frames,
                               float in_scale)
 {
-    const uint32_t tr0_on = (uint32_t)track_buf[0].enabled;
     float *AUDIO_RESTRICT tr0_l = track_buf[0].L;
     float *AUDIO_RESTRICT tr0_r = track_buf[0].R;
-
-    if (tr0_on == 0U)
-    {
-        memset(tr0_l, 0, frames * sizeof(float));
-        memset(tr0_r, 0, frames * sizeof(float));
-    }
 
     for (uint32_t tr = 1U; tr < 4U; tr++)
     {
         memset(track_buf[tr].L, 0, frames * sizeof(float));
         memset(track_buf[tr].R, 0, frames * sizeof(float));
-    }
-
-    if (tr0_on == 0U)
-    {
-        return;
     }
 
     const int32_t *AUDIO_RESTRICT prx = rx;

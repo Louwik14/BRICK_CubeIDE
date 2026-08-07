@@ -55,6 +55,9 @@
 /* UI / non real-time bulk buffers */
 #define UI_SDRAM SEC_ATTR(".sdram_ui") ALIGN32
 
+/* Small read-mostly UI registry kept internal to avoid SDRAM pressure. */
+#define UI_D1 SEC_ATTR(".ram_d1_ui") ALIGN32
+
 /* UI-owned state that is cold enough to keep out of D1. */
 #define UI_STATE_SDRAM SEC_ATTR(".ui_state_sdram") ALIGN32
 

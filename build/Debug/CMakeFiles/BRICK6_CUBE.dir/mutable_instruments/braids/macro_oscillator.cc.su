@@ -1,11 +1,13 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:329:6:void braids::MacroOscillator::RenderBuzz(const uint8_t*, int16_t*, size_t)	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:50:6:void braids::MacroOscillator::RenderCSaw(const uint8_t*, int16_t*, size_t)	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:127:6:void braids::MacroOscillator::RenderSawSquare(const uint8_t*, int16_t*, size_t)	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:224:6:void braids::MacroOscillator::RenderSub(const uint8_t*, int16_t*, size_t)	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:257:6:void braids::MacroOscillator::RenderDualSync(const uint8_t*, int16_t*, size_t)	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:289:6:void braids::MacroOscillator::RenderSineTriangle(const uint8_t*, int16_t*, size_t)	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:66:6:void braids::MacroOscillator::RenderMorph(const uint8_t*, int16_t*, size_t)	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:178:6:void braids::MacroOscillator::RenderTriple(const uint8_t*, int16_t*, size_t)	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:352:6:void braids::MacroOscillator::RenderDigital(const uint8_t*, int16_t*, size_t)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:363:6:void braids::MacroOscillator::RenderSawComb(const uint8_t*, int16_t*, size_t)	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:42:6:void braids::MacroOscillator::Render(const uint8_t*, int16_t*, size_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:42:20:void braids::RenderAnalogNoSyncOut(AnalogOscillator*, const uint8_t*, int16_t*, size_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:354:6:void braids::MacroOscillator::RenderBuzz(const uint8_t*, int16_t*, size_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:75:6:void braids::MacroOscillator::RenderCSaw(const uint8_t*, int16_t*, size_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:152:6:void braids::MacroOscillator::RenderSawSquare(const uint8_t*, int16_t*, size_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:249:6:void braids::MacroOscillator::RenderSub(const uint8_t*, int16_t*, size_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:314:6:void braids::MacroOscillator::RenderSineTriangle(const uint8_t*, int16_t*, size_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:91:6:void braids::MacroOscillator::RenderMorph(const uint8_t*, int16_t*, size_t)	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:203:6:void braids::MacroOscillator::RenderTriple(const uint8_t*, int16_t*, size_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:54:20:void braids::RenderAnalogSyncOut(AnalogOscillator*, const uint8_t*, int16_t*, uint8_t*, size_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:282:6:void braids::MacroOscillator::RenderDualSync(const uint8_t*, int16_t*, size_t)	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:377:6:void braids::MacroOscillator::RenderDigital(const uint8_t*, int16_t*, size_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:388:6:void braids::MacroOscillator::RenderSawComb(const uint8_t*, int16_t*, size_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/braids/macro_oscillator.cc:67:6:void braids::MacroOscillator::Render(const uint8_t*, int16_t*, size_t)	16	static

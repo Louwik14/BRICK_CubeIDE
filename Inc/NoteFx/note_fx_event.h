@@ -30,6 +30,8 @@ typedef enum
 
 #define NOTE_EVENT_STAGE_SOURCE   0U
 #define NOTE_EVENT_STAGE_TERMINAL 4U
+/* Stage 3 is the hand-off emitted by the third MIDI FX slot. */
+#define NOTE_EVENT_STAGE_TERMINAL_HANDOFF (NOTE_EVENT_STAGE_TERMINAL - 1U)
 #define NOTE_EVENT_DESTINATION_DEFAULT 0xFFU
 #define NOTE_EVENT_OCCURRENCE_COUNTER_MASK 0x3FFFFFFFU
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_STEP 0x00000000U
@@ -90,6 +92,12 @@ static inline uint8_t note_event_is_valid(const note_event_t *event)
         && (event->source_token != 0U)
         && (event->occurrence_id != 0U)
         && (event->generation != 0U);
+}
+
+static inline uint8_t note_event_is_terminal_handoff(const note_event_t *event)
+{
+    return (event != 0)
+        && (event->stage >= NOTE_EVENT_STAGE_TERMINAL_HANDOFF);
 }
 
 #endif

@@ -1,8 +1,8 @@
-# Campagne matérielle finale du streamer
+# Campagne materielle finale du streamer
 
 ## Firmware de mesure
 
-Configurer un build Release sans `-g`, avec :
+Configurer un build Release sans `-g`, avec le benchmark I/O conserve :
 
 ```powershell
 cmake -S . -B build/ReleaseStreamBench -DCMAKE_BUILD_TYPE=Release `
@@ -10,103 +10,56 @@ cmake -S . -B build/ReleaseStreamBench -DCMAKE_BUILD_TYPE=Release `
 cmake --build build/ReleaseStreamBench --target BRICK6_CUBE.elf -j 4
 ```
 
-Le symbole stable est `g_sample_stream_benchmark`. Réinitialiser la campagne
-avant chaque scénario avec `call sample_stream_benchmark_reset()`, ou redémarrer
-la cible. La taille se choisit avant le test avec :
+Le symbole de benchmark est `g_sample_stream_benchmark`. Reinitialiser la
+campagne avant chaque scenario, ou redemarrer la cible. Tester les tailles de
+lecture 4, 8, 16 et 32 Kio avec `sample_stream_io_set_read_chunk_kib()`.
 
-```gdb
-call sample_stream_io_set_read_chunk_kib(4)
-call sample_stream_io_set_read_chunk_kib(8)
-call sample_stream_io_set_read_chunk_kib(16)
-call sample_stream_io_set_read_chunk_kib(32)
-```
+## Trace causale et admission
 
-Retrouver et extraire le snapshot sans DWARF :
+Le firmware Release expose `g_sample_stream_event_trace` sans macro de trace ou
+d'audit. Le snapshot contient 128 evenements fixes et leur ABI stable. Extraire
+le symbole et sa taille avec :
 
 ```powershell
-arm-none-eabi-nm -S --size-sort build/ReleaseStreamBench/BRICK6_CUBE.elf | Select-String g_sample_stream_benchmark
+arm-none-eabi-nm -S --size-sort build/ReleaseStreamBench/BRICK6_CUBE.elf |
+  Select-String g_sample_stream_event_trace
 ```
 
 ```gdb
-x/100wx 0xADRESSE_NM
-dump binary memory stream_bench.bin 0xADRESSE_NM 0xADRESSE_NM+0x190
+p/x &g_sample_stream_event_trace
+p sizeof(g_sample_stream_event_trace)
+dump binary memory stream_event_trace.bin &g_sample_stream_event_trace ((char *)&g_sample_stream_event_trace)+sizeof(g_sample_stream_event_trace)
 ```
 
-L'ABI 1 occupe exactement `0x190` octets (400 octets).
+Pour une surcharge volontaire, saturer progressivement les voix, les ratios et
+les fichiers distincts. Verifier que l'admission publie les acceptations et
+refuse proprement la demande depassant voix, debit ou latence ; le refus doit
+preceder toute nouvelle allocation ou requete SD. Les valeurs d'admission
+restent conservatrices jusqu'a recalibration par ces mesures.
 
-## Capture causale d'un underrun
-
-Construire ponctuellement avec l'audit causal, nul par défaut et exclu du
-firmware produit :
-
-```powershell
-cmake -G Ninja -S . -B build/ReleaseStreamAudit `
-  -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake `
-  -DCMAKE_BUILD_TYPE=Release -DBRICK6_VARIANT=lowcost `
-  "-DCMAKE_C_FLAGS=-DBRICK6_STREAM_BENCH=1 -DBRICK6_STREAM_TRACE=1 -DBRICK6_STREAM_AUDIT=1"
-cmake --build build/ReleaseStreamAudit --target BRICK6_CUBE.elf -j 4
-```
-
-Flasher, sélectionner 16 Kio, redémarrer et reproduire le cas 8 voix Multi. Le
-premier `LATE_SELECTION` ou `CONSUME_MISS` gèle `g_sample_stream_trace`. Arrêter
-alors la cible et extraire le snapshot complet :
-
-```gdb
-p/x &g_sample_stream_trace
-p sizeof(g_sample_stream_trace)
-p g_sample_stream_trace.trigger
-p g_sample_stream_trace.trigger_key
-p g_sample_stream_trace.trigger_page
-dump binary memory stream_audit.bin &g_sample_stream_trace ((char *)&g_sample_stream_trace)+sizeof(g_sample_stream_trace)
-```
-
-Dans `operations`, retrouver le `key/page_index` du trigger.
-`created_audio_frame`, `consume_deadline_audio_frame` et `selected_audio_frame`
-donnent l'anticipation initiale, la deadline absolue et l'attente. Lire son
-anneau `audit_history` de `audit_history_write-audit_history_count` à
-`audit_history_write-1`, modulo 64 : chaque entrée donne rang EDF, requêtes
-devant elle, backlog, deadlines dépassées et frames restantes.
-
-Lire de même `audit_services` avec `audit_service_write/audit_service_count` :
-intervalle entre passages, arrivées, pages sorties et motif exact de sortie
-(`sample_stream_audit_exit_t`). Convertir les cycles avec `SystemCoreClock` et
-les frames à 48 kHz. `other_sd_cycles_since_previous` et
-`multi_bulk_cycles_since_previous` mesurent l'occupation réelle du gate SD;
-`audit_blocked_*` mesure les polls refusés et leur durée audio. Comparer
-`arrivals_since_previous` à `pages_selected` pour détecter un backlog croissant.
-
-Répéter trois fois, puis faire un run témoin sans `BRICK6_STREAM_AUDIT` pour
-vérifier que le classement diagnostic n'a pas déplacé le phénomène.
+Pour un miss, relever `last_miss_sequence`, puis suivre `cause_sequence` depuis
+`CONSUME_MISS` vers `PAGE_READY` ou `IO_ERROR`, `IO_BEGIN`, `PAGE_SELECTED` et
+`SERVICE_BEGIN`. Aucun classement EDF, rang, starvation guard ou repair n'est
+necessaire pour expliquer le phenomene. `SERVICE_BLOCKED` identifie les polls
+refuses par le gate SD. Les cycles DWT servent aux mesures de latence ; les
+deadlines sont comparees sur la base des frames audio.
 
 ## Matrice obligatoire
 
-Pour chacune des tailles 4/8/16/32 Kio, mesurer au moins : mono puis stéréo,
-Classic puis Multi, loop puis non-loop, un fichier partagé puis fichiers tous
-distincts, 1/2/4/8 voix simultanées, ratios 1.0/1.5/2.0 puis le ratio produit
-maximal. Chaque scénario commence à froid, dure au moins 60 secondes et est
-répété trois fois. Ajouter un scénario de wrap simultané et un scénario avec deux
-instruments Multi distincts.
+Pour chacune des tailles 4/8/16/32 Kio, mesurer mono puis stereo, Classic puis
+Multi, loop puis non-loop, un fichier partage puis des fichiers distincts,
+1/2/4/8 voix simultanees, ratios 1.0/1.5/2.0 puis le ratio produit maximal.
+Chaque scenario commence a froid, dure au moins 60 secondes et est repete
+trois fois. Ajouter un wrap simultane et deux instruments Multi distincts.
 
-## Exploitation
+## Criteres et decision DMA
 
-Les moyennes sont les totaux divisés par `selected_pages` ou `service_calls`.
-Le débit utile est `source_bytes` divisé par la durée audio depuis
-`start_audio_frame`; le débit SD inclut le read-ahead via `read_bytes`. Le p99 se
-déduit en cumulant l'histogramme jusqu'à 99 % des pages ; le bucket `n` représente
-les valeurs de `2^n` à `2^(n+1)-1`. Relever également maxima, temps total de
-service, backlog, deadlines manquées, changements de source, ouvertures, seeks,
-lectures, hits de read-ahead, erreurs et polls bloqués.
+Une configuration est admissible si aucune deadline n'est manquee, aucun
+underrun n'apparait, le backlog revient a zero apres le pic froid et le p99
+comme le maximum restent sous l'horizon avec au moins 25 % de marge. Choisir la
+plus petite taille qui satisfait ces criteres dans tous les scenarios.
 
-## Critères et décision DMA
-
-Une configuration n'est admissible que si aucune deadline n'est manquée, aucun
-underrun n'apparaît, le backlog revient à zéro après le pic froid et le p99 comme
-le maximum restent sous l'horizon avec une marge d'au moins 25 %. Choisir la plus
-petite taille qui satisfait ces critères dans tous les scénarios, pas celle qui
-maximise seulement le débit moyen.
-
-Le DMA SD asynchrone devient nécessaire exactement si, après sélection de la
-meilleure taille et validation de la cadence dédiée, le temps bloqué synchrone
-maximal ou p99 consomme la marge de deadline dans un scénario pourtant admis.
-Une insuffisance de débit soutenu doit d'abord corriger l'admission ; elle ne
-justifie pas à elle seule le DMA.
+Le DMA SD asynchrone devient necessaire seulement si, apres selection de la
+meilleure taille et validation de la cadence, le temps bloque synchrone maximal
+ou p99 consomme la marge de deadline d'un scenario pourtant admis. Une
+insuffisance de debit soutenu doit d'abord corriger l'admission.

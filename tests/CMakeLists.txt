@@ -113,6 +113,33 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME note_fx_state_restore COMMAND note_fx_state_restore_test)
 endif()
 
+add_executable(note_fx_euclid_mask_test
+    note_fx_euclid_mask_test.c
+    ../Src/NoteFx/note_fx_euclid.c
+)
+target_include_directories(note_fx_euclid_mask_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(note_fx_euclid_mask_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME note_fx_euclid_mask COMMAND note_fx_euclid_mask_test)
+endif()
+
+add_executable(note_fx_euclid_runtime_test
+    note_fx_euclid_runtime_test.c
+    ../Src/NoteFx/note_fx_engine.c
+    ../Src/NoteFx/note_fx_arp.c
+    ../Src/NoteFx/note_fx_euclid.c
+    ../Src/Seq/seq_division_catalog.c
+)
+target_include_directories(note_fx_euclid_runtime_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(note_fx_euclid_runtime_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME note_fx_euclid_runtime COMMAND note_fx_euclid_runtime_test)
+endif()
+
 add_executable(live_parameter_event_test
     live_parameter_event_test.c
     ../Src/Core/live_parameter_event.c
@@ -131,3 +158,7 @@ endif()
 add_test(NAME note_fx_step1_static_validation
          COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                  -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step1_static_validation.ps1)
+
+add_test(NAME note_fx_step10_consolidation_validation
+         COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                 -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step10_consolidation_validation.ps1)

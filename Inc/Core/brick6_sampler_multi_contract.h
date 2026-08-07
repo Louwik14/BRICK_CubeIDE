@@ -9,7 +9,9 @@
 
 #include <stdint.h>
 
-#define BRICK6_SAMPLER_MULTI_MAX_VOICES (8U)
+#include "Sampler/sample_stream_limits.h"
+
+#define BRICK6_SAMPLER_MULTI_MAX_VOICES SAMPLE_STREAM_TARGET_MAX_VOICES
 #define BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID UINT8_MAX
 
 typedef enum

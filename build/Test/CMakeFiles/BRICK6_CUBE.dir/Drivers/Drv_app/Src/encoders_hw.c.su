@@ -1,5 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:53:6:encoders_hw_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:63:6:encoders_fast_poll_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:73:6:encoders_hw_read	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:68:6:encoders_fast_poll_irq	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:99:9:encoders_hw_get_delta	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:107:6:encoders_hw_init	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:122:6:encoders_fast_poll_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:132:6:encoders_hw_read	48	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:127:6:encoders_fast_poll_irq	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:158:9:encoders_hw_get_delta	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:175:9:encoders_hw_pop_detent_event	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:194:10:encoders_hw_get_detent_pending_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Drv_app/Src/encoders_hw.c:202:10:encoders_hw_get_detent_overflow_count	0	static

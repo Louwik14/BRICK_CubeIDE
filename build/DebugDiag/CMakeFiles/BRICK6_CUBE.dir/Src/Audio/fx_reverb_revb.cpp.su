@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_revb_model.h:166:14:void mifx::Reverb::ProcessStereoWetAdd(const float*, const float*, float*, float*, const float*, size_t)	76	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_revb_model.h:185:14:void mifx::Reverb::ProcessStereoWet(const float*, const float*, float*, float*, const float*, size_t)	76	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_revb_model.h:204:14:void mifx::Reverb::ProcessMonoWet(const float*, float*, float*, const float*, size_t)	76	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:41:6:void fx_reverb_revb_global_init(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:57:6:void fx_reverb_revb_global_set_wet(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:59:6:void fx_reverb_revb_global_set_room_size(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:64:6:void fx_reverb_revb_global_set_damping(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:73:6:void fx_reverb_revb_global_set_width(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:78:6:void fx_reverb_revb_global_set_hpf(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:84:6:void fx_reverb_revb_global_set_lpf(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:90:6:void fx_reverb_revb_global_set_delay_mode(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:95:6:void fx_reverb_revb_global_process_send_mono_to_stereo_wet(const float*, float*, float*, uint32_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:118:6:void fx_reverb_revb_global_process_send_stereo_wet(const float*, const float*, float*, float*, uint32_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:148:6:void fx_reverb_revb_global_process_send_stereo_wet_add(const float*, const float*, float*, float*, uint32_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_revb.cpp:167:1:cpp)	0	static

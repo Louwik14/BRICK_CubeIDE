@@ -298,8 +298,16 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
         g_kit_pending.active = 0U;
-        ui_hall_mode_flow_leave_lowcost_modal_page();
-        ui_page_template_tone_open_global_master();
+        if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
+                && (ui_page_template_tone_is_global_master() != 0U))
+        {
+            ui_page_template_tone_toggle_subset();
+        }
+        else
+        {
+            ui_hall_mode_flow_leave_lowcost_modal_page();
+            ui_page_template_tone_open_global_master();
+        }
         return;
     }
 

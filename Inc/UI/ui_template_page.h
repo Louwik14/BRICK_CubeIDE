@@ -102,6 +102,8 @@ typedef struct
     uint8_t active_subpage;
     uint8_t has_visited;
     uint8_t preserve_subpage_on_family_change;
+    uint8_t navigation_subset;
+    uint8_t resolved_navigation_subset;
 } ui_template_page_state_t;
 
 void ui_template_page_enter(void);

@@ -694,3 +694,109 @@ Les extensions Undo/Redo des paramètres ou modèles MIDI FX ont été retirées
 Les builds `build/Release` et `build/Premium` passent. La matrice dynamique
 host/round-trip et les tests dédiés restent bloqués par D-019 : les sources
 référencées par `tests/CMakeLists.txt` ne sont pas présentes dans ce checkout.
+
+**Étape 4 — modèle EUCLID du 2026-08-05 : exécutée.** `NOTE_FX_MODEL_EUCLID`
+est maintenant défini avec un schéma centralisé : LENGTH `1..64` (défaut `16`),
+PULSE `0..LENGTH` (défaut `4`) et DIV via le catalogue canonique (défaut `1/16`).
+Les defaults, le clamp inter-paramètres, les restores normalisés et la transition
+de modèle sont atomiques ; le registre expose aussi le label EUCLID et le modèle
+peut être appliqué sans générer de notes. La page MIDI FX affiche les noms et
+bornes Euclid correspondants, sans implémentation du masque ni du runtime.
+
+Le test d’état est compilé/linké avec la toolchain ARM. Les builds
+`build/Release` et `build/Premium` passent. Les mesures H743 et la validation
+fine restent reportées aux étapes prévues.
+
+**Étape 5 — masque EUCLID du 2026-08-05 : exécutée.** Le module pur
+`NoteFx/note_fx_euclid` construit un masque `uint64_t` borné à 64 positions.
+L’accumulateur Bresenham distribue les pulses, ancre le premier pulse au bit 0,
+gère `PULSE=0`, `PULSE=LENGTH` et le clamp `PULSE>LENGTH`, sans division ni
+allocation dans la fonction. Les vecteurs et les bornes sont couverts par
+`note_fx_euclid_mask_test` ; le runtime, la phase et la génération de notes
+restent hors périmètre.
+
+Le test de masque et le test d’état sont compilés/linkés avec la toolchain ARM.
+Les builds `build/Release` et `build/Premium` passent.
+
+**Étape 6 — runtime EUCLID du 2026-08-05 : exécutée.** Chaque slot possède
+désormais un ledger fixe de 16 sources strictement actives, avec identité
+token/génération/provenance, phase, masque, division et échéance indépendants.
+Le premier pulse est ancré au sample du premier Note On ; les sources courtes
+sont fermées exactement, les retriggers de même pitch restent distincts,
+`PULSE=0` avance silencieusement et les sorties possédées portent leur
+`off_sample`. Les changements de LENGTH/PULSE/DIV reconstruisent le masque,
+rephasent et ferment les sorties possédées avant reprise ; aucune mutation
+UI/main ni admission terminale nouvelle n’a été ajoutée.
+
+Le test runtime couvre source longue/courte, PULSE zéro, fermeture exacte et
+phases indépendantes de deux slots. Les tests runtime/masque/état sont
+compilés/linkés avec la toolchain ARM. Les builds `build/Release` et
+`build/Premium` passent ; les mesures H743 du jalon 6M restent reportées.
+
+**Étape 7 — chaîne et terminal EUCLID du 2026-08-05 : exécutée.** Le stage
+émis après le troisième slot est maintenant explicitement un hand-off vers le
+terminal commun ; il n’existe pas de faux quatrième slot. Chaque occurrence
+générée conserve son identité `source_token == occurrence_id` dans la paire
+On/Off, les trois stages aval sont parcourus sans saut ni reboucle, et le
+terminal continue d’utiliser ses admissions internes et MIDI indépendantes.
+La fermeture est traitée avant la génération au même sample et reste liée au
+token et à la génération, jamais au pitch seul.
+
+Le test runtime couvre la trace des trois slots, les identités distinctes par
+stage et les trois Off correspondants avant toute nouvelle génération. Les
+builds `build/Release` et `build/Premium` passent ; les validations H743 et
+les mesures de saturation restent reportées à l’étape 9.
+
+**Étape 8 — transitions et p-locks EUCLID du 2026-08-05 : exécutée.** Les
+changements de modèle sont désormais appliqués par slot : la fermeture,
+l’incrément de génération et la purge du runtime ne touchent pas les deux
+autres slots. Les changements LENGTH/PULSE/DIV ferment les owned avant de
+rephaser ; les defaults restent transactionnels via l’état de base. Le chemin
+MUTE_TRIGS reste non destructif et les transitions STOP/PANIC/source/pattern/
+destination conservent leur nettoyage destructif de piste.
+
+La politique p-lock est centralisée : MODEL reste autorisé, tandis que les
+LENGTH/PULSE/DIV d’un slot EUCLID sont refusés sans mutation d’état. La
+frontière de step filtre aussi les locks dépendants lorsqu’un MODEL p-lock
+rend le slot EUCLID, puis conserve la restauration des locks déjà actifs. Les
+tests couvrent le refus de politique et la reconfiguration ciblée ; les builds
+`build/Release` et `build/Premium` passent. Les validations H743 et mesures de
+saturation restent reportées à l’étape 9.
+
+**Étape 9 — multi-EUCLID, saturation et budgets du 2026-08-05 : bornage
+implémenté, mesure H743 reportée.** Les trois instances par piste conservent
+leurs ledgers fixes indépendants : 8 pistes × 3 slots × 16 sources, soit 384
+sources actives au maximum, et 384 sorties owned simultanées avant admission
+aval. Le moteur expose désormais les high-water sources/owned par slot ainsi
+que les causes de refus (ledger source, owned, modèle et émission aval) en plus
+des totaux par piste. Le pipeline expose les admissions/refus On/Off générés,
+le high-water d’émissions et l’utilisation de la réserve Off ; le scheduler
+expose la capacité terminale fixe de 64, son high-water et les retries Off.
+
+Le fan-out reste fixe et borné par les trois stages ; aucune allocation ni
+augmentation arbitraire de polyphonie/queue n’a été ajoutée. La réserve Off et
+la priorité de fermeture restent actives pendant la saturation. Le test runtime
+couvre trois EUCLID, 16 sources par instance, masque plein et division rapide,
+avec preuve des 48 On/Off et des high-water par slot. Les builds `build/Release`
+et `build/Premium` passent ; les mesures DWT/p99, marge IRQ, USB et fragmentation
+H743 restent explicitement différées comme demandé.
+
+**Étape 10 — consolidation finale du 2026-08-05 : exécutée au niveau
+structurel.** Le script `tests/note_fx_step10_consolidation_validation.ps1`
+est maintenant enregistré dans CTest avec les tests de masque, runtime et
+restore présents. Il vérifie la cardinalité S1..S3, l'absence d'identifiants
+S4 fonctionnels, le hand-off terminal, le chemin EUCLID sans allocation ni
+calcul de masque dans la boucle chaude, les bornes de demi-buffer et les
+diagnostics de saturation. Les audits finaux et les architectures Z1/Z4
+décrivent désormais les mêmes capacités fixes : 8 pistes x 3 slots x 16
+sources/owned, fan-out borné et terminal 64.
+
+Les builds Release Low-Cost et Premium passent. Les empreintes finales sont
+`Release` FLASH 1 104 540, DTCM 104 064, RAM_D1 431 360, RAM_D2 102 144 et
+`Premium` FLASH 1 091 976, DTCM 105 088, RAM_D1 484 576, RAM_D2 108 640
+octets ; les tests NoteFx sont compilés/linkés avec la toolchain ARM.
+L'exécution host, les essais USB/moteur
+et les mesures DWT/p99, marge IRQ et underrun H743 restent différés selon la
+consigne de cette passe. Le verdict de l'étape est donc `implementation
+structurellement conforme`, sans prétendre à une validation hard-RT ou
+matérielle complète.
