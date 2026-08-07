@@ -645,7 +645,7 @@ void apply_filter_decimator_rate2(float v) { (void)v; }
 
 uint8_t param_filter_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
-    if ((out_value == NULL) || (track >= SEQ_TRACK_COUNT) || (param_filter_is_param(id) == 0U))
+    if ((out_value == NULL) || (track >= SEQ_LANE_CAPACITY) || (param_filter_is_param(id) == 0U))
     {
         return 0U;
     }

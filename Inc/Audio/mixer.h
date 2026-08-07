@@ -26,7 +26,9 @@
  * Mixer runtime owns one logical lane per sequencer track. This is distinct
  * from the 4 physical DSP ingress tracks exposed by audio_float.h.
  */
-#define MIXER_MAX_TRACKS SEQ_TRACK_COUNT
+/* 16 source lanes plus one post-sum GROUP bus. */
+#define MIXER_MAX_TRACKS (SEQ_LANE_CAPACITY + 1U)
+#define MIXER_GROUP_BUS_TRACK SEQ_LANE_CAPACITY
 #define MIXER_NUM_SENDS 2U
 #define MIXER_INSERTS_PER_TRACK 2U
 /* Nominal per-track trim for dry bus summing headroom. */

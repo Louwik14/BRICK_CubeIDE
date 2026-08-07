@@ -140,13 +140,13 @@ typedef struct
     mixer_lane_exec_kind_t exec_kind;
 } mixer_lane_plan_t;
 
-static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
+CTRL_STATE static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
-static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
+CTRL_STATE static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
 static uint32_t g_mixer_filter_config_version;
 AUDIO_HOT static mixer_track_filter_t g_poly_filters_hot[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
-static AUDIO_HOT float g_external_track_mono[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
-static AUDIO_HOT float g_external_track_l[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
+SEQ_STATE_D2 static float g_external_track_mono[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
+CTRL_STATE static float g_external_track_l[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 static uint8_t g_external_poly_initialized[MIXER_MAX_TRACKS];
@@ -3370,7 +3370,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     uint8_t looper_record_track = 0U;
     uint8_t diag_active_tracks = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
-    const uint8_t sample_capture_active = sample_capture_audio_hook_is_enabled();
+    const uint8_t sample_capture_recorder_active = sample_capture_recorder_is_active();
+    const uint8_t sample_capture_live_bus_required =
+        sample_capture_model_live_bus_required();
+    const uint8_t sample_capture_bus_active =
+        ((sample_capture_recorder_active != 0U)
+            || (sample_capture_live_bus_required != 0U)) ? 1U : 0U;
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
     {
         memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
@@ -3388,11 +3393,26 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memset(looper_record_l, 0, sizeof(looper_record_l));
         memset(looper_record_r, 0, sizeof(looper_record_r));
     }
-    if(sample_capture_active != 0U)
+    if(sample_capture_bus_active != 0U)
     {
         memset(sample_capture_l, 0, sizeof(sample_capture_l));
         memset(sample_capture_r, 0, sizeof(sample_capture_r));
     }
+
+#if defined(BRICK6_VARIANT_LOWCOST)
+    /* The Low-Cost codec input is a dedicated AUDIO REC source. */
+    if((sample_capture_bus_active != 0U)
+            && (sample_capture_model_mic_is_enabled() != 0U)
+            && (tracks != NULL)
+            && (track_count > 0U))
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            sample_capture_l[i] += tracks[0].L[i];
+            sample_capture_r[i] += tracks[0].L[i];
+        }
+    }
+#endif
 
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
@@ -3484,7 +3504,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
                 && (diag_lane == 0U)
-                && (sample_capture_active == 0U)
+                && (sample_capture_bus_active == 0U)
                 && (looper_record_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
@@ -3623,7 +3643,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         uint8_t poly_stereo_fanout = 0U;
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (diag_lane == 0U)
-                && (sample_capture_active == 0U)
+                && (sample_capture_bus_active == 0U)
                 && (looper_record_active == 0U)
                 && (looper_playback_mix_active == 0U)
                 && (mt->route_master != 0U)
@@ -3949,7 +3969,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track);
             if((source_track < MIXER_MAX_TRACKS) && (mixer_track_is_looper(source_track) != 0U))
             {
-                if((sample_capture_active != 0U)
+                if((sample_capture_bus_active != 0U)
                         && (sample_capture_model_source_track_is_enabled(source_track) != 0U))
                 {
                     for(uint32_t i = 0U; i < frames; ++i)
@@ -3994,7 +4014,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 }
             }
 
-            if((sample_capture_active != 0U)
+            if((sample_capture_bus_active != 0U)
                     && (source_track < MIXER_MAX_TRACKS)
                     && (sample_capture_model_source_track_is_enabled(source_track) != 0U))
             {
@@ -4037,6 +4057,32 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 }
 
                 mt->send_level_current[s] = mt->send_level[s];
+            }
+        }
+
+        uint8_t dry_source_track = (uint8_t)t;
+        (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t,
+                                                            &dry_source_track);
+        if ((dry_source_track >= (uint8_t)SEQ_GROUP_FIRST_CHILD_LANE)
+                && (dry_source_track <= (uint8_t)SEQ_GROUP_LAST_CHILD_LANE))
+        {
+            const track_runtime_ctx_t *const group_parent =
+                track_runtime_get_ctx((uint8_t)SEQ_GROUP_PARENT_MAIN_TRACK);
+            if ((group_parent != NULL)
+                    && (group_parent->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+                    && (group_parent->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                    && (group_parent->mix_track_id < MIXER_MAX_TRACKS))
+            {
+                const uint8_t group_mix = group_parent->mix_track_id;
+                for (uint32_t i = 0U; i < frames; ++i)
+                {
+                    g_external_track_l[group_mix][i] += L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                    g_external_track_r[group_mix][i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                }
+                g_external_track_enabled[group_mix] = 1U;
+                g_external_track_format[group_mix] = MIXER_EXTERNAL_FORMAT_STEREO;
+                g_external_track_frames_valid[group_mix] = (uint16_t)frames;
+                continue;
             }
         }
 
@@ -4343,15 +4389,37 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
     fx_chain_process_slot(2U, bus_main_l, bus_main_r, frames);
 
-    if(sample_capture_active != 0U)
+    if(sample_capture_bus_active != 0U)
     {
+        uint32_t live_peak_pcm24 = 0U;
         for(uint32_t i = 0U; i < frames; ++i)
         {
-            const uint32_t out = i * MULTI_RECORD_WRITER_CHANNELS;
-            sample_capture_i32[out] = mixer_looper_float_to_pcm24(sample_capture_l[i]);
-            sample_capture_i32[out + 1U] = mixer_looper_float_to_pcm24(sample_capture_r[i]);
+            const int32_t pcm_l = mixer_looper_float_to_pcm24(sample_capture_l[i]);
+            const int32_t pcm_r = mixer_looper_float_to_pcm24(sample_capture_r[i]);
+            const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-(int64_t)pcm_l) : (uint32_t)pcm_l;
+            const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-(int64_t)pcm_r) : (uint32_t)pcm_r;
+            if(abs_l > live_peak_pcm24)
+            {
+                live_peak_pcm24 = abs_l;
+            }
+            if(abs_r > live_peak_pcm24)
+            {
+                live_peak_pcm24 = abs_r;
+            }
+
+            if(sample_capture_recorder_active != 0U)
+            {
+                const uint32_t out = i * MULTI_RECORD_WRITER_CHANNELS;
+                sample_capture_i32[out] = pcm_l;
+                sample_capture_i32[out + 1U] = pcm_r;
+            }
         }
-        (void)sample_capture_push_audio_block_from_irq(sample_capture_i32, frames);
+        sample_capture_live_publish_peak_from_irq(live_peak_pcm24);
+
+        if(sample_capture_recorder_active != 0U)
+        {
+            (void)sample_capture_push_audio_block_from_irq(sample_capture_i32, frames);
+        }
     }
 
     if(track_count > 0U)

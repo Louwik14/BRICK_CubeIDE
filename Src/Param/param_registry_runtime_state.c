@@ -4,8 +4,8 @@
 #include "Storage/memory_layout.h"
 #include <string.h>
 
-SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
-SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_LANE_CAPACITY][PARAM_COUNT];
+SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_LANE_CAPACITY][PARAM_COUNT];
 
 void param_registry_runtime_state_init(void)
 {
@@ -15,7 +15,7 @@ void param_registry_runtime_state_init(void)
 
 uint8_t param_registry_runtime_cache_get(uint8_t track, param_id_t id, float *out_value)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT) || (out_value == NULL))
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT) || (out_value == NULL))
     {
         return 0U;
     }
@@ -31,7 +31,7 @@ uint8_t param_registry_runtime_cache_get(uint8_t track, param_id_t id, float *ou
 
 void param_registry_runtime_cache_set(uint8_t track, param_id_t id, float value)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
     {
         return;
     }
@@ -42,7 +42,7 @@ void param_registry_runtime_cache_set(uint8_t track, param_id_t id, float value)
 
 void param_registry_runtime_cache_clear_track(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -57,7 +57,7 @@ void param_registry_runtime_commit_authoritative_write(uint8_t track,
                                                        uint8_t resync_lfo)
 {
     /* Post-commit helper: cache is authoritative, optional LFO resync stays explicit. */
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
     {
         return;
     }
@@ -75,7 +75,7 @@ uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
                                               float *out_value)
 {
     /* Pure query helper: no cache write, no resync, only cache/default resolution. */
-    if ((registry == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
+    if ((registry == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY) || (out_value == NULL))
     {
         return 0U;
     }
@@ -91,7 +91,7 @@ uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
 
 void param_registry_runtime_resync_lfo(uint8_t track, param_id_t id, float value)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
     {
         return;
     }

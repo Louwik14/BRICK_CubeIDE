@@ -12,6 +12,7 @@
 #include "ui_core.h"
 #include "ui_renderer_template.h"
 #include "ui_page_manager.h"
+#include "ui_navigation.h"
 #include "ui_template_page.h"
 
 static uint8_t g_ui_template_tone_subset = 0U;
@@ -261,7 +262,7 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
     if (g_ui_template_tone_global_master != 0U)
     {
         return ui_page_template_tone_resolve_for_track(
-            ui_get_active_track(), UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
+            ui_get_active_lane(), UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
     }
     return ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
@@ -328,7 +329,7 @@ static const uint16_t g_prism_fm_frequency_quantizer[] = {
 
 static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_param(param_id_t id, uint8_t *out_edit_index)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
             || (ui_get_track_type(active_track) != UI_TRACK_TYPE_PRISM))
     {
@@ -922,7 +923,7 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
                                                       char *out_value,
                                                       uint32_t out_value_len)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     uint8_t stack_slot = 0U;
     uint8_t stack_param = 0U;
 
@@ -1064,8 +1065,8 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
 {
     (void)slot;
 
-    if ((ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_WAVE)
+    if ((ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_WAVE)
             && (subpage != NULL)
             && (((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
@@ -1089,7 +1090,7 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
 
     const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
     float model_value = 0.0f;
-    if (param_registry_get_track_value(model_param, ui_get_active_track(), &model_value) == 0U)
+    if (param_registry_get_track_value(model_param, ui_get_active_lane(), &model_value) == 0U)
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
@@ -1110,7 +1111,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 char *out_value,
                                                 uint32_t out_value_len)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE))
     {
@@ -1440,7 +1441,7 @@ static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, pa
 
 static void ui_page_template_tone_sync_drum_family(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_MD))
     {
@@ -1560,7 +1561,7 @@ void ui_page_template_tone_register_families(void)
 void ui_page_template_tone_open_primary(void)
 {
     g_ui_template_tone_subset = 0U;
-    g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
+    g_ui_template_tone_state.navigation_subset = 0U;
     ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
 }
 
@@ -1578,12 +1579,12 @@ uint8_t ui_page_template_tone_is_global_master(void)
 
 void ui_page_template_tone_toggle_subset(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if (g_ui_template_tone_global_master != 0U)
     {
         g_ui_template_tone_subset = (uint8_t)((g_ui_template_tone_subset + 1U) % 3U);
-        g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
-        ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
+        g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
+        ui_navigation_restore_current_template_subpage();
         return;
     }
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
@@ -1595,8 +1596,8 @@ void ui_page_template_tone_toggle_subset(void)
     }
 
     g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
-    g_ui_template_tone_state.resolved_family = ui_page_template_tone_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_tone_state, 0U);
+    g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
+    ui_navigation_restore_current_template_subpage();
 }
 
 static void ui_page_template_tone_enter(void)

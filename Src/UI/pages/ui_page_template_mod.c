@@ -4,6 +4,7 @@
 
 #include "Mod/mod_lfo_v1.h"
 #include "ui_core.h"
+#include "ui_navigation.h"
 #include "ui_template_page.h"
 
 static uint8_t g_ui_template_mod_subset = 0U;
@@ -175,7 +176,7 @@ static uint8_t ui_page_template_mod_param_text(uint8_t slot,
             }
         }
         const uint8_t is_rnd = ((lfo_index < MOD_LFO_COUNT_PER_TRACK)
-                && (mod_lfo_v1_shape_is_random(ui_get_active_track(), lfo_index) != 0U)) ? 1U : 0U;
+                && (mod_lfo_v1_shape_is_random(ui_get_active_lane(), lfo_index) != 0U)) ? 1U : 0U;
         (void)snprintf(out_name, out_name_len, "%s", (is_rnd != 0U) ? "Slew" : "Phase");
         if ((out_value != NULL) && (out_value_len > 0U) && (is_rnd != 0U))
         {
@@ -200,15 +201,15 @@ static ui_template_page_state_t g_ui_template_mod_state = {
 void ui_page_template_mod_open_primary(void)
 {
     g_ui_template_mod_subset = 0U;
-    g_ui_template_mod_state.resolved_family = ui_page_template_mod_resolve_family();
+    g_ui_template_mod_state.navigation_subset = 0U;
     ui_template_page_select_subpage(&g_ui_template_mod_state, 0U);
 }
 
 void ui_page_template_mod_toggle_subset(void)
 {
     g_ui_template_mod_subset = (g_ui_template_mod_subset == 0U) ? 1U : 0U;
-    g_ui_template_mod_state.resolved_family = ui_page_template_mod_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_mod_state, 0U);
+    g_ui_template_mod_state.navigation_subset = g_ui_template_mod_subset;
+    ui_navigation_restore_current_template_subpage();
 }
 
 void ui_page_template_mod_register_families(void)

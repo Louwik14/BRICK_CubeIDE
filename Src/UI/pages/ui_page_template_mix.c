@@ -41,7 +41,7 @@ static const ui_template_family_t g_ui_template_mix_unavailable_family = {
 
 static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 {
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_get_active_lane();
     track_runtime_refresh_track(track);
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(track, &resolved) == 0U)

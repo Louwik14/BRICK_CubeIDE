@@ -40,6 +40,7 @@
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
 #include "encoders.h"
+#include "NoteFx/note_fx_state.h"
 #include "param_store.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Storage/memory_layout.h"
@@ -77,8 +78,6 @@ static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
 static uint8_t g_ui_param_bank_track = 0xFFU;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
-UI_STATE_SDRAM static float g_ui_audio_owned_shadow[SEQ_TRACK_COUNT][PARAM_COUNT];
-UI_STATE_SDRAM static uint8_t g_ui_audio_owned_shadow_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
 
 typedef struct
 {
@@ -119,24 +118,20 @@ static uint8_t ui_param_audio_owned_shadow_get(param_id_t param,
 
     const uint8_t scoped = ui_param_is_track_scoped(param);
     const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
-    if (shadow_track >= SEQ_TRACK_COUNT)
+    if (shadow_track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
-    if (g_ui_audio_owned_shadow_valid[shadow_track][param] == 0U)
+    float value = 0.0f;
+    if (param_registry_runtime_cache_get(shadow_track, param, &value) == 0U)
     {
-        float value = param_store_get_active(param);
-        if ((scoped != 0U)
-                && (param_registry_runtime_cache_get(track, param, &value) == 0U))
-        {
-            value = param_registry[param].default_value;
-        }
-        g_ui_audio_owned_shadow[shadow_track][param] = value;
-        g_ui_audio_owned_shadow_valid[shadow_track][param] = 1U;
+        value = (scoped != 0U) ? param_registry[param].default_value
+                               : param_store_get_active(param);
+        param_registry_runtime_cache_set(shadow_track, param, value);
     }
 
-    *out_value = g_ui_audio_owned_shadow[shadow_track][param];
+    *out_value = value;
     return 1U;
 }
 
@@ -153,13 +148,12 @@ static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
 
     const uint8_t scoped = ui_param_is_track_scoped(param);
     const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
-    if (shadow_track >= SEQ_TRACK_COUNT)
+    if (shadow_track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
-    g_ui_audio_owned_shadow[shadow_track][param] = value;
-    g_ui_audio_owned_shadow_valid[shadow_track][param] = 1U;
+    param_registry_runtime_cache_set(shadow_track, param, value);
     if (update_active_mirror != 0U)
     {
         param_store_set_active(param, value);
@@ -424,7 +418,7 @@ static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param)
 
 static uint8_t ui_param_seq_runtime_track_is_valid(uint8_t track)
 {
-    return (uint8_t)(track < SEQ_TRACK_COUNT);
+    return (uint8_t)(track < SEQ_LANE_CAPACITY);
 }
 
 static uint8_t ui_param_get_seq_runtime_track_value(param_id_t param, uint8_t track, float *out_value)
@@ -584,13 +578,13 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
         g_ui_param_bank_track = 0xFFU;
         ui_param_clear_value_flash();
         ui_param_reset_stepped_encoder_accum();
-        ui_param_publish_encoder_binding(ui_get_active_track(),
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          (uint8_t)(button_down(BTN_SHIFT) != 0U));
         return;
     }
 
     const uint8_t same_bank = ui_param_bank_is_same(bank);
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const uint8_t same_track = (g_ui_param_bank_track == active_track) ? 1U : 0U;
     g_ui_param.bank = *bank;
     g_ui_param_bank_track = active_track;
@@ -621,13 +615,13 @@ void ui_param_invalidate_bank(void)
     g_ui_param_bank_track = 0xFFU;
     ui_param_clear_value_flash();
     ui_param_reset_stepped_encoder_accum();
-    ui_param_publish_encoder_binding(ui_get_active_track(),
+    ui_param_publish_encoder_binding(ui_get_active_lane(),
                                      (uint8_t)(button_down(BTN_SHIFT) != 0U));
 }
 
 void ui_param_sync_active_bank_values(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((param_registry_track_structure_transition_is_global_active() != 0U)
             || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
@@ -674,7 +668,7 @@ void ui_param_sync_active_bank_values(void)
 
 void ui_param_sync_active_track_mirror_from_runtime(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((param_registry_track_structure_transition_is_global_active() != 0U)
             || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
@@ -743,7 +737,7 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
     }
 
     ui_param_capture_encoder_context_for_state(out_ctx,
-                                               ui_get_active_track(),
+                                               ui_get_active_lane(),
                                                (uint8_t)(button_down(BTN_SHIFT) != 0U));
 }
 
@@ -861,7 +855,7 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
 
 static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT))
+    if ((track >= SEQ_LANE_CAPACITY) || (param >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -918,6 +912,33 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         }
         *out_min = (float)first;
         *out_max = (float)last;
+        return 1U;
+    }
+    uint8_t note_fx_slot = 0U;
+    uint8_t note_fx_param = 0U;
+    if (note_fx_state_param_map(param, &note_fx_slot, &note_fx_param) != 0U)
+    {
+        (void)note_fx_slot;
+        float model_value = 0.0f;
+        note_fx_param_schema_t schema;
+        const param_id_t model_id = (param_id_t)(param
+            + (NOTE_FX_PARAM_COUNT - 1U - note_fx_param));
+        if ((note_fx_state_get_param(track, model_id, &model_value) != 0U)
+                && (note_fx_state_get_param_schema((uint8_t)model_value,
+                                                    note_fx_param,
+                                                    &schema) != 0U))
+        {
+            *out_min = (float)schema.min;
+            *out_max = (float)schema.max;
+            if (((uint8_t)model_value == NOTE_FX_MODEL_EUCLID)
+                    && (note_fx_param == 1U))
+            {
+                float length = 0.0f;
+                const param_id_t length_id = (param_id_t)(param - 1U);
+                if (note_fx_state_get_param(track, length_id, &length) != 0U)
+                    *out_max = length;
+            }
+        }
         return 1U;
     }
     if (param == PARAM_CFG_TRACK)
@@ -1043,7 +1064,7 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
 static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint8_t active_track)
 {
     if ((param >= PARAM_COUNT)
-            || (active_track >= SEQ_TRACK_COUNT)
+            || (active_track >= SEQ_LANE_CAPACITY)
             || (ui_param_is_track_scoped(param) == 0U))
     {
         return 0U;
@@ -1069,7 +1090,7 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
                                          uint8_t *out_set_id,
                                          seq_param_slot_t *out_param_slot)
 {
-    if ((out_set_id == 0) || (out_param_slot == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((out_set_id == 0) || (out_param_slot == 0) || (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }
@@ -1123,7 +1144,7 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
     }
 
     const seq_track_id_t track = active_track;
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -1282,8 +1303,11 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
-    const param_desc_t *const desc = &param_registry[param];
-    const float clamped = ui_param_clamp(value, desc->min, desc->max);
+    float edit_min = 0.0f;
+    float edit_max = 0.0f;
+    if (ui_param_resolve_edit_bounds(param, track, &edit_min, &edit_max) == 0U)
+        return 0U;
+    const float clamped = ui_param_clamp(value, edit_min, edit_max);
     float current_value = 0.0f;
 
     if ((param_registry_get_track_value(param, track, &current_value) != 0U)
@@ -1573,7 +1597,7 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
     const float requested_delta = (float)delta * edit_step;
     uint8_t applied = 0U;
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         if (track == active_track)
         {
@@ -1811,7 +1835,7 @@ uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_
         return 0U;
     }
 
-    const uint8_t plock_track = ui_param_resolve_effective_edit_track(param, ui_get_active_track());
+    const uint8_t plock_track = ui_param_resolve_effective_edit_track(param, ui_get_active_lane());
     uint8_t set_id = 0U;
     seq_param_slot_t param_slot = 0U;
     if (ui_param_resolve_seq_slot(plock_track, param, &set_id, &param_slot) == 0U)
@@ -2034,7 +2058,7 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
         return 0U;
     }
 
-    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) && (track >= SEQ_TRACK_COUNT))
+    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) && (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }

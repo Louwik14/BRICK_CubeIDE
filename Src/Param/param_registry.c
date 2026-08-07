@@ -92,7 +92,7 @@ static uint8_t param_registry_prism_param_slot(param_id_t id, uint8_t *out_osc, 
 
 static void param_registry_sync_active_cfg_mirror_for_track(uint8_t track)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (track != ui_get_active_track()))
+    if ((track >= SEQ_LANE_CAPACITY) || (track != ui_get_active_lane()))
     {
         return;
     }
@@ -108,7 +108,7 @@ static void param_registry_sync_active_cfg_mirror_for_track(uint8_t track)
 
 static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float clamped)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -1092,7 +1092,7 @@ static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
                                           track_runtime_param_rule_t rule,
                                           uint8_t rt_fast)
 {
-    if ((ctx == NULL) || (track >= SEQ_TRACK_COUNT))
+    if ((ctx == NULL) || (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }
@@ -1293,7 +1293,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
      * This keeps UI and control queries away from private voice/backend state. */
     if (live_parameter_is_audio_owned(id) != 0U)
     {
-        if ((track >= SEQ_TRACK_COUNT)
+        if ((track >= SEQ_LANE_CAPACITY)
                 || (param_registry_runtime_cache_get(track, id, out_value) == 0U))
         {
             *out_value = param_registry[id].default_value;
@@ -1308,7 +1308,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return note_fx_state_get_param(track, id, out_value);
     }
 
-    if (track < SEQ_TRACK_COUNT)
+    if (track < SEQ_LANE_CAPACITY)
     {
         if (id == PARAM_CFG_POLY_VOICES)
         {
@@ -1427,7 +1427,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
                 && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
         {
-            if (track >= SEQ_TRACK_COUNT)
+            if (track >= SEQ_LANE_CAPACITY)
             {
                 return 0U;
             }
@@ -1473,7 +1473,7 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value)
 {
     if ((id >= PARAM_COUNT)
-            || (track >= SEQ_TRACK_COUNT)
+            || (track >= SEQ_LANE_CAPACITY)
             || (param_id_is_reserved(id) != 0U))
     {
         return 0U;
@@ -1604,7 +1604,7 @@ void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t trac
 
 void param_registry_clear_track_runtime_state(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -1840,7 +1840,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 /* Command surface: UI edit command forwarded to the track-aware apply seam. */
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd)
 {
-    if ((cmd == NULL) || (cmd->id >= PARAM_COUNT) || (cmd->track >= SEQ_TRACK_COUNT))
+    if ((cmd == NULL) || (cmd->id >= PARAM_COUNT) || (cmd->track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }

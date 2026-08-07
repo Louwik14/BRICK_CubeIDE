@@ -48,7 +48,7 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
                                     uint8_t track,
                                     float value)
 {
-    if ((bulk == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT)
+    if ((bulk == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
             || (live_parameter_is_audio_owned(param) == 0U))
     {
         return 0U;
@@ -175,7 +175,7 @@ float param_macro_lerp(float base_value, float scene_value, float amount)
 
 uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT))
+    if ((track >= SEQ_LANE_CAPACITY) || (param >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -329,7 +329,7 @@ static void param_macro_apply_non_audio_releases(void)
         for (uint8_t i = 0U; i < state->last_count; ++i)
         {
             const param_macro_resolution_t *const last = &state->last_resolution[i];
-            if ((last->track >= SEQ_TRACK_COUNT)
+            if ((last->track >= SEQ_LANE_CAPACITY)
                     || (last->param >= PARAM_COUNT)
                     || (last->resolved_value == last->base_value)
                     || (live_parameter_is_audio_owned(last->param) != 0U))
@@ -427,7 +427,7 @@ static void param_macro_recompute_sources(void)
         for (uint8_t i = 0U; i < state->last_count; ++i)
         {
             const param_macro_resolution_t *const last = &state->last_resolution[i];
-            if ((last->track >= SEQ_TRACK_COUNT)
+            if ((last->track >= SEQ_LANE_CAPACITY)
                     || (last->param >= PARAM_COUNT)
                     || (last->resolved_value == last->base_value))
             {
@@ -572,7 +572,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
     live_parameter_audio_bulk_t bulk;
 
     if ((resolution == NULL)
-            || (resolution->track >= SEQ_TRACK_COUNT)
+            || (resolution->track >= SEQ_LANE_CAPACITY)
             || (resolution->param >= PARAM_COUNT)
             || (param_macro_lock_target_is_supported(resolution->track, resolution->param) == 0U))
     {

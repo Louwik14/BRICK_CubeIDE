@@ -3,6 +3,7 @@
 #include "mixer.h"
 #include "param_store.h"
 #include "ui_core.h"
+#include "ui_navigation.h"
 #include "ui_template_page.h"
 #include "Core/track_runtime.h"
 
@@ -160,14 +161,14 @@ static ui_template_page_state_t g_ui_template_env_state = {
 void ui_page_template_env_open_primary(void)
 {
     g_ui_template_env_subset = 0U;
-    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
+    g_ui_template_env_state.navigation_subset = 0U;
     ui_template_page_select_subpage(&g_ui_template_env_state, 0U);
 }
 
 uint8_t ui_page_template_env_open_vca(void)
 {
     g_ui_template_env_subset = 0U;
-    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
+    g_ui_template_env_state.navigation_subset = 0U;
     ui_template_page_select_subpage(&g_ui_template_env_state, 2U);
     return (g_ui_template_env_state.active_subpage == 2U) ? 1U : 0U;
 }
@@ -175,8 +176,8 @@ uint8_t ui_page_template_env_open_vca(void)
 void ui_page_template_env_toggle_subset(void)
 {
     g_ui_template_env_subset = (g_ui_template_env_subset == 0U) ? 1U : 0U;
-    g_ui_template_env_state.resolved_family = ui_page_template_env_resolve_family();
-    ui_template_page_select_subpage(&g_ui_template_env_state, 0U);
+    g_ui_template_env_state.navigation_subset = g_ui_template_env_subset;
+    ui_navigation_restore_current_template_subpage();
 }
 
 typedef struct
@@ -255,7 +256,7 @@ static void ui_page_template_env_sync_family(void)
 
     ui_template_family_t *family = ui_page_template_env_get_audio_family();
     uint8_t filter_target_track = 0U;
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_track_family_t active_family = ui_get_track_family(active_track);
     const ui_track_type_t active_type = ui_get_track_type(active_track);
     if (family == 0)

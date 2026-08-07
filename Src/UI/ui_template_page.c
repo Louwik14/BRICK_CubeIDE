@@ -11,7 +11,7 @@
 #include "ui_navigation.h"
 #include "ui_renderer_template.h"
 
-UI_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
+UI_STATE_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
 
 static ui_template_page_state_t *ui_template_page_get_active_state(void)
 {
@@ -36,7 +36,9 @@ static void ui_template_page_remember_if_active(const ui_template_page_state_t *
         return;
     }
 
-    ui_navigation_remember_template_subpage(ui_page_get_id(), state->active_subpage);
+    ui_navigation_remember_template_subpage(ui_page_get_id(),
+                                             state->resolved_navigation_subset,
+                                             state->active_subpage);
 }
 
 static uint8_t ui_template_page_is_subpage_enabled(const ui_template_page_state_t *state, uint8_t subpage_index)
@@ -146,14 +148,23 @@ static void ui_template_page_sync_resolved_family(ui_template_page_state_t *stat
 
     if (state->resolved_family != family)
     {
+        const uint8_t previous_subset = state->resolved_navigation_subset;
         const uint8_t previous_subpage = state->active_subpage;
+        if ((state->resolved_family != 0)
+                && (ui_template_page_state_is_active(state) != 0U)
+                && (previous_subpage < 4U))
+        {
+            ui_navigation_remember_template_subpage(ui_page_get_id(),
+                                                     previous_subset,
+                                                     previous_subpage);
+        }
         state->resolved_family = family;
+        state->resolved_navigation_subset = state->navigation_subset;
         state->active_subpage = ((state->preserve_subpage_on_family_change != 0U)
                 && (previous_subpage < 4U)
                 && (ui_template_page_is_subpage_selectable(state, previous_subpage) != 0U))
                 ? previous_subpage
                 : ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
-        ui_template_page_remember_if_active(state);
     }
 }
 
@@ -222,7 +233,7 @@ const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t f
 
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_track_config_t config = ui_get_track_config(active_track);
     return ui_template_family_resolve(family_id, active_track, config.family, config.type);
 }
@@ -273,7 +284,7 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
 const ui_template_family_t *ui_template_family_resolve_effective_active_track(ui_template_family_id_t family_id)
 {
     return ui_template_family_resolve_effective_for_track(family_id,
-                                                           ui_get_active_track(),
+                                                           ui_get_active_lane(),
                                                            UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
 }
 
@@ -307,6 +318,8 @@ static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)
 
 void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t subpage_index)
 {
+    ui_template_page_sync_resolved_family(state);
+
     if ((state == 0)
             || (ui_template_page_get_active_family(state) == 0)
             || (subpage_index >= 4U)

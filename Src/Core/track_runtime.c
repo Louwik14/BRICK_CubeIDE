@@ -20,7 +20,7 @@
 #define TRACK_RUNTIME_INSTANCE_NONE    0xFFU
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
-#define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
+#define TRACK_RUNTIME_MIX_TRACK_COUNT MIXER_MAX_TRACKS
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_LANE_CAPACITY];
 static volatile uint8_t g_track_runtime_global_dirty = 1U;
@@ -48,7 +48,7 @@ static void track_runtime_rebuild_mix_track_reverse_map(void)
         g_track_runtime_logical_track_by_mix_track[mix_track] = 0xFFU;
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
         if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
@@ -963,7 +963,7 @@ static void track_runtime_prepare_group_children(void)
         ctx->type = (uint8_t)TRACK_RUNTIME_TYPE_RAM;
         ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER;
         ctx->instance_id = lane_id;
-        ctx->mix_track_id = parent->mix_track_id;
+        ctx->mix_track_id = lane_id;
         ctx->flags = track_runtime_compute_flags(TRACK_RUNTIME_FAMILY_SAMPLER,
                                                   TRACK_RUNTIME_TYPE_RAM);
         ctx->bind_state = TRACK_RUNTIME_BIND_BOUND;
@@ -1150,6 +1150,7 @@ void track_runtime_refresh_all(void)
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
         if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MIDI)
                 || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF)
+                || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_GROUP)
                 || (ctx->mix_track_id != TRACK_RUNTIME_MIX_TRACK_NONE))
         {
             continue;
@@ -1168,6 +1169,13 @@ void track_runtime_refresh_all(void)
                 || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF))
         {
             ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
+        }
+        else if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_GROUP)
+        {
+            (void)track_runtime_mix_try_reserve_exact(ctx,
+                                                      (uint8_t)MIXER_GROUP_BUS_TRACK,
+                                                      mix_track_used,
+                                                      (uint8_t)sizeof(mix_track_used));
         }
         else if (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE)
         {
@@ -1463,7 +1471,7 @@ uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t
     }
 
     const uint8_t track = g_track_runtime_logical_track_by_mix_track[mix_track];
-    if (track < SEQ_MAIN_TRACK_COUNT)
+    if (track < SEQ_LANE_CAPACITY)
     {
         *out_track = track;
         return 1U;

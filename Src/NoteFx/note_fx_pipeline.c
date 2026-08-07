@@ -24,7 +24,7 @@ typedef struct
     uint32_t generation;
 } note_fx_source_record_t;
 
-static note_fx_source_record_t
+SEQ_STATE_D2 static note_fx_source_record_t
     g_note_fx_source_ledger[NOTE_FX_TRACK_COUNT][NOTE_FX_ARP_MAX_SOURCES];
 static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 static note_fx_pipeline_diag_t g_note_fx_pipeline_diag[NOTE_FX_TRACK_COUNT];
@@ -90,12 +90,12 @@ static volatile uint8_t g_note_fx_command_head;
 static volatile uint8_t g_note_fx_command_tail;
 static uint16_t g_note_fx_command_high_water;
 static uint32_t g_note_fx_command_drop_count;
-static note_fx_source_reservation_t
+SEQ_STATE_D2 static note_fx_source_reservation_t
     g_note_fx_source_reservation[NOTE_FX_SOURCE_RESERVATION_CAPACITY];
-static uint8_t g_note_fx_source_reservation_count;
-static note_fx_command_t
+static uint16_t g_note_fx_source_reservation_count;
+SEQ_STATE_D2 static note_fx_command_t
     g_note_fx_pending_closure[NOTE_FX_SOURCE_RESERVATION_CAPACITY];
-static uint8_t g_note_fx_pending_closure_count;
+static uint16_t g_note_fx_pending_closure_count;
 static live_note_event_t g_note_fx_live_queue[NOTE_FX_LIVE_QUEUE_CAPACITY];
 static uint8_t g_note_fx_live_queue_count;
 static uint16_t g_note_fx_live_queue_high_water;
@@ -118,6 +118,15 @@ typedef struct
 static note_fx_half_budget_t g_note_fx_half_budget;
 static uint16_t g_note_fx_last_half_emissions;
 static uint16_t g_note_fx_max_half_emissions;
+static uint16_t g_note_fx_max_half_off_used;
+
+static void note_fx_pipeline_update_off_high_water(void)
+{
+    const uint16_t used = (uint16_t)(NOTE_FX_HALF_OFF_RESERVE
+                                     - g_note_fx_half_budget.off_remaining);
+    if (used > g_note_fx_max_half_off_used)
+        g_note_fx_max_half_off_used = used;
+}
 
 uint8_t note_fx_pipeline_is_generated_occurrence_current(
     uint8_t track, uint32_t occurrence_id, uint32_t generation)
@@ -149,7 +158,7 @@ static void note_fx_pipeline_exit_critical(uint32_t primask)
 static int16_t note_fx_pipeline_find_source_reservation_locked(
     uint8_t track, uint8_t provenance, uint32_t occurrence_id)
 {
-    for (uint8_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
+    for (uint16_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
     {
         const note_fx_source_reservation_t *const reservation =
             &g_note_fx_source_reservation[i];
@@ -166,7 +175,7 @@ static int16_t note_fx_pipeline_find_source_reservation_locked(
 
 static int16_t note_fx_pipeline_find_free_source_reservation_locked(void)
 {
-    for (uint8_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
+    for (uint16_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
     {
         if (g_note_fx_source_reservation[i].active == 0U)
             return (int16_t)i;
@@ -230,7 +239,7 @@ static void note_fx_pipeline_release_source_reservation_locked(int16_t index)
 static void note_fx_pipeline_release_source_reservations_for_track(uint8_t track)
 {
     const uint32_t primask = note_fx_pipeline_enter_critical();
-    for (uint8_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
+    for (uint16_t i = 0U; i < NOTE_FX_SOURCE_RESERVATION_CAPACITY; ++i)
     {
         if ((g_note_fx_source_reservation[i].active != 0U)
                 && (g_note_fx_source_reservation[i].track == track))
@@ -244,8 +253,8 @@ static void note_fx_pipeline_release_source_reservations_for_track(uint8_t track
 static void note_fx_pipeline_drop_pending_closures_for_track(uint8_t track)
 {
     const uint32_t primask = note_fx_pipeline_enter_critical();
-    uint8_t write_index = 0U;
-    for (uint8_t read_index = 0U;
+    uint16_t write_index = 0U;
+    for (uint16_t read_index = 0U;
          read_index < g_note_fx_pending_closure_count; ++read_index)
     {
         const note_fx_command_t command =
@@ -281,7 +290,7 @@ static uint8_t note_fx_pipeline_pending_closure_add(
 }
 
 static uint8_t note_fx_pipeline_pending_closure_take(
-    uint8_t index, note_fx_command_t *out_command)
+    uint16_t index, note_fx_command_t *out_command)
 {
     if ((out_command == NULL) || (index >= g_note_fx_pending_closure_count))
         return 0U;
@@ -293,7 +302,7 @@ static uint8_t note_fx_pipeline_pending_closure_take(
         return 0U;
     }
     *out_command = g_note_fx_pending_closure[index];
-    for (uint8_t i = index; (uint8_t)(i + 1U) < g_note_fx_pending_closure_count; ++i)
+    for (uint16_t i = index; (i + 1U) < g_note_fx_pending_closure_count; ++i)
         g_note_fx_pending_closure[i] = g_note_fx_pending_closure[i + 1U];
     --g_note_fx_pending_closure_count;
     note_fx_pipeline_exit_critical(primask);
@@ -332,6 +341,7 @@ static note_fx_result_t note_fx_pipeline_budget_admit(note_event_t *event,
          * matching Off consumes the reservation but must not charge it a
          * second time (nor bypass the reserve when it is exhausted). */
         event->flags |= NOTE_EVENT_FLAG_BUDGET_ACCOUNTED;
+        note_fx_pipeline_update_off_high_water();
     }
     else
     {
@@ -346,6 +356,7 @@ static note_fx_result_t note_fx_pipeline_budget_admit(note_event_t *event,
         event->flags |= NOTE_EVENT_FLAG_CLOSURE_RESERVED
                       | NOTE_EVENT_FLAG_BUDGET_ACCOUNTED;
         *reserved_here = 1U;
+        note_fx_pipeline_update_off_high_water();
     }
     ++g_note_fx_half_budget.emissions_used;
     return NOTE_EVENT_RESULT_ACCEPTED;
@@ -420,7 +431,7 @@ static uint8_t note_fx_pipeline_enqueue(const note_fx_command_t *command)
             return 0U;
         }
         /* The On itself and one future Off must both fit before accepting. */
-        if (free_slots <= (uint8_t)(g_note_fx_source_reservation_count + 1U))
+        if ((uint16_t)free_slots <= (g_note_fx_source_reservation_count + 1U))
         {
             ++g_note_fx_command_drop_count;
             note_fx_pipeline_exit_critical(primask);
@@ -601,17 +612,32 @@ static note_fx_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
     if (budget_result != NOTE_EVENT_RESULT_ACCEPTED)
     {
         if (event->kind == NOTE_EVENT_KIND_OFF)
+        {
             ++g_note_fx_pipeline_diag[event->track].budget_off_drop_count;
+            ++g_note_fx_pipeline_diag[event->track].generated_off_refused;
+        }
         else
+        {
             ++g_note_fx_pipeline_diag[event->track].budget_on_drop_count;
+            ++g_note_fx_pipeline_diag[event->track].generated_on_refused;
+        }
         ++g_note_fx_pipeline_diag[event->track].continuation_drop_count;
         return budget_result;
+    }
+    if ((admitted.flags & NOTE_EVENT_FLAG_GENERATED) != 0U)
+    {
+        if (admitted.kind == NOTE_EVENT_KIND_OFF)
+            ++g_note_fx_pipeline_diag[admitted.track].generated_off_admitted;
+        else
+            ++g_note_fx_pipeline_diag[admitted.track].generated_on_admitted;
     }
     ++g_note_fx_pipeline_diag[admitted.track].stage_emissions[admitted.stage];
     if (admitted.stage > g_note_fx_pipeline_diag[admitted.track].max_stage_reached)
         g_note_fx_pipeline_diag[admitted.track].max_stage_reached = admitted.stage;
     note_fx_result_t result;
-    if (admitted.stage >= NOTE_EVENT_STAGE_TERMINAL)
+    /* Stage 3 is emitted after the third slot and must enter the common
+     * terminal ledger; there is no fourth engine slot. */
+    if (note_event_is_terminal_handoff(&admitted) != 0U)
     {
         result = note_fx_pipeline_terminal(&admitted, NULL);
     }
@@ -670,9 +696,13 @@ void note_fx_pipeline_init(void)
     g_note_fx_live_queue_drop_count = 0U;
     g_note_fx_live_max_lateness_samples = 0U;
     g_note_fx_live_fallback_serial = 0U;
+    g_note_fx_panic_epoch = 1U;
+    g_note_fx_panic_pending = 0U;
+    g_note_fx_panic_active = 0U;
     memset(&g_note_fx_half_budget, 0, sizeof(g_note_fx_half_budget));
     g_note_fx_last_half_emissions = 0U;
     g_note_fx_max_half_emissions = 0U;
+    g_note_fx_max_half_off_used = 0U;
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         g_note_fx_source_generation[track] = 1U;
     note_fx_engine_init();
@@ -695,6 +725,7 @@ note_fx_pipeline_diag_t note_fx_pipeline_diag(uint8_t track)
     diag.command_drop_count = g_note_fx_command_drop_count;
     diag.half_emissions_last = g_note_fx_last_half_emissions;
     diag.half_emissions_high_water = g_note_fx_max_half_emissions;
+    diag.half_off_used_high_water = g_note_fx_max_half_off_used;
     return diag;
 }
 
@@ -978,13 +1009,6 @@ static void note_fx_pipeline_apply_runtime_param_owner(
     const uint8_t track = command->track;
     const uint8_t slot = command->slot;
     const uint8_t param = command->param;
-    const uint8_t previous = g_note_fx_override_valid[track][slot][param]
-        ? g_note_fx_override_value[track][slot][param]
-        : command->track_state.value[slot][param];
-    if ((param == 3U) && (previous != command->value))
-    {
-        note_fx_pipeline_cleanup_track_owner(track);
-    }
     g_note_fx_override_valid[track][slot][param] = 1U;
     g_note_fx_override_value[track][slot][param] = command->value;
     note_fx_pipeline_sync_track_owner(track, &command->track_state);
@@ -1004,12 +1028,6 @@ static void note_fx_pipeline_release_runtime_param_owner(
     const uint8_t track = command->track;
     const uint8_t slot = command->slot;
     const uint8_t param = command->param;
-    if ((param == 3U) && (g_note_fx_override_valid[track][slot][param] != 0U)
-            && (g_note_fx_override_value[track][slot][param]
-                != command->track_state.value[slot][param]))
-    {
-        note_fx_pipeline_cleanup_track_owner(track);
-    }
     g_note_fx_override_valid[track][slot][param] = 0U;
     note_fx_pipeline_sync_track_owner(track, &command->track_state);
 }
@@ -1210,7 +1228,7 @@ static note_fx_result_t note_fx_pipeline_apply_source_raw_command(
 
 static void note_fx_pipeline_apply_pending_closures(void)
 {
-    uint8_t attempts = g_note_fx_pending_closure_count;
+    uint16_t attempts = g_note_fx_pending_closure_count;
     while ((attempts > 0U)
             && ((g_note_fx_half_budget.active == 0U)
                 || (g_note_fx_half_budget.commands_used
