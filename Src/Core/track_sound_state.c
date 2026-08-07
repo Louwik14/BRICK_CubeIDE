@@ -6,7 +6,7 @@
 #include "Storage/memory_layout.h"
 #include "Seq/seq_types.h"
 
-SEQ_STATE_D2 static track_sound_state_t g_track_sound_state[SEQ_TRACK_COUNT];
+SEQ_STATE_D2 static track_sound_state_t g_track_sound_state[SEQ_LANE_CAPACITY];
 
 static const param_id_t g_track_sound_lfo_default_params[MOD_LFO_COUNT_PER_TRACK][MOD_LFO_PARAM_COUNT] = {
     { PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE },
@@ -72,7 +72,7 @@ void track_sound_state_make_default(track_sound_state_t *state)
 
 void track_sound_state_init(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         track_sound_state_make_default(&g_track_sound_state[track]);
     }
@@ -81,7 +81,7 @@ void track_sound_state_init(void)
 
 track_sound_state_t *track_sound_state_get(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return NULL;
     }

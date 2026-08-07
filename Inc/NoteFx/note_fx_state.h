@@ -4,8 +4,9 @@
 #include <stdint.h>
 
 #include "Param/param_store.h"
+#include "Seq/seq_types.h"
 
-#define NOTE_FX_TRACK_COUNT 8U
+#define NOTE_FX_TRACK_COUNT SEQ_LANE_CAPACITY
 #define NOTE_FX_SLOT_COUNT 3U
 #define NOTE_FX_PARAM_COUNT 4U
 

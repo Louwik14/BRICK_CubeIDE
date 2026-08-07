@@ -10,6 +10,7 @@
 #include "Core/live_clock.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime_exec.h"
+#include "Storage/memory_layout.h"
 
 static uint8_t g_note_fx_override_valid[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
 static uint8_t g_note_fx_override_value[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];

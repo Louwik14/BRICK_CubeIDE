@@ -104,13 +104,70 @@ static void brick6_render_synth_tracks(uint32_t frames,
     }
 }
 
+static uint8_t brick6_render_group_sampler_children(uint32_t frames)
+{
+    const track_runtime_ctx_t *const parent =
+        track_runtime_get_ctx((uint8_t)SEQ_GROUP_PARENT_MAIN_TRACK);
+    uint8_t mix_track = 0U;
+    if ((parent == NULL)
+            || (parent->type != (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+            || (parent->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (track_runtime_get_mix_target_track((uint8_t)SEQ_GROUP_PARENT_MAIN_TRACK,
+                                                    &mix_track) == 0U))
+    {
+        return 0U;
+    }
+
+    float *group_l = NULL;
+    float *group_r = NULL;
+    if (mixer_begin_external_stereo(mix_track, frames, &group_l, &group_r) == 0U)
+    {
+        return 0U;
+    }
+    memset(group_l, 0, frames * sizeof(float));
+    memset(group_r, 0, frames * sizeof(float));
+
+    static float child_l[AUDIO_BLOCK_SIZE];
+    static float child_r[AUDIO_BLOCK_SIZE];
+    uint8_t rendered = 0U;
+    for (uint8_t lane = (uint8_t)SEQ_GROUP_FIRST_CHILD_LANE;
+         lane <= (uint8_t)SEQ_GROUP_LAST_CHILD_LANE;
+         ++lane)
+    {
+        const track_runtime_ctx_t *const child = track_runtime_get_ctx(lane);
+        if ((child == NULL)
+                || (child->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (child->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+                || (child->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM)
+                || (track_runtime_is_audio_routable(lane) == 0U))
+        {
+            continue;
+        }
+
+        memset(child_l, 0, frames * sizeof(float));
+        memset(child_r, 0, frames * sizeof(float));
+        brick6_sampler_runtime_render_ram_track(child, child_l, child_r, frames);
+        for (uint32_t frame = 0U; frame < frames; ++frame)
+        {
+            group_l[frame] += child_l[frame];
+            group_r[frame] += child_r[frame];
+        }
+        rendered++;
+    }
+
+    mixer_commit_external_stereo(mix_track, frames);
+    return rendered;
+}
+
 static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_tracks)
 {
     static float sampler_tmp_l[AUDIO_BLOCK_SIZE];
     static float sampler_tmp_r[AUDIO_BLOCK_SIZE];
     uint8_t sampler_tracks = 0U;
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    sampler_tracks = brick6_render_group_sampler_children(frames);
+
+    for (uint8_t track = 0U; track < SEQ_MAIN_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)

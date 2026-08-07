@@ -23,6 +23,7 @@
 #include "Audio/mixer.h"
 #include "midi.h"
 #include "NoteFx/note_fx_pipeline.h"
+#include "Storage/memory_layout.h"
 
 typedef struct
 {
@@ -36,12 +37,12 @@ typedef struct
 
 typedef struct
 {
-    seq_output_guard_record_t record[TRACK_TOPOLOGY_TRACK_COUNT][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
+    seq_output_guard_record_t record[SEQ_LANE_CAPACITY][SEQ_OUTPUT_GUARD_MAX_OCCURRENCES];
     uint32_t orphan_off_count;
     uint32_t duplicate_close_count;
 } seq_output_guard_state_t;
 
-static seq_output_guard_state_t g_seq_output_guard;
+SEQ_STATE_D2 static seq_output_guard_state_t g_seq_output_guard;
 
 void seq_output_guard_init(void)
 {
@@ -66,7 +67,7 @@ uint8_t seq_output_guard_note_on_seen_mask(seq_track_id_t track, uint8_t note,
                                            uint32_t occurrence_id, uint32_t generation,
                                            uint8_t midi_dest_mask)
 {
-    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= SEQ_LANE_CAPACITY) || (note >= 128U)
             || (occurrence_id == 0U) || (generation == 0U))
         return 0U;
 
@@ -101,7 +102,7 @@ uint8_t seq_output_guard_note_on_seen_mask(seq_track_id_t track, uint8_t note,
 uint8_t seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note,
                                        uint32_t occurrence_id, uint32_t generation)
 {
-    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U)
+    if ((track >= SEQ_LANE_CAPACITY) || (note >= 128U)
             || (occurrence_id == 0U) || (generation == 0U))
         return 0U;
 
@@ -121,7 +122,7 @@ uint8_t seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note,
 }
 uint8_t seq_output_guard_is_note_active_on_track(seq_track_id_t track, uint8_t note)
 {
-    if ((track >= TRACK_TOPOLOGY_TRACK_COUNT) || (note >= 128U))
+    if ((track >= SEQ_LANE_CAPACITY) || (note >= 128U))
         return 0U;
     for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
     {
@@ -136,7 +137,7 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 {
     if ((channel_zero_based >= 16U) || (note >= 128U))
         return 0U;
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         if (track_runtime_get_midi_channel_zero_based(track) != channel_zero_based)
             continue;
@@ -151,7 +152,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
             SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) == 0U)
         return;
     synth_polyphony_panic();
-    for (seq_track_id_t track = 0U; track < TRACK_TOPOLOGY_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
         for (uint8_t i = 0U; i < SEQ_OUTPUT_GUARD_MAX_OCCURRENCES; ++i)
@@ -174,7 +175,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
     uint8_t drum_killed[SEQ_TRACK_COUNT] = { 0U };
     track_runtime_refresh_all();
     brick6_sampler_runtime_stop_transport_clips();
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         /* Non-UI projection consumer: panic only needs resolved routing/engine state. */
         track_runtime_resolved_track_t resolved;

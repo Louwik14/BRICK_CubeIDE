@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Core/track_topology.h"
+#include "Seq/seq_lane.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
 
