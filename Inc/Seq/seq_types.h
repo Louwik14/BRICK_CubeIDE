@@ -5,6 +5,12 @@
 #include "Core/track_topology.h"
 
 #define SEQ_TRACK_COUNT        TRACK_TOPOLOGY_TRACK_COUNT
+#define SEQ_MAIN_TRACK_COUNT   TRACK_TOPOLOGY_TRACK_COUNT
+#define SEQ_GROUP_SUBTRACK_COUNT 8U
+#define SEQ_LANE_CAPACITY      (SEQ_MAIN_TRACK_COUNT + SEQ_GROUP_SUBTRACK_COUNT)
+#define SEQ_GROUP_PARENT_MAIN_TRACK TRACK_TOPOLOGY_GROUP_PARENT_TRACK
+#define SEQ_GROUP_FIRST_CHILD_LANE SEQ_MAIN_TRACK_COUNT
+#define SEQ_GROUP_LAST_CHILD_LANE  (SEQ_LANE_CAPACITY - 1U)
 #define SEQ_STEPS_PER_PAGE    16U
 #define SEQ_PAGE_COUNT         4U
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)
@@ -40,9 +46,18 @@
     ((SEQ_PARAM_RUNTIME_FLAG_BIT_COUNT + 7U) / 8U)
 
 typedef uint8_t seq_track_id_t;
+/* Main-track and lane identities are kept distinct even while the legacy
+ * track APIs still use seq_track_id_t. */
+typedef uint8_t seq_lane_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;
 typedef uint16_t seq_value16_t;
+
+#ifdef __cplusplus
+static_assert(SEQ_LANE_CAPACITY <= UINT8_MAX, "sequence lane capacity exceeds lane id range");
+#else
+_Static_assert(SEQ_LANE_CAPACITY <= UINT8_MAX, "sequence lane capacity exceeds lane id range");
+#endif
 
 typedef enum
 {

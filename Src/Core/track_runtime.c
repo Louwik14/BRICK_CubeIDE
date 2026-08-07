@@ -116,6 +116,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_LOOPER;
         case UI_TRACK_TYPE_MULTI:
             return TRACK_RUNTIME_TYPE_MULTI;
+        case UI_TRACK_TYPE_GROUP:
+            return TRACK_RUNTIME_TYPE_GROUP;
         case UI_TRACK_TYPE_STACK:
             return TRACK_RUNTIME_TYPE_STACK;
         case UI_TRACK_TYPE_EXTERNAL:
@@ -193,6 +195,13 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                            track_runtime_type_t type)
 {
     uint8_t flags = 0U;
+
+    /* The GROUP parent is a control/sequencer identity, not an audio source.
+     * Child sampler lanes will receive their own runtime contexts later. */
+    if (type == TRACK_RUNTIME_TYPE_GROUP)
+    {
+        return 0U;
+    }
 
     if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
             || (family == TRACK_RUNTIME_FAMILY_SYNTH)
@@ -741,6 +750,15 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
+    if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (type == TRACK_RUNTIME_TYPE_GROUP))
+    {
+        /* Keep the parent represented in runtime without reserving an audio
+         * engine or voice.  Lane scheduling will be added in the next step. */
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
+        return;
+    }
+
     if (family == TRACK_RUNTIME_FAMILY_MIDI)
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
@@ -1066,6 +1084,7 @@ void track_runtime_refresh_all(void)
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
         if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MIDI)
                 || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF)
+                || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_GROUP)
                 || (ctx->mix_track_id != TRACK_RUNTIME_MIX_TRACK_NONE))
         {
             continue;
@@ -1081,7 +1100,8 @@ void track_runtime_refresh_all(void)
     {
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
         if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MIDI)
-                || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF))
+                || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF)
+                || ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_GROUP))
         {
             ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
         }
@@ -1194,6 +1214,7 @@ void track_runtime_refresh_track(uint8_t track)
 
         if (((track_runtime_family_t)next_ctx.family != TRACK_RUNTIME_FAMILY_MIDI)
                 && ((track_runtime_family_t)next_ctx.family != TRACK_RUNTIME_FAMILY_OFF)
+                && ((track_runtime_type_t)next_ctx.type != TRACK_RUNTIME_TYPE_GROUP)
                 && (next_ctx.mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE))
         {
             if (track_runtime_mix_try_reserve_exact(&next_ctx,

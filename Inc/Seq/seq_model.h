@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
+#include "Seq/seq_lane.h"
 
 typedef struct
 {
@@ -139,4 +140,3 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
                                     seq_plock_entry_t *out_entry);
 
 #endif /* SEQ_MODEL_H */
-

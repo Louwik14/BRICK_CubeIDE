@@ -11,6 +11,9 @@ extern "C" {
 #define TRACK_TOPOLOGY_TRACK_COUNT 8U
 #define TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY TRACK_TOPOLOGY_TRACK_COUNT
 #define TRACK_TOPOLOGY_LOGICAL_TRACK_COUNT TRACK_TOPOLOGY_TRACK_COUNT
+/* GROUP is deliberately anchored to the last main-track identity.  This is
+ * a main-track rule; child lanes are not topology tracks. */
+#define TRACK_TOPOLOGY_GROUP_PARENT_TRACK (TRACK_TOPOLOGY_TRACK_COUNT - 1U)
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT 1U

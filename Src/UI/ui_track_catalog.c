@@ -54,7 +54,8 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
         UI_TRACK_TYPE_RAM,
         UI_TRACK_TYPE_STREAM,
         UI_TRACK_TYPE_LOOPER,
-        UI_TRACK_TYPE_MULTI
+        UI_TRACK_TYPE_MULTI,
+        UI_TRACK_TYPE_GROUP
     };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_external_types[] = { UI_TRACK_TYPE_EXTERNAL };
@@ -180,6 +181,13 @@ bool ui_track_catalog_type_is_available(uint8_t track,
     if ((track >= UI_TRACK_COUNT)
             || (track_configs == 0)
             || !ui_track_catalog_type_is_valid_for_family(family, type))
+    {
+        return false;
+    }
+
+    if ((family == UI_TRACK_FAMILY_SAMPLER)
+            && (type == UI_TRACK_TYPE_GROUP)
+            && (track != TRACK_TOPOLOGY_GROUP_PARENT_TRACK))
     {
         return false;
     }
@@ -487,6 +495,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Looper";
         case UI_TRACK_TYPE_MULTI:
             return "Multi";
+        case UI_TRACK_TYPE_GROUP:
+            return "Group";
         case UI_TRACK_TYPE_PRISM:
             return "Prism";
         case UI_TRACK_TYPE_WAVE:
@@ -529,6 +539,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Loop";
         case UI_TRACK_TYPE_MULTI:
             return "Mult";
+        case UI_TRACK_TYPE_GROUP:
+            return "GRP";
         case UI_TRACK_TYPE_PRISM:
             return "PRSM";
         case UI_TRACK_TYPE_WAVE:
