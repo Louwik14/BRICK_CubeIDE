@@ -203,11 +203,13 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     engine_tasklet_poll();
+    brick6_stream_service_task_poll();
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
+    brick6_stream_service_task_poll();
     if (multi_sample_load_has_pending() != 0U)
     {
         multi_sample_service_load(0U);
@@ -216,6 +218,7 @@ void brick6_app_process(void)
     {
         brick6_stream_service_task_poll();
         multi_record_writer_service(16384U);
+        brick6_stream_service_task_poll();
 #if BRICK_TEST_BUILD
         audio_test_csv_service();
         monkey_test_log_service();
@@ -226,24 +229,33 @@ void brick6_app_process(void)
         if (looper_storage_raw_export_is_active() != 0U)
         {
             looper_storage_raw_export_service(516096U);
+            brick6_stream_service_task_poll();
         }
         else
         {
             brick6_sampler_runtime_service();
             sampler_ram_pool_waveform_service(4096U);
+            brick6_stream_service_task_poll();
             brick6_looper_runtime_service(8192U);
+            brick6_stream_service_task_poll();
             if (brick6_looper_runtime_has_pending_sd_work() == 0U)
             {
                 looper_storage_raw_export_service(8192U);
+                brick6_stream_service_task_poll();
                 multi_sample_service_load(32768U);
+                brick6_stream_service_task_poll();
             }
             pattern_load_service(4096U);
+            brick6_stream_service_task_poll();
             waveform_cache_service(8192U);
+            brick6_stream_service_task_poll();
             sd_preview_process();
+            brick6_stream_service_task_poll();
         }
         brick6_stream_service_task_poll();
     }
     pattern_live_service();
+    brick6_stream_service_task_poll();
     brick6_master_control_process();
 
     ui_boot_loading_service();
@@ -257,6 +269,7 @@ void brick6_app_process(void)
     }
 
     voice_manager_service();
+    brick6_stream_service_task_poll();
 
     midi_poll();
 }

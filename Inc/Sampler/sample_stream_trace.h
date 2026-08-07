@@ -12,8 +12,58 @@ extern "C" {
 #define BRICK6_STREAM_TRACE 0
 #endif
 
+#ifndef BRICK6_STREAM_AUDIT
+#define BRICK6_STREAM_AUDIT 0
+#endif
+
 #define SAMPLE_STREAM_TRACE_CAPACITY (32U)
 #define SAMPLE_STREAM_TRACE_MAGIC    (0x53545243UL)
+#define SAMPLE_STREAM_AUDIT_HISTORY_CAPACITY (64U)
+#define SAMPLE_STREAM_AUDIT_SERVICE_CAPACITY (64U)
+
+typedef enum
+{
+    SAMPLE_STREAM_AUDIT_EXIT_NONE = 0,
+    SAMPLE_STREAM_AUDIT_EXIT_EMPTY,
+    SAMPLE_STREAM_AUDIT_EXIT_BYTE_BUDGET,
+    SAMPLE_STREAM_AUDIT_EXIT_PAGE_LIMIT,
+    SAMPLE_STREAM_AUDIT_EXIT_FATFS_LIMIT,
+    SAMPLE_STREAM_AUDIT_EXIT_TIME_LIMIT,
+    SAMPLE_STREAM_AUDIT_EXIT_STREAM_INFO,
+    SAMPLE_STREAM_AUDIT_EXIT_STALE_TARGET,
+    SAMPLE_STREAM_AUDIT_EXIT_IO_ERROR,
+    SAMPLE_STREAM_AUDIT_EXIT_PUBLISH_ERROR
+} sample_stream_audit_exit_t;
+
+#if BRICK6_STREAM_AUDIT
+typedef struct
+{
+    uint32_t service_sequence;
+    uint32_t audio_frame_low;
+    int32_t frames_to_deadline;
+    uint16_t edf_rank;
+    uint16_t requests_ahead;
+    uint16_t backlog;
+    uint16_t overdue;
+} sample_stream_audit_rank_sample_t;
+
+typedef struct
+{
+    uint64_t begin_audio_frame;
+    uint64_t end_audio_frame;
+    uint32_t begin_cycle;
+    uint32_t end_cycle;
+    uint32_t interval_cycles;
+    uint32_t arrivals_since_previous;
+    uint32_t other_sd_cycles_since_previous;
+    uint32_t multi_bulk_cycles_since_previous;
+    uint16_t backlog_begin;
+    uint16_t overdue_begin;
+    uint16_t pages_selected;
+    uint8_t exit_reason;
+    uint8_t reserved;
+} sample_stream_audit_service_t;
+#endif
 
 typedef enum
 {
@@ -65,6 +115,11 @@ typedef struct
     uint8_t success;
     uint8_t starvation_guard_applied;
     uint8_t reserved;
+#if BRICK6_STREAM_AUDIT
+    uint32_t audit_history_write;
+    uint32_t audit_history_count;
+    sample_stream_audit_rank_sample_t audit_history[SAMPLE_STREAM_AUDIT_HISTORY_CAPACITY];
+#endif
 } sample_stream_trace_op_t;
 
 typedef struct
@@ -89,6 +144,17 @@ typedef struct
     uint32_t max_backlog;
     uint32_t file_changes;
     uint32_t max_pages_per_service;
+#if BRICK6_STREAM_AUDIT
+    uint32_t audit_service_sequence;
+    uint32_t audit_service_write;
+    uint32_t audit_service_count;
+    uint32_t audit_arrivals_total;
+    uint32_t audit_blocked_multi_polls;
+    uint32_t audit_blocked_bulk_polls;
+    uint64_t audit_blocked_multi_frames;
+    uint64_t audit_blocked_bulk_frames;
+    sample_stream_audit_service_t audit_services[SAMPLE_STREAM_AUDIT_SERVICE_CAPACITY];
+#endif
     sample_stream_trace_op_t operations[SAMPLE_STREAM_TRACE_CAPACITY];
 } sample_stream_trace_snapshot_t;
 

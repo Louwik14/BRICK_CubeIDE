@@ -21,6 +21,12 @@
 #define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (16U)
 #define SAMPLE_STREAM_SERVICE_MAX_TICKS (2U)
 #define SAMPLE_STREAM_SERVICE_MIN_URGENT_PAGES (2U)
+/*
+ * A 4096-frame guard covers about 85 ms at 48 kHz. Once any absolute consume
+ * deadline enters that window, byte/time/page limits become soft and the
+ * current non-IRQ service call drains EDF until the critical debt is gone.
+ */
+#define SAMPLE_STREAM_SERVICE_CRITICAL_GUARD_FRAMES (4096ULL)
 #define SAMPLE_STREAM_DYNAMIC_PENDING_MAX \
     (SAMPLE_STREAM_MAX_ACTIVE * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2U)
 #define SAMPLE_STREAM_PENDING_REASON_COMPLETE (1U)
@@ -156,6 +162,111 @@ static sample_stream_trace_op_t *sample_stream_trace_pending_op(
     }
     return (sample_stream_trace_op_t *)&g_sample_stream_trace.operations[pending->trace_slot];
 }
+
+#if BRICK6_STREAM_AUDIT
+static uint32_t g_sample_stream_audit_arrivals_at_service;
+static uint32_t g_sample_stream_audit_other_sd_cycles_at_service;
+static uint32_t g_sample_stream_audit_bulk_cycles_at_service;
+
+static uint32_t sample_stream_manager_audit_other_sd_cycles(void)
+{
+    uint32_t total = 0U;
+    for (uint32_t client = (uint32_t)SD_ACCESS_CLIENT_RECORDER;
+         client <= (uint32_t)SD_ACCESS_CLIENT_MAX; ++client)
+    {
+        if ((client != (uint32_t)SD_ACCESS_CLIENT_SAMPLE_STREAM)
+            && (client != (uint32_t)SD_ACCESS_CLIENT_MULTI_BULK))
+        {
+            total += sd_access_gate_audit_client_cycles((sd_access_client_t)client);
+        }
+    }
+    return total;
+}
+
+static sample_stream_audio_frame_t sample_stream_manager_audit_dispatch_deadline(
+    const sample_stream_pending_t *pending)
+{
+    const sample_stream_audio_frame_t guard = pending->created_audio_frame +
+        SAMPLE_STREAM_SCHEDULER_DEFAULT_MAX_WAIT_FRAMES;
+    return (pending->consume_deadline_audio_frame < guard)
+               ? pending->consume_deadline_audio_frame : guard;
+}
+
+static uint16_t sample_stream_manager_audit_counts(sample_stream_audio_frame_t now,
+                                                   uint16_t *out_overdue)
+{
+    uint32_t backlog = 0U;
+    uint32_t overdue = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        if (g_sample_stream_pending[i].active != 0U)
+        {
+            backlog++;
+            overdue += (g_sample_stream_pending[i].consume_deadline_audio_frame <= now) ? 1U : 0U;
+        }
+    }
+    *out_overdue = (overdue > UINT16_MAX) ? UINT16_MAX : (uint16_t)overdue;
+    return (backlog > UINT16_MAX) ? UINT16_MAX : (uint16_t)backlog;
+}
+
+static void sample_stream_manager_audit_sample_ranks(uint32_t service_sequence,
+                                                     sample_stream_audio_frame_t now,
+                                                     uint16_t backlog,
+                                                     uint16_t overdue)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        sample_stream_pending_t *const target = &g_sample_stream_pending[i];
+        sample_stream_trace_op_t *const op = sample_stream_trace_pending_op(target);
+        if ((target->active == 0U) || (op == 0))
+        {
+            continue;
+        }
+        uint32_t ahead = 0U;
+        const sample_stream_audio_frame_t target_dispatch =
+            sample_stream_manager_audit_dispatch_deadline(target);
+        for (uint32_t j = 0U; j < SAMPLE_STREAM_PENDING_MAX; ++j)
+        {
+            const sample_stream_pending_t *const other = &g_sample_stream_pending[j];
+            if ((other->active == 0U) || (other == target))
+            {
+                continue;
+            }
+            const sample_stream_audio_frame_t other_dispatch =
+                sample_stream_manager_audit_dispatch_deadline(other);
+            if ((other_dispatch < target_dispatch)
+                || ((other_dispatch == target_dispatch)
+                    && (other->consume_deadline_audio_frame < target->consume_deadline_audio_frame))
+                || ((other_dispatch == target_dispatch)
+                    && (other->consume_deadline_audio_frame == target->consume_deadline_audio_frame)
+                    && (other->created_audio_frame < target->created_audio_frame))
+                || ((other_dispatch == target_dispatch)
+                    && (other->consume_deadline_audio_frame == target->consume_deadline_audio_frame)
+                    && (other->created_audio_frame == target->created_audio_frame)
+                    && (other->requested_at < target->requested_at)))
+            {
+                ahead++;
+            }
+        }
+        const uint32_t slot = op->audit_history_write % SAMPLE_STREAM_AUDIT_HISTORY_CAPACITY;
+        sample_stream_audit_rank_sample_t *const sample = &op->audit_history[slot];
+        sample->service_sequence = service_sequence;
+        sample->audio_frame_low = (uint32_t)now;
+        const int64_t delta = (int64_t)target->consume_deadline_audio_frame - (int64_t)now;
+        sample->frames_to_deadline = (delta > INT32_MAX) ? INT32_MAX
+                                      : ((delta < INT32_MIN) ? INT32_MIN : (int32_t)delta);
+        sample->requests_ahead = (ahead > UINT16_MAX) ? UINT16_MAX : (uint16_t)ahead;
+        sample->edf_rank = (ahead >= UINT16_MAX) ? UINT16_MAX : (uint16_t)(ahead + 1U);
+        sample->backlog = backlog;
+        sample->overdue = overdue;
+        op->audit_history_write++;
+        if (op->audit_history_count < SAMPLE_STREAM_AUDIT_HISTORY_CAPACITY)
+        {
+            op->audit_history_count++;
+        }
+    }
+}
+#endif
 
 static void sample_stream_trace_trigger(sample_stream_trace_trigger_t trigger,
                                         sample_audio_key_t key,
@@ -425,6 +536,9 @@ static uint8_t sample_stream_manager_note_pending_key(sample_audio_key_t key,
     if (publish_result == SAMPLE_STREAM_REQUEST_INSERTED)
     {
         published->requested_at = ++g_sample_stream_request_clock;
+#if BRICK6_STREAM_AUDIT
+        g_sample_stream_trace.audit_arrivals_total++;
+#endif
     }
 
 #if BRICK6_STREAM_TRACE
@@ -634,6 +748,11 @@ void sample_stream_manager_reset(void)
     memset((void *)&g_sample_stream_trace, 0, sizeof(g_sample_stream_trace));
     g_sample_stream_trace.magic = SAMPLE_STREAM_TRACE_MAGIC;
     g_sample_stream_trace.enabled = 1U;
+#if BRICK6_STREAM_AUDIT
+    g_sample_stream_audit_arrivals_at_service = 0U;
+    g_sample_stream_audit_other_sd_cycles_at_service = 0U;
+    g_sample_stream_audit_bulk_cycles_at_service = 0U;
+#endif
     g_sample_stream_last_service_cycle = sample_stream_trace_cycle();
     memset(&g_sample_stream_last_selected_key, 0, sizeof(g_sample_stream_last_selected_key));
     g_sample_stream_last_selected_key_valid = 0U;
@@ -1311,6 +1430,23 @@ static uint8_t sample_stream_manager_has_urgent_pending(void)
     return 0U;
 }
 
+static uint8_t sample_stream_manager_has_critical_debt(void)
+{
+    const sample_stream_audio_frame_t now = sample_stream_time_now();
+    const sample_stream_audio_frame_t limit = sample_stream_time_deadline_after(
+        now, SAMPLE_STREAM_SERVICE_CRITICAL_GUARD_FRAMES);
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        const sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
+        if ((pending->active != 0U)
+            && (pending->consume_deadline_audio_frame <= limit))
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 void sample_stream_manager_service(uint32_t byte_budget)
 {
     if (byte_budget == 0U)
@@ -1319,6 +1455,37 @@ void sample_stream_manager_service(uint32_t byte_budget)
     }
 
     const uint32_t start_tick = HAL_GetTick();
+#if BRICK6_STREAM_AUDIT
+    const uint32_t audit_begin_cycle = DWT->CYCCNT;
+    const sample_stream_audio_frame_t audit_begin_frame = sample_stream_time_now();
+    const uint32_t audit_sequence = ++g_sample_stream_trace.audit_service_sequence;
+    const uint32_t audit_slot = g_sample_stream_trace.audit_service_write
+                                % SAMPLE_STREAM_AUDIT_SERVICE_CAPACITY;
+    sample_stream_audit_service_t *const audit_service =
+        (sample_stream_audit_service_t *)&g_sample_stream_trace.audit_services[audit_slot];
+    memset(audit_service, 0, sizeof(*audit_service));
+    audit_service->begin_audio_frame = audit_begin_frame;
+    audit_service->begin_cycle = audit_begin_cycle;
+    audit_service->interval_cycles = audit_begin_cycle - g_sample_stream_last_service_cycle;
+    audit_service->arrivals_since_previous = g_sample_stream_trace.audit_arrivals_total
+                                             - g_sample_stream_audit_arrivals_at_service;
+    g_sample_stream_audit_arrivals_at_service = g_sample_stream_trace.audit_arrivals_total;
+    const uint32_t audit_other_sd_cycles = sample_stream_manager_audit_other_sd_cycles();
+    const uint32_t audit_bulk_cycles =
+        sd_access_gate_audit_client_cycles(SD_ACCESS_CLIENT_MULTI_BULK);
+    audit_service->other_sd_cycles_since_previous =
+        audit_other_sd_cycles - g_sample_stream_audit_other_sd_cycles_at_service;
+    audit_service->multi_bulk_cycles_since_previous =
+        audit_bulk_cycles - g_sample_stream_audit_bulk_cycles_at_service;
+    g_sample_stream_audit_other_sd_cycles_at_service = audit_other_sd_cycles;
+    g_sample_stream_audit_bulk_cycles_at_service = audit_bulk_cycles;
+    audit_service->backlog_begin = sample_stream_manager_audit_counts(
+        audit_begin_frame, &audit_service->overdue_begin);
+    sample_stream_manager_audit_sample_ranks(audit_sequence, audit_begin_frame,
+                                             audit_service->backlog_begin,
+                                             audit_service->overdue_begin);
+    sample_stream_audit_exit_t audit_exit = SAMPLE_STREAM_AUDIT_EXIT_NONE;
+#endif
 #if BRICK6_STREAM_BENCH
     const uint32_t benchmark_service_begin_cycle = DWT->CYCCNT;
 #endif
@@ -1343,13 +1510,16 @@ void sample_stream_manager_service(uint32_t byte_budget)
     }
 #endif
 
-    while (byte_budget != 0U)
+    for (;;)
     {
         sample_page_load_target_t target;
         sample_stream_priority_t selected_priority = SAMPLE_STREAM_PRIORITY_NORMAL;
         sample_page_stream_info_t stream_info;
         if (sample_stream_manager_pick_next(&target, &selected_priority) == 0U)
         {
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_EMPTY;
+#endif
             break;
         }
 
@@ -1361,7 +1531,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_CANCEL);
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_STREAM_INFO;
+            goto sample_stream_audit_service_done;
+#else
             return;
+#endif
         }
 
         if ((sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
@@ -1377,7 +1552,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_STALE_TARGET;
+            goto sample_stream_audit_service_done;
+#else
             return;
+#endif
         }
 
         sample_page_load_token_t load_token;
@@ -1502,7 +1682,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_CANCEL);
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_IO_ERROR;
+            goto sample_stream_audit_service_done;
+#else
             return;
+#endif
         }
 
         if (sample_stream_publish_result(&io_result) == 0U)
@@ -1510,7 +1695,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key,
                                                     target.page_index,
                                                     SAMPLE_STREAM_PENDING_REASON_ORPHAN);
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_PUBLISH_ERROR;
+            goto sample_stream_audit_service_done;
+#else
             return;
+#endif
         }
 #if BRICK6_STREAM_TRACE
         if (traced_op != 0)
@@ -1563,6 +1753,14 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
         if (consumed >= byte_budget)
         {
+            if (sample_stream_manager_has_critical_debt() != 0U)
+            {
+                byte_budget = 0U;
+                continue;
+            }
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_BYTE_BUDGET;
+#endif
             break;
         }
         byte_budget -= consumed;
@@ -1570,24 +1768,76 @@ void sample_stream_manager_service(uint32_t byte_budget)
         const uint32_t elapsed_ticks = HAL_GetTick() - start_tick;
         if (pages_this_call >= SAMPLE_STREAM_SERVICE_MAX_PAGES)
         {
+            if (sample_stream_manager_has_critical_debt() != 0U)
+            {
+                continue;
+            }
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_PAGE_LIMIT;
+#endif
             break;
         }
         if (g_sample_stream_service_fatfs_ops >= SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS)
         {
+            if (sample_stream_manager_has_critical_debt() != 0U)
+            {
+                continue;
+            }
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_FATFS_LIMIT;
+#endif
             break;
         }
         if ((elapsed_ticks >= SAMPLE_STREAM_SERVICE_MAX_TICKS)
             && ((pages_this_call >= SAMPLE_STREAM_SERVICE_MIN_URGENT_PAGES)
                 || (sample_stream_manager_has_urgent_pending() == 0U)))
         {
+            if (sample_stream_manager_has_critical_debt() != 0U)
+            {
+                continue;
+            }
+#if BRICK6_STREAM_AUDIT
+            audit_exit = SAMPLE_STREAM_AUDIT_EXIT_TIME_LIMIT;
+#endif
             break;
         }
     }
+#if BRICK6_STREAM_AUDIT
+sample_stream_audit_service_done:
+    audit_service->pages_selected = (pages_this_call > UINT16_MAX)
+                                        ? UINT16_MAX : (uint16_t)pages_this_call;
+    audit_service->exit_reason = (uint8_t)audit_exit;
+    audit_service->end_audio_frame = sample_stream_time_now();
+    audit_service->end_cycle = DWT->CYCCNT;
+    g_sample_stream_trace.audit_service_write++;
+    if (g_sample_stream_trace.audit_service_count < SAMPLE_STREAM_AUDIT_SERVICE_CAPACITY)
+    {
+        g_sample_stream_trace.audit_service_count++;
+    }
+#endif
 #if BRICK6_STREAM_BENCH
     sample_stream_benchmark_note_service(
         pages_this_call, DWT->CYCCNT - benchmark_service_begin_cycle);
 #endif
 }
+
+#if BRICK6_STREAM_AUDIT
+void sample_stream_manager_audit_note_blocked_poll(uint8_t multi_blocked,
+                                                   uint8_t bulk_blocked,
+                                                   uint32_t elapsed_frames)
+{
+    if (multi_blocked != 0U)
+    {
+        g_sample_stream_trace.audit_blocked_multi_polls++;
+        g_sample_stream_trace.audit_blocked_multi_frames += elapsed_frames;
+    }
+    if (bulk_blocked != 0U)
+    {
+        g_sample_stream_trace.audit_blocked_bulk_polls++;
+        g_sample_stream_trace.audit_blocked_bulk_frames += elapsed_frames;
+    }
+}
+#endif
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {

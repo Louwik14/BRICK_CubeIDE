@@ -26,15 +26,18 @@ le ratio Q16 de lecture. Une page devient :
 - normale si elle appartient au bord de loop ou à l'horizon de 12 288 frames ;
 - spéculative au-delà.
 
-À priorité et deadline égales, la rotation par owner/source évite la starvation
-entre voix et fichiers. Un passage du service termine au moins deux pages
-urgentes avant d'appliquer sa limite temporelle de 2 ms. Le maximum global de
-16 pages, le budget d'appel, les pools et la géométrie 3/6 ne changent pas.
+La sélection reste EDF globale. Le budget de 32 Kio, la limite de 2 ms et le
+maximum de 16 pages restent les bornes du travail non critique. Dès qu'une
+deadline absolue entre dans la garde de 4 096 frames (environ 85 ms à 48 kHz),
+ces bornes deviennent souples : le même passage hors IRQ poursuit la sélection
+EDF jusqu'à disparition de toute dette critique. Des checkpoints streamer entre
+les services coopératifs de la superloop bornent en outre l'espacement par le
+coût d'un seul segment applicatif. Les pools et la géométrie 3/6 ne changent pas.
 Le verrou SD `streaming_critical` continue d'interdire les clients secondaires
 tant qu'une fenêtre active est détenue.
 
 Le backend contigu conserve une lecture SD multibloc par page physique. Le
-fallback FatFs conserve des sous-lectures de 4 Kio. Aucun regroupement de pages
+fallback FatFs utilise par défaut des sous-lectures de 16 Kio. Aucun regroupement de pages
 supplémentaire n'est activé sans mesure matérielle démontrant un meilleur temps
 maximal; le débit moyen seul n'est pas un critère suffisant.
 

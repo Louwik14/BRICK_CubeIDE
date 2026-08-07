@@ -6,6 +6,10 @@
 #include "ff.h"
 #include "Core/brick_build_config.h"
 
+#ifndef BRICK6_STREAM_AUDIT
+#define BRICK6_STREAM_AUDIT 0
+#endif
+
 typedef enum
 {
     SD_ACCESS_CLIENT_NONE = 0,
@@ -44,6 +48,9 @@ sd_access_client_t sd_access_gate_current_owner(void);
 sd_access_client_t sd_access_gate_last_owner(void);
 uint32_t sd_access_gate_max_hold_ticks(void);
 uint32_t sd_access_gate_acquire_fail_count(sd_access_client_t client);
+#if BRICK6_STREAM_AUDIT
+uint32_t sd_access_gate_audit_client_cycles(sd_access_client_t client);
+#endif
 const char *sd_access_gate_client_label(sd_access_client_t client);
 const char *sd_access_gate_busy_label(void);
 

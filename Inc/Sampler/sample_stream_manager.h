@@ -83,6 +83,11 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
 uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_desc_t *desc);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
+#if BRICK6_STREAM_AUDIT
+void sample_stream_manager_audit_note_blocked_poll(uint8_t multi_blocked,
+                                                   uint8_t bulk_blocked,
+                                                   uint32_t elapsed_frames);
+#endif
 void sample_stream_manager_trace_consume_miss(sample_audio_key_t key,
                                               uint32_t page_index,
                                               uint32_t reader_position,
