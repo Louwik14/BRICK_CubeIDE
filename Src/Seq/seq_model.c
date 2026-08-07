@@ -17,10 +17,10 @@
 
 typedef struct
 {
-    seq_track_data_t tracks[SEQ_TRACK_COUNT];
-    seq_plock_entry_t pool[SEQ_TRACK_COUNT][SEQ_PLOCK_POOL_CAP_PER_TRACK];
-    uint16_t free_head[SEQ_TRACK_COUNT];
-    uint16_t free_count[SEQ_TRACK_COUNT];
+    seq_track_data_t tracks[SEQ_LANE_CAPACITY];
+    seq_plock_entry_t pool[SEQ_LANE_CAPACITY][SEQ_PLOCK_POOL_CAP_PER_TRACK];
+    uint16_t free_head[SEQ_LANE_CAPACITY];
+    uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
@@ -42,12 +42,21 @@ static void seq_model_exit_critical(uint32_t primask)
 
 static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 {
-    return track_topology_is_active(track);
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
 }
 
 static uint8_t seq_model_track_is_play(seq_track_id_t track)
 {
     return seq_model_track_is_valid(track);
+}
+
+static uint8_t seq_model_track_can_emit_notes(seq_track_id_t track)
+{
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.can_emit_notes != 0U);
 }
 
 static uint16_t seq_model_pool_capacity(seq_track_id_t track)
@@ -300,7 +309,7 @@ void seq_model_init_defaults(void)
 {
     memset(&g_seq_project, 0, sizeof(g_seq_project));
 
-    for (uint8_t tr = 0U; tr < track_topology_get_logical_track_count(); ++tr)
+    for (uint8_t tr = 0U; tr < (uint8_t)SEQ_LANE_CAPACITY; ++tr)
     {
         g_seq_project.tracks[tr].length_steps = SEQ_DEFAULT_LENGTH_STEPS;
         g_seq_project.tracks[tr].ui_page = 0U;
@@ -551,7 +560,7 @@ seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t 
     {
         return SEQ_STEP_VISUAL_OFF;
     }
-    if (seq_model_track_is_play(track) == 0U)
+    if (seq_model_track_can_emit_notes(track) == 0U)
     {
         return SEQ_STEP_VISUAL_BLUE;
     }
@@ -575,7 +584,7 @@ seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t st
     {
         return SEQ_STEP_STATE_EMPTY;
     }
-    if (seq_model_track_is_play(track) == 0U)
+    if (seq_model_track_can_emit_notes(track) == 0U)
     {
         return SEQ_STEP_STATE_PARAM_LOCK_ONLY;
     }
@@ -626,7 +635,7 @@ uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step)
 
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step)
 {
-    if (seq_model_track_is_play(track) == 0U)
+    if (seq_model_track_can_emit_notes(track) == 0U)
     {
         return 0U;
     }
@@ -701,7 +710,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     {
         return SEQ_PLOCK_OP_SET_NOT_PLOCKABLE;
     }
-    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
+    if (seq_param_iface_slot_is_storable(track, set_id, param_slot) == 0U)
     {
         return SEQ_PLOCK_OP_INVALID;
     }

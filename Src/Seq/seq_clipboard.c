@@ -6,6 +6,7 @@
  * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
  */
 #include "Seq/seq_clipboard.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_step_snapshot.h"
 
 #include <string.h>
@@ -23,7 +24,9 @@ UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
 static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
 {
-    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
 }
 
 static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t step_count, seq_step_id_t *out_min)

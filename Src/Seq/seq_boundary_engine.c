@@ -23,6 +23,13 @@ typedef struct
     seq_value16_t base_value16;
 } seq_boundary_engine_step_lock_t;
 
+static uint8_t seq_boundary_engine_track_is_valid(seq_track_id_t track)
+{
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
+}
+
 static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
 {
     return seq_model_get_track_playback_length(track);
@@ -31,7 +38,7 @@ static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
 static seq_runtime_active_lock_t *seq_boundary_engine_active_locks(seq_runtime_state_t *state,
                                                                    seq_track_id_t track)
 {
-    if ((state == NULL) || (track_topology_is_active(track) == 0U))
+    if ((state == NULL) || (seq_boundary_engine_track_is_valid(track) == 0U))
     {
         return NULL;
     }
@@ -144,7 +151,7 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
 {
     if ((out_locks == 0)
         || (out_count == 0)
-        || (track >= SEQ_TRACK_COUNT)
+        || (seq_boundary_engine_track_is_valid(track) == 0U)
         || (seq_model_is_step_editable_index(step) == 0U))
     {
         return 0U;
@@ -200,7 +207,7 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
 void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
                                                   seq_track_id_t track)
 {
-    if ((state == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((state == 0) || (seq_boundary_engine_track_is_valid(track) == 0U))
     {
         return;
     }
@@ -234,7 +241,7 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
 void seq_boundary_engine_invalidate_track(seq_runtime_state_t *state,
                                           seq_track_id_t track)
 {
-    if ((state == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((state == 0) || (seq_boundary_engine_track_is_valid(track) == 0U))
     {
         return;
     }
@@ -347,8 +354,12 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
     }
 
     uint8_t hit_count = 0U;
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
+        if (seq_boundary_engine_track_is_valid(track) == 0U)
+        {
+            continue;
+        }
         const uint8_t length = seq_boundary_engine_track_length(track);
         seq_step_id_t current_step = state->play_step[track];
         if (current_step >= length)
@@ -386,8 +397,12 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         return;
     }
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
+        if (seq_boundary_engine_track_is_valid(track) == 0U)
+        {
+            continue;
+        }
         uint8_t div = 1U;
         /* Projection read: boundary stepping consumes track div as a runtime mirror. */
         (void)seq_runtime_get_track_div(track, &div);

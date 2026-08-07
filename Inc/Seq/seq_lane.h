@@ -99,6 +99,10 @@ static inline uint8_t seq_lane_resolve(uint8_t group_active,
     return 1U;
 }
 
+uint8_t seq_lane_group_is_active(void);
+uint8_t seq_lane_get_descriptor(seq_lane_id_t lane,
+                                seq_lane_descriptor_t *out_descriptor);
+
 #ifdef __cplusplus
 }
 #endif

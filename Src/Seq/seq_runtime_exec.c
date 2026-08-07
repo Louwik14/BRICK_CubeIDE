@@ -15,6 +15,7 @@
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_model.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
@@ -228,6 +229,14 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
         return;
     }
 
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)hit->track, &lane) == 0U)
+            || (lane.active == 0U)
+            || (lane.can_emit_notes == 0U))
+    {
+        return;
+    }
+
     const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
     seq_play_scheduler_schedule_step(hit->track,
                                      hit->step,
@@ -373,7 +382,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
     state->ext_clock_tick_accum = 0U;
     state->last_tick_count = now_tick;
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         state->play_step[track] = 0U;
         state->prev_step_valid[track] = 0U;
@@ -392,9 +401,9 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
 
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
-        seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
+        seq_boundary_hit_t hits[SEQ_LANE_CAPACITY];
         uint8_t hit_count = 0U;
-        seq_boundary_engine_process(state, hits, SEQ_TRACK_COUNT, &hit_count);
+        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY, &hit_count);
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
@@ -428,7 +437,7 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
     seq_play_scheduler_clear();
     g_seq_runtime_exec_metronome_step = 0U;
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         seq_boundary_engine_restore_all_active_locks(state, track);
         state->prev_step_valid[track] = 0U;
@@ -508,14 +517,14 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     if (seq_transport_fsm_allow_advance(transport_fsm) != 0U)
     {
         /* Progression guard: only running transport may advance musical step position. */
-        uint8_t previous_step[SEQ_TRACK_COUNT];
-        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        uint8_t previous_step[SEQ_LANE_CAPACITY];
+        for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
         {
             previous_step[track] = state->play_step[track];
         }
 
         seq_boundary_engine_advance_one_step(state);
-        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
         {
             if ((state->play_step[track] == 0U) && (previous_step[track] != 0U))
             {
@@ -531,9 +540,9 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
         /* Progression guard: scheduling follows the same transport running state as advancement. */
-        seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
+        seq_boundary_hit_t hits[SEQ_LANE_CAPACITY];
         uint8_t hit_count = 0U;
-        seq_boundary_engine_process(state, hits, SEQ_TRACK_COUNT, &hit_count);
+        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY, &hit_count);
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
@@ -681,7 +690,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
         const uint32_t coalesced = pending_steps
                                   - SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK;
         const uint32_t skipped = coalesced;
-        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
         {
             uint8_t div = 1U;
             uint8_t length = seq_model_get_track_playback_length(track);

@@ -12,6 +12,7 @@
 #include "Core/engine_tasklet.h"
 #include "Storage/memory_layout.h"
 #include "Seq/seq_model.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_surface.h"
@@ -73,7 +74,9 @@ static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status
 
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    seq_lane_descriptor_t descriptor;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) == 0U)
+            || (descriptor.active == 0U))
     {
         return 1U;
     }
@@ -721,7 +724,9 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
     {
         return 0U;
     }
-    if (track_topology_is_active(held_track) == 0U)
+    seq_lane_descriptor_t held_descriptor;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)held_track, &held_descriptor) == 0U)
+            || (held_descriptor.active == 0U))
     {
         return 0U;
     }

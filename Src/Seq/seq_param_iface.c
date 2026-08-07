@@ -6,6 +6,7 @@
  * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
  */
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_lane.h"
 
 #include <string.h>
 
@@ -23,7 +24,7 @@ typedef struct
 } seq_param_slot_state_t;
 
 SEQ_STATE_D2 static seq_param_slot_state_t
-    g_seq_param_runtime_state[SEQ_TRACK_COUNT][SEQ_PARAM_RUNTIME_SLOT_COUNT];
+    g_seq_param_runtime_state[SEQ_LANE_CAPACITY][SEQ_PARAM_RUNTIME_SLOT_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
@@ -318,7 +319,7 @@ static uint8_t seq_param_iface_is_play_param(param_id_t param)
 
 static void seq_param_iface_seed_play_defaults(void)
 {
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
         {
@@ -356,7 +357,9 @@ static void seq_param_iface_seed_play_defaults(void)
 
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
-    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
 }
 
 static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
@@ -506,6 +509,23 @@ static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, t
         return 0U;
     }
 
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+            || (lane.active == 0U))
+    {
+        return 0U;
+    }
+
+    if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+    {
+        *out_type = TRACK_RUNTIME_TYPE_RAM;
+        return 1U;
+    }
+    if (lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
+    {
+        return 0U;
+    }
+
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
@@ -537,6 +557,79 @@ static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
     }
 
     return 1U;
+}
+
+static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
+                                                         uint8_t set_id,
+                                                         seq_param_slot_t param_slot)
+{
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+            || (lane.active == 0U)
+            || (seq_param_iface_is_slot_addressable(track, set_id, param_slot) == 0U))
+    {
+        return 0U;
+    }
+
+    if ((lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
+            && (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t seq_param_iface_is_group_master(seq_track_id_t track)
+{
+    seq_lane_descriptor_t lane;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &lane) != 0U)
+            && (lane.role == SEQ_LANE_ROLE_GROUP_MASTER);
+}
+
+static uint8_t seq_param_iface_slot_is_supported_internal(
+    seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot,
+    uint8_t allow_refused_euclid_param)
+{
+    if ((seq_param_iface_track_is_valid(track) == 0U)
+            || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    {
+        return 0U;
+    }
+
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+    {
+        return 0U;
+    }
+    if (seq_param_iface_is_group_master(track) != 0U)
+    {
+        return (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY) ? 0U : 1U;
+    }
+    if ((allow_refused_euclid_param == 0U)
+            && (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX))
+    {
+        uint8_t fx_slot = 0U;
+        uint8_t fx_param = 0U;
+        float model_value = 0.0f;
+        if ((note_fx_state_param_map(param, &fx_slot, &fx_param) != 0U)
+                && (fx_param < 3U)
+                && (note_fx_state_get_param(
+                    track,
+                    (param_id_t)(PARAM_MIDI_FX_S1_MODEL
+                        + (fx_slot * NOTE_FX_PARAM_COUNT)),
+                    &model_value) != 0U)
+                && (note_fx_state_is_param_plock_allowed(
+                    (uint8_t)(model_value + 0.5f), fx_param) == 0U))
+        {
+            return 0U;
+        }
+    }
+
+    const track_runtime_param_status_t status =
+        track_runtime_get_effective_param_status(track, param);
+    return ((status == TRACK_RUNTIME_PARAM_ALLOWED)
+            || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
 void seq_param_iface_init(void)
@@ -572,7 +665,8 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
                                       seq_param_slot_t param_slot,
                                       param_id_t *out_param_id)
 {
-    if ((out_param_id == 0) || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    if ((out_param_id == 0) || (seq_param_iface_track_is_valid(track) == 0U)
+            || (seq_param_iface_is_set_plockable(set_id) == 0U))
     {
         return 0U;
     }
@@ -625,7 +719,8 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
                                       param_id_t param_id,
                                       seq_param_slot_t *out_param_slot)
 {
-    if ((out_param_slot == 0) || (param_id >= PARAM_COUNT))
+    if ((out_param_slot == 0) || (seq_param_iface_track_is_valid(track) == 0U)
+            || (param_id >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -670,19 +765,15 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
 
 uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
-    if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
-    {
-        return 0U;
-    }
+    return seq_param_iface_slot_is_supported_internal(track, set_id,
+                                                       param_slot, 0U);
+}
 
-    param_id_t param = PARAM_COUNT;
-    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
-    {
-        return 0U;
-    }
-
-    const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, param);
-    return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
+uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track,
+                                         uint8_t set_id,
+                                         seq_param_slot_t param_slot)
+{
+    return seq_param_iface_slot_is_storable_internal(track, set_id, param_slot);
 }
 
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
@@ -848,6 +939,13 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         seq_param_set_base_valid(track, set_id, param_slot, 1U);
     }
 
+    if (seq_param_iface_is_group_master(track) != 0U)
+    {
+        state->runtime_value = value16;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
+        return 1U;
+    }
+
     if (seq_param_iface_is_play_param(param) != 0U)
     {
         state->runtime_value = value16;
@@ -902,6 +1000,15 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
+    }
+
+    if (seq_param_iface_is_group_master(track) != 0U)
+    {
+        state->base_value = base_value16;
+        state->runtime_value = base_value16;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
+        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
+        return 1U;
     }
 
     if (seq_param_iface_is_play_param(param) != 0U)

@@ -1435,6 +1435,15 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      uint32_t samples_per_step_q16,
                                                      uint8_t negative_lookahead)
 {
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+            || (lane.active == 0U)
+            || (lane.can_emit_notes == 0U)
+            || (lane.role == SEQ_LANE_ROLE_GROUP_CHILD))
+    {
+        return;
+    }
+
     seq_play_scheduler_refresh_track(track);
 
     if (track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U)

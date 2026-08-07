@@ -3,7 +3,15 @@
 #include <string.h>
 
 #include "Core/track_topology.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
+
+static uint8_t seq_step_snapshot_track_is_valid(seq_track_id_t track)
+{
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
+}
 
 static uint8_t lock_before(const seq_step_snapshot_plock_t *a, const seq_step_snapshot_plock_t *b)
 {
@@ -29,12 +37,12 @@ static void sort_locks(seq_step_snapshot_t *snapshot)
 uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
                                               const seq_step_snapshot_t *snapshot)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (snapshot == 0) || (snapshot->valid == 0U)
+    if ((seq_step_snapshot_track_is_valid(track) == 0U) || (snapshot == 0) || (snapshot->valid == 0U)
             || (snapshot->lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)) return 0U;
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
         const seq_step_snapshot_plock_t *lock = &snapshot->locks[i];
-        if (seq_param_iface_slot_is_supported(track, lock->set_id, lock->param_slot) == 0U) return 0U;
+        if (seq_param_iface_slot_is_storable(track, lock->set_id, lock->param_slot) == 0U) return 0U;
         for (uint8_t j = 0U; j < i; ++j)
             if ((snapshot->locks[j].set_id == lock->set_id)
                     && (snapshot->locks[j].param_slot == lock->param_slot)) return 0U;
@@ -45,7 +53,7 @@ uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
 uint8_t seq_step_snapshot_capture(seq_track_id_t track, seq_step_id_t step,
                                    seq_step_snapshot_t *out_snapshot)
 {
-    if ((out_snapshot == 0) || (track >= SEQ_TRACK_COUNT)
+    if ((out_snapshot == 0) || (seq_step_snapshot_track_is_valid(track) == 0U)
             || (seq_model_is_step_editable_index(step) == 0U)) return 0U;
     seq_step_snapshot_t snapshot;
     memset(&snapshot, 0, sizeof(snapshot));
@@ -86,7 +94,7 @@ uint8_t seq_step_snapshot_capture_list(seq_track_id_t track, const seq_step_id_t
 uint8_t seq_step_snapshot_can_apply_list(seq_track_id_t track,
                                          const seq_step_snapshot_list_t *list)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (list == 0) || (list->count == 0U)
+    if ((seq_step_snapshot_track_is_valid(track) == 0U) || (list == 0) || (list->count == 0U)
             || (list->count > SEQ_STEP_SNAPSHOT_MAX_STEPS)) return 0U;
     uint32_t replaced = 0U, incoming = 0U;
     for (uint8_t i = 0U; i < list->count; ++i)

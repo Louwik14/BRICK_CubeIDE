@@ -20,6 +20,7 @@
 #include "midi.h"
 
 #include "Seq/seq_model.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_output_guard.h"
@@ -41,12 +42,12 @@
 SEQ_STATE_D2 static struct
 {
     seq_clock_src_t clock_src;
-    uint8_t track_div[SEQ_TRACK_COUNT];
-    uint8_t track_quant[SEQ_TRACK_COUNT];
-    uint8_t track_swing[SEQ_TRACK_COUNT];
+    uint8_t track_div[SEQ_LANE_CAPACITY];
+    uint8_t track_quant[SEQ_LANE_CAPACITY];
+    uint8_t track_swing[SEQ_LANE_CAPACITY];
 } g_seq_runtime_control;
 static volatile uint32_t g_seq_internal_time_tick;
-SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_TRACK_COUNT];
+SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static seq_runtime_diag_t g_seq_runtime_diag;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
@@ -209,7 +210,9 @@ static void seq_runtime_exit_critical(uint32_t primask)
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
-    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+    seq_lane_descriptor_t descriptor;
+    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
+            && (descriptor.active != 0U);
 }
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
@@ -295,7 +298,7 @@ void seq_runtime_init(void)
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         g_seq_runtime_control.track_div[track] = 1U;
         g_seq_runtime_control.track_quant[track] = 0U;
@@ -687,7 +690,7 @@ uint32_t seq_runtime_get_samples_per_step_q16(void)
 
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step)
 {
-    if ((out_step == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((out_step == 0) || (seq_runtime_track_is_valid(track) == 0U))
     {
         return 0U;
     }
@@ -698,7 +701,7 @@ uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_s
 
 uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation)
 {
-    if ((out_generation == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((out_generation == 0) || (seq_runtime_track_is_valid(track) == 0U))
     {
         return 0U;
     }
@@ -735,7 +738,7 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;
     }
@@ -746,7 +749,7 @@ void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
 
 void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;
     }
@@ -756,7 +759,7 @@ void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div)
 
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
 {
-    if ((out_div == NULL) || (track >= SEQ_TRACK_COUNT))
+    if ((out_div == NULL) || (seq_runtime_track_is_valid(track) == 0U))
     {
         return 0U;
     }
@@ -767,7 +770,7 @@ uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
 
 void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;
     }
@@ -777,7 +780,7 @@ void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
 
 uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
 {
-    if ((out_quant == NULL) || (track >= SEQ_TRACK_COUNT))
+    if ((out_quant == NULL) || (seq_runtime_track_is_valid(track) == 0U))
     {
         return 0U;
     }
@@ -788,7 +791,7 @@ uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
 
 void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;
     }
@@ -798,7 +801,7 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
 
 uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
 {
-    if ((out_swing == NULL) || (track >= SEQ_TRACK_COUNT))
+    if ((out_swing == NULL) || (seq_runtime_track_is_valid(track) == 0U))
     {
         return 0U;
     }

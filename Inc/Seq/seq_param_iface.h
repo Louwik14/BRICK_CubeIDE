@@ -37,7 +37,7 @@ _Static_assert(SEQ_PARAM_PLAY_SLOT_COUNT <= 255U, "PLAY p-lock capacity exceeds 
 _Static_assert(SEQ_PARAM_MOD_SLOT_COUNT <= 255U, "MOD p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_COUNT <= 255U, "MIDI FX p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds slot type");
-_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 90U, "runtime p-lock bitmap size changed");
+_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 180U, "runtime p-lock bitmap size changed");
 _Static_assert((PARAM_MIDI_FX_S3_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
                "MIDI FX inverse table capacity changed");
 
@@ -73,6 +73,7 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
                                       param_id_t param_id,
                                       seq_param_slot_t *out_param_slot);
 uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
+uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
                                            uint8_t set_id,
                                            param_id_t param_id);
@@ -83,6 +84,10 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
                                        uint8_t set_id,
                                        seq_param_slot_t param_slot,
                                        seq_value16_t *out_value16);
+uint8_t seq_param_iface_get_runtime_value(seq_track_id_t track,
+                                          uint8_t set_id,
+                                          seq_param_slot_t param_slot,
+                                          seq_value16_t *out_value16);
 uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        uint8_t set_id,
                                        seq_param_slot_t param_slot,

@@ -20,11 +20,11 @@ typedef struct
 typedef struct
 {
     uint8_t running;
-    uint8_t play_step[SEQ_TRACK_COUNT];
-    uint8_t prev_step[SEQ_TRACK_COUNT];
-    uint8_t prev_step_valid[SEQ_TRACK_COUNT];
-    uint8_t active_lock_count[SEQ_TRACK_COUNT];
-    uint8_t track_div_phase[SEQ_TRACK_COUNT];
+    uint8_t play_step[SEQ_LANE_CAPACITY];
+    uint8_t prev_step[SEQ_LANE_CAPACITY];
+    uint8_t prev_step_valid[SEQ_LANE_CAPACITY];
+    uint8_t active_lock_count[SEQ_LANE_CAPACITY];
+    uint8_t track_div_phase[SEQ_LANE_CAPACITY];
     uint32_t last_tick_count;
     uint32_t tick_accum;
     uint16_t ticks_per_step;
@@ -34,7 +34,7 @@ typedef struct
     uint32_t samples_per_step_q16;
     uint64_t audio_block_start_sample;
     uint64_t audio_timeline_sample;
-    seq_runtime_active_lock_t active_locks[SEQ_TRACK_COUNT][SEQ_STEP_MAX_LOCKS];
+    seq_runtime_active_lock_t active_locks[SEQ_LANE_CAPACITY][SEQ_STEP_MAX_LOCKS];
 } seq_runtime_state_t;
 
 typedef enum
