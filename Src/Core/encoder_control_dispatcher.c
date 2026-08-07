@@ -19,6 +19,8 @@ typedef struct
     uint8_t valid;
 } encoder_control_shadow_t;
 
+static encoder_control_shadow_t g_encoder_control_shadow[ENCODER_CONTROL_SHADOW_COUNT];
+
 static void encoder_control_shadow_reset(encoder_control_shadow_t *shadow)
 {
     for (uint8_t i = 0U; i < ENCODER_CONTROL_SHADOW_COUNT; ++i)
@@ -71,11 +73,10 @@ void encoder_control_dispatcher_init(void)
 
 uint8_t encoder_control_dispatcher_service(void)
 {
-    encoder_control_shadow_t shadow[ENCODER_CONTROL_SHADOW_COUNT];
     encoder_detent_event_t detent;
     uint8_t submitted = 0U;
 
-    encoder_control_shadow_reset(shadow);
+    encoder_control_shadow_reset(g_encoder_control_shadow);
 
     for (uint8_t i = 0U; i < ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK; ++i)
     {
@@ -84,12 +85,10 @@ uint8_t encoder_control_dispatcher_service(void)
             break;
         }
 
-        if ((detent.encoder_id <= (uint8_t)ENC_PAGE)
-                || (detent.encoder_id >= (uint8_t)ENC_COUNT)
+        if ((detent.encoder_id >= (uint8_t)ENC_COUNT)
                 || (detent.direction == 0)
                 || (detent.encoder_id >= ENCODER_BINDING_ENCODER_COUNT))
         {
-            /* ENC_PAGE is navigation only; it must never become a DSP command. */
             continue;
         }
 
@@ -111,7 +110,7 @@ uint8_t encoder_control_dispatcher_service(void)
             continue;
         }
 
-        encoder_control_shadow_t *const current = encoder_control_shadow_find(shadow,
+        encoder_control_shadow_t *const current = encoder_control_shadow_find(g_encoder_control_shadow,
                                                                                  parameter,
                                                                                  scope,
                                                                                  track,

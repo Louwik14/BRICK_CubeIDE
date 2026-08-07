@@ -1981,7 +1981,7 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
                                         ui_param_encoder_target_t *out_target)
 {
     if ((ctx == 0) || (ctx->valid == 0U) || (out_target == 0)
-            || (encoder == 0U) || (encoder >= 4U)
+            || (encoder >= 4U)
             || ((direction != -1) && (direction != 1)))
     {
         return 0U;

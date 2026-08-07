@@ -50,16 +50,17 @@ protocol, HSEM and the actual M4/M7 split remain out of scope here.
 
 ## Encoder detent to parameter command
 
-`encoder_control_dispatcher_service()` consumes the validated detent ring at
-the control-context boundary: first before the out-of-queue shift/track input
-mirror is updated, and again at the start of `ui_core_tick()` for detents
-captured after that boundary. Button/page events generated during the tick are
-dispatched afterwards. The dispatcher uses the binding embedded in each
+`encoder_control_dispatcher_service()` consumes the validated detent ring once
+at the control-context boundary, before the out-of-queue shift/track input
+mirror is updated. Button/page events generated during the tick are dispatched
+afterwards. The dispatcher uses the binding embedded in each
 detent; it never rereads the current page, track or SHIFT state. A later UI
 change therefore cannot rebind an older detent to another target.
 
-`ENC_PAGE` remains navigation-only. Parameter encoders whose bank entry is an
-audio/runtime parameter produce one `live_parameter_event_t` per accepted
+All four encoder indices address the four entries of the active parameter bank;
+the historical `ENC_PAGE` enum name does not make index zero navigation-only.
+An encoder whose bank entry is an audio/runtime parameter produces one
+`live_parameter_event_t` per accepted
 detent. The event stores the captured TIM5 tick and ingress serial, the
 resolved parameter/scope/track, and a canonical final `SET_TARGET` value; the
 value is stored as float bits in the fixed `int32_t` field. Structural and
@@ -67,8 +68,11 @@ sequence controls continue through the legacy UI path and do not enter this
 DSP command stream.
 
 The dispatcher uses a bounded 32-detent drain, matching the capture ring
-capacity, and keeps a small per-target value shadow so a burst emits successive
+capacity, and keeps a static bounded per-target value shadow so a burst emits successive
 canonical targets instead of repeatedly resolving from the pre-burst UI value.
+Keeping this 32-entry scratch outside the call stack is required: the expanded
+binding-aware entry otherwise raises the dispatcher frame from 128 to 632 bytes
+and can overwrite UI state on the constrained control stack.
 The UI shadow advances only after the command ring accepts the event; a rejected
 command leaves it unchanged. Audio-routed detents are excluded from the legacy
 delta accumulator, while navigation, structural and multi-track modifier

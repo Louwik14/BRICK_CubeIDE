@@ -831,7 +831,6 @@ void ui_core_tick(void)
 
     ui_param_capture_encoder_context(&encoder_ctx);
     track_runtime_refresh_track(encoder_ctx.active_track);
-    (void)encoder_control_dispatcher_service();
     param_registry_batch_begin();
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
