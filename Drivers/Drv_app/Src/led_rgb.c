@@ -43,6 +43,7 @@
 #include "UI/ui_page_manager.h"
 #include "UI/ui_step_led_ownership.h"
 #include "UI/pages/ui_page_patch_assign.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
@@ -75,6 +76,9 @@
 #define LED_FIXED_RED_R           LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_RED_G           0U
 #define LED_FIXED_RED_B           0U
+#define LED_FIXED_TEAL_R          0U
+#define LED_FIXED_TEAL_G          LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_TEAL_B          96U
 #define LED_MACRO_PRESSURE_RAW_NOISE_FLOOR 400U
 #define LED_MACRO_PRESSURE_LED_MARGIN 75U
 
@@ -355,12 +359,40 @@ static button_id_t led_param_button_for_led(led_id_t led)
 static void led_apply_default_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
+    seq_lane_descriptor_t lane = { 0 };
+
+    if ((seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) == 0U)
+            || (lane.active == 0U))
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+    {
+        led_layer_set(LED_LAYER_UI,
+                      led,
+                      LED_FIXED_LIGHT_BLUE_R,
+                      LED_FIXED_LIGHT_BLUE_G,
+                      LED_FIXED_LIGHT_BLUE_B);
+        return;
+    }
+
+    if (lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
+    {
+        led_layer_set(LED_LAYER_UI,
+                      led,
+                      LED_FIXED_VIOLET_R,
+                      LED_FIXED_VIOLET_G,
+                      LED_FIXED_VIOLET_B);
+        return;
+    }
 
     led_layer_set(LED_LAYER_UI,
                   led,
-                  LED_FIXED_GREEN_R,
-                  LED_FIXED_GREEN_G,
-                  LED_FIXED_GREEN_B);
+                  LED_FIXED_DARK_BLUE_R,
+                  LED_FIXED_DARK_BLUE_G,
+                  LED_FIXED_DARK_BLUE_B);
 }
 
 static void led_apply_keyboard_hall_scene(uint8_t hall)
@@ -558,11 +590,27 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
     }
     else if (mute_led.muted != 0U)
     {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
+        seq_lane_descriptor_t lane = { 0 };
+        const uint8_t is_group_child =
+            (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
+            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD);
+        led_layer_set(LED_LAYER_UI,
+                      led,
+                      is_group_child ? LED_FIXED_ORANGE_R : LED_FIXED_RED_R,
+                      is_group_child ? LED_FIXED_ORANGE_G : LED_FIXED_RED_G,
+                      is_group_child ? LED_FIXED_ORANGE_B : LED_FIXED_RED_B);
     }
     else
     {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
+        seq_lane_descriptor_t lane = { 0 };
+        const uint8_t is_group_child =
+            (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
+            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD);
+        led_layer_set(LED_LAYER_UI,
+                      led,
+                      is_group_child ? LED_FIXED_TEAL_R : LED_FIXED_GREEN_R,
+                      is_group_child ? LED_FIXED_TEAL_G : LED_FIXED_GREEN_G,
+                      is_group_child ? LED_FIXED_TEAL_B : LED_FIXED_GREEN_B);
     }
 
     return 1U;
