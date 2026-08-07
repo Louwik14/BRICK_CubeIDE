@@ -63,12 +63,14 @@
 #include "Core/synth_polyphony.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_surface.h"
+#include "Seq/seq_lane.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
 typedef struct
 {
     uint8_t active_track;
+    uint8_t active_lane;
     uint8_t shift_down;
     uint8_t track_select_armed;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
@@ -86,6 +88,7 @@ typedef struct
 
 static ui_track_state_t g_ui_track_state = {
     .active_track = 0U,
+    .active_lane = 0U,
     .shift_down = 0U,
     .track_select_armed = 0U,
     .mode_tap_ms = { 0U },
@@ -195,24 +198,35 @@ static uint8_t ui_core_select_active_track(uint8_t track)
     }
 
     g_ui_track_state.active_track = track;
+    g_ui_track_state.active_lane = track;
     return 1U;
 }
 
 static void ui_core_set_active_track(uint8_t track)
 {
-    if (track_topology_is_active(track) == 0U)
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+            || (lane.active == 0U))
     {
         return;
     }
 
-    if (g_ui_track_state.active_track == track)
+    const uint8_t main_track = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+        ? (uint8_t)lane.parent_lane_id : track;
+    const uint8_t changed = (uint8_t)((g_ui_track_state.active_track != main_track)
+            || (g_ui_track_state.active_lane != track));
+    if (changed == 0U)
     {
         ui_core_runtime_bridge_sync_active_track_context(0U);
         return;
     }
 
-    (void)ui_core_select_active_track(track);
-    ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+    if (g_ui_track_state.active_track != main_track)
+    {
+        (void)ui_core_select_active_track(main_track);
+    }
+    g_ui_track_state.active_lane = track;
+    ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
                                      g_ui_track_state.shift_down);
     ui_core_runtime_bridge_sync_active_track_context(1U);
 }
@@ -420,7 +434,7 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     if (g_ui_track_state.shift_down != normalized)
     {
         g_ui_track_state.shift_down = normalized;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
     }
 }
@@ -431,7 +445,7 @@ static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
     if (g_ui_track_state.track_select_armed != normalized)
     {
         g_ui_track_state.track_select_armed = normalized;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
     }
 }
@@ -536,7 +550,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 1U;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         return;
     }
@@ -544,7 +558,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 0U;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         return;
     }
@@ -552,7 +566,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
         g_ui_track_state.track_select_armed = 1U;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         return;
     }
@@ -560,7 +574,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
         g_ui_track_state.track_select_armed = 0U;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         return;
     }
@@ -703,6 +717,7 @@ void ui_core_init(void)
     ui_macro_interaction_init();
     track_state_init();
     g_ui_track_state.active_track = 0U;
+    g_ui_track_state.active_lane = 0U;
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.macro_overlay_active = 0U;
@@ -755,7 +770,7 @@ void ui_core_service_track_selection_inputs(void)
     else
     {
         g_ui_track_state.track_select_armed = 0U;
-        ui_param_publish_encoder_binding(g_ui_track_state.active_track,
+        ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
     }
 
@@ -937,6 +952,18 @@ next_event:
 
 uint8_t ui_get_active_track(void)
 {
+    return g_ui_track_state.active_track;
+}
+
+uint8_t ui_get_active_lane(void)
+{
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)g_ui_track_state.active_lane, &lane) != 0U)
+            && (lane.active != 0U))
+    {
+        return g_ui_track_state.active_lane;
+    }
+
     return g_ui_track_state.active_track;
 }
 

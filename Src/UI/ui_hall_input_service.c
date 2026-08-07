@@ -7,6 +7,7 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
+#include "Seq/seq_lane.h"
 #if defined(BRICK6_VARIANT_LOWCOST)
 #include "Seq/seq_edit.h"
 #include "ui_core.h"
@@ -26,7 +27,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        ui_hall_input_service_set_active_track_fn set_active_track,
                                        ui_hall_input_service_feedback_fn feedback)
 {
-    if ((mute_active != 0U) && (hall < UI_ACTIVE_TRACK_COUNT))
+    if ((mute_active != 0U) && (hall < SEQ_LANE_CAPACITY))
     {
         if ((was_pressed == 0U) && (pressed != 0U))
         {
@@ -54,7 +55,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
 #if defined(BRICK6_VARIANT_LOWCOST)
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         && (macro_overlay_hall_context == 0U)
-        && (seq_edit_lowcost_range_length_candidate(ui_get_active_track(), hall) != 0U))
+        && (seq_edit_lowcost_range_length_candidate(ui_get_active_lane(), hall) != 0U))
     {
         lowcost_range_length_candidate = 1U;
     }
@@ -78,7 +79,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         && (track_select_armed == 0U)
         && (was_pressed == 0U)
         && (pressed != 0U)
-        && (hall < UI_ACTIVE_TRACK_COUNT))
+        && (hall < SEQ_LANE_CAPACITY))
     {
         hall_note_suppressed[hall] = 1U;
     }
@@ -107,8 +108,20 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    if ((hall < HALL_UI_LANE_COUNT) && (hall < UI_ACTIVE_TRACK_COUNT))
+    seq_lane_descriptor_t lane;
+    if ((hall < HALL_UI_LANE_COUNT)
+            && (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
+            && (lane.active != 0U))
     {
+        if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+        {
+            hall_note_suppressed[hall] = 1U;
+            if (set_active_track != 0)
+            {
+                set_active_track(hall);
+            }
+            return;
+        }
         ui_hall_mode_flow_handle_track_hall_action(hall,
                                                    now_ms,
                                                    0U,

@@ -357,7 +357,7 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
     const ui_hall_mode_effective_view_t effective_view =
         ui_hall_mode_resolve_effective_view(active_track, hall_mode);

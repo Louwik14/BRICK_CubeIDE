@@ -61,7 +61,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
         }
 
         /* Command surface: pattern-rec arm is an explicit runtime command with target track preselection. */
-        const uint8_t rec_target_track = ui_get_active_track();
+        const uint8_t rec_target_track = ui_get_active_lane();
         seq_runtime_set_pattern_rec_target_track(rec_target_track);
         seq_runtime_rec_toggle_arm();
         return 1U;
@@ -102,7 +102,7 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
         return 0U;
     }
 
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_get_active_lane();
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS)
         && ((ev->id == (uint8_t)BTN_COPY) || (ev->id == (uint8_t)BTN_PASTE)))
@@ -168,7 +168,7 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_STEPS_PER_PAGE))
     {
-        seq_edit_step_release(ui_get_active_track(), ev->id);
+        seq_edit_step_release(ui_get_active_lane(), ev->id);
         return 1U;
     }
 

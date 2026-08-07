@@ -14,7 +14,7 @@ void ui_edit_context_sync_active_track(uint8_t include_keyboard_focus_sync)
         keyboard_runtime_sync_track_focus_context();
     }
 
-    mod_lfo_v1_invalidate_dest_cache_track(ui_get_active_track());
+    mod_lfo_v1_invalidate_dest_cache_track(ui_get_active_lane());
     ui_core_navigation_bridge_sync_active_track_ensemble();
     ui_page_sync_active_context();
     ui_param_sync_active_bank_values();
@@ -27,7 +27,7 @@ void ui_edit_context_sync_active_track_created_from_off(uint8_t include_keyboard
         keyboard_runtime_sync_track_focus_context();
     }
 
-    mod_lfo_v1_invalidate_dest_cache_track(ui_get_active_track());
+    mod_lfo_v1_invalidate_dest_cache_track(ui_get_active_lane());
     ui_core_navigation_bridge_sync_created_track_destination();
     ui_page_sync_active_context();
     ui_param_sync_active_bank_values();

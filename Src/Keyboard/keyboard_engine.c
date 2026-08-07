@@ -107,7 +107,7 @@ static void keyboard_engine_mono_clear(void)
 
 static uint8_t keyboard_engine_get_play_owner_track(void)
 {
-    return ui_get_active_track();
+    return ui_get_active_lane();
 }
 
 static bool keyboard_engine_active_track_has_midi_note_path(void)

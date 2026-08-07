@@ -53,7 +53,7 @@ static const ui_template_family_t g_ui_template_midi_fx_family_rout = {
 
 static const ui_template_family_t *ui_page_midi_fx_resolve_family(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_hall_rout_context_t rout_context =
         ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode());
 
@@ -73,7 +73,7 @@ static const ui_template_family_t *ui_page_midi_fx_resolve_family(void)
 static uint8_t ui_page_midi_fx_subpage_enabled(uint8_t subpage_index)
 {
     const ui_hall_rout_context_t rout_context =
-        ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode());
+        ui_hall_mode_resolve_rout_context(ui_get_active_lane(), ui_get_hall_mode());
 
     if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
     {
@@ -110,7 +110,8 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
                                                        uint32_t out_value_len)
 {
     static const char *const style_labels[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
-    static const char *const names[] = { "RATE", "STYLE", "RANGE", "MODEL" };
+    static const char *const arp_names[] = { "RATE", "STYLE", "RANGE", "MODEL" };
+    static const char *const euclid_names[] = { "LENGTH", "PULSE", "DIV", "MODEL" };
     const uint8_t page_slot = g_ui_template_midi_fx_state.active_subpage;
     if ((slot >= NOTE_FX_PARAM_COUNT) || (page_slot >= NOTE_FX_SLOT_COUNT))
     {
@@ -120,19 +121,30 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     const param_id_t first = (param_id_t)(PARAM_MIDI_FX_S1_PARAM1 + (page_slot * NOTE_FX_PARAM_COUNT));
     float model = 0.0f;
     float value = 0.0f;
-    if ((note_fx_state_get_param(ui_get_active_track(), (param_id_t)(first + 3U), &model) == 0U)
-            || (note_fx_state_get_param(ui_get_active_track(), (param_id_t)(first + slot), &value) == 0U))
+    if ((note_fx_state_get_param(ui_get_active_lane(), (param_id_t)(first + 3U), &model) == 0U)
+            || (note_fx_state_get_param(ui_get_active_lane(), (param_id_t)(first + slot), &value) == 0U))
     {
         return 0U;
     }
 
-    (void)snprintf(out_name, out_name_len, "%s", names[slot]);
+    const uint8_t is_euclid = ((uint8_t)model == NOTE_FX_MODEL_EUCLID) ? 1U : 0U;
+    (void)snprintf(out_name, out_name_len, "%s",
+                   is_euclid != 0U ? euclid_names[slot] : arp_names[slot]);
     if ((slot < 3U) && ((uint8_t)model == NOTE_FX_MODEL_OFF))
     {
         (void)snprintf(out_value, out_value_len, "-");
         return 1U;
     }
-    if (slot == 0U)
+    if (is_euclid != 0U && slot < 2U)
+    {
+        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(uint8_t)value);
+    }
+    else if (is_euclid != 0U && slot == 2U)
+    {
+        (void)snprintf(out_value, out_value_len, "%s",
+                       seq_division_arp_label((uint8_t)value));
+    }
+    else if (slot == 0U)
     {
         (void)snprintf(out_value, out_value_len, "%s", seq_division_arp_label((uint8_t)value));
     }
@@ -147,7 +159,9 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     }
     else
     {
-        (void)snprintf(out_value, out_value_len, "%s", ((uint8_t)value == NOTE_FX_MODEL_ARP) ? "ARP" : "OFF");
+        const char *const model_label = ((uint8_t)value == NOTE_FX_MODEL_ARP)
+            ? "ARP" : (((uint8_t)value == NOTE_FX_MODEL_EUCLID) ? "EUCLID" : "OFF");
+        (void)snprintf(out_value, out_value_len, "%s", model_label);
     }
     return 1U;
 }
@@ -159,7 +173,7 @@ static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
         const param_id_t model = (param_id_t)(PARAM_MIDI_FX_S1_MODEL
             + (g_ui_template_midi_fx_state.active_subpage * NOTE_FX_PARAM_COUNT));
         float value = 0.0f;
-        if ((note_fx_state_get_param(ui_get_active_track(), model, &value) != 0U)
+        if ((note_fx_state_get_param(ui_get_active_lane(), model, &value) != 0U)
                 && ((uint8_t)value == NOTE_FX_MODEL_OFF))
         {
             return;

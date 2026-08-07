@@ -8,6 +8,7 @@
 #include "Core/track_runtime.h"
 #include "ui_page_manager.h"
 #include "ui_step_led_ownership.h"
+#include "Seq/seq_lane.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -18,8 +19,8 @@ typedef struct
     ui_hall_mode_t prev_mode;
     uint8_t prev_mode_valid;
     uint8_t hold_quick_prepare_armed;
-    uint8_t initial_state[UI_TRACK_COUNT];
-    uint8_t prepared_state[UI_TRACK_COUNT];
+    uint8_t initial_state[SEQ_LANE_CAPACITY];
+    uint8_t prepared_state[SEQ_LANE_CAPACITY];
 } ui_core_mute_state_t;
 
 static ui_core_mute_state_t g_ui_core_mute = {
@@ -34,7 +35,7 @@ static ui_core_mute_state_t g_ui_core_mute = {
 
 static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted, uint8_t *out_available)
 {
-    if ((out_muted == 0) || (out_available == 0) || (track >= UI_TRACK_COUNT))
+    if ((out_muted == 0) || (out_available == 0) || (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }
@@ -50,7 +51,7 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
 
 static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -66,7 +67,7 @@ static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
         return;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint8_t muted = 0U;
         uint8_t available = 0U;
@@ -146,9 +147,11 @@ static void ui_core_mute_enter_prepare(ui_core_mute_set_hall_mode_fn set_hall_mo
 
 static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn set_hall_mode)
 {
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
-        if ((ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
+        seq_lane_descriptor_t lane;
+        if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+                || (lane.active == 0U)
                 || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
         {
             continue;
@@ -173,7 +176,9 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
 
 static void ui_core_mute_toggle_prepared_track(uint8_t track)
 {
-    if ((track >= UI_ACTIVE_TRACK_COUNT) || (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
+            || (lane.active == 0U)
             || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
     {
         return;
@@ -257,12 +262,14 @@ uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
         return 0U;
     }
 
-    if (hall >= UI_ACTIVE_TRACK_COUNT)
+    if (hall >= SEQ_LANE_CAPACITY)
     {
         return 1U;
     }
 
-    if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) == 0U)
+            || (lane.active == 0U))
     {
         return 1U;
     }
@@ -383,7 +390,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_ACTIVE_TRACK_COUNT))
+    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
     {
         if (suppress_hall_note != 0)
         {
@@ -402,7 +409,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < UI_ACTIVE_TRACK_COUNT))
+    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_LANE_CAPACITY))
     {
         return 1U;
     }
