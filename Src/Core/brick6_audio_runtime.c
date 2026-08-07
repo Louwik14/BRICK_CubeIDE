@@ -21,6 +21,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/track_mute.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/synth_polyphony.h"
@@ -147,6 +148,10 @@ static uint8_t brick6_render_group_sampler_children(uint32_t frames)
         memset(child_l, 0, frames * sizeof(float));
         memset(child_r, 0, frames * sizeof(float));
         brick6_sampler_runtime_render_ram_track(child, child_l, child_r, frames);
+        if (track_mute_is_effectively_muted(lane) != 0U)
+        {
+            continue;
+        }
         for (uint32_t frame = 0U; frame < frames; ++frame)
         {
             group_l[frame] += child_l[frame];
