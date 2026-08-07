@@ -1,9 +1,15 @@
 # Chargement massif des instruments Multi
 
 Le chargement initial d'un instrument Multi n'emprunte plus le service du
-streamer temps reel. Il est admis uniquement lorsque le transport est arrete,
-qu'aucune fenetre de voix streamee n'est verrouillee et qu'aucune demande SD du
-streamer n'est en attente.
+streamer temps reel. Le gate PLAY/STOP lit uniquement l'etat runtime du transport
+et son eventuel start pending. Les locks de fenetre et les pending restent des
+conditions SD distinctes et ne sont jamais interpretes comme un transport actif.
+
+L'UI verifie ce gate avant d'arreter une voix, vider un slot ou passer en etat de
+preparation. Une tentative pendant PLAY retourne donc `STOP AUDIO` sans modifier
+le transport ni les voix. Apres un arret manuel, la meme demande entre dans le
+chemin de chargement; les travaux SD residuels sont differes par le gate SD
+existant sans inverser le verdict PLAY/STOP.
 
 Le loader calcule une fois, pour chaque sample, l'union des presocles start et
 loop. Les intervalles superposes ou adjacents sont fusionnes. Toutes les pages

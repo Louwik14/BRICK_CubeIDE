@@ -248,16 +248,8 @@ static void multi_loader_bulk_release_exclusive(void)
 
 static uint8_t multi_loader_bulk_runtime_stopped(void)
 {
-    if ((seq_runtime_is_running() != 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sample_page_cache_has_window_locks() != 0U))
-    {
-        return 0U;
-    }
-    return ((g_multi_bulk.exclusive != 0U)
-            || (sample_stream_manager_has_pending_sd_work() == 0U))
-               ? 1U
-               : 0U;
+    return ((seq_runtime_is_running() == 0U)
+            && (seq_runtime_is_start_pending() == 0U)) ? 1U : 0U;
 }
 
 static void multi_loader_set_error(multi_sample_load_result_t error,

@@ -2823,6 +2823,21 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         return;
     }
 
+    /* Gate before stopping voices, clearing a slot or changing UI load state. */
+    if ((seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U))
+    {
+        if (already_blocking != 0U)
+        {
+            ui_page_settings_multi_prepare_finish("STOP AUDIO");
+        }
+        else
+        {
+            ui_page_settings_status("STOP AUDIO");
+        }
+        return;
+    }
+
     if (already_blocking == 0U)
     {
         ui_page_settings_multi_prepare_begin(slot,
