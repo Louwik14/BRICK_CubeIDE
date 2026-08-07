@@ -118,7 +118,7 @@ set to the audio authority:
 | --- | --- | --- |
 | VCA envelope | `PARAM_VCA_ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`, `ENV_TYPE` | Active track voices and new voices see the target; the existing VCA envelope keeps its current phase/level/gate, and a live type change retargets the active trajectory without restarting the voice. |
 | Filter | `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE` | Active and new voices use the track target; mixer filter smoothing continues from its current value. |
-| Mix | `PARAM_MIX_LEVEL`, `PAN`, `SEND1`, `SEND2` | Active and new track audio uses the target; the audio runtime ramp state starts from the reached value. |
+| Mix | `PARAM_MIX_LEVEL`, `PAN`, `SEND1`, `SEND2` | Active and new track audio uses the target; mixer-owned current/target smoothing starts from the value actually reached. |
 | Wave position | `PARAM_WAVE_OSC1_POS`, `PARAM_WAVE_OSC2_POS` | Active wave runtime and future voices share the target; position smoothing remains owned by the wave backend. |
 | Prism/Stack | `PARAM_PRISM_FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `LEVEL` and the matching `PARAM_PRISM_OSC2_*`; `PARAM_STACK_OSC1/2/3_LEVEL`, `NOISE_LEVEL`, `OSC1/2/3_TUNE`, `OSC1/2/3_TIMBRE`, `OSC1/2/3_COLOR`, `OSC_DETUNE` | Active runtime and new voices share the target; model, phase-reset and other structural selectors stay outside this file. |
 | Delay/reverb | `PARAM_MIX_REVERB_WET`, `ROOM_SIZE`, `DAMPING`, `WIDTH`, `HPF`, `LPF`; `PARAM_MIX_DELAY_WIDTH`, `FEEDBACK`, `SPECTRAL_POSITION`, `SPECTRAL_WIDTH`, `FBW`, `MOD`, `MOD_RATE`, `REV`, `VOL` | The global effect target changes at the effective sample; existing effect smoothing remains active. |

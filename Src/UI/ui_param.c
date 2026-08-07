@@ -202,6 +202,7 @@ void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
                                                        slot,
                                                        shift_down,
                                                        route,
+                                                       track_modifier_down,
                                                        valid);
     }
 

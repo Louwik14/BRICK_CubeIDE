@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include "Core/live_clock.h"
+#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_migration.h"
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_filter.h"
@@ -20,7 +23,65 @@ static volatile uint8_t g_param_registry_track_structure_transition_track_depth[
 static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
                                                                  uint8_t track,
                                                                  float *out_value);
-static void param_registry_reapply_track_runtime_params(uint8_t track);
+static uint8_t param_registry_reapply_track_runtime_params(
+    uint8_t track,
+    live_parameter_audio_bulk_t *bulk);
+
+static uint8_t param_registry_audio_bulk_add(live_parameter_audio_bulk_t *bulk,
+                                             param_id_t id,
+                                             uint8_t track,
+                                             float value)
+{
+    if ((bulk == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT)
+            || (live_parameter_is_audio_owned(id) == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+    {
+        live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        if ((item->parameter_id == (uint16_t)id)
+                && (item->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+                && (item->track == track)
+                && (item->slot == LIVE_PARAMETER_EVENT_INVALID_INDEX))
+        {
+            item->value = live_parameter_event_encode_float(value);
+            return 1U;
+        }
+    }
+
+    if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
+    {
+        return 0U;
+    }
+
+    live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
+    *item = (live_parameter_audio_bulk_item_t){
+        .parameter_id = (uint16_t)id,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+        .track = track,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+        .value = live_parameter_event_encode_float(value)
+    };
+    return 1U;
+}
+
+static uint8_t param_registry_reapply_track_value(
+    param_id_t id,
+    uint8_t track,
+    float value,
+    live_parameter_audio_bulk_t *bulk)
+{
+    if (live_parameter_is_audio_owned(id) != 0U)
+    {
+        return param_registry_audio_bulk_add(bulk, id, track, value);
+    }
+
+    return (param_registry_apply_track_value(id, track, value) != 0U) ? 1U : 0U;
+}
 
 static void param_registry_track_structure_transition_begin_global(void)
 {
@@ -137,8 +198,10 @@ static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
     }
 }
 
-static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
-                                                               uint8_t force_reapply_filters)
+static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
+    uint8_t track,
+    uint8_t force_reapply_filters,
+    live_parameter_audio_bulk_t *bulk)
 {
     static const param_id_t k_lane_bound_params[] = {
         PARAM_FILTER_TYPE,
@@ -171,7 +234,7 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
 
     if (track >= SEQ_TRACK_COUNT)
     {
-        return;
+        return 0U;
     }
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
@@ -188,16 +251,26 @@ static void param_registry_reapply_lane_bound_runtime_for_track(uint8_t track,
             continue;
         }
 
-        (void)param_registry_apply_track_value(k_lane_bound_params[i], track, value);
+        if (param_registry_reapply_track_value(k_lane_bound_params[i],
+                                               track,
+                                               value,
+                                               bulk) == 0U)
+        {
+            return 0U;
+        }
     }
+
+    return 1U;
 }
 
-static void param_registry_reapply_tone_runtime_for_track(uint8_t track)
+static uint8_t param_registry_reapply_tone_runtime_for_track(
+    uint8_t track,
+    live_parameter_audio_bulk_t *bulk)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
-        return;
+        return 1U;
     }
 
     for (uint8_t slot = 0U; slot < 32U; ++slot)
@@ -215,8 +288,13 @@ static void param_registry_reapply_tone_runtime_for_track(uint8_t track)
             continue;
         }
 
-        (void)param_registry_apply_track_value(id, track, value);
+        if (param_registry_reapply_track_value(id, track, value, bulk) == 0U)
+        {
+            return 0U;
+        }
     }
+
+    return 1U;
 }
 
 static void param_registry_snap_reapplied_runtime_for_track(uint8_t track)
@@ -231,16 +309,25 @@ static void param_registry_snap_reapplied_runtime_for_track(uint8_t track)
     mixer_snap_track_runtime_state((uint32_t)mix_track);
 }
 
-static void param_registry_reapply_track_runtime_params(uint8_t track)
+static uint8_t param_registry_reapply_track_runtime_params(
+    uint8_t track,
+    live_parameter_audio_bulk_t *bulk)
 {
     if (track >= SEQ_TRACK_COUNT)
     {
-        return;
+        return 0U;
     }
 
-    param_registry_reapply_lane_bound_runtime_for_track(track, 1U);
-    param_registry_reapply_tone_runtime_for_track(track);
+    if (param_registry_reapply_lane_bound_runtime_for_track(track, 1U, bulk) == 0U)
+    {
+        return 0U;
+    }
+    if (param_registry_reapply_tone_runtime_for_track(track, bulk) == 0U)
+    {
+        return 0U;
+    }
     param_registry_snap_reapplied_runtime_for_track(track);
+    return 1U;
 }
 
 static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
@@ -277,7 +364,9 @@ static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
     return param_registry_runtime_cache_get(track, id, out_value);
 }
 
-static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const uint8_t *previous_mix_tracks)
+static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(
+    const uint8_t *previous_mix_tracks,
+    live_parameter_audio_bulk_t *bulk)
 {
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -306,9 +395,16 @@ static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const u
                     && (current_mix_track < MIXER_MAX_TRACKS)) ? 1U : 0U;
         }
 
-        param_registry_reapply_lane_bound_runtime_for_track(track,
-                                                            (migrated_existing_lane == 0U) ? 1U : 0U);
+        if (param_registry_reapply_lane_bound_runtime_for_track(
+                track,
+                (migrated_existing_lane == 0U) ? 1U : 0U,
+                bulk) == 0U)
+        {
+            return 0U;
+        }
     }
+
+    return 1U;
 }
 
 static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_tracks)
@@ -392,11 +488,18 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
     mixer_set_track_vca_enabled((uint32_t)mix_track, 0U);
 }
 
-static void param_registry_finalize_track_structure_change(const uint8_t *previous_mix_tracks)
+static uint8_t param_registry_finalize_track_structure_change(
+    const uint8_t *previous_mix_tracks)
 {
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 0U
+    };
+
     if (previous_mix_tracks == NULL)
     {
-        return;
+        return 0U;
     }
 
     param_registry_rebind_lane_runtime(previous_mix_tracks);
@@ -407,16 +510,36 @@ static void param_registry_finalize_track_structure_change(const uint8_t *previo
         param_registry_neutralize_vca_runtime_if_invalid(track);
     }
 
-    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
+    if (param_registry_reapply_lane_bound_runtime_for_changed_tracks(
+            previous_mix_tracks,
+            &bulk) == 0U)
+    {
+        return 0U;
+    }
     track_runtime_refresh_all();
+
+    if ((bulk.count != 0U)
+            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+    {
+        return 0U;
+    }
+
+    return 1U;
 }
 
-static void param_registry_finalize_track_structure_change_track(uint8_t track,
-                                                                 uint8_t previous_mix_track)
+static uint8_t param_registry_finalize_track_structure_change_track(
+    uint8_t track,
+    uint8_t previous_mix_track)
 {
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 0U
+    };
+
     if (track >= SEQ_TRACK_COUNT)
     {
-        return;
+        return 0U;
     }
 
     track_runtime_refresh_track(track);
@@ -424,7 +547,18 @@ static void param_registry_finalize_track_structure_change_track(uint8_t track,
     param_registry_rebind_lane_runtime_track(previous_mix_track, next_mix_track);
     param_registry_neutralize_filter_runtime_if_invalid(track);
     param_registry_neutralize_vca_runtime_if_invalid(track);
-    param_registry_reapply_track_runtime_params(track);
+    if (param_registry_reapply_track_runtime_params(track, &bulk) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((bulk.count != 0U)
+            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+    {
+        return 0U;
+    }
+
+    return 1U;
 }
 
 static uint8_t param_registry_apply_track_structure_transition_mutate(void *ctx)
@@ -467,7 +601,10 @@ uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_
 
     if (ok != 0U)
     {
-        param_registry_finalize_track_structure_change(previous_mix_tracks);
+        if (param_registry_finalize_track_structure_change(previous_mix_tracks) == 0U)
+        {
+            ok = 0U;
+        }
     }
 
     param_registry_track_structure_transition_end_global();
@@ -526,7 +663,12 @@ uint8_t param_registry_run_track_transition_pipeline_for_track(const param_regis
 
     if (ok != 0U)
     {
-        param_registry_finalize_track_structure_change_track(track, previous_mix_track);
+        if (param_registry_finalize_track_structure_change_track(
+                track,
+                previous_mix_track) == 0U)
+        {
+            ok = 0U;
+        }
     }
 
     param_registry_track_structure_transition_end_track(track);
