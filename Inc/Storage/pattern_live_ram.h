@@ -45,13 +45,13 @@ typedef struct
 
 typedef struct
 {
-    pattern_v1_track_seq_t tracks[SEQ_TRACK_COUNT];
+    pattern_v1_track_seq_t tracks[SEQ_LANE_CAPACITY];
 } pattern_v1_seq_block_t;
 
 typedef struct
 {
-    float track_values[SEQ_TRACK_COUNT][PARAM_PERSIST_COUNT];
-    uint8_t track_valid[SEQ_TRACK_COUNT][PARAM_PERSIST_COUNT];
+    float track_values[SEQ_LANE_CAPACITY][PARAM_PERSIST_COUNT];
+    uint8_t track_valid[SEQ_LANE_CAPACITY][PARAM_PERSIST_COUNT];
 } pattern_v1_track_param_block_t;
 
 typedef struct
@@ -65,9 +65,9 @@ typedef struct
     uint8_t linked_kit_valid;
     uint8_t reserved;
     uint16_t linked_kit_slot;
-    uint8_t track_div[SEQ_TRACK_COUNT];
-    uint8_t track_quant[SEQ_TRACK_COUNT];
-    uint8_t track_swing[SEQ_TRACK_COUNT];
+    uint8_t track_div[SEQ_LANE_CAPACITY];
+    uint8_t track_quant[SEQ_LANE_CAPACITY];
+    uint8_t track_swing[SEQ_LANE_CAPACITY];
 } pattern_v1_globals_block_t;
 
 typedef struct

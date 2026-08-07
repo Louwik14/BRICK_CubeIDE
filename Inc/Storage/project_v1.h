@@ -16,7 +16,7 @@
 #define PROJECT_V1_MACRO_POT_COUNT        4U
 #define PROJECT_V1_MACRO_SCENE_LOCK_COUNT 32U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    9U /* Wave tone layout; older payloads are rejected. */
+#define PROJECT_V1_FILE_VERSION    10U /* GROUP lane persistence; older payloads are rejected. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
 #define PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX SAMPLE_POOL_PATH_MAX
 #define PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT \

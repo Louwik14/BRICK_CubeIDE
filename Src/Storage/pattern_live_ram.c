@@ -18,6 +18,7 @@
 #include "UI/ui_active_track_sync.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -218,7 +219,9 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
 static uint8_t pattern_live_param_is_storable_for_track(uint8_t track, param_id_t id)
 {
     (void)id;
-    return track_topology_is_active(track);
+    seq_lane_descriptor_t lane = { 0 };
+    return ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) != 0U)
+            && (lane.active != 0U)) ? 1U : 0U;
 }
 
 static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
@@ -373,7 +376,7 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint16_t required = 0U;
         const uint16_t track_capacity = seq_model_get_track_plock_capacity(track);
@@ -425,7 +428,7 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const pattern_v1_track_seq_t *const saved = &seq->tracks[track];
 
@@ -466,7 +469,7 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
         return 0U;
     }
 
-    if (boundary_track >= SEQ_TRACK_COUNT)
+    if (boundary_track >= SEQ_LANE_CAPACITY)
     {
         boundary_track = 0U;
     }
@@ -502,22 +505,25 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     out_pattern->globals.linked_kit_valid = g_current_pattern.globals.linked_kit_valid;
     out_pattern->globals.linked_kit_slot = g_current_pattern.globals.linked_kit_slot;
 
-    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         out_pattern->track_cfg.family[track] = (uint8_t)ui_get_track_family(track);
         out_pattern->track_cfg.type[track] = (uint8_t)ui_get_track_type(track);
         out_pattern->track_cfg.external_input[track] = ui_get_track_external_input(track);
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
-        if ((track < NOTE_FX_TRACK_COUNT)
-                && (note_fx_state_capture_track(track, &out_pattern->note_fx[track]) == 0U))
-        {
-            return 0U;
-        }
         for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
         {
             out_pattern->track_cfg.looper_route_enabled[track][source_track] =
                 ui_core_runtime_bridge_get_looper_route_enabled(track, source_track);
+        }
+    }
+
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        if (note_fx_state_capture_track(track, &out_pattern->note_fx[track]) == 0U)
+        {
+            return 0U;
         }
 
         pattern_v1_track_seq_t *const saved = &out_pattern->seq.tracks[track];
@@ -559,7 +565,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
             continue;
         }
 
-        for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
         {
             if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
             const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, id);
@@ -592,7 +598,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     out_pattern->globals.rec_start_mode = seq_runtime_get_rec_start_mode();
     out_pattern->globals.rec_len_mode = seq_runtime_get_rec_len_mode();
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint8_t div = 1U;
         uint8_t quant = 0U;
@@ -627,7 +633,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
 
     seq_model_init_defaults();
 
-    for (uint8_t track = 0U; track < track_topology_get_logical_track_count(); ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const pattern_v1_track_seq_t *const saved = &seq->tracks[track];
         seq_model_set_track_length(track, saved->length_steps);
@@ -717,16 +723,16 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
         if (classification == PATTERN_LIVE_PARAM_TRACK_AWARE)
         {
-            for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+            for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
             {
                 if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
                 if (ctx->pattern->sound.track_valid[track][id] != 0U)
                 {
                     float value = ctx->pattern->sound.track_values[track][id];
-                    const uint8_t family = ctx->pattern->track_cfg.family[track];
                     if ((id == PARAM_CFG_POLY_VOICES)
-                            && ((family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
-                                || (family == (uint8_t)UI_TRACK_FAMILY_DRUM))
+                            && (track < SEQ_TRACK_COUNT)
+                            && ((ctx->pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
+                                || (ctx->pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_DRUM))
                             && (ctx->voice_count[track] != 0U))
                     {
                         value = (float)ctx->voice_count[track];
@@ -775,14 +781,14 @@ static uint8_t pattern_live_transition_seq_runtime_sync(void *ctx_ptr)
     seq_runtime_set_rec_start_mode(ctx->pattern->globals.rec_start_mode);
     seq_runtime_set_rec_len_mode(ctx->pattern->globals.rec_len_mode);
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         seq_runtime_set_track_div(track, ctx->pattern->globals.track_div[track]);
         seq_runtime_set_track_quant(track, ctx->pattern->globals.track_quant[track]);
         seq_runtime_set_track_swing(track, ctx->pattern->globals.track_swing[track]);
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         (void)seq_runtime_set_playhead_step(track, 0U);
     }
@@ -1141,7 +1147,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
     }
 
     uint8_t boundary_track = ui_get_active_track();
-    if (boundary_track >= SEQ_TRACK_COUNT)
+    if (boundary_track >= SEQ_LANE_CAPACITY)
     {
         boundary_track = 0U;
     }
@@ -1390,7 +1396,7 @@ void pattern_live_set_active_state(uint8_t active_bank,
     if ((queued_valid != 0U) && (pattern_live_slot_is_valid(queued_bank, queued_pattern) != 0U))
     {
         uint8_t boundary_track = ui_get_active_track();
-        if (boundary_track >= SEQ_TRACK_COUNT)
+        if (boundary_track >= SEQ_LANE_CAPACITY)
         {
             boundary_track = 0U;
         }
