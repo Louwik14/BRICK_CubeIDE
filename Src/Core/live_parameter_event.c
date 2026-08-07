@@ -50,7 +50,7 @@ bool live_parameter_event_submit(const live_parameter_event_t *event)
         return false;
     }
 
-    g_live_parameter_event_queue[head] = *event;
+    g_live_parameter_event_queue[head & LIVE_PARAMETER_EVENT_QUEUE_MASK] = *event;
     __DMB();
     g_live_parameter_event_head = (uint16_t)(head + 1U);
 
@@ -73,7 +73,7 @@ bool live_parameter_event_pop(live_parameter_event_t *out_event)
         return false;
     }
 
-    *out_event = g_live_parameter_event_queue[tail];
+    *out_event = g_live_parameter_event_queue[tail & LIVE_PARAMETER_EVENT_QUEUE_MASK];
     __DMB();
     g_live_parameter_event_tail = (uint16_t)(tail + 1U);
 

@@ -79,6 +79,13 @@ delta accumulator, while navigation, structural and multi-track modifier
 bindings remain there. The command ring is fixed at 64 entries and drops newest
 commands on saturation with an observable counter.
 
+Its head and tail are monotonic 16-bit cursors used for depth accounting. Every
+array access masks the cursor with `capacity - 1`; advancing a cursor without
+masking the physical slot writes beyond the 64-event/1280-byte array from the
+65th lifetime command onward. The long-run wrap test submits and consumes
+100,000 commands (including 16-bit cursor wrap) and also exercises
+full/drop/reuse behavior.
+
 ## Audio-owned parameter schedule
 
 The control-side `live_parameter_event_t` ring is drained into a separate,

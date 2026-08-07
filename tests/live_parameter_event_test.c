@@ -3,6 +3,72 @@
 
 #include <assert.h>
 
+static live_parameter_event_t make_event(uint32_t serial)
+{
+    return (live_parameter_event_t){
+        .capture_tick = serial + 1000U,
+        .ingress_serial = serial,
+        .parameter_id = 42U,
+        .source = LIVE_PARAMETER_EVENT_SOURCE_ENCODER,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+        .track = 3U,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+        .value = live_parameter_event_encode_float((float)serial)
+    };
+}
+
+static void test_queue_wrap_stress(void)
+{
+    live_parameter_event_t out;
+
+    live_parameter_event_init();
+    for (uint32_t serial = 1U; serial <= 100000U; ++serial)
+    {
+        const live_parameter_event_t event = make_event(serial);
+        assert(live_parameter_event_submit(&event));
+        assert(live_parameter_event_depth() == 1U);
+        assert(live_parameter_event_pop(&out));
+        assert(out.ingress_serial == serial);
+        assert(out.capture_tick == serial + 1000U);
+        assert(live_parameter_event_decode_float(out.value) == (float)serial);
+        assert(live_parameter_event_depth() == 0U);
+    }
+    assert(live_parameter_event_drop_count() == 0U);
+}
+
+static void test_queue_saturation_and_reuse(void)
+{
+    live_parameter_event_t out;
+
+    live_parameter_event_init();
+    for (uint32_t serial = 1U; serial <= LIVE_PARAMETER_EVENT_QUEUE_CAPACITY; ++serial)
+    {
+        const live_parameter_event_t event = make_event(serial);
+        assert(live_parameter_event_submit(&event));
+    }
+    assert(live_parameter_event_depth() == LIVE_PARAMETER_EVENT_QUEUE_CAPACITY);
+    const live_parameter_event_t rejected = make_event(999U);
+    assert(!live_parameter_event_submit(&rejected));
+    assert(live_parameter_event_drop_count() == 1U);
+
+    for (uint32_t serial = 1U; serial <= LIVE_PARAMETER_EVENT_QUEUE_CAPACITY; ++serial)
+    {
+        assert(live_parameter_event_pop(&out));
+        assert(out.ingress_serial == serial);
+    }
+    assert(!live_parameter_event_pop(&out));
+
+    for (uint32_t serial = 10001U; serial <= 10128U; ++serial)
+    {
+        const live_parameter_event_t event = make_event(serial);
+        assert(live_parameter_event_submit(&event));
+        assert(live_parameter_event_pop(&out));
+        assert(out.ingress_serial == serial);
+    }
+}
+
 int main(void)
 {
     assert(sizeof(live_parameter_audio_event_t) == 32U);
@@ -38,6 +104,9 @@ int main(void)
     assert((event.flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U);
     assert(((event.flags & LIVE_PARAMETER_EVENT_FLAG_ENCODER_MASK)
             >> LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT) == 2U);
+
+    test_queue_wrap_stress();
+    test_queue_saturation_and_reuse();
 
     return 0;
 }

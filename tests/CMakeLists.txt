@@ -62,9 +62,15 @@ endif()
 
 add_executable(live_parameter_event_test
     live_parameter_event_test.c
+    ../Src/Core/live_parameter_event.c
 )
+target_include_directories(live_parameter_event_test PRIVATE stubs)
 target_include_directories(live_parameter_event_test PRIVATE ../Inc)
 target_include_directories(live_parameter_event_test PRIVATE ../Inc/Param)
+target_include_directories(live_parameter_event_test PRIVATE ../Drivers/CMSIS/Include)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(live_parameter_event_test PRIVATE --specs=nosys.specs)
+endif()
 if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME live_parameter_event COMMAND live_parameter_event_test)
 endif()
