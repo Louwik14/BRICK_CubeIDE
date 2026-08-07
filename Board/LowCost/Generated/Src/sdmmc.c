@@ -50,13 +50,10 @@ void MX_SDMMC1_SD_Init(void)
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
     sd_init_diag_hal_result(g_sd_init_diag.stage, HAL_ERROR, &hsd1);
-    /* An absent SD card is a valid boot configuration. FatFs/BSP will retry
-       initialization on demand when an SD-backed feature is requested. */
+    sd_init_diag_stage(SD_INIT_DIAG_STAGE_ERROR_HANDLER, &hsd1);
+    Error_Handler();
   }
-  else
-  {
-    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, HAL_OK, &hsd1);
-  }
+  sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, HAL_OK, &hsd1);
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
   /* USER CODE END SDMMC1_Init 2 */

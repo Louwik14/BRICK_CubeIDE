@@ -46,8 +46,7 @@ void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockDiv = 4;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    /* An absent SD card is a valid boot configuration. FatFs/BSP will retry
-       initialization on demand when an SD-backed feature is requested. */
+    Error_Handler();
   }
   /* USER CODE BEGIN SDMMC1_Init 2 */
 

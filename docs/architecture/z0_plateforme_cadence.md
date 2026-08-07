@@ -504,7 +504,7 @@ Z0 appelle principalement:
 
 ## Addendum 2026-07-23 - SDMMC1 low-cost
 
-- Un echec de `HAL_SD_Init(&hsd1)` pendant `MX_SDMMC1_SD_Init()` est non bloquant sur les deux variantes: l'absence de carte est un etat de boot valide. Les acces FatFs/SD echouent proprement et `BSP_SD_Init()` conserve l'initialisation a la demande, ce qui permet une insertion ulterieure sans ajouter de mecanisme hot-plug.
+- La variante low-cost bloque de nouveau dans `Error_Handler()` si `HAL_SD_Init(&hsd1)` echoue pendant `MX_SDMMC1_SD_Init()`; aucun echec SD n'est masque au boot.
 - Le pinout SDMMC1 low-cost attendu est `PC8=D0`, `PC9=D1`, `PC10=D2`, `PC11=D3`, `PC12=CK`, `PD2=CMD`, sans Card Detect utilisable; `BSP_SD_IsDetected()` considere donc la carte presente.
 - CMD et D0..D3 sont configures en AF12 avec pull-up interne; CK reste AF12 sans pull-up. La vitesse GPIO reste `GPIO_SPEED_FREQ_VERY_HIGH`.
 - L'identification HAL demarre en bus 1 bit et a 400 kHz derive de l'horloge SDMMC; apres identification, la configuration low-cost demande le bus 4 bits et `ClockDiv=5` sur SDMMCCLK 240 MHz, soit 24 MHz cible en transfert.
