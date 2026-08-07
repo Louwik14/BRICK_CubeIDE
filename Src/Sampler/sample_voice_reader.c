@@ -574,6 +574,29 @@ void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)
     }
 }
 
+void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos)
+{
+    if ((reader == 0) || (reader->active == 0U))
+    {
+        return;
+    }
+
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    reader->frame_pos = frame_pos;
+    reader->position = (float)frame_pos;
+    if ((state->audio_cursor.current_acquired != 0U)
+        && (frame_pos >= state->audio_cursor.current_start_frame)
+        && (frame_pos < (state->audio_cursor.current_start_frame
+                         + state->audio_cursor.current_frame_count)))
+    {
+        state->audio_cursor.current_offset_frames = frame_pos - state->audio_cursor.current_start_frame;
+    }
+    else if (state->audio_cursor.current_acquired != 0U)
+    {
+        sample_voice_reader_release_audio_cursor(state);
+    }
+}
+
 void sample_voice_reader_stop(sample_voice_reader_t *reader)
 {
     if (reader == 0)
@@ -592,13 +615,56 @@ uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
                                         uint32_t max_frames,
                                         sample_cache_block_t *out_block)
 {
-    if ((reader == 0) || (out_block == 0) || (reader->active == 0U)
-        || (reader->cache_voice_valid == 0U))
+    if (out_block == 0)
     {
         return 0U;
     }
 
-    return sample_cache_begin_read_block(reader->cache_voice_id, max_frames, out_block);
+    memset(out_block, 0, sizeof(*out_block));
+    out_block->format = SAMPLE_AUDIO_FORMAT_INVALID;
+    out_block->status = SAMPLE_CACHE_BLOCK_NOT_READY;
+    if ((reader == 0) || (reader->active == 0U) || (max_frames == 0U))
+    {
+        return 0U;
+    }
+
+    sample_audio_segment_t segment;
+    if (sample_voice_reader_begin_segment(reader, max_frames, &segment) == 0U)
+    {
+        return 0U;
+    }
+
+    out_block->l = segment.l;
+    out_block->r = segment.r;
+    out_block->frames = segment.frames;
+    out_block->frame_stride = segment.frame_stride;
+    out_block->frame_step = ((segment.kernel_type == SAMPLE_KERNEL_REV_1X)
+                             || (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR))
+                                ? -(int32_t)segment.frame_stride
+                                : (int32_t)segment.frame_stride;
+    out_block->format = segment.format;
+    out_block->frames_per_page = segment.frames_per_page;
+    out_block->is_mono = segment.is_mono;
+    switch (segment.status)
+    {
+        case SAMPLE_AUDIO_SEGMENT_OK:
+            out_block->status = SAMPLE_CACHE_BLOCK_OK;
+            break;
+
+        case SAMPLE_AUDIO_SEGMENT_DONE:
+            out_block->status = SAMPLE_CACHE_BLOCK_DONE;
+            break;
+
+        case SAMPLE_AUDIO_SEGMENT_UNDERRUN:
+            out_block->status = SAMPLE_CACHE_BLOCK_UNDERRUN;
+            break;
+
+        case SAMPLE_AUDIO_SEGMENT_NOT_READY:
+        default:
+            out_block->status = SAMPLE_CACHE_BLOCK_NOT_READY;
+            break;
+    }
+    return 1U;
 }
 
 void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
@@ -609,12 +675,7 @@ void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
         return;
     }
 
-    if (reader->cache_voice_valid != 0U)
-    {
-        sample_cache_commit_read_block(reader->cache_voice_id, consumed_frames);
-    }
-    reader->frame_pos += consumed_frames;
-    reader->position = (float)reader->frame_pos;
+    sample_voice_reader_commit_segment(reader, consumed_frames);
 }
 
 uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
@@ -1905,144 +1966,4 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
         *out_last = last;
     }
     return 1U;
-}
-
-uint32_t sample_voice_reader_render_pitch_forward_mono(sample_voice_reader_t *reader,
-                                                       uint32_t region_start,
-                                                       uint32_t region_end,
-                                                       uint8_t *io_reverse,
-                                                       uint8_t loop_mode,
-                                                       float gain,
-                                                       const float *fade_gain,
-                                                       uint32_t fade_count,
-                                                       float *out_mono,
-                                                       uint32_t frames,
-                                                       uint8_t *out_underrun,
-                                                       float *out_last)
-{
-    if (out_underrun != 0)
-    {
-        *out_underrun = 0U;
-    }
-    if ((reader == 0) || (reader->active == 0U) || (out_mono == 0) || (frames == 0U)
-        || (reader->format != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO))
-    {
-        return 0U;
-    }
-
-    uint32_t produced = 0U;
-    const float loop_start = (float)region_start;
-    const float loop_end = (float)region_end;
-    const float loop_length = (float)(region_end - region_start);
-    uint8_t reverse = ((io_reverse != 0) && (*io_reverse != 0U)) ? 1U : 0U;
-    float last = 0.0f;
-
-    while (produced < frames)
-    {
-        sample_voice_reader_normalize_position(&reader->position,
-                                               &reverse,
-                                               loop_start,
-                                               loop_end,
-                                               loop_length,
-                                               loop_mode);
-        if ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (reverse == 0U)
-             && (reader->position >= (float)region_end))
-            || (((loop_mode == 0U) || (loop_length <= 0.0f)) && (reverse != 0U)
-                && (reader->position < (float)region_start)))
-        {
-            break;
-        }
-
-        const uint32_t base_frame = (uint32_t)reader->position;
-        sample_cache_span_t span;
-        if (sample_cache_try_acquire_span(reader->sample_id, base_frame, frames - produced, &span) == 0U)
-        {
-            if (out_underrun != 0)
-            {
-                *out_underrun = 1U;
-            }
-            break;
-        }
-        if (span.is_mono == 0U)
-        {
-            sample_cache_release_span(reader->sample_id, &span);
-            break;
-        }
-
-        const uint32_t span_end = span.start_frame + span.frames;
-        uint32_t segment_frames = 0U;
-        float scan_position = reader->position;
-        uint8_t scan_reverse = reverse;
-        while ((produced + segment_frames) < frames)
-        {
-            const uint32_t scan_base_frame = (uint32_t)scan_position;
-            if ((scan_base_frame < span.start_frame) || (scan_base_frame >= span_end))
-            {
-                break;
-            }
-            segment_frames++;
-            const float raw_next_position =
-                scan_position + ((scan_reverse == 0U) ? reader->step : (-reader->step));
-            const uint8_t previous_reverse = scan_reverse;
-            scan_position = raw_next_position;
-            sample_voice_reader_normalize_position(&scan_position,
-                                                   &scan_reverse,
-                                                   loop_start,
-                                                   loop_end,
-                                                   loop_length,
-                                                   loop_mode);
-            if ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (scan_reverse == 0U)
-                 && (scan_position >= (float)region_end))
-                || (((loop_mode == 0U) || (loop_length <= 0.0f)) && (scan_reverse != 0U)
-                    && (scan_position < (float)region_start))
-                || (scan_reverse != previous_reverse) || (scan_position != raw_next_position))
-            {
-                break;
-            }
-            if ((((uint32_t)scan_position) < span.start_frame)
-                || (((uint32_t)scan_position) >= span_end))
-            {
-                break;
-            }
-        }
-
-        float position = reader->position;
-        uint8_t segment_reverse = reverse;
-        for (uint32_t i = 0U; i < segment_frames; ++i)
-        {
-            const uint32_t source_offset = ((uint32_t)position - span.start_frame) * span.frame_stride;
-            const float fade = ((fade_gain != 0) && ((produced + i) < fade_count))
-                                   ? fade_gain[produced + i]
-                                   : 1.0f;
-            last = span.l[source_offset] * gain * fade;
-            out_mono[produced + i] += last;
-            position += (segment_reverse == 0U) ? reader->step : (-reader->step);
-            sample_voice_reader_normalize_position(&position,
-                                                   &segment_reverse,
-                                                   loop_start,
-                                                   loop_end,
-                                                   loop_length,
-                                                   loop_mode);
-        }
-
-        sample_cache_release_span(reader->sample_id, &span);
-        reader->position = position;
-        reverse = segment_reverse;
-        reader->frame_pos = (uint32_t)reader->position;
-        if (reader->cache_voice_valid != 0U)
-        {
-            sample_cache_update_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
-        }
-        produced += segment_frames;
-    }
-
-    if (io_reverse != 0)
-    {
-        *io_reverse = reverse;
-    }
-    if ((produced != 0U) && (out_last != 0))
-    {
-        *out_last = last;
-    }
-    return produced;
 }

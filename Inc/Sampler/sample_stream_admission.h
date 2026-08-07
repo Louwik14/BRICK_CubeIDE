@@ -2,13 +2,15 @@
 
 #include <stdint.h>
 
-#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_audio_key.h"
+#include "Sampler/sample_stream_limits.h"
+#include "Sampler/sample_stream_snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SAMPLE_STREAM_ADMISSION_MAX_VOICES (8U)
+#define SAMPLE_STREAM_ADMISSION_MAX_VOICES SAMPLE_STREAM_TARGET_MAX_VOICES
 
 typedef enum
 {
@@ -33,11 +35,11 @@ typedef struct
 {
     sample_audio_key_t key;
     uint32_t step_q16;
-    uint32_t owner_generation;
+    uint32_t voice_generation;
     uint32_t horizon_frames;
     uint16_t block_align;
-    uint8_t owner_kind;
-    uint8_t owner_id;
+    uint8_t source;
+    uint8_t voice_id;
 } sample_stream_admission_demand_t;
 
 typedef struct
@@ -54,9 +56,12 @@ typedef struct
 void sample_stream_admission_init(const sample_stream_admission_config_t *config);
 sample_stream_admission_result_t sample_stream_admission_try_reserve(
     const sample_stream_admission_demand_t *demand);
-void sample_stream_admission_release_owner(uint8_t owner_kind,
-                                           uint8_t owner_id,
-                                           uint32_t owner_generation);
+sample_stream_admission_result_t sample_stream_admission_sync_snapshot(
+    sample_stream_snapshot_source_t source,
+    uint8_t voice_id,
+    const sample_stream_snapshot_t *snapshot);
+void sample_stream_admission_release_voice(sample_stream_snapshot_source_t source,
+                                           uint8_t voice_id);
 void sample_stream_admission_get_stats(sample_stream_admission_stats_t *out_stats);
 
 #ifdef __cplusplus

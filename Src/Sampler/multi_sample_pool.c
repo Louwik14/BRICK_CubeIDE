@@ -4,6 +4,7 @@
 
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
@@ -310,7 +311,6 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
             sample_stream_manager_release_key(key);
             sample_page_cache_clear_key(key);
         }
-        sd_access_gate_set_streaming_critical(sample_page_cache_has_window_locks());
     }
 
     if (sample_end == g_multi_sample_count)

@@ -48,6 +48,59 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME mod_matrix_ramp COMMAND mod_matrix_ramp_test)
 endif()
 
+add_executable(sample_stream_sequence_test
+    sample_stream_sequence_test.c
+    ../Src/Sampler/sample_stream_sequence.c
+)
+target_include_directories(sample_stream_sequence_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(sample_stream_sequence_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME sample_stream_sequence COMMAND sample_stream_sequence_test)
+endif()
+
+add_executable(sample_stream_snapshot_test
+    sample_stream_snapshot_test.c
+    sample_stream_snapshot_admission_stub.c
+    ../Src/Sampler/sample_stream_snapshot.c
+)
+target_include_directories(sample_stream_snapshot_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(sample_stream_snapshot_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME sample_stream_snapshot COMMAND sample_stream_snapshot_test)
+endif()
+
+add_executable(sample_stream_needs_test
+    sample_stream_needs_test.c
+    sample_stream_snapshot_admission_stub.c
+    sample_stream_event_trace_stub.c
+    ../Src/Sampler/sample_stream_needs.c
+    ../Src/Sampler/sample_stream_sequence.c
+    ../Src/Sampler/sample_stream_snapshot.c
+)
+target_include_directories(sample_stream_needs_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(sample_stream_needs_test PRIVATE --specs=nosys.specs)
+endif()
+
+add_executable(sample_stream_scheduler_test
+    sample_stream_scheduler_test.c
+    ../Src/Sampler/sample_stream_scheduler.c
+)
+target_include_directories(sample_stream_scheduler_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(sample_stream_scheduler_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME sample_stream_scheduler COMMAND sample_stream_scheduler_test)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME sample_stream_needs COMMAND sample_stream_needs_test)
+endif()
+
 add_executable(note_fx_state_restore_test
     note_fx_state_restore_test.c
     ../Src/NoteFx/note_fx_state.c

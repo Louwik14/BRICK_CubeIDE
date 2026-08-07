@@ -1,41 +1,17 @@
-# Streamer audio-time contract
+# Contrat de temps audio du streamer
 
-## Clock ownership
+Le temps du streamer est un compteur monotone 64 bits de frames de sortie. L'IRQ
+audio en est l'unique écrivain et ne fait que l'avancer puis réveiller le tasklet.
+Les lecteurs main-context utilisent une séquence anti-tearing. Le transport ou
+le séquenceur ne peuvent ni reculer ni remettre à zéro cette horloge.
 
-The streamer's scheduling time is a monotonic 64-bit count of rendered audio
-frames. The audio IRQ is its only writer. Main-context readers use a sequence
-counter, so a 64-bit snapshot cannot tear on Cortex-M7. The IRQ performs no
-scheduling, file access or decoding work.
+Chaque besoin de voix porte une deadline absolue de consommation. La distance
+source est convertie en frames de sortie avec le pas Q16 avant d'être ajoutée au
+temps courant. Chaque remplacement de snapshot recalcule l'horizon borné de la
+voix. Les pages physiques ne fusionnent ni ne possèdent ces deadlines, et le
+scheduler choisit la voix la moins avancée plutôt qu'une file globale par date.
 
-This clock is deliberately independent from transport state: stopping or
-rebasing the sequencer cannot move streamer time backwards. It is the M7-owned
-timebase that a future M7 to M4 request queue will carry.
-
-## Deadline contract
-
-A page request records:
-
-- `created_audio_frame`;
-- `consume_deadline_audio_frame`;
-- DWT timestamps used only for profiling.
-
-Source distance is converted once to output frames with the Q16 playback step,
-then added to the current audio frame. An existing request may only tighten its
-deadline when another owner of the same physical page needs it earlier. A
-refresh can never postpone it. Selection compares stored absolute deadlines;
-relative frame distances no longer age implicitly in the pending table.
-
-## Inter-core ABI seed
-
-`sample_stream_request_contract_t` is a pointer-free, fixed-width, 40-byte POD.
-Its layout is protected by static assertions. It is not yet the active request
-queue; it establishes the message contract for the later producer/scheduler
-separation and eventual shared-memory M7 to M4 transport.
-
-## Trace timestamps
-
-The Release trace now carries absolute audio-frame timestamps for creation,
-deadline, selection, transition to in-flight work and publication as ready.
-Cycle timestamps remain available for physical latency measurements. Deadline
-lateness is decided from audio frames rather than from a mutable projected DWT
-deadline.
+La commande `sample_stream_io_command_t` et le token de chargement sont
+transportables et sans pointeur. La trace Release est un ring borné avec séquence,
+frame audio, cycle DWT, source/voix/génération et identité clé/page. Les événements
+causaux stables relient sélection, chargement, publication et miss de consommation.

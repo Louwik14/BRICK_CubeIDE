@@ -52,7 +52,7 @@ typedef struct
     uint32_t max_read_bytes;
     uint32_t decode_cycles;
     uint32_t service_passes;
-    uint32_t legacy_rescans_avoided;
+    uint32_t saved_page_checks;
 } multi_sample_load_diag_t;
 
 multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,

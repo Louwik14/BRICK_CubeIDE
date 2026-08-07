@@ -66,44 +66,6 @@ typedef struct
 
 typedef struct
 {
-    uint32_t page_index;
-    uint32_t slot_index;
-    uint32_t generation;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
-    uint32_t frames_per_page;
-    uint32_t registration_epoch;
-    uint8_t valid;
-    uint8_t acquired;
-} sample_stream_page_handle_t;
-
-typedef struct
-{
-    const float *base;
-    uint32_t start_frame;
-    uint32_t frame_count;
-    uint32_t offset_frames;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
-    uint32_t frames_per_page;
-    uint32_t registration_epoch;
-    uint8_t valid;
-} sample_stream_span_t;
-
-typedef struct
-{
-    uint16_t sample_id;
-    uint32_t frame_pos;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
-    uint32_t frames_per_page;
-    sample_stream_page_handle_t current_page;
-    sample_stream_span_t current_span;
-    uint8_t valid;
-} sample_stream_cursor_t;
-
-typedef struct
-{
     uint8_t voice_id;
     uint16_t sample_id;
     uint32_t frame_pos;
@@ -112,7 +74,6 @@ typedef struct
     uint8_t active;
     uint8_t stop_on_underrun;
     uint8_t stream_release_pending;
-    sample_stream_cursor_t cursor;
 } sample_cache_voice_t;
 
 typedef enum
@@ -129,6 +90,7 @@ typedef struct
     const float *r;
     uint32_t frames;
     uint32_t frame_stride;
+    int32_t frame_step;
     sample_audio_format_t format;
     uint32_t frames_per_page;
     uint8_t is_mono;

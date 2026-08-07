@@ -93,6 +93,7 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            uint8_t cache_voice_id);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
+void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos);
 void sample_voice_reader_stop(sample_voice_reader_t *reader);
 uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
                                         uint32_t max_frames,
@@ -198,18 +199,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint8_t *out_underrun,
                                                   float *out_last_l,
                                                   float *out_last_r);
-uint32_t sample_voice_reader_render_pitch_forward_mono(sample_voice_reader_t *reader,
-                                                       uint32_t region_start,
-                                                       uint32_t region_end,
-                                                       uint8_t *io_reverse,
-                                                       uint8_t loop_mode,
-                                                       float gain,
-                                                       const float *fade_gain,
-                                                       uint32_t fade_count,
-                                                       float *out_mono,
-                                                       uint32_t frames,
-                                                       uint8_t *out_underrun,
-                                                       float *out_last);
 
 #ifdef __cplusplus
 }

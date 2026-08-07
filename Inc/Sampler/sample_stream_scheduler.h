@@ -2,34 +2,43 @@
 
 #include <stdint.h>
 
-#include "Sampler/sample_stream_request_queue.h"
+#include "Sampler/sample_audio_key.h"
+#include "Sampler/sample_stream_arch_contract.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SAMPLE_STREAM_SCHEDULER_DEFAULT_MAX_WAIT_FRAMES (24000ULL)
+#define SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES (24U)
 
+/* One candidate is the first non-ready need of one voice. */
 typedef struct
 {
-    sample_stream_audio_frame_t max_wait_frames;
-} sample_stream_scheduler_config_t;
-
-typedef struct
-{
-    uint32_t entry_index;
+    sample_audio_key_t key;
+    uint32_t page_index;
+    uint32_t registration_epoch;
+    uint32_t voice_generation;
     sample_stream_audio_frame_t consume_deadline_audio_frame;
-    sample_stream_audio_frame_t dispatch_deadline_audio_frame;
-    sample_stream_audio_frame_t waited_frames;
-    uint8_t starvation_guard_applied;
-    uint8_t reserved[3];
+    uint8_t source;
+    uint8_t voice_id;
+    uint8_t advance;
+    uint8_t round_robin_slot;
+    uint8_t active;
+} sample_stream_scheduler_candidate_t;
+
+typedef struct
+{
+    uint8_t candidate_index;
+    uint8_t advance;
+    uint8_t round_robin_slot;
+    uint8_t reserved;
+    sample_stream_audio_frame_t consume_deadline_audio_frame;
 } sample_stream_scheduler_decision_t;
 
-void sample_stream_scheduler_init(const sample_stream_scheduler_config_t *config);
+void sample_stream_scheduler_init(void);
 uint8_t sample_stream_scheduler_pick(
-    const sample_stream_request_entry_t *entries,
-    uint32_t entry_count,
-    sample_stream_audio_frame_t now_audio_frame,
+    const sample_stream_scheduler_candidate_t *candidates,
+    uint32_t candidate_count,
     sample_stream_scheduler_decision_t *out_decision);
 
 #ifdef __cplusplus

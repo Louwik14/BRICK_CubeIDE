@@ -1,28 +1,21 @@
-# Cadence du service streamer monocœur
+# Cadence du service streamer H743
 
-Le streamer possède désormais une voie de service prioritaire explicite,
-`brick6_stream_service_task`, distincte des travaux SD de fond. Chaque demi-bloc
-audio publie uniquement un réveil monotone depuis l'IRQ. Aucun accès FatFs,
-aucune sélection et aucun décodage ne sont exécutés dans cette IRQ.
+L'IRQ de demi-bloc audio publie uniquement un réveil monotone. Le tasklet
+`brick6_stream_service_task` centralise la cadence stockage et consomme le
+registre borné des voix. Aucun FatFs, décodage, scan de cache ou travail lourd
+n'est exécuté dans l'IRQ audio.
 
-Sur le M7 monocœur, la voie prioritaire est interrogée avant les clients SD de
-fond et une seconde fois avant le traitement UI. Un réveil survenu pendant une
-lecture synchrone n'est pas perdu : le service acquitte la séquence capturée à
-son entrée, ce qui force un nouveau passage au checkpoint suivant. Tant qu'un
-backlog subsiste, le service reste éligible même sans nouveau réveil audio.
+Le service H743 traite une commande bornée à la fois, avec un budget de 32 Kio,
+avant les clients SD de fond puis avant l'UI. Un réveil reçu pendant une lecture
+synchrone reste visible au checkpoint suivant. Le gate `streaming_critical` est
+piloté par le tasklet à partir des besoins non READY proches ; le bulk Multi
+obtient une exclusivité explicite et utilise des lots bornés à 64 Kio.
 
-Le contrat de cadence cible est de 256 frames audio. Les compteurs exposent le
-nombre de réveils, les passages, les refus liés à l'exclusivité bulk, le délai
-maximal en frames audio et les dépassements de cadence avec backlog. Ces mesures
-permettent de vérifier sur matériel la borne réellement obtenue par le chemin
-coopératif.
+BENCH conserve les volumes, latences, appels FatFs, ouvertures, seeks, décodage
+et backlog. La trace causale stable utilise `NEED_ADD`, `NEED_DROP`, `SELECT`,
+`LOAD_BEGIN`, `LOAD_END`, `READY` et `CONSUME_MISS`. Les diagnostics obsolètes
+de l'ancien ordonnanceur sont absents.
 
-Le bulk-loader Multi conserve son exclusivité et suspend cette voie puisque son
-contrat impose un transport arrêté et aucune voix streamée active. Les autres
-clients SD restent derrière le streamer grâce au gate `streaming_critical`.
-
-La frontière est conçue pour être déplacée ultérieurement : le M7 publiera le
-réveil et les demandes, tandis que le M4 exécutera l'ordonnanceur I/O. Cette passe
-reste synchrone et n'introduit ni PendSV, ni FatFs en interruption, ni DMA SD
-asynchrone. La décision DMA demeure conditionnée aux mesures de l'architecture
-synchrone finale.
+La cible de service reste 256 frames de sortie. Sa marge réelle, le read-ahead,
+les budgets et les seuils d'admission doivent être calibrés sur H743 avec SD
+réaliste, Classic/Multi simultanés, loop forward, pages partagées et bulk Multi.

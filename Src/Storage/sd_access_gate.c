@@ -12,10 +12,8 @@ static volatile uint8_t g_sd_access_streaming_critical;
 static volatile uint8_t g_sd_access_bulk_exclusive;
 static volatile uint32_t g_sd_access_owner_acquire_tick;
 static volatile uint32_t g_sd_access_max_hold_ticks;
-#if BRICK6_STREAM_AUDIT
 static volatile uint32_t g_sd_access_owner_acquire_cycle;
 static volatile uint32_t g_sd_access_client_cycles[SD_ACCESS_CLIENT_MAX + 1U];
-#endif
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 #if BRICK_TEST_BUILD
@@ -35,14 +33,10 @@ void sd_access_gate_init(void)
     {
         g_sd_access_client_count[i] = 0U;
         g_sd_access_acquire_fail_count[i] = 0U;
-#if BRICK6_STREAM_AUDIT
         g_sd_access_client_cycles[i] = 0U;
-#endif
     }
     g_sd_fs_mounted = 0U;
-#if BRICK6_STREAM_AUDIT
     g_sd_access_owner_acquire_cycle = 0U;
-#endif
 #if BRICK_TEST_BUILD
     g_sd_access_diagnostic_read_only = 0U;
 #endif
@@ -121,9 +115,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     {
         g_sd_access_owner = (uint8_t)client;
         g_sd_access_owner_acquire_tick = HAL_GetTick();
-#if BRICK6_STREAM_AUDIT
         g_sd_access_owner_acquire_cycle = DWT->CYCCNT;
-#endif
     }
     else if (g_sd_access_owner != (uint8_t)client)
     {
@@ -239,13 +231,11 @@ void sd_access_gate_release(sd_access_client_t client)
 
     if (g_sd_access_total_count == 0U)
     {
-#if BRICK6_STREAM_AUDIT
         if (g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
         {
             g_sd_access_client_cycles[g_sd_access_owner] +=
                 DWT->CYCCNT - g_sd_access_owner_acquire_cycle;
         }
-#endif
         const uint32_t hold_ticks = HAL_GetTick() - g_sd_access_owner_acquire_tick;
         if ((g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
             && (hold_ticks > g_sd_access_max_hold_ticks))
@@ -259,8 +249,7 @@ void sd_access_gate_release(sd_access_client_t client)
     __enable_irq();
 }
 
-#if BRICK6_STREAM_AUDIT
-uint32_t sd_access_gate_audit_client_cycles(sd_access_client_t client)
+uint32_t sd_access_gate_client_cycles(sd_access_client_t client)
 {
     uint32_t cycles = 0U;
     if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_MAX))
@@ -272,7 +261,6 @@ uint32_t sd_access_gate_audit_client_cycles(sd_access_client_t client)
     __enable_irq();
     return cycles;
 }
-#endif
 
 void sd_access_gate_set_streaming_critical(uint8_t active)
 {

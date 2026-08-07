@@ -14,7 +14,7 @@ Blockers principaux:
 
 - l'IRQ audio appelle encore des APIs qui mutent des etats globaux partages: scheduler, engines, mixer, sampler voices, Looper, LFO et parfois sorties MIDI;
 - `track_runtime_refresh_if_dirty()` est appele depuis l'IRQ audio, meme s'il refuse le refresh en IRQ; le dirty runtime reste donc une fuite directe du domaine controle vers le domaine audio;
-- le sampler/page-cache a de bons concepts de generation, refs, window locks et page READY, mais les metadata/refcounts ne sont pas protegees pour deux caches CPU et deux coeurs;
+- le sampler/page-cache a des generations, refs et une publication `READY`; la migration bicoueur devra encore formaliser les metadata/refcounts et la maintenance de cache;
 - les services SD/writer/preview sont hors IRQ, mais leur etat est encore partage en RAM avec le rendu audio sans protocole de publication versionnee.
 
 Verdict: preparation moyenne-haute sur les seams, faible sur les garanties de concurrence bicoueur. La prochaine etape ne doit pas etre un projet CM4, mais une phase H743 mono-core qui remplace les acces croises directs par des contrats locaux simules.
@@ -184,9 +184,9 @@ Ambiguites a eliminer:
 | Events audio sample-accurate | M4 ou M7 prepare | M7 apply | par bloc/horizon court | note on/off, p-lock apply/release, program, boundary, metro, offset intra-bloc ou sample absolu | si plein: drop selon priorite diagnostique; notes off/panic prioritaires |
 | Commandes transport | M4 | M7 | faible | start/stop/continue, tempo, clock source, count-in, sample anchor si connu | start/stop atomiques; si plein, stop/panic prioritaire |
 | MIDI out audio-aligne | M7 | M4 | par event | status/data/channel, sample_time/order | M4 peut etre en retard; horodatage USB best effort, ne bloque jamais M7 |
-| Page request | M7 | M4 | selon voices | `sample_audio_key`, page_index, priority, owner/generation, deadline | si plein: M7 garde silence/underrun local; requetes coalescables |
-| Page publication | M4 | M7 | selon streaming | slot/page, key, generation, frame_count, data address immutable, cache clean marker | publication double phase `LOADING -> READY`; M7 ignore generation incoherente |
-| Page release/telemetry | M7 | M4 | selon voice windows | owner/generation/page release, low-water, underruns | si plein: utiliser compteur saturant; eviction conservatrice cote M4 |
+| Need snapshot | M7 | M4 | selon voices | key, page, voice/generation, registration epoch, audio deadline | registre borne; aucune page ni owner de scheduler ne traverse la frontiere |
+| Page command/completion | M7 | M4 puis M7 | selon streaming | token, key/page, slot, generation, epoch, result | commande pointer-free; publication `LOADING -> READY` validee cote M7 |
+| Page release/telemetry | M7 | M4 | selon cache | key/page, generation, low-water, underruns | compteurs bornes; reclamation physique cote cache |
 | Record ring | M7 | M4 | audio bloc | PCM24/stereo frames, client, generation, start/stop markers | si plein: compteur overrun + stop/refus; jamais blocage IRQ |
 | Telemetrie | M7 | M4 | 10-60 Hz | CPU max, underruns, queue high-water, audio revision, playhead snapshots | ecrasement autorise |
 | Notification | M4->M7/M7->M4 | autre coeur | evenementielle | SD busy, project load done, panic, recorder finalized | flags atomiques/versionnes; pas de RPC sync |

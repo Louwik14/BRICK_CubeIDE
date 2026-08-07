@@ -11,26 +11,32 @@
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx.h"
 
-#define BRICK6_STREAM_SERVICE_BYTE_BUDGET (32768U)
-#define BRICK6_STREAM_SERVICE_CADENCE_FRAMES (256U)
-
 static volatile uint32_t g_brick6_stream_audio_wake_sequence;
 static uint32_t g_brick6_stream_serviced_wake_sequence;
 static sample_stream_audio_frame_t g_brick6_stream_last_service_frame;
-#if BRICK6_STREAM_AUDIT
 static sample_stream_audio_frame_t g_brick6_stream_last_poll_frame;
-#endif
 static brick6_stream_service_task_stats_t g_brick6_stream_service_stats;
+
+static void brick6_stream_service_task_update_critical(void)
+{
+    const uint32_t critical =
+        (sample_stream_manager_has_critical_advance() != 0U) ? 1U : 0U;
+    if (critical != g_brick6_stream_service_stats.critical_active)
+    {
+        g_brick6_stream_service_stats.critical_transition_count++;
+    }
+    g_brick6_stream_service_stats.critical_active = critical;
+    sd_access_gate_set_streaming_critical((uint8_t)critical);
+}
 
 void brick6_stream_service_task_init(void)
 {
     g_brick6_stream_audio_wake_sequence = 0U;
     g_brick6_stream_serviced_wake_sequence = 0U;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
-#if BRICK6_STREAM_AUDIT
     g_brick6_stream_last_poll_frame = g_brick6_stream_last_service_frame;
-#endif
     memset(&g_brick6_stream_service_stats, 0, sizeof(g_brick6_stream_service_stats));
+    brick6_stream_service_task_update_critical();
 }
 
 void brick6_stream_service_task_notify_audio_irq(void)
@@ -43,6 +49,7 @@ void brick6_stream_service_task_poll(void)
 {
     __DMB();
     const uint32_t requested_sequence = g_brick6_stream_audio_wake_sequence;
+    brick6_stream_service_task_update_critical();
     const uint8_t pending = sample_stream_manager_has_pending_sd_work();
     if ((requested_sequence == g_brick6_stream_serviced_wake_sequence)
         && (pending == 0U))
@@ -51,12 +58,10 @@ void brick6_stream_service_task_poll(void)
     }
 
     const sample_stream_audio_frame_t now = sample_stream_time_now();
-#if BRICK6_STREAM_AUDIT
     const uint64_t poll_delay_64 = now - g_brick6_stream_last_poll_frame;
     const uint32_t poll_delay_frames = (poll_delay_64 > UINT32_MAX)
                                            ? UINT32_MAX : (uint32_t)poll_delay_64;
     g_brick6_stream_last_poll_frame = now;
-#endif
     const uint64_t delay_64 = now - g_brick6_stream_last_service_frame;
     const uint32_t delay_frames = (delay_64 > UINT32_MAX) ? UINT32_MAX : (uint32_t)delay_64;
     if (delay_frames > g_brick6_stream_service_stats.max_dispatch_delay_frames)
@@ -72,12 +77,10 @@ void brick6_stream_service_task_poll(void)
     if ((multi_sample_load_has_pending() != 0U)
         || (sd_access_gate_bulk_exclusive_active() != 0U))
     {
-#if BRICK6_STREAM_AUDIT
-        sample_stream_manager_audit_note_blocked_poll(
+        sample_stream_manager_note_blocked_poll(
             multi_sample_load_has_pending(),
             sd_access_gate_bulk_exclusive_active(),
             poll_delay_frames);
-#endif
         g_brick6_stream_service_stats.busy_poll_count++;
 #if BRICK6_STREAM_BENCH
         sample_stream_benchmark_note_blocked_poll();
@@ -87,6 +90,7 @@ void brick6_stream_service_task_poll(void)
 
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
+    brick6_stream_service_task_update_critical();
     g_brick6_stream_serviced_wake_sequence = requested_sequence;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
     g_brick6_stream_service_stats.audio_wake_sequence = requested_sequence;

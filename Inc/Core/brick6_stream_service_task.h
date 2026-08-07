@@ -6,6 +6,11 @@
 extern "C" {
 #endif
 
+#define BRICK6_STREAM_SERVICE_BYTE_BUDGET      (32768U)
+#define BRICK6_STREAM_SERVICE_CADENCE_FRAMES  (256U)
+#define BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES  (8192U)
+#define BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES (1024U)
+
 typedef struct
 {
     uint32_t audio_wake_sequence;
@@ -14,6 +19,8 @@ typedef struct
     uint32_t busy_poll_count;
     uint32_t max_dispatch_delay_frames;
     uint32_t cadence_miss_count;
+    uint32_t critical_active;
+    uint32_t critical_transition_count;
 } brick6_stream_service_task_stats_t;
 
 void brick6_stream_service_task_init(void);

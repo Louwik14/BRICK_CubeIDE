@@ -72,7 +72,7 @@ typedef struct
     uint32_t multi_no_instrument_assigned;
     uint32_t multi_invalid_instrument_id;
     uint32_t multi_instrument_not_ready;
-    uint32_t multi_prefetch_request_count;
+    uint32_t multi_need_update_count;
     uint32_t multi_stop_done;
     uint32_t multi_stop_underrun;
     uint32_t multi_stop_steal;

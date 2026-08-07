@@ -8,6 +8,7 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/memory_layout.h"
 #include "ff.h"
+#include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_IO_FILE_OPEN_COOKIE (0x5354524DU)
 #ifndef BRICK6_STREAM_READ_CHUNK_KIB
@@ -48,6 +49,33 @@ static FSIZE_t g_sample_stream_io_cache_offset;
 static uint32_t g_sample_stream_io_cache_bytes;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
+
+uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
+                                      const sample_page_load_token_t *token,
+                                      const sample_page_load_target_t *target,
+                                      const sample_page_stream_info_t *stream_info)
+{
+    if ((out_command == 0) || (token == 0) || (target == 0) || (stream_info == 0))
+    {
+        return 0U;
+    }
+    memset(out_command, 0, sizeof(*out_command));
+    out_command->token = *token;
+    out_command->target = (sample_stream_io_target_t){
+        .key = target->key,
+        .page_index = target->page_index,
+        .start_frame = target->start_frame,
+        .frame_count = target->frame_count,
+        .frames_per_page = target->frames_per_page,
+        .registration_epoch = target->registration_epoch,
+        .page_generation = target->page_generation,
+        .slot_index = target->slot_index,
+        .format = target->format,
+        .stride_floats = target->stride_floats,
+    };
+    out_command->stream_info = *stream_info;
+    return 1U;
+}
 
 static uint8_t sample_stream_io_chunk_valid(sample_stream_read_chunk_kib_t chunk_kib)
 {
@@ -286,7 +314,22 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
         return;
     }
     out_result->token = command->token;
-    const uint32_t source_bytes = command->target.frame_count
+    sample_page_load_target_t target;
+    if ((sample_page_cache_resolve_loading_target(&command->token, &target) == 0U)
+        || (sample_audio_key_equal(&target.key, &command->target.key) == 0U)
+        || (target.page_index != command->target.page_index)
+        || (target.start_frame != command->target.start_frame)
+        || (target.frame_count != command->target.frame_count)
+        || (target.frames_per_page != command->target.frames_per_page)
+        || (target.registration_epoch != command->target.registration_epoch)
+        || (target.page_generation != command->target.page_generation)
+        || (target.slot_index != command->target.slot_index)
+        || (target.format != command->target.format)
+        || (target.stride_floats != command->target.stride_floats))
+    {
+        return;
+    }
+    const uint32_t source_bytes = target.frame_count
                                   * command->stream_info.info.block_align;
     out_result->source_bytes = source_bytes;
     if ((source_bytes == 0U) || (source_bytes > SAMPLE_PAGE_BYTES))
@@ -301,7 +344,7 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
             == (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS))
     {
         out_result->load_result = sample_stream_backend_contiguous_read_page(
-            &command->stream_info, &command->target, g_sample_stream_io_read_scratch,
+            &command->stream_info, &target, g_sample_stream_io_read_scratch,
             sizeof(g_sample_stream_io_read_scratch), &source, &out_result->source_bytes);
         if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
         {
@@ -320,14 +363,12 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
             out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
             return;
         }
-#if BRICK6_STREAM_BENCH
         if (out_result->fatfs_ops != 0U)
         {
             out_result->file_opens = 1U;
         }
-#endif
         const FSIZE_t offset = (FSIZE_t)command->stream_info.data_offset
-                              + ((FSIZE_t)command->target.start_frame
+                              + ((FSIZE_t)target.start_frame
                                  * command->stream_info.info.block_align);
         uint32_t bytes_read = 0U;
         while (bytes_read < source_bytes)
@@ -354,18 +395,14 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
                 memcpy(&g_sample_stream_io_page_scratch[bytes_read],
                        &g_sample_stream_io_read_scratch[cache_position], available);
                 bytes_read += available;
-#if BRICK6_STREAM_BENCH
                 out_result->read_cache_hits++;
-#endif
                 continue;
             }
 
             if (reader->current_file_offset != cursor)
             {
                 out_result->fatfs_ops++;
-#if BRICK6_STREAM_BENCH
                 out_result->seeks++;
-#endif
                 if (f_lseek(&reader->file, cursor) != FR_OK)
                 {
                     out_result->fatfs_ops += sample_stream_io_close_reader(reader);
@@ -416,7 +453,9 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
 
     if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
     {
+        const uint32_t decode_begin = DWT->CYCCNT;
         out_result->load_result = sample_stream_decoder_decode_page(
-            &command->stream_info, &command->target, source, out_result->source_bytes);
+            &command->stream_info, &target, source, out_result->source_bytes);
+        out_result->decode_cycles = DWT->CYCCNT - decode_begin;
     }
 }

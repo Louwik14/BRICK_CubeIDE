@@ -11,5 +11,5 @@ uint8_t sample_stream_publish_result(const sample_stream_io_result_t *result)
         (result->load_result == SAMPLE_PAGE_LOAD_OK)
             ? SAMPLE_PAGE_FINISH_READY
             : SAMPLE_PAGE_FINISH_ERROR;
-    return sample_page_cache_finish_in_flight(&result->token, finish);
+    return sample_page_cache_finish_loading(&result->token, finish);
 }

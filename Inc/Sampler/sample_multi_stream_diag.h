@@ -14,7 +14,7 @@ typedef enum
     SAMPLE_MULTI_STREAM_DIAG_PAGE0_NOT_READY,
     SAMPLE_MULTI_STREAM_DIAG_READER_BIND,
     SAMPLE_MULTI_STREAM_DIAG_RESERVE_PAGE_REQUEST,
-    SAMPLE_MULTI_STREAM_DIAG_RESERVE_WINDOW_LOCK,
+    SAMPLE_MULTI_STREAM_DIAG_RESERVE_NEED_MISSING,
     SAMPLE_MULTI_STREAM_DIAG_QUEUE_PAGE_REQUEST,
     SAMPLE_MULTI_STREAM_DIAG_READER_BEGIN,
     SAMPLE_MULTI_STREAM_DIAG_SEGMENT_STATUS,
@@ -28,9 +28,7 @@ typedef struct
     uint16_t slot_index;
     uint16_t frame_count;
     uint16_t use_count;
-    uint16_t window_pin_count;
     uint8_t state;
-    uint8_t owner_lock_count;
 } sample_multi_stream_diag_page_t;
 
 typedef struct
@@ -46,12 +44,7 @@ typedef struct
     uint8_t voice_active;
     uint8_t reader_active;
     uint8_t source_kind;
-    uint8_t current_owner_kind;
-    uint8_t current_owner_id;
-    uint8_t loop_owner_kind;
-    uint8_t loop_owner_id;
-    uint32_t current_generation;
-    uint32_t loop_generation;
+    uint32_t voice_generation;
     uint32_t format;
     uint32_t position_frame;
     uint32_t current_page;
@@ -60,10 +53,7 @@ typedef struct
     uint32_t current_acquired_pages;
     uint32_t loop_expected_pages;
     uint32_t loop_acquired_pages;
-    uint32_t pending_global;
-    uint32_t pending_current_owner;
-    uint32_t pending_loop_owner;
-    uint32_t locks_used;
+    uint32_t active_needs;
     uint32_t readers_active;
     uint32_t pages_free;
     uint32_t pc;
@@ -97,12 +87,7 @@ void sample_multi_stream_diag_capture_failure(
     uint8_t voice_active,
     uint8_t reader_active,
     uint8_t source_kind,
-    uint8_t current_owner_kind,
-    uint8_t current_owner_id,
-    uint32_t current_generation,
-    uint8_t loop_owner_kind,
-    uint8_t loop_owner_id,
-    uint32_t loop_generation,
+    uint32_t voice_generation,
     sample_audio_format_t format,
     uint32_t position_frame,
     uint32_t current_frame,

@@ -30,7 +30,6 @@ typedef enum
 #define SAMPLE_AUDIO_FORMAT_MONO_WINDOW_PAGES       (3U)
 #define SAMPLE_AUDIO_FORMAT_STEREO_WINDOW_PAGES     (6U)
 #define SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES   SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES
-#define SAMPLE_AUDIO_FORMAT_STREAM_URGENT_FRAMES    (1024U)
 
 static inline uint8_t sample_audio_format_is_valid(sample_audio_format_t format)
 {
