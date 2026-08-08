@@ -211,20 +211,8 @@ void brick6_app_init(void)
  * Rôle:
  * - Boucle principale applicative.
  */
-void brick6_app_process(void)
+static void brick6_app_service_storage(void)
 {
-    engine_tasklet_poll();
-    brick6_stream_service_task_poll();
-#if BRICK6_STREAM_CALIBRATION
-    brick6_stream_calibration_process();
-    brick6_stream_service_task_poll();
-    return;
-#endif
-    /*
-     * Seq runtime core is serviced from superloop for both clock domains.
-     * TIM12 IRQ only advances INTERNAL time ticks.
-     */
-    seq_runtime_time_adapter_process();
     if (multi_sample_load_has_pending() != 0U)
     {
         multi_sample_service_load(0U);
@@ -258,6 +246,23 @@ void brick6_app_process(void)
             sd_preview_process();
         }
     }
+}
+
+void brick6_app_process(void)
+{
+    engine_tasklet_poll();
+    brick6_stream_service_task_poll();
+    /*
+     * Seq runtime core is serviced from superloop for both clock domains.
+     * TIM12 IRQ only advances INTERNAL time ticks.
+     */
+    seq_runtime_time_adapter_process();
+    brick6_app_service_storage();
+#if BRICK6_STREAM_CALIBRATION
+    brick6_stream_calibration_process();
+    brick6_stream_service_task_poll();
+    return;
+#endif
     pattern_live_service();
     brick6_master_control_process();
 
