@@ -26,6 +26,7 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Sampler/voice_manager.h"
+#include "Sampler/multi_pitch_trace.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
@@ -542,6 +543,20 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
+    const void *trace_scratch0 = tracks;
+    const void *trace_scratch1 = NULL;
+    const void *trace_scratch2 = NULL;
+    if ((tracks != NULL) && (track_count > 0U))
+    {
+        trace_scratch1 = tracks[0].L;
+        trace_scratch2 = tracks[0].R;
+    }
+    brick6_multi_pitch_trace_block_begin(frames,
+                                         trace_scratch0,
+                                         trace_scratch1,
+                                         trace_scratch2,
+                                         NULL);
+
     track_runtime_synth_usage_t synth_usage = { 0U };
     (void)track_runtime_refresh_if_dirty();
     track_runtime_get_cached_synth_usage(&synth_usage);
@@ -625,4 +640,5 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         }
     }
 
+    brick6_multi_pitch_trace_block_end();
 }

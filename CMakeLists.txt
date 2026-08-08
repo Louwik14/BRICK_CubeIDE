@@ -22,6 +22,7 @@ option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
 option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
+option(BRICK6_MULTI_PITCH_TRACE "Capture bounded Multi pitched voice trace for GDB" OFF)
 option(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN
        "Use Release code generation for the Debug Multi stream diagnostic build"
        OFF)
@@ -495,6 +496,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     STM32H743xx
     BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
     $<$<BOOL:${BRICK6_MULTI_STREAM_DIAG}>:BRICK6_MULTI_STREAM_DIAG>
+    $<$<BOOL:${BRICK6_MULTI_PITCH_TRACE}>:BRICK6_MULTI_PITCH_TRACE=1>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
