@@ -64,7 +64,7 @@ typedef enum
 #define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_MULTI_ID_BASE \
                                                + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
-/* Multi page-window reserve; Stream keeps its independent active limit of 16. */
+/* Multi page-window reserve; Stream admits at most 8 active voices. */
 #define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES
 
 /* Product page-cache budget: keep this margin outside Multi slot presocle pages. */

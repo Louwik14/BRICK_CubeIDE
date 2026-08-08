@@ -16,15 +16,13 @@
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
-#define SAMPLE_STREAM_SERVICE_MAX_PAGES \
-    (SAMPLE_STREAM_TARGET_MAX_VOICES * SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND)
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "stream manager hot scan range must fit in page-cache ids");
-_Static_assert(SAMPLE_STREAM_MAX_ACTIVE <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
+_Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
 #endif
 static uint32_t g_sample_stream_service_fatfs_ops;
@@ -264,93 +262,90 @@ static uint8_t sample_stream_manager_pick_next(
     }
 
     sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    for (uint32_t attempt = 0U; attempt < SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES; ++attempt)
+    uint32_t loadable_needs = 0U;
+    uint32_t loading_needs = 0U;
+    const uint32_t candidate_count = sample_stream_manager_collect_candidates(
+        candidates,
+        SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
+        &loadable_needs,
+        &loading_needs);
+    if (candidate_count == 0U)
     {
-        uint32_t loadable_needs = 0U;
-        uint32_t loading_needs = 0U;
-        const uint32_t candidate_count = sample_stream_manager_collect_candidates(
-            candidates,
-            SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
-            &loadable_needs,
-            &loading_needs);
-        if (candidate_count == 0U)
-        {
-            const uint8_t reason = (loadable_needs == 0U)
-                                       ? ((loading_needs != 0U)
-                                              ? BRICK6_STREAM_TRACE_REASON_ALL_LOADING
-                                              : BRICK6_STREAM_TRACE_REASON_ALL_READY)
-                                       : BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
-            (void)reason;
-            brick6_stream_underrun_trace_scheduler(
-                0, 0, 0U, loadable_needs, reason);
-            return 0U;
-        }
+        sample_stream_scheduler_decision_t empty_decision;
+        (void)sample_stream_scheduler_pick(0, 0U, &empty_decision);
+        const uint8_t reason = (loadable_needs == 0U)
+                                   ? ((loading_needs != 0U)
+                                          ? BRICK6_STREAM_TRACE_REASON_ALL_LOADING
+                                          : BRICK6_STREAM_TRACE_REASON_ALL_READY)
+                                   : BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
+        brick6_stream_underrun_trace_scheduler(
+            0, 0, 0U, loadable_needs, reason);
+        return 0U;
+    }
 
-        sample_stream_scheduler_decision_t decision;
-        if (sample_stream_scheduler_pick(candidates, candidate_count, &decision) == 0U)
+    sample_stream_scheduler_decision_t decision;
+    if (sample_stream_scheduler_pick(candidates, candidate_count, &decision) == 0U)
+    {
+        brick6_stream_underrun_trace_scheduler(
+            0, 0, candidate_count, loadable_needs,
+            BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE);
+        return 0U;
+    }
+    sample_stream_scheduler_candidate_t *const candidate =
+        &candidates[decision.candidate_index];
+    const sample_page_state_t state = sample_page_cache_get_page_state_key(
+        candidate->key, candidate->page_index);
+    uint8_t reserved_here = 0U;
+    if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
+    {
+        if (sample_page_cache_reserve_page_key_alloc(
+                candidate->key,
+                candidate->page_index,
+                SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
-            brick6_stream_underrun_trace_scheduler(
-                0, 0, candidate_count, loadable_needs,
-                BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE);
-            return 0U;
-        }
-        sample_stream_scheduler_candidate_t *const candidate =
-            &candidates[decision.candidate_index];
-        const sample_page_state_t state = sample_page_cache_get_page_state_key(
-            candidate->key, candidate->page_index);
-        uint8_t reserved_here = 0U;
-        if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
-        {
-            if (sample_page_cache_reserve_page_key_alloc(
-                    candidate->key,
-                    candidate->page_index,
-                    SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
-            {
-                brick6_stream_underrun_trace_scheduler(
-                    candidate, 0, candidate_count, loadable_needs,
-                    BRICK6_STREAM_TRACE_REASON_RESERVE_FAILED);
-                return 0U;
-            }
-            reserved_here = 1U;
-        }
-
-        sample_page_load_target_t target;
-        if (sample_page_cache_get_load_target_key(candidate->key,
-                                                  candidate->page_index,
-                                                  &target) == 0U)
-        {
-            if (reserved_here != 0U)
-            {
-                (void)sample_page_cache_cancel_reserved_page_key(
-                    candidate->key,
-                    candidate->page_index,
-                    SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
-            }
             brick6_stream_underrun_trace_scheduler(
                 candidate, 0, candidate_count, loadable_needs,
-                BRICK6_STREAM_TRACE_REASON_TARGET_FAILED);
+                BRICK6_STREAM_TRACE_REASON_RESERVE_FAILED);
             return 0U;
         }
-        if ((candidate->registration_epoch != 0U)
-            && (target.registration_epoch != candidate->registration_epoch))
+        reserved_here = 1U;
+    }
+
+    sample_page_load_target_t target;
+    if (sample_page_cache_get_load_target_key(candidate->key,
+                                              candidate->page_index,
+                                              &target) == 0U)
+    {
+        if (reserved_here != 0U)
         {
             (void)sample_page_cache_cancel_reserved_page_key(
                 candidate->key,
                 candidate->page_index,
                 SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
-            brick6_stream_underrun_trace_scheduler(
-                candidate, 0, candidate_count, loadable_needs,
-                BRICK6_STREAM_TRACE_REASON_EPOCH_MISMATCH);
-            return 0U;
         }
         brick6_stream_underrun_trace_scheduler(
-            candidate, &decision, candidate_count, loadable_needs,
-            BRICK6_STREAM_TRACE_REASON_NONE);
-        *out_candidate = *candidate;
-        *out_target = target;
-        return 1U;
+            candidate, 0, candidate_count, loadable_needs,
+            BRICK6_STREAM_TRACE_REASON_TARGET_FAILED);
+        return 0U;
     }
-    return 0U;
+    if ((candidate->registration_epoch != 0U)
+        && (target.registration_epoch != candidate->registration_epoch))
+    {
+        (void)sample_page_cache_cancel_reserved_page_key(
+            candidate->key,
+            candidate->page_index,
+            SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
+        brick6_stream_underrun_trace_scheduler(
+            candidate, 0, candidate_count, loadable_needs,
+            BRICK6_STREAM_TRACE_REASON_EPOCH_MISMATCH);
+        return 0U;
+    }
+    brick6_stream_underrun_trace_scheduler(
+        candidate, &decision, candidate_count, loadable_needs,
+        BRICK6_STREAM_TRACE_REASON_NONE);
+    *out_candidate = *candidate;
+    *out_target = target;
+    return 1U;
 }
 
 void sample_stream_manager_service(uint32_t byte_budget)
@@ -369,6 +364,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
     g_sample_stream_service_fatfs_ops = 0U;
     uint8_t service_exit_reason = BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
     sample_stream_manager_trace_voice_states();
+    sample_stream_scheduler_begin_round();
     const uint32_t service_sequence = sample_stream_event_trace_record(
         SAMPLE_STREAM_EVENT_SERVICE_BEGIN,
         (sample_audio_key_t){ 0U, 0U },
@@ -420,7 +416,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
 
         sample_page_load_token_t load_token;
-        uint32_t delivered_pages = 1U;
         uint32_t consumed = target.frame_count * stream_info.info.block_align;
         const sample_stream_audio_frame_t selected_frame = sample_stream_time_now();
         const uint64_t remaining_64 =
@@ -559,7 +554,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
             target.page_generation,
             io_result.read_bytes,
             0U);
-        pages_this_call += delivered_pages;
+        ++pages_this_call;
 
         if (consumed >= byte_budget)
         {
@@ -568,11 +563,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
         byte_budget -= consumed;
 
-        if (pages_this_call >= SAMPLE_STREAM_SERVICE_MAX_PAGES)
-        {
-            service_exit_reason = BRICK6_STREAM_TRACE_REASON_SERVICE_PAGE_LIMIT;
-            break;
-        }
     }
     brick6_stream_underrun_trace_manager_end(
         pages_this_call, g_sample_stream_service_fatfs_ops, service_exit_reason);

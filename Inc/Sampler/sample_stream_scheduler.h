@@ -36,6 +36,8 @@ typedef struct
 } sample_stream_scheduler_decision_t;
 
 void sample_stream_scheduler_init(void);
+void sample_stream_scheduler_begin_round(void);
+uint8_t sample_stream_scheduler_round_active(void);
 uint8_t sample_stream_scheduler_pick(
     const sample_stream_scheduler_candidate_t *candidates,
     uint32_t candidate_count,

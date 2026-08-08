@@ -10,7 +10,6 @@
 extern "C" {
 #endif
 
-#define SAMPLE_STREAM_MAX_ACTIVE (16U)
 #define SAMPLE_STREAM_STEP_Q16_ONE (65536U)
 
 /*

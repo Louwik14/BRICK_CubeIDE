@@ -12,12 +12,14 @@ actif tant qu'une page streamer reste chargeable ou LOADING ; il ne repose plus 
 seuil d'avance. Le bulk Multi obtient une exclusivité explicite et utilise des
 lots bornés à 64 Kio.
 
-Le curseur round-robin persiste entre les appels. Chaque opportunité reprend au
-slot suivant, même lorsqu'un budget octets coupe un tour. Le plafond de pages
-d'un appel vaut `SAMPLE_STREAM_TARGET_MAX_VOICES *
-SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND`. Il n'existe plus de limite historique
-en ticks ni en nombre d'opérations FatFs ; le budget octets, le nombre calibré
-de passes et l'I/O synchrone bornent le passage.
+Le curseur et l'état du tour round-robin persistent entre les appels. Chaque
+opportunité reprend au slot suivant, même lorsque le budget de tranche de 32 Kio
+rend la main à la superloop. Un tour comporte exactement
+`SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND` passages complets des slots admis ;
+une voix sans page chargeable est sautée pour le passage courant. Il n'existe
+plus de plafond global de pages par appel, de limite historique en ticks ni de
+limite d'opérations FatFs. Le budget octets borne seulement une tranche de
+service et ne tronque donc plus le tour logique.
 
 BENCH conserve les volumes, latences, appels FatFs, ouvertures, seeks, décodage
 et backlog. La trace causale stable utilise `NEED_ADD`, `NEED_DROP`, `SELECT`,

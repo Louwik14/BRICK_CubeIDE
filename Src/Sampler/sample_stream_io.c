@@ -5,6 +5,7 @@
 
 #include "Sampler/sample_stream_backend_contiguous.h"
 #include "Sampler/sample_stream_decoder.h"
+#include "Sampler/sample_stream_limits.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/memory_layout.h"
 #include "ff.h"
@@ -37,9 +38,9 @@ typedef struct
 } sample_stream_io_reader_t;
 
 SDRAM_STREAM_SERVICE static sample_stream_io_reader_t
-    g_sample_stream_io_readers[SAMPLE_STREAM_MAX_ACTIVE];
+    g_sample_stream_io_readers[SAMPLE_STREAM_IO_MAX_READERS];
 SDRAM_STREAM_SERVICE static char
-    g_sample_stream_io_paths[SAMPLE_STREAM_MAX_ACTIVE][SAMPLE_PAGE_CACHE_PATH_MAX];
+    g_sample_stream_io_paths[SAMPLE_STREAM_IO_MAX_READERS][SAMPLE_PAGE_CACHE_PATH_MAX];
 SDRAM_STREAM_SCRATCH static uint8_t
     g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_MAX_CHUNK_BYTES];
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_page_scratch[SAMPLE_PAGE_BYTES];
@@ -100,7 +101,7 @@ static char *sample_stream_io_reader_path(sample_stream_io_reader_t *reader)
         return 0;
     }
     const uint32_t index = (uint32_t)(reader - g_sample_stream_io_readers);
-    return (index < SAMPLE_STREAM_MAX_ACTIVE) ? g_sample_stream_io_paths[index] : 0;
+    return (index < SAMPLE_STREAM_IO_MAX_READERS) ? g_sample_stream_io_paths[index] : 0;
 }
 
 static const char *sample_stream_io_reader_path_const(const sample_stream_io_reader_t *reader)
@@ -110,7 +111,7 @@ static const char *sample_stream_io_reader_path_const(const sample_stream_io_rea
         return 0;
     }
     const uint32_t index = (uint32_t)(reader - g_sample_stream_io_readers);
-    return (index < SAMPLE_STREAM_MAX_ACTIVE) ? g_sample_stream_io_paths[index] : 0;
+    return (index < SAMPLE_STREAM_IO_MAX_READERS) ? g_sample_stream_io_paths[index] : 0;
 }
 
 static uint16_t sample_stream_io_close_reader(sample_stream_io_reader_t *reader)
@@ -166,7 +167,7 @@ static uint8_t sample_stream_io_reader_matches(const sample_stream_io_reader_t *
 
 static sample_stream_io_reader_t *sample_stream_io_find_reader(sample_audio_key_t key)
 {
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_MAX_READERS; ++i)
     {
         if ((g_sample_stream_io_readers[i].in_use != 0U)
             && (sample_audio_key_equal(&g_sample_stream_io_readers[i].key, &key) != 0U))
@@ -191,7 +192,7 @@ static sample_stream_io_reader_t *sample_stream_io_get_reader(
         return reader;
     }
 
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_MAX_READERS; ++i)
     {
         if (g_sample_stream_io_readers[i].in_use == 0U)
         {
@@ -252,7 +253,7 @@ void sample_stream_io_init(void)
 void sample_stream_io_reset(void)
 {
     sample_stream_io_invalidate_read_cache();
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_MAX_READERS; ++i)
     {
         sample_stream_io_clear_reader(&g_sample_stream_io_readers[i]);
     }
@@ -274,7 +275,7 @@ void sample_stream_io_release_key(sample_audio_key_t key)
 uint32_t sample_stream_io_active_reader_count(void)
 {
     uint32_t count = 0U;
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_MAX_ACTIVE; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_MAX_READERS; ++i)
     {
         count += (g_sample_stream_io_readers[i].in_use != 0U) ? 1U : 0U;
     }

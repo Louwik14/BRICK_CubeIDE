@@ -94,6 +94,21 @@ target_include_directories(sample_stream_scheduler_test PRIVATE ../Inc)
 if(CMAKE_CROSSCOMPILING)
     target_link_options(sample_stream_scheduler_test PRIVATE --specs=nosys.specs)
 endif()
+
+add_executable(sample_stream_scheduler_n2_test
+    sample_stream_scheduler_test.c
+    ../Src/Sampler/sample_stream_scheduler.c
+)
+target_compile_definitions(sample_stream_scheduler_n2_test PRIVATE
+    SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND=2
+)
+target_include_directories(sample_stream_scheduler_n2_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(sample_stream_scheduler_n2_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME sample_stream_scheduler_n2 COMMAND sample_stream_scheduler_n2_test)
+endif()
 if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME sample_stream_scheduler COMMAND sample_stream_scheduler_test)
 endif()

@@ -15,6 +15,7 @@
 #define SAMPLE_STREAM_TARGET_MAX_NEEDS           \
     (SAMPLE_STREAM_TARGET_MAX_VOICES * SAMPLE_STREAM_TARGET_NEEDS_PER_VOICE)
 #define SAMPLE_STREAM_TARGET_MAX_IO_IN_FLIGHT    (1U)
+#define SAMPLE_STREAM_IO_MAX_READERS              SAMPLE_STREAM_TARGET_MAX_VOICES
 
 /*
  * Calibration seam: number of complete voice passes allowed per service

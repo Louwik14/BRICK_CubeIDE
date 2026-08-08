@@ -19,10 +19,12 @@ slots Classic puis Multi. Après chaque page, le curseur passe au slot suivant ;
 avance, pitch, deadline, backlog et ancienneté ne modifient jamais cet ordre.
 
 Une voix sans besoin chargeable est sautée sans I/O et le curseur poursuit son
-tour. Avec huit voix admises, une voix servie voit donc au plus les sept autres
-voix servies avant elle. `SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND` calibre le
-nombre de passes complètes : `N=2` produit V1..V8 puis V1..V8, jamais deux pages
-consécutives pour une même voix.
+passage. Le curseur, le nombre de slots restant dans le passage et le nombre de
+passages restant dans le tour survivent à un retour superloop. Avec huit voix
+admises, une voix servie voit donc au plus les sept autres voix servies avant
+elle. `SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND=N` signifie exactement N
+passages complets : `N=2` produit V1..V8 puis V1..V8, jamais deux pages
+consécutives pour une même voix et jamais un simple plafond global `8*N`.
 
 Le cache ne crée, ne détruit et ne reconstruit aucun besoin. Il possède seulement
 le cycle physique `FREE -> RESERVED -> LOADING -> READY`, ou `FAILED`. Une page
