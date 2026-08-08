@@ -91,6 +91,23 @@ typedef struct
     FRESULT fatfs_result;
 } sample_pool_diag_t;
 
+#define SAMPLE_POOL_PREPARE_BATCH_MAX (16U)
+
+typedef enum
+{
+    SAMPLE_POOL_PREPARE_IDLE = 0,
+    SAMPLE_POOL_PREPARE_RUNNING,
+    SAMPLE_POOL_PREPARE_READY,
+    SAMPLE_POOL_PREPARE_ERROR
+} sample_pool_prepare_status_t;
+
+typedef struct
+{
+    sample_pool_prepare_status_t status;
+    sample_pool_load_error_t error;
+    uint8_t failed_index;
+} sample_pool_prepare_result_t;
+
 /*
  * sample_pool is the project/catalog owner only.
  * Runtime audio memory is owned by sample_cache; data is legacy compatibility
@@ -107,3 +124,8 @@ void sample_pool_restore_project_snapshot(const sample_pool_project_snapshot_t *
 sample_pool_load_error_t sample_pool_get_last_load_error(void);
 uint8_t sample_pool_get_last_sd_error_code(void);
 const sample_pool_diag_t *sample_pool_get_diag(void);
+uint8_t sample_pool_prepare_batch_begin(uint16_t first_slot,
+                                        const char *const *paths,
+                                        uint8_t count);
+void sample_pool_prepare_batch_service(void);
+void sample_pool_prepare_batch_get_result(sample_pool_prepare_result_t *out_result);

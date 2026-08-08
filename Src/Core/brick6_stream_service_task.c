@@ -52,7 +52,7 @@ void brick6_stream_service_task_poll(void)
     __DMB();
     const uint32_t requested_sequence = g_brick6_stream_audio_wake_sequence;
     brick6_stream_service_task_update_gate();
-    const uint8_t pending = sample_stream_manager_has_pending_sd_work();
+    const uint8_t pending = sample_cache_has_pending_sd_work();
     if ((requested_sequence == g_brick6_stream_serviced_wake_sequence)
         && (pending == 0U))
     {

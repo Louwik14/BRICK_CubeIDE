@@ -30,8 +30,7 @@
 typedef enum
 {
     CAL_STATE_RESET = 0,
-    CAL_STATE_PREPARE_REQUEST,
-    CAL_STATE_PREPARE_WAIT,
+    CAL_STATE_PREPARE,
     CAL_STATE_START,
     CAL_STATE_RUN,
     CAL_STATE_SETTLE,
@@ -50,7 +49,6 @@ static const char *const k_paths[8] = {
 STORAGE_STATE_SDRAM static brick6_stream_calibration_file_t g_file;
 static cal_state_t g_state;
 static uint16_t g_case_index;
-static uint8_t g_prepare_index;
 static uint8_t g_case_running;
 static char g_error_text[28];
 static sample_stream_audio_frame_t g_case_start_frame;
@@ -111,27 +109,6 @@ static const char *cal_loader_error_text(sample_pool_load_error_t error)
         case SAMPLE_POOL_LOAD_OK:
         default:
             return "LOAD FAIL";
-    }
-}
-
-static const char *cal_cache_error_text(uint8_t error)
-{
-    switch (error)
-    {
-        case 2U: return "SD BUSY";
-        case 3U: return "MOUNT FAIL";
-        case 4U: return "OPEN FAIL";
-        case 5U: return "PARSE FAIL";
-        case 6U:
-        case 7U: return "UNSUPPORTED FORMAT";
-        case 8U: return "MEMORY";
-        case 9U: return "SEEK FAIL";
-        case 10U:
-        case 11U:
-        case 12U:
-        case 13U:
-        case 14U: return "READ FAIL";
-        default: return "LOAD STATE";
     }
 }
 
@@ -441,7 +418,6 @@ void brick6_stream_calibration_init(void)
     g_file.grid_signature = CAL_GRID_SIGNATURE;
     g_state = CAL_STATE_RESET;
     g_case_index = 0U;
-    g_prepare_index = 0U;
     g_case_running = 0U;
     cal_configure_tracks();
 }
@@ -450,56 +426,34 @@ void brick6_stream_calibration_process(void)
 {
     switch (g_state)
     {
-        case CAL_STATE_PREPARE_REQUEST:
-            if (g_prepare_index < 8U)
+        case CAL_STATE_PREPARE:
             {
-                sample_pool_clear(g_prepare_index);
-                if (!sample_pool_load(g_prepare_index, k_paths[g_prepare_index]))
+                sample_pool_prepare_result_t prepare;
+                sample_pool_prepare_batch_service();
+                sample_pool_prepare_batch_get_result(&prepare);
+                if (prepare.status == SAMPLE_POOL_PREPARE_READY)
                 {
-                    cal_set_file_error(
-                        g_prepare_index,
-                        cal_loader_error_text(sample_pool_get_last_load_error()));
+                    g_state = CAL_STATE_START;
+                }
+                else if (prepare.status == SAMPLE_POOL_PREPARE_ERROR)
+                {
+                    cal_set_file_error(prepare.failed_index,
+                                       cal_loader_error_text(prepare.error));
                     g_state = CAL_STATE_FATAL;
-                    break;
                 }
-                ++g_prepare_index;
-                break;
             }
-            g_state = CAL_STATE_PREPARE_WAIT;
-            break;
-
-        case CAL_STATE_PREPARE_WAIT:
-            for (uint8_t i = 0U; i < 8U; ++i)
-            {
-                const sample_pool_slot_state_t state = sample_pool_get_state(i);
-                if (state == SAMPLE_POOL_SLOT_LOADED)
-                {
-                    continue;
-                }
-                if (state == SAMPLE_POOL_SLOT_PREPARING)
-                {
-                    return;
-                }
-                if (state == SAMPLE_POOL_SLOT_ERROR)
-                {
-                    cal_set_file_error(i,
-                                       cal_cache_error_text(sample_cache_get_last_error(i)));
-                }
-                else
-                {
-                    cal_set_file_error(i, "LOAD STATE");
-                }
-                g_state = CAL_STATE_FATAL;
-                return;
-            }
-            g_state = CAL_STATE_START;
             break;
 
         case CAL_STATE_RESET:
             cal_stop_all();
             sample_cache_init();
-            g_prepare_index = 0U;
-            g_state = CAL_STATE_PREPARE_REQUEST;
+            if (sample_pool_prepare_batch_begin(0U, k_paths, 8U) == 0U)
+            {
+                (void)snprintf(g_error_text, sizeof(g_error_text), "PREPARE INIT");
+                g_state = CAL_STATE_FATAL;
+                break;
+            }
+            g_state = CAL_STATE_PREPARE;
             break;
 
         case CAL_STATE_START:

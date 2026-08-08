@@ -48,6 +48,18 @@ static CTRL_STATE sample_pool_load_error_t g_sample_pool_last_load_error = SAMPL
 static CTRL_STATE uint8_t g_sample_pool_last_sd_error_code;
 STORAGE_STATE_SDRAM static sample_pool_diag_t g_sample_pool_diag;
 
+typedef struct
+{
+    sample_pool_prepare_result_t result;
+    uint16_t first_slot;
+    uint8_t count;
+    uint8_t current;
+    uint8_t request_started;
+    char paths[SAMPLE_POOL_PREPARE_BATCH_MAX][SAMPLE_POOL_PATH_MAX];
+} sample_pool_prepare_batch_t;
+
+STORAGE_STATE_SDRAM static sample_pool_prepare_batch_t g_sample_pool_prepare_batch;
+
 static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
 {
     g_sample_pool_last_load_error = error;
@@ -318,6 +330,7 @@ static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char 
  */
 void sample_pool_init(void)
 {
+    memset(&g_sample_pool_prepare_batch, 0, sizeof(g_sample_pool_prepare_batch));
     for(uint32_t i = 0U; i < SAMPLE_POOL_SIZE; i++)
     {
         sample_pool_clear_entry(&g_sample_pool[i]);
@@ -660,4 +673,92 @@ uint8_t sample_pool_get_last_sd_error_code(void)
 const sample_pool_diag_t *sample_pool_get_diag(void)
 {
     return &g_sample_pool_diag;
+}
+
+uint8_t sample_pool_prepare_batch_begin(uint16_t first_slot,
+                                        const char *const *paths,
+                                        uint8_t count)
+{
+    if ((paths == NULL) || (count == 0U) || (count > SAMPLE_POOL_PREPARE_BATCH_MAX)
+        || (first_slot >= SAMPLE_POOL_SIZE)
+        || ((uint32_t)first_slot + count > SAMPLE_POOL_SIZE))
+    {
+        return 0U;
+    }
+
+    memset(&g_sample_pool_prepare_batch, 0, sizeof(g_sample_pool_prepare_batch));
+    g_sample_pool_prepare_batch.first_slot = first_slot;
+    g_sample_pool_prepare_batch.count = count;
+    g_sample_pool_prepare_batch.result.status = SAMPLE_POOL_PREPARE_RUNNING;
+    g_sample_pool_prepare_batch.result.error = SAMPLE_POOL_LOAD_OK;
+    g_sample_pool_prepare_batch.result.failed_index = UINT8_MAX;
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        if ((paths[i] == NULL) || (paths[i][0] == '\0')
+            || (strlen(paths[i]) >= SAMPLE_POOL_PATH_MAX))
+        {
+            memset(&g_sample_pool_prepare_batch, 0, sizeof(g_sample_pool_prepare_batch));
+            return 0U;
+        }
+        (void)memcpy(g_sample_pool_prepare_batch.paths[i], paths[i], strlen(paths[i]) + 1U);
+    }
+    return 1U;
+}
+
+void sample_pool_prepare_batch_service(void)
+{
+    sample_pool_prepare_batch_t *const batch = &g_sample_pool_prepare_batch;
+    if (batch->result.status != SAMPLE_POOL_PREPARE_RUNNING)
+    {
+        return;
+    }
+    if (batch->current >= batch->count)
+    {
+        batch->result.status = SAMPLE_POOL_PREPARE_READY;
+        return;
+    }
+
+    const uint16_t slot = (uint16_t)(batch->first_slot + batch->current);
+    if (batch->request_started == 0U)
+    {
+        sample_pool_clear(slot);
+        if (!sample_pool_load(slot, batch->paths[batch->current]))
+        {
+            batch->result.status = SAMPLE_POOL_PREPARE_ERROR;
+            batch->result.error = sample_pool_get_last_load_error();
+            batch->result.failed_index = batch->current;
+            return;
+        }
+        batch->request_started = 1U;
+    }
+
+    const sample_pool_slot_state_t state = sample_pool_get_state(slot);
+    if (state == SAMPLE_POOL_SLOT_LOADED)
+    {
+        batch->current++;
+        batch->request_started = 0U;
+        if (batch->current >= batch->count)
+        {
+            batch->result.status = SAMPLE_POOL_PREPARE_READY;
+        }
+        return;
+    }
+    if (state == SAMPLE_POOL_SLOT_PREPARING)
+    {
+        return;
+    }
+
+    batch->result.status = SAMPLE_POOL_PREPARE_ERROR;
+    batch->result.error = (state == SAMPLE_POOL_SLOT_ERROR)
+                              ? SAMPLE_POOL_LOAD_SD_READ_FAIL
+                              : SAMPLE_POOL_LOAD_SD_INVALID_OBJECT;
+    batch->result.failed_index = batch->current;
+}
+
+void sample_pool_prepare_batch_get_result(sample_pool_prepare_result_t *out_result)
+{
+    if (out_result != NULL)
+    {
+        *out_result = g_sample_pool_prepare_batch.result;
+    }
 }

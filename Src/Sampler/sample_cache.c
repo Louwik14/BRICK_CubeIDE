@@ -850,6 +850,30 @@ static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
     return 1U;
 }
 
+static uint8_t sample_cache_stream_start_base_failed(uint16_t sample_id,
+                                                     const sample_cache_desc_t *desc)
+{
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (desc == 0)
+        || (desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->total_frames == 0U))
+    {
+        return 0U;
+    }
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    uint32_t required_pages = sample_audio_format_presocle_pages(desc->format);
+    if (required_pages > (last_page + 1U))
+    {
+        required_pages = last_page + 1U;
+    }
+    for (uint32_t page = 0U; page < required_pages; ++page)
+    {
+        if (sample_page_cache_get_page_state(sample_id, page) == SAMPLE_PAGE_FAILED)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 static uint8_t sample_cache_stream_window_ready(uint16_t sample_id,
                                                 const sample_cache_desc_t *desc,
                                                 uint32_t frame_index,
@@ -1317,6 +1341,14 @@ void sample_cache_service(uint32_t byte_budget)
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
         return;
     }
+    if (sample_page_cache_has_reserved_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) != 0U)
+    {
+        sample_page_cache_service_range(0U,
+                                        SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
+                                        byte_budget);
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        return;
+    }
     if (sd_access_gate_streaming_critical_active() != 0U)
     {
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
@@ -1365,6 +1397,11 @@ uint8_t sample_cache_has_pending_sd_work(void)
         return 1U;
     }
 
+    if (sample_page_cache_has_reserved_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) != 0U)
+    {
+        return 1U;
+    }
+
     return (sample_cache_pick_refill_candidate() < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) ? 1U : 0U;
 }
 
@@ -1395,6 +1432,10 @@ sample_cache_slot_readiness_t sample_cache_get_slot_readiness(uint16_t sample_id
 
         case SAMPLE_CACHE_READY_PARTIAL:
         case SAMPLE_CACHE_PLAYING:
+            if (sample_cache_stream_start_base_failed(sample_id, desc) != 0U)
+            {
+                return SAMPLE_CACHE_SLOT_ERROR;
+            }
             if (sample_cache_stream_start_base_ready(sample_id, desc) == 0U)
             {
                 return SAMPLE_CACHE_SLOT_START_PENDING;

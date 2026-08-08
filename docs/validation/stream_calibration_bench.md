@@ -17,9 +17,10 @@ N3/A2 N3/A3 N3/A4 N3/A5 N3/A6
 ```
 
 Les images 16 Kio et 32 Kio donnent donc 30 cas. Chaque cas arrête les huit
-tracks, réinitialise le cache et le streamer, recharge `/voix1.wav` à
-`/voix8.wav`, vérifie 48 kHz/stéréo et au moins 4608000 frames source (deux
-secondes à la vitesse maximale), configure huit
+tracks, réinitialise le cache et le streamer, puis confie la préparation de
+`/voix1.wav` à `/voix8.wav` au workflow commun `sample_pool_prepare_batch`.
+Celui-ci séquence le loader produit et attend que son présocle soit jouable,
+sans validation WAV ni timeout propres au banc. Le cas configure ensuite huit
 tracks Stream forward sans loop, puis déclenche les huit voix dans la même
 itération superloop avec la note MIDI 127 (maximum clavier après octave +4).
 La fenêtre mesurée dure 96000 frames, suivie de 4800 frames de séparation.
@@ -44,8 +45,8 @@ image selon la carte SD, soit environ 70 à 120 secondes au total.
 
 Pendant la campagne : titre `STREAM TEST`, barre de progression, `CASE x / 15`
 et configuration `16K|32K / Nx / Ay`. À la fin : `COMPLETE`, compteurs PASS et
-FAIL. Un WAV absent, non stéréo, non 48 kHz ou trop court bloque la campagne sur
-`WAV / SD ERROR`.
+FAIL. Seule une erreur terminale du workflow produit bloque la campagne sur
+`STREAM TEST ERROR`, avec le fichier et la cause.
 
 ## Format binaire
 
