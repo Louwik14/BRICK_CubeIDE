@@ -9,7 +9,7 @@
  *
  * Rôle du module:
  * - Dépaqueter les slots TDM RX dans les tracks float.
- * - Repaqueter MAIN/CUE float vers TX TDM.
+ * - Repaqueter MAIN float vers TX stereo.
  *
  * Architecture:
  * - Appelé par: audio_float.c.
@@ -34,32 +34,26 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                      float in_scale);
 
 /**
- * @brief Repaquette MAIN/CUE float vers buffer TX TDM.
+ * @brief Repaquette MAIN float vers buffer TX stereo.
  *
  * @param tx Buffer TX int32 destination.
  * @param bus_main_l Bus MAIN gauche.
  * @param bus_main_r Bus MAIN droit.
- * @param bus_cue_l Bus CUE gauche.
- * @param bus_cue_r Bus CUE droit.
  * @param frames Nombre de frames.
  * @param out_gain Gain global de sortie.
  */
 void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    const float *AUDIO_RESTRICT bus_main_l,
                    const float *AUDIO_RESTRICT bus_main_r,
-                   const float *AUDIO_RESTRICT bus_cue_l,
-                   const float *AUDIO_RESTRICT bus_cue_r,
                    uint32_t frames,
                    float out_gain);
 
 /**
- * @brief Repaquette MAIN/CUE float vers buffer TX TDM avec gain rampé.
+ * @brief Repaquette MAIN float vers buffer TX stereo avec gain rampé.
  *
  * @param tx Buffer TX int32 destination.
  * @param bus_main_l Bus MAIN gauche.
  * @param bus_main_r Bus MAIN droit.
- * @param bus_cue_l Bus CUE gauche.
- * @param bus_cue_r Bus CUE droit.
  * @param frames Nombre de frames.
  * @param out_gain_start Gain global de sortie en début de bloc.
  * @param out_gain_end Gain global de sortie en fin de bloc.
@@ -67,8 +61,6 @@ void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
 void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
                           const float *AUDIO_RESTRICT bus_main_l,
                           const float *AUDIO_RESTRICT bus_main_r,
-                          const float *AUDIO_RESTRICT bus_cue_l,
-                          const float *AUDIO_RESTRICT bus_cue_r,
                           uint32_t frames,
                           float out_gain_start,
                           float out_gain_end);

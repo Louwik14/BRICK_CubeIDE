@@ -4,8 +4,6 @@
 
 typedef struct
 {
-    uint8_t has_physical_cue;
-    uint8_t physical_input_stereo_count;
     uint8_t has_microphone_input;
     uint8_t audio_tdm_slots;
     uint8_t has_analog_hall_lanes;

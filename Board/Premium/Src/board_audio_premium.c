@@ -272,17 +272,8 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
 void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
                              const float *AUDIO_RESTRICT main_l,
                              const float *AUDIO_RESTRICT main_r,
-                             const float *AUDIO_RESTRICT cue_l,
-                             const float *AUDIO_RESTRICT cue_r,
-                             uint32_t frames,
-                             float cue_gain_start,
-                             float cue_gain_end)
+                             uint32_t frames)
 {
-    (void)cue_l;
-    (void)cue_r;
-    (void)cue_gain_start;
-    (void)cue_gain_end;
-
     int32_t *AUDIO_RESTRICT ptx = tx;
     const uint8_t diag_enabled = audio_track_diag_is_enabled();
     for (uint32_t n = 0; n < frames; n++)

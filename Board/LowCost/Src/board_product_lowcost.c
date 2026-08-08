@@ -3,8 +3,6 @@
 #include "Board/board_led_transport.h"
 
 static const board_product_capabilities_t g_lowcost_capabilities = {
-    .has_physical_cue = 0U,
-    .physical_input_stereo_count = 1U,
     .has_microphone_input = 1U,
     .audio_tdm_slots = BOARD_AUDIO_TDM_SLOTS,
     .has_analog_hall_lanes = 0U,

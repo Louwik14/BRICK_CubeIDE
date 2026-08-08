@@ -15,11 +15,7 @@ extern "C" {
  * a main-track rule; child lanes are not topology tracks. */
 #define TRACK_TOPOLOGY_GROUP_PARENT_TRACK (TRACK_TOPOLOGY_TRACK_COUNT - 1U)
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT 1U
-#else
-#define TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT 3U
-#endif
 
 typedef enum
 {

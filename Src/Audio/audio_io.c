@@ -20,16 +20,12 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
 void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    const float *AUDIO_RESTRICT bus_main_l,
                    const float *AUDIO_RESTRICT bus_main_r,
-                   const float *AUDIO_RESTRICT bus_cue_l,
-                   const float *AUDIO_RESTRICT bus_cue_r,
                    uint32_t frames,
                    float out_gain)
 {
     audio_io_pack_ramped(tx,
                          bus_main_l,
                          bus_main_r,
-                         bus_cue_l,
-                         bus_cue_r,
                          frames,
                          out_gain,
                          out_gain);
@@ -38,8 +34,6 @@ void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
 void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
                           const float *AUDIO_RESTRICT bus_main_l,
                           const float *AUDIO_RESTRICT bus_main_r,
-                          const float *AUDIO_RESTRICT bus_cue_l,
-                          const float *AUDIO_RESTRICT bus_cue_r,
                           uint32_t frames,
                           float out_gain_start,
                           float out_gain_end)
@@ -83,11 +77,7 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     board_audio_pack_output(tx,
                             monitor_main_l,
                             monitor_main_r,
-                            bus_cue_l,
-                            bus_cue_r,
-                            frames,
-                            out_gain_start,
-                            out_gain_end);
+                            frames);
     if (diag_enabled != 0U)
     {
         audio_global_diag_end_block(frames);

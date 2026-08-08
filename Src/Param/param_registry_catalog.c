@@ -68,13 +68,8 @@ _Static_assert((sizeof(g_prism_edit_labels) / sizeof(g_prism_edit_labels[0])) - 
                "Prism labels and active model count must stay aligned");
 static const char *const g_stack_model_labels[] = {"SINE", "TRI", "SQUARE", "SAW", "SHAPE", "TRIPLE SAW", NULL};
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
-#if defined(BRICK6_VARIANT_LOWCOST)
 static const char *const g_track_family_labels[] = {"Off", "-", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
 static const char *const g_external_input_labels[] = {"Input 1", NULL};
-#else
-static const char *const g_track_family_labels[] = {"Off", "-", "-", "-", "Synth", "Drum", "MIDI", "Sampler", "External", NULL};
-static const char *const g_external_input_labels[] = {"Input 1", "Input 2", "Input 3", NULL};
-#endif
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_start_labels[] = {"DEFAULT", "TRIG", "ROLL 1/4", "ROLL 1/2", "ROLL 1", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};

@@ -3,9 +3,7 @@
 #include "Board/board_led_transport.h"
 
 static const board_product_capabilities_t g_premium_capabilities = {
-    .has_physical_cue = 1U,
-    .physical_input_stereo_count = 3U,
-    .has_microphone_input = 0U,
+    .has_microphone_input = 1U,
     .audio_tdm_slots = BOARD_AUDIO_TDM_SLOTS,
     .has_analog_hall_lanes = 1U,
     .has_step_binary_lanes = 0U,

@@ -179,7 +179,7 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127);
    ============================================================ */
 
 /**
- * @brief Traite un bloc audio int32 (TDM8) en modèle track stéréo float.
+ * @brief Traite un bloc audio int32 stereo en modèle track stéréo float.
  *
  * @param rx Buffer d'entrée DMA (int24 right-aligned dans int32).
  * @param tx Buffer de sortie DMA (int24 right-aligned dans int32).
@@ -189,10 +189,10 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127);
  * - IRQ audio (DMA RX half/full callback).
  *
  * Pipeline:
- * 1) Unpack TDM -> tracks actives.
+ * 1) Unpack stereo -> tracks actives.
  * 2) Callback DSP utilisateur.
  * 3) Somme tracks actives + gains.
- * 4) Pack master/cue vers slots TDM de sortie.
+ * 4) Pack master vers les deux slots de sortie.
  */
 void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,

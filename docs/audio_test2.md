@@ -25,15 +25,14 @@ Les deux WAV sont stéréo PCM24, 48 kHz, 11 904 000 frames, soit 4 min 08 s.
 Le manifeste contient 45 sections. Les CRC de `RUN.CSV` portent sur les seuls
 octets PCM, sans l'en-tête WAV.
 
-Le générateur entier déterministe remplace directement les bus MAIN et CUE dans
+Le générateur entier déterministe remplace directement la paire MAIN stéréo dans
 `audio_process_block_int32()`, avant `board_audio_pack_output()`. Engines,
 mixer, effets, macro master, métronome et gains de production ne sont donc pas
 parcourus. `INTERNAL.WAV` capture les mots PCM24 produits à ce seam. Pendant
 LINE et HEADPHONE, aucun service FatFs propre au test n'est appelé.
 
-Sur Premium, le même signal est envoyé aux slots MAIN et CUE pour couvrir les
-routes line et casque réelles. Sur Low-cost, le codec reçoit son unique paire
-stéréo de sortie : la distinction line/casque dépend donc du routage analogique.
+Sur les deux variantes, le même signal est envoyé sur l'unique paire stéréo
+du contrat audio ; la distinction line/casque dépend du routage analogique.
 
 ## Enregistrement externe
 

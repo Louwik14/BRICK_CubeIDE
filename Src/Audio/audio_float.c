@@ -519,7 +519,7 @@ float audio_float_get_master_gain(void)
    audio_dsp_process():
    - Appelle le callback DSP utilisateur
    - Réalise la somme tracks -> bus_main
-   - Copie bus_main -> bus_cue (par défaut)
+   - Le mix final est émis sur la paire MAIN stéréo
    ============================================================ */
 
 /**
@@ -577,8 +577,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     audio_io_pack_ramped(tx,
                          tracks[0].L,
                          tracks[0].R,
-                         tracks[1].L,
-                         tracks[1].R,
                          frames,
                          out_gain_start,
                          out_gain_end);

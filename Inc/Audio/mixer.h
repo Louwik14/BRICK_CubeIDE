@@ -11,7 +11,7 @@
  *
  * Rôle du module:
  * - Exposer la configuration runtime du mixer.
- * - Exécuter le mix final MAIN/CUE par bloc audio.
+ * - Exécuter le mix final MAIN par bloc audio.
  *
  * Architecture:
  * - Appelé par: brick6_app_init.c, callback DSP principal.
@@ -59,9 +59,7 @@ struct multi_voice_dsp_slot_t;
 typedef enum
 {
     MIXER_ROUTE_NONE = 0,
-    MIXER_ROUTE_MASTER = 1,
-    MIXER_ROUTE_CUE = 2,
-    MIXER_ROUTE_BOTH = 3
+    MIXER_ROUTE_MASTER = 1
 } mixer_route_t;
 
 void mixer_init(void);
