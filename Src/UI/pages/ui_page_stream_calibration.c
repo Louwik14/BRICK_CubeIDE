@@ -12,8 +12,8 @@ static void stream_calibration_render(void)
     drv_display_draw_text(0U, 0U, "STREAM TEST");
     if (brick6_stream_calibration_error() != 0U)
     {
-        drv_display_draw_text(0U, 20U, "WAV / SD ERROR");
-        drv_display_draw_text(0U, 42U, "CHECK VOIX1..8");
+        drv_display_draw_text(0U, 18U, "STREAM TEST ERROR");
+        drv_display_draw_text(0U, 42U, brick6_stream_calibration_error_text());
         return;
     }
     if (brick6_stream_calibration_complete() != 0U)

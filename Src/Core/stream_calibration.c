@@ -52,6 +52,7 @@ static cal_state_t g_state;
 static uint16_t g_case_index;
 static uint8_t g_prepare_index;
 static uint8_t g_case_running;
+static const char *g_error_text;
 static sample_stream_audio_frame_t g_case_start_frame;
 static sample_stream_audio_frame_t g_state_start_frame;
 static uint32_t g_last_select_frame[8];
@@ -186,6 +187,7 @@ static void cal_finish_case(void)
     brick6_stream_calibration_result_t *result = cal_current();
     cpu_load_metrics_t cpu;
     g_case_running = 0U;
+    g_error_text = NULL;
     cal_stop_all();
     cpu_load_get_metrics(&cpu);
     result->elapsed_audio_frames =
@@ -385,6 +387,11 @@ void brick6_stream_calibration_process(void)
                 sample_pool_clear(g_prepare_index);
                 if (!sample_pool_load(g_prepare_index, k_paths[g_prepare_index]))
                 {
+                    static const char *const load_errors[8] = {
+                        "LOAD VOIX1", "LOAD VOIX2", "LOAD VOIX3", "LOAD VOIX4",
+                        "LOAD VOIX5", "LOAD VOIX6", "LOAD VOIX7", "LOAD VOIX8"
+                    };
+                    g_error_text = load_errors[g_prepare_index];
                     g_state = CAL_STATE_FATAL;
                     break;
                 }
@@ -393,6 +400,11 @@ void brick6_stream_calibration_process(void)
                     || (desc->sample_rate != CAL_SAMPLE_RATE)
                     || (desc->length_frames < CAL_MAX_PITCH_SOURCE_FRAMES))
                 {
+                    static const char *const format_errors[8] = {
+                        "INVALID VOIX1", "INVALID VOIX2", "INVALID VOIX3", "INVALID VOIX4",
+                        "INVALID VOIX5", "INVALID VOIX6", "INVALID VOIX7", "INVALID VOIX8"
+                    };
+                    g_error_text = format_errors[g_prepare_index];
                     g_state = CAL_STATE_FATAL;
                     break;
                 }
@@ -453,6 +465,7 @@ void brick6_stream_calibration_process(void)
             }
             else
             {
+                g_error_text = "RESULT WRITE";
                 g_state = CAL_STATE_FATAL;
             }
             sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
@@ -564,6 +577,11 @@ uint8_t brick6_stream_calibration_complete(void)
 uint8_t brick6_stream_calibration_error(void)
 {
     return (g_state == CAL_STATE_FATAL) ? 1U : 0U;
+}
+
+const char *brick6_stream_calibration_error_text(void)
+{
+    return (g_error_text != NULL) ? g_error_text : "UNKNOWN";
 }
 
 uint16_t brick6_stream_calibration_case_index(void) { return g_case_index; }

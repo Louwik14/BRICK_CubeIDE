@@ -168,9 +168,12 @@ void brick6_app_init(void)
     patch_v1_init();
     kit_v1_init();
     project_v1_init();
+#if !BRICK6_STREAM_CALIBRATION
     ui_boot_loading_begin();
+#endif
     undo_v2_init();
     hall_loop_init();
+#if !BRICK6_STREAM_CALIBRATION
     if (hall_calibration_load() != 0U)
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -181,6 +184,7 @@ void brick6_app_init(void)
     }
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
+#endif
 #endif
     brick6_stream_service_task_init();
 #if BRICK6_STREAM_CALIBRATION

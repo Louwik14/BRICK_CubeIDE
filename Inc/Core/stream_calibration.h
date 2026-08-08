@@ -82,6 +82,7 @@ void brick6_stream_calibration_note_round_begin(void);
 void brick6_stream_calibration_note_round_end(void);
 uint8_t brick6_stream_calibration_complete(void);
 uint8_t brick6_stream_calibration_error(void);
+const char *brick6_stream_calibration_error_text(void);
 uint16_t brick6_stream_calibration_case_index(void);
 uint16_t brick6_stream_calibration_case_count(void);
 uint16_t brick6_stream_calibration_pass_count(void);

@@ -72,9 +72,15 @@ void ui_renderer_oled_draw(void)
 
     if (audio_get_init_state() == AUDIO_INIT_ERROR)
     {
-        char error_text[24];
         const board_audio_boot_error_t error = audio_get_boot_error();
         drv_display_set_font(&FONT_5X7);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        drv_display_draw_text(0U, 10U, "STREAM TEST ERROR");
+        drv_display_set_font(&FONT_4X6);
+        drv_display_draw_text(0U, 28U, "AUDIO INIT");
+        drv_display_draw_text(0U, 42U, ui_audio_boot_error_label(error));
+#else
+        char error_text[24];
         drv_display_draw_text(8U, 10U, "AUDIO INIT ERROR");
         drv_display_set_font(&FONT_4X6);
         drv_display_draw_text(8U, 25U, ui_audio_boot_error_label(error));
@@ -82,6 +88,7 @@ void ui_renderer_oled_draw(void)
                        (unsigned)error);
         drv_display_draw_text(8U, 37U, error_text);
         drv_display_draw_text(8U, 49U, "REBOOT TO RETRY");
+#endif
     }
     else if (ui_boot_loading_is_active() != 0U)
     {

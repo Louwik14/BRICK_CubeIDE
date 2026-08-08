@@ -80,5 +80,9 @@ void ui_bootstrap_init(void)
 #endif
     ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
 
+#if BRICK6_STREAM_CALIBRATION
+    ui_page_set(UI_PAGE_STREAM_CALIBRATION);
+#else
     ui_page_set(UI_PAGE_CALIBRATION);
+#endif
 }
