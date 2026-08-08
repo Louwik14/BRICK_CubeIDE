@@ -8,6 +8,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_underrun_trace.h"
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_snapshot.h"
 #include "Sampler/sample_voice_reader.h"
@@ -1303,6 +1304,10 @@ void sample_cache_service(uint32_t byte_budget)
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U)
     {
+        brick6_stream_underrun_trace_service_blocked(
+            BRICK6_STREAM_TRACE_REASON_GATE_BLOCKED,
+            (uint8_t)sd_access_gate_current_owner(),
+            0U);
         return;
     }
 

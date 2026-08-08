@@ -7,6 +7,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_needs.h"
+#include "Sampler/sample_stream_underrun_trace.h"
 #include "Sampler/sample_stream_manager.h"
 #include "stm32h7xx.h"
 
@@ -335,6 +336,7 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         return;
     }
 
+    const sample_page_state_t old_state = page->state;
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->state != state))
     {
@@ -353,6 +355,7 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         __DMB();
     }
     page->state = state;
+    brick6_stream_underrun_trace_page_state(page, old_state, state);
 }
 
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)

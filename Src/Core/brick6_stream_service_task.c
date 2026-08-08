@@ -7,7 +7,9 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_benchmark.h"
+#include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_time.h"
+#include "Sampler/sample_stream_underrun_trace.h"
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx.h"
 
@@ -73,6 +75,13 @@ void brick6_stream_service_task_poll(void)
         g_brick6_stream_service_stats.cadence_miss_count++;
     }
 
+    brick6_stream_underrun_trace_service_begin(
+        BRICK6_STREAM_SERVICE_BYTE_BUDGET,
+        sample_stream_needs_registry_count_active(),
+        requested_sequence,
+        delay_frames,
+        (uint8_t)sd_access_gate_current_owner());
+
     g_brick6_stream_service_stats.poll_count++;
     if ((multi_sample_load_has_pending() != 0U)
         || (sd_access_gate_bulk_exclusive_active() != 0U))
@@ -81,6 +90,14 @@ void brick6_stream_service_task_poll(void)
             multi_sample_load_has_pending(),
             sd_access_gate_bulk_exclusive_active(),
             poll_delay_frames);
+        brick6_stream_underrun_trace_service_blocked(
+            BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
+            (uint8_t)sd_access_gate_current_owner(),
+            poll_delay_frames);
+        brick6_stream_underrun_trace_service_end(
+            BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
+            pending,
+            g_brick6_stream_service_stats.critical_active);
         g_brick6_stream_service_stats.busy_poll_count++;
 #if BRICK6_STREAM_BENCH
         sample_stream_benchmark_note_blocked_poll();
@@ -91,6 +108,10 @@ void brick6_stream_service_task_poll(void)
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
     brick6_stream_service_task_update_critical();
+    brick6_stream_underrun_trace_service_end(
+        BRICK6_STREAM_TRACE_REASON_NONE,
+        sample_stream_manager_has_pending_sd_work(),
+        g_brick6_stream_service_stats.critical_active);
     g_brick6_stream_serviced_wake_sequence = requested_sequence;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
     g_brick6_stream_service_stats.audio_wake_sequence = requested_sequence;

@@ -5,6 +5,7 @@
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/sample_stream_sequence.h"
 #include "Sampler/sample_stream_trace.h"
+#include "Sampler/sample_stream_underrun_trace.h"
 
 #define SAMPLE_STREAM_NEEDS_CLASSIC_CAPACITY SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
 #define SAMPLE_STREAM_NEEDS_MULTI_CAPACITY   SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY
@@ -286,6 +287,7 @@ uint8_t sample_stream_needs_registry_update(
     }
     entry.voice_index = voice_id;
     sample_stream_needs_slot_t *const slot = &g_sample_stream_needs_slots[index];
+    const sample_stream_target_voice_registry_entry_t previous = slot->value;
     uint32_t sequence = slot->sequence;
     if ((sequence & 1U) != 0U)
     {
@@ -294,6 +296,29 @@ uint8_t sample_stream_needs_registry_update(
     slot->sequence = sequence + 1U;
     slot->value = entry;
     slot->sequence = sequence + 2U;
+    for (uint8_t need_index = 0U; need_index < entry.need_count; ++need_index)
+    {
+        const sample_stream_target_voice_need_t *const need = &entry.needs[need_index];
+        const uint8_t was_present =
+            ((previous.active != 0U) && (previous.generation == entry.generation))
+                ? sample_stream_needs_contains(&previous,
+                                               &need->key,
+                                               need->page_index,
+                                               need->registration_epoch)
+                : 0U;
+        if (was_present == 0U)
+        {
+            const uint64_t now = now_audio_frame;
+            const uint32_t frames_ahead =
+                (need->consume_deadline_audio_frame > now)
+                    ? (uint32_t)((need->consume_deadline_audio_frame - now) > UINT32_MAX
+                                     ? UINT32_MAX
+                                     : (need->consume_deadline_audio_frame - now))
+                    : 0U;
+            brick6_stream_underrun_trace_need_created(
+                source, voice_id, entry.generation, need, frames_ahead);
+        }
+    }
     (void)sample_stream_event_trace_record(
         SAMPLE_STREAM_EVENT_NEED_ADD,
         snapshot->key,
