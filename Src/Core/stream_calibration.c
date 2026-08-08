@@ -25,7 +25,8 @@
 #define CAL_CASE_FRAMES          (2U * CAL_SAMPLE_RATE)
 #define CAL_SETTLE_FRAMES        (CAL_SAMPLE_RATE / 10U)
 #define CAL_MAX_KEYBOARD_NOTE    (127U)
-#define CAL_MAX_PITCH_SOURCE_FRAMES (CAL_CASE_FRAMES * 48U)
+/* Product reader clamps the effective stream step to 32x, including note 127. */
+#define CAL_MAX_PITCH_SOURCE_FRAMES (CAL_CASE_FRAMES * 32U)
 #define CAL_GRID_SIGNATURE       (0x01020306UL)
 
 typedef enum
@@ -52,7 +53,7 @@ static cal_state_t g_state;
 static uint16_t g_case_index;
 static uint8_t g_prepare_index;
 static uint8_t g_case_running;
-static const char *g_error_text;
+static char g_error_text[28];
 static sample_stream_audio_frame_t g_case_start_frame;
 static sample_stream_audio_frame_t g_state_start_frame;
 static uint32_t g_last_select_frame[8];
@@ -65,6 +66,54 @@ static uint8_t g_round_had_select;
 static uint32_t g_contiguous_reads;
 static uint32_t g_fatfs_reads;
 static uint8_t g_started_voices;
+
+static void cal_set_file_error(uint8_t file_index, const char *cause)
+{
+    (void)snprintf(g_error_text,
+                   sizeof(g_error_text),
+                   "VOIX%u %s",
+                   (unsigned)(file_index + 1U),
+                   cause);
+}
+
+static const char *cal_loader_error_text(sample_pool_load_error_t error)
+{
+    switch (error)
+    {
+        case SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND:
+        case SAMPLE_POOL_LOAD_SD_OPEN_FAIL:
+            return "OPEN FAIL";
+        case SAMPLE_POOL_LOAD_WAV_PARSE_FAIL:
+            return "PARSE FAIL";
+        case SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT:
+            return "UNSUPPORTED FORMAT";
+        case SAMPLE_POOL_LOAD_WAV_48K_REQUIRED:
+            return "RATE";
+        case SAMPLE_POOL_LOAD_SD_MOUNT_FAIL:
+            return "MOUNT FAIL";
+        case SAMPLE_POOL_LOAD_SD_GATE_REFUSED:
+            return "SD BUSY";
+        case SAMPLE_POOL_LOAD_MEMORY_LIMIT:
+        case SAMPLE_POOL_LOAD_NO_FREE_SLOT:
+            return "MEMORY";
+        case SAMPLE_POOL_LOAD_INVALID_ID:
+        case SAMPLE_POOL_LOAD_INVALID_PATH:
+        case SAMPLE_POOL_LOAD_PATH_TOO_LONG:
+            return "PATH";
+        case SAMPLE_POOL_LOAD_SD_READ_FAIL:
+        case SAMPLE_POOL_LOAD_SD_SEEK_FAIL:
+        case SAMPLE_POOL_LOAD_SD_SHORT_READ:
+        case SAMPLE_POOL_LOAD_SD_READ_INT_ERR:
+        case SAMPLE_POOL_LOAD_SD_NOT_READY:
+        case SAMPLE_POOL_LOAD_SD_INVALID_OBJECT:
+        case SAMPLE_POOL_LOAD_SD_TIMEOUT:
+        case SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE:
+            return "READ FAIL";
+        case SAMPLE_POOL_LOAD_OK:
+        default:
+            return "LOAD FAIL";
+    }
+}
 
 static brick6_stream_calibration_result_t *cal_current(void)
 {
@@ -187,7 +236,7 @@ static void cal_finish_case(void)
     brick6_stream_calibration_result_t *result = cal_current();
     cpu_load_metrics_t cpu;
     g_case_running = 0U;
-    g_error_text = NULL;
+    g_error_text[0] = '\0';
     cal_stop_all();
     cpu_load_get_metrics(&cpu);
     result->elapsed_audio_frames =
@@ -387,24 +436,34 @@ void brick6_stream_calibration_process(void)
                 sample_pool_clear(g_prepare_index);
                 if (!sample_pool_load(g_prepare_index, k_paths[g_prepare_index]))
                 {
-                    static const char *const load_errors[8] = {
-                        "LOAD VOIX1", "LOAD VOIX2", "LOAD VOIX3", "LOAD VOIX4",
-                        "LOAD VOIX5", "LOAD VOIX6", "LOAD VOIX7", "LOAD VOIX8"
-                    };
-                    g_error_text = load_errors[g_prepare_index];
+                    cal_set_file_error(
+                        g_prepare_index,
+                        cal_loader_error_text(sample_pool_get_last_load_error()));
                     g_state = CAL_STATE_FATAL;
                     break;
                 }
                 const sample_desc_t *desc = sample_pool_get(g_prepare_index);
-                if ((desc == NULL) || (desc->valid == 0U) || (desc->channels != 2U)
-                    || (desc->sample_rate != CAL_SAMPLE_RATE)
-                    || (desc->length_frames < CAL_MAX_PITCH_SOURCE_FRAMES))
+                if ((desc == NULL) || !sample_pool_is_loaded(g_prepare_index))
                 {
-                    static const char *const format_errors[8] = {
-                        "INVALID VOIX1", "INVALID VOIX2", "INVALID VOIX3", "INVALID VOIX4",
-                        "INVALID VOIX5", "INVALID VOIX6", "INVALID VOIX7", "INVALID VOIX8"
-                    };
-                    g_error_text = format_errors[g_prepare_index];
+                    cal_set_file_error(g_prepare_index, "LOAD STATE");
+                    g_state = CAL_STATE_FATAL;
+                    break;
+                }
+                if (desc->channels != 2U)
+                {
+                    cal_set_file_error(g_prepare_index, "NOT STEREO");
+                    g_state = CAL_STATE_FATAL;
+                    break;
+                }
+                if (desc->sample_rate != CAL_SAMPLE_RATE)
+                {
+                    cal_set_file_error(g_prepare_index, "RATE");
+                    g_state = CAL_STATE_FATAL;
+                    break;
+                }
+                if (desc->length_frames < CAL_MAX_PITCH_SOURCE_FRAMES)
+                {
+                    cal_set_file_error(g_prepare_index, "TOO SHORT");
                     g_state = CAL_STATE_FATAL;
                     break;
                 }
@@ -465,7 +524,7 @@ void brick6_stream_calibration_process(void)
             }
             else
             {
-                g_error_text = "RESULT WRITE";
+                (void)snprintf(g_error_text, sizeof(g_error_text), "RESULT WRITE");
                 g_state = CAL_STATE_FATAL;
             }
             sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
@@ -581,7 +640,7 @@ uint8_t brick6_stream_calibration_error(void)
 
 const char *brick6_stream_calibration_error_text(void)
 {
-    return (g_error_text != NULL) ? g_error_text : "UNKNOWN";
+    return (g_error_text[0] != '\0') ? g_error_text : "UNKNOWN";
 }
 
 uint16_t brick6_stream_calibration_case_index(void) { return g_case_index; }
