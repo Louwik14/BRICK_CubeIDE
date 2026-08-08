@@ -24,9 +24,8 @@
 #define CAL_SAMPLE_RATE          (48000U)
 #define CAL_CASE_FRAMES          (2U * CAL_SAMPLE_RATE)
 #define CAL_SETTLE_FRAMES        (CAL_SAMPLE_RATE / 10U)
+#define CAL_READY_TIMEOUT_FRAMES (15U * CAL_SAMPLE_RATE)
 #define CAL_MAX_KEYBOARD_NOTE    (127U)
-/* Product reader clamps the effective stream step to 32x, including note 127. */
-#define CAL_MAX_PITCH_SOURCE_FRAMES (CAL_CASE_FRAMES * 32U)
 #define CAL_GRID_SIGNATURE       (0x01020306UL)
 
 typedef enum
@@ -464,34 +463,10 @@ void brick6_stream_calibration_process(void)
                     g_state = CAL_STATE_FATAL;
                     break;
                 }
-                const sample_desc_t *desc = sample_pool_get(g_prepare_index);
-                if ((desc == NULL) || (desc->valid == 0U))
-                {
-                    cal_set_file_error(g_prepare_index, "LOAD STATE");
-                    g_state = CAL_STATE_FATAL;
-                    break;
-                }
-                if (desc->channels != 2U)
-                {
-                    cal_set_file_error(g_prepare_index, "NOT STEREO");
-                    g_state = CAL_STATE_FATAL;
-                    break;
-                }
-                if (desc->sample_rate != CAL_SAMPLE_RATE)
-                {
-                    cal_set_file_error(g_prepare_index, "RATE");
-                    g_state = CAL_STATE_FATAL;
-                    break;
-                }
-                if (desc->length_frames < CAL_MAX_PITCH_SOURCE_FRAMES)
-                {
-                    cal_set_file_error(g_prepare_index, "TOO SHORT");
-                    g_state = CAL_STATE_FATAL;
-                    break;
-                }
                 ++g_prepare_index;
                 break;
             }
+            g_state_start_frame = sample_stream_time_now();
             g_state = CAL_STATE_PREPARE_WAIT;
             break;
 
@@ -505,6 +480,12 @@ void brick6_stream_calibration_process(void)
                 }
                 if (state == SAMPLE_POOL_SLOT_PREPARING)
                 {
+                    if ((sample_stream_time_now() - g_state_start_frame)
+                        >= CAL_READY_TIMEOUT_FRAMES)
+                    {
+                        cal_set_file_error(i, "READY TIMEOUT");
+                        g_state = CAL_STATE_FATAL;
+                    }
                     return;
                 }
                 if (state == SAMPLE_POOL_SLOT_ERROR)
