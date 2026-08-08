@@ -32,6 +32,7 @@ typedef enum
     CAL_STATE_RESET = 0,
     CAL_STATE_PREPARE,
     CAL_STATE_START,
+    CAL_STATE_ARMED,
     CAL_STATE_RUN,
     CAL_STATE_SETTLE,
     CAL_STATE_WRITE,
@@ -212,8 +213,6 @@ static void cal_begin_case(void)
     sample_stream_benchmark_reset();
     brick6_sampler_runtime_diag_reset();
     cpu_load_reset_measurement();
-    g_case_start_frame = sample_stream_time_now();
-    g_case_running = 1U;
     for (uint8_t track = 0U; track < 8U; ++track)
     {
         brick6_sampler_runtime_trigger_note_velocity(track,
@@ -226,6 +225,7 @@ static void cal_begin_case(void)
         g_started_voices +=
             brick6_sampler_runtime_calibration_track_stream_active(track);
     }
+    g_case_running = 0U;
 }
 
 static void cal_finish_case(void)
@@ -375,7 +375,7 @@ static void cal_write_csv(void)
     {
         const brick6_stream_calibration_result_t *r = &g_file.results[i];
         const int length = snprintf(line, sizeof(line),
-            "%u,%u,%u,%u,%lu,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%llu,%lu\r\n",
+            "%u,%u,%u,%u,%lu,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\r\n",
             r->page_kib, r->passes, r->advance_pages, r->passed,
             (unsigned long)r->underruns, r->first_fault_voice,
             (unsigned long)r->first_fault_page,
@@ -394,7 +394,8 @@ static void cal_write_csv(void)
             (unsigned long)r->fatfs_reads,
             (unsigned long)r->seeks,
             (unsigned long)r->io_errors,
-            (unsigned long long)r->service_cycles_total,
+            (unsigned long)((r->service_cycles_total > UINT32_MAX)
+                                ? UINT32_MAX : r->service_cycles_total),
             (unsigned long)r->audio_irq_overruns);
         if (length > 0)
         {
@@ -459,6 +460,33 @@ void brick6_stream_calibration_process(void)
         case CAL_STATE_START:
             cal_configure_tracks();
             cal_begin_case();
+            if (g_started_voices != 8U)
+            {
+                (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM %u/8",
+                               (unsigned)g_started_voices);
+                g_state = CAL_STATE_FATAL;
+                break;
+            }
+            g_state = CAL_STATE_ARMED;
+            break;
+
+        case CAL_STATE_ARMED:
+            g_started_voices = 0U;
+            for (uint8_t track = 0U; track < 8U; ++track)
+            {
+                g_started_voices +=
+                    brick6_sampler_runtime_calibration_track_stream_active(track);
+            }
+            if ((g_started_voices != 8U)
+                || (sample_stream_needs_registry_count_active() < 8U))
+            {
+                (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM %u/8",
+                               (unsigned)g_started_voices);
+                g_state = CAL_STATE_FATAL;
+                break;
+            }
+            g_case_start_frame = sample_stream_time_now();
+            g_case_running = 1U;
             g_state = CAL_STATE_RUN;
             break;
 
@@ -466,6 +494,13 @@ void brick6_stream_calibration_process(void)
             if ((sample_stream_time_now() - g_case_start_frame) >= CAL_CASE_FRAMES)
             {
                 cal_finish_case();
+                if ((cal_current()->pages_loaded == 0U)
+                    || (cal_current()->physical_reads == 0U))
+                {
+                    (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM");
+                    g_state = CAL_STATE_FATAL;
+                    break;
+                }
                 g_state_start_frame = sample_stream_time_now();
                 g_state = CAL_STATE_SETTLE;
             }
