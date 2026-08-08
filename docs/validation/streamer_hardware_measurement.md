@@ -44,6 +44,13 @@ necessaire pour expliquer le phenomene. `SERVICE_BLOCKED` identifie les polls
 refuses par le gate SD. Les cycles DWT servent aux mesures de latence ; les
 deadlines sont comparees sur la base des frames audio.
 
+La sélection doit rester strictement round-robin pendant toute la campagne.
+Mesurer le temps maximal entre deux services d'une même voix après passage des
+sept autres. Les deadlines et l'avance READY servent uniquement à calculer la
+profondeur nécessaire ; elles ne doivent jamais changer l'ordre observé. Tester
+successivement les valeurs de `SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND` en
+conservant l'entrelacement V1..V8 pour chaque passe complète.
+
 ## Matrice obligatoire
 
 Pour chacune des tailles 4/8/16/32 Kio, mesurer mono puis stereo, Classic puis

@@ -26,7 +26,6 @@ void sample_stream_manager_release_key(sample_audio_key_t key);
 void sample_stream_manager_release_sample(uint16_t sample_id);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
-uint8_t sample_stream_manager_has_critical_advance(void);
 void sample_stream_manager_note_blocked_poll(uint8_t multi_blocked,
                                              uint8_t bulk_blocked,
                                              uint32_t elapsed_frames);

@@ -19,16 +19,16 @@ static sample_stream_audio_frame_t g_brick6_stream_last_service_frame;
 static sample_stream_audio_frame_t g_brick6_stream_last_poll_frame;
 static brick6_stream_service_task_stats_t g_brick6_stream_service_stats;
 
-static void brick6_stream_service_task_update_critical(void)
+static void brick6_stream_service_task_update_gate(void)
 {
-    const uint32_t critical =
-        (sample_stream_manager_has_critical_advance() != 0U) ? 1U : 0U;
-    if (critical != g_brick6_stream_service_stats.critical_active)
+    const uint32_t streaming =
+        (sample_stream_manager_has_pending_sd_work() != 0U) ? 1U : 0U;
+    if (streaming != g_brick6_stream_service_stats.streaming_active)
     {
-        g_brick6_stream_service_stats.critical_transition_count++;
+        g_brick6_stream_service_stats.streaming_transition_count++;
     }
-    g_brick6_stream_service_stats.critical_active = critical;
-    sd_access_gate_set_streaming_critical((uint8_t)critical);
+    g_brick6_stream_service_stats.streaming_active = streaming;
+    sd_access_gate_set_streaming_critical((uint8_t)streaming);
 }
 
 void brick6_stream_service_task_init(void)
@@ -38,7 +38,7 @@ void brick6_stream_service_task_init(void)
     g_brick6_stream_last_service_frame = sample_stream_time_now();
     g_brick6_stream_last_poll_frame = g_brick6_stream_last_service_frame;
     memset(&g_brick6_stream_service_stats, 0, sizeof(g_brick6_stream_service_stats));
-    brick6_stream_service_task_update_critical();
+    brick6_stream_service_task_update_gate();
 }
 
 void brick6_stream_service_task_notify_audio_irq(void)
@@ -51,7 +51,7 @@ void brick6_stream_service_task_poll(void)
 {
     __DMB();
     const uint32_t requested_sequence = g_brick6_stream_audio_wake_sequence;
-    brick6_stream_service_task_update_critical();
+    brick6_stream_service_task_update_gate();
     const uint8_t pending = sample_stream_manager_has_pending_sd_work();
     if ((requested_sequence == g_brick6_stream_serviced_wake_sequence)
         && (pending == 0U))
@@ -97,7 +97,7 @@ void brick6_stream_service_task_poll(void)
         brick6_stream_underrun_trace_service_end(
             BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
             pending,
-            g_brick6_stream_service_stats.critical_active);
+            g_brick6_stream_service_stats.streaming_active);
         g_brick6_stream_service_stats.busy_poll_count++;
 #if BRICK6_STREAM_BENCH
         sample_stream_benchmark_note_blocked_poll();
@@ -107,11 +107,11 @@ void brick6_stream_service_task_poll(void)
 
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
-    brick6_stream_service_task_update_critical();
+    brick6_stream_service_task_update_gate();
     brick6_stream_underrun_trace_service_end(
         BRICK6_STREAM_TRACE_REASON_NONE,
         sample_stream_manager_has_pending_sd_work(),
-        g_brick6_stream_service_stats.critical_active);
+        g_brick6_stream_service_stats.streaming_active);
     g_brick6_stream_serviced_wake_sequence = requested_sequence;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
     g_brick6_stream_service_stats.audio_wake_sequence = requested_sequence;

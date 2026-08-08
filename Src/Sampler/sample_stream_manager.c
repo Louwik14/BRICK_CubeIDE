@@ -16,12 +16,10 @@
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
-#define SAMPLE_STREAM_SERVICE_MAX_PAGES (16U)
-#define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (16U)
-#define SAMPLE_STREAM_SERVICE_MAX_TICKS (2U)
+#define SAMPLE_STREAM_SERVICE_MAX_PAGES \
+    (SAMPLE_STREAM_TARGET_MAX_VOICES * SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND)
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
-#define SAMPLE_STREAM_CRITICAL_ADVANCE_FRAMES (1024U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -34,14 +32,10 @@ static uint8_t g_sample_stream_manager_initialized;
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
-    uint32_t *out_critical_voices,
     uint32_t *out_loadable_needs,
     uint32_t *out_loading_needs);
 static uint8_t sample_stream_manager_candidate_source(
     const sample_stream_scheduler_candidate_t *candidate);
-static uint8_t sample_stream_manager_entry_has_critical_advance(
-    const sample_stream_target_voice_registry_entry_t *entry,
-    sample_stream_audio_frame_t now);
 #if defined(BRICK6_MULTI_STREAM_DIAG)
 SDRAM_STREAM_SERVICE volatile sample_multi_stream_diag_snapshot_t g_sample_multi_stream_diag;
 volatile uint32_t g_sample_multi_stream_diag_frozen;
@@ -124,7 +118,6 @@ static uint8_t sample_stream_manager_candidate_source(
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
-    uint32_t *out_critical_voices,
     uint32_t *out_loadable_needs,
     uint32_t *out_loading_needs)
 {
@@ -133,10 +126,6 @@ static uint32_t sample_stream_manager_collect_candidates(
         return 0U;
     }
 
-    if (out_critical_voices != 0)
-    {
-        *out_critical_voices = 0U;
-    }
     if (out_loadable_needs != 0)
     {
         *out_loadable_needs = 0U;
@@ -146,7 +135,6 @@ static uint32_t sample_stream_manager_collect_candidates(
         *out_loading_needs = 0U;
     }
     uint32_t count = 0U;
-    const sample_stream_audio_frame_t now = sample_stream_time_now();
     for (uint8_t source = (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC;
          source <= (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI;
          ++source)
@@ -167,12 +155,6 @@ static uint32_t sample_stream_manager_collect_candidates(
                     (sample_stream_snapshot_source_t)source, voice_id, &entry) == 0U)
             {
                 continue;
-            }
-
-            if ((out_critical_voices != 0)
-                && (sample_stream_manager_entry_has_critical_advance(&entry, now) != 0U))
-            {
-                (*out_critical_voices)++;
             }
 
             uint8_t first_missing_seen = 0U;
@@ -218,10 +200,11 @@ static uint32_t sample_stream_manager_collect_candidates(
                 candidate->page_index = need->page_index;
                 candidate->registration_epoch = need->registration_epoch;
                 candidate->voice_generation = entry.generation;
-                candidate->consume_deadline_audio_frame = need->consume_deadline_audio_frame;
+                candidate->diagnostic_deadline_audio_frame =
+                    need->consume_deadline_audio_frame;
                 candidate->source = source;
                 candidate->voice_id = voice_id;
-                candidate->advance = need_index;
+                candidate->need_index = need_index;
                 candidate->round_robin_slot =
                     (source == (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC)
                         ? voice_id
@@ -273,10 +256,9 @@ static void sample_stream_manager_trace_voice_states(void)
 
 static uint8_t sample_stream_manager_pick_next(
     sample_page_load_target_t *out_target,
-    sample_stream_scheduler_candidate_t *out_candidate,
-    sample_stream_scheduler_decision_t *out_decision)
+    sample_stream_scheduler_candidate_t *out_candidate)
 {
-    if ((out_target == 0) || (out_candidate == 0) || (out_decision == 0))
+    if ((out_target == 0) || (out_candidate == 0))
     {
         return 0U;
     }
@@ -284,13 +266,11 @@ static uint8_t sample_stream_manager_pick_next(
     sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
     for (uint32_t attempt = 0U; attempt < SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES; ++attempt)
     {
-        uint32_t critical_voices = 0U;
         uint32_t loadable_needs = 0U;
         uint32_t loading_needs = 0U;
         const uint32_t candidate_count = sample_stream_manager_collect_candidates(
             candidates,
             SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
-            &critical_voices,
             &loadable_needs,
             &loading_needs);
         if (candidate_count == 0U)
@@ -300,8 +280,9 @@ static uint8_t sample_stream_manager_pick_next(
                                               ? BRICK6_STREAM_TRACE_REASON_ALL_LOADING
                                               : BRICK6_STREAM_TRACE_REASON_ALL_READY)
                                        : BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
+            (void)reason;
             brick6_stream_underrun_trace_scheduler(
-                0, 0, 0U, critical_voices, loadable_needs, reason);
+                0, 0, 0U, loadable_needs, reason);
             return 0U;
         }
 
@@ -309,7 +290,7 @@ static uint8_t sample_stream_manager_pick_next(
         if (sample_stream_scheduler_pick(candidates, candidate_count, &decision) == 0U)
         {
             brick6_stream_underrun_trace_scheduler(
-                0, 0, candidate_count, critical_voices, loadable_needs,
+                0, 0, candidate_count, loadable_needs,
                 BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE);
             return 0U;
         }
@@ -326,7 +307,7 @@ static uint8_t sample_stream_manager_pick_next(
                     SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
             {
                 brick6_stream_underrun_trace_scheduler(
-                    candidate, 0, candidate_count, critical_voices, loadable_needs,
+                    candidate, 0, candidate_count, loadable_needs,
                     BRICK6_STREAM_TRACE_REASON_RESERVE_FAILED);
                 return 0U;
             }
@@ -346,7 +327,7 @@ static uint8_t sample_stream_manager_pick_next(
                     SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
             }
             brick6_stream_underrun_trace_scheduler(
-                candidate, 0, candidate_count, critical_voices, loadable_needs,
+                candidate, 0, candidate_count, loadable_needs,
                 BRICK6_STREAM_TRACE_REASON_TARGET_FAILED);
             return 0U;
         }
@@ -358,15 +339,14 @@ static uint8_t sample_stream_manager_pick_next(
                 candidate->page_index,
                 SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
             brick6_stream_underrun_trace_scheduler(
-                candidate, 0, candidate_count, critical_voices, loadable_needs,
+                candidate, 0, candidate_count, loadable_needs,
                 BRICK6_STREAM_TRACE_REASON_EPOCH_MISMATCH);
             return 0U;
         }
         brick6_stream_underrun_trace_scheduler(
-            candidate, &decision, candidate_count, critical_voices, loadable_needs,
+            candidate, &decision, candidate_count, loadable_needs,
             BRICK6_STREAM_TRACE_REASON_NONE);
         *out_candidate = *candidate;
-        *out_decision = decision;
         *out_target = target;
         return 1U;
     }
@@ -382,7 +362,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
         return;
     }
 
-    const uint32_t start_tick = HAL_GetTick();
 #if BRICK6_STREAM_BENCH
     const uint32_t benchmark_service_begin_cycle = DWT->CYCCNT;
 #endif
@@ -407,8 +386,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         sample_page_load_target_t target;
         sample_page_stream_info_t stream_info;
         sample_stream_scheduler_candidate_t candidate;
-        sample_stream_scheduler_decision_t decision;
-        if (sample_stream_manager_pick_next(&target, &candidate, &decision) == 0U)
+        if (sample_stream_manager_pick_next(&target, &candidate) == 0U)
         {
             service_exit_reason = BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
             break;
@@ -446,8 +424,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
         uint32_t consumed = target.frame_count * stream_info.info.block_align;
         const sample_stream_audio_frame_t selected_frame = sample_stream_time_now();
         const uint64_t remaining_64 =
-            (decision.consume_deadline_audio_frame > selected_frame)
-                ? (decision.consume_deadline_audio_frame - selected_frame)
+            (candidate.diagnostic_deadline_audio_frame > selected_frame)
+                ? (candidate.diagnostic_deadline_audio_frame - selected_frame)
                 : 0U;
         const uint32_t remaining_frames = (remaining_64 > UINT32_MAX)
                                               ? UINT32_MAX
@@ -460,7 +438,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
             candidate.voice_id,
             candidate.voice_generation,
             service_sequence,
-            candidate.advance,
+            candidate.need_index,
             remaining_frames,
             0U);
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
@@ -506,7 +484,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
             DWT->CYCCNT - benchmark_io_begin_cycle,
             0U,
             benchmark_backlog,
-            (sample_stream_time_now() > decision.consume_deadline_audio_frame) ? 1U : 0U);
+            (sample_stream_time_now() > candidate.diagnostic_deadline_audio_frame) ? 1U : 0U);
 #endif
         if (io_result.read_bytes > consumed)
         {
@@ -590,25 +568,15 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
         byte_budget -= consumed;
 
-        const uint32_t elapsed_ticks = HAL_GetTick() - start_tick;
         if (pages_this_call >= SAMPLE_STREAM_SERVICE_MAX_PAGES)
         {
             service_exit_reason = BRICK6_STREAM_TRACE_REASON_SERVICE_PAGE_LIMIT;
             break;
         }
-        if (g_sample_stream_service_fatfs_ops >= SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS)
-        {
-            service_exit_reason = BRICK6_STREAM_TRACE_REASON_SERVICE_FATFS_LIMIT;
-            break;
-        }
-        if (elapsed_ticks >= SAMPLE_STREAM_SERVICE_MAX_TICKS)
-        {
-            service_exit_reason = BRICK6_STREAM_TRACE_REASON_SERVICE_TICK_LIMIT;
-            break;
-        }
     }
     brick6_stream_underrun_trace_manager_end(
         pages_this_call, g_sample_stream_service_fatfs_ops, service_exit_reason);
+    (void)service_exit_reason;
     (void)sample_stream_event_trace_record(
         SAMPLE_STREAM_EVENT_SERVICE_END,
         (sample_audio_key_t){ 0U, 0U },
@@ -645,85 +613,13 @@ void sample_stream_manager_note_blocked_poll(uint8_t multi_blocked,
         1U);
 }
 
-static uint8_t sample_stream_manager_entry_has_critical_advance(
-    const sample_stream_target_voice_registry_entry_t *entry,
-    sample_stream_audio_frame_t now)
-{
-    if ((entry == 0) || (entry->active == 0U))
-    {
-        return 0U;
-    }
-
-    for (uint8_t need_index = 0U; need_index < entry->need_count; ++need_index)
-    {
-        const sample_stream_target_voice_need_t *const need = &entry->needs[need_index];
-        if ((need->valid == 0U)
-            || (sample_page_cache_get_page_state_key(need->key, need->page_index)
-                == SAMPLE_PAGE_READY))
-        {
-            continue;
-        }
-
-        /* A missing current page is critical regardless of its deadline. */
-        if (need_index == 0U)
-        {
-            return 1U;
-        }
-
-        if (need->consume_deadline_audio_frame == SAMPLE_STREAM_AUDIO_FRAME_NEVER)
-        {
-            continue;
-        }
-        const uint64_t remaining = (need->consume_deadline_audio_frame > now)
-                                       ? (need->consume_deadline_audio_frame - now)
-                                       : 0U;
-        if (remaining <= SAMPLE_STREAM_CRITICAL_ADVANCE_FRAMES)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
-uint8_t sample_stream_manager_has_critical_advance(void)
-{
-    const sample_stream_audio_frame_t now = sample_stream_time_now();
-    sample_stream_target_voice_registry_entry_t entry;
-    for (uint8_t voice_id = 0U;
-         voice_id < SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY;
-         ++voice_id)
-    {
-        if ((sample_stream_needs_registry_read(SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-                                               voice_id,
-                                               &entry) != 0U)
-            && (sample_stream_manager_entry_has_critical_advance(&entry, now) != 0U))
-        {
-            return 1U;
-        }
-    }
-    for (uint8_t voice_id = 0U;
-         voice_id < SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY;
-         ++voice_id)
-    {
-        if ((sample_stream_needs_registry_read(SAMPLE_STREAM_SNAPSHOT_MULTI,
-                                               voice_id,
-                                               &entry) != 0U)
-            && (sample_stream_manager_entry_has_critical_advance(&entry, now) != 0U))
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
     sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    return (sample_stream_manager_collect_candidates(
-                candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
-                0, 0, 0) != 0U)
-               ? 1U
-               : 0U;
+    uint32_t loading_needs = 0U;
+    const uint32_t candidate_count = sample_stream_manager_collect_candidates(
+        candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_needs);
+    return ((candidate_count != 0U) || (loading_needs != 0U)) ? 1U : 0U;
 }
 
 #if defined(BRICK6_MULTI_STREAM_DIAG)

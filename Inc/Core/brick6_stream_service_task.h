@@ -19,8 +19,8 @@ typedef struct
     uint32_t busy_poll_count;
     uint32_t max_dispatch_delay_frames;
     uint32_t cadence_miss_count;
-    uint32_t critical_active;
-    uint32_t critical_transition_count;
+    uint32_t streaming_active;
+    uint32_t streaming_transition_count;
 } brick6_stream_service_task_stats_t;
 
 void brick6_stream_service_task_init(void);

@@ -21,7 +21,6 @@ uint8_t sample_stream_scheduler_pick(
 
     uint8_t found = 0U;
     uint32_t best_index = 0U;
-    uint8_t best_advance = UINT8_MAX;
     uint32_t best_distance = UINT32_MAX;
     for (uint32_t i = 0U; i < candidate_count; ++i)
     {
@@ -30,20 +29,21 @@ uint8_t sample_stream_scheduler_pick(
         {
             continue;
         }
+        if (candidate->round_robin_slot >= SAMPLE_STREAM_SCHEDULER_SLOT_COUNT)
+        {
+            continue;
+        }
 
         const uint32_t distance =
             (candidate->round_robin_slot + SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES
              - g_sample_stream_scheduler_round_robin_cursor)
-            % SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES;
-        if ((found != 0U)
-            && ((candidate->advance > best_advance)
-                || ((candidate->advance == best_advance) && (distance >= best_distance))))
+            % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT;
+        if ((found != 0U) && (distance >= best_distance))
         {
             continue;
         }
         found = 1U;
         best_index = i;
-        best_advance = candidate->advance;
         best_distance = distance;
     }
 
@@ -54,12 +54,9 @@ uint8_t sample_stream_scheduler_pick(
 
     memset(out_decision, 0, sizeof(*out_decision));
     out_decision->candidate_index = (uint8_t)best_index;
-    out_decision->advance = best_advance;
     out_decision->round_robin_slot = candidates[best_index].round_robin_slot;
-    out_decision->consume_deadline_audio_frame =
-        candidates[best_index].consume_deadline_audio_frame;
     g_sample_stream_scheduler_round_robin_cursor =
         (uint8_t)((candidates[best_index].round_robin_slot + 1U)
-                  % SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES);
+                  % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
     return 1U;
 }

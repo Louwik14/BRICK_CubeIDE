@@ -362,13 +362,6 @@ void brick6_stream_underrun_trace_need_selectable(
     {
         return;
     }
-    const uint64_t now = sample_stream_time_now();
-    const uint32_t frames_ahead =
-        (candidate->consume_deadline_audio_frame > now)
-            ? (uint32_t)((candidate->consume_deadline_audio_frame - now) > UINT32_MAX
-                             ? UINT32_MAX
-                             : (candidate->consume_deadline_audio_frame - now))
-            : 0U;
     brick6_stream_underrun_trace_record(
         BRICK6_STREAM_TRACE_NEED_SELECTABLE,
         candidate->key,
@@ -382,17 +375,16 @@ void brick6_stream_underrun_trace_need_selectable(
         0U,
         0U,
         0U,
-        candidate->advance,
-        frames_ahead,
+        candidate->need_index,
+        candidate->round_robin_slot,
         candidate_count,
-        candidate->round_robin_slot);
+        0U);
 }
 
 void brick6_stream_underrun_trace_scheduler(
     const sample_stream_scheduler_candidate_t *candidate,
     const sample_stream_scheduler_decision_t *decision,
     uint32_t candidate_count,
-    uint32_t critical_voices,
     uint32_t loadable_needs,
     uint8_t reason)
 {
@@ -402,8 +394,7 @@ void brick6_stream_underrun_trace_scheduler(
     uint32_t epoch = 0U;
     uint8_t source = UINT8_MAX;
     uint8_t voice = UINT8_MAX;
-    uint32_t advance = UINT32_MAX;
-    uint32_t remaining = 0U;
+    uint32_t slot = UINT32_MAX;
     if (candidate != 0)
     {
         key = candidate->key;
@@ -412,18 +403,11 @@ void brick6_stream_underrun_trace_scheduler(
         epoch = candidate->registration_epoch;
         source = candidate->source;
         voice = candidate->voice_id;
-        advance = candidate->advance;
+        slot = candidate->round_robin_slot;
     }
     if (decision != 0)
     {
-        advance = decision->advance;
-        const uint64_t now = sample_stream_time_now();
-        remaining = (decision->consume_deadline_audio_frame > now)
-                        ? (uint32_t)((decision->consume_deadline_audio_frame - now)
-                                     > UINT32_MAX
-                                         ? UINT32_MAX
-                                         : (decision->consume_deadline_audio_frame - now))
-                        : 0U;
+        slot = decision->round_robin_slot;
     }
     brick6_stream_underrun_trace_record(
         BRICK6_STREAM_TRACE_SCHEDULER_DECISION,
@@ -439,9 +423,9 @@ void brick6_stream_underrun_trace_scheduler(
         (decision != 0) ? 1U : 0U,
         0U,
         candidate_count,
-        critical_voices,
         loadable_needs,
-        (advance == UINT32_MAX) ? remaining : ((advance & 0xFFFFU) | (remaining << 16U)));
+        slot,
+        0U);
 }
 
 void brick6_stream_underrun_trace_load_begin(
@@ -468,7 +452,7 @@ void brick6_stream_underrun_trace_load_begin(
         0U,
         target->frame_count,
         target->slot_index,
-        candidate->advance,
+        candidate->need_index,
         0U);
 }
 
@@ -784,7 +768,7 @@ void brick6_stream_underrun_trace_manager_end(uint32_t pages,
 
 void brick6_stream_underrun_trace_service_end(uint8_t reason,
                                               uint32_t pending_needs,
-                                              uint8_t critical_active)
+                                              uint8_t streaming_active)
 {
     if (reason == BRICK6_STREAM_TRACE_REASON_NONE)
     {
@@ -806,7 +790,7 @@ void brick6_stream_underrun_trace_service_end(uint8_t reason,
         0U,
         0U,
         g_trace_new_needs > UINT8_MAX ? UINT8_MAX : (uint8_t)g_trace_new_needs,
-        critical_active,
+        streaming_active,
         0U,
         reason,
         0U,

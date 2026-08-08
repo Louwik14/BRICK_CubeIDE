@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 #define BRICK6_STREAM_UNDERRUN_TRACE_MAGIC       (0x53555254UL)
-#define BRICK6_STREAM_UNDERRUN_TRACE_ABI_VERSION (2U)
+#define BRICK6_STREAM_UNDERRUN_TRACE_ABI_VERSION (3U)
 #define BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY    (1024U)
 #define BRICK6_STREAM_UNDERRUN_TRACE_POST_EVENTS (128U)
 #define BRICK6_STREAM_TRACE_STATE_ABSENT         (0xFFU)
@@ -54,8 +54,6 @@ typedef enum
     BRICK6_STREAM_TRACE_REASON_ZERO_BUDGET,
     BRICK6_STREAM_TRACE_REASON_SERVICE_BYTE_BUDGET,
     BRICK6_STREAM_TRACE_REASON_SERVICE_PAGE_LIMIT,
-    BRICK6_STREAM_TRACE_REASON_SERVICE_FATFS_LIMIT,
-    BRICK6_STREAM_TRACE_REASON_SERVICE_TICK_LIMIT,
     BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
     BRICK6_STREAM_TRACE_REASON_GATE_BLOCKED,
     BRICK6_STREAM_TRACE_REASON_LOAD_ERROR,
@@ -137,7 +135,6 @@ void brick6_stream_underrun_trace_scheduler(
     const sample_stream_scheduler_candidate_t *candidate,
     const sample_stream_scheduler_decision_t *decision,
     uint32_t candidate_count,
-    uint32_t critical_voices,
     uint32_t loadable_needs,
     uint8_t reason);
 void brick6_stream_underrun_trace_load_begin(
@@ -180,7 +177,7 @@ void brick6_stream_underrun_trace_manager_end(uint32_t pages,
                                               uint8_t reason);
 void brick6_stream_underrun_trace_service_end(uint8_t reason,
                                               uint32_t pending_needs,
-                                              uint8_t critical_active);
+                                              uint8_t streaming_active);
 #else
 #define brick6_stream_underrun_trace_reset() ((void)0)
 #define brick6_stream_underrun_trace_voice_state(...) ((void)0)

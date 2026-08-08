@@ -12,9 +12,17 @@ uniquement l'entrée de la génération concernée.
 
 `sample_stream_sequence_build()` est le générateur pur commun Classic/Multi. Il
 calcule les pages forward, le retour de loop et supprime les doublons. Les
-deadlines sont exprimées en frames de sortie à partir du ratio Q16. Le scheduler
-inspecte seulement les entrées actives et choisit la voix dont le premier besoin
-non READY a la plus faible avance, avec départage round-robin.
+deadlines sont exprimées en frames de sortie à partir du ratio Q16 et ne servent
+qu'au diagnostic et à la calibration. Le scheduler inspecte seulement les
+entrées actives et sert leur premier besoin non READY dans l'ordre fixe des
+slots Classic puis Multi. Après chaque page, le curseur passe au slot suivant ;
+avance, pitch, deadline, backlog et ancienneté ne modifient jamais cet ordre.
+
+Une voix sans besoin chargeable est sautée sans I/O et le curseur poursuit son
+tour. Avec huit voix admises, une voix servie voit donc au plus les sept autres
+voix servies avant elle. `SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND` calibre le
+nombre de passes complètes : `N=2` produit V1..V8 puis V1..V8, jamais deux pages
+consécutives pour une même voix.
 
 Le cache ne crée, ne détruit et ne reconstruit aucun besoin. Il possède seulement
 le cycle physique `FREE -> RESERVED -> LOADING -> READY`, ou `FAILED`. Une page

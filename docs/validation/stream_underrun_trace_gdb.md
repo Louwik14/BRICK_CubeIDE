@@ -111,7 +111,7 @@ Les événements sont :
 ```text
 0 VOICE_STATE       état, position, step, avance READY, premier manque
 1 NEED_CREATED      besoin créé ; value0=role, value1=frames avant deadline
-2 NEED_SELECTABLE   besoin sélectionnable ; value0=avance, value1=frames avant deadline
+2 NEED_SELECTABLE   besoin sélectionnable ; value0=index besoin, value1=slot RR
 3 SCHEDULER_DECISION
 4 LOAD_BEGIN
 5 IO_BEGIN
@@ -131,10 +131,10 @@ READY` et `page` est la première page manquante. Les événements
 `VOICE_STATE` suivants listent les besoins : `value0=état`, `value1=frames
 avant deadline`, `value2=0`, `value3=(role << 24) | need_count`.
 
-Pour `SCHEDULER_DECISION`, `value0=candidate_count`, `value1=voix sous le
-seuil critique`, `value2=besoins chargeables`. Une décision réussie a
-`result=1` et `value3=(advance & 0xffff) | (frames_deadline << 16)` ; une
-décision sans page a `result=0` et `reason` donne la cause exacte.
+Pour `SCHEDULER_DECISION`, `value0=candidate_count`, `value1=besoins
+chargeables`, `value2=slot round-robin`. Une décision réussie a `result=1` ;
+une décision sans page a `result=0` et `reason` donne la cause exacte. Aucun
+champ d'avance ou de deadline n'entre dans la décision.
 
 Pour `IO_END`, `value0=bytes lus`, `value1=lectures physiques`, `value2=seeks`
 et `value3=(fatfs_ops << 16) | file_opens`. La durée couvre l'I/O synchrone ;
@@ -147,9 +147,8 @@ Les raisons sont :
 0 NONE                  1 NO_ACTIVE_NEED       2 ALL_READY
 3 ALL_LOADING           4 NO_CANDIDATE         5 RESERVE_FAILED
 6 TARGET_FAILED         7 EPOCH_MISMATCH       8 ZERO_BUDGET
-9 SERVICE_BYTE_BUDGET  10 SERVICE_PAGE_LIMIT  11 SERVICE_FATFS_LIMIT
-12 SERVICE_TICK_LIMIT  13 MULTI_BULK_BLOCKED  14 GATE_BLOCKED
-15 LOAD_ERROR           16 PUBLISH_ERROR
+9 SERVICE_BYTE_BUDGET  10 SERVICE_PAGE_LIMIT  11 MULTI_BULK_BLOCKED
+12 GATE_BLOCKED         13 LOAD_ERROR          14 PUBLISH_ERROR
 ```
 
 ## Coût

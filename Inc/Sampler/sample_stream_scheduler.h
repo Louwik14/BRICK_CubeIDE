@@ -4,12 +4,14 @@
 
 #include "Sampler/sample_audio_key.h"
 #include "Sampler/sample_stream_arch_contract.h"
+#include "Sampler/sample_stream_snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES (24U)
+#define SAMPLE_STREAM_SCHEDULER_SLOT_COUNT SAMPLE_STREAM_SNAPSHOT_CAPACITY
+#define SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES SAMPLE_STREAM_SCHEDULER_SLOT_COUNT
 
 /* One candidate is the first non-ready need of one voice. */
 typedef struct
@@ -18,10 +20,10 @@ typedef struct
     uint32_t page_index;
     uint32_t registration_epoch;
     uint32_t voice_generation;
-    sample_stream_audio_frame_t consume_deadline_audio_frame;
+    sample_stream_audio_frame_t diagnostic_deadline_audio_frame;
     uint8_t source;
     uint8_t voice_id;
-    uint8_t advance;
+    uint8_t need_index;
     uint8_t round_robin_slot;
     uint8_t active;
 } sample_stream_scheduler_candidate_t;
@@ -29,10 +31,8 @@ typedef struct
 typedef struct
 {
     uint8_t candidate_index;
-    uint8_t advance;
     uint8_t round_robin_slot;
-    uint8_t reserved;
-    sample_stream_audio_frame_t consume_deadline_audio_frame;
+    uint8_t reserved[2];
 } sample_stream_scheduler_decision_t;
 
 void sample_stream_scheduler_init(void);
