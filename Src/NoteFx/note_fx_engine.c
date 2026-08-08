@@ -20,19 +20,40 @@ typedef struct {
 } note_fx_euclid_source_t;
 
 typedef struct {
-    note_fx_arp_t arp;
-    note_fx_euclid_source_t euclid_source[NOTE_FX_EUCLID_MAX_SOURCES];
     note_fx_owned_t owned[NOTE_FX_EUCLID_MAX_OWNED];
     uint64_t next_sample;
     uint32_t generation;
+    uint8_t model;
+    uint8_t closing;
+} note_fx_slot_common_t;
+
+typedef struct {
+    note_fx_arp_t arp;
     uint32_t pending_close_token, pending_close_generation;
-    uint64_t euclid_mask;
-    uint8_t euclid_length, euclid_pulse, euclid_division, euclid_phase;
-    uint8_t euclid_source_count;
-    uint8_t euclid_reconfigure_pending;
-    uint8_t model, rate, style, range, destination, closing;
+    uint8_t rate, style, range, destination;
     uint8_t pending_source_close;
+} note_fx_arp_state_t;
+
+typedef struct {
+    note_fx_euclid_source_t source[NOTE_FX_EUCLID_MAX_SOURCES];
+    uint64_t mask;
+    uint8_t length, pulse, division, phase;
+    uint8_t source_count;
+    uint8_t reconfigure_pending;
+} note_fx_euclid_state_t;
+
+typedef union {
+    note_fx_arp_state_t arp;
+    note_fx_euclid_state_t euclid;
+} note_fx_state_union_t;
+
+typedef struct {
+    note_fx_slot_common_t common;
+    note_fx_state_union_t fx;
 } note_fx_slot_runtime_t;
+
+_Static_assert(sizeof(note_fx_slot_runtime_t) == 928U,
+               "NoteFx slot layout changed unexpectedly");
 
 static note_fx_slot_runtime_t g_slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
 static note_fx_diag_t g_diag[NOTE_FX_TRACK_COUNT];
@@ -42,7 +63,7 @@ static uint8_t slot_owned_count(const note_fx_slot_runtime_t *runtime)
 {
     uint8_t count = 0U;
     for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
-        count = (uint8_t)(count + (runtime->owned[i].active != 0U));
+        count = (uint8_t)(count + (runtime->common.owned[i].active != 0U));
     return count;
 }
 
@@ -83,8 +104,8 @@ static void note_fx_diag_update_usage(uint8_t track, uint8_t slot,
         return;
     note_fx_slot_diag_t *const diag = &g_diag[track].slot[slot];
     const uint8_t owned_count = slot_owned_count(runtime);
-    if (runtime->euclid_source_count > diag->source_high_water)
-        diag->source_high_water = runtime->euclid_source_count;
+    if (runtime->fx.euclid.source_count > diag->source_high_water)
+        diag->source_high_water = runtime->fx.euclid.source_count;
     if (owned_count > diag->owned_high_water)
         diag->owned_high_water = owned_count;
 }
@@ -101,7 +122,7 @@ static uint8_t slot_has_owned(const note_fx_slot_runtime_t *runtime)
 {
     for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
     {
-        if (runtime->owned[i].active != 0U)
+        if (runtime->common.owned[i].active != 0U)
             return 1U;
     }
     return 0U;
@@ -111,10 +132,10 @@ static int8_t euclid_source_find(const note_fx_slot_runtime_t *runtime,
                                  uint32_t token, uint32_t generation,
                                  uint8_t provenance)
 {
-    for (uint8_t i = 0U; i < runtime->euclid_source_count; ++i)
+    for (uint8_t i = 0U; i < runtime->fx.euclid.source_count; ++i)
     {
         const note_fx_euclid_source_t *const source =
-            &runtime->euclid_source[i];
+            &runtime->fx.euclid.source[i];
         if ((source->active != 0U)
                 && (source->token == token)
                 && (source->generation == generation)
@@ -129,19 +150,19 @@ static int8_t euclid_source_find(const note_fx_slot_runtime_t *runtime,
 static void euclid_source_remove(note_fx_slot_runtime_t *runtime,
                                  uint8_t index)
 {
-    if (index >= runtime->euclid_source_count)
+    if (index >= runtime->fx.euclid.source_count)
         return;
     for (uint8_t i = (uint8_t)(index + 1U);
-         i < runtime->euclid_source_count; ++i)
+         i < runtime->fx.euclid.source_count; ++i)
     {
-        runtime->euclid_source[i - 1U] = runtime->euclid_source[i];
+        runtime->fx.euclid.source[i - 1U] = runtime->fx.euclid.source[i];
     }
-    --runtime->euclid_source_count;
-    if (runtime->euclid_source_count == 0U)
+    --runtime->fx.euclid.source_count;
+    if (runtime->fx.euclid.source_count == 0U)
     {
-        runtime->euclid_phase = 0U;
+        runtime->fx.euclid.phase = 0U;
         if (slot_has_owned(runtime) == 0U)
-            runtime->next_sample = 0U;
+            runtime->common.next_sample = 0U;
     }
 }
 
@@ -162,11 +183,11 @@ uint8_t note_fx_engine_is_generated_occurrence_current(
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         const note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-        if (runtime->closing != 0U)
+        if (runtime->common.closing != 0U)
             continue;
         for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
         {
-            const note_fx_owned_t *const owned = &runtime->owned[i];
+            const note_fx_owned_t *const owned = &runtime->common.owned[i];
             if ((owned->active != 0U)
                     && (owned->token == occurrence_id)
                     && (owned->generation == generation))
@@ -184,15 +205,35 @@ static uint8_t closure_is_settled(note_fx_result_t result)
         || (result == NOTE_EVENT_RESULT_REJECTED_STALE);
 }
 
+static void note_fx_slot_reset_fx_state(note_fx_slot_runtime_t *runtime,
+                                        uint8_t track, uint8_t slot,
+                                        uint8_t model)
+{
+    memset(&runtime->fx, 0, sizeof(runtime->fx));
+    if (model == NOTE_FX_MODEL_ARP)
+    {
+        note_fx_arp_init(&runtime->fx.arp.arp,
+                         0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
+    }
+    else if (model == NOTE_FX_MODEL_EUCLID)
+    {
+        runtime->fx.euclid.length = NOTE_FX_EUCLID_LENGTH_DEFAULT;
+        runtime->fx.euclid.pulse = NOTE_FX_EUCLID_PULSE_DEFAULT;
+        runtime->fx.euclid.division = SEQ_DIVISION_ARP_DEFAULT_INDEX;
+        runtime->fx.euclid.mask = euclid_build_mask(
+            runtime->fx.euclid.length, runtime->fx.euclid.pulse);
+    }
+}
+
 static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
                          note_fx_emit_fn emit, void *context)
 {
     note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-    ++runtime->generation;
-    if (runtime->generation == 0U)
-        runtime->generation = 1U;
+    ++runtime->common.generation;
+    if (runtime->common.generation == 0U)
+        runtime->common.generation = 1U;
     for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
-        note_fx_owned_t *const owned = &runtime->owned[i];
+        note_fx_owned_t *const owned = &runtime->common.owned[i];
         if (owned->active == 0U) continue;
         const note_fx_event_t event = {
             .sample_abs = sample,
@@ -215,16 +256,11 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
         else
             note_fx_diag_record_emit_reject(track, slot, 0U);
     }
-    note_fx_arp_init(&runtime->arp, 0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
-    memset(runtime->euclid_source, 0, sizeof(runtime->euclid_source));
-    runtime->euclid_source_count = 0U;
-    runtime->euclid_phase = 0U;
-    runtime->euclid_reconfigure_pending = 0U;
-    runtime->pending_source_close = 0U;
-    runtime->closing = 0U;
+    note_fx_slot_reset_fx_state(runtime, track, slot, runtime->common.model);
+    runtime->common.closing = 0U;
     for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
-        runtime->closing |= runtime->owned[i].active;
-    runtime->next_sample = (runtime->closing != 0U) ? sample : 0U;
+        runtime->common.closing |= runtime->common.owned[i].active;
+    runtime->common.next_sample = (runtime->common.closing != 0U) ? sample : 0U;
 }
 
 void note_fx_engine_init(void)
@@ -234,16 +270,10 @@ void note_fx_engine_init(void)
     g_token = 0U;
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
-            g_slot[track][slot].range = 1U;
-            g_slot[track][slot].euclid_length = NOTE_FX_EUCLID_LENGTH_DEFAULT;
-            g_slot[track][slot].euclid_pulse = NOTE_FX_EUCLID_PULSE_DEFAULT;
-            g_slot[track][slot].euclid_division = SEQ_DIVISION_ARP_DEFAULT_INDEX;
-            g_slot[track][slot].euclid_mask = euclid_build_mask(
-                g_slot[track][slot].euclid_length,
-                g_slot[track][slot].euclid_pulse);
-            g_slot[track][slot].generation = 1U;
-            note_fx_arp_init(&g_slot[track][slot].arp,
-                             0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
+            g_slot[track][slot].common.model = NOTE_FX_MODEL_OFF;
+            g_slot[track][slot].common.generation = 1U;
+            note_fx_slot_reset_fx_state(&g_slot[track][slot], track, slot,
+                                        NOTE_FX_MODEL_OFF);
         }
 }
 
@@ -252,7 +282,7 @@ void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model,
 {
     if (track >= NOTE_FX_TRACK_COUNT || slot >= NOTE_FX_SLOT_COUNT) return;
     note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-    const uint8_t previous_model = runtime->model;
+    const uint8_t previous_model = runtime->common.model;
     const uint8_t target_model = (model < NOTE_FX_MODEL_COUNT)
         ? model : NOTE_FX_MODEL_OFF;
 
@@ -266,34 +296,33 @@ void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model,
         const uint8_t division = (range < SEQ_DIVISION_ARP_COUNT)
             ? range : SEQ_DIVISION_ARP_DEFAULT_INDEX;
         const uint8_t changed = (previous_model != NOTE_FX_MODEL_EUCLID)
-            || (runtime->euclid_length != length)
-            || (runtime->euclid_pulse != pulse)
-            || (runtime->euclid_division != division);
+            ? 1U
+            : (uint8_t)((runtime->fx.euclid.length != length)
+                || (runtime->fx.euclid.pulse != pulse)
+                || (runtime->fx.euclid.division != division));
 
         if (previous_model != NOTE_FX_MODEL_EUCLID)
         {
-            note_fx_arp_init(&runtime->arp,
-                             0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
-            memset(runtime->euclid_source, 0, sizeof(runtime->euclid_source));
-            runtime->euclid_source_count = 0U;
+            note_fx_slot_reset_fx_state(runtime, track, slot,
+                                        NOTE_FX_MODEL_EUCLID);
             if (slot_has_owned(runtime) != 0U)
             {
-                runtime->closing = 1U;
-                runtime->next_sample = 0U;
+                runtime->common.closing = 1U;
+                runtime->common.next_sample = 0U;
             }
         }
-        runtime->model = target_model;
-        runtime->euclid_length = length;
-        runtime->euclid_pulse = pulse;
-        runtime->euclid_division = division;
+        runtime->common.model = target_model;
+        runtime->fx.euclid.length = length;
+        runtime->fx.euclid.pulse = pulse;
+        runtime->fx.euclid.division = division;
         if (changed != 0U)
         {
-            runtime->euclid_mask = euclid_build_mask(length, pulse);
-            runtime->euclid_phase = 0U;
+            runtime->fx.euclid.mask = euclid_build_mask(length, pulse);
+            runtime->fx.euclid.phase = 0U;
             if (previous_model == NOTE_FX_MODEL_EUCLID)
             {
-                runtime->euclid_reconfigure_pending = 1U;
-                runtime->next_sample = 0U;
+                runtime->fx.euclid.reconfigure_pending = 1U;
+                runtime->common.next_sample = 0U;
             }
         }
         return;
@@ -301,27 +330,21 @@ void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model,
 
     if (previous_model != target_model)
     {
-        if (previous_model == NOTE_FX_MODEL_EUCLID)
-        {
-            memset(runtime->euclid_source, 0, sizeof(runtime->euclid_source));
-            runtime->euclid_source_count = 0U;
-        }
-        if (target_model == NOTE_FX_MODEL_ARP)
-        {
-            note_fx_arp_init(&runtime->arp,
-                             0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
-        }
+        note_fx_slot_reset_fx_state(runtime, track, slot, target_model);
         if (slot_has_owned(runtime) != 0U)
         {
-            runtime->closing = 1U;
-            runtime->next_sample = 0U;
+            runtime->common.closing = 1U;
+            runtime->common.next_sample = 0U;
         }
     }
-    runtime->model = target_model;
-    runtime->rate = (rate < 8U) ? rate : 2U;
-    runtime->style = (style <= NOTE_FX_ARP_RANDOM) ? style : NOTE_FX_ARP_ORDER;
-    runtime->range = (range >= 1U && range <= 4U) ? range : 1U;
-    runtime->euclid_reconfigure_pending = 0U;
+    runtime->common.model = target_model;
+    if (target_model == NOTE_FX_MODEL_ARP)
+    {
+        runtime->fx.arp.rate = (rate < 8U) ? rate : 2U;
+        runtime->fx.arp.style = (style <= NOTE_FX_ARP_RANDOM) ? style : NOTE_FX_ARP_ORDER;
+        runtime->fx.arp.range = (range >= 1U && range <= 4U) ? range : 1U;
+        runtime->fx.arp.pending_source_close = 0U;
+    }
 }
 
 static note_fx_result_t euclid_emit_source_off(
@@ -332,7 +355,7 @@ static note_fx_result_t euclid_emit_source_off(
     note_fx_result_t close_result = NOTE_EVENT_RESULT_ACCEPTED;
     for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
     {
-        note_fx_owned_t *const owned = &runtime->owned[i];
+        note_fx_owned_t *const owned = &runtime->common.owned[i];
         if ((owned->active == 0U)
                 || (owned->source_token != source->token)
                 || (owned->source_generation != source->generation)
@@ -378,20 +401,20 @@ static note_fx_result_t euclid_stage_source(
         if (source_index < 0)
             return NOTE_EVENT_RESULT_REJECTED_STALE;
         note_fx_euclid_source_t *const source =
-            &runtime->euclid_source[(uint8_t)source_index];
+            &runtime->fx.euclid.source[(uint8_t)source_index];
         source->closing = 1U;
         source->close_sample = event->sample_abs;
-        if ((runtime->next_sample == 0U)
-                || (event->sample_abs < runtime->next_sample))
+        if ((runtime->common.next_sample == 0U)
+                || (event->sample_abs < runtime->common.next_sample))
         {
-            runtime->next_sample = event->sample_abs;
+            runtime->common.next_sample = event->sample_abs;
         }
         const note_fx_result_t result = euclid_emit_source_off(
             runtime, event->track, slot, source, event->sample_abs, emit, context);
         uint8_t pending_owned = 0U;
         for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
         {
-            const note_fx_owned_t *const owned = &runtime->owned[i];
+            const note_fx_owned_t *const owned = &runtime->common.owned[i];
             if ((owned->active != 0U)
                     && (owned->source_token == source->token)
                     && (owned->source_generation == source->generation)
@@ -409,23 +432,23 @@ static note_fx_result_t euclid_stage_source(
     if (source_index >= 0)
     {
         note_fx_euclid_source_t *const source =
-            &runtime->euclid_source[(uint8_t)source_index];
+            &runtime->fx.euclid.source[(uint8_t)source_index];
         source->note = event->note;
         source->velocity = event->velocity;
         source->destination = event->destination_id;
         source->closing = 0U;
         return NOTE_EVENT_RESULT_ACCEPTED;
     }
-    if (runtime->euclid_source_count >= NOTE_FX_EUCLID_MAX_SOURCES)
+    if (runtime->fx.euclid.source_count >= NOTE_FX_EUCLID_MAX_SOURCES)
     {
         note_fx_diag_record_saturation(event->track, slot,
                                         NOTE_FX_DIAG_CAUSE_SOURCE_CAPACITY);
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
 
-    const uint8_t was_empty = runtime->euclid_source_count == 0U;
+    const uint8_t was_empty = runtime->fx.euclid.source_count == 0U;
     note_fx_euclid_source_t *const source =
-        &runtime->euclid_source[runtime->euclid_source_count++];
+        &runtime->fx.euclid.source[runtime->fx.euclid.source_count++];
     *source = (note_fx_euclid_source_t){
         .active = 1U,
         .note = event->note,
@@ -437,8 +460,8 @@ static note_fx_result_t euclid_stage_source(
     };
     if (was_empty != 0U)
     {
-        runtime->euclid_phase = 0U;
-        runtime->next_sample = event->sample_abs;
+        runtime->fx.euclid.phase = 0U;
+        runtime->common.next_sample = event->sample_abs;
     }
     note_fx_diag_update_usage(event->track, slot, runtime);
     return NOTE_EVENT_RESULT_ACCEPTED;
@@ -452,11 +475,11 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
 
     note_fx_slot_runtime_t *const runtime = &g_slot[event->track][slot];
-    if (runtime->model == NOTE_FX_MODEL_EUCLID)
+    if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
     {
         return euclid_stage_source(runtime, event, slot, emit, context);
     }
-    if (runtime->model != NOTE_FX_MODEL_ARP)
+    if (runtime->common.model != NOTE_FX_MODEL_ARP)
     {
         note_fx_event_t forwarded = *event;
         forwarded.stage = (uint8_t)(slot + 1U);
@@ -467,7 +490,7 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
         note_fx_result_t close_result = NOTE_EVENT_RESULT_ACCEPTED;
         uint8_t matched_owned = 0U;
         for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
-            note_fx_owned_t *const owned = &runtime->owned[i];
+            note_fx_owned_t *const owned = &runtime->common.owned[i];
             if ((owned->active == 0U)
                     || (owned->source_token != event->source_token)
                     || (owned->source_generation != event->generation)) continue;
@@ -495,37 +518,37 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
         }
         if (close_result != NOTE_EVENT_RESULT_ACCEPTED)
         {
-            runtime->pending_source_close = 1U;
-            runtime->pending_close_token = event->source_token;
-            runtime->pending_close_generation = event->generation;
-            runtime->next_sample = event->sample_abs;
+            runtime->fx.arp.pending_source_close = 1U;
+            runtime->fx.arp.pending_close_token = event->source_token;
+            runtime->fx.arp.pending_close_generation = event->generation;
+            runtime->common.next_sample = event->sample_abs;
             return close_result;
         }
-        if (note_fx_arp_note_off(&runtime->arp, event->source_token,
+        if (note_fx_arp_note_off(&runtime->fx.arp.arp, event->source_token,
                                  event->generation) == 0U)
         {
             return (matched_owned != 0U) ? NOTE_EVENT_RESULT_ACCEPTED
                                          : NOTE_EVENT_RESULT_REJECTED_STALE;
         }
-        if (runtime->arp.count == 0U) {
-            runtime->closing = 0U;
+        if (runtime->fx.arp.arp.count == 0U) {
+            runtime->common.closing = 0U;
             for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
-                runtime->closing |= runtime->owned[i].active;
-            runtime->next_sample = (runtime->closing != 0U)
+                runtime->common.closing |= runtime->common.owned[i].active;
+            runtime->common.next_sample = (runtime->common.closing != 0U)
                 ? event->sample_abs : 0U;
         }
         return 1U;
     }
 
-    const uint8_t was_empty = runtime->arp.count == 0U;
-    if (note_fx_arp_note_on(&runtime->arp, event->note, event->velocity,
+    const uint8_t was_empty = runtime->fx.arp.arp.count == 0U;
+    if (note_fx_arp_note_on(&runtime->fx.arp.arp, event->note, event->velocity,
                             event->source_token, event->generation) == 0U) {
         note_fx_diag_record_saturation(event->track, slot,
                                         NOTE_FX_DIAG_CAUSE_MODEL_CAPACITY);
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
-    runtime->destination = event->destination_id;
-    if (was_empty != 0U) runtime->next_sample = event->sample_abs;
+    runtime->fx.arp.destination = event->destination_id;
+    if (was_empty != 0U) runtime->common.next_sample = event->sample_abs;
     return 1U;
 }
 
@@ -572,10 +595,10 @@ static note_fx_result_t euclid_emit_owned_off(
 static uint8_t euclid_owned_source_is_closing(
     const note_fx_slot_runtime_t *runtime, const note_fx_owned_t *owned)
 {
-    for (uint8_t i = 0U; i < runtime->euclid_source_count; ++i)
+    for (uint8_t i = 0U; i < runtime->fx.euclid.source_count; ++i)
     {
         const note_fx_euclid_source_t *const source =
-            &runtime->euclid_source[i];
+            &runtime->fx.euclid.source[i];
         if ((source->active != 0U)
                 && (source->token == owned->source_token)
                 && (source->generation == owned->source_generation)
@@ -592,11 +615,11 @@ static uint8_t euclid_process_closures(
     uint64_t start, uint64_t end, note_fx_emit_fn emit, void *context)
 {
     uint8_t blocked = 0U;
-    if (runtime->euclid_reconfigure_pending != 0U)
+    if (runtime->fx.euclid.reconfigure_pending != 0U)
     {
         for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
         {
-            note_fx_owned_t *const owned = &runtime->owned[i];
+            note_fx_owned_t *const owned = &runtime->common.owned[i];
             if (owned->active != 0U)
                 (void)euclid_emit_owned_off(runtime, track, slot, owned,
                                             start, emit, context);
@@ -605,14 +628,14 @@ static uint8_t euclid_process_closures(
             blocked = 1U;
         else
         {
-            runtime->euclid_reconfigure_pending = 0U;
-            runtime->next_sample = start;
+            runtime->fx.euclid.reconfigure_pending = 0U;
+            runtime->common.next_sample = start;
         }
     }
 
-    for (uint8_t i = 0U; i < runtime->euclid_source_count; )
+    for (uint8_t i = 0U; i < runtime->fx.euclid.source_count; )
     {
-        note_fx_euclid_source_t *const source = &runtime->euclid_source[i];
+        note_fx_euclid_source_t *const source = &runtime->fx.euclid.source[i];
         if ((source->active == 0U) || (source->closing == 0U)
                 || (source->close_sample >= end))
         {
@@ -627,7 +650,8 @@ static uint8_t euclid_process_closures(
         for (uint8_t owned_index = 0U;
              owned_index < NOTE_FX_MAX_OUTPUTS; ++owned_index)
         {
-            const note_fx_owned_t *const owned = &runtime->owned[owned_index];
+            const note_fx_owned_t *const owned =
+                &runtime->common.owned[owned_index];
             if ((owned->active != 0U)
                     && (owned->source_token == source->token)
                     && (owned->source_generation == source->generation)
@@ -650,7 +674,7 @@ static uint8_t euclid_process_closures(
 
     for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
     {
-        note_fx_owned_t *const owned = &runtime->owned[i];
+        note_fx_owned_t *const owned = &runtime->common.owned[i];
         if ((owned->active == 0U)
                 || (owned->off_sample >= end)
                 || (euclid_owned_source_is_closing(runtime, owned) != 0U))
@@ -672,36 +696,36 @@ static void euclid_generate_at_deadline(
     uint64_t start, uint64_t end, uint32_t samples_per_step_q16,
     note_fx_emit_fn emit, void *context)
 {
-    if ((runtime->model != NOTE_FX_MODEL_EUCLID)
-            || (runtime->euclid_source_count == 0U)
-            || (runtime->euclid_reconfigure_pending != 0U)
-            || (runtime->closing != 0U)
-            || (runtime->next_sample >= end))
+    if ((runtime->common.model != NOTE_FX_MODEL_EUCLID)
+            || (runtime->fx.euclid.source_count == 0U)
+            || (runtime->fx.euclid.reconfigure_pending != 0U)
+            || (runtime->common.closing != 0U)
+            || (runtime->common.next_sample >= end))
     {
         return;
     }
-    if (runtime->next_sample < start)
-        runtime->next_sample = start;
+    if (runtime->common.next_sample < start)
+        runtime->common.next_sample = start;
 
-    const uint64_t sample = runtime->next_sample;
-    const uint64_t period = rate_period(runtime->euclid_division,
+    const uint64_t sample = runtime->common.next_sample;
+    const uint64_t period = rate_period(runtime->fx.euclid.division,
                                         samples_per_step_q16);
-    if (((runtime->euclid_mask >> runtime->euclid_phase) & 1U) != 0U)
+    if (((runtime->fx.euclid.mask >> runtime->fx.euclid.phase) & 1U) != 0U)
     {
         for (uint8_t source_index = 0U;
-             source_index < runtime->euclid_source_count; ++source_index)
+             source_index < runtime->fx.euclid.source_count; ++source_index)
         {
             const note_fx_euclid_source_t *const source =
-                &runtime->euclid_source[source_index];
+                &runtime->fx.euclid.source[source_index];
             if ((source->active == 0U) || (source->closing != 0U))
                 continue;
             note_fx_owned_t *owned = 0;
             for (uint8_t owned_index = 0U;
                  owned_index < NOTE_FX_MAX_OUTPUTS; ++owned_index)
             {
-                if (runtime->owned[owned_index].active == 0U)
+                if (runtime->common.owned[owned_index].active == 0U)
                 {
-                    owned = &runtime->owned[owned_index];
+                    owned = &runtime->common.owned[owned_index];
                     break;
                 }
             }
@@ -721,7 +745,7 @@ static void euclid_generate_at_deadline(
                 .source_token = source->token,
                 .source_generation = source->generation,
                 .token = token,
-                .generation = runtime->generation,
+                .generation = runtime->common.generation,
                 .off_sample = sample + period
             };
             note_fx_diag_update_usage(track, slot, runtime);
@@ -737,7 +761,7 @@ static void euclid_generate_at_deadline(
                 .flags = NOTE_EVENT_FLAG_GENERATED,
                 .source_token = token,
                 .occurrence_id = token,
-                .generation = runtime->generation
+                .generation = runtime->common.generation
             };
             const note_fx_result_t result = (emit != 0)
                 ? emit(&on, context) : NOTE_EVENT_RESULT_ACCEPTED;
@@ -749,11 +773,11 @@ static void euclid_generate_at_deadline(
         }
     }
 
-    if ((uint8_t)(runtime->euclid_phase + 1U) >= runtime->euclid_length)
-        runtime->euclid_phase = 0U;
+    if ((uint8_t)(runtime->fx.euclid.phase + 1U) >= runtime->fx.euclid.length)
+        runtime->fx.euclid.phase = 0U;
     else
-        ++runtime->euclid_phase;
-    runtime->next_sample = sample + period;
+        ++runtime->fx.euclid.phase;
+    runtime->common.next_sample = sample + period;
 }
 
 void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
@@ -764,25 +788,30 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-            if ((runtime->closing != 0U) && (runtime->next_sample < end)) {
-                if (runtime->next_sample < start) runtime->next_sample = start;
-                release_slot(track, slot, runtime->next_sample, emit, context);
+            if ((runtime->common.closing != 0U)
+                    && (runtime->common.next_sample < end)) {
+                if (runtime->common.next_sample < start)
+                    runtime->common.next_sample = start;
+                release_slot(track, slot, runtime->common.next_sample,
+                             emit, context);
                 continue;
             }
-            if (runtime->model == NOTE_FX_MODEL_EUCLID)
+            if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
             {
                 (void)euclid_process_closures(runtime, track, slot, start, end,
                                                emit, context);
                 continue;
             }
-            if (runtime->model != NOTE_FX_MODEL_ARP ||
-                runtime->arp.count == 0U || runtime->next_sample >= end) continue;
-            if (runtime->next_sample < start) runtime->next_sample = start;
+            if (runtime->common.model != NOTE_FX_MODEL_ARP ||
+                runtime->fx.arp.arp.count == 0U
+                || runtime->common.next_sample >= end) continue;
+            if (runtime->common.next_sample < start)
+                runtime->common.next_sample = start;
             for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
-                note_fx_owned_t *const owned = &runtime->owned[i];
+                note_fx_owned_t *const owned = &runtime->common.owned[i];
                 if (owned->active == 0U) continue;
                 const note_fx_event_t off = {
-                    .sample_abs = runtime->next_sample,
+                    .sample_abs = runtime->common.next_sample,
                     .track = track,
                     .destination_id = owned->destination,
                     .note = owned->note,
@@ -802,25 +831,28 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                 else
                     note_fx_diag_record_emit_reject(track, slot, 0U);
             }
-            if (runtime->pending_source_close != 0U) {
+            if (runtime->fx.arp.pending_source_close != 0U) {
                 uint8_t pending_owned = 0U;
                 for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
-                    const note_fx_owned_t *const owned = &runtime->owned[i];
+                    const note_fx_owned_t *const owned =
+                        &runtime->common.owned[i];
                     if ((owned->active != 0U)
-                            && (owned->source_token == runtime->pending_close_token)
+                            && (owned->source_token
+                                == runtime->fx.arp.pending_close_token)
                             && (owned->source_generation
-                                == runtime->pending_close_generation)) {
+                                == runtime->fx.arp.pending_close_generation)) {
                         pending_owned = 1U;
                         break;
                     }
                 }
                 if (pending_owned == 0U) {
-                    (void)note_fx_arp_note_off(&runtime->arp,
-                                              runtime->pending_close_token,
-                                              runtime->pending_close_generation);
-                    runtime->pending_source_close = 0U;
-                    if (runtime->arp.count == 0U)
-                        runtime->next_sample = 0U;
+                    (void)note_fx_arp_note_off(
+                        &runtime->fx.arp.arp,
+                        runtime->fx.arp.pending_close_token,
+                        runtime->fx.arp.pending_close_generation);
+                    runtime->fx.arp.pending_source_close = 0U;
+                    if (runtime->fx.arp.arp.count == 0U)
+                        runtime->common.next_sample = 0U;
                 }
             }
         }
@@ -830,7 +862,7 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-            if (runtime->model == NOTE_FX_MODEL_EUCLID)
+            if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
             {
                 if (slot_has_owned(runtime) == 0U)
                 {
@@ -839,36 +871,39 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                 }
                 continue;
             }
-            if ((runtime->closing != 0U)
-                    || (runtime->model != NOTE_FX_MODEL_ARP)
-                    || (runtime->arp.count == 0U)
-                    || (runtime->next_sample >= end)) continue;
+            if ((runtime->common.closing != 0U)
+                    || (runtime->common.model != NOTE_FX_MODEL_ARP)
+                    || (runtime->fx.arp.arp.count == 0U)
+                    || (runtime->common.next_sample >= end)) continue;
             uint8_t release_pending = 0U;
             for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
-                release_pending |= runtime->owned[i].active;
+                release_pending |= runtime->common.owned[i].active;
             if (release_pending != 0U) {
-                runtime->next_sample += rate_period(runtime->rate, step_q16);
+                runtime->common.next_sample += rate_period(
+                    runtime->fx.arp.rate, step_q16);
                 continue;
             }
             uint8_t note, velocity;
-            if (note_fx_arp_next(&runtime->arp,
-                (note_fx_arp_style_t)runtime->style, runtime->range,
+            if (note_fx_arp_next(&runtime->fx.arp.arp,
+                (note_fx_arp_style_t)runtime->fx.arp.style,
+                runtime->fx.arp.range,
                 &note, &velocity) == 0U) {
                 note_fx_diag_record_saturation(track, slot,
                                                 NOTE_FX_DIAG_CAUSE_MODEL_CAPACITY);
-                release_slot(track, slot, runtime->next_sample, emit, context);
+                release_slot(track, slot, runtime->common.next_sample,
+                             emit, context);
                 continue;
             }
-            note_fx_owned_t *const owned = &runtime->owned[0];
+            note_fx_owned_t *const owned = &runtime->common.owned[0];
             owned->active = 1U; owned->note = note;
-            owned->source_token = runtime->arp.last_source_token;
-            owned->source_generation = runtime->arp.last_source_generation;
+            owned->source_token = runtime->fx.arp.arp.last_source_token;
+            owned->source_generation = runtime->fx.arp.arp.last_source_generation;
             owned->source_provenance = NOTE_EVENT_SOURCE_FX;
-            owned->destination = runtime->destination;
+            owned->destination = runtime->fx.arp.destination;
             owned->token = next_fx_token();
-            owned->generation = runtime->generation;
+            owned->generation = runtime->common.generation;
             const note_fx_event_t on = {
-                .sample_abs = runtime->next_sample,
+                .sample_abs = runtime->common.next_sample,
                 .track = track,
                 .destination_id = owned->destination,
                 .note = note,
@@ -888,7 +923,8 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                 note_fx_diag_record_emit_reject(track, slot, 1U);
                 owned->active = 0U;
             }
-            runtime->next_sample += rate_period(runtime->rate, step_q16);
+            runtime->common.next_sample += rate_period(
+                runtime->fx.arp.rate, step_q16);
         }
     }
 }
@@ -921,35 +957,39 @@ uint64_t note_fx_engine_next_deadline(void)
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             const note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-            if ((runtime->closing != 0U)
-                    || (runtime->pending_source_close != 0U)
-                    || (runtime->euclid_reconfigure_pending != 0U))
+            const uint8_t model = runtime->common.model;
+            if ((runtime->common.closing != 0U)
+                    || ((model == NOTE_FX_MODEL_ARP)
+                        && (runtime->fx.arp.pending_source_close != 0U))
+                    || ((model == NOTE_FX_MODEL_EUCLID)
+                        && (runtime->fx.euclid.reconfigure_pending != 0U)))
             {
-                if (runtime->next_sample < next)
-                    next = runtime->next_sample;
+                if (runtime->common.next_sample < next)
+                    next = runtime->common.next_sample;
             }
-            if ((runtime->model == NOTE_FX_MODEL_ARP)
-                    && (runtime->arp.count != 0U)
-                    && (runtime->next_sample < next))
+            if ((runtime->common.model == NOTE_FX_MODEL_ARP)
+                    && (runtime->fx.arp.arp.count != 0U)
+                    && (runtime->common.next_sample < next))
             {
-                next = runtime->next_sample;
+                next = runtime->common.next_sample;
             }
-            if (runtime->model == NOTE_FX_MODEL_EUCLID)
+            if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
             {
-                if ((runtime->euclid_source_count != 0U)
-                        && (runtime->next_sample < next))
-                    next = runtime->next_sample;
-                for (uint8_t i = 0U; i < runtime->euclid_source_count; ++i)
+                if ((runtime->fx.euclid.source_count != 0U)
+                        && (runtime->common.next_sample < next))
+                    next = runtime->common.next_sample;
+                for (uint8_t i = 0U;
+                     i < runtime->fx.euclid.source_count; ++i)
                 {
                     const note_fx_euclid_source_t *const source =
-                        &runtime->euclid_source[i];
+                        &runtime->fx.euclid.source[i];
                     if ((source->active != 0U) && (source->closing != 0U)
                             && (source->close_sample < next))
                         next = source->close_sample;
                 }
                 for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
                 {
-                    const note_fx_owned_t *const owned = &runtime->owned[i];
+                    const note_fx_owned_t *const owned = &runtime->common.owned[i];
                     if ((owned->active != 0U) && (owned->off_sample < next))
                         next = owned->off_sample;
                 }
