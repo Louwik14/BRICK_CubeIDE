@@ -1054,6 +1054,12 @@ sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
     return state;
 }
 
+uint8_t sample_page_cache_page_exists_key(sample_audio_key_t key,
+                                          uint32_t page_index)
+{
+    return (sample_page_cache_find_page_key(key, page_index) != 0) ? 1U : 0U;
+}
+
 const sample_page_desc_t *sample_page_cache_get_page_desc(uint32_t slot_index)
 {
     if (slot_index >= SAMPLE_PAGE_MAX_COUNT)

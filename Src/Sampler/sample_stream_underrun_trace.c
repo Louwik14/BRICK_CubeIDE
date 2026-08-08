@@ -215,8 +215,13 @@ void brick6_stream_underrun_trace_voice_state(
         {
             continue;
         }
-        const sample_page_state_t state = sample_page_cache_get_page_state_key(
+        const uint8_t page_exists = sample_page_cache_page_exists_key(
             need->key, need->page_index);
+        const sample_page_state_t page_state = sample_page_cache_get_page_state_key(
+            need->key, need->page_index);
+        const uint8_t state = (page_exists != 0U)
+                                  ? (uint8_t)page_state
+                                  : BRICK6_STREAM_TRACE_STATE_ABSENT;
         const uint32_t frames_ahead =
             (need->consume_deadline_audio_frame > sample_stream_time_now())
                 ? (uint32_t)((need->consume_deadline_audio_frame
@@ -233,7 +238,7 @@ void brick6_stream_underrun_trace_voice_state(
             need->registration_epoch,
             (uint8_t)source,
             voice_id,
-            (uint8_t)state,
+            state,
             BRICK6_STREAM_TRACE_REASON_NONE,
             0U,
             0U,
@@ -552,7 +557,9 @@ void brick6_stream_underrun_trace_consume_miss(sample_audio_key_t key,
                                                uint32_t reader_position,
                                                uint32_t frames_remaining)
 {
-    const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page_index);
+    const uint8_t state = (sample_page_cache_page_exists_key(key, page_index) != 0U)
+                              ? (uint8_t)sample_page_cache_get_page_state_key(key, page_index)
+                              : BRICK6_STREAM_TRACE_STATE_ABSENT;
     uint8_t found = 0U;
     for (uint8_t source = (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC;
          source <= (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI;
@@ -590,7 +597,7 @@ void brick6_stream_underrun_trace_consume_miss(sample_audio_key_t key,
                     need->registration_epoch,
                     source,
                     voice_id,
-                    (uint8_t)state,
+                    state,
                     BRICK6_STREAM_TRACE_REASON_NONE,
                     0U,
                     1U,
@@ -612,7 +619,7 @@ void brick6_stream_underrun_trace_consume_miss(sample_audio_key_t key,
             0U,
             UINT8_MAX,
             UINT8_MAX,
-            (uint8_t)state,
+            state,
             BRICK6_STREAM_TRACE_REASON_NO_ACTIVE_NEED,
             0U,
             1U,

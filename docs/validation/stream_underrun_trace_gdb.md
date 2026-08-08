@@ -17,7 +17,7 @@ proviennent de `arm-none-eabi-nm -S --size-sort` sur cet ELF :
 | élément | adresse | taille |
 |---|---:|---:|
 | `g_brick6_stream_underrun_trace` | `0xC1F17700` | `0x10020` = 65568 octets |
-| `brick6_stream_underrun_trace_reset` | `0x080762C4` | `0xB0` |
+| `brick6_stream_underrun_trace_reset` | `0x080762D4` | `0xB0` |
 
 Le snapshot est placé dans `.sdram_recorder` à `0xC1F17700`. Le ring est
 contenu dans le snapshot, immédiatement après son en-tête. La trace est
@@ -32,7 +32,7 @@ Avec le programme arrêté dans GDB :
 set pagination off
 set confirm off
 set $trace = 0xC1F17700
-call ((void (*)(void))0x080762C5)()
+call ((void (*)(void))0x080762D5)()
 continue
 ```
 
@@ -91,6 +91,9 @@ octets. Les compteurs sont en little-endian ARM.
 | `0x3D` | 1 | backend : 1 contigu, sinon FatFs/valeur backend |
 | `0x3E` | 1 | résultat |
 | `0x3F` | 1 | réservé |
+
+Dans `state`, `0=FREE`, `1=RESERVED`, `2=LOADING`, `3=READY`, `4=FAILED` et
+`0xFF=ABSENT`.
 
 Les événements sont :
 
