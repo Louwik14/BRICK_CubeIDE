@@ -819,6 +819,14 @@ void ui_core_service_track_selection_inputs(void)
  */
 void ui_core_tick(void)
 {
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+    const ui_page_t *calibration_page = ui_page_get();
+    if ((calibration_page != 0) && (calibration_page->tick != 0))
+    {
+        calibration_page->tick();
+    }
+    return;
+#endif
     typedef uint8_t (*ui_core_tick_stage_fn_t)(const ui_event_t *ev);
     typedef struct
     {

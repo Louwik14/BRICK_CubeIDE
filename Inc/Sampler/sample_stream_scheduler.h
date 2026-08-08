@@ -38,6 +38,9 @@ typedef struct
 void sample_stream_scheduler_init(void);
 void sample_stream_scheduler_begin_round(void);
 uint8_t sample_stream_scheduler_round_active(void);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+void sample_stream_scheduler_calibration_set_passes(uint8_t passes);
+#endif
 uint8_t sample_stream_scheduler_pick(
     const sample_stream_scheduler_candidate_t *candidates,
     uint32_t candidate_count,

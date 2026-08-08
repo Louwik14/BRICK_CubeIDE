@@ -14,9 +14,10 @@
  * windows and margin pages stay in their reserved ranges.
  */
 
-#define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT   (1504U)
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES \
-    (SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT * SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
+    (1504U * 16U * 1024U)
+#define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT \
+    (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
 #define SAMPLE_PAGE_BYTES                     SAMPLE_AUDIO_FORMAT_PAGE_BYTES
 #define SAMPLE_PAGE_FRAMES                    SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE
 #define SAMPLE_PAGE_CHANNELS                  (2U)
@@ -120,10 +121,6 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 
 #if (SAMPLE_PAGE_BYTES == 0U)
 #error "SAMPLE_PAGE_BYTES must be non-zero"
-#endif
-
-#if (SAMPLE_PAGE_BYTES != SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
-#error "Stream/Multi page bytes must remain a physical 16 KiB invariant"
 #endif
 
 #if (SAMPLE_PAGE_FRAMES * SAMPLE_PAGE_BYTES_PER_FRAME != SAMPLE_PAGE_BYTES)

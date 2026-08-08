@@ -216,6 +216,9 @@ void brick6_sampler_runtime_render_multi_track_mono(const track_runtime_ctx_t *c
                                                     float *out_mono,
                                                     uint32_t frames);
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+uint8_t brick6_sampler_runtime_calibration_track_stream_active(uint8_t track_id);
+#endif
 uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id);
 uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id);
 void brick6_sampler_runtime_render_ram_track_mono(const track_runtime_ctx_t *ctx,

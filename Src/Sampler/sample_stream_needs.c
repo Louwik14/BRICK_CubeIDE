@@ -19,6 +19,10 @@ typedef struct
 } sample_stream_needs_slot_t;
 
 static sample_stream_needs_slot_t g_sample_stream_needs_slots[SAMPLE_STREAM_NEEDS_CAPACITY];
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+static uint8_t g_sample_stream_needs_calibration_depth =
+    SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
+#endif
 
 static uint8_t sample_stream_needs_slot_index(sample_stream_snapshot_source_t source,
                                               uint8_t voice_id,
@@ -192,9 +196,15 @@ uint8_t sample_stream_needs_build(
     };
     uint32_t pages[SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE] = { 0U };
     uint8_t page_count = 0U;
+    const uint8_t mobile_capacity =
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        g_sample_stream_needs_calibration_depth;
+#else
+        SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
+#endif
     if (sample_stream_sequence_build(&sequence_input,
                                     pages,
-                                    SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE,
+                                    mobile_capacity,
                                     &page_count) == 0U)
     {
         return 0U;
@@ -545,3 +555,18 @@ uint32_t sample_stream_needs_registry_count_active(void)
     }
     return count;
 }
+
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+void sample_stream_needs_calibration_set_depth(uint8_t pages)
+{
+    if (pages == 0U)
+    {
+        pages = 1U;
+    }
+    if (pages > SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE)
+    {
+        pages = SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
+    }
+    g_sample_stream_needs_calibration_depth = pages;
+}
+#endif

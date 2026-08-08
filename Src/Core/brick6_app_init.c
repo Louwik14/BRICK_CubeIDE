@@ -63,6 +63,7 @@
 #include "Core/monkey_test.h"
 #endif
 #include "Core/brick6_sd_config.h"
+#include "Core/stream_calibration.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -125,7 +126,9 @@ void brick6_app_init(void)
     monkey_test_init();
 #endif
     waveform_cache_init();
+#if !BRICK6_STREAM_CALIBRATION
     (void)waveform_cache_ensure_dirs();
+#endif
     wav_loader_catalog_init_load();
     sd_preview_init();
     looper_storage_raw_init();
@@ -180,6 +183,10 @@ void brick6_app_init(void)
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
 #endif
     brick6_stream_service_task_init();
+#if BRICK6_STREAM_CALIBRATION
+    ui_page_set(UI_PAGE_STREAM_CALIBRATION);
+    brick6_stream_calibration_init();
+#endif
     (void)audio_start();
 
     cpu_load_reset_peak();
@@ -204,6 +211,11 @@ void brick6_app_process(void)
 {
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
+#if BRICK6_STREAM_CALIBRATION
+    brick6_stream_calibration_process();
+    brick6_stream_service_task_poll();
+    return;
+#endif
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.

@@ -7153,6 +7153,20 @@ uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id)
             && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)) ? 1U : 0U;
 }
 
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+uint8_t brick6_sampler_runtime_calibration_track_stream_active(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    return ((voice->active != 0U)
+            && (voice->reader.active != 0U)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)) ? 1U : 0U;
+}
+#endif
+
 uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)

@@ -15,6 +15,9 @@
 #include "Sampler/sample_stream_underrun_trace.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+#include "Core/stream_calibration.h"
+#endif
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
@@ -86,6 +89,9 @@ void sample_stream_manager_trace_consume_miss(sample_audio_key_t key,
                                                 frames_remaining);
     brick6_stream_underrun_trace_consume_miss(
         key, page_index, reader_position, frames_remaining);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+    brick6_stream_calibration_note_underrun(key, page_index);
+#endif
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -278,6 +284,7 @@ static uint8_t sample_stream_manager_pick_next(
                                           ? BRICK6_STREAM_TRACE_REASON_ALL_LOADING
                                           : BRICK6_STREAM_TRACE_REASON_ALL_READY)
                                    : BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
+        (void)reason;
         brick6_stream_underrun_trace_scheduler(
             0, 0, 0U, loadable_needs, reason);
         return 0U;
@@ -436,6 +443,9 @@ void sample_stream_manager_service(uint32_t byte_budget)
             candidate.need_index,
             remaining_frames,
             0U);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        brick6_stream_calibration_note_select(&candidate);
+#endif
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
         {
             continue;
@@ -464,7 +474,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
         sample_stream_io_result_t io_result;
         brick6_stream_underrun_trace_io_begin(&candidate, &io_command);
-#if BRICK6_STREAM_BENCH
+#if BRICK6_STREAM_BENCH || (defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION)
         const uint32_t benchmark_io_begin_cycle = DWT->CYCCNT;
 #endif
         sample_stream_transport_execute_monocore(&io_command, &io_result);
@@ -480,6 +490,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
             0U,
             benchmark_backlog,
             (sample_stream_time_now() > candidate.diagnostic_deadline_audio_frame) ? 1U : 0U);
+#endif
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        brick6_stream_calibration_note_io(
+            &io_result, DWT->CYCCNT - benchmark_io_begin_cycle);
 #endif
         if (io_result.read_bytes > consumed)
         {
