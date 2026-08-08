@@ -53,10 +53,10 @@
 
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
-#define AUDIO_FRAMES_PER_HALF    BOARD_AUDIO_FRAMES_PER_HALF
+#define AUDIO_FRAMES_PER_HALF    BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
 
 /* Double buffer DMA: [half0 | half1] */
-#define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)
+#define AUDIO_FRAMES_TOTAL       BOARD_AUDIO_CONTRACT_FRAMES_TOTAL
 
 /* 1 frame TDM = 8 mots (slots) */
 #define AUDIO_WORDS_PER_FRAME    AUDIO_TDM_SLOTS

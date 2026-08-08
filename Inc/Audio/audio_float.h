@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include "Board/board_audio_format.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +34,7 @@ extern "C" {
    Track-based stereo DSP model
    ============================================================ */
 
-#define AUDIO_BLOCK_SIZE 64U
+#define AUDIO_BLOCK_SIZE BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
 /*
  * DSP engine exposes 4 stereo tracks. Tracks 0..2 come from TDM slots
  * (0/1, 2/3, 4/5). Track 3 has no physical input and remains disabled;
