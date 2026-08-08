@@ -30,8 +30,9 @@ allocate the authoritative note occurrence.
 
 The current H743 implementation uses a bounded 64-slot static M7 FIFO
 (63 usable entries with the ring sentinel). Submission is a short critical
-section with deterministic rejection and a drop counter. The Premium raw ADC
-FIFO is diagnostic-only and cannot delay Hall detection.
+section with deterministic rejection and a drop counter. Hall detection is
+performed directly from the ADC callback; no second Premium raw-sample FIFO
+is retained.
 
 The event producer captures only TIM5. It never reads the audio timeline, the
 voice state, the mixer, or M7-private memory. The keyboard bridge carries the

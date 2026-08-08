@@ -10,8 +10,6 @@
 #include "stm32h7xx_hal.h"
 
 #define HALL_MUX_COUNT         8U
-#define HALL_SAMPLE_FIFO_SIZE  512U
-#define HALL_SAMPLE_FIFO_MASK  (HALL_SAMPLE_FIFO_SIZE - 1U)
 
 /*
  * ADC DMA mailboxes:
@@ -31,13 +29,6 @@ static DMA_BUFFER volatile uint16_t adc2_dma;
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
 static volatile uint32_t hall_sample_count[HALL_KEY_COUNT];
 
-static hall_adc_sample_t hall_sample_fifo[HALL_SAMPLE_FIFO_SIZE];
-static volatile uint32_t hall_fifo_head;
-static volatile uint32_t hall_fifo_tail;
-static volatile uint32_t hall_fifo_push_count;
-static volatile uint32_t hall_fifo_drop_count;
-static volatile uint16_t hall_fifo_max_depth;
-
 static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_count;
 static volatile uint8_t adc1_ready;
@@ -54,46 +45,13 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
     const uint32_t tim5_tick = live_clock_capture_tick();
-#if !defined(BRICK6_VARIANT_LOWCOST)
-    const uint32_t head = hall_fifo_head;
-    const uint32_t tail = hall_fifo_tail;
-    const uint32_t depth = head - tail;
-#endif
 
     hall_raw[key] = raw;
     hall_sample_count[key] = sample_count;
     board_surface_update_lane(key, raw, sample_count);
 
-    /* Both boards run the same bounded detector in the acquisition callback.
-     * The Premium raw FIFO below is diagnostic-only and never gates music. */
+    /* Both boards run the same bounded detector in the acquisition callback. */
     hall_engine_process_sample(key, raw, sample_count, tim5_tick);
-#if !defined(BRICK6_VARIANT_LOWCOST)
-    if (depth >= HALL_SAMPLE_FIFO_SIZE)
-    {
-        hall_fifo_drop_count++;
-        return;
-    }
-
-    {
-        hall_adc_sample_t *entry = &hall_sample_fifo[head & HALL_SAMPLE_FIFO_MASK];
-        const uint16_t new_depth = (uint16_t)(depth + 1U);
-
-        entry->key = key;
-        entry->raw = raw;
-        entry->sample_count = sample_count;
-        entry->tim5_tick = tim5_tick;
-
-        __DMB();
-        hall_fifo_head = head + 1U;
-        hall_fifo_push_count++;
-
-        if (new_depth > hall_fifo_max_depth)
-        {
-            hall_fifo_max_depth = new_depth;
-        }
-    }
-#endif
-
 }
 
 static void hall_adc_process_pair(void)
@@ -155,12 +113,6 @@ void hall_adc_init(void)
 #endif
     adc2_dma = 0U;
 
-    hall_fifo_head = 0U;
-    hall_fifo_tail = 0U;
-    hall_fifo_push_count = 0U;
-    hall_fifo_drop_count = 0U;
-    hall_fifo_max_depth = 0U;
-
     hall_mux_select(hall_mux_index);
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
@@ -186,28 +138,6 @@ void hall_adc_init(void)
     {
         return;
     }
-}
-
-uint8_t hall_adc_pop_sample(hall_adc_sample_t *sample)
-{
-    const uint32_t tail = hall_fifo_tail;
-
-    if (sample == 0)
-    {
-        return 0U;
-    }
-
-    if (tail == hall_fifo_head)
-    {
-        return 0U;
-    }
-
-    *sample = hall_sample_fifo[tail & HALL_SAMPLE_FIFO_MASK];
-
-    __DMB();
-    hall_fifo_tail = tail + 1U;
-
-    return 1U;
 }
 
 uint16_t hall_adc_get_raw(uint8_t key)
@@ -245,33 +175,6 @@ uint32_t hall_adc_get_sample_count(uint8_t key)
     }
 
     return hall_sample_count[key];
-}
-
-uint32_t hall_adc_get_fifo_push_count(void)
-{
-    return hall_fifo_push_count;
-}
-
-uint32_t hall_adc_get_fifo_drop_count(void)
-{
-    return hall_fifo_drop_count;
-}
-
-uint16_t hall_adc_get_fifo_depth(void)
-{
-    const uint32_t depth = hall_fifo_head - hall_fifo_tail;
-
-    if (depth > 65535U)
-    {
-        return 65535U;
-    }
-
-    return (uint16_t)depth;
-}
-
-uint16_t hall_adc_get_fifo_max_depth(void)
-{
-    return hall_fifo_max_depth;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)

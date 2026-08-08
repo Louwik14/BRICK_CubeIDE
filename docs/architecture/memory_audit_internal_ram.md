@@ -438,7 +438,6 @@ D1 mÃ©lange :
 | `g_wav_catalog` | 6 208 B | `wav_loader.c` | catalogue WAV | dÃ©plaÃ§able SDRAM/D3 | storage/UI |
 | `g_seq_play_events` | 6 144 B | `seq_play_scheduler.c` | queue scheduler events | garder interne | collect/apply audio-block |
 | `g_project_macro_state` | 4 104 B | `project_v1.c` | macro lock project | dÃ©plaÃ§able SDRAM/D3 | persistence/control |
-| `hall_sample_fifo` | 4 096 B | `hall_adc.c` | FIFO samples hall | D3 possible avec vÃ©rification | non audio, IRQ-ish hall |
 | `g_seq_runtime_exec_state` | 2 808 B | `seq_runtime_exec.c` | Ã©tat exec sÃ©quenceur | garder interne | timeline/progression audio-block |
 | `g_ps` | 2 764 B | `param_store.c` | param store | D3 possible | control/param |
 | `g_seq_live_rec_pending` | 2 048 B | `seq_live_rec_capture.c` | pending live rec capture | D3 possible avec vÃ©rification | live-rec |
