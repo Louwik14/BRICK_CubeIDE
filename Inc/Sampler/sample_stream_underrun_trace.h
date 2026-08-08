@@ -17,8 +17,9 @@ extern "C" {
 #endif
 
 #define BRICK6_STREAM_UNDERRUN_TRACE_MAGIC       (0x53555254UL)
-#define BRICK6_STREAM_UNDERRUN_TRACE_ABI_VERSION (1U)
+#define BRICK6_STREAM_UNDERRUN_TRACE_ABI_VERSION (2U)
 #define BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY    (1024U)
+#define BRICK6_STREAM_UNDERRUN_TRACE_POST_EVENTS (128U)
 #define BRICK6_STREAM_TRACE_STATE_ABSENT         (0xFFU)
 
 typedef enum
@@ -98,6 +99,17 @@ typedef struct
     uint32_t count;
     uint32_t dropped_count;
     uint32_t last_miss_sequence;
+    uint32_t triggered;
+    uint32_t trigger_type;
+    uint32_t trigger_source;
+    uint32_t trigger_voice_id;
+    uint32_t trigger_key_domain;
+    uint32_t trigger_key_object_id;
+    uint32_t trigger_page;
+    uint32_t trigger_audio_frame_low;
+    uint32_t trigger_audio_frame_high;
+    uint32_t post_trigger_remaining;
+    uint32_t frozen;
     brick6_stream_underrun_trace_event_t events[BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY];
 } brick6_stream_underrun_trace_snapshot_t;
 

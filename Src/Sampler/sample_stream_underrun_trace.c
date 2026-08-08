@@ -13,7 +13,7 @@
 _Static_assert(sizeof(brick6_stream_underrun_trace_event_t) == 64U,
                "underrun trace event ABI must remain fixed-width");
 _Static_assert(sizeof(brick6_stream_underrun_trace_snapshot_t)
-                   == (32U + (64U * BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY)),
+                   == (76U + (64U * BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY)),
                "underrun trace snapshot ABI must remain fixed-width");
 #endif
 
@@ -49,6 +49,13 @@ static uint32_t brick6_stream_underrun_trace_record_locked(
     uint32_t value2,
     uint32_t value3)
 {
+    if (g_brick6_stream_underrun_trace.frozen != 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t was_triggered =
+        (g_brick6_stream_underrun_trace.triggered != 0U) ? 1U : 0U;
     const uint32_t sequence = g_brick6_stream_underrun_trace.write_index + 1U;
     const uint32_t slot = g_brick6_stream_underrun_trace.write_index
                           % BRICK6_STREAM_UNDERRUN_TRACE_CAPACITY;
@@ -92,6 +99,35 @@ static uint32_t brick6_stream_underrun_trace_record_locked(
     {
         g_brick6_stream_underrun_trace.last_miss_sequence = sequence;
     }
+    if ((type == BRICK6_STREAM_TRACE_CONSUME_MISS) && (was_triggered == 0U))
+    {
+        g_brick6_stream_underrun_trace.triggered = 1U;
+        g_brick6_stream_underrun_trace.trigger_type = (uint32_t)type;
+        g_brick6_stream_underrun_trace.trigger_source = source;
+        g_brick6_stream_underrun_trace.trigger_voice_id = voice_id;
+        g_brick6_stream_underrun_trace.trigger_key_domain = (uint32_t)key.domain;
+        g_brick6_stream_underrun_trace.trigger_key_object_id = key.object_id;
+        g_brick6_stream_underrun_trace.trigger_page = page_index;
+        g_brick6_stream_underrun_trace.trigger_audio_frame_low = (uint32_t)frame;
+        g_brick6_stream_underrun_trace.trigger_audio_frame_high = (uint32_t)(frame >> 32U);
+        g_brick6_stream_underrun_trace.post_trigger_remaining =
+            BRICK6_STREAM_UNDERRUN_TRACE_POST_EVENTS;
+        if (g_brick6_stream_underrun_trace.post_trigger_remaining == 0U)
+        {
+            g_brick6_stream_underrun_trace.frozen = 1U;
+        }
+    }
+    else if (was_triggered != 0U)
+    {
+        if (g_brick6_stream_underrun_trace.post_trigger_remaining != 0U)
+        {
+            g_brick6_stream_underrun_trace.post_trigger_remaining--;
+        }
+        if (g_brick6_stream_underrun_trace.post_trigger_remaining == 0U)
+        {
+            g_brick6_stream_underrun_trace.frozen = 1U;
+        }
+    }
     return sequence;
 }
 
@@ -113,6 +149,10 @@ static uint32_t brick6_stream_underrun_trace_record(
     uint32_t value2,
     uint32_t value3)
 {
+    if (g_brick6_stream_underrun_trace.frozen != 0U)
+    {
+        return 0U;
+    }
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     const uint32_t sequence = brick6_stream_underrun_trace_record_locked(

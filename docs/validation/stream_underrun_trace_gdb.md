@@ -16,8 +16,8 @@ proviennent de `arm-none-eabi-nm -S --size-sort` sur cet ELF :
 
 | élément | adresse | taille |
 |---|---:|---:|
-| `g_brick6_stream_underrun_trace` | `0xC1F17700` | `0x10020` = 65568 octets |
-| `brick6_stream_underrun_trace_reset` | `0x080762D4` | `0xB0` |
+| `g_brick6_stream_underrun_trace` | `0xC1F17700` | `0x1004C` = 65612 octets |
+| `brick6_stream_underrun_trace_reset` | `0x08076340` | `0xB0` |
 
 Le snapshot est placé dans `.sdram_recorder` à `0xC1F17700`. Le ring est
 contenu dans le snapshot, immédiatement après son en-tête. La trace est
@@ -32,7 +32,7 @@ Avec le programme arrêté dans GDB :
 set pagination off
 set confirm off
 set $trace = 0xC1F17700
-call ((void (*)(void))0x080762D5)()
+call ((void (*)(void))0x08076341)()
 continue
 ```
 
@@ -40,14 +40,14 @@ Déclencher les 8 voix streaming, attendre l'underrun, puis faire `Ctrl+C` et
 dump le snapshot complet :
 
 ```gdb
-dump binary memory run_8voices_underrun.bin 0xC1F17700 0xC1F27720
+dump binary memory run_8voices_underrun.bin 0xC1F17700 0xC1F2774C
 ```
 
-La borne est exclusive : `0xC1F27720 - 0xC1F17700 = 0x10020`.
+La borne est exclusive : `0xC1F2774C - 0xC1F17700 = 0x1004C`.
 
 ## Layout binaire
 
-Le fichier commence par 32 octets d'en-tête, puis 1024 événements de 64
+Le fichier commence par 76 octets d'en-tête, puis 1024 événements de 64
 octets. Les compteurs sont en little-endian ARM.
 
 ### En-tête, offsets relatifs au début du fichier
@@ -55,14 +55,25 @@ octets. Les compteurs sont en little-endian ARM.
 | offset | taille | champ |
 |---:|---:|---|
 | `0x00` | 4 | magic `0x53555254` |
-| `0x04` | 4 | ABI `1` |
+| `0x04` | 4 | ABI `2` |
 | `0x08` | 4 | taille événement `64` |
 | `0x0C` | 4 | capacité `1024` |
 | `0x10` | 4 | `write_index` monotone |
 | `0x14` | 4 | `count`, plafonné à 1024 |
 | `0x18` | 4 | `dropped_count` après rotation |
 | `0x1C` | 4 | séquence du dernier `CONSUME_MISS` |
-| `0x20` | 65536 | événements, slot `(sequence - 1) % 1024` |
+| `0x20` | 4 | `triggered` |
+| `0x24` | 4 | `trigger_type` : `9` = `CONSUME_MISS` |
+| `0x28` | 4 | `trigger_source` |
+| `0x2C` | 4 | `trigger_voice_id` |
+| `0x30` | 4 | `trigger_key_domain` |
+| `0x34` | 4 | `trigger_key_object_id` |
+| `0x38` | 4 | `trigger_page` |
+| `0x3C` | 4 | frame audio bas du trigger |
+| `0x40` | 4 | frame audio haut du trigger |
+| `0x44` | 4 | événements post-trigger restants |
+| `0x48` | 4 | `frozen` |
+| `0x4C` | 65536 | événements, slot `(sequence - 1) % 1024` |
 
 ### Événement, 64 octets
 
@@ -152,3 +163,9 @@ par une courte désactivation IRQ. Le chemin normal de service ajoute au plus
 les événements des voix/besoins actifs et des I/O ; le chemin audio ne trace
 que `CONSUME_MISS` et ne modifie aucune décision, allocation, priorité ou
 transition du streamer.
+
+Le premier `CONSUME_MISS` renseigne les champs trigger, puis exactement 128
+événements supplémentaires sont acceptés. Le 128e événement post-trigger
+positionne `frozen=1` et toutes les écritures suivantes sont ignorées jusqu'à
+l'appel explicite à `brick6_stream_underrun_trace_reset`. Le ring conserve donc
+l'historique précédant le premier miss et sa conséquence immédiate.
