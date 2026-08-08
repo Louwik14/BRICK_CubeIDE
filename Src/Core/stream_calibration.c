@@ -24,7 +24,6 @@
 #define CAL_SAMPLE_RATE          (48000U)
 #define CAL_CASE_FRAMES          (2U * CAL_SAMPLE_RATE)
 #define CAL_SETTLE_FRAMES        (CAL_SAMPLE_RATE / 10U)
-#define CAL_READY_TIMEOUT_FRAMES (15U * CAL_SAMPLE_RATE)
 #define CAL_MAX_KEYBOARD_NOTE    (127U)
 #define CAL_GRID_SIGNATURE       (0x01020306UL)
 
@@ -466,7 +465,6 @@ void brick6_stream_calibration_process(void)
                 ++g_prepare_index;
                 break;
             }
-            g_state_start_frame = sample_stream_time_now();
             g_state = CAL_STATE_PREPARE_WAIT;
             break;
 
@@ -480,12 +478,6 @@ void brick6_stream_calibration_process(void)
                 }
                 if (state == SAMPLE_POOL_SLOT_PREPARING)
                 {
-                    if ((sample_stream_time_now() - g_state_start_frame)
-                        >= CAL_READY_TIMEOUT_FRAMES)
-                    {
-                        cal_set_file_error(i, "READY TIMEOUT");
-                        g_state = CAL_STATE_FATAL;
-                    }
                     return;
                 }
                 if (state == SAMPLE_POOL_SLOT_ERROR)
