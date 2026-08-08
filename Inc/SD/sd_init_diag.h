@@ -42,7 +42,7 @@ typedef struct
     volatile uint32_t rcc_sdmmc_hz;
 } sd_init_diag_t;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST) && defined(BRICK6_SD_INIT_DIAG)
 extern volatile sd_init_diag_t g_sd_init_diag;
 
 void sd_init_diag_reset(SD_HandleTypeDef *hsd);

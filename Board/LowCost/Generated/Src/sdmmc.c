@@ -49,7 +49,7 @@ void MX_SDMMC1_SD_Init(void)
   sd_init_diag_stage(SD_INIT_DIAG_STAGE_HAL_SD_INIT, &hsd1);
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    sd_init_diag_hal_result(g_sd_init_diag.stage, HAL_ERROR, &hsd1);
+    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_HAL_SD_INIT, HAL_ERROR, &hsd1);
     sd_init_diag_stage(SD_INIT_DIAG_STAGE_ERROR_HANDLER, &hsd1);
     Error_Handler();
   }

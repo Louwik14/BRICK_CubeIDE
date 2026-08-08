@@ -23,6 +23,7 @@ message("BRICK test build: ${BRICK_TEST_BUILD}")
 
 option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
 option(BRICK6_MULTI_PITCH_TRACE "Capture bounded Multi pitched voice trace for GDB" OFF)
+option(BRICK6_SD_INIT_DIAG "Capture SD initialization diagnostics" OFF)
 option(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN
        "Use Release code generation for the Debug Multi stream diagnostic build"
        OFF)
@@ -497,6 +498,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
     $<$<BOOL:${BRICK6_MULTI_STREAM_DIAG}>:BRICK6_MULTI_STREAM_DIAG>
     $<$<BOOL:${BRICK6_MULTI_PITCH_TRACE}>:BRICK6_MULTI_PITCH_TRACE=1>
+    $<$<BOOL:${BRICK6_SD_INIT_DIAG}>:BRICK6_SD_INIT_DIAG=1>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

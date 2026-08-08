@@ -1,6 +1,6 @@
 #include "SD/sd_init_diag.h"
 
-#if defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST) && defined(BRICK6_SD_INIT_DIAG)
 volatile sd_init_diag_t g_sd_init_diag;
 
 static void sd_init_diag_capture_regs(SDMMC_TypeDef *instance)
