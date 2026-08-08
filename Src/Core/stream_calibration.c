@@ -32,7 +32,8 @@
 typedef enum
 {
     CAL_STATE_RESET = 0,
-    CAL_STATE_PREPARE,
+    CAL_STATE_PREPARE_REQUEST,
+    CAL_STATE_PREPARE_WAIT,
     CAL_STATE_START,
     CAL_STATE_RUN,
     CAL_STATE_SETTLE,
@@ -112,6 +113,27 @@ static const char *cal_loader_error_text(sample_pool_load_error_t error)
         case SAMPLE_POOL_LOAD_OK:
         default:
             return "LOAD FAIL";
+    }
+}
+
+static const char *cal_cache_error_text(uint8_t error)
+{
+    switch (error)
+    {
+        case 2U: return "SD BUSY";
+        case 3U: return "MOUNT FAIL";
+        case 4U: return "OPEN FAIL";
+        case 5U: return "PARSE FAIL";
+        case 6U:
+        case 7U: return "UNSUPPORTED FORMAT";
+        case 8U: return "MEMORY";
+        case 9U: return "SEEK FAIL";
+        case 10U:
+        case 11U:
+        case 12U:
+        case 13U:
+        case 14U: return "READ FAIL";
+        default: return "LOAD STATE";
     }
 }
 
@@ -430,7 +452,7 @@ void brick6_stream_calibration_process(void)
 {
     switch (g_state)
     {
-        case CAL_STATE_PREPARE:
+        case CAL_STATE_PREPARE_REQUEST:
             if (g_prepare_index < 8U)
             {
                 sample_pool_clear(g_prepare_index);
@@ -443,7 +465,7 @@ void brick6_stream_calibration_process(void)
                     break;
                 }
                 const sample_desc_t *desc = sample_pool_get(g_prepare_index);
-                if ((desc == NULL) || !sample_pool_is_loaded(g_prepare_index))
+                if ((desc == NULL) || (desc->valid == 0U))
                 {
                     cal_set_file_error(g_prepare_index, "LOAD STATE");
                     g_state = CAL_STATE_FATAL;
@@ -468,8 +490,34 @@ void brick6_stream_calibration_process(void)
                     break;
                 }
                 ++g_prepare_index;
-                g_state = CAL_STATE_PREPARE;
                 break;
+            }
+            g_state = CAL_STATE_PREPARE_WAIT;
+            break;
+
+        case CAL_STATE_PREPARE_WAIT:
+            for (uint8_t i = 0U; i < 8U; ++i)
+            {
+                const sample_pool_slot_state_t state = sample_pool_get_state(i);
+                if (state == SAMPLE_POOL_SLOT_LOADED)
+                {
+                    continue;
+                }
+                if (state == SAMPLE_POOL_SLOT_PREPARING)
+                {
+                    return;
+                }
+                if (state == SAMPLE_POOL_SLOT_ERROR)
+                {
+                    cal_set_file_error(i,
+                                       cal_cache_error_text(sample_cache_get_last_error(i)));
+                }
+                else
+                {
+                    cal_set_file_error(i, "LOAD STATE");
+                }
+                g_state = CAL_STATE_FATAL;
+                return;
             }
             g_state = CAL_STATE_START;
             break;
@@ -478,7 +526,7 @@ void brick6_stream_calibration_process(void)
             cal_stop_all();
             sample_cache_init();
             g_prepare_index = 0U;
-            g_state = CAL_STATE_PREPARE;
+            g_state = CAL_STATE_PREPARE_REQUEST;
             break;
 
         case CAL_STATE_START:
