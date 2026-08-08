@@ -213,7 +213,7 @@ Autorite init systeme MCU/HAL:
 
 Autorite init sous-systemes projet:
 - `brick6_app_init()` dans `Src/Core/brick6_app_init.c`.
-- Les frontieres physiques audio, USB, power, controls, surface, LED et display passent par `Inc/Board/*`; la variante premium conserve CS42448/SAI2/TDM8, la variante low-cost apporte TLV320AIC3204/SAI1/I2S, FUSB302/role USB dynamique et POWER_HOLD.
+- Les frontieres physiques audio, USB, power, controls, surface, LED et display passent par `Inc/Board/*`; premium et low-cost partagent le codec TLV320AIC3204 et le contrat audio stereo 24-bit/2 slots, avec seulement le routage physique SAI/I2C/DMA propre à la carte; low-cost ajoute FUSB302/role USB dynamique et POWER_HOLD.
 
 Autorite wiring global inter-zones:
 - `brick6_app_init()`:
@@ -492,9 +492,9 @@ Z0 appelle principalement:
 
 ## Addendum 2026-07-17 - couche Board premium
 
-- La selection variante CMake compile les sources premium depuis `Board/Premium` et expose les contrats publics `Inc/Board/*`; aucune source low-cost n'est compilee dans cette phase.
+- La selection variante CMake compile les sources premium depuis `Board/Premium` et expose les contrats publics `Inc/Board/*`; le driver codec TLV320 commun est partage, tandis que le reste des sources de carte reste propre a la variante.
 - La pile USB Cube premium vit maintenant dans `Board/Premium/UsbStack`; le commun passe uniquement par `board_usb_*` pour l'init/process de role expose.
-- `brick6_app_init.c` ne reference plus directement CS42448, SAI ni USB CubeMX pour l'init produit: le codec, le demarrage audio physique, USB Device et le delai power passent par `board_audio_*`, `board_usb_*` et `board_power_*`.
+- `brick6_app_init.c` ne reference pas directement le codec, SAI ni USB CubeMX pour l'init produit: le codec, le demarrage audio physique, USB Device et le delai power passent par `board_audio_*`, `board_usb_*` et `board_power_*`.
 - Le CubeMX premium et ses handles restent sous `Board/Premium/Generated`; les appels `MX_*_Init()` generes ne sont pas wrappers ni modifies.
 
 ## Addendum 2026-07-17 - mapping controles low-cost

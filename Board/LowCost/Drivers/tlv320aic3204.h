@@ -16,6 +16,11 @@
 #define TLV320AIC3204_WORD_BITS 24U
 #endif
 
+/* Board-specific I2C instance; codec settings remain common. */
+#ifndef TLV320AIC3204_I2C_HANDLE
+#define TLV320AIC3204_I2C_HANDLE hi2c1
+#endif
+
 #ifndef TLV320AIC3204_LEFT_P_ROUTE
 #define TLV320AIC3204_LEFT_P_ROUTE 0x80U
 #endif

@@ -33,7 +33,6 @@
 /* USER CODE BEGIN Includes */
 #include "usb_device.h"
 #include "usb_host.h"
-#include "cs42448.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"

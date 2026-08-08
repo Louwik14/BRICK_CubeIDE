@@ -516,7 +516,7 @@ tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config)
 tlv320aic3204_status_t TLV320AIC3204_InitDefault(void)
 {
   const tlv320aic3204_config_t config = {
-      .i2c = &hi2c1,
+      .i2c = &TLV320AIC3204_I2C_HANDLE,
       .address_7bit = TLV320AIC3204_I2C_ADDR_7BIT,
       .mclk_hz = TLV320AIC3204_MCLK_HZ,
       .word_bits = TLV320AIC3204_WORD_BITS,

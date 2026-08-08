@@ -119,9 +119,10 @@ if(BRICK6_VARIANT STREQUAL "premium")
     list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers"
     )
     list(APPEND BRICK6_VARIANT_DRIVER_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers/cs42448.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_audio_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_controls_premium.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_display_transport_premium.c"
@@ -510,7 +511,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_PREMIUM)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+        BRICK6_VARIANT_PREMIUM
+        TLV320AIC3204_I2C_HANDLE=hi2c2
+    )
 elseif(BRICK6_VARIANT STREQUAL "lowcost")
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_LOWCOST)
 endif()

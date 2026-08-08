@@ -3,25 +3,21 @@
  * @brief Moteur frontière int24 <-> float, architecture tracks stéréo actives.
  *
  * Rôle du module:
- * - Convertir le flux DMA TDM8 (int24 right-aligned) en buffers float par track.
+ * - Convertir le flux DMA stereo 2 slots (int24 right-aligned) en buffers float.
  * - Exécuter le callback DSP utilisateur sur les tracks.
- * - Réaliser le mix vers buses internes (MAIN/CUE/SEND) et le remappage de sortie TDM.
+ * - Réaliser le mix vers buses internes et le remappage de sortie stereo.
  *
  * Architecture (appelant -> appelé):
  * - audio.c (IRQ DMA RX) -> audio_process_block_int32().
  * - audio_process_block_int32() -> float_cb(tracks, MAX_TRACKS, frames).
  *
  * Modèle audio track-based:
- * - Track 0 lit slots TDM 0/1 (L/R).
- * - Track 1 lit slots TDM 2/3 (L/R).
- * - Track 2 lit slots TDM 4/5 (L/R).
- * - Les slots 6/7 en entrée ne sont pas exploités.
+ * - La paire d'entree logique lit les slots 0/1 (L/R).
+ * - Les tracks DSP supplementaires sont des lanes logiques internes.
  *
- * Mapping sortie TDM:
+ * Mapping sortie physique:
  * - MAIN L/R -> slots 0/1.
- * - CUE L/R (copie MAIN par défaut) -> slots 2/3.
- * - Copie MAIN L/R -> slots 4/5.
- * - slots 6/7 forcés à 0.
+ * - Les anciennes voies physiques auxiliaires sont ignorees par l'adapter board.
  *
  * Contraintes temps réel:
  * - Fonction principale exécutée en IRQ audio.

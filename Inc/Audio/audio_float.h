@@ -14,12 +14,12 @@ extern "C" {
 
 /**
  * @file audio_float.h
- * @brief Frontière DSP float track-based (stéréo) pour moteur audio TDM8.
+ * @brief Frontière DSP float track-based (stéréo) pour le contrat audio commun.
  *
  * Rôle du module:
  * - Convertir le flux int24 (DMA/SAI) <-> float.
  * - Exposer un modèle de traitement par tracks stéréo actives.
- * - Effectuer le mixage master et le mapping de sortie TDM.
+ * - Effectuer le mixage master et le mapping de sortie stéréo.
  *
  * Architecture:
  * - Appelé par: audio.c (IRQ DMA RX half/full).
@@ -35,11 +35,8 @@ extern "C" {
    ============================================================ */
 
 #define AUDIO_BLOCK_SIZE BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
-/*
- * DSP engine exposes 4 stereo tracks. Tracks 0..2 come from TDM slots
- * (0/1, 2/3, 4/5). Track 3 has no physical input and remains disabled;
- * internal engines publish through the mixer's external-lane seam.
- */
+/* Le transport physique commun expose une seule paire stéréo (slots 0/1).
+ * Les tracks DSP supplémentaires restent des lanes logiques internes. */
 #define MAX_TRACKS       4U
 
 /**

@@ -9,10 +9,8 @@
 /*
  * Common audio contract used by both product variants.
  *
- * The active board transport is still selected below until the Premium board
- * adapter is migrated.  These constants are intentionally variant-neutral so
- * the common audio layer has one authoritative target contract during that
- * migration.
+ * Both variants use this contract.  Only the physical SAI/I2C/DMA wiring may
+ * remain board-specific.
  */
 #define BOARD_AUDIO_CONTRACT_SAMPLE_RATE_HZ 48000U
 #define BOARD_AUDIO_CONTRACT_SAMPLE_BITS 24U
@@ -31,10 +29,6 @@
 #error "Board audio timing must match the common audio contract"
 #endif
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-#define BOARD_AUDIO_TDM_SLOTS 2U
-#else
-#define BOARD_AUDIO_TDM_SLOTS 8U
-#endif
+#define BOARD_AUDIO_TDM_SLOTS BOARD_AUDIO_CONTRACT_TDM_SLOTS
 #define BOARD_AUDIO_WORDS_PER_FRAME BOARD_AUDIO_TDM_SLOTS
 #define BOARD_AUDIO_BUFFER_WORDS (BOARD_AUDIO_FRAMES_TOTAL * BOARD_AUDIO_WORDS_PER_FRAME)

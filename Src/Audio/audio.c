@@ -1,6 +1,6 @@
 ﻿/**
  * @file audio.c
- * @brief Couche matérielle audio STM32H743 (SAI TDM8 + DMA double buffer).
+ * @brief Couche matérielle audio STM32H743 (SAI stereo 24-bit + DMA double buffer).
  *
  * Rôle du module:
  * - Configurer la mécanique de streaming RX/TX DMA en ping-pong (half/full).
@@ -45,10 +45,10 @@
 #include "stm32h7xx_hal.h"
 
 /* ============================================================
-   CONFIG AUDIO : STM32H743 + CS42448 TDM8
+   CONFIG AUDIO : contrat codec/SAI stereo commun aux variantes
    ============================================================ */
 
-/* TDM8 = 8 slots x 32-bit */
+/* Deux slots stéréo de 32 bits transportant des samples 24 bits. */
 #define AUDIO_TDM_SLOTS          BOARD_AUDIO_TDM_SLOTS
 
 /* Frames traitées par interruption half DMA.
@@ -58,7 +58,7 @@
 /* Double buffer DMA: [half0 | half1] */
 #define AUDIO_FRAMES_TOTAL       BOARD_AUDIO_CONTRACT_FRAMES_TOTAL
 
-/* 1 frame TDM = 8 mots (slots) */
+/* 1 frame audio = un mot par canal stéréo. */
 #define AUDIO_WORDS_PER_FRAME    AUDIO_TDM_SLOTS
 
 /* Taille totale des buffers DMA (en int32) */
