@@ -4,7 +4,7 @@
 
 #include "Core/brick6_sd_config.h"
 #include "SD/bsp_driver_sd.h"
-#include "SD/sd_diskio.h"
+#include "SD/sd_io_hooks.h"
 #include "Storage/cache_maintenance.h"
 #include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
@@ -66,11 +66,11 @@ static void sd_block_device_async_start_head(void)
         entry->dst, (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
     entry->started = 1U;
     entry->start_tick = HAL_GetTick();
-    sd_diskio_read_metrics_note_blocks(entry->sector_count);
-    if (BSP_SD_ReadBlocks_DMA((uint32_t *)entry->dst,
-                              entry->lba,
-                              entry->sector_count) != MSD_OK)
+    if (brick_sd_read_blocks_dma((uint32_t *)entry->dst,
+                                 entry->lba,
+                                 entry->sector_count) != MSD_OK)
     {
+        brick_sd_media_fault();
         entry->result = SD_BLOCK_DEVICE_READ_FAIL;
         entry->completed = 1U;
     }
@@ -129,6 +129,7 @@ void sd_block_device_async_poll(void)
     {
         if ((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
         {
+            brick_sd_media_fault();
             entry->result = SD_BLOCK_DEVICE_READ_FAIL;
             entry->completed = 1U;
             return;
@@ -138,6 +139,7 @@ void sd_block_device_async_poll(void)
     }
     if (g_sd_block_device_async_error != 0U)
     {
+        brick_sd_media_fault();
         entry->result = SD_BLOCK_DEVICE_READ_FAIL;
         entry->completed = 1U;
         return;
@@ -145,6 +147,7 @@ void sd_block_device_async_poll(void)
     if ((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
     {
         (void)HAL_SD_Abort(&hsd1);
+        brick_sd_media_fault();
         entry->result = SD_BLOCK_DEVICE_READ_FAIL;
         entry->completed = 1U;
         return;

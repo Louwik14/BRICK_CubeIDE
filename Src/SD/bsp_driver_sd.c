@@ -420,13 +420,12 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
   BSP_SD_ReadCpltCallback();
 }
 
+/* USER CODE BEGIN CallBacksSection_C */
 void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd)
 {
   (void)hsd;
   BSP_SD_ErrorCallback();
 }
-
-/* USER CODE BEGIN CallBacksSection_C */
 /**
   * @brief BSP SD Abort callback
   * @retval None

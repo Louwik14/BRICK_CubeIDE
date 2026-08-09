@@ -1504,10 +1504,29 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
         return 0U;
     }
 
-    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
     if (sample_page_cache_sample_is_stream_loadable_key(key) == 0U)
     {
         return 0U;
+    }
+
+    sample_stream_physical_map_t *const map = &sample->stream_safe.physical_map;
+    if ((sample->raw_pcm24 == 0U) && (map->valid != 0U)
+        && (sample_stream_physical_map_is_current(map) == 0U))
+    {
+        const uint64_t data_end = (uint64_t)sample->data_offset
+                                + (uint64_t)sample->info.data_size;
+        if ((sample_stream_fatfs_map_build_from_path(
+                 sample->path, &sample->stream_safe) == 0U)
+            || (data_end > sample->stream_safe.file_size))
+        {
+            sample_stream_physical_map_release(map);
+            sample_stream_safe_metadata_init_fatfs(key,
+                                                   &sample->info,
+                                                   sample->total_frames,
+                                                   sample->data_offset,
+                                                   &sample->stream_safe);
+        }
     }
 
     memset(out_info, 0, sizeof(*out_info));
@@ -1605,6 +1624,7 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
     const uint32_t primask = sample_page_cache_lock();
     const sample_page_desc_t *const page = &g_sample_page_desc[token->slot_index];
     const uint8_t valid = (uint8_t)((page->state == SAMPLE_PAGE_LOADING)
+        && (page->load_cancel_requested == 0U)
         && (page->page_index == token->page_index)
         && (page->generation == token->page_generation)
         && (page->registration_epoch == token->registration_epoch)

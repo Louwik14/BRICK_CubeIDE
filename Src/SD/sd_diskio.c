@@ -22,6 +22,10 @@
 
 /* USER CODE BEGIN firstSection */
 /* can be used to modify / undefine following code or add new definitions */
+#include "SD/sd_io_hooks.h"
+#define BSP_SD_IsDetected brick_sd_is_detected
+#define BSP_SD_ReadBlocks_DMA brick_sd_read_blocks_dma
+#define BSP_SD_ReadCpltCallback BSP_SD_ReadCpltCallback_CubeMX
 /* USER CODE END firstSection*/
 
 /* Includes ------------------------------------------------------------------*/
@@ -30,7 +34,6 @@
 
 #include <string.h>
 #include "Core/brick6_sd_config.h"
-#include "SD/sd_block_device.h"
 #include "Storage/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
 
@@ -52,32 +55,6 @@
  * transaction while keeping the bounce buffer bounded.
  */
 #define SD_READ_BOUNCE_BLOCK_COUNT 8U
-
-static volatile sd_diskio_read_metrics_t g_sd_diskio_read_metrics;
-
-void sd_diskio_read_metrics_reset(void)
-{
-  memset((void *)&g_sd_diskio_read_metrics, 0, sizeof(g_sd_diskio_read_metrics));
-}
-
-void sd_diskio_read_metrics_get(sd_diskio_read_metrics_t *out_metrics)
-{
-  if (out_metrics != 0)
-  {
-    *out_metrics = g_sd_diskio_read_metrics;
-  }
-}
-
-void sd_diskio_read_metrics_note_blocks(uint32_t blocks)
-{
-  const uint32_t bytes = (uint32_t)blocks * SD_DEFAULT_BLOCK_SIZE;
-  g_sd_diskio_read_metrics.read_transactions++;
-  g_sd_diskio_read_metrics.read_bytes += bytes;
-  if (bytes > g_sd_diskio_read_metrics.max_read_bytes)
-  {
-    g_sd_diskio_read_metrics.max_read_bytes = bytes;
-  }
-}
 
 /*
  * Depending on the use case, the SD card initialization could be done at the
@@ -331,7 +308,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
      */
     dcache_invalidate_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
-    sd_diskio_read_metrics_note_blocks(count);
     if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
                              (uint32_t) (sector),
                              count) == MSD_OK)
@@ -396,7 +372,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
          */
         dcache_invalidate_by_addr_aligned(scratch, bounce_bytes);
 #endif
-        sd_diskio_read_metrics_note_blocks(bounce_count);
         ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch,
                                    (uint32_t)(sector + blocks_done),
                                    bounce_count);
@@ -730,10 +705,15 @@ void BSP_SD_WriteCpltCallback(void)
 void BSP_SD_ReadCpltCallback(void)
 {
   ReadStatus = 1;
-  sd_block_device_async_read_complete_isr();
 }
 
 /* USER CODE BEGIN ErrorAbortCallbacks */
+#undef BSP_SD_ReadCpltCallback
+void BSP_SD_ReadCpltCallback(void)
+{
+  ReadStatus = 1;
+  brick_sd_async_read_complete_isr();
+}
 /*
 ==============================================================================================
   depending on the SD_HAL_Driver version, either the HAL_SD_ErrorCallback() or HAL_SD_AbortCallback()
@@ -752,7 +732,7 @@ void BSP_SD_ReadCpltCallback(void)
  */
 void BSP_SD_AbortCallback(void)
 {
-  sd_block_device_async_error_isr();
+  brick_sd_async_error_isr();
 }
 
 /**
@@ -767,7 +747,7 @@ void BSP_SD_AbortCallback(void)
  */
 void BSP_SD_ErrorCallback(void)
 {
-  sd_block_device_async_error_isr();
+  brick_sd_async_error_isr();
 }
 
 /* USER CODE END ErrorAbortCallbacks */

@@ -60,6 +60,7 @@ typedef struct
     sample_stream_physical_cursor_t local_physical_cursor;
     sample_stream_backend_physical_async_t physical;
     const uint8_t *source;
+    uint32_t media_epoch;
     uint8_t active;
     uint8_t completed;
     uint8_t physical_active;
@@ -333,6 +334,21 @@ static void sample_stream_io_decode_async(void)
     {
         return;
     }
+    sample_page_load_target_t current_target;
+    if ((g_sample_stream_io_async.media_epoch != sd_access_media_epoch())
+        || (sample_page_cache_resolve_loading_target(
+                &g_sample_stream_io_async.command.token, &current_target) == 0U)
+        || (current_target.frames_interleaved
+            != g_sample_stream_io_async.target.frames_interleaved)
+        || (current_target.page_generation
+            != g_sample_stream_io_async.target.page_generation)
+        || (current_target.registration_epoch
+            != g_sample_stream_io_async.target.registration_epoch))
+    {
+        g_sample_stream_io_async.result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+        return;
+    }
+    g_sample_stream_io_async.target = current_target;
     const uint32_t decode_begin = DWT->CYCCNT;
     g_sample_stream_io_async.result.load_result = sample_stream_decoder_decode_page(
         &g_sample_stream_io_async.command.stream_info,
@@ -454,6 +470,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     }
     memset(async, 0, sizeof(*async));
     async->active = 1U;
+    async->media_epoch = sd_access_media_epoch();
     async->command = *command;
     async->result.token = command->token;
     async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;

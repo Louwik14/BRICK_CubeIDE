@@ -456,6 +456,7 @@ static uint8_t finalize_client_step(uint32_t client_id)
                 MRW_FINALIZE_PHASE_RENAME_WAV : MRW_FINALIZE_PHASE_BEGIN;
         if(client->backend != MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV)
         {
+            sd_access_media_epoch_advance();
             client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
             writer_debug_mark(client,
                               REC_LIVE_DEBUG_WRITER_FINAL_READY,
@@ -468,6 +469,7 @@ static uint8_t finalize_client_step(uint32_t client_id)
     {
         if(strncmp(client->raw_path, client->final_path, MULTI_RECORD_WRITER_PATH_MAX) == 0)
         {
+            sd_access_media_epoch_advance();
             client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
             client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
             writer_debug_mark(client,
@@ -488,6 +490,7 @@ static uint8_t finalize_client_step(uint32_t client_id)
         }
 
         client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
+        sd_access_media_epoch_advance();
         client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
         writer_debug_mark(client,
                           REC_LIVE_DEBUG_WRITER_FINAL_READY,

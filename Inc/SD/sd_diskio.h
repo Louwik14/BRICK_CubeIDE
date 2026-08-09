@@ -35,19 +35,9 @@
 /* Exported functions ------------------------------------------------------- */
 extern const Diskio_drvTypeDef  SD_Driver;
 
-typedef struct
-{
-  uint32_t read_transactions;
-  uint32_t read_bytes;
-  uint32_t max_read_bytes;
-} sd_diskio_read_metrics_t;
-
-void sd_diskio_read_metrics_reset(void);
-void sd_diskio_read_metrics_get(sd_diskio_read_metrics_t *out_metrics);
-void sd_diskio_read_metrics_note_blocks(uint32_t blocks);
-
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */
+#include "SD/sd_io_hooks.h"
 /* USER CODE END lastSection */
 
 #endif /* __SD_DISKIO_H */

@@ -607,6 +607,7 @@ static uint8_t wav_convert_replace_phase(void)
     }
 
     (void)f_unlink(g_wav_convert.bak_path);
+    sd_access_media_epoch_advance();
     g_wav_convert.temp_created = 0U;
     g_wav_convert.bak_created = 0U;
     wav_convert_release_gate();
