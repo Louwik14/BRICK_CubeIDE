@@ -28,12 +28,17 @@ option(BRICK6_STREAM_UNDERRUN_TRACE
        "Capture bounded causal streaming underrun trace for GDB"
        OFF)
 option(BRICK6_STREAM_CALIBRATION "Enable manual streamer calibration cases in Multi TONE" OFF)
-set(BRICK6_STREAM_CALIBRATION_PAGE_KIB "16" CACHE STRING
-    "Streamer calibration page size (16 or 32 KiB)")
+set(BRICK6_STREAM_CALIBRATION_PAGE_KIB "32" CACHE STRING
+    "Streamer calibration page size (32 KiB)")
+set(BRICK6_STREAM_READ_CHUNK_KIB "16" CACHE STRING
+    "Streamer application read quantum in KiB")
 if(BRICK6_STREAM_CALIBRATION
-   AND NOT BRICK6_STREAM_CALIBRATION_PAGE_KIB STREQUAL "16"
    AND NOT BRICK6_STREAM_CALIBRATION_PAGE_KIB STREQUAL "32")
-    message(FATAL_ERROR "BRICK6_STREAM_CALIBRATION_PAGE_KIB must be 16 or 32")
+    message(FATAL_ERROR "Manual stream calibration requires 32 KiB pages")
+endif()
+if(BRICK6_STREAM_CALIBRATION
+   AND NOT BRICK6_STREAM_READ_CHUNK_KIB MATCHES "^(4|8|16|32)$")
+    message(FATAL_ERROR "BRICK6_STREAM_READ_CHUNK_KIB must be 4, 8, 16 or 32")
 endif()
 option(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN
        "Use Release code generation for the Debug Multi stream diagnostic build"
@@ -515,6 +520,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_CALIBRATION=1>
     $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_BENCH=1>
     $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_CALIBRATION_PAGE_KIB=${BRICK6_STREAM_CALIBRATION_PAGE_KIB}>
+    $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_READ_CHUNK_KIB=${BRICK6_STREAM_READ_CHUNK_KIB}>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

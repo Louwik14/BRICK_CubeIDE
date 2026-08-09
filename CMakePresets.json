@@ -65,6 +65,30 @@
                 "BRICK6_VARIANT": "premium",
                 "BRICK_TEST_BUILD": "OFF"
             }
+        },
+        {
+            "name": "Calibration32Chunk16",
+            "inherits": "common-ninja-arm",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BRICK6_VARIANT": "lowcost",
+                "BRICK_TEST_BUILD": "OFF",
+                "BRICK6_STREAM_CALIBRATION": "ON",
+                "BRICK6_STREAM_CALIBRATION_PAGE_KIB": "32",
+                "BRICK6_STREAM_READ_CHUNK_KIB": "16"
+            }
+        },
+        {
+            "name": "Calibration32Chunk32",
+            "inherits": "common-ninja-arm",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BRICK6_VARIANT": "lowcost",
+                "BRICK_TEST_BUILD": "OFF",
+                "BRICK6_STREAM_CALIBRATION": "ON",
+                "BRICK6_STREAM_CALIBRATION_PAGE_KIB": "32",
+                "BRICK6_STREAM_READ_CHUNK_KIB": "32"
+            }
         }
     ],
     "buildPresets": [
@@ -91,6 +115,14 @@
         {
             "name": "Premium",
             "configurePreset": "Premium"
+        },
+        {
+            "name": "Calibration32Chunk16",
+            "configurePreset": "Calibration32Chunk16"
+        },
+        {
+            "name": "Calibration32Chunk32",
+            "configurePreset": "Calibration32Chunk32"
         }
     ]
 }
