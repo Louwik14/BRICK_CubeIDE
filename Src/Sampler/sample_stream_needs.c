@@ -221,6 +221,7 @@ uint8_t sample_stream_needs_build(
     }
 
     const uint8_t loop_valid = sample_stream_needs_loop_valid(snapshot);
+#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES == 0U
     if (loop_valid != 0U)
     {
         if (current >= snapshot->loop_end)
@@ -228,6 +229,7 @@ uint8_t sample_stream_needs_build(
             current = snapshot->loop_begin;
         }
     }
+#endif
     for (uint8_t i = 0U; i < page_count; ++i)
     {
         const sample_stream_audio_frame_t deadline = sample_stream_needs_deadline(

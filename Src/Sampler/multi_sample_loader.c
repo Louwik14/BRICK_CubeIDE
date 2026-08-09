@@ -289,6 +289,7 @@ static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
     result.start_last = start_pages - 1U;
     uint32_t pages = result.start_last + 1U;
 
+#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES == 0U
     if ((has_loop != 0U) && (loop_end > loop_begin) && (loop_end <= total_frames))
     {
         uint32_t loop_ready_end = loop_begin + SAMPLE_PREP_MIN_READY_FRAMES;
@@ -315,6 +316,11 @@ static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
         }
         pages += loop_pages - overlap;
     }
+#else
+    (void)has_loop;
+    (void)loop_begin;
+    (void)loop_end;
+#endif
 
     const uint32_t max_budget_pages =
         SAMPLE_PREP_MULTI_BUDGET_BYTES / SAMPLE_PAGE_BYTES;

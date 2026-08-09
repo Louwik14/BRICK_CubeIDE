@@ -984,6 +984,10 @@ static uint8_t brick6_sampler_runtime_start_gate_check(
 
 static uint8_t brick6_sampler_runtime_loop_gate_check(const sample_play_plan_t *plan)
 {
+#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+    (void)plan;
+    return 1U;
+#else
     if ((plan == NULL) || (plan->loop_mode != (uint8_t)SAMPLE_PLAY_LOOP_FORWARD)
         || (plan->loop_end <= plan->loop_begin))
     {
@@ -1011,6 +1015,7 @@ static uint8_t brick6_sampler_runtime_loop_gate_check(const sample_play_plan_t *
         }
     }
     return ready;
+#endif
 }
 
 static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_play_plan(
@@ -4689,6 +4694,10 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
             sample_page_cache_get_page_state_key(key, 0U));
         return 0U;
     }
+    sample_voice_reader_bind_loop_cache_incarnation(
+        &multi_voice->reader,
+        brick6_sampler_runtime_multi_voice_index(multi_voice),
+        multi_voice->trigger_order);
 
     multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     const brick6_sampler_multi_voice_handle_t multi_handle =

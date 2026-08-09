@@ -2031,6 +2031,29 @@ void sample_page_cache_unpin_page_key(sample_audio_key_t key, uint32_t page_inde
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
 }
 
+void sample_page_cache_unpin_page_ref_key(sample_audio_key_t key,
+                                          const sample_page_ref_t *ref)
+{
+    if ((ref == 0) || (sample_audio_key_equal(&key, &ref->key) == 0U)
+        || (ref->slot_index >= SAMPLE_PAGE_MAX_COUNT))
+    {
+        return;
+    }
+    sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
+    if ((sample_audio_key_equal(&page->key, &ref->key) == 0U)
+        || (page->page_index != ref->page_index)
+        || (page->generation != ref->page_generation)
+        || (page->registration_epoch != ref->registration_epoch))
+    {
+        return;
+    }
+    if (page->pin_count != 0U)
+    {
+        page->pin_count--;
+    }
+    page->last_touch = ++g_sample_page_cache_state.touch_counter;
+}
+
 sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
                                                              FIL *fp,
                                                              const wav_info_t *info,

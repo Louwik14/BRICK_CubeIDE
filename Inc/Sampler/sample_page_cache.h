@@ -321,6 +321,8 @@ uint8_t sample_page_cache_pin_page_key_alloc(sample_audio_key_t key,
                                              sample_page_alloc_type_t alloc_type);
 void sample_page_cache_unpin_page(uint16_t sample_id, uint32_t page_index);
 void sample_page_cache_unpin_page_key(sample_audio_key_t key, uint32_t page_index);
+void sample_page_cache_unpin_page_ref_key(sample_audio_key_t key,
+                                          const sample_page_ref_t *ref);
 sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
                                                              FIL *fp,
                                                              const wav_info_t *info,
