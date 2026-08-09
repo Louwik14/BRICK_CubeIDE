@@ -22,6 +22,7 @@ sample_page_load_result_t sample_stream_backend_contiguous_read_page(
         || (info->stream_safe.valid == 0U)
         || (info->stream_safe.backend_kind != (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS)
         || (info->stream_safe.contiguous == 0U)
+        || (sample_stream_physical_map_is_current(&info->stream_safe.physical_map) == 0U)
         || (info->info.block_align == 0U))
     {
         return SAMPLE_PAGE_LOAD_INVALID_ARG;

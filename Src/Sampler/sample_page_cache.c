@@ -927,6 +927,7 @@ void sample_page_cache_init(void)
 
 void sample_page_cache_reset(void)
 {
+    sample_stream_physical_map_pool_reset();
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
@@ -969,6 +970,8 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
         }
     }
 
+    sample_stream_physical_map_release(
+        &g_sample_page_sample_desc[key_slot].stream_safe.physical_map);
     memset(&g_sample_page_sample_desc[key_slot], 0, sizeof(g_sample_page_sample_desc[key_slot]));
     g_sample_page_sample_desc[key_slot].key = key;
     g_sample_page_sample_desc[key_slot].first_slot = UINT16_MAX;
@@ -2165,7 +2168,8 @@ static uint8_t sample_page_cache_register_stream_sample_key_internal(
     const wav_info_t *info,
     uint32_t total_frames,
     uint32_t data_offset,
-    uint8_t certify_contiguous)
+    uint8_t build_physical_map,
+    FIL *map_file)
 {
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0) || (info == 0)
@@ -2200,14 +2204,29 @@ static uint8_t sample_page_cache_register_stream_sample_key_internal(
                                            total_frames,
                                            data_offset,
                                            &sample->stream_safe);
-    if (certify_contiguous != 0U)
+    if (build_physical_map != 0U)
     {
-        (void)sample_stream_fatfs_map_certify_contiguous(key,
-                                                         sample->path,
-                                                         info,
-                                                         total_frames,
-                                                         data_offset,
-                                                         &sample->stream_safe);
+        uint8_t map_ok;
+        if (map_file != 0)
+        {
+            map_ok = sample_stream_fatfs_map_build_from_file(map_file,
+                                                             &sample->stream_safe);
+        }
+        else
+        {
+            map_ok = sample_stream_fatfs_map_build_from_path(sample->path,
+                                                             &sample->stream_safe);
+        }
+        const uint64_t data_end = (uint64_t)data_offset + (uint64_t)info->data_size;
+        if ((map_ok == 0U) || (data_end > sample->stream_safe.file_size))
+        {
+            sample_stream_physical_map_release(&sample->stream_safe.physical_map);
+            sample_stream_safe_metadata_init_fatfs(key,
+                                                   info,
+                                                   total_frames,
+                                                   data_offset,
+                                                   &sample->stream_safe);
+        }
     }
     sample->valid = 1U;
     sample->fully_loaded = 0U;
@@ -2226,7 +2245,24 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
                                                                   info,
                                                                   total_frames,
                                                                   data_offset,
-                                                                  1U);
+                                                                  1U,
+                                                                  0);
+}
+
+uint8_t sample_page_cache_register_stream_sample_key_from_file(sample_audio_key_t key,
+                                                               const char *path,
+                                                               const wav_info_t *info,
+                                                               uint32_t total_frames,
+                                                               uint32_t data_offset,
+                                                               FIL *map_file)
+{
+    return sample_page_cache_register_stream_sample_key_internal(key,
+                                                                  path,
+                                                                  info,
+                                                                  total_frames,
+                                                                  data_offset,
+                                                                  1U,
+                                                                  map_file);
 }
 
 uint8_t sample_page_cache_register_stream_sample_key_no_map(
@@ -2241,7 +2277,8 @@ uint8_t sample_page_cache_register_stream_sample_key_no_map(
                                                                   info,
                                                                   total_frames,
                                                                   data_offset,
-                                                                  0U);
+                                                                  0U,
+                                                                  0);
 }
 
 uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,

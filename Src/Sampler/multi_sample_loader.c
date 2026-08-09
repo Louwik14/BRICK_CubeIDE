@@ -601,11 +601,11 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         const sample_audio_key_t key = sample_audio_key_multi(multi_sample_id);
         const wav_info_t info = multi_loader_wav_info_from_index_sample(sample);
         sample_stream_manager_release_key(key);
-        if (sample_page_cache_register_stream_sample_key_no_map(key,
-                                                                full_path,
-                                                                &info,
-                                                                sample->total_frames,
-                                                                sample->data_offset) == 0U)
+        if (sample_page_cache_register_stream_sample_key(key,
+                                                        full_path,
+                                                        &info,
+                                                        sample->total_frames,
+                                                        sample->data_offset) == 0U)
         {
             multi_loader_set_error(MULTI_SAMPLE_LOAD_REGISTER_FAIL, multi_sample_id);
             return MULTI_SAMPLE_LOAD_REGISTER_FAIL;

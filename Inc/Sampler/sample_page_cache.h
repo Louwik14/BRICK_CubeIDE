@@ -354,6 +354,12 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
                                                      const wav_info_t *info,
                                                      uint32_t total_frames,
                                                      uint32_t data_offset);
+uint8_t sample_page_cache_register_stream_sample_key_from_file(sample_audio_key_t key,
+                                                               const char *path,
+                                                               const wav_info_t *info,
+                                                               uint32_t total_frames,
+                                                               uint32_t data_offset,
+                                                               FIL *map_file);
 uint8_t sample_page_cache_register_stream_sample_key_no_map(
     sample_audio_key_t key,
     const char *path,

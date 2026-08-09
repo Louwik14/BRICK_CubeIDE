@@ -50,6 +50,8 @@ const char *sd_access_gate_busy_label(void);
 
 uint8_t sd_access_fs_mount_if_needed(void);
 void sd_access_fs_invalidate_mount(void);
+uint32_t sd_access_media_epoch(void);
+void sd_access_media_epoch_advance(void);
 
 #if BRICK_TEST_BUILD
 void sd_access_gate_set_diagnostic_read_only(uint8_t active);

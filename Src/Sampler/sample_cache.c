@@ -44,7 +44,8 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
                                                             sample_cache_desc_t *desc,
                                                             FIL *fp);
 static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
-                                                           sample_cache_desc_t *desc);
+                                                           sample_cache_desc_t *desc,
+                                                           FIL *map_file);
 static uint8_t sample_cache_request_pin_page_span(uint16_t sample_id,
                                                   const sample_play_plan_page_span_t *span);
 static void sample_cache_voice_reset(sample_cache_voice_t *voice);
@@ -424,18 +425,21 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
 }
 
 static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
-                                                           sample_cache_desc_t *desc)
+                                                           sample_cache_desc_t *desc,
+                                                           FIL *map_file)
 {
     if ((desc == 0) || (desc->mode != SAMPLE_CACHE_MODE_STREAM))
     {
         return 0U;
     }
 
-    if (sample_page_cache_register_stream_sample(sample_id,
-                                                 desc->path,
-                                                 &desc->info,
-                                                 desc->total_frames,
-                                                 desc->data_offset) == 0U)
+    if (sample_page_cache_register_stream_sample_key_from_file(
+            sample_audio_key_classic(sample_id),
+            desc->path,
+            &desc->info,
+            desc->total_frames,
+            desc->data_offset,
+            map_file) == 0U)
     {
         desc->last_error = 12U;
         g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
@@ -1295,7 +1299,7 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
     desc->cache = 0;
     desc->cache_window_start_frame = 0U;
     desc->state = SAMPLE_CACHE_PREFILLING;
-    if (sample_cache_prepare_partial_via_page_cache(sample_id, desc) == 0U)
+    if (sample_cache_prepare_partial_via_page_cache(sample_id, desc, &fp) == 0U)
     {
         goto done;
     }

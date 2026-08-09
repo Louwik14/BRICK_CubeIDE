@@ -16,6 +16,7 @@ static volatile uint32_t g_sd_access_owner_acquire_cycle;
 static volatile uint32_t g_sd_access_client_cycles[SD_ACCESS_CLIENT_MAX + 1U];
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
+static volatile uint32_t g_sd_media_epoch;
 #if BRICK_TEST_BUILD
 static volatile uint8_t g_sd_access_diagnostic_read_only;
 #endif
@@ -36,6 +37,11 @@ void sd_access_gate_init(void)
         g_sd_access_client_cycles[i] = 0U;
     }
     g_sd_fs_mounted = 0U;
+    g_sd_media_epoch++;
+    if (g_sd_media_epoch == 0U)
+    {
+        g_sd_media_epoch = 1U;
+    }
     g_sd_access_owner_acquire_cycle = 0U;
 #if BRICK_TEST_BUILD
     g_sd_access_diagnostic_read_only = 0U;
@@ -64,6 +70,27 @@ uint8_t sd_access_fs_mount_if_needed(void)
 void sd_access_fs_invalidate_mount(void)
 {
     g_sd_fs_mounted = 0U;
+    sd_access_media_epoch_advance();
+}
+
+uint32_t sd_access_media_epoch(void)
+{
+    uint32_t epoch;
+    __disable_irq();
+    epoch = g_sd_media_epoch;
+    __enable_irq();
+    return epoch;
+}
+
+void sd_access_media_epoch_advance(void)
+{
+    __disable_irq();
+    g_sd_media_epoch++;
+    if (g_sd_media_epoch == 0U)
+    {
+        g_sd_media_epoch = 1U;
+    }
+    __enable_irq();
 }
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
