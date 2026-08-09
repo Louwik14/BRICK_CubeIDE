@@ -459,14 +459,9 @@ static void brick6_stack_runtime_init_slot(stack_osc_slot_t *slot, uint8_t enabl
     memset(slot, 0, sizeof(*slot));
     const brick6_stack_model_desc_t *const desc = brick6_stack_runtime_model_desc(BRICK6_STACK_MODEL_SHAPE);
     slot->model = (uint8_t)BRICK6_STACK_MODEL_SHAPE;
-    slot->family = desc->family;
-    slot->kernel_id = desc->kernel_id;
     slot->renderer_id = desc->renderer_id;
-    slot->level = enabled;
     slot->level_q15 = (enabled != 0U) ? 32767U : 0U;
     slot->level_current_q15 = slot->level_q15;
-    slot->timbre = 127U;
-    slot->color = 127U;
     slot->timbre_q15 = 16384U;
     slot->color_q15 = 16384U;
     slot->timbre_current_q15 = slot->timbre_q15;
@@ -994,7 +989,6 @@ void brick6_stack_runtime_set_slot_level(uint8_t instance_id, uint8_t slot, floa
     const uint16_t next = brick6_stack_float_to_q15(level);
     if (instance->slots[slot].level_q15 == next) return;
     instance->slots[slot].level_q15 = next;
-    instance->slots[slot].level = (uint8_t)((instance->slots[slot].level_q15 * 127U) / 32767U);
     brick6_stack_runtime_touch_config(instance);
 }
 
@@ -1015,8 +1009,6 @@ void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, bric
     }
 
     osc->model = (uint8_t)model;
-    osc->family = desc->family;
-    osc->kernel_id = desc->kernel_id;
     osc->renderer_id = desc->renderer_id;
     osc->phase = 0U;
     osc->phase2 = 0x55555555UL;
@@ -1050,7 +1042,6 @@ void brick6_stack_runtime_set_slot_timbre(uint8_t instance_id, uint8_t slot, flo
     const uint16_t next = brick6_stack_float_to_q15(timbre);
     if (instance->slots[slot].timbre_q15 == next) return;
     instance->slots[slot].timbre_q15 = next;
-    instance->slots[slot].timbre = (uint8_t)((instance->slots[slot].timbre_q15 * 127U) / 32767U);
     brick6_stack_runtime_touch_config(instance);
 }
 
@@ -1064,7 +1055,6 @@ void brick6_stack_runtime_set_slot_color(uint8_t instance_id, uint8_t slot, floa
     const uint16_t next = brick6_stack_float_to_q15(color);
     if (instance->slots[slot].color_q15 == next) return;
     instance->slots[slot].color_q15 = next;
-    instance->slots[slot].color = (uint8_t)((instance->slots[slot].color_q15 * 127U) / 32767U);
     brick6_stack_runtime_touch_config(instance);
 }
 
@@ -1421,7 +1411,6 @@ void brick6_stack_runtime_process_commands_from_audio(void)
                 if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
                 {
                     instance->slots[command.note].level_q15 = command.value_u16;
-                    instance->slots[command.note].level = (uint8_t)((command.value_u16 * 127U) / 32767U);
                 }
                 break;
             }
@@ -1441,7 +1430,6 @@ void brick6_stack_runtime_process_commands_from_audio(void)
                 if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
                 {
                     instance->slots[command.note].timbre_q15 = command.value_u16;
-                    instance->slots[command.note].timbre = (uint8_t)((command.value_u16 * 127U) / 32767U);
                 }
                 break;
             }
@@ -1451,7 +1439,6 @@ void brick6_stack_runtime_process_commands_from_audio(void)
                 if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
                 {
                     instance->slots[command.note].color_q15 = command.value_u16;
-                    instance->slots[command.note].color = (uint8_t)((command.value_u16 * 127U) / 32767U);
                 }
                 break;
             }
@@ -1507,8 +1494,6 @@ void brick6_stack_runtime_sync_voice(uint8_t track_instance, uint8_t voice_insta
         stack_osc_slot_t *const out = &dst->slots[slot];
         const stack_osc_slot_t *const in = &src->slots[slot];
         out->model = in->model;
-        out->family = in->family;
-        out->kernel_id = in->kernel_id;
         out->renderer_id = in->renderer_id;
         out->level_q15 = in->level_q15;
         out->tune_cents = in->tune_cents;
