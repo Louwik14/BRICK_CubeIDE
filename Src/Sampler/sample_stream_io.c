@@ -353,8 +353,8 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
     sample_stream_physical_cursor_t *const physical_cursor =
         (reader != 0) ? &reader->physical_cursor : &local_physical_cursor;
     if ((command->stream_info.raw_pcm24 == 0U)
-        && (sample_stream_physical_map_is_current(
-                &command->stream_info.stream_safe.physical_map) != 0U))
+        && (sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
+            == SAMPLE_STREAM_BACKEND_PHYSICAL))
     {
         out_result->load_result = sample_stream_backend_physical_read_page(
             &command->stream_info,

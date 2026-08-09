@@ -475,7 +475,7 @@ void brick6_stream_underrun_trace_io_begin(
         candidate->voice_id,
         SAMPLE_PAGE_LOADING,
         BRICK6_STREAM_TRACE_REASON_NONE,
-        command->stream_info.stream_safe.backend_kind,
+        (uint8_t)sample_stream_safe_metadata_backend(&command->stream_info.stream_safe),
         0U,
         0U,
         command->target.frame_count * command->stream_info.info.block_align,

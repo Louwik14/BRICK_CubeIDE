@@ -170,6 +170,17 @@ uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t
             && (map->media_epoch == sd_access_media_epoch())) ? 1U : 0U;
 }
 
+sample_stream_backend_kind_t sample_stream_safe_metadata_backend(
+    const sample_stream_safe_metadata_t *metadata)
+{
+    if ((metadata != 0)
+        && (sample_stream_physical_map_is_current(&metadata->physical_map) != 0U))
+    {
+        return SAMPLE_STREAM_BACKEND_PHYSICAL;
+    }
+    return SAMPLE_STREAM_BACKEND_FATFS;
+}
+
 uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t *map,
                                               uint16_t extent_index,
                                               sample_stream_physical_extent_t *out_extent)
@@ -358,8 +369,6 @@ void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
     memset(out_meta, 0, sizeof(*out_meta));
     out_meta->physical_map.first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
     out_meta->key = key;
-    out_meta->backend_kind = (uint8_t)SAMPLE_STREAM_BACKEND_FATFS;
-    out_meta->safe_state = (uint8_t)SAMPLE_STREAM_SAFE_INVALID;
     out_meta->data_offset_bytes = data_offset;
     out_meta->total_frames = total_frames;
     out_meta->sector_size = SAMPLE_STREAM_FATFS_SECTOR_SIZE;
@@ -462,14 +471,6 @@ uint8_t sample_stream_fatfs_map_build_from_file(FIL *fp,
 
     map->valid = 1U;
     out_meta->file_size = file_size;
-    if (map->extent_count == 1U)
-    {
-        out_meta->valid = 1U;
-        out_meta->backend_kind = (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS;
-        out_meta->safe_state = (uint8_t)SAMPLE_STREAM_SAFE_CONTIGUOUS;
-        out_meta->contiguous = 1U;
-        out_meta->first_file_lba = map->inline_extent.lba_start;
-    }
     return 1U;
 }
 
@@ -513,32 +514,4 @@ uint8_t sample_stream_fatfs_map_build_from_path(const char *path,
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
     }
     return ok;
-}
-
-uint8_t sample_stream_fatfs_map_certify_contiguous(sample_audio_key_t key,
-                                                   const char *path,
-                                                   const wav_info_t *info,
-                                                   uint32_t total_frames,
-                                                   uint32_t data_offset,
-                                                   sample_stream_safe_metadata_t *out_meta)
-{
-    sample_stream_safe_metadata_init_fatfs(key, info, total_frames, data_offset, out_meta);
-    if ((path == 0) || (path[0] == '\0') || (info == 0) || (out_meta == 0)
-        || (info->block_align == 0U) || (total_frames == 0U))
-    {
-        return 0U;
-    }
-
-    const uint64_t data_end = (uint64_t)data_offset + (uint64_t)info->data_size;
-    if (sample_stream_fatfs_map_build_from_path(path, out_meta) == 0U)
-    {
-        return 0U;
-    }
-    if (data_end > out_meta->file_size)
-    {
-        sample_stream_physical_map_release(&out_meta->physical_map);
-        sample_stream_safe_metadata_init_fatfs(key, info, total_frames, data_offset, out_meta);
-        return 0U;
-    }
-    return (out_meta->contiguous != 0U) ? 1U : 0U;
 }

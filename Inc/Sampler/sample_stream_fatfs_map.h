@@ -12,16 +12,8 @@ extern "C" {
 typedef enum
 {
     SAMPLE_STREAM_BACKEND_FATFS = 0,
-    SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS = 1,
-    SAMPLE_STREAM_BACKEND_RUNS_RESERVED = 2
+    SAMPLE_STREAM_BACKEND_PHYSICAL = 1
 } sample_stream_backend_kind_t;
-
-typedef enum
-{
-    SAMPLE_STREAM_SAFE_INVALID = 0,
-    SAMPLE_STREAM_SAFE_CONTIGUOUS = 1,
-    SAMPLE_STREAM_SAFE_REJECTED = 2
-} sample_stream_safe_state_t;
 
 #define SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS      (128U)
 #define SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS      (512U)
@@ -65,11 +57,6 @@ typedef struct
 typedef struct
 {
     sample_audio_key_t key;
-    uint8_t valid;
-    uint8_t backend_kind;
-    uint8_t safe_state;
-    uint8_t contiguous;
-    uint32_t first_file_lba;
     uint32_t data_offset_bytes;
     uint32_t total_frames;
     uint32_t block_align;
@@ -87,6 +74,8 @@ typedef struct
 void sample_stream_physical_map_pool_reset(void);
 void sample_stream_physical_map_release(sample_stream_physical_map_t *map);
 uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t *map);
+sample_stream_backend_kind_t sample_stream_safe_metadata_backend(
+    const sample_stream_safe_metadata_t *metadata);
 uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t *map,
                                               uint16_t extent_index,
                                               sample_stream_physical_extent_t *out_extent);
@@ -107,13 +96,6 @@ void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
                                             uint32_t total_frames,
                                             uint32_t data_offset,
                                             sample_stream_safe_metadata_t *out_meta);
-
-uint8_t sample_stream_fatfs_map_certify_contiguous(sample_audio_key_t key,
-                                                   const char *path,
-                                                   const wav_info_t *info,
-                                                   uint32_t total_frames,
-                                                   uint32_t data_offset,
-                                                   sample_stream_safe_metadata_t *out_meta);
 
 #ifdef __cplusplus
 }
