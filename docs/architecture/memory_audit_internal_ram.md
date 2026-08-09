@@ -875,3 +875,10 @@ Sans toucher aux gros blocs audio hard-RT, un gain rÃ©aliste est :
 - DTCM : 0 KiB safe immÃ©diat, 10â€“30 KiB seulement aprÃ¨s profiling.
 
 Le gain global rÃ©aliste sans refonte profonde est donc de l'ordre de 90â€“120 KiB de RAM interne rÃ©organisable, principalement en libÃ©rant D1/D2 et en exploitant D3/SDRAM pour les Ã©tats non audio.
+
+## 15. Correction de placement des variantes (2026-08-09)
+
+Les scripts Low-Cost et Premium doivent placer `.sdram_audio_cold` en `SDRAM`.
+Le script Low-Cost `STM32H743IITX_FLASH.ld` pointait accidentellement cette
+section vers `RAM_D1`; cette divergence a ete corrigee. Le contenu de
+`AUDIO_COLD_SDRAM` reste donc commun et hors `RAM_D1` dans les deux variantes.
