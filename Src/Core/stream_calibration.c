@@ -57,8 +57,45 @@ static uint64_t g_round_cycles_total;
 static uint32_t g_round_cycles_max;
 static uint32_t g_round_count;
 static uint8_t g_round_had_select;
+static uint8_t g_round_all_eight;
 static uint32_t g_contiguous_reads;
 static uint32_t g_fatfs_reads;
+
+static brick6_stream_calibration_result_t *cal_current(void);
+
+/* Runtime needs registry is the authority for an active streaming voice. */
+static uint8_t cal_sample_active_multi(void)
+{
+    brick6_stream_calibration_result_t *const result = cal_current();
+    uint8_t count = 0U;
+    for (uint8_t voice = 0U; voice < SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY; ++voice)
+    {
+        sample_stream_target_voice_registry_entry_t entry;
+        if ((sample_stream_needs_registry_read(SAMPLE_STREAM_SNAPSHOT_MULTI,
+                                               voice, &entry) == 0U)
+            || (entry.active == 0U))
+        {
+            continue;
+        }
+        ++count;
+        result->active_voice_seen_mask |= (uint8_t)(1U << voice);
+        if (result->active_voice_last_generation[voice] != entry.generation)
+        {
+            if (result->active_voice_last_generation[voice] != 0U)
+            {
+                result->voice_generation_changed_mask |= (uint8_t)(1U << voice);
+            }
+            result->active_voice_last_generation[voice] = entry.generation;
+            ++result->active_voice_incarnations;
+        }
+    }
+    result->active_multi_current = count;
+    if (count > result->active_multi_peak)
+    {
+        result->active_multi_peak = count;
+    }
+    return count;
+}
 
 static uint8_t cal_passes_for(uint16_t case_index)
 {
@@ -116,7 +153,8 @@ static void cal_init_result(uint16_t case_index)
     result->page_kib = BRICK6_STREAM_CALIBRATION_PAGE_KIB;
     result->passes = cal_passes_for(case_index);
     result->advance_pages = cal_advance_for(case_index);
-    result->first_fault_voice = UINT8_MAX;
+    result->first_fault_voice_id = UINT8_MAX;
+    result->first_fault_source_id = UINT32_MAX;
     result->first_fault_page = UINT32_MAX;
     result->minimum_margin_frames = UINT32_MAX;
     for (uint8_t voice = 0U; voice < 8U; ++voice)
@@ -133,6 +171,7 @@ static void cal_reset_measurement(void)
     g_round_cycles_max = 0U;
     g_round_count = 0U;
     g_round_had_select = 0U;
+    g_round_all_eight = 0U;
     g_contiguous_reads = 0U;
     g_fatfs_reads = 0U;
     sample_stream_scheduler_calibration_set_passes(cal_passes_for(g_case_index));
@@ -183,21 +222,14 @@ static void cal_capture_current(void)
         ? (uint32_t)((result->read_bytes * CAL_SAMPLE_RATE)
                      / result->elapsed_audio_frames) : 0U;
     result->audio_irq_overruns = cpu.over_100_count;
-    if (result->minimum_margin_frames == UINT32_MAX)
-    {
-        result->minimum_margin_frames = 0U;
-    }
-    for (uint8_t voice = 0U; voice < 8U; ++voice)
-    {
-        if (result->minimum_margin_per_voice[voice] == UINT32_MAX)
-        {
-            result->minimum_margin_per_voice[voice] = 0U;
-        }
-    }
+    (void)cal_sample_active_multi();
+    result->eight_voice_valid = ((result->active_multi_peak == 8U)
+                                 && (result->full_rounds_at_8_voices != 0U)) ? 1U : 0U;
     result->passed = ((result->underruns == 0U)
                       && (result->io_errors == 0U)
                       && (result->audio_irq_overruns == 0U)
-                      && (result->pages_loaded != 0U)) ? 1U : 0U;
+                      && (result->pages_loaded != 0U)
+                      && (result->eight_voice_valid != 0U)) ? 1U : 0U;
     g_saved_mask |= (uint16_t)(1U << g_case_index);
 }
 
@@ -280,15 +312,18 @@ static uint8_t cal_write_csv(void)
     }
     static const char header[] =
         "case,page_kib,N,advance,served_kib_per_voice_round,ahead_kib_per_voice,volume_product_kib2,"
-        "saved,pass,underruns,first_voice,first_page,min_margin_frames,"
+        "saved,pass,underruns,first_fault_voice_id,first_fault_voice_generation,first_fault_source_id,first_page,min_margin_frames,"
         "min_margin_voice_1,min_margin_voice_2,min_margin_voice_3,min_margin_voice_4,"
         "min_margin_voice_5,min_margin_voice_6,min_margin_voice_7,min_margin_voice_8,"
         "max_voice_gap_frames,round_avg_cycles,round_max_cycles,sd_avg_cycles,"
         "sd_p99_cycles,sd_max_cycles,sd_bytes_s,pages_s_q16,pages,physical_reads,"
-        "contiguous_reads,fatfs_reads,seeks,io_errors,storage_cycles,irq_overruns\r\n";
+        "contiguous_reads,fatfs_reads,seeks,io_errors,storage_cycles,irq_overruns,"
+        "source_bytes_logical,read_bytes_storage,active_multi_current,active_multi_peak,"
+        "active_voice_seen_mask,voice_generation_changed_mask,active_voice_incarnations,"
+        "margin_valid_mask,full_rounds_at_8_voices,eight_voice_valid,sd_diskio_dma_ops,sd_diskio_read_bytes\r\n";
     UINT written = 0U;
     uint8_t ok = (f_write(&file, header, sizeof(header) - 1U, &written) == FR_OK) ? 1U : 0U;
-    char line[512];
+    char line[768];
     for (uint16_t i = 0U; (i < g_export_file.result_count) && (ok != 0U); ++i)
     {
         const brick6_stream_calibration_result_t *const r = &g_export_file.results[i];
@@ -296,15 +331,18 @@ static uint8_t cal_write_csv(void)
         const uint8_t saved = (r->page_kib == BRICK6_STREAM_CALIBRATION_PAGE_KIB)
             ? (uint8_t)((g_saved_mask >> scenario) & 1U) : 1U;
         const int length = snprintf(line, sizeof(line),
-            "%u,%u,%u,%u,%u,%u,%lu,%u,%u,%lu,%u,%lu,%lu,"
+            "%u,%u,%u,%u,%u,%u,%lu,%u,%u,%lu,%u,%lu,%lu,%lu,%lu,"
             "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,"
-            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%llu,%lu\r\n",
+            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%llu,%lu,"
+            "%llu,%llu,%u,%u,%u,%u,%lu,%u,%llu,%u,%lu,%lu\r\n",
             (unsigned)(scenario + 1U), r->page_kib, r->passes, r->advance_pages,
             (unsigned)(r->page_kib * r->passes),
             (unsigned)(r->page_kib * r->advance_pages),
             (unsigned long)r->page_kib * r->passes * r->page_kib * r->advance_pages,
             saved, r->passed,
-            (unsigned long)r->underruns, r->first_fault_voice,
+            (unsigned long)r->underruns, r->first_fault_voice_id,
+            (unsigned long)r->first_fault_voice_generation,
+            (unsigned long)r->first_fault_source_id,
             (unsigned long)r->first_fault_page,
             (unsigned long)r->minimum_margin_frames,
             (unsigned long)r->minimum_margin_per_voice[0],
@@ -330,7 +368,17 @@ static uint8_t cal_write_csv(void)
             (unsigned long)r->seeks,
             (unsigned long)r->io_errors,
             (unsigned long long)r->service_cycles_total,
-            (unsigned long)r->audio_irq_overruns);
+            (unsigned long)r->audio_irq_overruns,
+            (unsigned long long)r->source_bytes,
+            (unsigned long long)r->read_bytes,
+            r->active_multi_current, r->active_multi_peak,
+            r->active_voice_seen_mask, r->voice_generation_changed_mask,
+            (unsigned long)r->active_voice_incarnations,
+            r->margin_valid_mask,
+            (unsigned long long)r->full_rounds_at_8_voices,
+            r->eight_voice_valid,
+            (unsigned long)r->sd_diskio_dma_ops,
+            (unsigned long)r->sd_diskio_read_bytes);
         if ((length <= 0) || ((uint32_t)length >= sizeof(line))
             || (f_write(&file, line, (UINT)length, &written) != FR_OK))
         {
@@ -405,6 +453,10 @@ void brick6_stream_calibration_note_select(
     const uint32_t margin = (deadline > now) ? (deadline - now) : 0U;
     const uint8_t voice = candidate->voice_id;
     g_round_had_select = 1U;
+    if (cal_sample_active_multi() != 8U)
+    {
+        g_round_all_eight = 0U;
+    }
     if (margin < result->minimum_margin_frames)
     {
         result->minimum_margin_frames = margin;
@@ -413,6 +465,7 @@ void brick6_stream_calibration_note_select(
     {
         result->minimum_margin_per_voice[voice] = margin;
     }
+    result->margin_valid_mask |= (uint8_t)(1U << voice);
     if (g_last_select_valid[voice] != 0U)
     {
         const uint32_t gap = now - g_last_select_frame[voice];
@@ -426,7 +479,9 @@ void brick6_stream_calibration_note_select(
 }
 
 void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
-                                       uint32_t read_cycles)
+                                       uint32_t read_cycles,
+                                       uint32_t sd_dma_ops,
+                                       uint32_t sd_read_bytes)
 {
     (void)read_cycles;
     if ((g_measurement_active == 0U) || (result == NULL))
@@ -441,10 +496,15 @@ void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
     {
         g_fatfs_reads += result->physical_reads;
     }
+    brick6_stream_calibration_result_t *const current = cal_current();
+    current->sd_diskio_dma_ops += sd_dma_ops;
+    current->sd_diskio_read_bytes += sd_read_bytes;
 }
 
 void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
-                                             uint32_t page_index)
+                                             uint32_t page_index,
+                                             uint8_t voice_id,
+                                             uint32_t voice_generation)
 {
     if (g_measurement_active == 0U)
     {
@@ -453,9 +513,11 @@ void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
     brick6_stream_calibration_result_t *const result = cal_current();
     ++result->underruns;
     result->minimum_margin_frames = 0U;
-    if (result->first_fault_voice == UINT8_MAX)
+    if (result->first_fault_page == UINT32_MAX)
     {
-        result->first_fault_voice = (key.object_id < 8U) ? (uint8_t)key.object_id : UINT8_MAX;
+        result->first_fault_voice_id = voice_id;
+        result->first_fault_voice_generation = voice_generation;
+        result->first_fault_source_id = key.object_id;
         result->first_fault_page = page_index;
     }
 }
@@ -466,11 +528,16 @@ void brick6_stream_calibration_note_round_begin(void)
     {
         g_round_begin_cycle = DWT->CYCCNT;
         g_round_had_select = 0U;
+        g_round_all_eight = (cal_sample_active_multi() == 8U) ? 1U : 0U;
     }
 }
 
 void brick6_stream_calibration_note_round_end(void)
 {
+    if ((g_measurement_active != 0U) && (cal_sample_active_multi() != 8U))
+    {
+        g_round_all_eight = 0U;
+    }
     if ((g_measurement_active != 0U) && (g_round_had_select != 0U))
     {
         const uint32_t cycles = DWT->CYCCNT - g_round_begin_cycle;
@@ -479,6 +546,10 @@ void brick6_stream_calibration_note_round_end(void)
         if (cycles > g_round_cycles_max)
         {
             g_round_cycles_max = cycles;
+        }
+        if (g_round_all_eight != 0U)
+        {
+            ++cal_current()->full_rounds_at_8_voices;
         }
     }
 }

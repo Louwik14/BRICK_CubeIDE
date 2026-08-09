@@ -17,6 +17,7 @@
 #include "stm32h7xx_hal.h"
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
 #include "Core/stream_calibration.h"
+#include "SD/sd_diskio.h"
 #endif
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
@@ -30,6 +31,23 @@ _Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
 #endif
 static uint32_t g_sample_stream_service_fatfs_ops;
 static uint8_t g_sample_stream_manager_initialized;
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+static uint8_t g_calibration_voice_id = UINT8_MAX;
+static uint32_t g_calibration_voice_generation;
+
+void sample_stream_manager_calibration_set_voice_context(uint8_t voice_id,
+                                                         uint32_t generation)
+{
+    g_calibration_voice_id = voice_id;
+    g_calibration_voice_generation = generation;
+}
+
+void sample_stream_manager_calibration_clear_voice_context(void)
+{
+    g_calibration_voice_id = UINT8_MAX;
+    g_calibration_voice_generation = 0U;
+}
+#endif
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
@@ -90,7 +108,8 @@ void sample_stream_manager_trace_consume_miss(sample_audio_key_t key,
     brick6_stream_underrun_trace_consume_miss(
         key, page_index, reader_position, frames_remaining);
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    brick6_stream_calibration_note_underrun(key, page_index);
+    brick6_stream_calibration_note_underrun(
+        key, page_index, g_calibration_voice_id, g_calibration_voice_generation);
 #endif
 }
 
@@ -477,7 +496,15 @@ void sample_stream_manager_service(uint32_t byte_budget)
 #if BRICK6_STREAM_BENCH || (defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION)
         const uint32_t benchmark_io_begin_cycle = DWT->CYCCNT;
 #endif
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        sd_diskio_read_metrics_t sd_before;
+        sd_diskio_read_metrics_t sd_after;
+        sd_diskio_read_metrics_get(&sd_before);
+#endif
         sample_stream_transport_execute_monocore(&io_command, &io_result);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        sd_diskio_read_metrics_get(&sd_after);
+#endif
         brick6_stream_underrun_trace_io_end(
             &candidate, &io_command, &io_result, 0U);
 #if BRICK6_STREAM_BENCH
@@ -493,7 +520,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
 #endif
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
         brick6_stream_calibration_note_io(
-            &io_result, DWT->CYCCNT - benchmark_io_begin_cycle);
+            &io_result,
+            DWT->CYCCNT - benchmark_io_begin_cycle,
+            sd_after.read_transactions - sd_before.read_transactions,
+            sd_after.read_bytes - sd_before.read_bytes);
 #endif
         if (io_result.read_bytes > consumed)
         {

@@ -11,7 +11,7 @@
 #endif
 
 #define BRICK6_STREAM_CALIBRATION_MAGIC       (0x5343414CUL)
-#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (3U)
+#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (4U)
 #define BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD (3U)
 #define BRICK6_STREAM_CALIBRATION_MAX_RESULTS (6U)
 
@@ -21,9 +21,17 @@ typedef struct
     uint8_t passes;
     uint8_t advance_pages;
     uint8_t passed;
-    uint8_t first_fault_voice;
-    uint16_t reserved0;
+    uint8_t first_fault_voice_id;
+    uint8_t active_multi_current;
+    uint8_t active_multi_peak;
+    uint8_t active_voice_seen_mask;
+    uint8_t margin_valid_mask;
+    uint8_t voice_generation_changed_mask;
+    uint8_t eight_voice_valid;
+    uint8_t reserved0;
     uint32_t first_fault_page;
+    uint32_t first_fault_voice_generation;
+    uint32_t first_fault_source_id;
     uint32_t underruns;
     uint32_t minimum_margin_frames;
     uint32_t minimum_margin_per_voice[8];
@@ -37,6 +45,9 @@ typedef struct
     uint64_t read_bytes;
     uint64_t read_cycles_total;
     uint64_t service_cycles_total;
+    uint64_t full_rounds_at_8_voices;
+    uint32_t active_voice_last_generation[8];
+    uint32_t active_voice_incarnations;
     uint32_t elapsed_audio_frames;
     uint32_t pages_loaded;
     uint32_t physical_reads;
@@ -49,6 +60,8 @@ typedef struct
     uint32_t pages_per_second_q16;
     uint32_t sd_bytes_per_second;
     uint32_t audio_irq_overruns;
+    uint32_t sd_diskio_dma_ops;
+    uint32_t sd_diskio_read_bytes;
 } brick6_stream_calibration_result_t;
 
 typedef struct
@@ -66,7 +79,7 @@ typedef struct
     brick6_stream_calibration_result_t results[BRICK6_STREAM_CALIBRATION_MAX_RESULTS];
 } brick6_stream_calibration_file_t;
 
-_Static_assert(sizeof(brick6_stream_calibration_result_t) == 160U,
+_Static_assert(sizeof(brick6_stream_calibration_result_t) == 232U,
                "stream calibration record ABI changed");
 
 #if BRICK6_STREAM_CALIBRATION
@@ -76,9 +89,13 @@ void brick6_stream_calibration_select_case(uint8_t case_index);
 void brick6_stream_calibration_note_select(
     const sample_stream_scheduler_candidate_t *candidate);
 void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
-                                       uint32_t read_cycles);
+                                       uint32_t read_cycles,
+                                       uint32_t sd_dma_ops,
+                                       uint32_t sd_read_bytes);
 void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
-                                             uint32_t page_index);
+                                             uint32_t page_index,
+                                             uint8_t voice_id,
+                                             uint32_t voice_generation);
 void brick6_stream_calibration_note_round_begin(void);
 void brick6_stream_calibration_note_round_end(void);
 uint16_t brick6_stream_calibration_case_index(void);

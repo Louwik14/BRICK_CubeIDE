@@ -7515,6 +7515,10 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
                 multi_voice->reader.key,
                 multi_voice->trigger_order,
                 &multi_voice->reader.plan);
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+            sample_stream_manager_calibration_set_voice_context(
+                i, multi_voice->trigger_order);
+#endif
             if (dsp_state->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO)
             {
                 memset(voice_l, 0, frames * sizeof(float));
@@ -7569,6 +7573,9 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
                     out_r[frame] += voice_r[frame] * vca * pan_r;
                 }
             }
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+            sample_stream_manager_calibration_clear_voice_context();
+#endif
             brick6_multi_pitch_trace_voice_end(
                 trace_voice_start,
                 i,
