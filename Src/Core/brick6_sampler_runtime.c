@@ -7154,39 +7154,59 @@ uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id)
 }
 
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-uint8_t brick6_sampler_runtime_calibration_track_stream_active(uint8_t track_id)
+uint8_t brick6_sampler_runtime_calibration_multi_voice_stream_active(
+    uint8_t track_id,
+    uint16_t instrument_id,
+    uint8_t *out_voice_id,
+    uint16_t *out_sample_id)
 {
-    if (track_id >= SEQ_TRACK_COUNT)
+    if ((track_id >= SEQ_TRACK_COUNT)
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
         return 0U;
     }
-    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
-    const uint8_t cache_voice_id = brick6_sampler_runtime_cache_voice_id(track_id);
-    sample_stream_snapshot_t snapshot;
-    sample_stream_target_voice_registry_entry_t needs;
-    if ((voice->active == 0U)
-        || (voice->reader.active == 0U)
-        || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
-        || (voice->sample_id != track_id)
-        || (clip->sample_id != track_id)
-        || (sample_stream_snapshot_read(SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-                                        cache_voice_id,
-                                        &snapshot) == 0U)
-        || (sample_stream_needs_registry_read(SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-                                              cache_voice_id,
-                                              &needs) == 0U))
+    for (uint8_t voice_id = 0U; voice_id < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++voice_id)
     {
-        return 0U;
+        const brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[voice_id];
+        sample_stream_snapshot_t snapshot;
+        sample_stream_target_voice_registry_entry_t needs;
+        if ((voice->active == 0U)
+            || (voice->reader.active == 0U)
+            || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)
+            || (voice->owner_track_id != track_id)
+            || (voice->multi_instrument_id != instrument_id)
+            || (sample_stream_snapshot_read(SAMPLE_STREAM_SNAPSHOT_MULTI,
+                                            voice_id,
+                                            &snapshot) == 0U)
+            || (sample_stream_needs_registry_read(SAMPLE_STREAM_SNAPSHOT_MULTI,
+                                                  voice_id,
+                                                  &needs) == 0U))
+        {
+            continue;
+        }
+        const sample_audio_key_t expected_key =
+            sample_audio_key_multi(voice->multi_sample_id);
+        if ((snapshot.active == 0U)
+            || (snapshot.key.domain != expected_key.domain)
+            || (snapshot.key.object_id != expected_key.object_id)
+            || (needs.active == 0U)
+            || (needs.need_count == 0U)
+            || (needs.needs[0].key.domain != snapshot.key.domain)
+            || (needs.needs[0].key.object_id != snapshot.key.object_id))
+        {
+            continue;
+        }
+        if (out_voice_id != NULL)
+        {
+            *out_voice_id = voice_id;
+        }
+        if (out_sample_id != NULL)
+        {
+            *out_sample_id = voice->multi_sample_id;
+        }
+        return 1U;
     }
-    const sample_audio_key_t expected_key = sample_audio_key_classic(track_id);
-    return ((snapshot.active != 0U)
-            && (snapshot.key.domain == expected_key.domain)
-            && (snapshot.key.object_id == expected_key.object_id)
-            && (needs.active != 0U)
-            && (needs.need_count != 0U)
-            && (needs.needs[0].key.domain == snapshot.key.domain)
-            && (needs.needs[0].key.object_id == snapshot.key.object_id)) ? 1U : 0U;
+    return 0U;
 }
 #endif
 

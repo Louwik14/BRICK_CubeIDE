@@ -11,6 +11,8 @@
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/multi_sample_pool.h"
+#include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_needs.h"
@@ -64,6 +66,9 @@ static uint8_t g_round_had_select;
 static uint32_t g_contiguous_reads;
 static uint32_t g_fatfs_reads;
 static uint8_t g_started_voices;
+static uint16_t g_calibration_instrument[8];
+static uint16_t g_calibration_sample[8];
+static uint8_t g_runtime_io_mask;
 
 static void cal_set_file_error(uint8_t file_index, const char *cause)
 {
@@ -167,7 +172,8 @@ static void cal_stop_all(void)
 {
     for (uint8_t track = 0U; track < 8U; ++track)
     {
-        brick6_sampler_runtime_stop(track);
+        brick6_sampler_runtime_note_off_multi_track_note_all(
+            track, CAL_MAX_KEYBOARD_NOTE);
     }
 }
 
@@ -176,16 +182,110 @@ static void cal_configure_tracks(void)
     for (uint8_t track = 0U; track < 8U; ++track)
     {
         (void)track_state_set_track_family(track, UI_TRACK_FAMILY_SAMPLER);
-        (void)track_state_set_track_type(track, UI_TRACK_TYPE_STREAM);
+        (void)track_state_set_track_type(track, UI_TRACK_TYPE_MULTI);
         track_runtime_refresh_track(track);
         brick6_sampler_runtime_reset_track(track);
-        brick6_sampler_runtime_set_sample(track, track);
-        brick6_sampler_runtime_set_gain(track, 0.125f);
-        brick6_sampler_runtime_set_start(track, 0.0f);
-        brick6_sampler_runtime_set_end(track, 1.0f);
-        brick6_sampler_runtime_set_mode(track, 0U);
-        brick6_sampler_runtime_set_tune(track, 0.0f);
+        brick6_sampler_runtime_set_multi_instrument(
+            track, g_calibration_instrument[track]);
+        brick6_sampler_runtime_set_multi_gain(track, 0.125f);
+        brick6_sampler_runtime_set_multi_voice_count(track, 1U);
     }
+}
+
+static uint8_t cal_prepare_multi_sources(void)
+{
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        return 0U;
+    }
+    for (uint8_t index = 0U; index < 8U; ++index)
+    {
+        const sample_desc_t *const source = sample_pool_get(index);
+        if ((source == NULL) || (source->valid == 0U)
+            || (source->length_frames == 0U))
+        {
+            cal_set_file_error(index, "NOT READY");
+            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+            return 0U;
+        }
+
+        const uint16_t instrument_id = index;
+        uint16_t sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        if ((multi_sample_pool_debug_define_instrument(
+                 instrument_id, "STREAM CAL", MULTI_SAMPLE_INSTRUMENT_INDEXED) == 0U)
+            || (multi_sample_pool_debug_add_sample(instrument_id,
+                                                   source->path,
+                                                   source->length_frames,
+                                                   STREAM_SAMPLER_ROOT_NOTE,
+                                                   0U,
+                                                   127U,
+                                                   0U,
+                                                   &sample_id) == 0U)
+            || (multi_sample_pool_set_sample_format(sample_id,
+                                                    source->data_offset,
+                                                    source->length_frames
+                                                        * source->bytes_per_frame,
+                                                    source->sample_rate,
+                                                    source->channels,
+                                                    source->bits_per_sample) == 0U))
+        {
+            cal_set_file_error(index, "MULTI SOURCE");
+            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+            return 0U;
+        }
+        const multi_sample_zone_t zone = {
+            .note_low = 0U,
+            .note_high = 127U,
+            .vel_low = 0U,
+            .vel_high = 127U,
+            .root_note = STREAM_SAMPLER_ROOT_NOTE,
+            .multi_sample_id = sample_id,
+        };
+        const wav_info_t info = {
+            .audio_format = 1U,
+            .sample_rate = source->sample_rate,
+            .byte_rate = source->sample_rate * source->bytes_per_frame,
+            .channels = source->channels,
+            .block_align = (uint16_t)source->bytes_per_frame,
+            .bits_per_sample = source->bits_per_sample,
+            .data_offset = source->data_offset,
+            .data_size = source->length_frames * source->bytes_per_frame,
+        };
+        const sample_audio_key_t key = sample_audio_key_multi(sample_id);
+        if ((multi_sample_pool_debug_add_zone(instrument_id, &zone) == 0U)
+            || (sample_page_cache_register_stream_sample_key_no_map(
+                    key, source->path, &info, source->length_frames,
+                    source->data_offset) == 0U)
+            || (sample_page_cache_reserve_page_key_alloc(
+                    key, 0U, SAMPLE_PAGE_ALLOC_MARGIN) == 0U))
+        {
+            cal_set_file_error(index, "MULTI PREP");
+            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+            return 0U;
+        }
+        g_calibration_instrument[index] = instrument_id;
+        g_calibration_sample[index] = sample_id;
+    }
+
+    sample_page_cache_service_domain_range(SAMPLE_AUDIO_DOMAIN_MULTI,
+                                           g_calibration_sample[0],
+                                           8U,
+                                           UINT32_MAX);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+
+    for (uint8_t index = 0U; index < 8U; ++index)
+    {
+        if ((sample_page_cache_get_page_state_key(
+                 sample_audio_key_multi(g_calibration_sample[index]), 0U)
+             != SAMPLE_PAGE_READY)
+            || (multi_sample_pool_set_state(g_calibration_instrument[index],
+                                            MULTI_SAMPLE_INSTRUMENT_READY) == 0U))
+        {
+            cal_set_file_error(index, "MULTI PAGE0");
+            return 0U;
+        }
+    }
+    return 1U;
 }
 
 static void cal_begin_case(void)
@@ -208,24 +308,26 @@ static void cal_begin_case(void)
     g_round_count = 0U;
     g_contiguous_reads = 0U;
     g_fatfs_reads = 0U;
+    g_runtime_io_mask = 0U;
     sample_stream_scheduler_calibration_set_passes(result->passes);
     sample_stream_needs_calibration_set_depth(result->advance_pages);
     sample_stream_benchmark_reset();
     brick6_sampler_runtime_diag_reset();
     cpu_load_reset_measurement();
+    g_case_start_frame = sample_stream_time_now();
+    g_case_running = 1U;
     for (uint8_t track = 0U; track < 8U; ++track)
     {
-        brick6_sampler_runtime_trigger_note_velocity(track,
-                                                     CAL_MAX_KEYBOARD_NOTE,
-                                                     127U);
+        (void)brick6_sampler_runtime_trigger_multi_track_note_velocity(
+            track, CAL_MAX_KEYBOARD_NOTE, 127U);
     }
     g_started_voices = 0U;
     for (uint8_t track = 0U; track < 8U; ++track)
     {
         g_started_voices +=
-            brick6_sampler_runtime_calibration_track_stream_active(track);
+            brick6_sampler_runtime_calibration_multi_voice_stream_active(
+                track, g_calibration_instrument[track], NULL, NULL);
     }
-    g_case_running = 0U;
 }
 
 static void cal_finish_case(void)
@@ -434,7 +536,14 @@ void brick6_stream_calibration_process(void)
                 sample_pool_prepare_batch_get_result(&prepare);
                 if (prepare.status == SAMPLE_POOL_PREPARE_READY)
                 {
-                    g_state = CAL_STATE_START;
+                    if (cal_prepare_multi_sources() != 0U)
+                    {
+                        g_state = CAL_STATE_START;
+                    }
+                    else if (g_error_text[0] != '\0')
+                    {
+                        g_state = CAL_STATE_FATAL;
+                    }
                 }
                 else if (prepare.status == SAMPLE_POOL_PREPARE_ERROR)
                 {
@@ -448,6 +557,12 @@ void brick6_stream_calibration_process(void)
         case CAL_STATE_RESET:
             cal_stop_all();
             sample_cache_init();
+            multi_sample_pool_reset();
+            for (uint8_t index = 0U; index < 8U; ++index)
+            {
+                g_calibration_instrument[index] = index;
+                g_calibration_sample[index] = MULTI_SAMPLE_POOL_INVALID_ID;
+            }
             if (sample_pool_prepare_batch_begin(0U, k_paths, 8U) == 0U)
             {
                 (void)snprintf(g_error_text, sizeof(g_error_text), "PREPARE INIT");
@@ -462,7 +577,8 @@ void brick6_stream_calibration_process(void)
             cal_begin_case();
             if (g_started_voices != 8U)
             {
-                (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM %u/8",
+                g_case_running = 0U;
+                (void)snprintf(g_error_text, sizeof(g_error_text), "START FAIL %u/8",
                                (unsigned)g_started_voices);
                 g_state = CAL_STATE_FATAL;
                 break;
@@ -475,18 +591,18 @@ void brick6_stream_calibration_process(void)
             for (uint8_t track = 0U; track < 8U; ++track)
             {
                 g_started_voices +=
-                    brick6_sampler_runtime_calibration_track_stream_active(track);
+                    brick6_sampler_runtime_calibration_multi_voice_stream_active(
+                        track, g_calibration_instrument[track], NULL, NULL);
             }
             if ((g_started_voices != 8U)
                 || (sample_stream_needs_registry_count_active() < 8U))
             {
-                (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM %u/8",
+                g_case_running = 0U;
+                (void)snprintf(g_error_text, sizeof(g_error_text), "RUNTIME FAIL %u/8",
                                (unsigned)g_started_voices);
                 g_state = CAL_STATE_FATAL;
                 break;
             }
-            g_case_start_frame = sample_stream_time_now();
-            g_case_running = 1U;
             g_state = CAL_STATE_RUN;
             break;
 
@@ -494,7 +610,8 @@ void brick6_stream_calibration_process(void)
             if ((sample_stream_time_now() - g_case_start_frame) >= CAL_CASE_FRAMES)
             {
                 cal_finish_case();
-                if ((cal_current()->pages_loaded == 0U)
+                if ((g_runtime_io_mask != 0xFFU)
+                    || (cal_current()->pages_loaded == 0U)
                     || (cal_current()->physical_reads == 0U))
                 {
                     (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM");
@@ -587,6 +704,12 @@ void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
     if ((g_case_running == 0U) || (result == NULL))
     {
         return;
+    }
+    if ((result->load_result == SAMPLE_PAGE_LOAD_OK)
+        && (result->token.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+        && (result->token.key.object_id < 8U))
+    {
+        g_runtime_io_mask |= (uint8_t)(1U << result->token.key.object_id);
     }
     if (result->backend == 1U)
     {
