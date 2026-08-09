@@ -2,10 +2,6 @@
 
 #include <stdint.h>
 
-#include "Sampler/sample_audio_key.h"
-#include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_scheduler.h"
-
 #ifndef BRICK6_STREAM_CALIBRATION
 #define BRICK6_STREAM_CALIBRATION (0)
 #endif
@@ -83,6 +79,10 @@ _Static_assert(sizeof(brick6_stream_calibration_result_t) == 232U,
                "stream calibration record ABI changed");
 
 #if BRICK6_STREAM_CALIBRATION
+#include "Sampler/sample_audio_key.h"
+#include "Sampler/sample_stream_io.h"
+#include "Sampler/sample_stream_scheduler.h"
+
 void brick6_stream_calibration_init(void);
 void brick6_stream_calibration_process(void);
 void brick6_stream_calibration_select_case(uint8_t case_index);

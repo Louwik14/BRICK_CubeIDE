@@ -3,6 +3,18 @@ project(brick6_note_fx_step1_tests C)
 
 enable_testing()
 
+add_executable(stream_calibration_csv_test
+    stream_calibration_csv_test.c
+    ../Src/Core/stream_calibration_csv.c
+)
+target_include_directories(stream_calibration_csv_test PRIVATE ../Inc)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(stream_calibration_csv_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME stream_calibration_csv COMMAND stream_calibration_csv_test)
+endif()
+
 add_executable(encoder_detent_test
     encoder_detent_test.c
     ../Drivers/Drv_app/Src/encoders_hw.c

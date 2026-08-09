@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "Core/cpu_load.h"
+#include "Core/stream_calibration_csv.h"
 #include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_scheduler.h"
@@ -330,55 +331,8 @@ static uint8_t cal_write_csv(void)
         const uint16_t scenario = (uint16_t)(i % CAL_CASE_COUNT);
         const uint8_t saved = (r->page_kib == BRICK6_STREAM_CALIBRATION_PAGE_KIB)
             ? (uint8_t)((g_saved_mask >> scenario) & 1U) : 1U;
-        const int length = snprintf(line, sizeof(line),
-            "%u,%u,%u,%u,%u,%u,%lu,%u,%u,%lu,%u,%lu,%lu,%lu,%lu,"
-            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,"
-            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%llu,%lu,"
-            "%llu,%llu,%u,%u,%u,%u,%lu,%u,%llu,%u,%lu,%lu\r\n",
-            (unsigned)(scenario + 1U), r->page_kib, r->passes, r->advance_pages,
-            (unsigned)(r->page_kib * r->passes),
-            (unsigned)(r->page_kib * r->advance_pages),
-            (unsigned long)r->page_kib * r->passes * r->page_kib * r->advance_pages,
-            saved, r->passed,
-            (unsigned long)r->underruns, r->first_fault_voice_id,
-            (unsigned long)r->first_fault_voice_generation,
-            (unsigned long)r->first_fault_source_id,
-            (unsigned long)r->first_fault_page,
-            (unsigned long)r->minimum_margin_frames,
-            (unsigned long)r->minimum_margin_per_voice[0],
-            (unsigned long)r->minimum_margin_per_voice[1],
-            (unsigned long)r->minimum_margin_per_voice[2],
-            (unsigned long)r->minimum_margin_per_voice[3],
-            (unsigned long)r->minimum_margin_per_voice[4],
-            (unsigned long)r->minimum_margin_per_voice[5],
-            (unsigned long)r->minimum_margin_per_voice[6],
-            (unsigned long)r->minimum_margin_per_voice[7],
-            (unsigned long)r->max_voice_service_gap_frames,
-            (unsigned long)r->round_cycles_average,
-            (unsigned long)r->round_cycles_max,
-            (unsigned long)r->sd_read_cycles_average,
-            (unsigned long)r->sd_read_cycles_p99_upper,
-            (unsigned long)r->sd_read_cycles_max,
-            (unsigned long)r->sd_bytes_per_second,
-            (unsigned long)r->pages_per_second_q16,
-            (unsigned long)r->pages_loaded,
-            (unsigned long)r->physical_reads,
-            (unsigned long)r->contiguous_reads,
-            (unsigned long)r->fatfs_reads,
-            (unsigned long)r->seeks,
-            (unsigned long)r->io_errors,
-            (unsigned long long)r->service_cycles_total,
-            (unsigned long)r->audio_irq_overruns,
-            (unsigned long long)r->source_bytes,
-            (unsigned long long)r->read_bytes,
-            r->active_multi_current, r->active_multi_peak,
-            r->active_voice_seen_mask, r->voice_generation_changed_mask,
-            (unsigned long)r->active_voice_incarnations,
-            r->margin_valid_mask,
-            (unsigned long long)r->full_rounds_at_8_voices,
-            r->eight_voice_valid,
-            (unsigned long)r->sd_diskio_dma_ops,
-            (unsigned long)r->sd_diskio_read_bytes);
+        const int length = brick6_stream_calibration_format_csv_row(
+            line, sizeof(line), r, scenario, saved);
         if ((length <= 0) || ((uint32_t)length >= sizeof(line))
             || (f_write(&file, line, (UINT)length, &written) != FR_OK))
         {
