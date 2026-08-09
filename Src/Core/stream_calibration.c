@@ -17,11 +17,30 @@
 #include "stm32h7xx.h"
 
 #define CAL_SAMPLE_RATE    (48000U)
-#define CAL_GRID_SIGNATURE (0x02020306UL)
+#define CAL_GRID_SIGNATURE (0x03102060UL)
 #define CAL_CASE_COUNT     BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD
 
-static const uint8_t k_passes[] = {1U, 2U, 3U};
-static const uint8_t k_advance[] = {2U, 3U, 4U, 5U, 6U};
+typedef struct
+{
+    uint8_t passes;
+    uint8_t advance_pages;
+} cal_case_config_t;
+
+#if BRICK6_STREAM_CALIBRATION_PAGE_KIB == 16
+static const cal_case_config_t k_cases[CAL_CASE_COUNT] = {
+    {2U, 2U},
+    {2U, 4U},
+    {2U, 6U},
+};
+#elif BRICK6_STREAM_CALIBRATION_PAGE_KIB == 32
+static const cal_case_config_t k_cases[CAL_CASE_COUNT] = {
+    {1U, 1U},
+    {1U, 2U},
+    {1U, 3U},
+};
+#else
+#error "Manual stream calibration supports only 16 or 32 KiB pages"
+#endif
 
 STORAGE_STATE_SDRAM static brick6_stream_calibration_file_t g_file;
 STORAGE_STATE_SDRAM static brick6_stream_calibration_file_t g_export_file;
@@ -43,12 +62,12 @@ static uint32_t g_fatfs_reads;
 
 static uint8_t cal_passes_for(uint16_t case_index)
 {
-    return k_passes[case_index / (uint16_t)(sizeof(k_advance))];
+    return k_cases[case_index].passes;
 }
 
 static uint8_t cal_advance_for(uint16_t case_index)
 {
-    return k_advance[case_index % (uint16_t)(sizeof(k_advance))];
+    return k_cases[case_index].advance_pages;
 }
 
 static brick6_stream_calibration_result_t *cal_current(void)
@@ -260,7 +279,8 @@ static uint8_t cal_write_csv(void)
         return 0U;
     }
     static const char header[] =
-        "case,page_kib,N,advance,saved,pass,underruns,first_voice,first_page,min_margin_frames,"
+        "case,page_kib,N,advance,served_kib_per_voice_round,ahead_kib_per_voice,volume_product_kib2,"
+        "saved,pass,underruns,first_voice,first_page,min_margin_frames,"
         "min_margin_voice_1,min_margin_voice_2,min_margin_voice_3,min_margin_voice_4,"
         "min_margin_voice_5,min_margin_voice_6,min_margin_voice_7,min_margin_voice_8,"
         "max_voice_gap_frames,round_avg_cycles,round_max_cycles,sd_avg_cycles,"
@@ -276,10 +296,13 @@ static uint8_t cal_write_csv(void)
         const uint8_t saved = (r->page_kib == BRICK6_STREAM_CALIBRATION_PAGE_KIB)
             ? (uint8_t)((g_saved_mask >> scenario) & 1U) : 1U;
         const int length = snprintf(line, sizeof(line),
-            "%u,%u,%u,%u,%u,%u,%lu,%u,%lu,%lu,"
+            "%u,%u,%u,%u,%u,%u,%lu,%u,%u,%lu,%u,%lu,%lu,"
             "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,"
-            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\r\n",
+            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%llu,%lu\r\n",
             (unsigned)(scenario + 1U), r->page_kib, r->passes, r->advance_pages,
+            (unsigned)(r->page_kib * r->passes),
+            (unsigned)(r->page_kib * r->advance_pages),
+            (unsigned long)r->page_kib * r->passes * r->page_kib * r->advance_pages,
             saved, r->passed,
             (unsigned long)r->underruns, r->first_fault_voice,
             (unsigned long)r->first_fault_page,
@@ -306,8 +329,7 @@ static uint8_t cal_write_csv(void)
             (unsigned long)r->fatfs_reads,
             (unsigned long)r->seeks,
             (unsigned long)r->io_errors,
-            (unsigned long)((r->service_cycles_total > UINT32_MAX)
-                                ? UINT32_MAX : r->service_cycles_total),
+            (unsigned long long)r->service_cycles_total,
             (unsigned long)r->audio_irq_overruns);
         if ((length <= 0) || ((uint32_t)length >= sizeof(line))
             || (f_write(&file, line, (UINT)length, &written) != FR_OK))
@@ -465,5 +487,13 @@ uint16_t brick6_stream_calibration_case_index(void) { return g_case_index; }
 uint16_t brick6_stream_calibration_case_count(void) { return CAL_CASE_COUNT; }
 uint8_t brick6_stream_calibration_current_passes(void) { return cal_passes_for(g_case_index); }
 uint8_t brick6_stream_calibration_current_advance(void) { return cal_advance_for(g_case_index); }
+uint16_t brick6_stream_calibration_current_served_kib(void)
+{
+    return (uint16_t)(BRICK6_STREAM_CALIBRATION_PAGE_KIB * cal_passes_for(g_case_index));
+}
+uint16_t brick6_stream_calibration_current_ahead_kib(void)
+{
+    return (uint16_t)(BRICK6_STREAM_CALIBRATION_PAGE_KIB * cal_advance_for(g_case_index));
+}
 
 #endif

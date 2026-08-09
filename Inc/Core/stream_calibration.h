@@ -11,9 +11,9 @@
 #endif
 
 #define BRICK6_STREAM_CALIBRATION_MAGIC       (0x5343414CUL)
-#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (2U)
-#define BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD (15U)
-#define BRICK6_STREAM_CALIBRATION_MAX_RESULTS (30U)
+#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (3U)
+#define BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD (3U)
+#define BRICK6_STREAM_CALIBRATION_MAX_RESULTS (6U)
 
 typedef struct
 {
@@ -85,4 +85,6 @@ uint16_t brick6_stream_calibration_case_index(void);
 uint16_t brick6_stream_calibration_case_count(void);
 uint8_t brick6_stream_calibration_current_passes(void);
 uint8_t brick6_stream_calibration_current_advance(void);
+uint16_t brick6_stream_calibration_current_served_kib(void);
+uint16_t brick6_stream_calibration_current_ahead_kib(void);
 #endif

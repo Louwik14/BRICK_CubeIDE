@@ -1288,12 +1288,16 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         {
             if ((out_name != NULL) && (out_name_len > 0U))
             {
-                (void)snprintf(out_name, out_name_len, "STREAM CAL");
+                (void)snprintf(out_name, out_name_len, "%uK N%u A%u",
+                               (unsigned)BRICK6_STREAM_CALIBRATION_PAGE_KIB,
+                               (unsigned)brick6_stream_calibration_current_passes(),
+                               (unsigned)brick6_stream_calibration_current_advance());
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                (void)snprintf(out_value, out_value_len, "CASE %02u / 15",
-                               (unsigned)((uint8_t)(value + 0.5f) + 1U));
+                (void)snprintf(out_value, out_value_len, "%uK/tour %uK ahead",
+                               (unsigned)brick6_stream_calibration_current_served_kib(),
+                               (unsigned)brick6_stream_calibration_current_ahead_kib());
             }
             (void)slot;
             return 1U;
