@@ -27,7 +27,7 @@ option(BRICK6_SD_INIT_DIAG "Capture SD initialization diagnostics" OFF)
 option(BRICK6_STREAM_UNDERRUN_TRACE
        "Capture bounded causal streaming underrun trace for GDB"
        OFF)
-option(BRICK6_STREAM_CALIBRATION "Boot the automatic streamer calibration bench" OFF)
+option(BRICK6_STREAM_CALIBRATION "Enable manual streamer calibration cases in Multi TONE" OFF)
 set(BRICK6_STREAM_CALIBRATION_PAGE_KIB "16" CACHE STRING
     "Streamer calibration page size (16 or 32 KiB)")
 if(BRICK6_STREAM_CALIBRATION

@@ -1644,18 +1644,6 @@ static void ui_page_template_tone_leave(void)
 static void ui_page_template_tone_handle_event(const ui_event_t *ev)
 {
     ui_page_template_tone_sync_drum_family();
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    if ((ev != NULL)
-        && (ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_ENCODER_1_PUSH)
-        && (g_ui_template_tone_state.active_subpage == 1U)
-        && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SAMPLER)
-        && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_MULTI))
-    {
-        brick6_stream_calibration_save_current();
-        return;
-    }
-#endif
     ui_template_page_handle_event(ev);
     ui_page_template_tone_sync_drum_family();
     ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);

@@ -73,7 +73,6 @@ _Static_assert(sizeof(brick6_stream_calibration_result_t) == 160U,
 void brick6_stream_calibration_init(void);
 void brick6_stream_calibration_process(void);
 void brick6_stream_calibration_select_case(uint8_t case_index);
-void brick6_stream_calibration_save_current(void);
 void brick6_stream_calibration_note_select(
     const sample_stream_scheduler_candidate_t *candidate);
 void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,

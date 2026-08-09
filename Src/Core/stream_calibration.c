@@ -356,16 +356,6 @@ void brick6_stream_calibration_select_case(uint8_t case_index)
     cal_reset_measurement();
 }
 
-void brick6_stream_calibration_save_current(void)
-{
-    if (g_initialized != 0U)
-    {
-        cal_capture_current();
-        g_measurement_active = 0U;
-        g_export_pending = 1U;
-    }
-}
-
 void brick6_stream_calibration_process(void)
 {
     if ((g_export_pending == 0U)
