@@ -62,8 +62,9 @@ void sample_stream_io_release_key(sample_audio_key_t key);
 uint32_t sample_stream_io_active_reader_count(void);
 uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib);
 sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void);
-void sample_stream_io_execute(const sample_stream_io_command_t *command,
-                              sample_stream_io_result_t *out_result);
+uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command);
+uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result);
+void sample_stream_io_cancel(void);
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,
                                       const sample_page_load_target_t *target,

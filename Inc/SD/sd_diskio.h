@@ -44,6 +44,7 @@ typedef struct
 
 void sd_diskio_read_metrics_reset(void);
 void sd_diskio_read_metrics_get(sd_diskio_read_metrics_t *out_metrics);
+void sd_diskio_read_metrics_note_blocks(uint32_t blocks);
 
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */

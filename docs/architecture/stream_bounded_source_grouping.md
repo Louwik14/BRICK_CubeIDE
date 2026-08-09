@@ -15,12 +15,20 @@ retombe sur 16 Kio. Le read-ahead est limite par la fin des donnees audio et
 reste sur pour les fichiers fragmentes, FatFs conservant la traduction de
 chaine de clusters.
 
-Le backend physiquement certifie contigu conserve sa lecture multibloc directe
-d'une page. Il invalide le read-ahead FatFs, puis le decodeur commun convertit
-directement vers la page SDRAM finale. Le cache de read-ahead ne contient que
-des octets source temporaires : il ne change ni les etats de page, ni les
-besoins, ni les generations, et une page n'est publiee `READY` qu'apres
-decodage complet.
+Le backend physique commun represente un fichier contigu par un extent et un
+fichier fragmente par plusieurs extents. Chaque page est resolue en demandes
+`LBA + secteurs + destination`, placees dans une FIFO bornee de quatre entrees.
+Le transport SD lance ensuite les lectures SDMMC DMA sans attente active dans
+le service streamer. Les callbacks IRQ terminent chaque demande, puis le poll
+cooperatif enchaine les extents et ne decode/publie la page `READY` qu'apres
+reception complete dans le scratch SDRAM.
 
-Les mesures materielles 4/8/16/32 Kio ont retenu 16 Kio pour le produit. Le DMA
-asynchrone n'est pas active.
+La generation de map et l'epoch media sont verifies pendant toute l'operation.
+Une map absente ou invalide conserve le chemin FatFs ; une erreur du chemin
+physique annule sa FIFO avant le fallback. Le read-ahead FatFs ne contient que
+des octets source temporaires et ne change ni les etats de page, ni les besoins,
+ni les generations.
+
+Les mesures materielles 4/8/16/32 Kio ont retenu 16 Kio pour le fallback FatFs.
+Le backend physique utilise les plus grandes lectures permises par chaque
+extent, independamment de ce reglage.

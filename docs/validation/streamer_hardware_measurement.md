@@ -59,14 +59,15 @@ Multi, loop puis non-loop, un fichier partage puis des fichiers distincts,
 Chaque scenario commence a froid, dure au moins 60 secondes et est repete
 trois fois. Ajouter un wrap simultane et deux instruments Multi distincts.
 
-## Criteres et decision DMA
+## Criteres du transport DMA
 
 Une configuration est admissible si aucune deadline n'est manquee, aucun
 underrun n'apparait, le backlog revient a zero apres le pic froid et le p99
 comme le maximum restent sous l'horizon avec au moins 25 % de marge. Choisir la
 plus petite taille qui satisfait ces criteres dans tous les scenarios.
 
-Le DMA SD asynchrone devient necessaire seulement si, apres selection de la
-meilleure taille et validation de la cadence, le temps bloque synchrone maximal
-ou p99 consomme la marge de deadline d'un scenario pourtant admis. Une
-insuffisance de debit soutenu doit d'abord corriger l'admission.
+Pour le backend physique, verifier en plus que le service principal reste
+cooperatif entre le lancement DMA et son callback, que la FIFO bloc se vide
+apres chaque page et que les pages traversant plusieurs extents sont identiques
+au fallback FatFs. Une insuffisance de debit soutenu reste un probleme
+d'admission, pas un motif de modification de l'ordre round-robin.

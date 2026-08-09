@@ -29,6 +29,7 @@ static AUDIO_HOT sample_voice_reader_t g_sample_cache_readers[SAMPLE_CACHE_MAX_V
 static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
 static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static CTRL_STATE uint32_t g_sample_cache_voice_generation_counter;
+static uint8_t g_sample_cache_stream_gate_held;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -1134,6 +1135,12 @@ void sample_cache_init(void)
 {
     sample_page_cache_reset();
     sample_stream_manager_init();
+    if ((g_sample_cache_stream_gate_held != 0U)
+        && (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_SAMPLE_STREAM))
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+    }
+    g_sample_cache_stream_gate_held = 0U;
     g_sample_cache_voice_generation_counter = 0U;
 
     for (uint32_t i = 0U; i < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY; ++i)
@@ -1330,7 +1337,8 @@ void sample_cache_service(uint32_t byte_budget)
         return;
     }
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U)
+    if ((g_sample_cache_stream_gate_held == 0U)
+        && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U))
     {
         brick6_stream_underrun_trace_service_blocked(
             BRICK6_STREAM_TRACE_REASON_GATE_BLOCKED,
@@ -1338,11 +1346,16 @@ void sample_cache_service(uint32_t byte_budget)
             0U);
         return;
     }
+    g_sample_cache_stream_gate_held = 1U;
 
     sample_stream_manager_service(byte_budget);
     if (sample_stream_manager_has_pending_sd_work() != 0U)
     {
-        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        if (sample_stream_manager_io_in_flight() == 0U)
+        {
+            sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+            g_sample_cache_stream_gate_held = 0U;
+        }
         return;
     }
     if (sample_page_cache_has_reserved_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) != 0U)
@@ -1351,11 +1364,13 @@ void sample_cache_service(uint32_t byte_budget)
                                         SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
                                         byte_budget);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        g_sample_cache_stream_gate_held = 0U;
         return;
     }
     if (sd_access_gate_streaming_critical_active() != 0U)
     {
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        g_sample_cache_stream_gate_held = 0U;
         return;
     }
 
@@ -1391,6 +1406,7 @@ void sample_cache_service(uint32_t byte_budget)
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+    g_sample_cache_stream_gate_held = 0U;
 }
 
 uint8_t sample_cache_has_pending_sd_work(void)

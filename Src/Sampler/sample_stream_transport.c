@@ -9,6 +9,7 @@ typedef enum
 {
     SAMPLE_STREAM_TRANSPORT_EMPTY = 0,
     SAMPLE_STREAM_TRANSPORT_COMMAND_READY,
+    SAMPLE_STREAM_TRANSPORT_IO_ACTIVE,
     SAMPLE_STREAM_TRANSPORT_RESULT_READY
 } sample_stream_transport_state_t;
 
@@ -69,8 +70,18 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
 void sample_stream_transport_worker_poll(void)
 {
     __DMB();
-    if (g_sample_stream_transport_mailbox.state
-        != SAMPLE_STREAM_TRANSPORT_COMMAND_READY)
+    if (g_sample_stream_transport_mailbox.state == SAMPLE_STREAM_TRANSPORT_IO_ACTIVE)
+    {
+        if (sample_stream_io_poll(&g_sample_stream_transport_mailbox.result) == 0U)
+        {
+            return;
+        }
+        __DMB();
+        g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
+        __DMB();
+        return;
+    }
+    if (g_sample_stream_transport_mailbox.state != SAMPLE_STREAM_TRANSPORT_COMMAND_READY)
     {
         return;
     }
@@ -87,8 +98,22 @@ void sample_stream_transport_worker_poll(void)
     }
     else
     {
-        sample_stream_io_execute(&g_sample_stream_transport_mailbox.command,
-                                 &g_sample_stream_transport_mailbox.result);
+        if (sample_stream_io_begin(&g_sample_stream_transport_mailbox.command) == 0U)
+        {
+            g_sample_stream_transport_mailbox.result.token =
+                g_sample_stream_transport_mailbox.command.token;
+            g_sample_stream_transport_mailbox.result.load_result =
+                SAMPLE_PAGE_LOAD_INVALID_ARG;
+        }
+        else
+        {
+            g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_IO_ACTIVE;
+            __DMB();
+            if (sample_stream_io_poll(&g_sample_stream_transport_mailbox.result) == 0U)
+            {
+                return;
+            }
+        }
     }
     __DMB();
     g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
@@ -137,8 +162,11 @@ void sample_stream_transport_execute_monocore(const sample_stream_io_command_t *
     {
         return;
     }
-    sample_stream_transport_worker_poll();
-    if (sample_stream_transport_take_result(sequence, out_result) == 0U)
+    do
+    {
+        sample_stream_transport_worker_poll();
+    } while (sample_stream_transport_take_result(sequence, out_result) == 0U);
+    if (out_result->token.page_generation != command->token.page_generation)
     {
         g_sample_stream_transport_stats.protocol_errors++;
         out_result->token = command->token;

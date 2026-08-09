@@ -83,8 +83,9 @@ void brick6_stream_service_task_poll(void)
         (uint8_t)sd_access_gate_current_owner());
 
     g_brick6_stream_service_stats.poll_count++;
-    if ((multi_sample_load_has_pending() != 0U)
-        || (sd_access_gate_bulk_exclusive_active() != 0U))
+    if ((sample_stream_manager_io_in_flight() == 0U)
+        && ((multi_sample_load_has_pending() != 0U)
+            || (sd_access_gate_bulk_exclusive_active() != 0U)))
     {
         sample_stream_manager_note_blocked_poll(
             multi_sample_load_has_pending(),

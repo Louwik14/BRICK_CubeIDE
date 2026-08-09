@@ -7,6 +7,7 @@
 #include "Sampler/sample_stream_decoder.h"
 #include "Sampler/sample_stream_limits.h"
 #include "Sampler/sample_stream_manager.h"
+#include "SD/sd_block_device.h"
 #include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
@@ -50,6 +51,20 @@ SDRAM_STREAM_SERVICE static char
 SDRAM_STREAM_SCRATCH static uint8_t
     g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_READ_SCRATCH_BYTES];
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_page_scratch[SAMPLE_PAGE_BYTES];
+typedef struct
+{
+    sample_stream_io_command_t command;
+    sample_page_load_target_t target;
+    sample_stream_io_result_t result;
+    sample_stream_io_reader_t *reader;
+    sample_stream_physical_cursor_t local_physical_cursor;
+    sample_stream_backend_physical_async_t physical;
+    const uint8_t *source;
+    uint8_t active;
+    uint8_t completed;
+    uint8_t physical_active;
+} sample_stream_io_async_t;
+SDRAM_STREAM_SERVICE static sample_stream_io_async_t g_sample_stream_io_async;
 static sample_audio_key_t g_sample_stream_io_cache_key;
 static uint32_t g_sample_stream_io_cache_registration_epoch;
 static FSIZE_t g_sample_stream_io_cache_offset;
@@ -251,6 +266,8 @@ void sample_stream_io_init(void)
 {
     memset(g_sample_stream_io_readers, 0, sizeof(g_sample_stream_io_readers));
     memset(g_sample_stream_io_paths, 0, sizeof(g_sample_stream_io_paths));
+    memset(&g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
+    sd_block_device_async_init();
     sample_stream_io_invalidate_read_cache();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
     {
@@ -260,6 +277,7 @@ void sample_stream_io_init(void)
 
 void sample_stream_io_reset(void)
 {
+    sample_stream_io_cancel();
     sample_stream_io_invalidate_read_cache();
     for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_MAX_READERS; ++i)
     {
@@ -309,174 +327,236 @@ sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void)
     return g_sample_stream_io_chunk_kib;
 }
 
-void sample_stream_io_execute(const sample_stream_io_command_t *command,
-                              sample_stream_io_result_t *out_result)
+static void sample_stream_io_decode_async(void)
 {
-    if (out_result == 0)
+    if (g_sample_stream_io_async.result.load_result != SAMPLE_PAGE_LOAD_OK)
     {
         return;
     }
-    memset(out_result, 0, sizeof(*out_result));
-    out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    if (command == 0)
+    const uint32_t decode_begin = DWT->CYCCNT;
+    g_sample_stream_io_async.result.load_result = sample_stream_decoder_decode_page(
+        &g_sample_stream_io_async.command.stream_info,
+        &g_sample_stream_io_async.target,
+        g_sample_stream_io_async.source,
+        g_sample_stream_io_async.result.source_bytes);
+    g_sample_stream_io_async.result.decode_cycles = DWT->CYCCNT - decode_begin;
+}
+
+static void sample_stream_io_run_fatfs_fallback(void)
+{
+    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
+    const sample_stream_io_command_t *const command = &async->command;
+    sample_stream_io_result_t *const result = &async->result;
+    sample_stream_io_reader_t *const reader = async->reader;
+    const uint32_t source_bytes = result->source_bytes;
+    async->source = g_sample_stream_io_page_scratch;
+
+    if ((reader == 0) || (sample_stream_io_open_reader(reader, &result->fatfs_ops) == 0U))
     {
+        result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         return;
     }
-    out_result->token = command->token;
-    sample_page_load_target_t target;
-    if ((sample_page_cache_resolve_loading_target(&command->token, &target) == 0U)
-        || (sample_audio_key_equal(&target.key, &command->target.key) == 0U)
-        || (target.page_index != command->target.page_index)
-        || (target.start_frame != command->target.start_frame)
-        || (target.frame_count != command->target.frame_count)
-        || (target.frames_per_page != command->target.frames_per_page)
-        || (target.registration_epoch != command->target.registration_epoch)
-        || (target.page_generation != command->target.page_generation)
-        || (target.slot_index != command->target.slot_index)
-        || (target.format != command->target.format)
-        || (target.stride_floats != command->target.stride_floats))
+    if (result->fatfs_ops != 0U)
     {
-        return;
+        result->file_opens = 1U;
     }
-    const uint32_t source_bytes = target.frame_count
-                                  * command->stream_info.info.block_align;
-    out_result->source_bytes = source_bytes;
-    if ((source_bytes == 0U) || (source_bytes > SAMPLE_PAGE_BYTES))
+    const FSIZE_t offset = (FSIZE_t)command->stream_info.data_offset
+                          + ((FSIZE_t)async->target.start_frame
+                             * command->stream_info.info.block_align);
+    uint32_t bytes_read = 0U;
+    while (bytes_read < source_bytes)
     {
-        return;
+        const FSIZE_t cursor = offset + bytes_read;
+        const uint8_t cache_matches =
+            (uint8_t)((g_sample_stream_io_cache_bytes != 0U)
+                && (sample_audio_key_equal(&g_sample_stream_io_cache_key,
+                                           &command->target.key) != 0U)
+                && (g_sample_stream_io_cache_registration_epoch
+                    == command->stream_info.registration_epoch)
+                && (cursor >= g_sample_stream_io_cache_offset)
+                && (cursor < (g_sample_stream_io_cache_offset
+                              + g_sample_stream_io_cache_bytes)));
+        if (cache_matches != 0U)
+        {
+            const uint32_t cache_position =
+                (uint32_t)(cursor - g_sample_stream_io_cache_offset);
+            uint32_t available = g_sample_stream_io_cache_bytes - cache_position;
+            const uint32_t needed = source_bytes - bytes_read;
+            if (available > needed)
+            {
+                available = needed;
+            }
+            memcpy(&g_sample_stream_io_page_scratch[bytes_read],
+                   &g_sample_stream_io_read_scratch[cache_position], available);
+            bytes_read += available;
+            result->read_cache_hits++;
+            continue;
+        }
+
+        if (reader->current_file_offset != cursor)
+        {
+            result->fatfs_ops++;
+            result->seeks++;
+            if (f_lseek(&reader->file, cursor) != FR_OK)
+            {
+                result->fatfs_ops += sample_stream_io_close_reader(reader);
+                result->load_result = SAMPLE_PAGE_LOAD_SEEK_FAILED;
+                return;
+            }
+        }
+
+        uint32_t request = (uint32_t)g_sample_stream_io_chunk_kib * 1024U;
+        const uint64_t source_end = (uint64_t)command->stream_info.data_offset
+                                    + ((uint64_t)command->stream_info.total_frames
+                                       * command->stream_info.info.block_align);
+        if ((uint64_t)cursor >= source_end)
+        {
+            result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+            return;
+        }
+        const uint64_t remaining_file_bytes = source_end - (uint64_t)cursor;
+        if ((uint64_t)request > remaining_file_bytes)
+        {
+            request = (uint32_t)remaining_file_bytes;
+        }
+        if (request == 0U)
+        {
+            result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+            return;
+        }
+        UINT actual = 0U;
+        result->fatfs_ops++;
+        result->physical_reads++;
+        if ((f_read(&reader->file, g_sample_stream_io_read_scratch, request, &actual) != FR_OK)
+            || (actual != request))
+        {
+            result->fatfs_ops += sample_stream_io_close_reader(reader);
+            result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+            return;
+        }
+        g_sample_stream_io_cache_key = command->target.key;
+        result->read_bytes += actual;
+        g_sample_stream_io_cache_registration_epoch =
+            command->stream_info.registration_epoch;
+        g_sample_stream_io_cache_offset = cursor;
+        g_sample_stream_io_cache_bytes = actual;
+        reader->current_file_offset = cursor + actual;
+    }
+    result->load_result = SAMPLE_PAGE_LOAD_OK;
+}
+
+uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
+{
+    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
+    if ((command == 0) || (async->active != 0U))
+    {
+        return 0U;
+    }
+    memset(async, 0, sizeof(*async));
+    async->active = 1U;
+    async->command = *command;
+    async->result.token = command->token;
+    async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+    if ((sample_page_cache_resolve_loading_target(&command->token, &async->target) == 0U)
+        || (sample_audio_key_equal(&async->target.key, &command->target.key) == 0U)
+        || (async->target.page_index != command->target.page_index)
+        || (async->target.start_frame != command->target.start_frame)
+        || (async->target.frame_count != command->target.frame_count)
+        || (async->target.frames_per_page != command->target.frames_per_page)
+        || (async->target.registration_epoch != command->target.registration_epoch)
+        || (async->target.page_generation != command->target.page_generation)
+        || (async->target.slot_index != command->target.slot_index)
+        || (async->target.format != command->target.format)
+        || (async->target.stride_floats != command->target.stride_floats))
+    {
+        async->completed = 1U;
+        return 1U;
     }
 
-    const uint8_t *source = g_sample_stream_io_page_scratch;
-    sample_stream_io_reader_t *const reader = sample_stream_io_get_reader(command);
-    sample_stream_physical_cursor_t local_physical_cursor;
-    memset(&local_physical_cursor, 0, sizeof(local_physical_cursor));
-    sample_stream_physical_cursor_t *const physical_cursor =
-        (reader != 0) ? &reader->physical_cursor : &local_physical_cursor;
+    async->result.source_bytes = async->target.frame_count
+                                 * command->stream_info.info.block_align;
+    if ((async->result.source_bytes == 0U)
+        || (async->result.source_bytes > SAMPLE_PAGE_BYTES))
+    {
+        async->completed = 1U;
+        return 1U;
+    }
+    async->reader = sample_stream_io_get_reader(command);
+    sample_stream_physical_cursor_t *const cursor = (async->reader != 0)
+        ? &async->reader->physical_cursor : &async->local_physical_cursor;
     if ((command->stream_info.raw_pcm24 == 0U)
         && (sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
-            == SAMPLE_STREAM_BACKEND_PHYSICAL))
+            == SAMPLE_STREAM_BACKEND_PHYSICAL)
+        && (sample_stream_backend_physical_begin(
+                &async->physical,
+                &async->command.stream_info,
+                &async->target,
+                cursor,
+                g_sample_stream_io_read_scratch,
+                sizeof(g_sample_stream_io_read_scratch)) != 0U))
     {
-        out_result->load_result = sample_stream_backend_physical_read_page(
-            &command->stream_info,
-            &target,
-            physical_cursor,
-            g_sample_stream_io_read_scratch,
-            sizeof(g_sample_stream_io_read_scratch),
-            &source,
-            &out_result->source_bytes,
-            &out_result->physical_reads);
-        if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
+        async->physical_active = 1U;
+        return 1U;
+    }
+
+    sample_stream_io_run_fatfs_fallback();
+    sample_stream_io_decode_async();
+    async->completed = 1U;
+    return 1U;
+}
+
+uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
+{
+    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
+    if ((out_result == 0) || (async->active == 0U))
+    {
+        return 0U;
+    }
+    if ((async->completed == 0U) && (async->physical_active != 0U))
+    {
+        sample_page_load_result_t physical_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+        if (sample_stream_backend_physical_poll(
+                &async->physical,
+                &physical_result,
+                &async->source,
+                &async->result.source_bytes,
+                &async->result.physical_reads) == 0U)
+        {
+            return 0U;
+        }
+        async->physical_active = 0U;
+        async->result.load_result = physical_result;
+        if (physical_result == SAMPLE_PAGE_LOAD_OK)
         {
             sample_stream_io_invalidate_read_cache();
-            out_result->backend = 1U;
-            out_result->read_bytes = out_result->source_bytes;
+            async->result.backend = 1U;
+            async->result.read_bytes = async->result.source_bytes;
         }
         else
         {
-            memset(physical_cursor, 0, sizeof(*physical_cursor));
+            sample_stream_physical_cursor_t *const cursor = (async->reader != 0)
+                ? &async->reader->physical_cursor : &async->local_physical_cursor;
+            memset(cursor, 0, sizeof(*cursor));
+            async->reader = sample_stream_io_get_reader(&async->command);
+            sample_stream_io_run_fatfs_fallback();
         }
+        sample_stream_io_decode_async();
+        async->completed = 1U;
     }
-
-    if (out_result->backend == 0U)
+    if (async->completed == 0U)
     {
-        if ((reader == 0) || (sample_stream_io_open_reader(reader, &out_result->fatfs_ops) == 0U))
-        {
-            out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-            return;
-        }
-        if (out_result->fatfs_ops != 0U)
-        {
-            out_result->file_opens = 1U;
-        }
-        const FSIZE_t offset = (FSIZE_t)command->stream_info.data_offset
-                              + ((FSIZE_t)target.start_frame
-                                 * command->stream_info.info.block_align);
-        uint32_t bytes_read = 0U;
-        while (bytes_read < source_bytes)
-        {
-            const FSIZE_t cursor = offset + bytes_read;
-            const uint8_t cache_matches =
-                (uint8_t)((g_sample_stream_io_cache_bytes != 0U)
-                    && (sample_audio_key_equal(&g_sample_stream_io_cache_key,
-                                               &command->target.key) != 0U)
-                    && (g_sample_stream_io_cache_registration_epoch
-                        == command->stream_info.registration_epoch)
-                    && (cursor >= g_sample_stream_io_cache_offset)
-                    && (cursor < (g_sample_stream_io_cache_offset
-                                  + g_sample_stream_io_cache_bytes)));
-            if (cache_matches != 0U)
-            {
-                const uint32_t cache_position = (uint32_t)(cursor - g_sample_stream_io_cache_offset);
-                uint32_t available = g_sample_stream_io_cache_bytes - cache_position;
-                const uint32_t needed = source_bytes - bytes_read;
-                if (available > needed)
-                {
-                    available = needed;
-                }
-                memcpy(&g_sample_stream_io_page_scratch[bytes_read],
-                       &g_sample_stream_io_read_scratch[cache_position], available);
-                bytes_read += available;
-                out_result->read_cache_hits++;
-                continue;
-            }
-
-            if (reader->current_file_offset != cursor)
-            {
-                out_result->fatfs_ops++;
-                out_result->seeks++;
-                if (f_lseek(&reader->file, cursor) != FR_OK)
-                {
-                    out_result->fatfs_ops += sample_stream_io_close_reader(reader);
-                    out_result->load_result = SAMPLE_PAGE_LOAD_SEEK_FAILED;
-                    return;
-                }
-            }
-
-            uint32_t request = (uint32_t)g_sample_stream_io_chunk_kib * 1024U;
-            const uint64_t source_end = (uint64_t)command->stream_info.data_offset
-                                        + ((uint64_t)command->stream_info.total_frames
-                                           * command->stream_info.info.block_align);
-            if ((uint64_t)cursor >= source_end)
-            {
-                out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-                return;
-            }
-            const uint64_t remaining_file_bytes = source_end - (uint64_t)cursor;
-            if ((uint64_t)request > remaining_file_bytes)
-            {
-                request = (uint32_t)remaining_file_bytes;
-            }
-            if (request == 0U)
-            {
-                out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-                return;
-            }
-            UINT actual = 0U;
-            out_result->fatfs_ops++;
-            out_result->physical_reads++;
-            if ((f_read(&reader->file, g_sample_stream_io_read_scratch, request, &actual) != FR_OK)
-                || (actual != request))
-            {
-                out_result->fatfs_ops += sample_stream_io_close_reader(reader);
-                out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-                return;
-            }
-            g_sample_stream_io_cache_key = command->target.key;
-            out_result->read_bytes += actual;
-            g_sample_stream_io_cache_registration_epoch =
-                command->stream_info.registration_epoch;
-            g_sample_stream_io_cache_offset = cursor;
-            g_sample_stream_io_cache_bytes = actual;
-            reader->current_file_offset = cursor + actual;
-        }
-        out_result->load_result = SAMPLE_PAGE_LOAD_OK;
+        return 0U;
     }
+    *out_result = async->result;
+    memset(async, 0, sizeof(*async));
+    return 1U;
+}
 
-    if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
+void sample_stream_io_cancel(void)
+{
+    if (g_sample_stream_io_async.physical_active != 0U)
     {
-        const uint32_t decode_begin = DWT->CYCCNT;
-        out_result->load_result = sample_stream_decoder_decode_page(
-            &command->stream_info, &target, source, out_result->source_bytes);
-        out_result->decode_cycles = DWT->CYCCNT - decode_begin;
+        sample_stream_backend_physical_cancel(&g_sample_stream_io_async.physical);
     }
+    memset(&g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
 }
