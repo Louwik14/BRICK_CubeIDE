@@ -214,6 +214,136 @@ uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t
     return 1U;
 }
 
+static uint8_t sample_stream_physical_extent_contains(
+    const sample_stream_physical_extent_t *extent,
+    uint32_t file_sector)
+{
+    if (extent == 0)
+    {
+        return 0U;
+    }
+    const uint64_t extent_end = (uint64_t)extent->file_sector_start
+                              + (uint64_t)extent->sector_count;
+    return ((file_sector >= extent->file_sector_start)
+            && ((uint64_t)file_sector < extent_end)) ? 1U : 0U;
+}
+
+uint8_t sample_stream_physical_map_resolve(const sample_stream_physical_map_t *map,
+                                           uint64_t file_byte_offset,
+                                           uint32_t requested_bytes,
+                                           sample_stream_physical_cursor_t *cursor,
+                                           sample_stream_physical_span_t *out_span)
+{
+    if ((out_span == 0) || (requested_bytes == 0U)
+        || (sample_stream_physical_map_is_current(map) == 0U))
+    {
+        return 0U;
+    }
+    memset(out_span, 0, sizeof(*out_span));
+
+    const uint64_t file_sector_64 = file_byte_offset / SAMPLE_STREAM_FATFS_SECTOR_SIZE;
+    if (file_sector_64 > UINT32_MAX)
+    {
+        return 0U;
+    }
+    const uint32_t file_sector = (uint32_t)file_sector_64;
+    uint16_t extent_index = 0U;
+    sample_stream_physical_extent_t extent;
+    uint8_t found = 0U;
+
+    if ((cursor != 0) && (cursor->map_generation == map->generation)
+        && (cursor->extent_index < map->extent_count)
+        && (sample_stream_physical_map_get_extent(map, cursor->extent_index, &extent) != 0U))
+    {
+        extent_index = cursor->extent_index;
+        if (sample_stream_physical_extent_contains(&extent, file_sector) != 0U)
+        {
+            found = 1U;
+        }
+        else if (file_sector >= extent.file_sector_start)
+        {
+            while (++extent_index < map->extent_count)
+            {
+                if (sample_stream_physical_map_get_extent(map, extent_index, &extent) == 0U)
+                {
+                    return 0U;
+                }
+                if (sample_stream_physical_extent_contains(&extent, file_sector) != 0U)
+                {
+                    found = 1U;
+                    break;
+                }
+                if (file_sector < extent.file_sector_start)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (found == 0U)
+    {
+        uint16_t low = 0U;
+        uint16_t high = map->extent_count;
+        while (low < high)
+        {
+            const uint16_t mid = (uint16_t)(low + ((high - low) / 2U));
+            if (sample_stream_physical_map_get_extent(map, mid, &extent) == 0U)
+            {
+                return 0U;
+            }
+            if (file_sector < extent.file_sector_start)
+            {
+                high = mid;
+            }
+            else if (sample_stream_physical_extent_contains(&extent, file_sector) == 0U)
+            {
+                low = (uint16_t)(mid + 1U);
+            }
+            else
+            {
+                extent_index = mid;
+                found = 1U;
+                break;
+            }
+        }
+    }
+    if (found == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t sector_in_extent = file_sector - extent.file_sector_start;
+    const uint32_t sectors_available = extent.sector_count - sector_in_extent;
+    const uint16_t first_skip = (uint16_t)(file_byte_offset
+                                & (SAMPLE_STREAM_FATFS_SECTOR_SIZE - 1U));
+    const uint64_t extent_bytes_available =
+        ((uint64_t)sectors_available * SAMPLE_STREAM_FATFS_SECTOR_SIZE) - first_skip;
+    const uint32_t logical_bytes = (extent_bytes_available < requested_bytes)
+        ? (uint32_t)extent_bytes_available
+        : requested_bytes;
+    const uint32_t sector_count = (first_skip + logical_bytes
+        + (SAMPLE_STREAM_FATFS_SECTOR_SIZE - 1U)) / SAMPLE_STREAM_FATFS_SECTOR_SIZE;
+    if ((logical_bytes == 0U) || (sector_count == 0U)
+        || (sector_count > sectors_available))
+    {
+        return 0U;
+    }
+
+    out_span->lba = extent.lba_start + sector_in_extent;
+    out_span->sector_count = sector_count;
+    out_span->logical_bytes = logical_bytes;
+    out_span->first_sector_skip = first_skip;
+    out_span->extent_index = extent_index;
+    if (cursor != 0)
+    {
+        cursor->map_generation = map->generation;
+        cursor->extent_index = extent_index;
+        cursor->reserved = 0U;
+    }
+    return 1U;
+}
+
 void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
                                             const wav_info_t *info,
                                             uint32_t total_frames,

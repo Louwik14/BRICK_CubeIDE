@@ -3,11 +3,12 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Sampler/sample_stream_backend_contiguous.h"
+#include "Sampler/sample_stream_backend_physical.h"
 #include "Sampler/sample_stream_decoder.h"
 #include "Sampler/sample_stream_limits.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/memory_layout.h"
+#include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 
@@ -20,6 +21,9 @@
 #define SAMPLE_STREAM_IO_READ_SCRATCH_BYTES \
     (SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES)
 
+_Static_assert(SAMPLE_STREAM_IO_READ_SCRATCH_BYTES >= (SAMPLE_PAGE_BYTES + 511U),
+               "Physical reads require one page plus sector alignment headroom");
+
 typedef struct
 {
     sample_audio_key_t key;
@@ -30,10 +34,12 @@ typedef struct
     uint32_t data_offset;
     uint32_t total_frames;
     uint32_t bytes_per_frame;
+    uint32_t media_epoch;
     FSIZE_t current_file_offset;
     uint32_t file_open_cookie;
     uint8_t in_use;
     uint8_t file_open;
+    sample_stream_physical_cursor_t physical_cursor;
     FIL file;
 } sample_stream_io_reader_t;
 
@@ -42,7 +48,7 @@ SDRAM_STREAM_SERVICE static sample_stream_io_reader_t
 SDRAM_STREAM_SERVICE static char
     g_sample_stream_io_paths[SAMPLE_STREAM_IO_MAX_READERS][SAMPLE_PAGE_CACHE_PATH_MAX];
 SDRAM_STREAM_SCRATCH static uint8_t
-    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_MAX_CHUNK_BYTES];
+    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_READ_SCRATCH_BYTES];
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_page_scratch[SAMPLE_PAGE_BYTES];
 static sample_audio_key_t g_sample_stream_io_cache_key;
 static uint32_t g_sample_stream_io_cache_registration_epoch;
@@ -162,6 +168,7 @@ static uint8_t sample_stream_io_reader_matches(const sample_stream_io_reader_t *
             && (reader->stride_floats == info->stride_floats)
             && (reader->frames_per_page == info->frames_per_page)
             && (reader->registration_epoch == info->registration_epoch)
+            && (reader->media_epoch == sd_access_media_epoch())
             && (strncmp(path, info->path, SAMPLE_PAGE_CACHE_PATH_MAX) == 0)) ? 1U : 0U;
 }
 
@@ -209,6 +216,7 @@ static sample_stream_io_reader_t *sample_stream_io_get_reader(
             reader->stride_floats = command->stream_info.stride_floats;
             reader->frames_per_page = command->stream_info.frames_per_page;
             reader->registration_epoch = command->stream_info.registration_epoch;
+            reader->media_epoch = sd_access_media_epoch();
             return reader;
         }
     }
@@ -339,26 +347,38 @@ void sample_stream_io_execute(const sample_stream_io_command_t *command,
     }
 
     const uint8_t *source = g_sample_stream_io_page_scratch;
+    sample_stream_io_reader_t *const reader = sample_stream_io_get_reader(command);
+    sample_stream_physical_cursor_t local_physical_cursor;
+    memset(&local_physical_cursor, 0, sizeof(local_physical_cursor));
+    sample_stream_physical_cursor_t *const physical_cursor =
+        (reader != 0) ? &reader->physical_cursor : &local_physical_cursor;
     if ((command->stream_info.raw_pcm24 == 0U)
-        && (command->stream_info.stream_safe.valid != 0U)
-        && (command->stream_info.stream_safe.backend_kind
-            == (uint8_t)SAMPLE_STREAM_BACKEND_SAFE_CONTIGUOUS))
+        && (sample_stream_physical_map_is_current(
+                &command->stream_info.stream_safe.physical_map) != 0U))
     {
-        out_result->load_result = sample_stream_backend_contiguous_read_page(
-            &command->stream_info, &target, g_sample_stream_io_read_scratch,
-            sizeof(g_sample_stream_io_read_scratch), &source, &out_result->source_bytes);
+        out_result->load_result = sample_stream_backend_physical_read_page(
+            &command->stream_info,
+            &target,
+            physical_cursor,
+            g_sample_stream_io_read_scratch,
+            sizeof(g_sample_stream_io_read_scratch),
+            &source,
+            &out_result->source_bytes,
+            &out_result->physical_reads);
         if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
         {
             sample_stream_io_invalidate_read_cache();
             out_result->backend = 1U;
-            out_result->physical_reads = 1U;
             out_result->read_bytes = out_result->source_bytes;
+        }
+        else
+        {
+            memset(physical_cursor, 0, sizeof(*physical_cursor));
         }
     }
 
     if (out_result->backend == 0U)
     {
-        sample_stream_io_reader_t *const reader = sample_stream_io_get_reader(command);
         if ((reader == 0) || (sample_stream_io_open_reader(reader, &out_result->fatfs_ops) == 0U))
         {
             out_result->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;

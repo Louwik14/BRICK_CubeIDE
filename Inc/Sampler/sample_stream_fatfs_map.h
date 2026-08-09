@@ -48,6 +48,22 @@ typedef struct
 
 typedef struct
 {
+    uint32_t map_generation;
+    uint16_t extent_index;
+    uint16_t reserved;
+} sample_stream_physical_cursor_t;
+
+typedef struct
+{
+    uint32_t lba;
+    uint32_t sector_count;
+    uint32_t logical_bytes;
+    uint16_t first_sector_skip;
+    uint16_t extent_index;
+} sample_stream_physical_span_t;
+
+typedef struct
+{
     sample_audio_key_t key;
     uint8_t valid;
     uint8_t backend_kind;
@@ -74,6 +90,11 @@ uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t
 uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t *map,
                                               uint16_t extent_index,
                                               sample_stream_physical_extent_t *out_extent);
+uint8_t sample_stream_physical_map_resolve(const sample_stream_physical_map_t *map,
+                                           uint64_t file_byte_offset,
+                                           uint32_t requested_bytes,
+                                           sample_stream_physical_cursor_t *cursor,
+                                           sample_stream_physical_span_t *out_span);
 
 uint8_t sample_stream_fatfs_map_build_from_file(FIL *fp,
                                                 sample_stream_safe_metadata_t *out_meta);
