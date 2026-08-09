@@ -1288,15 +1288,14 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         {
             if ((out_name != NULL) && (out_name_len > 0U))
             {
-                (void)snprintf(out_name, out_name_len, "%uK N%u A%u",
-                               (unsigned)BRICK6_STREAM_CALIBRATION_PAGE_KIB,
-                               (unsigned)brick6_stream_calibration_current_passes(),
-                               (unsigned)brick6_stream_calibration_current_advance());
+                (void)snprintf(out_name, out_name_len, "CASE %02u",
+                               (unsigned)brick6_stream_calibration_case_index() + 1U);
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                (void)snprintf(out_value, out_value_len, "%uK/tour %uK ahead",
-                               (unsigned)brick6_stream_calibration_current_served_kib(),
+                (void)snprintf(out_value, out_value_len, "PRE %uK / AHEAD %uK",
+                               (unsigned)(BRICK6_STREAM_CALIBRATION_PAGE_KIB
+                                          * brick6_stream_calibration_current_presocle()),
                                (unsigned)brick6_stream_calibration_current_ahead_kib());
             }
             (void)slot;

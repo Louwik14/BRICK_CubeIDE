@@ -18,20 +18,22 @@
 #include "stm32h7xx.h"
 
 #define CAL_SAMPLE_RATE    (48000U)
-#define CAL_GRID_SIGNATURE (0x0F320206UL)
+#define CAL_GRID_SIGNATURE (0x04320101UL)
 #define CAL_CASE_COUNT     BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD
 
 typedef struct
 {
     uint8_t passes;
+    uint8_t presocle_pages;
     uint8_t advance_pages;
 } cal_case_config_t;
 
 #if BRICK6_STREAM_CALIBRATION_PAGE_KIB == 32
 static const cal_case_config_t k_cases[CAL_CASE_COUNT] = {
-    {1U, 2U}, {1U, 3U}, {1U, 4U}, {1U, 5U}, {1U, 6U},
-    {2U, 2U}, {2U, 3U}, {2U, 4U}, {2U, 5U}, {2U, 6U},
-    {3U, 2U}, {3U, 3U}, {3U, 4U}, {3U, 5U}, {3U, 6U},
+    {1U, 2U, 2U},
+    {1U, 2U, 3U},
+    {1U, 3U, 2U},
+    {1U, 3U, 3U},
 };
 #else
 #error "The manual stream calibration grid requires 32 KiB pages"
@@ -100,6 +102,11 @@ static uint8_t cal_passes_for(uint16_t case_index)
 static uint8_t cal_advance_for(uint16_t case_index)
 {
     return k_cases[case_index].advance_pages;
+}
+
+static uint8_t cal_presocle_for(uint16_t case_index)
+{
+    return k_cases[case_index].presocle_pages;
 }
 
 static brick6_stream_calibration_result_t *cal_current(void)
@@ -505,7 +512,12 @@ void brick6_stream_calibration_note_round_end(void)
 uint16_t brick6_stream_calibration_case_index(void) { return g_case_index; }
 uint16_t brick6_stream_calibration_case_count(void) { return CAL_CASE_COUNT; }
 uint8_t brick6_stream_calibration_current_passes(void) { return cal_passes_for(g_case_index); }
+uint8_t brick6_stream_calibration_current_presocle(void) { return cal_presocle_for(g_case_index); }
 uint8_t brick6_stream_calibration_current_advance(void) { return cal_advance_for(g_case_index); }
+uint32_t sample_audio_format_calibration_presocle_pages(void)
+{
+    return cal_presocle_for(g_case_index);
+}
 uint16_t brick6_stream_calibration_current_served_kib(void)
 {
     return (uint16_t)(BRICK6_STREAM_CALIBRATION_PAGE_KIB * cal_passes_for(g_case_index));

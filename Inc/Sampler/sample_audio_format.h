@@ -45,6 +45,10 @@ typedef enum
 #define SAMPLE_AUDIO_FORMAT_STEREO_WINDOW_PAGES     SAMPLE_AUDIO_FORMAT_STEREO_PRESOCLE_PAGES
 #define SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES   SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES
 
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+uint32_t sample_audio_format_calibration_presocle_pages(void);
+#endif
+
 static inline uint8_t sample_audio_format_is_valid(sample_audio_format_t format)
 {
     return ((format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
@@ -114,7 +118,12 @@ static inline uint32_t sample_audio_format_required_page_count(sample_audio_form
 
 static inline uint32_t sample_audio_format_presocle_pages(sample_audio_format_t format)
 {
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+    (void)format;
+    return sample_audio_format_calibration_presocle_pages();
+#else
     return sample_audio_format_required_page_count(format, SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES);
+#endif
 }
 
 static inline uint32_t sample_audio_format_window_pages(sample_audio_format_t format)
