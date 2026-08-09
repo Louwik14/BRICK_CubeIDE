@@ -5,6 +5,9 @@
 #include "Audio/md_model.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+#include "Core/stream_calibration.h"
+#endif
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Sampler/sample_global_pool.h"
@@ -130,6 +133,15 @@ static const ui_template_family_t g_ui_template_tone_family_looper = {
 
 static const ui_template_family_t g_ui_template_tone_family_multi = {
     .family_title = "TONE",
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+    .nav_labels = { "INST", "CAL", "-", "-" },
+    .subpages = {
+        { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
+        { .title = "STREAM CAL", .param_bank = { .params = { PARAM_STREAM_CAL_CASE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+#else
     .nav_labels = { "INST", "-", "-", "-" },
     .subpages = {
         { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
@@ -137,6 +149,7 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
+#endif
     .default_subpage = 0U,
 };
 
@@ -1270,6 +1283,22 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
     {
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+        if (id == PARAM_STREAM_CAL_CASE)
+        {
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "STREAM CAL");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                (void)snprintf(out_value, out_value_len, "CASE %02u / 15",
+                               (unsigned)((uint8_t)(value + 0.5f) + 1U));
+            }
+            (void)slot;
+            return 1U;
+        }
+#endif
         if (id == PARAM_SAMPLER_SAMPLE)
         {
             uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
@@ -1615,6 +1644,18 @@ static void ui_page_template_tone_leave(void)
 static void ui_page_template_tone_handle_event(const ui_event_t *ev)
 {
     ui_page_template_tone_sync_drum_family();
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+    if ((ev != NULL)
+        && (ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_ENCODER_1_PUSH)
+        && (g_ui_template_tone_state.active_subpage == 1U)
+        && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SAMPLER)
+        && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_MULTI))
+    {
+        brick6_stream_calibration_save_current();
+        return;
+    }
+#endif
     ui_template_page_handle_event(ev);
     ui_page_template_tone_sync_drum_family();
     ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);

@@ -11,7 +11,7 @@
 #endif
 
 #define BRICK6_STREAM_CALIBRATION_MAGIC       (0x5343414CUL)
-#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (1U)
+#define BRICK6_STREAM_CALIBRATION_ABI_VERSION (2U)
 #define BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD (15U)
 #define BRICK6_STREAM_CALIBRATION_MAX_RESULTS (30U)
 
@@ -72,6 +72,8 @@ _Static_assert(sizeof(brick6_stream_calibration_result_t) == 160U,
 #if BRICK6_STREAM_CALIBRATION
 void brick6_stream_calibration_init(void);
 void brick6_stream_calibration_process(void);
+void brick6_stream_calibration_select_case(uint8_t case_index);
+void brick6_stream_calibration_save_current(void);
 void brick6_stream_calibration_note_select(
     const sample_stream_scheduler_candidate_t *candidate);
 void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
@@ -80,13 +82,8 @@ void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
                                              uint32_t page_index);
 void brick6_stream_calibration_note_round_begin(void);
 void brick6_stream_calibration_note_round_end(void);
-uint8_t brick6_stream_calibration_complete(void);
-uint8_t brick6_stream_calibration_error(void);
-const char *brick6_stream_calibration_error_text(void);
 uint16_t brick6_stream_calibration_case_index(void);
 uint16_t brick6_stream_calibration_case_count(void);
-uint16_t brick6_stream_calibration_pass_count(void);
-uint16_t brick6_stream_calibration_fail_count(void);
 uint8_t brick6_stream_calibration_current_passes(void);
 uint8_t brick6_stream_calibration_current_advance(void);
 #endif

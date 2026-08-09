@@ -2,18 +2,11 @@
 
 #if BRICK6_STREAM_CALIBRATION
 
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "Core/brick6_sampler_runtime.h"
 #include "Core/cpu_load.h"
-#include "Core/track_runtime.h"
-#include "Core/track_state.h"
-#include "Sampler/sample_cache.h"
-#include "Sampler/multi_sample_pool.h"
-#include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_pool.h"
 #include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_scheduler.h"
@@ -23,39 +16,21 @@
 #include "ff.h"
 #include "stm32h7xx.h"
 
-#define CAL_SAMPLE_RATE          (48000U)
-#define CAL_CASE_FRAMES          (2U * CAL_SAMPLE_RATE)
-#define CAL_SETTLE_FRAMES        (CAL_SAMPLE_RATE / 10U)
-#define CAL_MAX_KEYBOARD_NOTE    (127U)
-#define CAL_GRID_SIGNATURE       (0x01020306UL)
-
-typedef enum
-{
-    CAL_STATE_RESET = 0,
-    CAL_STATE_PREPARE,
-    CAL_STATE_START,
-    CAL_STATE_ARMED,
-    CAL_STATE_RUN,
-    CAL_STATE_SETTLE,
-    CAL_STATE_WRITE,
-    CAL_STATE_COMPLETE,
-    CAL_STATE_FATAL
-} cal_state_t;
+#define CAL_SAMPLE_RATE    (48000U)
+#define CAL_GRID_SIGNATURE (0x02020306UL)
+#define CAL_CASE_COUNT     BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD
 
 static const uint8_t k_passes[] = {1U, 2U, 3U};
 static const uint8_t k_advance[] = {2U, 3U, 4U, 5U, 6U};
-static const char *const k_paths[8] = {
-    "0:/voix1.wav", "0:/voix2.wav", "0:/voix3.wav", "0:/voix4.wav",
-    "0:/voix5.wav", "0:/voix6.wav", "0:/voix7.wav", "0:/voix8.wav"
-};
 
 STORAGE_STATE_SDRAM static brick6_stream_calibration_file_t g_file;
-static cal_state_t g_state;
+STORAGE_STATE_SDRAM static brick6_stream_calibration_file_t g_export_file;
 static uint16_t g_case_index;
-static uint8_t g_case_running;
-static char g_error_text[28];
+static uint16_t g_saved_mask;
+static uint8_t g_measurement_active;
+static uint8_t g_initialized;
+static uint8_t g_export_pending;
 static sample_stream_audio_frame_t g_case_start_frame;
-static sample_stream_audio_frame_t g_state_start_frame;
 static uint32_t g_last_select_frame[8];
 static uint8_t g_last_select_valid[8];
 static uint32_t g_round_begin_cycle;
@@ -65,72 +40,20 @@ static uint32_t g_round_count;
 static uint8_t g_round_had_select;
 static uint32_t g_contiguous_reads;
 static uint32_t g_fatfs_reads;
-static uint8_t g_started_voices;
-static uint16_t g_calibration_instrument[8];
-static uint16_t g_calibration_sample[8];
-static uint8_t g_runtime_io_mask;
 
-static void cal_set_file_error(uint8_t file_index, const char *cause)
+static uint8_t cal_passes_for(uint16_t case_index)
 {
-    (void)snprintf(g_error_text,
-                   sizeof(g_error_text),
-                   "VOIX%u %s",
-                   (unsigned)(file_index + 1U),
-                   cause);
+    return k_passes[case_index / (uint16_t)(sizeof(k_advance))];
 }
 
-static const char *cal_loader_error_text(sample_pool_load_error_t error)
+static uint8_t cal_advance_for(uint16_t case_index)
 {
-    switch (error)
-    {
-        case SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND:
-        case SAMPLE_POOL_LOAD_SD_OPEN_FAIL:
-            return "OPEN FAIL";
-        case SAMPLE_POOL_LOAD_WAV_PARSE_FAIL:
-            return "PARSE FAIL";
-        case SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT:
-            return "UNSUPPORTED FORMAT";
-        case SAMPLE_POOL_LOAD_WAV_48K_REQUIRED:
-            return "RATE";
-        case SAMPLE_POOL_LOAD_SD_MOUNT_FAIL:
-            return "MOUNT FAIL";
-        case SAMPLE_POOL_LOAD_SD_GATE_REFUSED:
-            return "SD BUSY";
-        case SAMPLE_POOL_LOAD_MEMORY_LIMIT:
-        case SAMPLE_POOL_LOAD_NO_FREE_SLOT:
-            return "MEMORY";
-        case SAMPLE_POOL_LOAD_INVALID_ID:
-        case SAMPLE_POOL_LOAD_INVALID_PATH:
-        case SAMPLE_POOL_LOAD_PATH_TOO_LONG:
-            return "PATH";
-        case SAMPLE_POOL_LOAD_SD_READ_FAIL:
-        case SAMPLE_POOL_LOAD_SD_SEEK_FAIL:
-        case SAMPLE_POOL_LOAD_SD_SHORT_READ:
-        case SAMPLE_POOL_LOAD_SD_READ_INT_ERR:
-        case SAMPLE_POOL_LOAD_SD_NOT_READY:
-        case SAMPLE_POOL_LOAD_SD_INVALID_OBJECT:
-        case SAMPLE_POOL_LOAD_SD_TIMEOUT:
-        case SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE:
-            return "READ FAIL";
-        case SAMPLE_POOL_LOAD_OK:
-        default:
-            return "LOAD FAIL";
-    }
+    return k_advance[case_index % (uint16_t)(sizeof(k_advance))];
 }
 
 static brick6_stream_calibration_result_t *cal_current(void)
 {
     return &g_file.results[g_case_index];
-}
-
-static uint8_t cal_passes(void)
-{
-    return k_passes[g_case_index / (uint16_t)(sizeof(k_advance))];
-}
-
-static uint8_t cal_advance(void)
-{
-    return k_advance[g_case_index % (uint16_t)(sizeof(k_advance))];
 }
 
 static uint32_t cal_crc32(const void *data, uint32_t size)
@@ -148,8 +71,7 @@ static uint32_t cal_crc32(const void *data, uint32_t size)
     return ~crc;
 }
 
-static uint32_t cal_histogram_p99_upper(const uint32_t histogram[32],
-                                        uint32_t samples)
+static uint32_t cal_histogram_p99_upper(const uint32_t histogram[32], uint32_t samples)
 {
     if (samples == 0U)
     {
@@ -168,133 +90,13 @@ static uint32_t cal_histogram_p99_upper(const uint32_t histogram[32],
     return UINT32_MAX;
 }
 
-static void cal_stop_all(void)
+static void cal_init_result(uint16_t case_index)
 {
-    for (uint8_t track = 0U; track < 8U; ++track)
-    {
-        brick6_sampler_runtime_note_off_multi_track_note_all(
-            track, CAL_MAX_KEYBOARD_NOTE);
-    }
-}
-
-static void cal_configure_tracks(void)
-{
-    for (uint8_t track = 0U; track < 8U; ++track)
-    {
-        (void)track_state_set_track_family(track, UI_TRACK_FAMILY_SAMPLER);
-        (void)track_state_set_track_type(track, UI_TRACK_TYPE_MULTI);
-        track_runtime_refresh_track(track);
-        brick6_sampler_runtime_reset_track(track);
-        brick6_sampler_runtime_set_multi_instrument(
-            track, g_calibration_instrument[track]);
-        brick6_sampler_runtime_set_multi_gain(track, 0.125f);
-        brick6_sampler_runtime_set_multi_voice_count(track, 1U);
-    }
-}
-
-static uint8_t cal_prepare_multi_sources(void)
-{
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
-    {
-        return 0U;
-    }
-    for (uint8_t index = 0U; index < 8U; ++index)
-    {
-        const sample_desc_t *const source = sample_pool_get(index);
-        if ((source == NULL) || (source->valid == 0U)
-            || (source->length_frames == 0U))
-        {
-            cal_set_file_error(index, "NOT READY");
-            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-            return 0U;
-        }
-
-        const uint16_t instrument_id = index;
-        uint16_t sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        if ((multi_sample_pool_debug_define_instrument(
-                 instrument_id, "STREAM CAL", MULTI_SAMPLE_INSTRUMENT_INDEXED) == 0U)
-            || (multi_sample_pool_debug_add_sample(instrument_id,
-                                                   source->path,
-                                                   source->length_frames,
-                                                   STREAM_SAMPLER_ROOT_NOTE,
-                                                   0U,
-                                                   127U,
-                                                   0U,
-                                                   &sample_id) == 0U)
-            || (multi_sample_pool_set_sample_format(sample_id,
-                                                    source->data_offset,
-                                                    source->length_frames
-                                                        * source->bytes_per_frame,
-                                                    source->sample_rate,
-                                                    source->channels,
-                                                    source->bits_per_sample) == 0U))
-        {
-            cal_set_file_error(index, "MULTI SOURCE");
-            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-            return 0U;
-        }
-        const multi_sample_zone_t zone = {
-            .note_low = 0U,
-            .note_high = 127U,
-            .vel_low = 0U,
-            .vel_high = 127U,
-            .root_note = STREAM_SAMPLER_ROOT_NOTE,
-            .multi_sample_id = sample_id,
-        };
-        const wav_info_t info = {
-            .audio_format = 1U,
-            .sample_rate = source->sample_rate,
-            .byte_rate = source->sample_rate * source->bytes_per_frame,
-            .channels = source->channels,
-            .block_align = (uint16_t)source->bytes_per_frame,
-            .bits_per_sample = source->bits_per_sample,
-            .data_offset = source->data_offset,
-            .data_size = source->length_frames * source->bytes_per_frame,
-        };
-        const sample_audio_key_t key = sample_audio_key_multi(sample_id);
-        if ((multi_sample_pool_debug_add_zone(instrument_id, &zone) == 0U)
-            || (sample_page_cache_register_stream_sample_key_no_map(
-                    key, source->path, &info, source->length_frames,
-                    source->data_offset) == 0U)
-            || (sample_page_cache_reserve_page_key_alloc(
-                    key, 0U, SAMPLE_PAGE_ALLOC_MARGIN) == 0U))
-        {
-            cal_set_file_error(index, "MULTI PREP");
-            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-            return 0U;
-        }
-        g_calibration_instrument[index] = instrument_id;
-        g_calibration_sample[index] = sample_id;
-    }
-
-    sample_page_cache_service_domain_range(SAMPLE_AUDIO_DOMAIN_MULTI,
-                                           g_calibration_sample[0],
-                                           8U,
-                                           UINT32_MAX);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-
-    for (uint8_t index = 0U; index < 8U; ++index)
-    {
-        if ((sample_page_cache_get_page_state_key(
-                 sample_audio_key_multi(g_calibration_sample[index]), 0U)
-             != SAMPLE_PAGE_READY)
-            || (multi_sample_pool_set_state(g_calibration_instrument[index],
-                                            MULTI_SAMPLE_INSTRUMENT_READY) == 0U))
-        {
-            cal_set_file_error(index, "MULTI PAGE0");
-            return 0U;
-        }
-    }
-    return 1U;
-}
-
-static void cal_begin_case(void)
-{
-    brick6_stream_calibration_result_t *result = cal_current();
+    brick6_stream_calibration_result_t *const result = &g_file.results[case_index];
     memset(result, 0, sizeof(*result));
     result->page_kib = BRICK6_STREAM_CALIBRATION_PAGE_KIB;
-    result->passes = cal_passes();
-    result->advance_pages = cal_advance();
+    result->passes = cal_passes_for(case_index);
+    result->advance_pages = cal_advance_for(case_index);
     result->first_fault_voice = UINT8_MAX;
     result->first_fault_page = UINT32_MAX;
     result->minimum_margin_frames = UINT32_MAX;
@@ -302,41 +104,34 @@ static void cal_begin_case(void)
     {
         result->minimum_margin_per_voice[voice] = UINT32_MAX;
     }
+}
+
+static void cal_reset_measurement(void)
+{
+    cal_init_result(g_case_index);
     memset(g_last_select_valid, 0, sizeof(g_last_select_valid));
     g_round_cycles_total = 0U;
     g_round_cycles_max = 0U;
     g_round_count = 0U;
+    g_round_had_select = 0U;
     g_contiguous_reads = 0U;
     g_fatfs_reads = 0U;
-    g_runtime_io_mask = 0U;
-    sample_stream_scheduler_calibration_set_passes(result->passes);
-    sample_stream_needs_calibration_set_depth(result->advance_pages);
+    sample_stream_scheduler_calibration_set_passes(cal_passes_for(g_case_index));
+    sample_stream_needs_calibration_set_depth(cal_advance_for(g_case_index));
     sample_stream_benchmark_reset();
-    brick6_sampler_runtime_diag_reset();
     cpu_load_reset_measurement();
     g_case_start_frame = sample_stream_time_now();
-    g_case_running = 1U;
-    for (uint8_t track = 0U; track < 8U; ++track)
-    {
-        (void)brick6_sampler_runtime_trigger_multi_track_note_velocity(
-            track, CAL_MAX_KEYBOARD_NOTE, 127U);
-    }
-    g_started_voices = 0U;
-    for (uint8_t track = 0U; track < 8U; ++track)
-    {
-        g_started_voices +=
-            brick6_sampler_runtime_calibration_multi_voice_stream_active(
-                track, g_calibration_instrument[track], NULL, NULL);
-    }
+    g_measurement_active = 1U;
 }
 
-static void cal_finish_case(void)
+static void cal_capture_current(void)
 {
-    brick6_stream_calibration_result_t *result = cal_current();
+    if (g_measurement_active == 0U)
+    {
+        return;
+    }
+    brick6_stream_calibration_result_t *const result = cal_current();
     cpu_load_metrics_t cpu;
-    g_case_running = 0U;
-    g_error_text[0] = '\0';
-    cal_stop_all();
     cpu_load_get_metrics(&cpu);
     result->elapsed_audio_frames =
         (uint32_t)(sample_stream_time_now() - g_case_start_frame);
@@ -353,25 +148,21 @@ static void cal_finish_case(void)
     result->contiguous_reads = g_contiguous_reads;
     result->fatfs_reads = g_fatfs_reads;
     result->round_cycles_average = (g_round_count != 0U)
-                                       ? (uint32_t)(g_round_cycles_total / g_round_count)
-                                       : 0U;
+        ? (uint32_t)(g_round_cycles_total / g_round_count) : 0U;
     result->round_cycles_max = g_round_cycles_max;
     result->sd_read_cycles_average = (g_sample_stream_benchmark.selected_pages != 0U)
-                                         ? (uint32_t)(result->read_cycles_total
-                                                      / g_sample_stream_benchmark.selected_pages)
-                                         : 0U;
+        ? (uint32_t)(result->read_cycles_total / g_sample_stream_benchmark.selected_pages)
+        : 0U;
     result->sd_read_cycles_p99_upper = cal_histogram_p99_upper(
         (const uint32_t *)g_sample_stream_benchmark.read_cycles_histogram,
         (uint32_t)g_sample_stream_benchmark.selected_pages);
     result->sd_read_cycles_max = g_sample_stream_benchmark.read_cycles_max;
     result->pages_per_second_q16 = (result->elapsed_audio_frames != 0U)
         ? (uint32_t)(((uint64_t)result->pages_loaded * CAL_SAMPLE_RATE << 16U)
-                     / result->elapsed_audio_frames)
-        : 0U;
+                     / result->elapsed_audio_frames) : 0U;
     result->sd_bytes_per_second = (result->elapsed_audio_frames != 0U)
         ? (uint32_t)((result->read_bytes * CAL_SAMPLE_RATE)
-                     / result->elapsed_audio_frames)
-        : 0U;
+                     / result->elapsed_audio_frames) : 0U;
     result->audio_irq_overruns = cpu.over_100_count;
     if (result->minimum_margin_frames == UINT32_MAX)
     {
@@ -387,8 +178,8 @@ static void cal_finish_case(void)
     result->passed = ((result->underruns == 0U)
                       && (result->io_errors == 0U)
                       && (result->audio_irq_overruns == 0U)
-                      && (g_started_voices == 8U)
                       && (result->pages_loaded != 0U)) ? 1U : 0U;
+    g_saved_mask |= (uint16_t)(1U << g_case_index);
 }
 
 static uint8_t cal_write_binary(void)
@@ -411,27 +202,26 @@ static uint8_t cal_write_binary(void)
                            && (merged.grid_signature == CAL_GRID_SIGNATURE)) ? 1U : 0U;
     if (prior_valid != 0U)
     {
-        const uint32_t prior_bytes = merged.header_size
-            + (uint32_t)merged.result_count * merged.record_size;
-        const uint32_t prior_crc = cal_crc32(
-            merged.results,
-            (uint32_t)merged.result_count * sizeof(brick6_stream_calibration_result_t));
-        prior_valid = ((transferred == prior_bytes)
-                       && (merged.payload_crc32 == prior_crc)) ? 1U : 0U;
+        const uint32_t payload_bytes =
+            (uint32_t)merged.result_count * sizeof(brick6_stream_calibration_result_t);
+        prior_valid = ((transferred == (UINT)(merged.header_size + payload_bytes))
+                       && (merged.payload_crc32 == cal_crc32(merged.results, payload_bytes)))
+            ? 1U : 0U;
     }
     if (prior_valid == 0U)
     {
         memset(&merged, 0, sizeof(merged));
     }
+
     uint16_t keep = 0U;
-    for (uint16_t i = 0U; (i < merged.result_count) && (keep < 15U); ++i)
+    for (uint16_t i = 0U; (i < merged.result_count) && (keep < CAL_CASE_COUNT); ++i)
     {
         if (merged.results[i].page_kib != BRICK6_STREAM_CALIBRATION_PAGE_KIB)
         {
             merged.results[keep++] = merged.results[i];
         }
     }
-    for (uint16_t i = 0U; i < BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD; ++i)
+    for (uint16_t i = 0U; i < CAL_CASE_COUNT; ++i)
     {
         merged.results[keep++] = g_file.results[i];
     }
@@ -442,10 +232,10 @@ static uint8_t cal_write_binary(void)
     merged.result_count = keep;
     merged.firmware_page_kib = BRICK6_STREAM_CALIBRATION_PAGE_KIB;
     merged.sample_rate = CAL_SAMPLE_RATE;
-    merged.case_duration_frames = CAL_CASE_FRAMES;
+    merged.case_duration_frames = 0U;
     merged.grid_signature = CAL_GRID_SIGNATURE;
-    merged.payload_crc32 = cal_crc32(merged.results,
-        keep * (uint32_t)sizeof(brick6_stream_calibration_result_t));
+    merged.payload_crc32 = cal_crc32(
+        merged.results, keep * (uint32_t)sizeof(brick6_stream_calibration_result_t));
     if (f_open(&file, "0:/stream_calibration.bin", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
     {
         return 0U;
@@ -454,34 +244,54 @@ static uint8_t cal_write_binary(void)
     const FRESULT fr = f_write(&file, &merged, bytes, &transferred);
     (void)f_sync(&file);
     (void)f_close(&file);
-    g_file = merged;
-    return ((fr == FR_OK) && (transferred == bytes)) ? 1U : 0U;
+    if ((fr != FR_OK) || (transferred != bytes))
+    {
+        return 0U;
+    }
+    g_export_file = merged;
+    return 1U;
 }
 
-static void cal_write_csv(void)
+static uint8_t cal_write_csv(void)
 {
     FIL file;
     if (f_open(&file, "0:/stream_calibration.csv", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
     {
-        return;
+        return 0U;
     }
     static const char header[] =
-        "page_kib,N,advance,pass,underruns,first_voice,first_page,min_margin_frames,"
+        "case,page_kib,N,advance,saved,pass,underruns,first_voice,first_page,min_margin_frames,"
+        "min_margin_voice_1,min_margin_voice_2,min_margin_voice_3,min_margin_voice_4,"
+        "min_margin_voice_5,min_margin_voice_6,min_margin_voice_7,min_margin_voice_8,"
         "max_voice_gap_frames,round_avg_cycles,round_max_cycles,sd_avg_cycles,"
         "sd_p99_cycles,sd_max_cycles,sd_bytes_s,pages_s_q16,pages,physical_reads,"
         "contiguous_reads,fatfs_reads,seeks,io_errors,storage_cycles,irq_overruns\r\n";
-    UINT written;
-    (void)f_write(&file, header, sizeof(header) - 1U, &written);
-    char line[384];
-    for (uint16_t i = 0U; i < g_file.result_count; ++i)
+    UINT written = 0U;
+    uint8_t ok = (f_write(&file, header, sizeof(header) - 1U, &written) == FR_OK) ? 1U : 0U;
+    char line[512];
+    for (uint16_t i = 0U; (i < g_export_file.result_count) && (ok != 0U); ++i)
     {
-        const brick6_stream_calibration_result_t *r = &g_file.results[i];
+        const brick6_stream_calibration_result_t *const r = &g_export_file.results[i];
+        const uint16_t scenario = (uint16_t)(i % CAL_CASE_COUNT);
+        const uint8_t saved = (r->page_kib == BRICK6_STREAM_CALIBRATION_PAGE_KIB)
+            ? (uint8_t)((g_saved_mask >> scenario) & 1U) : 1U;
         const int length = snprintf(line, sizeof(line),
-            "%u,%u,%u,%u,%lu,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\r\n",
-            r->page_kib, r->passes, r->advance_pages, r->passed,
+            "%u,%u,%u,%u,%u,%u,%lu,%u,%lu,%lu,"
+            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,"
+            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\r\n",
+            (unsigned)(scenario + 1U), r->page_kib, r->passes, r->advance_pages,
+            saved, r->passed,
             (unsigned long)r->underruns, r->first_fault_voice,
             (unsigned long)r->first_fault_page,
             (unsigned long)r->minimum_margin_frames,
+            (unsigned long)r->minimum_margin_per_voice[0],
+            (unsigned long)r->minimum_margin_per_voice[1],
+            (unsigned long)r->minimum_margin_per_voice[2],
+            (unsigned long)r->minimum_margin_per_voice[3],
+            (unsigned long)r->minimum_margin_per_voice[4],
+            (unsigned long)r->minimum_margin_per_voice[5],
+            (unsigned long)r->minimum_margin_per_voice[6],
+            (unsigned long)r->minimum_margin_per_voice[7],
             (unsigned long)r->max_voice_service_gap_frames,
             (unsigned long)r->round_cycles_average,
             (unsigned long)r->round_cycles_max,
@@ -499,13 +309,15 @@ static void cal_write_csv(void)
             (unsigned long)((r->service_cycles_total > UINT32_MAX)
                                 ? UINT32_MAX : r->service_cycles_total),
             (unsigned long)r->audio_irq_overruns);
-        if (length > 0)
+        if ((length <= 0) || ((uint32_t)length >= sizeof(line))
+            || (f_write(&file, line, (UINT)length, &written) != FR_OK))
         {
-            (void)f_write(&file, line, (UINT)length, &written);
+            ok = 0U;
         }
     }
     (void)f_sync(&file);
     (void)f_close(&file);
+    return ok;
 }
 
 void brick6_stream_calibration_init(void)
@@ -515,163 +327,67 @@ void brick6_stream_calibration_init(void)
     g_file.abi_version = BRICK6_STREAM_CALIBRATION_ABI_VERSION;
     g_file.header_size = (uint16_t)offsetof(brick6_stream_calibration_file_t, results);
     g_file.record_size = (uint16_t)sizeof(brick6_stream_calibration_result_t);
+    g_file.result_count = CAL_CASE_COUNT;
     g_file.firmware_page_kib = BRICK6_STREAM_CALIBRATION_PAGE_KIB;
     g_file.sample_rate = CAL_SAMPLE_RATE;
-    g_file.case_duration_frames = CAL_CASE_FRAMES;
+    g_file.case_duration_frames = 0U;
     g_file.grid_signature = CAL_GRID_SIGNATURE;
-    g_state = CAL_STATE_RESET;
+    for (uint16_t i = 0U; i < CAL_CASE_COUNT; ++i)
+    {
+        cal_init_result(i);
+    }
     g_case_index = 0U;
-    g_case_running = 0U;
-    cal_configure_tracks();
+    g_saved_mask = 0U;
+    g_export_pending = 0U;
+    g_initialized = 1U;
+    cal_reset_measurement();
+}
+
+void brick6_stream_calibration_select_case(uint8_t case_index)
+{
+    if ((g_initialized == 0U) || (case_index >= CAL_CASE_COUNT)
+        || (case_index == g_case_index))
+    {
+        return;
+    }
+    cal_capture_current();
+    g_export_pending = 1U;
+    g_case_index = case_index;
+    cal_reset_measurement();
+}
+
+void brick6_stream_calibration_save_current(void)
+{
+    if (g_initialized != 0U)
+    {
+        cal_capture_current();
+        g_measurement_active = 0U;
+        g_export_pending = 1U;
+    }
 }
 
 void brick6_stream_calibration_process(void)
 {
-    switch (g_state)
+    if ((g_export_pending == 0U)
+        || (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U))
     {
-        case CAL_STATE_PREPARE:
-            {
-                sample_pool_prepare_result_t prepare;
-                sample_pool_prepare_batch_service();
-                sample_pool_prepare_batch_get_result(&prepare);
-                if (prepare.status == SAMPLE_POOL_PREPARE_READY)
-                {
-                    if (cal_prepare_multi_sources() != 0U)
-                    {
-                        g_state = CAL_STATE_START;
-                    }
-                    else if (g_error_text[0] != '\0')
-                    {
-                        g_state = CAL_STATE_FATAL;
-                    }
-                }
-                else if (prepare.status == SAMPLE_POOL_PREPARE_ERROR)
-                {
-                    cal_set_file_error(prepare.failed_index,
-                                       cal_loader_error_text(prepare.error));
-                    g_state = CAL_STATE_FATAL;
-                }
-            }
-            break;
-
-        case CAL_STATE_RESET:
-            cal_stop_all();
-            sample_cache_init();
-            multi_sample_pool_reset();
-            for (uint8_t index = 0U; index < 8U; ++index)
-            {
-                g_calibration_instrument[index] = index;
-                g_calibration_sample[index] = MULTI_SAMPLE_POOL_INVALID_ID;
-            }
-            if (sample_pool_prepare_batch_begin(0U, k_paths, 8U) == 0U)
-            {
-                (void)snprintf(g_error_text, sizeof(g_error_text), "PREPARE INIT");
-                g_state = CAL_STATE_FATAL;
-                break;
-            }
-            g_state = CAL_STATE_PREPARE;
-            break;
-
-        case CAL_STATE_START:
-            cal_configure_tracks();
-            cal_begin_case();
-            if (g_started_voices != 8U)
-            {
-                g_case_running = 0U;
-                (void)snprintf(g_error_text, sizeof(g_error_text), "START FAIL %u/8",
-                               (unsigned)g_started_voices);
-                g_state = CAL_STATE_FATAL;
-                break;
-            }
-            g_state = CAL_STATE_ARMED;
-            break;
-
-        case CAL_STATE_ARMED:
-            g_started_voices = 0U;
-            for (uint8_t track = 0U; track < 8U; ++track)
-            {
-                g_started_voices +=
-                    brick6_sampler_runtime_calibration_multi_voice_stream_active(
-                        track, g_calibration_instrument[track], NULL, NULL);
-            }
-            if ((g_started_voices != 8U)
-                || (sample_stream_needs_registry_count_active() < 8U))
-            {
-                g_case_running = 0U;
-                (void)snprintf(g_error_text, sizeof(g_error_text), "RUNTIME FAIL %u/8",
-                               (unsigned)g_started_voices);
-                g_state = CAL_STATE_FATAL;
-                break;
-            }
-            g_state = CAL_STATE_RUN;
-            break;
-
-        case CAL_STATE_RUN:
-            if ((sample_stream_time_now() - g_case_start_frame) >= CAL_CASE_FRAMES)
-            {
-                cal_finish_case();
-                if ((g_runtime_io_mask != 0xFFU)
-                    || (cal_current()->pages_loaded == 0U)
-                    || (cal_current()->physical_reads == 0U))
-                {
-                    (void)snprintf(g_error_text, sizeof(g_error_text), "NO STREAM");
-                    g_state = CAL_STATE_FATAL;
-                    break;
-                }
-                g_state_start_frame = sample_stream_time_now();
-                g_state = CAL_STATE_SETTLE;
-            }
-            break;
-
-        case CAL_STATE_SETTLE:
-            if ((sample_stream_time_now() - g_state_start_frame) >= CAL_SETTLE_FRAMES)
-            {
-                ++g_case_index;
-                if (g_case_index >= BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD)
-                {
-                    g_file.result_count = BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD;
-                    g_state = CAL_STATE_WRITE;
-                }
-                else
-                {
-                    g_state = CAL_STATE_RESET;
-                }
-            }
-            break;
-
-        case CAL_STATE_WRITE:
-            if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
-            {
-                break;
-            }
-            if (cal_write_binary() != 0U)
-            {
-                cal_write_csv();
-                g_state = CAL_STATE_COMPLETE;
-            }
-            else
-            {
-                (void)snprintf(g_error_text, sizeof(g_error_text), "RESULT WRITE");
-                g_state = CAL_STATE_FATAL;
-            }
-            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-            break;
-
-        case CAL_STATE_COMPLETE:
-        case CAL_STATE_FATAL:
-        default:
-            break;
+        return;
     }
+    if ((cal_write_binary() != 0U) && (cal_write_csv() != 0U))
+    {
+        g_export_pending = 0U;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
 }
 
 void brick6_stream_calibration_note_select(
     const sample_stream_scheduler_candidate_t *candidate)
 {
-    if ((g_case_running == 0U) || (candidate == NULL) || (candidate->voice_id >= 8U))
+    if ((g_measurement_active == 0U) || (candidate == NULL) || (candidate->voice_id >= 8U))
     {
         return;
     }
-    brick6_stream_calibration_result_t *result = cal_current();
+    brick6_stream_calibration_result_t *const result = cal_current();
     const uint32_t now = (uint32_t)sample_stream_time_now();
     const uint32_t deadline = (uint32_t)candidate->diagnostic_deadline_audio_frame;
     const uint32_t margin = (deadline > now) ? (deadline - now) : 0U;
@@ -701,15 +417,9 @@ void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
                                        uint32_t read_cycles)
 {
     (void)read_cycles;
-    if ((g_case_running == 0U) || (result == NULL))
+    if ((g_measurement_active == 0U) || (result == NULL))
     {
         return;
-    }
-    if ((result->load_result == SAMPLE_PAGE_LOAD_OK)
-        && (result->token.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-        && (result->token.key.object_id < 8U))
-    {
-        g_runtime_io_mask |= (uint8_t)(1U << result->token.key.object_id);
     }
     if (result->backend == 1U)
     {
@@ -724,11 +434,11 @@ void brick6_stream_calibration_note_io(const sample_stream_io_result_t *result,
 void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
                                              uint32_t page_index)
 {
-    if (g_case_running == 0U)
+    if (g_measurement_active == 0U)
     {
         return;
     }
-    brick6_stream_calibration_result_t *result = cal_current();
+    brick6_stream_calibration_result_t *const result = cal_current();
     ++result->underruns;
     result->minimum_margin_frames = 0U;
     if (result->first_fault_voice == UINT8_MAX)
@@ -740,7 +450,7 @@ void brick6_stream_calibration_note_underrun(sample_audio_key_t key,
 
 void brick6_stream_calibration_note_round_begin(void)
 {
-    if (g_case_running != 0U)
+    if (g_measurement_active != 0U)
     {
         g_round_begin_cycle = DWT->CYCCNT;
         g_round_had_select = 0U;
@@ -749,7 +459,7 @@ void brick6_stream_calibration_note_round_begin(void)
 
 void brick6_stream_calibration_note_round_end(void)
 {
-    if ((g_case_running != 0U) && (g_round_had_select != 0U))
+    if ((g_measurement_active != 0U) && (g_round_had_select != 0U))
     {
         const uint32_t cycles = DWT->CYCCNT - g_round_begin_cycle;
         g_round_cycles_total += cycles;
@@ -761,38 +471,9 @@ void brick6_stream_calibration_note_round_end(void)
     }
 }
 
-uint8_t brick6_stream_calibration_complete(void)
-{
-    return (g_state == CAL_STATE_COMPLETE) ? 1U : 0U;
-}
-
-uint8_t brick6_stream_calibration_error(void)
-{
-    return (g_state == CAL_STATE_FATAL) ? 1U : 0U;
-}
-
-const char *brick6_stream_calibration_error_text(void)
-{
-    return (g_error_text[0] != '\0') ? g_error_text : "UNKNOWN";
-}
-
 uint16_t brick6_stream_calibration_case_index(void) { return g_case_index; }
-uint16_t brick6_stream_calibration_case_count(void) { return BRICK6_STREAM_CALIBRATION_CASES_PER_BUILD; }
-uint8_t brick6_stream_calibration_current_passes(void) { return cal_passes(); }
-uint8_t brick6_stream_calibration_current_advance(void) { return cal_advance(); }
-
-uint16_t brick6_stream_calibration_pass_count(void)
-{
-    uint16_t count = 0U;
-    const uint16_t end = (g_state == CAL_STATE_COMPLETE) ? g_file.result_count : g_case_index;
-    for (uint16_t i = 0U; i < end; ++i) count += g_file.results[i].passed;
-    return count;
-}
-
-uint16_t brick6_stream_calibration_fail_count(void)
-{
-    const uint16_t end = (g_state == CAL_STATE_COMPLETE) ? g_file.result_count : g_case_index;
-    return (uint16_t)(end - brick6_stream_calibration_pass_count());
-}
+uint16_t brick6_stream_calibration_case_count(void) { return CAL_CASE_COUNT; }
+uint8_t brick6_stream_calibration_current_passes(void) { return cal_passes_for(g_case_index); }
+uint8_t brick6_stream_calibration_current_advance(void) { return cal_advance_for(g_case_index); }
 
 #endif

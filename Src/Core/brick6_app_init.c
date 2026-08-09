@@ -126,9 +126,7 @@ void brick6_app_init(void)
     monkey_test_init();
 #endif
     waveform_cache_init();
-#if !BRICK6_STREAM_CALIBRATION
     (void)waveform_cache_ensure_dirs();
-#endif
     wav_loader_catalog_init_load();
     sd_preview_init();
     looper_storage_raw_init();
@@ -168,12 +166,9 @@ void brick6_app_init(void)
     patch_v1_init();
     kit_v1_init();
     project_v1_init();
-#if !BRICK6_STREAM_CALIBRATION
     ui_boot_loading_begin();
-#endif
     undo_v2_init();
     hall_loop_init();
-#if !BRICK6_STREAM_CALIBRATION
     if (hall_calibration_load() != 0U)
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -185,10 +180,8 @@ void brick6_app_init(void)
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
 #endif
-#endif
     brick6_stream_service_task_init();
 #if BRICK6_STREAM_CALIBRATION
-    ui_page_set(UI_PAGE_STREAM_CALIBRATION);
     brick6_stream_calibration_init();
 #endif
     (void)audio_start();
@@ -260,8 +253,6 @@ void brick6_app_process(void)
     brick6_app_service_storage();
 #if BRICK6_STREAM_CALIBRATION
     brick6_stream_calibration_process();
-    brick6_stream_service_task_poll();
-    return;
 #endif
     pattern_live_service();
     brick6_master_control_process();

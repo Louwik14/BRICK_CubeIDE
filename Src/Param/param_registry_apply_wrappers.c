@@ -18,6 +18,9 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "UI/ui_track_catalog.h"
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+#include "Core/stream_calibration.h"
+#endif
 
 static float clamp_value(float v, float lo, float hi)
 {
@@ -137,6 +140,12 @@ void apply_sampler_loop_start(float v) { apply_tone_live_track(PARAM_SAMPLER_LOO
 void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }
 void apply_sampler_slice_count(float v) { apply_tone_live_track(PARAM_SAMPLER_SLICE_COUNT, v); }
 void apply_sampler_multi_loop(float v) { apply_tone_live_track(PARAM_SAMPLER_MULTI_LOOP, v); }
+#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
+void apply_stream_cal_case(float v)
+{
+    brick6_stream_calibration_select_case((uint8_t)(clamp_value(v, 0.0f, 14.0f) + 0.5f));
+}
+#endif
 void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
 void apply_midi_cc1_2(float v) { apply_tone_live_track(PARAM_MIDI_CC1_2, v); }
 void apply_midi_cc1_3(float v) { apply_tone_live_track(PARAM_MIDI_CC1_3, v); }

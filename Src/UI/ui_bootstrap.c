@@ -19,11 +19,9 @@
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_lowcost_button_test.h"
-#include "pages/ui_page_stream_calibration.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 #include "lowcost_button_test_config.h"
-#include "Core/stream_calibration.h"
 
 /* Keep the stable page-ID slot formerly occupied by the removed standalone UI. */
 static const ui_page_t g_ui_page_reserved_legacy_slot = { 0 };
@@ -62,11 +60,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_template_macro);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
-#if BRICK6_STREAM_CALIBRATION
-    ui_page_manager_register(&g_ui_page_stream_calibration);
-#else
     ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
-#endif
     ui_page_manager_register(&g_ui_page_audio_rec);
     ui_page_manager_register(&g_ui_page_rec_edit);
     ui_page_manager_register(&g_ui_page_patch_assign);
@@ -80,9 +74,5 @@ void ui_bootstrap_init(void)
 #endif
     ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
 
-#if BRICK6_STREAM_CALIBRATION
-    ui_page_set(UI_PAGE_STREAM_CALIBRATION);
-#else
     ui_page_set(UI_PAGE_CALIBRATION);
-#endif
 }
