@@ -20,7 +20,8 @@
 #define SAMPLE_STREAM_IO_MAX_CHUNK_BYTES (32768U)
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
 #define SAMPLE_STREAM_IO_READ_SCRATCH_BYTES \
-    (SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES)
+    (((SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES + 31U) / 32U) * 32U)
+#define SAMPLE_STREAM_IO_SCRATCH_COUNT (2U)
 
 _Static_assert(SAMPLE_STREAM_IO_READ_SCRATCH_BYTES >= (SAMPLE_PAGE_BYTES + 511U),
                "Physical reads require one page plus sector alignment headroom");
@@ -48,8 +49,17 @@ SDRAM_STREAM_SERVICE static sample_stream_io_reader_t
     g_sample_stream_io_readers[SAMPLE_STREAM_IO_MAX_READERS];
 SDRAM_STREAM_SERVICE static char
     g_sample_stream_io_paths[SAMPLE_STREAM_IO_MAX_READERS][SAMPLE_PAGE_CACHE_PATH_MAX];
-SDRAM_STREAM_SCRATCH static uint8_t
-    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_READ_SCRATCH_BYTES];
+typedef enum
+{
+    SAMPLE_STREAM_IO_SCRATCH_FREE = 0,
+    SAMPLE_STREAM_IO_SCRATCH_DMA,
+    SAMPLE_STREAM_IO_SCRATCH_RAW_READY,
+    SAMPLE_STREAM_IO_SCRATCH_DECODING
+} sample_stream_io_scratch_state_t;
+
+SDRAM_STREAM_SCRATCH __attribute__((aligned(32))) static uint8_t
+    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_SCRATCH_COUNT]
+                                   [SAMPLE_STREAM_IO_READ_SCRATCH_BYTES];
 SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_io_page_scratch[SAMPLE_PAGE_BYTES];
 typedef struct
 {
@@ -61,11 +71,16 @@ typedef struct
     sample_stream_backend_physical_async_t physical;
     const uint8_t *source;
     uint32_t media_epoch;
+    uint32_t order;
+    uint8_t *scratch;
+    uint8_t scratch_index;
+    uint8_t state;
     uint8_t active;
-    uint8_t completed;
     uint8_t physical_active;
 } sample_stream_io_async_t;
-SDRAM_STREAM_SERVICE static sample_stream_io_async_t g_sample_stream_io_async;
+SDRAM_STREAM_SERVICE static sample_stream_io_async_t
+    g_sample_stream_io_async[SAMPLE_STREAM_IO_SCRATCH_COUNT];
+static uint32_t g_sample_stream_io_next_order;
 static sample_audio_key_t g_sample_stream_io_cache_key;
 static uint32_t g_sample_stream_io_cache_registration_epoch;
 static FSIZE_t g_sample_stream_io_cache_offset;
@@ -267,7 +282,8 @@ void sample_stream_io_init(void)
 {
     memset(g_sample_stream_io_readers, 0, sizeof(g_sample_stream_io_readers));
     memset(g_sample_stream_io_paths, 0, sizeof(g_sample_stream_io_paths));
-    memset(&g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
+    memset(g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
+    g_sample_stream_io_next_order = 1U;
     sd_block_device_async_init();
     sample_stream_io_invalidate_read_cache();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
@@ -330,42 +346,50 @@ sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void)
 
 static void sample_stream_io_decode_async(void)
 {
-    if (g_sample_stream_io_async.result.load_result != SAMPLE_PAGE_LOAD_OK)
+    sample_stream_io_async_t *async = 0;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        if ((g_sample_stream_io_async[i].active != 0U)
+            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DECODING))
+        {
+            async = &g_sample_stream_io_async[i];
+            break;
+        }
+    }
+    if ((async == 0) || (async->result.load_result != SAMPLE_PAGE_LOAD_OK))
     {
         return;
     }
     sample_page_load_target_t current_target;
-    if ((g_sample_stream_io_async.media_epoch != sd_access_media_epoch())
+    if ((async->media_epoch != sd_access_media_epoch())
         || (sample_page_cache_resolve_loading_target(
-                &g_sample_stream_io_async.command.token, &current_target) == 0U)
+                &async->command.token, &current_target) == 0U)
         || (current_target.frames_interleaved
-            != g_sample_stream_io_async.target.frames_interleaved)
+            != async->target.frames_interleaved)
         || (current_target.page_generation
-            != g_sample_stream_io_async.target.page_generation)
+            != async->target.page_generation)
         || (current_target.registration_epoch
-            != g_sample_stream_io_async.target.registration_epoch))
+            != async->target.registration_epoch))
     {
-        g_sample_stream_io_async.result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+        async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
-    g_sample_stream_io_async.target = current_target;
+    async->target = current_target;
     const uint32_t decode_begin = DWT->CYCCNT;
-    g_sample_stream_io_async.result.load_result = sample_stream_decoder_decode_page(
-        &g_sample_stream_io_async.command.stream_info,
-        &g_sample_stream_io_async.target,
-        g_sample_stream_io_async.source,
-        g_sample_stream_io_async.result.source_bytes);
-    g_sample_stream_io_async.result.decode_cycles = DWT->CYCCNT - decode_begin;
+    async->result.load_result = sample_stream_decoder_decode_page(
+        &async->command.stream_info, &async->target, async->source,
+        async->result.source_bytes);
+    async->result.decode_cycles = DWT->CYCCNT - decode_begin;
 }
 
-static void sample_stream_io_run_fatfs_fallback(void)
+static void sample_stream_io_run_fatfs_fallback(sample_stream_io_async_t *async)
 {
-    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
     const sample_stream_io_command_t *const command = &async->command;
     sample_stream_io_result_t *const result = &async->result;
     sample_stream_io_reader_t *const reader = async->reader;
     const uint32_t source_bytes = result->source_bytes;
     async->source = g_sample_stream_io_page_scratch;
+    sample_stream_io_invalidate_read_cache();
 
     if ((reader == 0) || (sample_stream_io_open_reader(reader, &result->fatfs_ops) == 0U))
     {
@@ -403,7 +427,7 @@ static void sample_stream_io_run_fatfs_fallback(void)
                 available = needed;
             }
             memcpy(&g_sample_stream_io_page_scratch[bytes_read],
-                   &g_sample_stream_io_read_scratch[cache_position], available);
+                   &async->scratch[cache_position], available);
             bytes_read += available;
             result->read_cache_hits++;
             continue;
@@ -443,7 +467,7 @@ static void sample_stream_io_run_fatfs_fallback(void)
         UINT actual = 0U;
         result->fatfs_ops++;
         result->physical_reads++;
-        if ((f_read(&reader->file, g_sample_stream_io_read_scratch, request, &actual) != FR_OK)
+        if ((f_read(&reader->file, async->scratch, request, &actual) != FR_OK)
             || (actual != request))
         {
             result->fatfs_ops += sample_stream_io_close_reader(reader);
@@ -463,13 +487,36 @@ static void sample_stream_io_run_fatfs_fallback(void)
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
 {
-    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
-    if ((command == 0) || (async->active != 0U))
+    sample_stream_io_async_t *async = 0;
+    if (command == 0)
     {
         return 0U;
     }
-    memset(async, 0, sizeof(*async));
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        if ((g_sample_stream_io_async[i].active != 0U)
+            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DMA))
+        {
+            return 0U;
+        }
+    }
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        if (g_sample_stream_io_async[i].active == 0U)
+        {
+            async = &g_sample_stream_io_async[i];
+            memset(async, 0, sizeof(*async));
+            async->scratch = g_sample_stream_io_read_scratch[i];
+            async->scratch_index = (uint8_t)i;
+            break;
+        }
+    }
+    if (async == 0)
+    {
+        return 0U;
+    }
     async->active = 1U;
+    async->order = g_sample_stream_io_next_order++;
     async->media_epoch = sd_access_media_epoch();
     async->command = *command;
     async->result.token = command->token;
@@ -486,7 +533,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
         || (async->target.format != command->target.format)
         || (async->target.stride_floats != command->target.stride_floats))
     {
-        async->completed = 1U;
+        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
         return 1U;
     }
 
@@ -495,7 +542,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     if ((async->result.source_bytes == 0U)
         || (async->result.source_bytes > SAMPLE_PAGE_BYTES))
     {
-        async->completed = 1U;
+        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
         return 1U;
     }
     async->reader = sample_stream_io_get_reader(command);
@@ -509,27 +556,54 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
                 &async->command.stream_info,
                 &async->target,
                 cursor,
-                g_sample_stream_io_read_scratch,
-                sizeof(g_sample_stream_io_read_scratch)) != 0U))
+                async->scratch,
+                SAMPLE_STREAM_IO_READ_SCRATCH_BYTES) != 0U))
     {
         async->physical_active = 1U;
+        async->state = SAMPLE_STREAM_IO_SCRATCH_DMA;
         return 1U;
     }
 
-    sample_stream_io_run_fatfs_fallback();
-    sample_stream_io_decode_async();
-    async->completed = 1U;
+    sample_stream_io_run_fatfs_fallback(async);
+    async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
     return 1U;
 }
 
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
 {
-    sample_stream_io_async_t *const async = &g_sample_stream_io_async;
-    if ((out_result == 0) || (async->active == 0U))
+    sample_stream_io_async_t *async = 0;
+    if (out_result == 0)
     {
         return 0U;
     }
-    if ((async->completed == 0U) && (async->physical_active != 0U))
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        sample_stream_io_async_t *const candidate = &g_sample_stream_io_async[i];
+        if ((candidate->active != 0U)
+            && (candidate->state == SAMPLE_STREAM_IO_SCRATCH_RAW_READY)
+            && ((async == 0) || (candidate->order < async->order)))
+        {
+            async = candidate;
+        }
+    }
+    if (async != 0)
+    {
+        async->state = SAMPLE_STREAM_IO_SCRATCH_DECODING;
+        sample_stream_io_decode_async();
+        *out_result = async->result;
+        memset(async, 0, sizeof(*async));
+        return 1U;
+    }
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        if ((g_sample_stream_io_async[i].active != 0U)
+            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DMA))
+        {
+            async = &g_sample_stream_io_async[i];
+            break;
+        }
+    }
+    if ((async != 0) && (async->physical_active != 0U))
     {
         sample_page_load_result_t physical_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         if (sample_stream_backend_physical_poll(
@@ -555,25 +629,22 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
                 ? &async->reader->physical_cursor : &async->local_physical_cursor;
             memset(cursor, 0, sizeof(*cursor));
             async->reader = sample_stream_io_get_reader(&async->command);
-            sample_stream_io_run_fatfs_fallback();
+            sample_stream_io_run_fatfs_fallback(async);
         }
-        sample_stream_io_decode_async();
-        async->completed = 1U;
-    }
-    if (async->completed == 0U)
-    {
+        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
         return 0U;
     }
-    *out_result = async->result;
-    memset(async, 0, sizeof(*async));
-    return 1U;
+    return 0U;
 }
 
 void sample_stream_io_cancel(void)
 {
-    if (g_sample_stream_io_async.physical_active != 0U)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
     {
-        sample_stream_backend_physical_cancel(&g_sample_stream_io_async.physical);
+        if (g_sample_stream_io_async[i].physical_active != 0U)
+        {
+            sample_stream_backend_physical_cancel(&g_sample_stream_io_async[i].physical);
+        }
     }
-    memset(&g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
+    memset(g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
 }

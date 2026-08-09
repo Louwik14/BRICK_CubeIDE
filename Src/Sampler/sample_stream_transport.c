@@ -22,17 +22,23 @@ typedef struct
     sample_stream_io_result_t result;
 } sample_stream_transport_mailbox_t;
 
+#define SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT (2U)
+
 SDRAM_STREAM_SERVICE static sample_stream_transport_mailbox_t
-    g_sample_stream_transport_mailbox;
+    g_sample_stream_transport_mailbox[SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT];
 static sample_stream_transport_stats_t g_sample_stream_transport_stats;
 
 void sample_stream_transport_init(void)
 {
-    memset(&g_sample_stream_transport_mailbox, 0,
+    memset(g_sample_stream_transport_mailbox, 0,
            sizeof(g_sample_stream_transport_mailbox));
     memset(&g_sample_stream_transport_stats, 0,
            sizeof(g_sample_stream_transport_stats));
-    g_sample_stream_transport_mailbox.abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
+    {
+        g_sample_stream_transport_mailbox[i].abi_version =
+            SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
+    }
     g_sample_stream_transport_stats.next_sequence = 1U;
     __DMB();
 }
@@ -45,7 +51,16 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
         return 0U;
     }
     __DMB();
-    if (g_sample_stream_transport_mailbox.state != SAMPLE_STREAM_TRANSPORT_EMPTY)
+    sample_stream_transport_mailbox_t *mailbox = 0;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
+    {
+        if (g_sample_stream_transport_mailbox[i].state == SAMPLE_STREAM_TRANSPORT_EMPTY)
+        {
+            mailbox = &g_sample_stream_transport_mailbox[i];
+            break;
+        }
+    }
+    if (mailbox == 0)
     {
         g_sample_stream_transport_stats.busy_rejections++;
         return 0U;
@@ -56,11 +71,11 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
     {
         sequence = g_sample_stream_transport_stats.next_sequence++;
     }
-    g_sample_stream_transport_mailbox.abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
-    g_sample_stream_transport_mailbox.sequence = sequence;
-    g_sample_stream_transport_mailbox.command = *command;
+    mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
+    mailbox->sequence = sequence;
+    mailbox->command = *command;
     __DMB();
-    g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_COMMAND_READY;
+    mailbox->state = SAMPLE_STREAM_TRANSPORT_COMMAND_READY;
     __DMB();
     g_sample_stream_transport_stats.submitted++;
     *out_sequence = sequence;
@@ -70,54 +85,55 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
 void sample_stream_transport_worker_poll(void)
 {
     __DMB();
-    if (g_sample_stream_transport_mailbox.state == SAMPLE_STREAM_TRANSPORT_IO_ACTIVE)
+    sample_stream_transport_mailbox_t *ready = 0;
+    sample_stream_transport_mailbox_t *active = 0;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
     {
-        if (sample_stream_io_poll(&g_sample_stream_transport_mailbox.result) == 0U)
+        sample_stream_transport_mailbox_t *const mailbox =
+            &g_sample_stream_transport_mailbox[i];
+        if ((mailbox->state == SAMPLE_STREAM_TRANSPORT_COMMAND_READY)
+            && ((ready == 0) || (mailbox->sequence < ready->sequence)))
         {
-            return;
+            ready = mailbox;
         }
-        __DMB();
-        g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
-        __DMB();
-        return;
+        if ((mailbox->state == SAMPLE_STREAM_TRANSPORT_IO_ACTIVE)
+            && ((active == 0) || (mailbox->sequence < active->sequence)))
+        {
+            active = mailbox;
+        }
     }
-    if (g_sample_stream_transport_mailbox.state != SAMPLE_STREAM_TRANSPORT_COMMAND_READY)
-    {
-        return;
-    }
-    memset(&g_sample_stream_transport_mailbox.result, 0,
-           sizeof(g_sample_stream_transport_mailbox.result));
-    if (g_sample_stream_transport_mailbox.abi_version
-        != SAMPLE_STREAM_TRANSPORT_ABI_VERSION)
+
+    if ((ready != 0) && (ready->abi_version != SAMPLE_STREAM_TRANSPORT_ABI_VERSION))
     {
         g_sample_stream_transport_stats.protocol_errors++;
-        g_sample_stream_transport_mailbox.result.token =
-            g_sample_stream_transport_mailbox.command.token;
-        g_sample_stream_transport_mailbox.result.load_result =
-            SAMPLE_PAGE_LOAD_INVALID_ARG;
+        ready->result.token = ready->command.token;
+        ready->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+        ready->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
+        ready = 0;
     }
-    else
+    if (ready != 0)
     {
-        if (sample_stream_io_begin(&g_sample_stream_transport_mailbox.command) == 0U)
+        memset(&ready->result, 0, sizeof(ready->result));
+        if (sample_stream_io_begin(&ready->command) != 0U)
         {
-            g_sample_stream_transport_mailbox.result.token =
-                g_sample_stream_transport_mailbox.command.token;
-            g_sample_stream_transport_mailbox.result.load_result =
-                SAMPLE_PAGE_LOAD_INVALID_ARG;
-        }
-        else
-        {
-            g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_IO_ACTIVE;
-            __DMB();
-            if (sample_stream_io_poll(&g_sample_stream_transport_mailbox.result) == 0U)
+            ready->state = SAMPLE_STREAM_TRANSPORT_IO_ACTIVE;
+            if ((active == 0) || (ready->sequence < active->sequence))
             {
-                return;
+                active = ready;
             }
         }
     }
-    __DMB();
-    g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
-    __DMB();
+
+    if (active != 0)
+    {
+        sample_stream_io_result_t result;
+        if (sample_stream_io_poll(&result) != 0U)
+        {
+            active->result = result;
+            active->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
+            __DMB();
+        }
+    }
 }
 
 uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
@@ -128,17 +144,27 @@ uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
         return 0U;
     }
     __DMB();
-    if ((g_sample_stream_transport_mailbox.state
-         != SAMPLE_STREAM_TRANSPORT_RESULT_READY)
-        || (g_sample_stream_transport_mailbox.sequence != expected_sequence))
+    sample_stream_transport_mailbox_t *mailbox = 0;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
+    {
+        if ((g_sample_stream_transport_mailbox[i].state
+             == SAMPLE_STREAM_TRANSPORT_RESULT_READY)
+            && (g_sample_stream_transport_mailbox[i].sequence == expected_sequence))
+        {
+            mailbox = &g_sample_stream_transport_mailbox[i];
+            break;
+        }
+    }
+    if (mailbox == 0)
     {
         return 0U;
     }
-    *out_result = g_sample_stream_transport_mailbox.result;
+    *out_result = mailbox->result;
     g_sample_stream_transport_stats.completed_sequence = expected_sequence;
     g_sample_stream_transport_stats.completed++;
     __DMB();
-    g_sample_stream_transport_mailbox.state = SAMPLE_STREAM_TRANSPORT_EMPTY;
+    memset(mailbox, 0, sizeof(*mailbox));
+    mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
     __DMB();
     return 1U;
 }

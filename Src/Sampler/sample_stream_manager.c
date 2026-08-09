@@ -45,7 +45,8 @@ typedef struct
     uint8_t active;
 } sample_stream_manager_pending_io_t;
 SDRAM_STREAM_SERVICE static sample_stream_manager_pending_io_t
-    g_sample_stream_manager_pending_io;
+    g_sample_stream_manager_pending_io[2];
+static uint8_t g_sample_stream_manager_pending_count;
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
 static uint8_t g_calibration_voice_id = UINT8_MAX;
 static uint32_t g_calibration_voice_generation;
@@ -103,8 +104,9 @@ void sample_stream_manager_reset(void)
     sample_stream_manager_init_storage_once();
     sample_stream_io_reset();
     sample_stream_transport_init();
-    memset(&g_sample_stream_manager_pending_io, 0,
+    memset(g_sample_stream_manager_pending_io, 0,
            sizeof(g_sample_stream_manager_pending_io));
+    g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
     sample_stream_event_trace_reset();
     brick6_stream_underrun_trace_reset();
@@ -515,28 +517,39 @@ void sample_stream_manager_service(uint32_t byte_budget)
         sample_stream_needs_registry_count_active(),
         0U);
 
-    if (g_sample_stream_manager_pending_io.active != 0U)
+    if (g_sample_stream_manager_pending_count != 0U)
     {
         sample_stream_io_result_t pending_result;
         sample_stream_transport_worker_poll();
         if (sample_stream_transport_take_result(
-                g_sample_stream_manager_pending_io.transport_sequence,
-                &pending_result) == 0U)
+                g_sample_stream_manager_pending_io[0].transport_sequence,
+                &pending_result) != 0U)
+        {
+            const uint8_t finished = sample_stream_manager_finish_io(
+                &g_sample_stream_manager_pending_io[0], &pending_result);
+            if (g_sample_stream_manager_pending_count > 1U)
+            {
+                g_sample_stream_manager_pending_io[0] =
+                    g_sample_stream_manager_pending_io[1];
+            }
+            memset(&g_sample_stream_manager_pending_io[
+                       g_sample_stream_manager_pending_count - 1U],
+                   0, sizeof(g_sample_stream_manager_pending_io[0]));
+            --g_sample_stream_manager_pending_count;
+            pages_this_call = (finished != 0U) ? 1U : 0U;
+            brick6_stream_underrun_trace_manager_end(
+                pages_this_call, g_sample_stream_service_fatfs_ops,
+                (finished != 0U) ? BRICK6_STREAM_TRACE_REASON_NONE
+                                 : BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
+            return;
+        }
+        if (g_sample_stream_manager_pending_count >= 2U)
         {
             brick6_stream_underrun_trace_manager_end(
                 0U, g_sample_stream_service_fatfs_ops,
                 BRICK6_STREAM_TRACE_REASON_NONE);
             return;
         }
-        const uint8_t finished = sample_stream_manager_finish_io(
-            &g_sample_stream_manager_pending_io, &pending_result);
-        g_sample_stream_manager_pending_io.active = 0U;
-        pages_this_call = (finished != 0U) ? 1U : 0U;
-        brick6_stream_underrun_trace_manager_end(
-            pages_this_call, g_sample_stream_service_fatfs_ops,
-            (finished != 0U) ? BRICK6_STREAM_TRACE_REASON_NONE
-                             : BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
-        return;
     }
 
     sample_stream_scheduler_begin_round();
@@ -630,8 +643,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
             continue;
         }
         brick6_stream_underrun_trace_io_begin(&candidate, &io_command);
-        sample_stream_manager_pending_io_t *const pending =
-            &g_sample_stream_manager_pending_io;
+        sample_stream_manager_pending_io_t *pending =
+            &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
         memset(pending, 0, sizeof(*pending));
         pending->candidate = candidate;
         pending->target = target;
@@ -655,15 +668,28 @@ void sample_stream_manager_service(uint32_t byte_budget)
             return;
         }
         pending->active = 1U;
+        ++g_sample_stream_manager_pending_count;
         sample_stream_transport_worker_poll();
         if (sample_stream_transport_take_result(
-                pending->transport_sequence, &io_result) == 0U)
+                g_sample_stream_manager_pending_io[0].transport_sequence,
+                &io_result) == 0U)
         {
             brick6_stream_underrun_trace_manager_end(
                 pages_this_call, g_sample_stream_service_fatfs_ops,
                 BRICK6_STREAM_TRACE_REASON_NONE);
             return;
         }
+        sample_stream_manager_pending_io_t completed_pending =
+            g_sample_stream_manager_pending_io[0];
+        if (g_sample_stream_manager_pending_count > 1U)
+        {
+            g_sample_stream_manager_pending_io[0] =
+                g_sample_stream_manager_pending_io[1];
+        }
+        --g_sample_stream_manager_pending_count;
+        memset(&g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count],
+               0, sizeof(g_sample_stream_manager_pending_io[0]));
+        pending = &completed_pending;
         pending->active = 0U;
         if (io_result.read_bytes > consumed)
         {
@@ -736,7 +762,7 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
 
 uint8_t sample_stream_manager_io_in_flight(void)
 {
-    return g_sample_stream_manager_pending_io.active;
+    return (g_sample_stream_manager_pending_count != 0U) ? 1U : 0U;
 }
 
 #if defined(BRICK6_MULTI_STREAM_DIAG)
