@@ -1124,6 +1124,10 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         options.rate = rate;
         options.reverse = 0U;
         options.loop_mode = out_source->loop_mode;
+        options.min_ready_frames = sample_audio_format_multi_presocle_pages(
+                                       sample_audio_format_or_stereo(out_source->format))
+                                   * sample_audio_format_frames_per_page(
+                                       sample_audio_format_or_stereo(out_source->format));
     }
     else
     {

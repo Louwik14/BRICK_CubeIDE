@@ -277,13 +277,16 @@ static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
         return result;
     }
 
-    const uint32_t contract_frames =
-        (total_frames < SAMPLE_PREP_MIN_READY_FRAMES) ? total_frames
-                                                       : SAMPLE_PREP_MIN_READY_FRAMES;
     const sample_audio_format_t format = sample_audio_format_or_stereo(
         sample_audio_format_from_channels(channels));
     result.start_first = 0U;
-    result.start_last = sample_audio_format_page_index_from_frame(format, contract_frames - 1U);
+    uint32_t start_pages = sample_audio_format_multi_presocle_pages(format);
+    const uint32_t total_pages = sample_audio_format_required_page_count(format, total_frames);
+    if (start_pages > total_pages)
+    {
+        start_pages = total_pages;
+    }
+    result.start_last = start_pages - 1U;
     uint32_t pages = result.start_last + 1U;
 
     if ((has_loop != 0U) && (loop_end > loop_begin) && (loop_end <= total_frames))
