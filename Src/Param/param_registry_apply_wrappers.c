@@ -143,7 +143,7 @@ void apply_sampler_multi_loop(float v) { apply_tone_live_track(PARAM_SAMPLER_MUL
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
 void apply_stream_cal_case(float v)
 {
-    brick6_stream_calibration_select_case((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
+    brick6_stream_calibration_select_case((uint8_t)(clamp_value(v, 0.0f, 14.0f) + 0.5f));
 }
 #endif
 void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
