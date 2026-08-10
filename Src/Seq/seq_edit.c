@@ -72,6 +72,32 @@ static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
+static uint8_t seq_edit_play_slot_decode(seq_track_id_t track,
+                                         seq_param_slot_t param_slot,
+                                         uint8_t *out_voice,
+                                         seq_step_play_field_t *out_field,
+                                         param_id_t *out_param)
+{
+    if ((out_voice == NULL) || (out_field == NULL) || (out_param == NULL)
+            || (param_slot >= SEQ_PARAM_PLAY_SLOT_COUNT)
+            || (seq_param_iface_slot_to_param(track,
+                                              (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                              param_slot,
+                                              out_param) == 0U))
+    {
+        return 0U;
+    }
+    *out_voice = (uint8_t)(param_slot / (seq_param_slot_t)SEQ_STEP_PLAY_FIELD_COUNT);
+    *out_field = (seq_step_play_field_t)(param_slot % (seq_param_slot_t)SEQ_STEP_PLAY_FIELD_COUNT);
+    return (*out_voice < SEQ_STEP_PLAY_VOICE_COUNT) ? 1U : 0U;
+}
+
+static int16_t seq_edit_play_value_decode(param_id_t param, seq_value16_t value16)
+{
+    const float value = seq_param_iface_decode_param_value(param, value16);
+    return (int16_t)(value + ((value >= 0.0f) ? 0.5f : -0.5f));
+}
+
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
 {
     seq_lane_descriptor_t descriptor;
@@ -234,7 +260,7 @@ static uint8_t seq_edit_lowcost_step_has_play_param(seq_track_id_t track,
     seq_param_slot_t slot = 0U;
     seq_plock_entry_t entry;
     return ((seq_param_iface_param_to_slot(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param, &slot) != 0U)
-            && (seq_model_step_plock_find(track, step, (uint8_t)SEQ_PLOCK_SET_PLAY, slot, &entry) != 0U))
+            && (seq_edit_step_plock_find(track, step, (uint8_t)SEQ_PLOCK_SET_PLAY, slot, &entry) != 0U))
         ? 1U
         : 0U;
 }
@@ -348,7 +374,7 @@ static uint8_t seq_edit_lowcost_apply_length_to_voice(seq_track_id_t track,
 
     const seq_value16_t encoded = seq_param_iface_encode_param_value(len_param, (float)length_steps);
     const seq_plock_op_status_t status =
-        seq_model_step_plock_upsert(track, step, (uint8_t)SEQ_PLOCK_SET_PLAY, len_slot, encoded, 0U);
+        seq_edit_step_plock_upsert(track, step, (uint8_t)SEQ_PLOCK_SET_PLAY, len_slot, encoded, 0U);
 
     return seq_edit_step_plock_upsert_succeeded(status);
 }
@@ -481,7 +507,7 @@ static void seq_edit_apply_short_action(uint8_t hall)
             seq_edit_finish_snapshot_undo(undo_started);
             return;
         }
-        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
+        const seq_plock_op_status_t status = seq_edit_step_plock_upsert(track,
                                                                           step,
                                                                           (uint8_t)SEQ_PLOCK_SET_PLAY,
                                                                           note_slot,
@@ -869,6 +895,24 @@ uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_param_slot_t param_slot,
                                  seq_plock_entry_t *out_entry)
 {
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+    {
+        uint8_t voice = 0U;
+        seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+        param_id_t param = PARAM_COUNT;
+        int16_t value = 0;
+        if ((out_entry == NULL)
+                || (seq_edit_play_slot_decode(track, param_slot, &voice, &field, &param) == 0U)
+                || (seq_model_step_play_get(track, step, voice, field, &value) == 0U))
+        {
+            return 0U;
+        }
+        *out_entry = (seq_plock_entry_t){ .next = UINT16_MAX,
+            .param_slot = param_slot, .set_id = set_id,
+            .value16 = seq_param_iface_encode_param_value(param, (float)value),
+            .flags = 0U, .reserved = 0U };
+        return 1U;
+    }
     return seq_model_step_plock_find(track, step, set_id, param_slot, out_entry);
 }
 
@@ -882,6 +926,26 @@ seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
     if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
         return SEQ_PLOCK_OP_INVALID;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+    {
+        uint8_t voice = 0U;
+        seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+        param_id_t param = PARAM_COUNT;
+        int16_t previous = 0;
+        if (seq_edit_play_slot_decode(track, param_slot, &voice, &field, &param) == 0U)
+        {
+            return SEQ_PLOCK_OP_INVALID;
+        }
+        const uint8_t existed = seq_model_step_play_get(track, step, voice, field, &previous);
+        if (seq_model_step_play_set(track, step, voice, field,
+                                    seq_edit_play_value_decode(param, value16)) == 0U)
+        {
+            return SEQ_PLOCK_OP_INVALID;
+        }
+        (void)flags;
+        return (existed != 0U) ? SEQ_PLOCK_OP_UPDATED : SEQ_PLOCK_OP_CREATED;
     }
 
     return seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
@@ -918,6 +982,19 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
     if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
         return SEQ_PLOCK_OP_INVALID;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+    {
+        uint8_t voice = 0U;
+        seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+        param_id_t param = PARAM_COUNT;
+        if (seq_edit_play_slot_decode(track, param_slot, &voice, &field, &param) == 0U)
+        {
+            return SEQ_PLOCK_OP_INVALID;
+        }
+        return (seq_model_step_play_delete(track, step, voice, field) != 0U)
+            ? SEQ_PLOCK_OP_DELETED : SEQ_PLOCK_OP_NOT_FOUND;
     }
 
     const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param_slot);

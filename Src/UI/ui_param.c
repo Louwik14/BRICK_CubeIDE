@@ -1717,7 +1717,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             applied_count--;
             if (had_prior_entry[applied_count] != 0U)
             {
-                (void)seq_model_step_plock_upsert(param_track,
+                (void)seq_edit_step_plock_upsert(param_track,
                                                   held_steps[applied_count],
                                                   set_id,
                                                   param_slot,
@@ -1726,7 +1726,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             }
             else
             {
-                (void)seq_model_step_plock_delete(param_track,
+                (void)seq_edit_step_plock_delete(param_track,
                                                   held_steps[applied_count],
                                                   set_id,
                                                   param_slot);
