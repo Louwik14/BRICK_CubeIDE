@@ -30,7 +30,7 @@ option(BRICK6_STREAM_UNDERRUN_TRACE
 option(BRICK6_STREAM_CALIBRATION "Enable manual streamer calibration cases in Multi TONE" OFF)
 set(BRICK6_STREAM_CALIBRATION_PAGE_KIB "32" CACHE STRING
     "Streamer calibration page size (32 KiB)")
-set(BRICK6_STREAM_READ_CHUNK_KIB "16" CACHE STRING
+set(BRICK6_STREAM_READ_CHUNK_KIB "32" CACHE STRING
     "Streamer application read quantum in KiB")
 if(BRICK6_STREAM_CALIBRATION
    AND NOT BRICK6_STREAM_CALIBRATION_PAGE_KIB STREQUAL "32")
@@ -41,21 +41,13 @@ if(BRICK6_STREAM_CALIBRATION
     message(FATAL_ERROR "BRICK6_STREAM_READ_CHUNK_KIB must be 4, 8, 16 or 32")
 endif()
 
-if(BRICK6_VARIANT STREQUAL "lowcost")
-    set(BRICK6_STREAM_PRODUCT_PAGE_KIB 32)
-    set(BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB 32)
-    set(BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES 2)
-    set(BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES 3)
-    set(BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES 2)
-    set(BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST 1)
-else()
-    set(BRICK6_STREAM_PRODUCT_PAGE_KIB 16)
-    set(BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB 16)
-    set(BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES 6)
-    set(BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES 6)
-    set(BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES 0)
-    set(BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST 0)
-endif()
+# Common sampler/streamer product contract. Board variants only adapt hardware.
+set(BRICK6_STREAM_PRODUCT_PAGE_KIB 32)
+set(BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB 32)
+set(BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES 2)
+set(BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES 3)
+set(BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES 2)
+set(BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST 1)
 if(BRICK6_STREAM_CALIBRATION)
     set(BRICK6_STREAM_EFFECTIVE_READ_CHUNK_KIB ${BRICK6_STREAM_READ_CHUNK_KIB})
 else()
@@ -616,11 +608,11 @@ set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
-# Audio Low-Cost: keep LTO scoped to audio, DSP/modulation and synth runtime.
+# Common audio engine: keep LTO scoped to audio, DSP/modulation and synth runtime.
 set(AUDIO_ALL_SOURCES ${SRC_AUDIO_SRC})
 list(FILTER AUDIO_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 
-set(LOWCOST_AUDIO_LTO_SOURCES
+set(AUDIO_LTO_SOURCES
     ${AUDIO_ALL_SOURCES} ${CMSIS_DSP_SRC} ${SRC_MOD_SRC}
     ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
@@ -635,10 +627,10 @@ set(LOWCOST_AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/synth_polyphony.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
 )
-set_source_files_properties(${LOWCOST_AUDIO_LTO_SOURCES} PROPERTIES
+set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
-set(LOWCOST_AUDIO_O3_SOURCES
+set(AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
@@ -651,7 +643,7 @@ set(LOWCOST_AUDIO_O3_SOURCES
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
 )
-set_source_files_properties(${LOWCOST_AUDIO_O3_SOURCES} PROPERTIES
+set_source_files_properties(${AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
@@ -669,20 +661,17 @@ set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
     COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
 )
 
-# Low-Cost only: hot sampler render code reached from the audio block.
+# Hot sampler render code reached from the common audio block.
 # Keep sample_cache/sample_stream_manager and the other Sampler sources out:
 # they also own SD/FatFs, refill, page scheduling or asynchronous state.
-if(BRICK6_VARIANT STREQUAL "lowcost")
-    set(LOWCOST_SAMPLE_RENDER_HOT_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/voice_manager.c"
-    )
-    set_source_files_properties(${LOWCOST_SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
-        COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-    )
-
-endif()
+set(SAMPLE_RENDER_HOT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/voice_manager.c"
+)
+set_source_files_properties(${SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
+)
 
 # Storage en O0 : fichiers C et C++ du dossier Src/Storage
 set(STORAGE_ALL_SOURCES ${SRC_STORAGE_SRC})

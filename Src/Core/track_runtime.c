@@ -36,9 +36,7 @@ volatile uint32_t g_track_runtime_refresh_track_count[SEQ_LANE_CAPACITY];
 typedef struct
 {
     uint8_t drum_used;
-#if defined(BRICK6_VARIANT_LOWCOST)
     uint8_t looper_used;
-#endif
 } track_runtime_allocator_state_t;
 
 static void track_runtime_rebuild_mix_track_reverse_map(void)
@@ -838,7 +836,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
     if (type == TRACK_RUNTIME_TYPE_LOOPER)
     {
-#if defined(BRICK6_VARIANT_LOWCOST)
         if (allocator->looper_used >= BRICK6_LOOPER_GLOBAL_CAP)
         {
             track_runtime_set_quota_blocked(ctx);
@@ -846,9 +843,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         }
         allocator->looper_used++;
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_LOOPER, 0U);
-#else
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_LOOPER, ctx->track_id);
-#endif
         return;
     }
 
@@ -1270,7 +1264,6 @@ void track_runtime_refresh_track(uint8_t track)
 
         g_track_runtime_refresh_track_count[track]++;
         track_runtime_prepare_ctx_base(track, &next_ctx);
-#if defined(BRICK6_VARIANT_LOWCOST)
         for (uint8_t other = 0U; other < SEQ_TRACK_COUNT; ++other)
         {
             if ((other != track)
@@ -1281,7 +1274,6 @@ void track_runtime_refresh_track(uint8_t track)
                 break;
             }
         }
-#endif
         track_runtime_mark_used_mix_tracks_except(track,
                                                   mix_track_used,
                                                   (uint8_t)sizeof(mix_track_used));

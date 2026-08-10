@@ -72,7 +72,7 @@ typedef enum
 /* Multi page-window reserve; Stream admits at most 8 active voices. */
 #define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES
 #ifndef BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES
-#define BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES (0U)
+#define BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES (2U)
 #endif
 
 /* Product page-cache budget: keep this margin outside Multi slot presocle pages. */

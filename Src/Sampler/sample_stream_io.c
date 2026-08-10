@@ -15,7 +15,7 @@
 
 #define SAMPLE_STREAM_IO_FILE_OPEN_COOKIE (0x5354524DU)
 #ifndef BRICK6_STREAM_READ_CHUNK_KIB
-#define BRICK6_STREAM_READ_CHUNK_KIB (16U)
+#define BRICK6_STREAM_READ_CHUNK_KIB (32U)
 #endif
 #define SAMPLE_STREAM_IO_MAX_CHUNK_BYTES (32768U)
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
@@ -288,7 +288,7 @@ void sample_stream_io_init(void)
     sample_stream_io_invalidate_read_cache();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
     {
-        g_sample_stream_io_chunk_kib = SAMPLE_STREAM_READ_CHUNK_16_KIB;
+        g_sample_stream_io_chunk_kib = SAMPLE_STREAM_READ_CHUNK_32_KIB;
     }
 }
 

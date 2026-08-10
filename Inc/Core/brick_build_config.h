@@ -15,14 +15,8 @@
 #error "A supported BRICK6 variant must be selected"
 #endif
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define BRICK6_LOOPER_GLOBAL_CAP 1U
 #define BRICK6_LOOPER_RAW_SLOT_CAP 1U
 #define BRICK6_LOOPER_SHIFTER_SLOT_CAP 1U
-#elif defined(BRICK6_VARIANT_PREMIUM)
-#define BRICK6_LOOPER_GLOBAL_CAP 8U
-#define BRICK6_LOOPER_RAW_SLOT_CAP 4U
-#define BRICK6_LOOPER_SHIFTER_SLOT_CAP 4U
-#endif
 
 #endif

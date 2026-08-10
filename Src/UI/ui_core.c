@@ -1134,12 +1134,10 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
     if (!ui_track_type_is_available(track, config.family, type))
     {
-#if defined(BRICK6_VARIANT_LOWCOST)
         if (type == UI_TRACK_TYPE_LOOPER)
         {
             ui_core_set_feedback("LOOPER LIMIT");
         }
-#endif
         if (track == g_ui_track_state.active_track)
         {
             ui_core_runtime_bridge_sync_active_track_context(0U);

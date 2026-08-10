@@ -3452,9 +3452,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames, diag_lane);
         }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
         /*
-         * Low-cost mono-native fan-out.  Keep the historical L/R path when
+         * Common mono-native fan-out. Keep the historical L/R path when
          * an insert, diagnostic, or auxiliary capture/looper route needs the
          * materialized stereo buffers.  The direct path preserves the same
          * post-pan L/R values and the existing stereo send contracts, but
@@ -3585,8 +3584,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             }
             continue;
         }
-#endif
-
         /*
          * POLY_STEREO final fan-out.  The external poly buffers are already
          * accumulated L/R, so keep them read-only and feed every active final
@@ -4131,7 +4128,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         if(reverb_active != 0U)
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
             if(diag_enabled == 0U)
             {
                 fx_reverb_global_process_block_add(
@@ -4142,7 +4138,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     frames);
             }
             else
-#endif
             {
                 fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
                                                send_r[MIXER_REVERB_SEND_INDEX],
