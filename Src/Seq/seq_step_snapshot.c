@@ -92,19 +92,6 @@ static uint8_t apply_play(seq_track_id_t track, seq_step_id_t step, const seq_st
     return 1U;
 }
 
-static uint8_t current_param_lock_count(seq_track_id_t track, seq_step_id_t step)
-{
-    const uint8_t total = seq_model_step_plock_count(track, step);
-    uint8_t count = 0U;
-    for (uint8_t i = 0U; i < total; ++i)
-    {
-        seq_plock_entry_t entry;
-        if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U) return UINT8_MAX;
-        if (entry.set_id != (uint8_t)SEQ_PLOCK_SET_PLAY) count++;
-    }
-    return count;
-}
-
 uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
                                               const seq_step_snapshot_t *snapshot)
 {
@@ -134,17 +121,14 @@ uint8_t seq_step_snapshot_capture(seq_track_id_t track, seq_step_id_t step,
     snapshot.trig = seq_model_get_trig(track, step);
     snapshot.roll = seq_model_get_step_roll(track, step);
     if (capture_play(track, step, &snapshot.play) == 0U) return 0U;
-    const uint8_t total_count = seq_model_step_plock_count(track, step);
-    if (total_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS) return 0U;
-    for (uint8_t i = 0U; i < total_count; ++i)
+    snapshot.lock_count = seq_model_step_param_plock_count(track, step);
+    if (snapshot.lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS) return 0U;
+    for (uint8_t i = 0U; i < snapshot.lock_count; ++i)
     {
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U) return 0U;
-        if (entry.set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
-        {
-            snapshot.locks[snapshot.lock_count++] = (seq_step_snapshot_plock_t){ entry.set_id,
-                entry.param_slot, entry.value16, entry.flags };
-        }
+        if (seq_model_step_param_plock_get_at(track, step, i, &entry) == 0U) return 0U;
+        snapshot.locks[i] = (seq_step_snapshot_plock_t){ entry.set_id,
+            entry.param_slot, entry.value16, entry.flags };
     }
     sort_locks(&snapshot);
     if (seq_step_snapshot_validate_for_track(track, &snapshot) == 0U) return 0U;
@@ -180,9 +164,7 @@ uint8_t seq_step_snapshot_can_apply_list(seq_track_id_t track,
                 || (seq_step_snapshot_validate_for_track(track, &list->entries[i].snapshot) == 0U)) return 0U;
         for (uint8_t j = 0U; j < i; ++j)
             if (list->entries[j].step == list->entries[i].step) return 0U;
-        const uint8_t replaced_step = current_param_lock_count(track, list->entries[i].step);
-        if (replaced_step == UINT8_MAX) return 0U;
-        replaced += replaced_step;
+        replaced += seq_model_step_param_plock_count(track, list->entries[i].step);
         incoming += list->entries[i].snapshot.lock_count;
     }
     const uint32_t current = seq_model_get_track_plock_count(track);

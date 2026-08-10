@@ -1073,14 +1073,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         const uint32_t primask = seq_model_enter_critical();
         int16_t previous_value = 0;
         const uint8_t existed = seq_step_play_get(&s->play, voice, field, &previous_value);
-        if ((existed == 0U)
-                && ((uint16_t)s->lock_count + seq_model_step_play_field_count(s)
-                    >= seq_model_get_step_lock_limit(track)))
-        {
-            seq_model_exit_critical(primask);
-            return SEQ_PLOCK_OP_STEP_FULL;
-        }
-
         if (seq_step_play_set(&s->play, voice, field, value) == 0U)
         {
             seq_model_exit_critical(primask);
@@ -1109,8 +1101,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         return SEQ_PLOCK_OP_UPDATED;
     }
 
-    if (((uint16_t)s->lock_count + seq_model_step_play_field_count(s))
-            >= seq_model_get_step_lock_limit(track))
+    if (s->lock_count >= seq_model_get_step_lock_limit(track))
     {
         seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_STEP_FULL;
@@ -1201,6 +1192,12 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
 
 void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
+    seq_model_step_param_plock_clear(track, step);
+    seq_model_step_play_clear(track, step);
+}
+
+void seq_model_step_param_plock_clear(seq_track_id_t track, seq_step_id_t step)
+{
     seq_step_t *const s = seq_model_get_step_mut(track, step);
     if (s == 0)
     {
@@ -1224,8 +1221,13 @@ void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
     s->lock_head = SEQ_LOCK_NONE;
     s->lock_count = 0U;
     s->lock_set_mask = 0U;
-    seq_step_play_clear(&s->play);
     seq_model_exit_critical(primask);
+}
+
+uint8_t seq_model_step_param_plock_count(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    return (s != NULL) ? s->lock_count : 0U;
 }
 
 uint8_t seq_model_step_plock_count(seq_track_id_t track, seq_step_id_t step)
@@ -1361,5 +1363,46 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
         }
     }
 
+    return 0U;
+}
+
+uint8_t seq_model_step_param_plock_get_at(seq_track_id_t track,
+                                          seq_step_id_t step,
+                                          uint8_t ordinal,
+                                          seq_plock_entry_t *out_entry)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if ((s == NULL) || (out_entry == NULL) || (ordinal >= s->lock_count))
+    {
+        return 0U;
+    }
+
+    uint8_t index = 0U;
+    uint16_t idx = s->lock_head;
+    uint16_t guard = 0U;
+    while (idx != SEQ_LOCK_NONE)
+    {
+        if ((guard++ >= seq_model_pool_capacity(track)) || (idx >= seq_model_pool_capacity(track)))
+        {
+            return 0U;
+        }
+        if (index == ordinal)
+        {
+            const seq_plock_node_t *const node = seq_model_pool_entry_const(track, idx);
+            if (seq_param_iface_key_to_address(node->key,
+                                               &out_entry->set_id,
+                                               &out_entry->param_slot) == 0U)
+            {
+                return 0U;
+            }
+            out_entry->next = node->next;
+            out_entry->value16 = node->value16;
+            out_entry->flags = node->flags;
+            out_entry->reserved = 0U;
+            return 1U;
+        }
+        index++;
+        idx = seq_model_pool_entry_const(track, idx)->next;
+    }
     return 0U;
 }

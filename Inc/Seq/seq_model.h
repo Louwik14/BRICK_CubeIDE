@@ -193,6 +193,12 @@ uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
+uint8_t seq_model_step_param_plock_count(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_param_plock_get_at(seq_track_id_t track,
+                                          seq_step_id_t step,
+                                          uint8_t ordinal,
+                                          seq_plock_entry_t *out_entry);
+void seq_model_step_param_plock_clear(seq_track_id_t track, seq_step_id_t step);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
