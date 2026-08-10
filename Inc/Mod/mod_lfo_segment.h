@@ -23,6 +23,12 @@ typedef struct
 
 float mod_lfo_segment_wave(uint8_t shape, uint32_t phase, float sh_value);
 
+#define MOD_LFO_SEGMENT_POLICY_WRAP  (1U << 0)
+#define MOD_LFO_SEGMENT_POLICY_SHAPE (1U << 1)
+#define MOD_LFO_SEGMENT_POLICY_HALF  (1U << 2)
+
+uint8_t mod_lfo_segment_policy_from_shape(uint8_t shape, uint8_t force_wrap);
+
 /*
  * Plan one bounded piece of a trajectory.  The returned length is in
  * ramp->frames and is never greater than requested_frames.  A short result
@@ -33,7 +39,7 @@ uint32_t mod_lfo_segment_plan(uint8_t shape,
                               uint32_t phase_inc,
                               uint32_t requested_frames,
                               float sh_value,
-                              uint8_t force_wrap,
+                              uint8_t split_policy,
                               mod_lfo_ramp_t *ramp);
 
 #ifdef __cplusplus

@@ -11,6 +11,7 @@ static uint32_t advance_in_slices(uint8_t shape,
                                   uint32_t total,
                                   uint32_t slice)
 {
+    const uint8_t split_policy = mod_lfo_segment_policy_from_shape(shape, 0U);
     while (total > 0U)
     {
         const uint32_t requested = (total < slice) ? total : slice;
@@ -20,7 +21,7 @@ static uint32_t advance_in_slices(uint8_t shape,
                                                    inc,
                                                    requested,
                                                    0.25f,
-                                                   0U,
+                                                   split_policy,
                                                    &ramp);
         assert(used != 0U);
         phase = ramp.phase_after;
@@ -54,7 +55,7 @@ static void test_saw_wrap_is_a_boundary(void)
                                                0x10000000U,
                                                4U,
                                                0.0f,
-                                               0U,
+                                               mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_SAW, 0U),
                                                &ramp);
     assert(used == 1U);
     assert(ramp.transition != 0U);
@@ -65,7 +66,7 @@ static void test_saw_wrap_is_a_boundary(void)
                                 0x10000000U,
                                 3U,
                                 0.0f,
-                                0U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_SAW, 0U),
                                 &ramp) == 3U);
     assert(ramp.start < 0.0f);
 }
@@ -78,7 +79,7 @@ static void test_triangle_and_square_boundaries(void)
                                 0x10000000U,
                                 4U,
                                 0.0f,
-                                0U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_TRIANGLE, 0U),
                                 &ramp) == 1U);
     assert(ramp.transition != 0U);
 
@@ -87,7 +88,7 @@ static void test_triangle_and_square_boundaries(void)
                                 0x10000000U,
                                 4U,
                                 0.0f,
-                                0U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_SQUARE, 0U),
                                 &ramp) == 1U);
     assert(ramp.transition != 0U);
     assert_close(ramp.step, 0.0f);
@@ -101,7 +102,7 @@ static void test_random_hold_and_single_sample(void)
                                 0x01000000U,
                                 8U,
                                 0.37f,
-                                0U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_RANDOM_SH, 0U),
                                 &ramp) == 8U);
     assert_close(ramp.start, 0.37f);
     assert_close(ramp.step, 0.0f);
@@ -111,7 +112,7 @@ static void test_random_hold_and_single_sample(void)
                                 0x01000000U,
                                 1U,
                                 0.0f,
-                                0U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_SINE, 0U),
                                 &ramp) == 1U);
     assert_close(ramp.step, 0.0f);
 }
@@ -124,7 +125,7 @@ static void test_one_shot_wrap(void)
                                 0x10000000U,
                                 4U,
                                 0.0f,
-                                1U,
+                                mod_lfo_segment_policy_from_shape(MOD_LFO_SHAPE_SINE, 1U),
                                 &ramp) == 1U);
     assert(ramp.transition != 0U);
     assert(ramp.phase_after == 0U);

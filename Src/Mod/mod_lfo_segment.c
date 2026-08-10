@@ -55,39 +55,38 @@ float mod_lfo_segment_wave(uint8_t shape, uint32_t phase, float sh_value)
     }
 }
 
-static uint64_t mod_lfo_segment_next_boundary(uint8_t shape, uint32_t phase)
+uint8_t mod_lfo_segment_policy_from_shape(uint8_t shape, uint8_t force_wrap)
 {
-    const uint64_t full = 0x100000000ULL;
-    const uint64_t half = 0x80000000ULL;
-
-    switch ((mod_lfo_shape_t)shape)
+    uint8_t policy = 0U;
+    if ((force_wrap != 0U)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_SAW)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_REVERSE_SAW)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH))
     {
-        case MOD_LFO_SHAPE_TRIANGLE:
-        case MOD_LFO_SHAPE_TRIANGLE_POS:
-        case MOD_LFO_SHAPE_SQUARE:
-        case MOD_LFO_SHAPE_SQUARE_POS:
-            return (phase < 0x80000000U) ? (half - phase) : (full - phase);
-
-        case MOD_LFO_SHAPE_SAW:
-        case MOD_LFO_SHAPE_REVERSE_SAW:
-        case MOD_LFO_SHAPE_RANDOM_SH:
-            return full - phase;
-
-        default:
-            return full;
+        policy |= MOD_LFO_SEGMENT_POLICY_WRAP;
     }
+
+    if ((shape == (uint8_t)MOD_LFO_SHAPE_TRIANGLE)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_TRIANGLE_POS)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_SQUARE)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_SQUARE_POS))
+    {
+        policy |= (uint8_t)(MOD_LFO_SEGMENT_POLICY_SHAPE
+                            | MOD_LFO_SEGMENT_POLICY_HALF);
+    }
+
+    return policy;
 }
 
-static uint8_t mod_lfo_segment_splits_at_wrap(uint8_t shape, uint8_t force_wrap)
+static uint64_t mod_lfo_segment_next_boundary(uint8_t split_policy, uint32_t phase)
 {
-    if (force_wrap != 0U)
+    const uint64_t full = 0x100000000ULL;
+    if ((split_policy & MOD_LFO_SEGMENT_POLICY_HALF) != 0U)
     {
-        return 1U;
+        const uint64_t half = 0x80000000ULL;
+        return (phase < 0x80000000U) ? (half - phase) : (full - phase);
     }
-
-    return ((shape == (uint8_t)MOD_LFO_SHAPE_SAW)
-            || (shape == (uint8_t)MOD_LFO_SHAPE_REVERSE_SAW)
-            || (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH)) ? 1U : 0U;
+    return full - phase;
 }
 
 uint32_t mod_lfo_segment_plan(uint8_t shape,
@@ -95,7 +94,7 @@ uint32_t mod_lfo_segment_plan(uint8_t shape,
                               uint32_t phase_inc,
                               uint32_t requested_frames,
                               float sh_value,
-                              uint8_t force_wrap,
+                              uint8_t split_policy,
                               mod_lfo_ramp_t *ramp)
 {
     if ((ramp == NULL) || (requested_frames == 0U))
@@ -106,14 +105,10 @@ uint32_t mod_lfo_segment_plan(uint8_t shape,
     uint32_t count = requested_frames;
     if (phase_inc != 0U)
     {
-        const uint8_t split_wrap = mod_lfo_segment_splits_at_wrap(shape, force_wrap);
-        const uint8_t split_shape = ((shape == (uint8_t)MOD_LFO_SHAPE_TRIANGLE)
-                || (shape == (uint8_t)MOD_LFO_SHAPE_TRIANGLE_POS)
-                || (shape == (uint8_t)MOD_LFO_SHAPE_SQUARE)
-                || (shape == (uint8_t)MOD_LFO_SHAPE_SQUARE_POS)) ? 1U : 0U;
-        if ((split_wrap != 0U) || (split_shape != 0U))
+        if ((split_policy & (MOD_LFO_SEGMENT_POLICY_WRAP
+                             | MOD_LFO_SEGMENT_POLICY_SHAPE)) != 0U)
         {
-            const uint64_t distance = mod_lfo_segment_next_boundary(shape, phase);
+            const uint64_t distance = mod_lfo_segment_next_boundary(split_policy, phase);
             uint64_t samples = (distance + (uint64_t)phase_inc - 1ULL) / (uint64_t)phase_inc;
             if (samples == 0ULL)
             {

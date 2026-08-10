@@ -98,9 +98,15 @@ typedef struct
     uint32_t frames;
     float random_slew_coeff;
     uint8_t shape;
-    uint8_t trig;
+    uint8_t flags;
     uint8_t valid;
 } mod_lfo_poly_segment_config_t;
+
+#define MOD_LFO_POLY_FLAG_RANDOM       (1U << 0)
+#define MOD_LFO_POLY_FLAG_HOLD         (1U << 1)
+#define MOD_LFO_POLY_FLAG_ONE          (1U << 2)
+#define MOD_LFO_POLY_FLAG_SPLIT_SHIFT  3U
+#define MOD_LFO_POLY_FLAG_SPLIT_MASK   (0x07U << MOD_LFO_POLY_FLAG_SPLIT_SHIFT)
 
 static mod_lfo_poly_segment_config_t
     g_mod_lfo_poly_segment_config[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
@@ -443,6 +449,8 @@ static void mod_lfo_prepare_ramp(mod_lfo_runtime_state_t *rt,
     rt->ramp_end = 0.0f;
     rt->ramp_discontinuous = 0U;
     uint32_t remaining = frames;
+    const uint8_t split_policy = mod_lfo_segment_policy_from_shape(
+        (uint8_t)shape, (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U);
     while (remaining > 0U)
     {
         if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->sh_valid == 0U))
@@ -457,7 +465,7 @@ static void mod_lfo_prepare_ramp(mod_lfo_runtime_state_t *rt,
                                                         rt->phase_inc,
                                                         remaining,
                                                         rt->sh_value,
-                                                        (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U,
+                                                        split_policy,
                                                         &ramp);
         if (consumed == 0U)
         {
@@ -587,7 +595,14 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
             prepared->random_slew_coeff = (shape == MOD_LFO_SHAPE_RANDOM_SH)
                 ? mod_lfo_poly_random_slew_coeff(phase_setting, frames) : 1.0f;
             prepared->shape = (uint8_t)shape;
-            prepared->trig = (uint8_t)trig;
+            prepared->flags = (uint8_t)
+                (((shape == MOD_LFO_SHAPE_RANDOM_SH) ? MOD_LFO_POLY_FLAG_RANDOM : 0U)
+                 | ((trig == MOD_LFO_TRIG_POLY_HOLD) ? MOD_LFO_POLY_FLAG_HOLD : 0U)
+                 | ((trig == MOD_LFO_TRIG_POLY_ONE) ? MOD_LFO_POLY_FLAG_ONE : 0U)
+                 | (mod_lfo_segment_policy_from_shape(
+                        (uint8_t)shape,
+                        (trig == MOD_LFO_TRIG_POLY_ONE) ? 1U : 0U)
+                    << MOD_LFO_POLY_FLAG_SPLIT_SHIFT));
             prepared->valid = 1U;
             g_mod_lfo_poly_prepared_entries[g_mod_lfo_poly_prepared_entry_count++] =
                 (uint8_t)(track * MOD_LFO_COUNT_PER_TRACK + lfo);
@@ -1308,7 +1323,6 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
         const uint8_t source = (uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo;
         mod_lfo_poly_state_t *const rt = &g_mod_lfo_poly_runtime[voice_slot][lfo];
         const mod_lfo_shape_t shape = (mod_lfo_shape_t)prepared->shape;
-        const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)prepared->trig;
         const uint32_t phase_inc = prepared->phase_inc;
         if (rt->pending_trigger != 0U)
         {
@@ -1320,14 +1334,16 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
             mod_lfo_v1_poly_note_trigger(track, voice_slot);
         }
 
-        if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->sh_valid == 0U))
+        if (((prepared->flags & MOD_LFO_POLY_FLAG_RANDOM) != 0U)
+                && (rt->sh_valid == 0U))
         {
             rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
             rt->sh_valid = 1U;
         }
         float start = 0.0f;
         float end = 0.0f;
-        if ((trig == MOD_LFO_TRIG_POLY_ONE) && (rt->one_done != 0U))
+        if (((prepared->flags & MOD_LFO_POLY_FLAG_ONE) != 0U)
+                && (rt->one_done != 0U))
         {
             start = mod_lfo_segment_wave((uint8_t)shape, 0xFFFFFFFFU, rt->sh_value);
             end = start;
@@ -1342,7 +1358,9 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
                 const uint32_t phase_before = rt->phase;
                 const uint32_t consumed = mod_lfo_segment_plan((uint8_t)shape, rt->phase,
                                                                 phase_inc, remaining, rt->sh_value,
-                                                                (trig == MOD_LFO_TRIG_POLY_ONE),
+                                                                (uint8_t)((prepared->flags
+                                                                           & MOD_LFO_POLY_FLAG_SPLIT_MASK)
+                                                                          >> MOD_LFO_POLY_FLAG_SPLIT_SHIFT),
                                                                 &ramp);
                 if (consumed == 0U)
                 {
@@ -1363,11 +1381,13 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
                 end = ramp.start + ramp.step * (float)(ramp.frames - 1U);
                 rt->phase = ramp.phase_after;
                 remaining -= consumed;
-                if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_before))
+                if (((prepared->flags & MOD_LFO_POLY_FLAG_RANDOM) != 0U)
+                        && (rt->phase < phase_before))
                 {
                     rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
                 }
-                if ((trig == MOD_LFO_TRIG_POLY_ONE) && (rt->phase < phase_before))
+                if (((prepared->flags & MOD_LFO_POLY_FLAG_ONE) != 0U)
+                        && (rt->phase < phase_before))
                 {
                     rt->one_done = 1U;
                     rt->phase = 0U;
@@ -1375,12 +1395,13 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
                 }
             }
         }
-        if ((trig == MOD_LFO_TRIG_POLY_HOLD) && (rt->hold_valid != 0U))
+        if (((prepared->flags & MOD_LFO_POLY_FLAG_HOLD) != 0U)
+                && (rt->hold_valid != 0U))
         {
             start = rt->hold_value;
             end = start;
         }
-        else if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+        else if ((prepared->flags & MOD_LFO_POLY_FLAG_RANDOM) != 0U)
         {
             if (rt->slew_valid == 0U)
             {
