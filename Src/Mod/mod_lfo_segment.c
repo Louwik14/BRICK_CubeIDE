@@ -109,14 +109,14 @@ uint32_t mod_lfo_segment_plan(uint8_t shape,
                              | MOD_LFO_SEGMENT_POLICY_SHAPE)) != 0U)
         {
             const uint64_t distance = mod_lfo_segment_next_boundary(split_policy, phase);
-            uint64_t samples = (distance + (uint64_t)phase_inc - 1ULL) / (uint64_t)phase_inc;
-            if (samples == 0ULL)
+            const uint64_t requested_distance = (uint64_t)phase_inc * (uint64_t)count;
+            if (distance <= requested_distance)
             {
-                samples = 1ULL;
-            }
-            if (samples < (uint64_t)count)
-            {
-                count = (uint32_t)samples;
+                const uint32_t samples = ((uint32_t)(distance - 1ULL) / phase_inc) + 1U;
+                if (samples < count)
+                {
+                    count = samples;
+                }
             }
         }
     }
