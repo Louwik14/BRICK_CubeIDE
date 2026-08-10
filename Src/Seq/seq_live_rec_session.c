@@ -268,7 +268,7 @@ static uint8_t seq_live_rec_session_upsert_play_param(seq_track_id_t track,
     }
 
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param_id, value);
-    const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
+    const seq_plock_op_status_t st = seq_edit_step_plock_upsert(track,
                                                                  step,
                                                                  set_id,
                                                                  param_slot,
@@ -293,7 +293,7 @@ static uint8_t seq_live_rec_session_delete_play_param(seq_track_id_t track,
         return 0U;
     }
 
-    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param_slot);
+    const seq_plock_op_status_t st = seq_edit_step_plock_delete(track, step, set_id, param_slot);
     return (st == SEQ_PLOCK_OP_DELETED) ? 1U : 0U;
 }
 
@@ -324,7 +324,7 @@ static uint8_t seq_live_rec_session_read_play_param(seq_track_id_t track,
     }
 
     seq_plock_entry_t entry;
-    if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
+    if (seq_edit_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
     {
         return 1U;
     }
@@ -357,7 +357,7 @@ static uint8_t seq_live_rec_session_restore_play_param(seq_track_id_t track,
         return 0U;
     }
 
-    const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
+    const seq_plock_op_status_t st = seq_edit_step_plock_upsert(track,
                                                                  step,
                                                                  set_id,
                                                                  param_slot,
@@ -549,7 +549,7 @@ static int32_t seq_live_rec_session_find_voice_with_note_lock(seq_track_id_t tra
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
+        if (seq_edit_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
         {
             continue;
         }
@@ -626,7 +626,7 @@ static uint8_t seq_live_rec_session_voice_has_any_lock(seq_track_id_t track,
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) != 0U)
+        if (seq_edit_step_plock_find(track, step, set_id, param_slot, &entry) != 0U)
         {
             return 1U;
         }
