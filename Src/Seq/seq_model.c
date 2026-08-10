@@ -17,11 +17,24 @@
 
 typedef struct
 {
+    uint16_t next;
+    seq_value16_t value16;
+    seq_plock_key_t key;
+    uint8_t flags;
+} seq_plock_node_t;
+
+_Static_assert(sizeof(seq_plock_node_t) == 6U, "internal p-lock node size changed");
+
+typedef struct
+{
     seq_track_data_t tracks[SEQ_LANE_CAPACITY];
-    seq_plock_entry_t pool[SEQ_LANE_CAPACITY][SEQ_PLOCK_POOL_CAP_PER_TRACK];
+    seq_plock_node_t pool[SEQ_LANE_CAPACITY][SEQ_PLOCK_POOL_CAP_PER_TRACK];
     uint16_t free_head[SEQ_LANE_CAPACITY];
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
+
+_Static_assert(sizeof(seq_runtime_project_data_t) == 106624U,
+               "sequencer project storage size changed");
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
 
@@ -218,7 +231,7 @@ static uint16_t seq_model_pool_capacity(seq_track_id_t track)
     return (seq_model_track_is_valid(track) != 0U) ? (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK : 0U;
 }
 
-static seq_plock_entry_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_t index)
+static seq_plock_node_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_t index)
 {
     if ((seq_model_track_is_valid(track) == 0U) || (index >= seq_model_pool_capacity(track)))
     {
@@ -227,7 +240,7 @@ static seq_plock_entry_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_
     return &g_seq_project.pool[track][index];
 }
 
-static const seq_plock_entry_t *seq_model_pool_entry_const(seq_track_id_t track, uint16_t index)
+static const seq_plock_node_t *seq_model_pool_entry_const(seq_track_id_t track, uint16_t index)
 {
     return seq_model_pool_entry_mut(track, index);
 }
@@ -308,7 +321,7 @@ static uint16_t seq_model_alloc_lock_node(seq_track_id_t track)
     }
 
     const uint16_t idx = g_seq_project.free_head[track];
-    seq_plock_entry_t *const entry = seq_model_pool_entry_mut(track, idx);
+    seq_plock_node_t *const entry = seq_model_pool_entry_mut(track, idx);
     if (entry == NULL)
     {
         return SEQ_LOCK_NONE;
@@ -334,8 +347,7 @@ static void seq_model_free_lock_node(seq_track_id_t track, uint16_t idx)
 
 static uint16_t seq_model_find_lock_idx(seq_track_id_t track,
                                         const seq_step_t *step,
-                                        uint8_t set_id,
-                                        seq_param_slot_t param_slot,
+                                        seq_plock_key_t key,
                                         uint16_t *out_prev)
 {
     if (out_prev != 0)
@@ -358,8 +370,8 @@ static uint16_t seq_model_find_lock_idx(seq_track_id_t track,
             break;
         }
 
-        const seq_plock_entry_t *entry = seq_model_pool_entry_const(track, idx);
-        if ((entry->set_id == set_id) && (entry->param_slot == param_slot))
+        const seq_plock_node_t *entry = seq_model_pool_entry_const(track, idx);
+        if (entry->key == key)
         {
             if (out_prev != 0)
             {
@@ -393,8 +405,15 @@ static uint8_t seq_model_compute_step_mask(seq_track_id_t track, const seq_step_
             break;
         }
 
-        const seq_plock_entry_t *entry = seq_model_pool_entry_const(track, idx);
-        mask |= seq_param_iface_set_to_mask(entry->set_id);
+        const seq_plock_node_t *entry = seq_model_pool_entry_const(track, idx);
+        uint8_t set_id = 0U;
+        seq_param_slot_t param_slot = 0U;
+        if (seq_param_iface_key_to_address(entry->key, &set_id, &param_slot) == 0U)
+        {
+            break;
+        }
+        (void)param_slot;
+        mask |= seq_param_iface_set_to_mask(set_id);
         idx = entry->next;
     }
 
@@ -436,8 +455,15 @@ static void seq_model_step_scan_lock_sets(seq_track_id_t track,
             break;
         }
 
-        const seq_plock_entry_t *entry = seq_model_pool_entry_const(track, idx);
-        if (entry->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+        const seq_plock_node_t *entry = seq_model_pool_entry_const(track, idx);
+        uint8_t set_id = 0U;
+        seq_param_slot_t param_slot = 0U;
+        if (seq_param_iface_key_to_address(entry->key, &set_id, &param_slot) == 0U)
+        {
+            break;
+        }
+        (void)param_slot;
+        if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
         {
             has_play_plock = 1U;
         }
@@ -837,13 +863,25 @@ uint8_t seq_model_step_plock_find(seq_track_id_t track,
         return 0U;
     }
 
-    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param_slot, 0);
+    seq_plock_key_t key = 0U;
+    if (seq_param_iface_address_to_key(set_id, param_slot, &key) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint16_t idx = seq_model_find_lock_idx(track, s, key, 0);
     if (idx == SEQ_LOCK_NONE)
     {
         return 0U;
     }
 
-    *out_entry = *seq_model_pool_entry_const(track, idx);
+    const seq_plock_node_t *const node = seq_model_pool_entry_const(track, idx);
+    out_entry->next = node->next;
+    out_entry->param_slot = param_slot;
+    out_entry->set_id = set_id;
+    out_entry->value16 = node->value16;
+    out_entry->flags = node->flags;
+    out_entry->reserved = 0U;
     return 1U;
 }
 
@@ -869,12 +907,18 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         return SEQ_PLOCK_OP_INVALID;
     }
 
+    seq_plock_key_t key = 0U;
+    if (seq_param_iface_address_to_key(set_id, param_slot, &key) == 0U)
+    {
+        return SEQ_PLOCK_OP_INVALID;
+    }
+
     const uint32_t primask = seq_model_enter_critical();
 
-    const uint16_t existing_idx = seq_model_find_lock_idx(track, s, set_id, param_slot, 0);
+    const uint16_t existing_idx = seq_model_find_lock_idx(track, s, key, 0);
     if (existing_idx != SEQ_LOCK_NONE)
     {
-        seq_plock_entry_t *const existing = seq_model_pool_entry_mut(track, existing_idx);
+        seq_plock_node_t *const existing = seq_model_pool_entry_mut(track, existing_idx);
         existing->value16 = value16;
         existing->flags = flags;
         seq_model_exit_critical(primask);
@@ -894,12 +938,10 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         return SEQ_PLOCK_OP_POOL_EMPTY;
     }
 
-    seq_plock_entry_t *const entry = seq_model_pool_entry_mut(track, new_idx);
-    entry->set_id = set_id;
-    entry->param_slot = param_slot;
+    seq_plock_node_t *const entry = seq_model_pool_entry_mut(track, new_idx);
+    entry->key = key;
     entry->value16 = value16;
     entry->flags = flags;
-    entry->reserved = 0U;
     entry->next = s->lock_head;
 
     s->lock_head = new_idx;
@@ -921,9 +963,15 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
         return SEQ_PLOCK_OP_INVALID;
     }
 
+    seq_plock_key_t key = 0U;
+    if (seq_param_iface_address_to_key(set_id, param_slot, &key) == 0U)
+    {
+        return SEQ_PLOCK_OP_INVALID;
+    }
+
     const uint32_t primask = seq_model_enter_critical();
     uint16_t prev = SEQ_LOCK_NONE;
-    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param_slot, &prev);
+    const uint16_t idx = seq_model_find_lock_idx(track, s, key, &prev);
     if (idx == SEQ_LOCK_NONE)
     {
         seq_model_exit_critical(primask);
@@ -1024,8 +1072,18 @@ uint8_t seq_model_step_plock_collect(seq_track_id_t track,
             return 0U;
         }
 
-        out_entries[count++] = *seq_model_pool_entry_const(track, idx);
-        idx = seq_model_pool_entry_const(track, idx)->next;
+        const seq_plock_node_t *const node = seq_model_pool_entry_const(track, idx);
+        seq_plock_entry_t *const entry = &out_entries[count];
+        if (seq_param_iface_key_to_address(node->key, &entry->set_id, &entry->param_slot) == 0U)
+        {
+            return 0U;
+        }
+        entry->next = node->next;
+        entry->value16 = node->value16;
+        entry->flags = node->flags;
+        entry->reserved = 0U;
+        count++;
+        idx = node->next;
     }
 
     *out_count = count;
@@ -1060,7 +1118,17 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
 
         if (index == ordinal)
         {
-            *out_entry = *seq_model_pool_entry_const(track, idx);
+            const seq_plock_node_t *const node = seq_model_pool_entry_const(track, idx);
+            if (seq_param_iface_key_to_address(node->key,
+                                               &out_entry->set_id,
+                                               &out_entry->param_slot) == 0U)
+            {
+                return 0U;
+            }
+            out_entry->next = node->next;
+            out_entry->value16 = node->value16;
+            out_entry->flags = node->flags;
+            out_entry->reserved = 0U;
             return 1U;
         }
 

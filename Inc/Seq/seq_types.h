@@ -51,6 +51,7 @@ typedef uint8_t seq_track_id_t;
 typedef uint8_t seq_lane_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;
+typedef uint8_t seq_plock_key_t;
 typedef uint16_t seq_value16_t;
 
 #ifdef __cplusplus

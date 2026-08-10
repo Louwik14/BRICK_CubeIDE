@@ -238,6 +238,9 @@ static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_MIX_SLOT_COUNT
 };
 
+_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT <= UINT8_MAX,
+               "p-lock compact key exceeds storage width");
+
 static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
                                                         uint8_t set_id,
                                                         seq_param_slot_t param_slot);
@@ -653,6 +656,46 @@ uint8_t seq_param_iface_set_to_mask(uint8_t set_id)
     }
 
     return (uint8_t)(1U << set_id);
+}
+
+uint8_t seq_param_iface_address_to_key(uint8_t set_id,
+                                       seq_param_slot_t param_slot,
+                                       seq_plock_key_t *out_key)
+{
+    if ((out_key == 0)
+            || (seq_param_iface_is_set_plockable(set_id) == 0U)
+            || (param_slot >= (seq_param_slot_t)g_seq_param_set_capacities[set_id]))
+    {
+        return 0U;
+    }
+
+    *out_key = (seq_plock_key_t)(g_seq_param_set_offsets[set_id] + param_slot);
+    return 1U;
+}
+
+uint8_t seq_param_iface_key_to_address(seq_plock_key_t key,
+                                       uint8_t *out_set_id,
+                                       seq_param_slot_t *out_param_slot)
+{
+    if ((out_set_id == 0) || (out_param_slot == 0)
+            || (key >= (seq_plock_key_t)SEQ_PARAM_RUNTIME_SLOT_COUNT))
+    {
+        return 0U;
+    }
+
+    for (uint8_t set_id = 0U; set_id < (uint8_t)SEQ_PLOCK_SET_COUNT; ++set_id)
+    {
+        const uint8_t offset = g_seq_param_set_offsets[set_id];
+        const uint8_t capacity = g_seq_param_set_capacities[set_id];
+        if ((key >= offset) && (key < (seq_plock_key_t)(offset + capacity)))
+        {
+            *out_set_id = set_id;
+            *out_param_slot = (seq_param_slot_t)(key - offset);
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)

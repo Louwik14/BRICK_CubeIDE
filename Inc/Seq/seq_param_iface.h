@@ -63,6 +63,12 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id);
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id);
 uint8_t seq_param_iface_set_to_mask(uint8_t set_id);
+uint8_t seq_param_iface_address_to_key(uint8_t set_id,
+                                       seq_param_slot_t param_slot,
+                                       seq_plock_key_t *out_key);
+uint8_t seq_param_iface_key_to_address(seq_plock_key_t key,
+                                       uint8_t *out_set_id,
+                                       seq_param_slot_t *out_param_slot);
 
 uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
                                       uint8_t set_id,
