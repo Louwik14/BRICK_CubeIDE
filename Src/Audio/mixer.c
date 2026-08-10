@@ -61,14 +61,24 @@ typedef struct {
     float send_level_current[MIXER_NUM_SENDS];
 } mixer_track_t;
 
+typedef enum
+{
+    MIXER_FILTER_DSP_STEREO = 0U,
+    MIXER_FILTER_DSP_MONO = 1U
+} mixer_filter_dsp_format_t;
+
 typedef struct {
-    fx_biquad_filter_t biquad;
-    fx_biquad_filter_mono_t biquad_mono;
+    union {
+        fx_biquad_filter_t biquad;
+        fx_biquad_filter_mono_t biquad_mono;
+    };
+    union {
+        fx_dj_eq3_t eq3;
+        fx_dj_eq3_mono_t eq3_mono;
+    };
     env_adsr_t filter_env;
     env_adsr_t vca_env;
     vca_env_t synth_vca_env;
-    fx_dj_eq3_t eq3;
-    fx_dj_eq3_mono_t eq3_mono;
     float sample_rate;
     float cutoff_hz;
     float cutoff_target_hz;
@@ -86,6 +96,12 @@ typedef struct {
     float eq_mid_target_db;
     float eq_high_db;
     float eq_high_target_db;
+    float vca_env_value;
+    float filter_env_value;
+    uint32_t config_version;
+    int16_t filter_env_prepared_first[AUDIO_BLOCK_SIZE / 8U];
+    int16_t filter_env_prepared_terminal[AUDIO_BLOCK_SIZE / 8U];
+    uint16_t filter_env_prepared_frames;
     uint8_t note_active;
     uint8_t current_note;
     uint8_t vca_enabled;
@@ -96,16 +112,16 @@ typedef struct {
     uint8_t filter_retrigger_hard;
     uint8_t vca_retrigger_hard;
     uint8_t synth_vca_type;
-    float vca_env_value;
-    float filter_env_value;
-    int16_t filter_env_prepared_first[AUDIO_BLOCK_SIZE / 8U];
-    int16_t filter_env_prepared_terminal[AUDIO_BLOCK_SIZE / 8U];
-    uint16_t filter_env_prepared_frames;
     uint8_t filter_env_prepared_count;
     uint8_t filter_env_prepared_consumed;
     uint8_t type;
-    uint32_t config_version;
+    uint8_t dsp_format;
 } mixer_track_filter_t;
+
+_Static_assert(_Alignof(mixer_track_filter_t) >= 32U,
+               "mixer track filter DSP storage must stay 32-byte aligned");
+_Static_assert((sizeof(mixer_track_filter_t) % 32U) == 0U,
+               "mixer track filter array stride must preserve DSP alignment");
 
 typedef enum
 {
@@ -136,7 +152,7 @@ typedef struct
 
 CTRL_STATE static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
-CTRL_STATE static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
+static AUDIO_HOT mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
 static uint32_t g_mixer_filter_config_version;
 AUDIO_HOT static mixer_track_filter_t g_poly_filters_hot[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
 SEQ_STATE_D2 static float g_external_track_mono[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
@@ -568,61 +584,18 @@ static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filte
                         MIXER_FILTER_CUTOFF_MAX_HZ);
 }
 
-static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
-{
-    if(filter == NULL)
-        return;
-
-    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
-    fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
-    if(mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U)
-    {
-        fx_biquad_filter_set_mode(&filter->biquad,
-                                  mixer_track_filter_type_to_biquad_mode((mixer_track_filter_type_t)filter->type));
-    }
-    fx_biquad_filter_set_bypass(&filter->biquad,
-                                (mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U) ? 0U : 1U);
-
-    fx_dj_eq3_set_gains_db(&filter->eq3,
-                           filter->eq_low_db,
-                           filter->eq_mid_db,
-                           filter->eq_high_db);
-    fx_dj_eq3_set_bypass(&filter->eq3, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
-    fx_dj_eq3_mono_set_low_db(&filter->eq3_mono, filter->eq_low_db);
-    fx_dj_eq3_mono_set_mid_db(&filter->eq3_mono, filter->eq_mid_db);
-    fx_dj_eq3_mono_set_high_db(&filter->eq3_mono, filter->eq_high_db);
-    fx_dj_eq3_mono_set_bypass(&filter->eq3_mono, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
-
-    fx_biquad_filter_mono_set_sample_rate(&filter->biquad_mono, filter->sample_rate);
-    fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, filter->cutoff_hz);
-    fx_biquad_filter_mono_set_q(&filter->biquad_mono, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
-    if(mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U)
-    {
-        fx_biquad_filter_mono_set_mode(&filter->biquad_mono,
-                                       mixer_track_filter_type_to_biquad_mode((mixer_track_filter_type_t)filter->type));
-    }
-    fx_biquad_filter_mono_set_bypass(&filter->biquad_mono,
-                                     (mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U) ? 0U : 1U);
-}
-
-static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
-{
-    if(filter == NULL)
-        return;
-
-    fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
-    fx_biquad_filter_mono_init(&filter->biquad_mono, filter->sample_rate);
-    fx_dj_eq3_init(&filter->eq3, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
-    fx_dj_eq3_mono_init(&filter->eq3_mono, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
-    fx_biquad_filter_reset(&filter->biquad);
-    fx_biquad_filter_mono_reset(&filter->biquad_mono);
-    mixer_track_filter_apply_core_params(filter);
-}
-
 static void mixer_track_filter_rebind_dsp_storage(mixer_track_filter_t *filter)
 {
     if(filter == NULL)
         return;
+
+    if (filter->dsp_format == (uint8_t)MIXER_FILTER_DSP_MONO)
+    {
+        filter->eq3_mono.inst.numStages = MIXER_EQ3_NUM_STAGES;
+        filter->eq3_mono.inst.pCoeffs = filter->eq3_mono.coeffs;
+        filter->eq3_mono.inst.pState = filter->eq3_mono.state;
+        return;
+    }
 
     filter->eq3.inst_l.numStages = MIXER_EQ3_NUM_STAGES;
     filter->eq3.inst_l.pCoeffs = filter->eq3.coeffs;
@@ -630,9 +603,180 @@ static void mixer_track_filter_rebind_dsp_storage(mixer_track_filter_t *filter)
     filter->eq3.inst_r.numStages = MIXER_EQ3_NUM_STAGES;
     filter->eq3.inst_r.pCoeffs = filter->eq3.coeffs;
     filter->eq3.inst_r.pState = filter->eq3.state_r;
-    filter->eq3_mono.inst.numStages = MIXER_EQ3_NUM_STAGES;
-    filter->eq3_mono.inst.pCoeffs = filter->eq3_mono.coeffs;
-    filter->eq3_mono.inst.pState = filter->eq3_mono.state;
+}
+
+static void mixer_track_filter_convert_biquad_to_mono(mixer_track_filter_t *filter)
+{
+    const fx_biquad_filter_t *const stereo = &filter->biquad;
+    fx_biquad_filter_mono_t mono = {0};
+    mono.sample_rate = stereo->sample_rate;
+    mono.cutoff_hz = stereo->cutoff_hz;
+    mono.q = stereo->q;
+    mono.current = stereo->current;
+    mono.ic1eq = stereo->ic1eq_l;
+    mono.ic2eq = stereo->ic2eq_l;
+    mono.mode_xfade_remaining = stereo->mode_xfade_remaining;
+    mono.bypass_xfade_remaining = stereo->bypass_xfade_remaining;
+    mono.bypass_mix = stereo->bypass_mix;
+    mono.mode = stereo->mode;
+    mono.previous_mode = stereo->previous_mode;
+    mono.bypass = stereo->bypass;
+    mono.reset_after_bypass = stereo->reset_after_bypass;
+    mono.mode_via_dry = stereo->mode_via_dry;
+    filter->biquad_mono = mono;
+}
+
+static void mixer_track_filter_convert_biquad_to_stereo(mixer_track_filter_t *filter)
+{
+    const fx_biquad_filter_mono_t *const mono = &filter->biquad_mono;
+    fx_biquad_filter_t stereo = {0};
+    stereo.sample_rate = mono->sample_rate;
+    stereo.cutoff_hz = mono->cutoff_hz;
+    stereo.q = mono->q;
+    stereo.current = mono->current;
+    stereo.ic1eq_l = mono->ic1eq;
+    stereo.ic2eq_l = mono->ic2eq;
+    stereo.ic1eq_r = mono->ic1eq;
+    stereo.ic2eq_r = mono->ic2eq;
+    stereo.mode_xfade_remaining = mono->mode_xfade_remaining;
+    stereo.bypass_xfade_remaining = mono->bypass_xfade_remaining;
+    stereo.bypass_mix = mono->bypass_mix;
+    stereo.mode = mono->mode;
+    stereo.previous_mode = mono->previous_mode;
+    stereo.bypass = mono->bypass;
+    stereo.reset_after_bypass = mono->reset_after_bypass;
+    stereo.mode_via_dry = mono->mode_via_dry;
+    filter->biquad = stereo;
+}
+
+static void mixer_track_filter_convert_eq3_to_mono(mixer_track_filter_t *filter)
+{
+    const fx_dj_eq3_t *const stereo = &filter->eq3;
+    fx_dj_eq3_mono_t mono = {0};
+    memcpy(mono.coeffs, stereo->coeffs, sizeof(mono.coeffs));
+    memcpy(mono.coeffs_pending, stereo->coeffs_pending, sizeof(mono.coeffs_pending));
+    memcpy(mono.state, stereo->state_l, sizeof(mono.state));
+    mono.sample_rate = stereo->sample_rate;
+    mono.low_freq = stereo->low_freq;
+    mono.mid_freq = stereo->mid_freq;
+    mono.high_freq = stereo->high_freq;
+    mono.mid_q = stereo->mid_q;
+    mono.low_db = stereo->low_db;
+    mono.mid_db = stereo->mid_db;
+    mono.high_db = stereo->high_db;
+    mono.bypass = stereo->bypass;
+    mono.coeffs_pending_update = stereo->coeffs_pending_update;
+    filter->eq3_mono = mono;
+}
+
+static void mixer_track_filter_convert_eq3_to_stereo(mixer_track_filter_t *filter)
+{
+    const fx_dj_eq3_mono_t *const mono = &filter->eq3_mono;
+    fx_dj_eq3_t stereo = {0};
+    memcpy(stereo.coeffs, mono->coeffs, sizeof(stereo.coeffs));
+    memcpy(stereo.coeffs_pending, mono->coeffs_pending, sizeof(stereo.coeffs_pending));
+    memcpy(stereo.state_l, mono->state, sizeof(mono->state));
+    memcpy(stereo.state_r, mono->state, sizeof(mono->state));
+    stereo.sample_rate = mono->sample_rate;
+    stereo.low_freq = mono->low_freq;
+    stereo.mid_freq = mono->mid_freq;
+    stereo.high_freq = mono->high_freq;
+    stereo.mid_q = mono->mid_q;
+    stereo.low_db = mono->low_db;
+    stereo.mid_db = mono->mid_db;
+    stereo.high_db = mono->high_db;
+    stereo.bypass = mono->bypass;
+    stereo.coeffs_pending_update = mono->coeffs_pending_update;
+    filter->eq3 = stereo;
+}
+
+static void mixer_track_filter_set_dsp_format(mixer_track_filter_t *filter,
+                                               mixer_filter_dsp_format_t format)
+{
+    if ((filter == NULL) || (filter->dsp_format == (uint8_t)format))
+        return;
+
+    if (format == MIXER_FILTER_DSP_MONO)
+    {
+        mixer_track_filter_convert_biquad_to_mono(filter);
+        mixer_track_filter_convert_eq3_to_mono(filter);
+    }
+    else
+    {
+        mixer_track_filter_convert_biquad_to_stereo(filter);
+        mixer_track_filter_convert_eq3_to_stereo(filter);
+    }
+    filter->dsp_format = (uint8_t)format;
+    mixer_track_filter_rebind_dsp_storage(filter);
+}
+
+static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
+{
+    if(filter == NULL)
+        return;
+
+    const uint8_t is_biquad =
+        mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type);
+    const uint8_t is_eq3 =
+        (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
+    if (filter->dsp_format == (uint8_t)MIXER_FILTER_DSP_MONO)
+    {
+        fx_biquad_filter_mono_set_sample_rate(&filter->biquad_mono, filter->sample_rate);
+        fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, filter->cutoff_hz);
+        fx_biquad_filter_mono_set_q(
+            &filter->biquad_mono,
+            mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+        if(is_biquad != 0U)
+        {
+            fx_biquad_filter_mono_set_mode(
+                &filter->biquad_mono,
+                mixer_track_filter_type_to_biquad_mode(
+                    (mixer_track_filter_type_t)filter->type));
+        }
+        fx_biquad_filter_mono_set_bypass(&filter->biquad_mono,
+                                         (is_biquad != 0U) ? 0U : 1U);
+        fx_dj_eq3_mono_set_gains_db(&filter->eq3_mono,
+                                    filter->eq_low_db,
+                                    filter->eq_mid_db,
+                                    filter->eq_high_db);
+        fx_dj_eq3_mono_set_bypass(&filter->eq3_mono,
+                                  (is_eq3 != 0U) ? 0U : 1U);
+        return;
+    }
+
+    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
+    fx_biquad_filter_set_q(
+        &filter->biquad,
+        mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+    if(is_biquad != 0U)
+    {
+        fx_biquad_filter_set_mode(
+            &filter->biquad,
+            mixer_track_filter_type_to_biquad_mode(
+                (mixer_track_filter_type_t)filter->type));
+    }
+    fx_biquad_filter_set_bypass(&filter->biquad,
+                                (is_biquad != 0U) ? 0U : 1U);
+
+    fx_dj_eq3_set_gains_db(&filter->eq3,
+                           filter->eq_low_db,
+                           filter->eq_mid_db,
+                           filter->eq_high_db);
+    fx_dj_eq3_set_bypass(&filter->eq3, (is_eq3 != 0U) ? 0U : 1U);
+}
+
+static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
+{
+    if(filter == NULL)
+        return;
+
+    filter->dsp_format = (uint8_t)MIXER_FILTER_DSP_STEREO;
+    fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
+    fx_dj_eq3_init(&filter->eq3, filter->sample_rate,
+                   300.0f, 1000.0f, 0.8f, 4000.0f);
+    fx_biquad_filter_reset(&filter->biquad);
+    mixer_track_filter_rebind_dsp_storage(filter);
+    mixer_track_filter_apply_core_params(filter);
 }
 
 static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_rate)
@@ -674,7 +818,6 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->filter_env_prepared_consumed = 1U;
     filter->config_version = mixer_track_filter_next_config_version();
 
-    fx_biquad_filter_mono_init(&filter->biquad_mono, filter->sample_rate);
     env_adsr_init(&filter->filter_env, filter->sample_rate);
     env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f, filter->sample_rate));
     env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
@@ -863,6 +1006,8 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
 {
     if((filter == NULL) || (left == NULL) || (right == NULL))
         return;
+
+    mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_STEREO);
 
     if((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
             && (filter->biquad.bypass_xfade_remaining == 0U))
@@ -1064,53 +1209,6 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
         i += chunk;
     }
     filter->filter_env_prepared_consumed = 1U;
-}
-
-static void mixer_track_filter_sync_stereo_state_from_mono(mixer_track_filter_t *filter)
-{
-    if (filter == NULL)
-    {
-        return;
-    }
-
-    filter->biquad.ic1eq_l = filter->biquad_mono.ic1eq;
-    filter->biquad.ic2eq_l = filter->biquad_mono.ic2eq;
-    filter->biquad.ic1eq_r = filter->biquad_mono.ic1eq;
-    filter->biquad.ic2eq_r = filter->biquad_mono.ic2eq;
-    filter->biquad.current = filter->biquad_mono.current;
-    filter->biquad.cutoff_hz = filter->biquad_mono.cutoff_hz;
-    filter->biquad.q = filter->biquad_mono.q;
-    filter->biquad.mode = filter->biquad_mono.mode;
-    filter->biquad.previous_mode = filter->biquad_mono.previous_mode;
-    filter->biquad.mode_xfade_remaining = filter->biquad_mono.mode_xfade_remaining;
-    filter->biquad.bypass_xfade_remaining = filter->biquad_mono.bypass_xfade_remaining;
-    filter->biquad.bypass_mix = filter->biquad_mono.bypass_mix;
-    filter->biquad.bypass = filter->biquad_mono.bypass;
-    filter->biquad.reset_after_bypass = filter->biquad_mono.reset_after_bypass;
-    filter->biquad.mode_via_dry = filter->biquad_mono.mode_via_dry;
-}
-
-static void mixer_track_filter_sync_stereo_state_from_mono_eq3(mixer_track_filter_t *filter)
-{
-    if (filter == NULL)
-    {
-        return;
-    }
-
-    memcpy(filter->eq3.state_l, filter->eq3_mono.state, sizeof(filter->eq3_mono.state));
-    memcpy(filter->eq3.state_r, filter->eq3_mono.state, sizeof(filter->eq3_mono.state));
-    memcpy(filter->eq3.coeffs, filter->eq3_mono.coeffs, sizeof(filter->eq3_mono.coeffs));
-    memcpy(filter->eq3.coeffs_pending, filter->eq3_mono.coeffs_pending, sizeof(filter->eq3_mono.coeffs_pending));
-    filter->eq3.sample_rate = filter->eq3_mono.sample_rate;
-    filter->eq3.low_freq = filter->eq3_mono.low_freq;
-    filter->eq3.mid_freq = filter->eq3_mono.mid_freq;
-    filter->eq3.high_freq = filter->eq3_mono.high_freq;
-    filter->eq3.mid_q = filter->eq3_mono.mid_q;
-    filter->eq3.low_db = filter->eq3_mono.low_db;
-    filter->eq3.mid_db = filter->eq3_mono.mid_db;
-    filter->eq3.high_db = filter->eq3_mono.high_db;
-    filter->eq3.bypass = filter->eq3_mono.bypass;
-    filter->eq3.coeffs_pending_update = filter->eq3_mono.coeffs_pending_update;
 }
 
 static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
@@ -1339,6 +1437,8 @@ static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filte
         return 0U;
     }
 
+    mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_MONO);
+
     if((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
             && (filter->biquad_mono.bypass_xfade_remaining == 0U))
     {
@@ -1375,7 +1475,6 @@ static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filte
             fx_dj_eq3_mono_process_block(&filter->eq3_mono, &mono[i], chunk);
         }
         filter->filter_env_prepared_consumed = 1U;
-        mixer_track_filter_sync_stereo_state_from_mono_eq3(filter);
         return 1U;
     }
 
@@ -1393,11 +1492,10 @@ static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filte
     filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     mixer_track_filter_process_biquad_mono_block(filter, mono, frames,
-                                                cutoff_start_hz,
-                                                cutoff_mod_start_hz,
-                                                resonance_start,
-                                                keytrack_ratio_start);
-    mixer_track_filter_sync_stereo_state_from_mono(filter);
+                                                 cutoff_start_hz,
+                                                 cutoff_mod_start_hz,
+                                                 resonance_start,
+                                                 keytrack_ratio_start);
 
     return 1U;
 }
