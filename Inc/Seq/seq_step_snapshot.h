@@ -23,8 +23,11 @@ typedef struct
     uint8_t roll;
     uint8_t lock_count;
     uint8_t reserved[4];
+    seq_step_play_t play;
     seq_step_snapshot_plock_t locks[SEQ_STEP_SNAPSHOT_MAX_LOCKS];
 } seq_step_snapshot_t;
+
+_Static_assert(sizeof(seq_step_snapshot_t) == 220U, "step snapshot storage size changed");
 
 typedef struct
 {
