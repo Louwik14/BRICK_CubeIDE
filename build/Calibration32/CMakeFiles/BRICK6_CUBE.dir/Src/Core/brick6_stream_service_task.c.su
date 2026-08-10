@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stream_service_task.c:22:13:brick6_stream_service_task_update_gate	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stream_service_task.c:34:6:brick6_stream_service_task_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stream_service_task.c:44:6:brick6_stream_service_task_notify_audio_irq	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stream_service_task.c:50:6:brick6_stream_service_task_poll	32	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_stream_service_task.c:122:6:brick6_stream_service_task_get_stats	8	static

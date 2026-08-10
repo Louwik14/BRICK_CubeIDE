@@ -3,7 +3,6 @@
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/md_model.h"
-#include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
 #include "Core/stream_calibration.h"
@@ -20,6 +19,32 @@
 
 static uint8_t g_ui_template_tone_subset = 0U;
 static uint8_t g_ui_template_tone_global_master = 0U;
+
+static uint16_t ui_template_tone_multi_instrument_from_selector(float value)
+{
+    if (value < 0.5f)
+    {
+        return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    const uint8_t selector = (uint8_t)(value + 0.5f);
+    uint8_t current = 1U;
+    uint16_t last_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    {
+        if (multi_sample_pool_get_instrument(id) == NULL)
+        {
+            continue;
+        }
+        last_id = id;
+        if (current == selector)
+        {
+            return id;
+        }
+        current++;
+    }
+    return last_id;
+}
 
 
 static const ui_template_family_t g_ui_template_tone_family_master_reverb = {
@@ -1306,13 +1331,19 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         {
             uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
             const multi_sample_instrument_t *instrument = NULL;
+            float selector = 0.0f;
 
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "INST");
             }
 
-            (void)brick6_sampler_runtime_get_multi_instrument(active_track, &instrument_id);
+            if (param_registry_get_track_value(PARAM_SAMPLER_SAMPLE,
+                                               active_track,
+                                               &selector) != 0U)
+            {
+                instrument_id = ui_template_tone_multi_instrument_from_selector(selector);
+            }
             if (instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
             {
                 instrument = multi_sample_pool_get_instrument(instrument_id);

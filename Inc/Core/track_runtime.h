@@ -43,7 +43,7 @@ typedef enum
     TRACK_RUNTIME_VOICE_MODE_POLY
 } track_runtime_voice_mode_t;
 
-typedef struct
+typedef struct track_runtime_ctx_s
 {
     uint8_t track_id;
     uint8_t mix_track_id;

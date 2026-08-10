@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:60:6:live_clock_init	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:76:6:live_clock_audio_publish_anchor	4	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:89:6:live_clock_read_anchor	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:106:6:live_clock_tim5_to_sample_time	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:133:6:live_clock_tim5_to_guarded_sample_time	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:155:10:live_clock_capture_tick	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_clock.c:160:10:live_clock_get_tim5_hz	0	static

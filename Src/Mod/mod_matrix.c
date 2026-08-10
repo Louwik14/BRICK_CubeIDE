@@ -5,6 +5,7 @@
 #include "Audio/mixer.h"
 #include "Core/track_sound_state.h"
 #include "Mod/mod_destination_catalog.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_types.h"
 
@@ -52,6 +53,31 @@ typedef struct
 
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_route_cache_t g_mod_matrix_route_cache[SEQ_TRACK_COUNT];
+typedef struct
+{
+    uint8_t source;
+    uint8_t destination_index;
+    float scale;
+} mod_matrix_poly_route_t;
+
+typedef struct
+{
+    uint16_t destination;
+    float base_value;
+    float min_value;
+    float max_value;
+} mod_matrix_poly_destination_t;
+
+typedef struct
+{
+    uint8_t source_mask;
+    uint8_t route_count;
+    uint8_t destination_count;
+    mod_matrix_poly_route_t routes[MOD_MATRIX_SLOT_COUNT];
+    mod_matrix_poly_destination_t destinations[MOD_MATRIX_SLOT_COUNT];
+} mod_matrix_poly_plan_t;
+
+static mod_matrix_poly_plan_t g_mod_matrix_poly_plan[SEQ_TRACK_COUNT];
 static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_base_override_t
     g_mod_matrix_base_overrides[SEQ_TRACK_COUNT][MOD_MATRIX_SLOT_COUNT];
@@ -447,30 +473,73 @@ void mod_matrix_rebuild_route_cache_track(uint8_t track)
 
     g_mod_matrix_route_cache[track].source_mask = source_mask;
     g_mod_matrix_route_cache[track].any_route = (source_mask != 0U) ? 1U : 0U;
+
+    mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+    memset(plan, 0, sizeof(*plan));
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (ctx != NULL)
+    {
+        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+        {
+            const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
+            if ((mod_matrix_slot_is_configured(s) == 0U)
+                    || (s->source < (uint8_t)MOD_MATRIX_SOURCE_LFO1)
+                    || (s->source > (uint8_t)MOD_MATRIX_SOURCE_LFO3)) continue;
+            const uint8_t lfo = (uint8_t)(s->source - (uint8_t)MOD_MATRIX_SOURCE_LFO1);
+            const mod_lfo_trig_mode_t trig = mod_lfo_v1_effective_trig(track, lfo);
+            if ((trig < MOD_LFO_TRIG_POLY_TRIG)
+                    || (mod_destination_catalog_poly_voice_supported(
+                        (param_id_t)s->destination, ctx) == 0U)) continue;
+
+            uint8_t dst_index = plan->destination_count;
+            for (uint8_t i = 0U; i < plan->destination_count; ++i)
+            {
+                if (plan->destinations[i].destination == s->destination)
+                {
+                    dst_index = i;
+                    break;
+                }
+            }
+            if (dst_index == plan->destination_count)
+            {
+                const param_desc_t *const desc = &param_registry[s->destination];
+                plan->destinations[dst_index].destination = s->destination;
+                const mod_matrix_base_override_t *const override =
+                    mod_matrix_find_base_override(track, (param_id_t)s->destination);
+                if (override != NULL)
+                    plan->destinations[dst_index].base_value = override->value;
+                else
+                    (void)param_registry_get_track_value((param_id_t)s->destination, track,
+                        &plan->destinations[dst_index].base_value);
+                plan->destinations[dst_index].min_value = desc->min;
+                plan->destinations[dst_index].max_value = desc->max;
+                plan->destination_count++;
+            }
+            mod_matrix_poly_route_t *const route = &plan->routes[plan->route_count++];
+            route->source = s->source;
+            route->destination_index = dst_index;
+            route->scale = (s->depth / 127.0f)
+                * (plan->destinations[dst_index].max_value
+                    - plan->destinations[dst_index].min_value);
+            plan->source_mask |= (uint8_t)(1U << lfo);
+        }
+    }
+    mixer_invalidate_external_poly_track(track);
     mod_matrix_recompute_global_route_flag();
 }
 
 void mod_matrix_rebuild_route_cache_all(void)
 {
-    g_mod_matrix_any_route = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        uint16_t source_mask = 0U;
-        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-        {
-            const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
-            if (mod_matrix_slot_is_configured(s) != 0U)
-            {
-                source_mask |= (uint16_t)(1U << s->source);
-            }
-        }
-        g_mod_matrix_route_cache[track].source_mask = source_mask;
-        g_mod_matrix_route_cache[track].any_route = (source_mask != 0U) ? 1U : 0U;
-        if (source_mask != 0U)
-        {
-            g_mod_matrix_any_route = 1U;
-        }
+        mod_matrix_rebuild_route_cache_track(track);
     }
+}
+
+uint8_t mod_matrix_poly_route_mask(uint8_t track)
+{
+    return (track < SEQ_TRACK_COUNT) ? g_mod_matrix_poly_plan[track].source_mask : 0U;
 }
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value)
@@ -1097,6 +1166,7 @@ void mod_matrix_process_track_ramped(uint8_t track,
         return;
     }
 
+    (void)source_start;
     mod_matrix_runtime_track_t *const rt = &g_mod_matrix_runtime[track];
     const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
     const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
@@ -1202,6 +1272,64 @@ void mod_matrix_process_track(uint8_t track,
                                     1U);
 }
 
+void mod_matrix_process_poly_voice_ramped(uint8_t track,
+                                          uint8_t voice_slot,
+                                          const track_runtime_ctx_t *ctx,
+                                          const float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                          const float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                          const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT])
+{
+    if ((track >= SEQ_TRACK_COUNT) || (ctx == NULL) || (source_start == NULL)
+            || (source_end == NULL) || (source_valid == NULL)
+            || (mod_matrix_track_has_configured_route(track) == 0U))
+    {
+        return;
+    }
+
+    const mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+    if (plan->route_count == 0U) return;
+    float sums[MOD_MATRIX_SLOT_COUNT] = {0.0f};
+
+    for (uint8_t i = 0U; i < plan->route_count; ++i)
+    {
+        const mod_matrix_poly_route_t *const route = &plan->routes[i];
+        if (source_valid[route->source] != 0U)
+            sums[route->destination_index] += source_end[route->source] * route->scale;
+    }
+
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
+    {
+        const mod_matrix_poly_destination_t *const planned = &plan->destinations[i];
+        const float value = mod_matrix_clampf(planned->base_value + sums[i],
+                                              planned->min_value, planned->max_value);
+        (void)mod_destination_catalog_apply_poly_voice_rt(track, voice_slot,
+                                                          (param_id_t)planned->destination,
+                                                          ctx, value);
+    }
+}
+
+void mod_matrix_reset_poly_voice(uint8_t track,
+                                 uint8_t voice_slot,
+                                 const track_runtime_ctx_t *ctx)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (ctx == NULL)
+            || (mod_matrix_track_has_configured_route(track) == 0U))
+    {
+        return;
+    }
+
+    const mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
+    {
+        const mod_matrix_poly_destination_t *const destination = &plan->destinations[i];
+        (void)mod_destination_catalog_apply_poly_voice_rt(track,
+                                                          voice_slot,
+                                                          (param_id_t)destination->destination,
+                                                          ctx,
+                                                          destination->base_value);
+    }
+}
+
 uint8_t mod_matrix_get_destination_ramp(uint8_t track,
                                         param_id_t destination,
                                         mod_destination_ramp_t *out_ramp)
@@ -1251,6 +1379,13 @@ void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id,
     {
         dst->base_value = value;
     }
+    if (mod_matrix_find_base_override(track, id) == NULL)
+    {
+        mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+        for (uint8_t i = 0U; i < plan->destination_count; ++i)
+            if (plan->destinations[i].destination == (uint16_t)id)
+                plan->destinations[i].base_value = value;
+    }
 }
 
 void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float value)
@@ -1297,6 +1432,10 @@ void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float va
     {
         dst->base_value = value;
     }
+    mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
+        if (plan->destinations[i].destination == (uint16_t)id)
+            plan->destinations[i].base_value = value;
 }
 
 void mod_matrix_clear_runtime_base_override(uint8_t track,
@@ -1323,4 +1462,8 @@ void mod_matrix_clear_runtime_base_override(uint8_t track,
     {
         dst->base_value = base_value;
     }
+    mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
+        if (plan->destinations[i].destination == (uint16_t)id)
+            plan->destinations[i].base_value = base_value;
 }

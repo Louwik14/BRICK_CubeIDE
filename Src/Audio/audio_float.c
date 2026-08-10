@@ -425,6 +425,7 @@ volatile uint32_t g_audio_dsp_frames_counter = 0U;
 
 /* Gain master global (après somme des tracks). */
 static AUDIO_HOT float master_gain = 1.0f;
+static AUDIO_HOT uint32_t g_audio_tracks_enabled_mask;
 
 /* ============================================================
    USER CALLBACK
@@ -439,6 +440,7 @@ void audio_set_float_callback(audio_dsp_cb cb)
 /** Voir audio_float.h */
 void audio_tracks_init(void)
 {
+    g_audio_tracks_enabled_mask = 0U;
     for(uint32_t t = 0; t < MAX_TRACKS; t++)
     {
         tracks[t].enabled = 0U;
@@ -471,6 +473,11 @@ void track_enable(uint32_t track_id, uint8_t enabled)
     const uint8_t next = enabled ? 1U : 0U;
 
     tracks[track_id].enabled = next;
+    const uint32_t bit = (uint32_t)(1UL << track_id);
+    if (next != 0U)
+        g_audio_tracks_enabled_mask |= bit;
+    else
+        g_audio_tracks_enabled_mask &= ~bit;
 
     if((prev == 0U) && (next != 0U) && (track_id == 0U))
     {
@@ -486,6 +493,11 @@ uint32_t track_is_enabled(uint32_t track_id)
         return 0U;
 
     return (uint32_t)tracks[track_id].enabled;
+}
+
+uint32_t audio_tracks_enabled_mask(void)
+{
+    return g_audio_tracks_enabled_mask;
 }
 
 /** Voir audio_float.h */

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Core/brick6_audio_event_grid.h"
+#include "Core/synth_polyphony.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_runtime.h"
 #include "Audio/mixer.h"
@@ -71,9 +72,84 @@ typedef struct
 } mod_lfo_runtime_state_t;
 
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+typedef struct
+{
+    uint32_t phase;
+    uint32_t rng_state;
+    float sh_value;
+    float hold_value;
+    float slew_value;
+    uint8_t sh_valid;
+    uint8_t hold_valid;
+    uint8_t slew_valid;
+    uint8_t one_done;
+    uint8_t active;
+    uint8_t pending_trigger;
+    uint8_t pending_reset;
+} mod_lfo_poly_state_t;
+
+static mod_lfo_poly_state_t
+    g_mod_lfo_poly_runtime[MOD_LFO_POLY_SLOT_COUNT][MOD_LFO_COUNT_PER_TRACK];
+static uint8_t g_mod_lfo_poly_owner[MOD_LFO_POLY_SLOT_COUNT];
+_Static_assert(SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET == MOD_LFO_POLY_SYNTH_SLOT_COUNT,
+               "Poly LFO synth slot namespace changed");
 static uint32_t g_mod_lfo_control_counter = 0U;
 static uint8_t g_mod_lfo_had_matrix_routes = 0U;
 static uint8_t g_mod_lfo_track_had_matrix_routes[SEQ_TRACK_COUNT];
+
+static uint8_t mod_lfo_trig_is_poly(mod_lfo_trig_mode_t trig)
+{
+    return (trig >= MOD_LFO_TRIG_POLY_TRIG) ? 1U : 0U;
+}
+
+static void mod_lfo_poly_state_invalidate(mod_lfo_poly_state_t *rt,
+                                          uint8_t wait_for_trigger)
+{
+    if (rt == NULL)
+    {
+        return;
+    }
+
+    rt->phase = 0U;
+    rt->rng_state = 0U;
+    rt->sh_value = 0.0f;
+    rt->hold_value = 0.0f;
+    rt->slew_value = 0.0f;
+    rt->sh_valid = 0U;
+    rt->hold_valid = 0U;
+    rt->slew_valid = 0U;
+    rt->one_done = 0U;
+    rt->active = 0U;
+    rt->pending_trigger = wait_for_trigger;
+    rt->pending_reset = wait_for_trigger;
+}
+
+static void mod_lfo_poly_mode_changed(uint8_t track,
+                                      uint8_t lfo_index,
+                                      mod_lfo_trig_mode_t old_trig,
+                                      mod_lfo_trig_mode_t new_trig)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+            || (old_trig == new_trig))
+    {
+        return;
+    }
+
+    if ((mod_lfo_trig_is_poly(old_trig) == 0U)
+            && (mod_lfo_trig_is_poly(new_trig) == 0U))
+    {
+        return;
+    }
+
+    for (uint8_t voice_slot = 0U; voice_slot < MOD_LFO_POLY_SLOT_COUNT; ++voice_slot)
+    {
+        if (g_mod_lfo_poly_owner[voice_slot] == track)
+        {
+            mod_lfo_poly_state_invalidate(&g_mod_lfo_poly_runtime[voice_slot][lfo_index],
+                                          mod_lfo_trig_is_poly(new_trig));
+        }
+    }
+}
 
 static float mod_lfo_clampf(float v, float lo, float hi)
 {
@@ -547,6 +623,12 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             const mod_lfo_shape_t shape_id = (mod_lfo_shape_t)((uint8_t)(shape + 0.5f));
             const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)(trig_f + 0.5f));
 
+            if (trig >= MOD_LFO_TRIG_POLY_TRIG)
+            {
+                rt->active = 0U;
+                continue;
+            }
+
             rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
             if (rt->phase_inc == 0U)
             {
@@ -642,6 +724,8 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 void mod_lfo_v1_init(void)
 {
     memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
+    memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
+    memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
     mod_destination_catalog_init();
     mod_env3_init();
     mod_matrix_init();
@@ -686,6 +770,8 @@ void mod_lfo_v1_reset_runtime(void)
     mod_destination_catalog_reset_runtime();
     mod_env3_reset_runtime();
     mod_matrix_reset_runtime();
+    memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
+    memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
@@ -755,6 +841,9 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             return 1U;
 
         case MOD_LFO_PARAM_TRIG:
+        {
+            const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)((uint8_t)
+                (mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f));
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
             rt->triggered = 0U;
@@ -763,7 +852,13 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->hold_valid = 0U;
             rt->active = 0U;
             rt->ramp_valid = 0U;
+            mod_lfo_poly_mode_changed(track,
+                                      lfo_index,
+                                      old_trig,
+                                      (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f)));
+            mod_matrix_rebuild_route_cache_track(track);
             return 1U;
+        }
 
         case MOD_LFO_PARAM_PHASE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
@@ -818,13 +913,21 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             break;
 
         case MOD_LFO_PARAM_TRIG:
+        {
+            const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)((uint8_t)
+                (mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f));
             rt->temp.trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
             rt->triggered = 0U;
             rt->one_running = 0U;
             rt->one_done = 0U;
             rt->hold_valid = 0U;
             rt->active = 0U;
+            mod_lfo_poly_mode_changed(track,
+                                      lfo_index,
+                                      old_trig,
+                                      (mod_lfo_trig_mode_t)((uint8_t)(rt->temp.trig + 0.5f)));
             break;
+        }
 
         case MOD_LFO_PARAM_PHASE:
             rt->temp.phase = mod_lfo_clampf(value, 0.0f, 360.0f);
@@ -836,6 +939,7 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     }
 
     rt->temp_valid_mask |= mod_lfo_runtime_param_mask(param);
+    if (param == MOD_LFO_PARAM_TRIG) mod_matrix_rebuild_route_cache_track(track);
     return 1U;
 }
 
@@ -847,7 +951,26 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
     }
 
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const mod_lfo_trig_mode_t old_trig = (s != NULL)
+        ? (mod_lfo_trig_mode_t)((uint8_t)(mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f))
+        : MOD_LFO_TRIG_FREE;
     rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
+    if ((param == MOD_LFO_PARAM_TRIG) && (s != NULL))
+    {
+        const mod_lfo_trig_mode_t new_trig = (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f));
+        mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
+    }
+    if (param == MOD_LFO_PARAM_TRIG) mod_matrix_rebuild_route_cache_track(track);
+}
+
+mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index)
+{
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    if ((s == NULL) || (track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+        return MOD_LFO_TRIG_FREE;
+    return (mod_lfo_trig_mode_t)((uint8_t)(mod_lfo_effective_field(
+        &g_mod_lfo_runtime[track][lfo_index], s, MOD_LFO_PARAM_TRIG) + 0.5f));
 }
 
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value)
@@ -943,7 +1066,7 @@ void mod_lfo_v1_note_trigger(uint8_t track)
 
         const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f));
         const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)(s->shape + 0.5f));
-        if (trig == MOD_LFO_TRIG_FREE)
+        if ((trig == MOD_LFO_TRIG_FREE) || (trig >= MOD_LFO_TRIG_POLY_TRIG))
         {
             continue;
         }
@@ -960,6 +1083,218 @@ void mod_lfo_v1_note_trigger(uint8_t track)
         {
             mod_lfo_capture_hold_value(rt, shape);
         }
+    }
+}
+
+void mod_lfo_v1_poly_voice_reset(uint8_t voice_slot)
+{
+    if (voice_slot < MOD_LFO_POLY_SLOT_COUNT)
+    {
+        memset(g_mod_lfo_poly_runtime[voice_slot], 0,
+               sizeof(g_mod_lfo_poly_runtime[voice_slot]));
+        g_mod_lfo_poly_owner[voice_slot] = SYNTH_POLYPHONY_NO_VOICE;
+    }
+}
+
+void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (voice_slot >= MOD_LFO_POLY_SLOT_COUNT))
+    {
+        return;
+    }
+
+    g_mod_lfo_poly_owner[voice_slot] = track;
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+        if (s == NULL) continue;
+        const mod_lfo_runtime_state_t *const shared = &g_mod_lfo_runtime[track][lfo];
+        const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)
+            (mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_TRIG) + 0.5f));
+        mod_lfo_poly_state_t *const rt = &g_mod_lfo_poly_runtime[voice_slot][lfo];
+        if (trig < MOD_LFO_TRIG_POLY_TRIG)
+        {
+            mod_lfo_poly_state_invalidate(rt, 0U);
+            continue;
+        }
+
+        const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)
+            (mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_SHAPE) + 0.5f));
+        rt->one_done = 0U;
+        rt->hold_valid = 0U;
+        rt->pending_trigger = 0U;
+        rt->pending_reset = 0U;
+        if (rt->rng_state == 0U)
+        {
+            rt->rng_state = 0xA341316CU ^ ((uint32_t)voice_slot << 8) ^ (uint32_t)lfo;
+        }
+        if ((trig != MOD_LFO_TRIG_POLY_HOLD) || (rt->active == 0U))
+        {
+            rt->slew_valid = 0U;
+            rt->phase = (shape == MOD_LFO_SHAPE_RANDOM_SH) ? 0U
+                : mod_lfo_phase_from_degrees(
+                    mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_PHASE));
+            rt->sh_valid = 0U;
+        }
+        rt->active = 1U;
+        if (trig == MOD_LFO_TRIG_POLY_HOLD)
+        {
+            if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+            {
+                rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+                rt->sh_valid = 1U;
+            }
+            rt->hold_value = mod_lfo_segment_wave((uint8_t)shape, rt->phase, rt->sh_value);
+            rt->hold_valid = 1U;
+        }
+    }
+}
+
+void mod_lfo_v1_process_poly_voice(uint8_t track,
+                                   uint8_t voice_slot,
+                                   const track_runtime_ctx_t *ctx,
+                                   uint32_t frames)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (voice_slot >= MOD_LFO_POLY_SLOT_COUNT)
+            || (ctx == NULL) || (frames == 0U))
+    {
+        return;
+    }
+    const uint8_t poly_mask = mod_matrix_poly_route_mask(track);
+    if (poly_mask == 0U) return;
+
+    float source_start[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
+    float source_end[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
+    uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT] = {0U};
+    uint8_t any_valid = 0U;
+    uint8_t pending_reset = 0U;
+    const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        if ((poly_mask & (uint8_t)(1U << lfo)) != 0U
+                && (g_mod_lfo_poly_runtime[voice_slot][lfo].pending_reset != 0U))
+        {
+            pending_reset = 1U;
+            break;
+        }
+    }
+    if (pending_reset != 0U)
+    {
+        mod_matrix_reset_poly_voice(track, voice_slot, ctx);
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+        {
+            g_mod_lfo_poly_runtime[voice_slot][lfo].pending_reset = 0U;
+        }
+    }
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        if ((poly_mask & (uint8_t)(1U << lfo)) == 0U) continue;
+        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+        if (s == NULL) continue;
+        const mod_lfo_runtime_state_t *const shared = &g_mod_lfo_runtime[track][lfo];
+        const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)
+            (mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_TRIG) + 0.5f));
+        if (trig < MOD_LFO_TRIG_POLY_TRIG) continue;
+        const uint8_t source = (uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo;
+        mod_lfo_poly_state_t *const rt = &g_mod_lfo_poly_runtime[voice_slot][lfo];
+        const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)
+            (mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_SHAPE) + 0.5f));
+        const float phase_setting = mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_PHASE);
+        const uint32_t phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(
+            mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_RATE), bpm_milli);
+        if (rt->pending_trigger != 0U)
+        {
+            continue;
+        }
+        if (phase_inc == 0U) continue;
+        if (rt->active == 0U)
+        {
+            mod_lfo_v1_poly_note_trigger(track, voice_slot);
+        }
+
+        if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->sh_valid == 0U))
+        {
+            rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+            rt->sh_valid = 1U;
+        }
+        float start = mod_lfo_segment_wave((uint8_t)shape, rt->phase, rt->sh_value);
+        float end = start;
+        if ((trig == MOD_LFO_TRIG_POLY_ONE) && (rt->one_done != 0U))
+        {
+            start = mod_lfo_segment_wave((uint8_t)shape, 0xFFFFFFFFU, rt->sh_value);
+            end = start;
+        }
+        else
+        {
+            uint32_t remaining = frames;
+            uint8_t first = 1U;
+            while (remaining != 0U)
+            {
+                mod_lfo_ramp_t ramp;
+                const uint32_t phase_before = rt->phase;
+                const uint32_t consumed = mod_lfo_segment_plan((uint8_t)shape, rt->phase,
+                                                                phase_inc, remaining, rt->sh_value,
+                                                                (trig == MOD_LFO_TRIG_POLY_ONE),
+                                                                &ramp);
+                if (consumed == 0U) break;
+                if (first != 0U)
+                {
+                    start = ramp.start;
+                    first = 0U;
+                }
+                end = ramp.start + ramp.step * (float)(ramp.frames - 1U);
+                rt->phase = ramp.phase_after;
+                remaining -= consumed;
+                if ((shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_before))
+                {
+                    rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+                }
+                if ((trig == MOD_LFO_TRIG_POLY_ONE) && (rt->phase < phase_before))
+                {
+                    rt->one_done = 1U;
+                    rt->phase = 0U;
+                    break;
+                }
+            }
+        }
+        if ((trig == MOD_LFO_TRIG_POLY_HOLD) && (rt->hold_valid != 0U))
+        {
+            start = rt->hold_value;
+            end = start;
+        }
+        else if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+        {
+            const float slew_norm = mod_lfo_clampf(phase_setting / 360.0f, 0.0f, 1.0f);
+            const float reference_coeff = 1.0f - (slew_norm * 0.95f);
+            const float time_constant_frames = (reference_coeff < 1.0f)
+                ? (64.0f * (1.0f - reference_coeff) / reference_coeff) : 0.0f;
+            const float coeff = (reference_coeff < 1.0f)
+                ? ((float)frames / (time_constant_frames + (float)frames)) : 1.0f;
+            if (rt->slew_valid == 0U)
+            {
+                rt->slew_value = start;
+                rt->slew_valid = 1U;
+            }
+            else
+            {
+                rt->slew_value += (start - rt->slew_value) * coeff;
+            }
+            start = rt->slew_value;
+            end = start;
+        }
+        source_start[source] = start;
+        source_end[source] = end;
+        source_valid[source] = 1U;
+        any_valid = 1U;
+    }
+
+    if (any_valid != 0U)
+    {
+        mod_matrix_process_poly_voice_ramped(track, voice_slot, ctx,
+                                             source_start, source_end, source_valid);
     }
 }
 

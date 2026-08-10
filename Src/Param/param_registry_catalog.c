@@ -81,13 +81,15 @@ static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
 static const char *const g_vca_env_type_labels[] = {"DAISY", "LINEAR", NULL};
 static const char *const g_midi_fx_style_labels[] = {"ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
-static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
+static const char *const g_lfo_trig_labels[] = {
+    "FREE", "TRIG", "HOLD", "ONE", "P.Trig", "P.Hold", "P.One", NULL
+};
 static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2", "LFO 3", "env flt", "env vca", "env mod", "MULT1", "MULT2", "SLEW1", "SLEW2", NULL};
 
 #define PARAM_DESC_LFO(_rate, _shape, _trig, _phase, _apply_rate, _apply_shape, _apply_trig, _apply_phase) \
     PARAM_DESC_EX((_rate), "Rate", PARAM_TYPE_FLOAT, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, (_apply_rate)), \
     PARAM_DESC_EX((_shape), "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, (_apply_shape)), \
-    PARAM_DESC_EX((_trig), "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, (_apply_trig)), \
+    PARAM_DESC_EX((_trig), "Trig", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, (_apply_trig)), \
     PARAM_DESC_EX((_phase), "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, (_apply_phase))
 
 const param_desc_t param_registry[PARAM_COUNT] = {

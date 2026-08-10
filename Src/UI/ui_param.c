@@ -35,6 +35,8 @@
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/live_clock.h"
+#include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
@@ -92,6 +94,7 @@ typedef struct
 static uint8_t ui_param_is_track_scoped(param_id_t param);
 static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param);
 static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param);
+static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track);
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value);
 static uint8_t ui_param_resolve_seq_slot(uint8_t track,
                                          param_id_t param,
@@ -245,7 +248,8 @@ void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
                 scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
                 track = ui_param_resolve_effective_edit_track(parameter, active_track);
             }
-            if (live_parameter_is_audio_owned(parameter) != 0U)
+            if ((live_parameter_is_audio_owned(parameter) != 0U)
+                    && (ui_param_is_prism_tune(parameter, track) == 0U))
             {
                 route = ENCODER_BINDING_ROUTE_AUDIO;
             }
@@ -277,7 +281,12 @@ uint8_t ui_param_accept_audio_owned_command(param_id_t param,
                                             float value)
 {
     const uint8_t shadow_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
-    return ui_param_audio_owned_shadow_set(param, shadow_track, value, 0U);
+    const uint8_t update_global_mirror =
+        (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL) ? 1U : 0U;
+    return ui_param_audio_owned_shadow_set(param,
+                                           shadow_track,
+                                           value,
+                                           update_global_mirror);
 }
 
 static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
@@ -1070,7 +1079,8 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     active_track = ui_param_resolve_effective_edit_track(param, active_track);
 
     float value = 0.0f;
-    if (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U)
+    if ((ui_param_is_prism_tune(param, active_track) == 0U)
+            && (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U))
     {
         return value;
     }
@@ -1098,7 +1108,8 @@ float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_t
 
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value)
 {
-    if (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U)
+    if ((ui_param_is_prism_tune(param, track) == 0U)
+            && (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U))
     {
         return 1U;
     }
@@ -1110,8 +1121,14 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
     {
         float coarse = 0.5f;
         float fine = 0.5f;
-        if ((param_registry_get_track_value(param, track, &coarse) == 0U)
-                || (param_registry_get_track_value(ui_param_prism_fine_for_tune(param), track, &fine) == 0U))
+        const param_id_t fine_param = ui_param_prism_fine_for_tune(param);
+        if ((ui_param_audio_owned_shadow_get(param, track, &coarse) == 0U)
+                && (param_registry_get_track_value(param, track, &coarse) == 0U))
+        {
+            return 0U;
+        }
+        if ((ui_param_audio_owned_shadow_get(fine_param, track, &fine) == 0U)
+                && (param_registry_get_track_value(fine_param, track, &fine) == 0U))
         {
             return 0U;
         }
@@ -1252,9 +1269,8 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         uint8_t track,
                                         uint8_t update_active_mirror)
 {
-    (void)encoder;
-
-    if (live_parameter_is_audio_owned(param) != 0U)
+    if ((live_parameter_is_audio_owned(param) != 0U)
+            && (ui_param_is_prism_tune(param, track) == 0U))
     {
         const param_desc_t *const desc = &param_registry[param];
         float edit_min = desc->min;
@@ -1335,21 +1351,39 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             return 1U;
         }
 
-        const param_registry_track_edit_cmd_t fine_cmd = {
-            .id = ui_param_prism_fine_for_tune(param),
-            .track = track,
-            .value = 0.5f
+        const param_id_t fine_param = ui_param_prism_fine_for_tune(param);
+        live_parameter_audio_bulk_t bulk = {
+            .capture_tick = live_clock_capture_tick(),
+            .source = LIVE_PARAMETER_EVENT_SOURCE_ENCODER,
+            .count = 2U
         };
-        const param_registry_track_edit_cmd_t coarse_cmd = {
-            .id = param,
+        bulk.item[0] = (live_parameter_audio_bulk_item_t){
+            .parameter_id = (uint16_t)fine_param,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
-            .value = clamped
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+                                | ((uint16_t)encoder << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)),
+            .value = live_parameter_event_encode_float(0.5f)
         };
-        if ((param_registry_apply_track_edit(&fine_cmd) == 0U)
-                || (param_registry_apply_track_edit(&coarse_cmd) == 0U))
+        bulk.item[1] = (live_parameter_audio_bulk_item_t){
+            .parameter_id = (uint16_t)param,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+                                | ((uint16_t)encoder << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)),
+            .value = live_parameter_event_encode_float(clamped)
+        };
+        if (live_parameter_audio_queue_submit_bulk(&bulk) == false)
         {
             return 0U;
         }
+        (void)ui_param_audio_owned_shadow_set(fine_param, track, 0.5f, 0U);
+        (void)ui_param_audio_owned_shadow_set(param, track, clamped,
+                                              update_active_mirror);
 
         uint8_t set_id = 0U;
         seq_param_slot_t param_slot = 0U;
@@ -1369,8 +1403,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
 
         if (update_active_mirror != 0U)
         {
-            param_store_set_active(param, clamped);
-            param_store_set_active(ui_param_prism_fine_for_tune(param), 0.5f);
+            param_store_set_active(fine_param, 0.5f);
         }
         return 1U;
     }

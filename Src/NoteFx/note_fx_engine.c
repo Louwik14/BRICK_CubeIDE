@@ -58,6 +58,36 @@ _Static_assert(sizeof(note_fx_slot_runtime_t) == 928U,
 static note_fx_slot_runtime_t g_slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
 static note_fx_diag_t g_diag[NOTE_FX_TRACK_COUNT];
 static uint32_t g_token;
+static uint64_t g_work_slot_mask;
+
+static uint8_t slot_has_owned(const note_fx_slot_runtime_t *runtime);
+
+static uint64_t slot_work_bit(uint8_t track, uint8_t slot)
+{
+    return UINT64_C(1) << ((uint32_t)track * NOTE_FX_SLOT_COUNT + slot);
+}
+
+static uint8_t slot_has_work(const note_fx_slot_runtime_t *runtime)
+{
+    if ((runtime->common.closing != 0U) || (slot_has_owned(runtime) != 0U))
+        return 1U;
+    if (runtime->common.model == NOTE_FX_MODEL_ARP)
+        return (runtime->fx.arp.arp.count != 0U)
+            || (runtime->fx.arp.pending_source_close != 0U);
+    if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
+        return (runtime->fx.euclid.source_count != 0U)
+            || (runtime->fx.euclid.reconfigure_pending != 0U);
+    return 0U;
+}
+
+static void refresh_slot_work(uint8_t track, uint8_t slot)
+{
+    const uint64_t bit = slot_work_bit(track, slot);
+    if (slot_has_work(&g_slot[track][slot]) != 0U)
+        g_work_slot_mask |= bit;
+    else
+        g_work_slot_mask &= ~bit;
+}
 
 static uint8_t slot_owned_count(const note_fx_slot_runtime_t *runtime)
 {
@@ -261,6 +291,7 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
     for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
         runtime->common.closing |= runtime->common.owned[i].active;
     runtime->common.next_sample = (runtime->common.closing != 0U) ? sample : 0U;
+    refresh_slot_work(track, slot);
 }
 
 void note_fx_engine_init(void)
@@ -268,6 +299,7 @@ void note_fx_engine_init(void)
     memset(g_slot, 0, sizeof(g_slot));
     memset(g_diag, 0, sizeof(g_diag));
     g_token = 0U;
+    g_work_slot_mask = 0U;
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
             g_slot[track][slot].common.model = NOTE_FX_MODEL_OFF;
@@ -325,6 +357,7 @@ void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model,
                 runtime->common.next_sample = 0U;
             }
         }
+        refresh_slot_work(track, slot);
         return;
     }
 
@@ -345,6 +378,7 @@ void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model,
         runtime->fx.arp.range = (range >= 1U && range <= 4U) ? range : 1U;
         runtime->fx.arp.pending_source_close = 0U;
     }
+    refresh_slot_work(track, slot);
 }
 
 static note_fx_result_t euclid_emit_source_off(
@@ -467,8 +501,9 @@ static note_fx_result_t euclid_stage_source(
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8_t slot,
-                                             note_fx_emit_fn emit, void *context)
+static note_fx_result_t note_fx_engine_stage_source_impl(
+    const note_fx_event_t *event, uint8_t slot,
+    note_fx_emit_fn emit, void *context)
 {
     if (!note_event_is_valid(event) || event->track >= NOTE_FX_TRACK_COUNT
             || slot >= NOTE_FX_SLOT_COUNT || event->stage != slot)
@@ -550,6 +585,21 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
     runtime->fx.arp.destination = event->destination_id;
     if (was_empty != 0U) runtime->common.next_sample = event->sample_abs;
     return 1U;
+}
+
+note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event,
+                                             uint8_t slot,
+                                             note_fx_emit_fn emit,
+                                             void *context)
+{
+    const note_fx_result_t result = note_fx_engine_stage_source_impl(
+        event, slot, emit, context);
+    if ((event != 0) && (event->track < NOTE_FX_TRACK_COUNT)
+            && (slot < NOTE_FX_SLOT_COUNT))
+    {
+        refresh_slot_work(event->track, slot);
+    }
+    return result;
 }
 
 note_fx_result_t note_fx_engine_source(const note_fx_event_t *event,
@@ -783,10 +833,16 @@ static void euclid_generate_at_deadline(
 void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                             note_fx_emit_fn emit, void *context)
 {
+    if (g_work_slot_mask == 0U)
+        return;
     const uint64_t end = start + frames;
     /* First pass: every due owned closure precedes every newly generated On. */
-    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
-        for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
+    uint64_t work_mask = g_work_slot_mask;
+    while (work_mask != 0U) {
+            const uint32_t work_index = (uint32_t)__builtin_ctzll(work_mask);
+            work_mask &= work_mask - 1U;
+            const uint8_t track = (uint8_t)(work_index / NOTE_FX_SLOT_COUNT);
+            const uint8_t slot = (uint8_t)(work_index % NOTE_FX_SLOT_COUNT);
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
             if ((runtime->common.closing != 0U)
                     && (runtime->common.next_sample < end)) {
@@ -800,6 +856,7 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
             {
                 (void)euclid_process_closures(runtime, track, slot, start, end,
                                                emit, context);
+                refresh_slot_work(track, slot);
                 continue;
             }
             if (runtime->common.model != NOTE_FX_MODEL_ARP ||
@@ -855,12 +912,16 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                         runtime->common.next_sample = 0U;
                 }
             }
-        }
+            refresh_slot_work(track, slot);
     }
 
     /* Second pass: generate only after the global closure pass completed. */
-    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track) {
-        for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
+    uint64_t processed_mask = 0U;
+    while ((work_mask = (g_work_slot_mask & ~processed_mask)) != 0U) {
+            const uint32_t work_index = (uint32_t)__builtin_ctzll(work_mask);
+            processed_mask |= UINT64_C(1) << work_index;
+            const uint8_t track = (uint8_t)(work_index / NOTE_FX_SLOT_COUNT);
+            const uint8_t slot = (uint8_t)(work_index % NOTE_FX_SLOT_COUNT);
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
             if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
             {
@@ -869,6 +930,7 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                     euclid_generate_at_deadline(runtime, track, slot, start, end,
                                                 step_q16, emit, context);
                 }
+                refresh_slot_work(track, slot);
                 continue;
             }
             if ((runtime->common.closing != 0U)
@@ -881,6 +943,7 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
             if (release_pending != 0U) {
                 runtime->common.next_sample += rate_period(
                     runtime->fx.arp.rate, step_q16);
+                refresh_slot_work(track, slot);
                 continue;
             }
             uint8_t note, velocity;
@@ -925,7 +988,7 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
             }
             runtime->common.next_sample += rate_period(
                 runtime->fx.arp.rate, step_q16);
-        }
+            refresh_slot_work(track, slot);
     }
 }
 
@@ -953,9 +1016,15 @@ note_fx_slot_diag_t note_fx_engine_slot_diag(uint8_t track, uint8_t slot)
 
 uint64_t note_fx_engine_next_deadline(void)
 {
+    if (g_work_slot_mask == 0U)
+        return UINT64_MAX;
     uint64_t next = UINT64_MAX;
-    for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
-        for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot) {
+    uint64_t work_mask = g_work_slot_mask;
+    while (work_mask != 0U) {
+            const uint32_t work_index = (uint32_t)__builtin_ctzll(work_mask);
+            work_mask &= work_mask - 1U;
+            const uint8_t track = (uint8_t)(work_index / NOTE_FX_SLOT_COUNT);
+            const uint8_t slot = (uint8_t)(work_index % NOTE_FX_SLOT_COUNT);
             const note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
             const uint8_t model = runtime->common.model;
             if ((runtime->common.closing != 0U)
@@ -994,6 +1063,6 @@ uint64_t note_fx_engine_next_deadline(void)
                         next = owned->off_sample;
                 }
             }
-        }
+    }
     return next;
 }

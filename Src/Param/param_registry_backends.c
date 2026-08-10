@@ -807,6 +807,10 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         case PARAM_SAMPLER_SAMPLE:
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {
+                if ((update_base_state != 0U) && (state != NULL))
+                {
+                    state->sample = value;
+                }
                 brick6_sampler_runtime_set_multi_instrument(track,
                                                             param_backend_multi_instrument_from_selector(value));
                 return 1U;

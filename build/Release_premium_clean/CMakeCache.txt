@@ -23,12 +23,30 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
 
+//Capture bounded Multi pitched voice trace for GDB
+BRICK6_MULTI_PITCH_TRACE:BOOL=OFF
+
 //Capture the first Multi stream failure for GDB
 BRICK6_MULTI_STREAM_DIAG:BOOL=OFF
 
 //Use Release code generation for the Debug Multi stream diagnostic
 // build
 BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN:BOOL=OFF
+
+//Capture SD initialization diagnostics
+BRICK6_SD_INIT_DIAG:BOOL=OFF
+
+//Enable manual streamer calibration cases in Multi TONE
+BRICK6_STREAM_CALIBRATION:BOOL=OFF
+
+//Streamer calibration page size (32 KiB)
+BRICK6_STREAM_CALIBRATION_PAGE_KIB:STRING=32
+
+//Streamer application read quantum in KiB
+BRICK6_STREAM_READ_CHUNK_KIB:STRING=32
+
+//Capture bounded causal streaming underrun trace for GDB
+BRICK6_STREAM_UNDERRUN_TRACE:BOOL=OFF
 
 //Firmware product variant
 BRICK6_VARIANT:STRING=premium

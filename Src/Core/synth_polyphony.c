@@ -7,6 +7,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Mod/mod_lfo_v1.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -87,6 +88,7 @@ static void synth_polyphony_reset_slot(uint8_t slot)
     brick6_stack_runtime_reset_instance(slot);
     brick6_wave_runtime_reset_instance(slot);
     mixer_synth_voice_slot_reset(slot);
+    mod_lfo_v1_poly_voice_reset(slot);
 }
 
 static void synth_polyphony_silence_slot(uint8_t slot)
@@ -99,6 +101,7 @@ static void synth_polyphony_silence_slot(uint8_t slot)
     brick6_wave_runtime_all_notes_off(slot);
     brick6_wave_runtime_clear_trigger(slot);
     mixer_synth_voice_slot_reset(slot);
+    mod_lfo_v1_poly_voice_reset(slot);
 }
 
 static uint8_t synth_poly_valid_track(uint8_t track)
@@ -619,6 +622,7 @@ void synth_polyphony_voice_release_complete(uint8_t track, uint8_t voice)
         if ((slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 || (g_synth_voice[slot].state != SYNTH_POLY_VOICE_RELEASE)) return;
         g_synth_voice[slot].state = SYNTH_POLY_VOICE_FREE;
+        mod_lfo_v1_poly_voice_reset(slot);
         __DMB();
         g_synth_poly[track].renderable_voice_mask &= (uint8_t)~(1U << voice);
         while ((g_synth_poly[track].render_voice_count

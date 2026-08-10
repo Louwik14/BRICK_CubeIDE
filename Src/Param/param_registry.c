@@ -44,7 +44,6 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
-#include "Sampler/multi_sample_pool.h"
 #include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
 #include "Keyboard/keyboard_engine.h"
@@ -158,35 +157,6 @@ static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
     return (uint8_t)((ctx != NULL)
                      && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                      && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
-}
-
-static float param_registry_multi_instrument_selector_value(uint8_t track)
-{
-    uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    if (brick6_sampler_runtime_get_multi_instrument(track, &instrument_id) == 0U)
-    {
-        return 0.0f;
-    }
-    if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
-    {
-        return 0.0f;
-    }
-
-    uint8_t selector = 1U;
-    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
-    {
-        if (multi_sample_pool_get_instrument(id) == NULL)
-        {
-            continue;
-        }
-        if (id == instrument_id)
-        {
-            return (float)selector;
-        }
-        selector++;
-    }
-
-    return 0.0f;
 }
 
 /**
@@ -471,24 +441,11 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
     switch (id)
     {
         case PARAM_SAMPLER_SAMPLE:
-            if (param_registry_track_is_sampler_multi(track) != 0U)
-            {
-                *out_value = param_registry_multi_instrument_selector_value(track);
-                return 1U;
-            }
             *out_value = state->sample;
             return 1U;
         case PARAM_SAMPLER_GAIN:
-        {
-            const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
-            {
-                *out_value = brick6_sampler_runtime_get_multi_gain(track);
-                return 1U;
-            }
             *out_value = state->gain;
             return 1U;
-        }
         case PARAM_SAMPLER_START:
             *out_value = state->start;
             return 1U;
@@ -1479,7 +1436,7 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
                                                           0U);
         if (applied != 0U)
         {
-            param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+            param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
         }
         return applied;
     }
@@ -1506,7 +1463,7 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
     const uint8_t applied = param_track_exec_apply_backend(&ctx, 1U);
     if (applied != 0U)
     {
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+        param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
     }
     return applied;
 }
@@ -1913,6 +1870,14 @@ void param_set(param_id_t id, float value)
         {
             return;
         }
+    }
+
+    /* Global audio-owned values also have a control-side target shadow.  Keep
+     * authoritative writes such as defaults/project restore coherent with the
+     * encoder command path, which uses cache slot zero for global scope. */
+    if (live_parameter_is_audio_owned(id) != 0U)
+    {
+        param_registry_runtime_cache_set(0U, id, clamped);
     }
 
     if (desc->apply != NULL)

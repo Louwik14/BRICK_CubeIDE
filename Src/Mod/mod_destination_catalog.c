@@ -5,6 +5,7 @@
 #include "Audio/md_model.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/synth_polyphony.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
@@ -85,6 +86,23 @@ static uint8_t mod_destination_is_direct_filter(param_id_t dest)
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t mod_destination_is_poly_filter_voice_local(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_FILTER_EG_AMT:
+        case PARAM_FILTER_ATTACK:
+        case PARAM_FILTER_DECAY:
+        case PARAM_FILTER_SUSTAIN:
+        case PARAM_FILTER_RELEASE:
             return 1U;
         default:
             return 0U;
@@ -172,6 +190,28 @@ static uint8_t mod_destination_is_direct_sampler(param_id_t dest)
         case PARAM_SAMPLER_CLIP_HOP:
         case PARAM_SAMPLER_MULTI_LOOP:
         case PARAM_LOOPER_XFADE:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t mod_destination_is_structural_sampler(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_SAMPLER_MODE:
+        case PARAM_SAMPLER_SLICE_COUNT:
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
+        case PARAM_SAMPLER_CLIP_PITCH:
+        case PARAM_SAMPLER_CLIP_PLAY_MODE:
+        case PARAM_SAMPLER_CLIP_LOOP:
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
+        case PARAM_SAMPLER_CLIP_GRAIN:
+        case PARAM_SAMPLER_CLIP_HOP:
+        case PARAM_SAMPLER_CLIP_SEARCH:
+        case PARAM_SAMPLER_MULTI_LOOP:
             return 1U;
         default:
             return 0U;
@@ -833,6 +873,10 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
                                          const track_runtime_ctx_t *ctx,
                                          float value)
 {
+    if (mod_destination_is_structural_sampler(dest) != 0U)
+    {
+        return 0U;
+    }
     if (mod_destination_is_lfo_rate(dest) != 0U)
     {
         (void)ctx;
@@ -881,6 +925,142 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     return param_registry_apply_track_value_rt_fast(dest, track, value);
 }
 
+uint8_t mod_destination_catalog_apply_poly_voice_rt(uint8_t track,
+                                                    uint8_t voice_slot,
+                                                    param_id_t dest,
+                                                    const track_runtime_ctx_t *ctx,
+                                                    float value)
+{
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    track_runtime_ctx_t voice_ctx = *ctx;
+    voice_ctx.instance_id = voice_slot;
+    if ((ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+            && (mod_destination_is_direct_filter(dest) != 0U
+                || mod_destination_is_direct_vca(dest) != 0U))
+    {
+        switch (dest)
+        {
+            case PARAM_FILTER_CUTOFF:
+            {
+                const float cutoff_hz = param_filter_ui127_to_cutoff_hz(value);
+                mixer_poly_voice_set_cutoff(voice_slot, cutoff_hz);
+                return 1U;
+            }
+            case PARAM_FILTER_RESONANCE:
+                mixer_poly_voice_set_resonance(voice_slot, param_filter_ui127_to_resonance(value)); return 1U;
+            case PARAM_FILTER_EG_AMT:
+                mixer_poly_voice_set_eg_amount(voice_slot, param_filter_ui127_to_eg_amount(value)); return 1U;
+            case PARAM_FILTER_ATTACK:
+                mixer_poly_voice_set_filter_attack(voice_slot, param_filter_ui127_to_attack_s(value)); return 1U;
+            case PARAM_FILTER_DECAY:
+                mixer_poly_voice_set_filter_decay(voice_slot, param_filter_ui127_to_decay_s(value)); return 1U;
+            case PARAM_FILTER_SUSTAIN:
+                mixer_poly_voice_set_filter_sustain(voice_slot, param_filter_ui127_to_sustain(value)); return 1U;
+            case PARAM_FILTER_RELEASE:
+                mixer_poly_voice_set_filter_release(voice_slot, param_filter_ui127_to_release_s(value)); return 1U;
+            case PARAM_VCA_ATTACK:
+                mixer_poly_voice_set_vca_attack(voice_slot, param_filter_ui127_to_attack_s(value)); return 1U;
+            case PARAM_VCA_DECAY:
+                mixer_poly_voice_set_vca_decay(voice_slot, param_filter_ui127_to_decay_s(value)); return 1U;
+            case PARAM_VCA_SUSTAIN:
+                mixer_poly_voice_set_vca_sustain(voice_slot, param_filter_ui127_to_sustain(value)); return 1U;
+            case PARAM_VCA_RELEASE:
+                mixer_poly_voice_set_vca_release(voice_slot, param_filter_ui127_to_release_s(value)); return 1U;
+            default: return 0U;
+        }
+    }
+    switch ((track_runtime_engine_t)ctx->engine)
+    {
+        case TRACK_RUNTIME_ENGINE_PRISM:
+            return (mod_destination_is_direct_prism(dest) != 0U)
+                ? mod_destination_apply_prism_rt(track, dest, &voice_ctx, value) : 0U;
+        case TRACK_RUNTIME_ENGINE_STACK:
+            return (mod_destination_is_direct_stack(dest) != 0U)
+                ? mod_destination_apply_stack_rt(track, dest, &voice_ctx, value) : 0U;
+        case TRACK_RUNTIME_ENGINE_WAVE:
+            return (mod_destination_is_direct_wave(dest) != 0U)
+                ? mod_destination_apply_wave_rt(track, dest, &voice_ctx, value) : 0U;
+        case TRACK_RUNTIME_ENGINE_SAMPLER:
+        {
+            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MULTI)
+                    || (voice_slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET))
+            {
+                return 0U;
+            }
+            struct multi_voice_dsp_slot_t *const slot =
+                brick6_sampler_runtime_get_multi_voice_dsp(
+                    (uint8_t)(voice_slot - SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET));
+            if (slot == NULL) return 0U;
+            switch (dest)
+            {
+                case PARAM_FILTER_CUTOFF:
+                    mixer_multi_filter_set_voice_cutoff(slot, param_filter_ui127_to_cutoff_hz(value));
+                    return 1U;
+                case PARAM_FILTER_RESONANCE:
+                    mixer_multi_filter_set_voice_resonance(slot, param_filter_ui127_to_resonance(value));
+                    return 1U;
+                case PARAM_FILTER_EG_AMT:
+                    mixer_multi_filter_set_voice_eg_amount(slot, param_filter_ui127_to_eg_amount(value));
+                    return 1U;
+                case PARAM_FILTER_ATTACK:
+                    mixer_multi_filter_set_voice_env_attack(slot, param_filter_ui127_to_attack_s(value));
+                    return 1U;
+                case PARAM_FILTER_DECAY:
+                    mixer_multi_filter_set_voice_env_decay(slot, param_filter_ui127_to_decay_s(value));
+                    return 1U;
+                case PARAM_FILTER_SUSTAIN:
+                    mixer_multi_filter_set_voice_env_sustain(slot, param_filter_ui127_to_sustain(value));
+                    return 1U;
+                case PARAM_FILTER_RELEASE:
+                    mixer_multi_filter_set_voice_env_release(slot, param_filter_ui127_to_release_s(value));
+                    return 1U;
+                case PARAM_VCA_ATTACK:
+                    mixer_multi_filter_set_voice_vca_attack(slot, param_filter_ui127_to_attack_s(value));
+                    return 1U;
+                case PARAM_VCA_DECAY:
+                    mixer_multi_filter_set_voice_vca_decay(slot, param_filter_ui127_to_decay_s(value));
+                    return 1U;
+                case PARAM_VCA_SUSTAIN:
+                    mixer_multi_filter_set_voice_vca_sustain(slot, param_filter_ui127_to_sustain(value));
+                    return 1U;
+                case PARAM_VCA_RELEASE:
+                    mixer_multi_filter_set_voice_vca_release(slot, param_filter_ui127_to_release_s(value));
+                    return 1U;
+                default:
+                    return 0U;
+            }
+        }
+        default:
+            return 0U;
+    }
+}
+
+uint8_t mod_destination_catalog_poly_voice_supported(param_id_t dest,
+                                                      const track_runtime_ctx_t *ctx)
+{
+    if (ctx == NULL) return 0U;
+    if ((mod_destination_is_poly_filter_voice_local(dest) != 0U)
+            || (mod_destination_is_direct_vca(dest) != 0U))
+    {
+        return ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+                || ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))) ? 1U : 0U;
+    }
+    switch ((track_runtime_engine_t)ctx->engine)
+    {
+        case TRACK_RUNTIME_ENGINE_PRISM: return mod_destination_is_direct_prism(dest);
+        case TRACK_RUNTIME_ENGINE_STACK: return mod_destination_is_direct_stack(dest);
+        case TRACK_RUNTIME_ENGINE_WAVE: return mod_destination_is_direct_wave(dest);
+        default: return 0U;
+    }
+}
+
 static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
 {
     switch (dest)
@@ -893,7 +1073,6 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_FILTER_RESONANCE:
         case PARAM_SAMPLER_GAIN:
         case PARAM_SAMPLER_TUNE:
-        case PARAM_SAMPLER_CLIP_PITCH:
         case PARAM_PRISM_COARSE:
         case PARAM_PRISM_LEVEL:
         case PARAM_PRISM_OSC2_COARSE:
@@ -918,6 +1097,26 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
     }
 }
 
+static uint8_t mod_destination_is_segment_rate(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_SAMPLER_TUNE:
+        case PARAM_PRISM_COARSE:
+        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_STACK_OSC1_TUNE:
+        case PARAM_STACK_OSC2_TUNE:
+        case PARAM_STACK_OSC3_TUNE:
+        case PARAM_WAVE_OSC1_TUNE:
+        case PARAM_WAVE_OSC2_TUNE:
+        case PARAM_DRUM_TRX_BD_PITCH:
+        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 uint8_t mod_destination_catalog_apply_ramp_rt(uint8_t track,
                                               param_id_t dest,
                                               const track_runtime_ctx_t *ctx,
@@ -926,6 +1125,13 @@ uint8_t mod_destination_catalog_apply_ramp_rt(uint8_t track,
     if (ramp == NULL)
     {
         return 0U;
+    }
+
+    if ((ramp->discontinuous == 0U)
+            && (ramp->frames > 1U)
+            && (mod_destination_is_segment_rate(dest) != 0U))
+    {
+        return mod_destination_catalog_apply_rt(track, dest, ctx, ramp->end);
     }
 
     const uint8_t applied = mod_destination_catalog_apply_rt(track,
@@ -1128,7 +1334,10 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
 {
     (void)type;
 
-    if ((track >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT) || (mod_destination_is_internal_lfo_param(dest) != 0U))
+    if ((track >= SEQ_TRACK_COUNT)
+            || (dest >= PARAM_COUNT)
+            || (mod_destination_is_internal_lfo_param(dest) != 0U)
+            || (mod_destination_is_structural_sampler(dest) != 0U))
     {
         return 0U;
     }

@@ -117,6 +117,7 @@ void track_enable(uint32_t track_id, uint8_t enabled);
  * @return 1 si active, 0 sinon (ou index invalide).
  */
 uint32_t track_is_enabled(uint32_t track_id);
+uint32_t audio_tracks_enabled_mask(void);
 
 /**
  * @brief Configure le gain d'une track.

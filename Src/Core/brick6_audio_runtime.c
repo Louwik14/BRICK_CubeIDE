@@ -31,6 +31,7 @@
 #include "mixer.h"
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_matrix.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
@@ -112,8 +113,11 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
     static float sampler_tmp_r[AUDIO_BLOCK_SIZE];
     uint8_t sampler_tracks = 0U;
 
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    uint32_t render_mask = brick6_sampler_runtime_render_track_mask();
+    while (render_mask != 0U)
     {
+        const uint8_t track = (uint8_t)__builtin_ctz(render_mask);
+        render_mask &= render_mask - 1U;
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -267,8 +271,11 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
     static float looper_tmp_r[AUDIO_BLOCK_SIZE];
     uint8_t looper_tracks = 0U;
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    uint16_t playing_mask = brick6_looper_runtime_playing_mask();
+    while (playing_mask != 0U)
     {
+        const uint8_t track = (uint8_t)__builtin_ctz((unsigned)playing_mask);
+        playing_mask &= (uint16_t)(playing_mask - 1U);
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -313,6 +320,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
             continue;
         if (voice_count > 1U)
         {
+            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -325,11 +333,20 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_braids_runtime_sync_voice(ctx->instance_id, instance);
+                if (poly_lfo_active != 0U)
+                {
+                    mixer_prepare_external_poly_voice(ctx->mix_track_id, track, voice);
+                    mod_lfo_v1_process_poly_voice(track, instance, ctx, frames);
+                }
                 if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
                     memset(prism_tmp, 0, frames * sizeof(float));
-                const uint8_t running = mixer_process_external_poly_voice(
-                    ctx->mix_track_id, track, voice, prism_tmp, frames,
-                    synth_polyphony_get_voice_pan(track, voice));
+                const uint8_t running = (poly_lfo_active != 0U)
+                    ? mixer_process_external_poly_voice_prepared(
+                        ctx->mix_track_id, track, voice, prism_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice))
+                    : mixer_process_external_poly_voice(
+                        ctx->mix_track_id, track, voice, prism_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
                 published = 1U;
                 if (running == 0U)
                     synth_polyphony_voice_release_complete(track, voice);
@@ -387,6 +404,7 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
             continue;
         if (voice_count > 1U)
         {
+            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -399,12 +417,21 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_wave_runtime_sync_voice(ctx->instance_id, instance);
+                if (poly_lfo_active != 0U)
+                {
+                    mixer_prepare_external_poly_voice(ctx->mix_track_id, track, voice);
+                    mod_lfo_v1_process_poly_voice(track, instance, ctx, frames);
+                }
                 if ((brick6_wave_runtime_prepare_block(instance, frames, 1U) == 0U)
                         || (brick6_wave_runtime_render_instance(instance, wave_tmp, frames) == 0U))
                     memset(wave_tmp, 0, frames * sizeof(float));
-                const uint8_t running = mixer_process_external_poly_voice(
-                    ctx->mix_track_id, track, voice, wave_tmp, frames,
-                    synth_polyphony_get_voice_pan(track, voice));
+                const uint8_t running = (poly_lfo_active != 0U)
+                    ? mixer_process_external_poly_voice_prepared(
+                        ctx->mix_track_id, track, voice, wave_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice))
+                    : mixer_process_external_poly_voice(
+                        ctx->mix_track_id, track, voice, wave_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
                 published = 1U;
                 if (running == 0U)
                     synth_polyphony_voice_release_complete(track, voice);
@@ -469,6 +496,7 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
             continue;
         if (voice_count > 1U)
         {
+            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -481,11 +509,20 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
                 renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_stack_runtime_sync_voice(ctx->instance_id, instance);
+                if (poly_lfo_active != 0U)
+                {
+                    mixer_prepare_external_poly_voice(ctx->mix_track_id, track, voice);
+                    mod_lfo_v1_process_poly_voice(track, instance, ctx, frames);
+                }
                 if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) == 0U)
                     memset(stack_tmp, 0, frames * sizeof(float));
-                const uint8_t running = mixer_process_external_poly_voice(
-                    ctx->mix_track_id, track, voice, stack_tmp, frames,
-                    synth_polyphony_get_voice_pan(track, voice));
+                const uint8_t running = (poly_lfo_active != 0U)
+                    ? mixer_process_external_poly_voice_prepared(
+                        ctx->mix_track_id, track, voice, stack_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice))
+                    : mixer_process_external_poly_voice(
+                        ctx->mix_track_id, track, voice, stack_tmp, frames,
+                        synth_polyphony_get_voice_pan(track, voice));
                 published = 1U;
                 if (running == 0U)
                     synth_polyphony_voice_release_complete(track, voice);

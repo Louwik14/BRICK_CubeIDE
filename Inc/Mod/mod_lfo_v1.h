@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+struct track_runtime_ctx_s;
+
 typedef enum
 {
     MOD_LFO_SHAPE_SINE = 0,
@@ -29,6 +31,9 @@ typedef enum
     MOD_LFO_TRIG_TRIG,
     MOD_LFO_TRIG_HOLD,
     MOD_LFO_TRIG_ONE,
+    MOD_LFO_TRIG_POLY_TRIG,
+    MOD_LFO_TRIG_POLY_HOLD,
+    MOD_LFO_TRIG_POLY_ONE,
     MOD_LFO_TRIG_COUNT
 } mod_lfo_trig_mode_t;
 
@@ -42,6 +47,9 @@ typedef enum
 } mod_lfo_param_t;
 
 #define MOD_LFO_COUNT_PER_TRACK 3U
+#define MOD_LFO_POLY_SYNTH_SLOT_COUNT 16U
+#define MOD_LFO_POLY_MULTI_SLOT_COUNT 8U
+#define MOD_LFO_POLY_SLOT_COUNT (MOD_LFO_POLY_SYNTH_SLOT_COUNT + MOD_LFO_POLY_MULTI_SLOT_COUNT)
 #define LFO_FREE_MAX_HZ 80.0f
 #define MOD_LFO_SYNC_RATE_COUNT 16U
 
@@ -64,9 +72,16 @@ void mod_lfo_v1_invalidate_dest_cache_all(void);
 void mod_lfo_v1_process_sample_all(void);
 void mod_lfo_v1_process_block(uint32_t frames);
 void mod_lfo_v1_note_trigger(uint8_t track);
+void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot);
+void mod_lfo_v1_poly_voice_reset(uint8_t voice_slot);
+void mod_lfo_v1_process_poly_voice(uint8_t track,
+                                   uint8_t voice_slot,
+                                   const struct track_runtime_ctx_s *ctx,
+                                   uint32_t frames);
 void mod_lfo_v1_note_release(uint8_t track);
 void mod_lfo_v1_all_notes_off(uint8_t track);
 uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index);
+mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index);
 uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7);
 
 #ifdef __cplusplus

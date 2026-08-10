@@ -1,3 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/stream_calibration_csv_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/encoder_detent_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/mod_lfo_segment_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/mod_matrix_ramp_test.dir
@@ -5,6 +6,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFile
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/sample_stream_snapshot_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/sample_stream_needs_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/sample_stream_scheduler_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/vca_env_block_test.dir
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/sample_stream_scheduler_n2_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/note_fx_state_restore_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/note_fx_euclid_mask_test.dir
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/CMakeFiles/note_fx_euclid_runtime_test.dir

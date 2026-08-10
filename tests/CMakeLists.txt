@@ -107,6 +107,21 @@ if(CMAKE_CROSSCOMPILING)
     target_link_options(sample_stream_scheduler_test PRIVATE --specs=nosys.specs)
 endif()
 
+add_executable(vca_env_block_test
+    vca_env_block_test.c
+    ../Src/Audio/vca_env.c
+    ../Src/Audio/env_adsr.c
+    ../Src/Audio/env_adsr_peaks.c
+)
+target_include_directories(vca_env_block_test PRIVATE ../Inc ../Inc/Audio)
+target_link_libraries(vca_env_block_test PRIVATE m)
+if(CMAKE_CROSSCOMPILING)
+    target_link_options(vca_env_block_test PRIVATE --specs=nosys.specs)
+endif()
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME vca_env_block COMMAND vca_env_block_test)
+endif()
+
 add_executable(sample_stream_scheduler_n2_test
     sample_stream_scheduler_test.c
     ../Src/Sampler/sample_stream_scheduler.c

@@ -21,8 +21,8 @@ CMAKE_ADDR2LINE:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.st
 // MinSizeRel ...
 CMAKE_BUILD_TYPE:STRING=
 
-//C compiler
-CMAKE_C_COMPILER:STRING=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/arm-none-eabi-gcc.exe
+//No help, variable specified on the command line.
+CMAKE_C_COMPILER:UNINITIALIZED=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/arm-none-eabi-gcc.exe
 
 //A wrapper around 'ar' adding the appropriate '--plugin' option
 // for the GCC compiler
@@ -168,8 +168,8 @@ CMAKE_STRIP:FILEPATH=C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32c
 //Path to a program.
 CMAKE_TAPI:FILEPATH=CMAKE_TAPI-NOTFOUND
 
-//The CMake toolchain file
-CMAKE_TOOLCHAIN_FILE:FILEPATH=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/cmake/gcc-arm-none-eabi.cmake
+//No help, variable specified on the command line.
+CMAKE_TOOLCHAIN_FILE:UNINITIALIZED=
 
 //If this value is on, makefiles will be generated without the
 // .SILENT directive, and all commands will be echoed to the console

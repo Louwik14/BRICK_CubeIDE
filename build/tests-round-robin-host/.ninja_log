@@ -1,0 +1,27 @@
+# ninja log v5
+8	139	8078937391307478	CMakeFiles/sample_stream_needs_test.dir/sample_stream_snapshot_admission_stub.c.obj	e99acbb58910798
+5	241	8078937107676038	CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj	482acd9b561b42b6
+11	143	8078937391364646	CMakeFiles/sample_stream_needs_test.dir/sample_stream_event_trace_stub.c.obj	754bb07e4612a479
+15	229	8078937107528078	CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_admission_stub.c.obj	43432d39d1e44630
+18	246	8078937107709070	CMakeFiles/sample_stream_snapshot_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj	4f48c2b81aa964f5
+5	153	8078937391487951	CMakeFiles/sample_stream_needs_test.dir/sample_stream_needs_test.c.obj	7fcdaa78ac749a09
+12	237	8078937107641353	CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_test.c.obj	620196b408e54066
+9	245	8078937107705184	CMakeFiles/sample_stream_sequence_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj	62500fd58cee2f5b
+17	158	8078937391531963	CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj	ebf1511a1b1a20a3
+10	129	8078957031303928	CMakeFiles/sample_stream_scheduler_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj	ebddb5a3d8cf31d5
+5	147	8078957031456404	CMakeFiles/sample_stream_scheduler_test.dir/sample_stream_scheduler_test.c.obj	c2d1152cf2a36829
+14	170	8078937156648463	sample_stream_snapshot_test.exe	7d1e56d263c86f5c
+7	171	8078937156648463	sample_stream_sequence_test.exe	da1215747f0236dd
+147	283	8078957032824102	sample_stream_scheduler_test.exe	b6bee11df9dcbe06
+20	156	8078937391520622	CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj	179462a6b870cb11
+17	134	8078957031390160	CMakeFiles/sample_stream_scheduler_n2_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj	a8af749895a403b6
+13	138	8078957031435553	CMakeFiles/sample_stream_scheduler_n2_test.dir/sample_stream_scheduler_test.c.obj	80be939ebc4fa715
+139	275	8078957032675659	sample_stream_scheduler_n2_test.exe	cbdfe93647bb722b
+3	279	8079944236252471	build.ninja	e8239a71de9fd574
+3	215	8079943533587462	CMakeFiles/stream_calibration_csv_test.dir/stream_calibration_csv_test.c.obj	e8957555e974f7d5
+6	216	8079943533587462	CMakeFiles/stream_calibration_csv_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/stream_calibration_csv.c.obj	fe460fa965f30213
+216	407	8079943535477451	stream_calibration_csv_test.exe	d78a40da79c954aa
+2	243	8079944236252471	build.ninja	e8239a71de9fd574
+8	130	8079944237662449	CMakeFiles/stream_calibration_csv_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/stream_calibration_csv.c.obj	38b8e51702e30e8
+5	138	8079944237727457	CMakeFiles/stream_calibration_csv_test.dir/stream_calibration_csv_test.c.obj	2647d5a6ad6eb5a3
+138	282	8079944239137677	stream_calibration_csv_test.exe	d78a40da79c954aa

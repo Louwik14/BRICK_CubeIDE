@@ -36,6 +36,46 @@ include CMakeFiles/rules.ninja
 
 cmake_ninja_workdir = C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current/
 # =============================================================================
+# Object build statements for EXECUTABLE target stream_calibration_csv_test
+
+
+#############################################
+# Order-only phony target for stream_calibration_csv_test
+
+build cmake_object_order_depends_target_stream_calibration_csv_test: phony || CMakeFiles/stream_calibration_csv_test.dir
+
+build CMakeFiles/stream_calibration_csv_test.dir/stream_calibration_csv_test.c.obj: C_COMPILER__stream_calibration_csv_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stream_calibration_csv_test.c || cmake_object_order_depends_target_stream_calibration_csv_test
+  DEP_FILE = CMakeFiles\stream_calibration_csv_test.dir\stream_calibration_csv_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\stream_calibration_csv_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\stream_calibration_csv_test.dir
+
+build CMakeFiles/stream_calibration_csv_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/stream_calibration_csv.c.obj: C_COMPILER__stream_calibration_csv_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/stream_calibration_csv.c || cmake_object_order_depends_target_stream_calibration_csv_test
+  DEP_FILE = CMakeFiles\stream_calibration_csv_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Core\stream_calibration_csv.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\stream_calibration_csv_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\stream_calibration_csv_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Core
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target stream_calibration_csv_test
+
+
+#############################################
+# Link the executable stream_calibration_csv_test.elf
+
+build stream_calibration_csv_test.elf: C_EXECUTABLE_LINKER__stream_calibration_csv_test_ CMakeFiles/stream_calibration_csv_test.dir/stream_calibration_csv_test.c.obj CMakeFiles/stream_calibration_csv_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/stream_calibration_csv.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\stream_calibration_csv_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = stream_calibration_csv_test.elf
+  TARGET_PDB = stream_calibration_csv_test.elf.dbg
+
+# =============================================================================
 # Object build statements for EXECUTABLE target encoder_detent_test
 
 
@@ -156,6 +196,298 @@ build mod_matrix_ramp_test.elf: C_EXECUTABLE_LINKER__mod_matrix_ramp_test_ CMake
   PRE_LINK = cd .
   TARGET_FILE = mod_matrix_ramp_test.elf
   TARGET_PDB = mod_matrix_ramp_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sample_stream_sequence_test
+
+
+#############################################
+# Order-only phony target for sample_stream_sequence_test
+
+build cmake_object_order_depends_target_sample_stream_sequence_test: phony || CMakeFiles/sample_stream_sequence_test.dir
+
+build CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj: C_COMPILER__sample_stream_sequence_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_sequence_test.c || cmake_object_order_depends_target_sample_stream_sequence_test
+  DEP_FILE = CMakeFiles\sample_stream_sequence_test.dir\sample_stream_sequence_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_sequence_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_sequence_test.dir
+
+build CMakeFiles/sample_stream_sequence_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj: C_COMPILER__sample_stream_sequence_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c || cmake_object_order_depends_target_sample_stream_sequence_test
+  DEP_FILE = CMakeFiles\sample_stream_sequence_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_sequence.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_sequence_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_sequence_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sample_stream_sequence_test
+
+
+#############################################
+# Link the executable sample_stream_sequence_test.elf
+
+build sample_stream_sequence_test.elf: C_EXECUTABLE_LINKER__sample_stream_sequence_test_ CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj CMakeFiles/sample_stream_sequence_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\sample_stream_sequence_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sample_stream_sequence_test.elf
+  TARGET_PDB = sample_stream_sequence_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sample_stream_snapshot_test
+
+
+#############################################
+# Order-only phony target for sample_stream_snapshot_test
+
+build cmake_object_order_depends_target_sample_stream_snapshot_test: phony || CMakeFiles/sample_stream_snapshot_test.dir
+
+build CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_test.c.obj: C_COMPILER__sample_stream_snapshot_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_snapshot_test.c || cmake_object_order_depends_target_sample_stream_snapshot_test
+  DEP_FILE = CMakeFiles\sample_stream_snapshot_test.dir\sample_stream_snapshot_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+
+build CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_admission_stub.c.obj: C_COMPILER__sample_stream_snapshot_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_snapshot_admission_stub.c || cmake_object_order_depends_target_sample_stream_snapshot_test
+  DEP_FILE = CMakeFiles\sample_stream_snapshot_test.dir\sample_stream_snapshot_admission_stub.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+
+build CMakeFiles/sample_stream_snapshot_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj: C_COMPILER__sample_stream_snapshot_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c || cmake_object_order_depends_target_sample_stream_snapshot_test
+  DEP_FILE = CMakeFiles\sample_stream_snapshot_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_snapshot.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_snapshot_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sample_stream_snapshot_test
+
+
+#############################################
+# Link the executable sample_stream_snapshot_test.elf
+
+build sample_stream_snapshot_test.elf: C_EXECUTABLE_LINKER__sample_stream_snapshot_test_ CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_test.c.obj CMakeFiles/sample_stream_snapshot_test.dir/sample_stream_snapshot_admission_stub.c.obj CMakeFiles/sample_stream_snapshot_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\sample_stream_snapshot_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sample_stream_snapshot_test.elf
+  TARGET_PDB = sample_stream_snapshot_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sample_stream_needs_test
+
+
+#############################################
+# Order-only phony target for sample_stream_needs_test
+
+build cmake_object_order_depends_target_sample_stream_needs_test: phony || CMakeFiles/sample_stream_needs_test.dir
+
+build CMakeFiles/sample_stream_needs_test.dir/sample_stream_needs_test.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_needs_test.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\sample_stream_needs_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir
+
+build CMakeFiles/sample_stream_needs_test.dir/sample_stream_snapshot_admission_stub.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_snapshot_admission_stub.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\sample_stream_snapshot_admission_stub.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir
+
+build CMakeFiles/sample_stream_needs_test.dir/sample_stream_event_trace_stub.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_event_trace_stub.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\sample_stream_event_trace_stub.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir
+
+build CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_needs.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+build CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_sequence.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+build CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj: C_COMPILER__sample_stream_needs_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c || cmake_object_order_depends_target_sample_stream_needs_test
+  DEP_FILE = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_snapshot.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_needs_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sample_stream_needs_test
+
+
+#############################################
+# Link the executable sample_stream_needs_test.elf
+
+build sample_stream_needs_test.elf: C_EXECUTABLE_LINKER__sample_stream_needs_test_ CMakeFiles/sample_stream_needs_test.dir/sample_stream_needs_test.c.obj CMakeFiles/sample_stream_needs_test.dir/sample_stream_snapshot_admission_stub.c.obj CMakeFiles/sample_stream_needs_test.dir/sample_stream_event_trace_stub.c.obj CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_needs.c.obj CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj CMakeFiles/sample_stream_needs_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\sample_stream_needs_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sample_stream_needs_test.elf
+  TARGET_PDB = sample_stream_needs_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sample_stream_scheduler_test
+
+
+#############################################
+# Order-only phony target for sample_stream_scheduler_test
+
+build cmake_object_order_depends_target_sample_stream_scheduler_test: phony || CMakeFiles/sample_stream_scheduler_test.dir
+
+build CMakeFiles/sample_stream_scheduler_test.dir/sample_stream_scheduler_test.c.obj: C_COMPILER__sample_stream_scheduler_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_scheduler_test.c || cmake_object_order_depends_target_sample_stream_scheduler_test
+  DEP_FILE = CMakeFiles\sample_stream_scheduler_test.dir\sample_stream_scheduler_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_scheduler_test.dir
+
+build CMakeFiles/sample_stream_scheduler_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj: C_COMPILER__sample_stream_scheduler_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c || cmake_object_order_depends_target_sample_stream_scheduler_test
+  DEP_FILE = CMakeFiles\sample_stream_scheduler_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_scheduler.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_scheduler_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sample_stream_scheduler_test
+
+
+#############################################
+# Link the executable sample_stream_scheduler_test.elf
+
+build sample_stream_scheduler_test.elf: C_EXECUTABLE_LINKER__sample_stream_scheduler_test_ CMakeFiles/sample_stream_scheduler_test.dir/sample_stream_scheduler_test.c.obj CMakeFiles/sample_stream_scheduler_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sample_stream_scheduler_test.elf
+  TARGET_PDB = sample_stream_scheduler_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target vca_env_block_test
+
+
+#############################################
+# Order-only phony target for vca_env_block_test
+
+build cmake_object_order_depends_target_vca_env_block_test: phony || CMakeFiles/vca_env_block_test.dir
+
+build CMakeFiles/vca_env_block_test.dir/vca_env_block_test.c.obj: C_COMPILER__vca_env_block_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/vca_env_block_test.c || cmake_object_order_depends_target_vca_env_block_test
+  DEP_FILE = CMakeFiles\vca_env_block_test.dir\vca_env_block_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Audio
+  OBJECT_DIR = CMakeFiles\vca_env_block_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\vca_env_block_test.dir
+
+build CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/vca_env.c.obj: C_COMPILER__vca_env_block_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/vca_env.c || cmake_object_order_depends_target_vca_env_block_test
+  DEP_FILE = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio\vca_env.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Audio
+  OBJECT_DIR = CMakeFiles\vca_env_block_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio
+
+build CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c.obj: C_COMPILER__vca_env_block_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c || cmake_object_order_depends_target_vca_env_block_test
+  DEP_FILE = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio\env_adsr.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Audio
+  OBJECT_DIR = CMakeFiles\vca_env_block_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio
+
+build CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr_peaks.c.obj: C_COMPILER__vca_env_block_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr_peaks.c || cmake_object_order_depends_target_vca_env_block_test
+  DEP_FILE = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio\env_adsr_peaks.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Audio
+  OBJECT_DIR = CMakeFiles\vca_env_block_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\vca_env_block_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Audio
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target vca_env_block_test
+
+
+#############################################
+# Link the executable vca_env_block_test.elf
+
+build vca_env_block_test.elf: C_EXECUTABLE_LINKER__vca_env_block_test_ CMakeFiles/vca_env_block_test.dir/vca_env_block_test.c.obj CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/vca_env.c.obj CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c.obj CMakeFiles/vca_env_block_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr_peaks.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  LINK_LIBRARIES = -lm
+  OBJECT_DIR = CMakeFiles\vca_env_block_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = vca_env_block_test.elf
+  TARGET_PDB = vca_env_block_test.elf.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sample_stream_scheduler_n2_test
+
+
+#############################################
+# Order-only phony target for sample_stream_scheduler_n2_test
+
+build cmake_object_order_depends_target_sample_stream_scheduler_n2_test: phony || CMakeFiles/sample_stream_scheduler_n2_test.dir
+
+build CMakeFiles/sample_stream_scheduler_n2_test.dir/sample_stream_scheduler_test.c.obj: C_COMPILER__sample_stream_scheduler_n2_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sample_stream_scheduler_test.c || cmake_object_order_depends_target_sample_stream_scheduler_n2_test
+  DEFINES = -DSAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND=2
+  DEP_FILE = CMakeFiles\sample_stream_scheduler_n2_test.dir\sample_stream_scheduler_test.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_n2_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_scheduler_n2_test.dir
+
+build CMakeFiles/sample_stream_scheduler_n2_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj: C_COMPILER__sample_stream_scheduler_n2_test_unscanned_ C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c || cmake_object_order_depends_target_sample_stream_scheduler_n2_test
+  DEFINES = -DSAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND=2
+  DEP_FILE = CMakeFiles\sample_stream_scheduler_n2_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler\sample_stream_scheduler.c.obj.d
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_n2_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sample_stream_scheduler_n2_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Sampler
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sample_stream_scheduler_n2_test
+
+
+#############################################
+# Link the executable sample_stream_scheduler_n2_test.elf
+
+build sample_stream_scheduler_n2_test.elf: C_EXECUTABLE_LINKER__sample_stream_scheduler_n2_test_ CMakeFiles/sample_stream_scheduler_n2_test.dir/sample_stream_scheduler_test.c.obj CMakeFiles/sample_stream_scheduler_n2_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_scheduler.c.obj
+  FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wall -fdata-sections -ffunction-sections
+  LINK_FLAGS = -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -Wl,--print-memory-usage   --specs=nosys.specs
+  OBJECT_DIR = CMakeFiles\sample_stream_scheduler_n2_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sample_stream_scheduler_n2_test.elf
+  TARGET_PDB = sample_stream_scheduler_n2_test.elf.dbg
 
 # =============================================================================
 # Object build statements for EXECUTABLE target note_fx_state_restore_test
@@ -391,6 +723,20 @@ build note_fx_euclid_runtime_test: phony note_fx_euclid_runtime_test.elf
 
 build note_fx_state_restore_test: phony note_fx_state_restore_test.elf
 
+build sample_stream_needs_test: phony sample_stream_needs_test.elf
+
+build sample_stream_scheduler_n2_test: phony sample_stream_scheduler_n2_test.elf
+
+build sample_stream_scheduler_test: phony sample_stream_scheduler_test.elf
+
+build sample_stream_sequence_test: phony sample_stream_sequence_test.elf
+
+build sample_stream_snapshot_test: phony sample_stream_snapshot_test.elf
+
+build stream_calibration_csv_test: phony stream_calibration_csv_test.elf
+
+build vca_env_block_test: phony vca_env_block_test.elf
+
 # =============================================================================
 # Folder targets.
 
@@ -399,7 +745,7 @@ build note_fx_state_restore_test: phony note_fx_state_restore_test.elf
 #############################################
 # Folder: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-cross-current
 
-build all: phony encoder_detent_test.elf mod_lfo_segment_test.elf mod_matrix_ramp_test.elf note_fx_state_restore_test.elf note_fx_euclid_mask_test.elf note_fx_euclid_runtime_test.elf live_parameter_event_test.elf
+build all: phony stream_calibration_csv_test.elf encoder_detent_test.elf mod_lfo_segment_test.elf mod_matrix_ramp_test.elf sample_stream_sequence_test.elf sample_stream_snapshot_test.elf sample_stream_needs_test.elf sample_stream_scheduler_test.elf vca_env_block_test.elf sample_stream_scheduler_n2_test.elf note_fx_state_restore_test.elf note_fx_euclid_mask_test.elf note_fx_euclid_runtime_test.elf live_parameter_event_test.elf
 
 # =============================================================================
 # Built-in targets

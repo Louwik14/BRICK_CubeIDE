@@ -257,6 +257,12 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
                               : synth_polyphony_note_off(track, note));
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
         ? ctx->instance_id : SYNTH_POLYPHONY_INSTANCE(track, voice);
+    if ((is_note_on != 0U) && (is_poly_synth != 0U)
+            && (voice != SYNTH_POLYPHONY_NO_VOICE))
+    {
+        mod_lfo_v1_poly_voice_reset(instance);
+        mod_lfo_v1_poly_note_trigger(track, instance);
+    }
 
     uint8_t filter_track = 0U;
     uint8_t mix_track = 0U;

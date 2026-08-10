@@ -1,0 +1,17 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:175:13:param_backend_project_looper_stretch	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:215:9:param_backend_apply_tone_prism	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:336:9:param_backend_reapply_tone_prism_runtime	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:388:9:param_backend_apply_tone_stack	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:528:9:param_backend_reapply_tone_stack_runtime	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:576:9:param_backend_apply_tone_wave	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:704:9:param_backend_reapply_tone_wave_runtime	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:734:9:param_backend_is_midi_cc_id	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:739:9:param_backend_midi_cc_number_from_id	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:749:9:param_backend_track_supports_midi_tone_ctx	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:770:9:param_backend_track_supports_midi_tone_descriptor	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:782:9:param_backend_send_midi_cc	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:800:9:param_backend_apply_tone_sampler	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1064:9:param_backend_apply_tone_looper	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1136:9:param_backend_apply_tone_drum	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1214:9:param_backend_apply_mix_track	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1383:9:param_backend_apply_env_track	8	static

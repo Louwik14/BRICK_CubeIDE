@@ -711,6 +711,12 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
         mod_lfo_v1_note_release(track);
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
         ? resolved.descriptor.instance_id : SYNTH_POLYPHONY_INSTANCE(track, voice);
+    if ((is_note_on != 0U) && (is_poly_synth != 0U)
+            && (voice != SYNTH_POLYPHONY_NO_VOICE))
+    {
+        mod_lfo_v1_poly_voice_reset(instance);
+        mod_lfo_v1_poly_note_trigger(track, instance);
+    }
 
     if ((is_poly_synth != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE)
             && (resolved.has_mix_target != 0U))

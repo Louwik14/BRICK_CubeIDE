@@ -1,0 +1,36 @@
+# CMake generated Testfile for 
+# Source directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests
+# Build directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host
+# 
+# This file includes the relevant testing commands required for 
+# testing this directory and lists subdirectories to be tested as well.
+add_test([=[stream_calibration_csv]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/stream_calibration_csv_test.exe")
+set_tests_properties([=[stream_calibration_csv]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;15;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[encoder_detent]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/encoder_detent_test.exe")
+set_tests_properties([=[encoder_detent]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;36;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[mod_lfo_segment]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/mod_lfo_segment_test.exe")
+set_tests_properties([=[mod_lfo_segment]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;48;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[mod_matrix_ramp]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/mod_matrix_ramp_test.exe")
+set_tests_properties([=[mod_matrix_ramp]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;60;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[sample_stream_sequence]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/sample_stream_sequence_test.exe")
+set_tests_properties([=[sample_stream_sequence]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;72;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[sample_stream_snapshot]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/sample_stream_snapshot_test.exe")
+set_tests_properties([=[sample_stream_snapshot]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;85;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[sample_stream_scheduler_n2]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/sample_stream_scheduler_n2_test.exe")
+set_tests_properties([=[sample_stream_scheduler_n2]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;122;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[sample_stream_scheduler]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/sample_stream_scheduler_test.exe")
+set_tests_properties([=[sample_stream_scheduler]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;125;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[sample_stream_needs]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/sample_stream_needs_test.exe")
+set_tests_properties([=[sample_stream_needs]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;128;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[note_fx_state_restore]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/note_fx_state_restore_test.exe")
+set_tests_properties([=[note_fx_state_restore]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;140;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[note_fx_euclid_mask]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/note_fx_euclid_mask_test.exe")
+set_tests_properties([=[note_fx_euclid_mask]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;152;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[note_fx_euclid_runtime]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/note_fx_euclid_runtime_test.exe")
+set_tests_properties([=[note_fx_euclid_runtime]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;167;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[live_parameter_event]=] "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/live_parameter_event_test.exe")
+set_tests_properties([=[live_parameter_event]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;182;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[note_fx_step1_static_validation]=] "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/note_fx_step1_static_validation.ps1")
+set_tests_properties([=[note_fx_step1_static_validation]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;185;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")
+add_test([=[note_fx_step10_consolidation_validation]=] "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/note_fx_step10_consolidation_validation.ps1")
+set_tests_properties([=[note_fx_step10_consolidation_validation]=] PROPERTIES  _BACKTRACE_TRIPLES "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;189;add_test;C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/CMakeLists.txt;0;")

@@ -535,6 +535,176 @@ uint8_t vca_env_process_linear(vca_env_t *env, float *out_gain)
     return 1U;
 }
 
+uint32_t vca_env_process_block(vca_env_t *env, float *out_gain, uint32_t frames)
+{
+    if ((env == NULL) || (out_gain == NULL) || (frames == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t produced = 0U;
+    while (produced < frames)
+    {
+        uint32_t chunk = frames - produced;
+        if ((env->stage != VCA_ENV_SUSTAIN)
+                && (env->samples_remaining < chunk))
+        {
+            chunk = env->samples_remaining;
+        }
+        if (chunk == 0U)
+        {
+            chunk = 1U;
+        }
+
+        switch (env->stage)
+        {
+            case VCA_ENV_ATTACK:
+                for (uint32_t i = 0U; i < chunk; ++i)
+                {
+                    if (env->type == VCA_ENV_TYPE_LINEAR)
+                    {
+                        env->level += env->linear_increment;
+                    }
+                    else
+                    {
+                        env->level += env->attack_coefficient
+                                    * (env->attack_target - env->level);
+                    }
+                    if ((env->type != VCA_ENV_TYPE_LINEAR) && (env->level >= 1.0f))
+                    {
+                        env->samples_remaining = 0U;
+                    }
+                    else
+                    {
+                        --env->samples_remaining;
+                    }
+                    if (env->samples_remaining == 0U)
+                    {
+                        env->level = 1.0f;
+                        env->stage = VCA_ENV_DECAY;
+                        vca_env_prepare_decay(env);
+                    }
+                    out_gain[produced++] = env->level;
+                    if (env->stage != VCA_ENV_ATTACK)
+                    {
+                        break;
+                    }
+                }
+                break;
+
+            case VCA_ENV_DECAY:
+                for (uint32_t i = 0U; i < chunk; ++i)
+                {
+                    if (env->type == VCA_ENV_TYPE_LINEAR)
+                    {
+                        env->level += env->linear_increment;
+                    }
+                    else
+                    {
+                        env->level += env->decay_coefficient
+                                    * (env->sustain - env->level);
+                    }
+                    --env->samples_remaining;
+                    if (env->samples_remaining == 0U)
+                    {
+                        env->level = env->sustain;
+                        env->stage = VCA_ENV_SUSTAIN;
+                    }
+                    out_gain[produced++] = env->level;
+                }
+                break;
+
+            case VCA_ENV_SUSTAIN:
+                if (env->sustain_transition_active == false)
+                {
+                    env->level = env->sustain;
+                    while (produced < frames)
+                    {
+                        out_gain[produced++] = env->level;
+                    }
+                    break;
+                }
+                chunk = frames - produced;
+                if (env->samples_remaining < chunk)
+                {
+                    chunk = env->samples_remaining;
+                }
+                if (chunk == 0U)
+                {
+                    chunk = 1U;
+                }
+                for (uint32_t i = 0U; i < chunk; ++i)
+                {
+                    if (env->type == VCA_ENV_TYPE_LINEAR)
+                    {
+                        env->level += env->linear_increment;
+                    }
+                    else
+                    {
+                        env->level += env->decay_coefficient
+                                    * (env->sustain - env->level);
+                    }
+                    if ((env->samples_remaining <= 1U)
+                            || (vca_env_level_reached(env->level, env->sustain) != 0U))
+                    {
+                        env->level = env->sustain;
+                        env->samples_remaining = 0U;
+                        env->sustain_transition_active = false;
+                    }
+                    else
+                    {
+                        --env->samples_remaining;
+                    }
+                    out_gain[produced++] = env->level;
+                    if (env->sustain_transition_active == false)
+                    {
+                        break;
+                    }
+                }
+                break;
+
+            case VCA_ENV_RELEASE:
+                for (uint32_t i = 0U; i < chunk; ++i)
+                {
+                    if (env->type == VCA_ENV_TYPE_LINEAR)
+                    {
+                        env->level += env->linear_increment;
+                    }
+                    else
+                    {
+                        env->level += env->release_coefficient
+                                    * (env->release_target - env->level);
+                    }
+                    const uint8_t reached_zero =
+                        (uint8_t)((env->type != VCA_ENV_TYPE_LINEAR)
+                            && (env->level <= 0.0f));
+                    if (reached_zero == 0U)
+                    {
+                        --env->samples_remaining;
+                    }
+                    if ((reached_zero != 0U) || (env->samples_remaining == 0U))
+                    {
+                        env->level = 0.0f;
+                        env->stage = VCA_ENV_IDLE;
+                    }
+                    out_gain[produced++] = env->level;
+                    if (env->stage == VCA_ENV_IDLE)
+                    {
+                        break;
+                    }
+                }
+                break;
+
+            case VCA_ENV_IDLE:
+            default:
+                env->level = 0.0f;
+                env->stage = VCA_ENV_IDLE;
+                return produced;
+        }
+    }
+    return produced;
+}
+
 vca_env_stage_t vca_env_stage(const vca_env_t *env)
 {
     return (env != NULL) ? env->stage : VCA_ENV_IDLE;

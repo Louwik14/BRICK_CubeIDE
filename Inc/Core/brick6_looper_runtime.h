@@ -104,6 +104,8 @@ uint8_t brick6_looper_runtime_next_start_offset(uint64_t block_start_sample,
 void brick6_looper_runtime_on_scheduled_start(uint64_t sample_time);
 uint8_t brick6_looper_runtime_is_ready(uint8_t track_id);
 uint8_t brick6_looper_runtime_is_playing(uint8_t track_id);
+uint16_t brick6_looper_runtime_playing_mask(void);
+uint16_t brick6_looper_runtime_scheduled_start_mask(void);
 void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
                                         float *out_l,
                                         float *out_r,

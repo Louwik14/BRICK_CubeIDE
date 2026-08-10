@@ -52,11 +52,6 @@ static void refresh_increments(env_adsr_peaks_t *env)
     env->release_increment = phase_increment_from_time(env, env->release);
 }
 
-static uint16_t phase_curve_linear(uint32_t phase)
-{
-    return (uint16_t)(phase >> 16);
-}
-
 static uint16_t phase_curve_quartic(uint32_t phase)
 {
     const uint32_t x = phase >> 16;
@@ -222,83 +217,89 @@ void env_adsr_peaks_retrigger(env_adsr_peaks_t *env, bool hard_reset)
     start_attack(env, hard_reset);
 }
 
-int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
+static inline int16_t env_adsr_peaks_advance_attack_sample(env_adsr_peaks_t *env)
 {
-    if(env->stage == ENV_ADSR_PEAKS_STAGE_IDLE)
-        return 0;
-
-    if(env->stage == ENV_ADSR_PEAKS_STAGE_SUSTAIN)
-    {
-        env->value = (int16_t)env->sustain;
-        return env->value;
-    }
-
-    if(env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE)
-    {
-        const uint32_t previous_phase = env->phase;
-        env->phase += env->phase_increment;
-        env->release_level += env->release_coefficient * (0.0f - env->release_level);
-
-        if((env->phase < previous_phase) || !(env->release_level > 0.0f))
-        {
-            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
-            env->value = 0;
-            env->release_level = 0.0f;
-            env->phase = 0u;
-            env->phase_increment = 0u;
-            return 0;
-        }
-
-        env->value = (int16_t)env->release_level;
-        /* Q15 zero is terminal only after a real RELEASE phase advance.  A
-         * zero value in ATTACK/DECAY/SUSTAIN is not an end condition. */
-        if ((env->phase != previous_phase) && (env->value <= 0))
-        {
-            env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
-            env->release_level = 0.0f;
-            env->phase = 0u;
-            env->phase_increment = 0u;
-            return 0;
-        }
-        return env->value;
-    }
-
     const uint32_t previous_phase = env->phase;
     env->phase += env->phase_increment;
-
-    uint16_t curve = 0;
-    if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
-        curve = phase_curve_quartic(env->phase);
-    else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
-        curve = phase_curve_exponential(env->phase);
-    else
-        curve = phase_curve_linear(env->phase);
-
+    const uint16_t curve = phase_curve_quartic(env->phase);
     env->value = interpolate_q15(env->start_value, env->target_value, curve);
-
     if(env->phase < previous_phase)
     {
-        if(env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK)
+        env->value = ENV_ADSR_Q15_MAX;
+        prepare_decay_from_current(env);
+    }
+    return env->value;
+}
+
+static inline int16_t env_adsr_peaks_advance_decay_sample(env_adsr_peaks_t *env)
+{
+    const uint32_t previous_phase = env->phase;
+    env->phase += env->phase_increment;
+    const uint16_t curve = phase_curve_exponential(env->phase);
+    env->value = interpolate_q15(env->start_value, env->target_value, curve);
+    if(env->phase < previous_phase)
+    {
+        if(env->gate_high)
         {
-            env->value = ENV_ADSR_Q15_MAX;
-            prepare_decay_from_current(env);
+            env->stage = ENV_ADSR_PEAKS_STAGE_SUSTAIN;
+            env->value = (int16_t)env->sustain;
         }
-        else if(env->stage == ENV_ADSR_PEAKS_STAGE_DECAY)
+        else
         {
-            if(env->gate_high)
-            {
-                env->stage = ENV_ADSR_PEAKS_STAGE_SUSTAIN;
-                env->value = (int16_t)env->sustain;
-            }
-            else
-            {
-                env->value = (int16_t)env->sustain;
-                prepare_release_from_level(env, (float)env->value);
-            }
+            env->value = (int16_t)env->sustain;
+            prepare_release_from_level(env, (float)env->value);
         }
     }
-
     return env->value;
+}
+
+static inline int16_t env_adsr_peaks_advance_release_sample(env_adsr_peaks_t *env)
+{
+    const uint32_t previous_phase = env->phase;
+    env->phase += env->phase_increment;
+    env->release_level += env->release_coefficient * (0.0f - env->release_level);
+
+    if((env->phase < previous_phase) || !(env->release_level > 0.0f))
+    {
+        env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
+        env->value = 0;
+        env->release_level = 0.0f;
+        env->phase = 0u;
+        env->phase_increment = 0u;
+        return 0;
+    }
+
+    env->value = (int16_t)env->release_level;
+    /* Q15 zero is terminal only after a real RELEASE phase advance.  A
+     * zero value in ATTACK/DECAY/SUSTAIN is not an end condition. */
+    if ((env->phase != previous_phase) && (env->value <= 0))
+    {
+        env->stage = ENV_ADSR_PEAKS_STAGE_IDLE;
+        env->release_level = 0.0f;
+        env->phase = 0u;
+        env->phase_increment = 0u;
+        return 0;
+    }
+    return env->value;
+}
+
+int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env)
+{
+    switch((env_adsr_peaks_stage_t)env->stage)
+    {
+        case ENV_ADSR_PEAKS_STAGE_ATTACK:
+            return env_adsr_peaks_advance_attack_sample(env);
+        case ENV_ADSR_PEAKS_STAGE_DECAY:
+            return env_adsr_peaks_advance_decay_sample(env);
+        case ENV_ADSR_PEAKS_STAGE_SUSTAIN:
+            env->value = (int16_t)env->sustain;
+            return env->value;
+        case ENV_ADSR_PEAKS_STAGE_RELEASE:
+            return env_adsr_peaks_advance_release_sample(env);
+        case ENV_ADSR_PEAKS_STAGE_IDLE:
+        default:
+            return 0;
+    }
 }
 
 int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
@@ -405,6 +406,77 @@ int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
     }
 
     return env->value;
+}
+
+uint32_t env_adsr_peaks_process_vca_block(env_adsr_peaks_t *env,
+                                          float *out_gain,
+                                          uint32_t frames)
+{
+    if ((env == NULL) || (out_gain == NULL) || (frames == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t produced = 0U;
+    while (produced < frames)
+    {
+        switch((env_adsr_peaks_stage_t)env->stage)
+        {
+            case ENV_ADSR_PEAKS_STAGE_ATTACK:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_peaks_advance_attack_sample(env);
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_PEAKS_STAGE_ATTACK));
+                break;
+
+            case ENV_ADSR_PEAKS_STAGE_DECAY:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_peaks_advance_decay_sample(env);
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_PEAKS_STAGE_DECAY));
+                break;
+
+            case ENV_ADSR_PEAKS_STAGE_SUSTAIN:
+            {
+                env->value = (int16_t)env->sustain;
+                const float gain =
+                    (float)env->value * (1.0f / 32767.0f);
+                while (produced < frames)
+                {
+                    out_gain[produced++] = gain;
+                }
+                break;
+            }
+
+            case ENV_ADSR_PEAKS_STAGE_RELEASE:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_peaks_advance_release_sample(env);
+                    if (env->stage == ENV_ADSR_PEAKS_STAGE_IDLE)
+                    {
+                        return produced;
+                    }
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_PEAKS_STAGE_RELEASE));
+                break;
+
+            case ENV_ADSR_PEAKS_STAGE_IDLE:
+            default:
+                return produced;
+        }
+    }
+    return produced;
 }
 
 int16_t env_adsr_peaks_value(const env_adsr_peaks_t *env)

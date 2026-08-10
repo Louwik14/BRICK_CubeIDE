@@ -75,6 +75,12 @@ static uint8_t live_parameter_audio_runtime_apply_target(
 
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
     {
+        if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
+        {
+            return param_registry_apply_track_value_runtime_temp(event->parameter_id,
+                                                                  event->track,
+                                                                  value);
+        }
         return param_registry_apply_track_value_audio(event->parameter_id,
                                                        event->track,
                                                        value);

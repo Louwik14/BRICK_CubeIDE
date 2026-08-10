@@ -2,5 +2,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:118:6:sample_stream_admission_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:146:34:sample_stream_admission_try_reserve	64	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:274:6:sample_stream_admission_release_voice	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:218:34:sample_stream_admission_sync_snapshot	344	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:218:34:sample_stream_admission_sync_snapshot	352	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_admission.c:310:6:sample_stream_admission_get_stats	4	static

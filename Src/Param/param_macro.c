@@ -11,7 +11,6 @@
 #include "Param/param_registry.h"
 #include "Seq/seq_param_iface.h"
 #include "Storage/memory_layout.h"
-#include "UI/ui_param.h"
 #include "Storage/project_v1.h"
 
 typedef struct
@@ -79,7 +78,8 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
         .track = track,
         .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
         .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+                            | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
         .value = live_parameter_event_encode_float(value)
     };
     return 1U;
@@ -392,24 +392,6 @@ static void param_macro_commit_pending_resolutions(
     }
 }
 
-static void param_macro_accept_audio_bulk(const live_parameter_audio_bulk_t *bulk)
-{
-    if (bulk == NULL)
-    {
-        return;
-    }
-
-    for (uint8_t i = 0U; i < bulk->count; ++i)
-    {
-        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        (void)ui_param_accept_audio_owned_command(
-            (param_id_t)item->parameter_id,
-            item->scope,
-            item->track,
-            live_parameter_event_decode_float(item->value));
-    }
-}
-
 static void param_macro_recompute_sources(void)
 {
     uint32_t last_applied_seq = 0U;
@@ -495,7 +477,6 @@ static void param_macro_recompute_sources(void)
     param_macro_apply_non_audio_releases();
     param_macro_apply_non_audio_pending(g_param_macro_pending_resolutions,
                                         pending_count);
-    param_macro_accept_audio_bulk(&bulk);
     param_macro_commit_pending_resolutions(g_param_macro_pending_resolutions,
                                            pending_count);
 }
@@ -599,7 +580,6 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
         return 0U;
     }
 
-    param_macro_accept_audio_bulk(&bulk);
     return 1U;
 }
 

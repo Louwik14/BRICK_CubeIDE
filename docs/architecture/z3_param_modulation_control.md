@@ -26,3 +26,14 @@ catalogue reçoivent ensuite ces bornes via leur lissage moteur existant; les
 destinations structurelles, discrètes ou à transition marquée restent
 appliquées au début de la fenêtre. Aucun setter de destination ni calcul de
 forme n'est introduit dans une boucle sample.
+
+### Transition d'un mode LFO POLY avec voix active
+
+Un passage entre `P.Trig`, `P.Hold` et `P.One` invalide l'état LFO de chaque voix
+concernée et la place en `pending_trigger`. La voix audio peut continuer son
+release, mais aucune source LFO POLY ni source globale de remplacement n'est
+consommée tant qu'un nouveau note-on/retrigger n'a pas réarmé cette voix.
+Le réarmement réinitialise phase, HOLD, ONE et l'état RNG/S&H selon le mode
+courant. Une restauration bornée des destinations POLY vers leur base est faite
+une seule fois lors de la transition; les fenêtres suivantes en attente restent
+sur un chemin court.

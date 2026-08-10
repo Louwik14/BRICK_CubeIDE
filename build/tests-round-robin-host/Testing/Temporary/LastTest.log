@@ -1,0 +1,18 @@
+Start testing: Aug 09 19:25 Paris, Madrid (heure d’été)
+----------------------------------------------------------
+1/15 Testing: stream_calibration_csv
+1/15 Test: stream_calibration_csv
+Command: "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host/stream_calibration_csv_test.exe"
+Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-round-robin-host
+"stream_calibration_csv" start time: Aug 09 19:25 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"stream_calibration_csv" end time: Aug 09 19:25 Paris, Madrid (heure d’été)
+"stream_calibration_csv" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 09 19:25 Paris, Madrid (heure d’été)

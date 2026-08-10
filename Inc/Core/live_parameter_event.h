@@ -47,7 +47,10 @@ enum
     LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT = 9U,
     LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_MASK = (uint16_t)(0x3FU << LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_SHIFT),
     LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT = 8U,
-    LIVE_PARAMETER_EVENT_FLAG_ENCODER_MASK = (uint16_t)(0x03U << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)
+    LIVE_PARAMETER_EVENT_FLAG_ENCODER_MASK = (uint16_t)(0x03U << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT),
+    /* Temporary effective target: apply in audio without replacing the
+     * control/UI base value (macro, modulation-like override). */
+    LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP = (uint16_t)(1U << 15)
 };
 
 static inline uint16_t live_parameter_event_bulk_flags(uint16_t flags,

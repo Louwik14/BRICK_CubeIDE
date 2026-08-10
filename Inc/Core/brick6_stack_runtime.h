@@ -46,8 +46,13 @@ typedef enum
 typedef struct
 {
     uint8_t model;
+    uint8_t family;
     uint8_t renderer_id;
+    uint8_t level;
     int16_t tune_cents;
+    uint8_t timbre;
+    uint8_t color;
+    uint8_t kernel_id;
     uint16_t level_q15;
     uint16_t level_current_q15;
     uint16_t timbre_q15;

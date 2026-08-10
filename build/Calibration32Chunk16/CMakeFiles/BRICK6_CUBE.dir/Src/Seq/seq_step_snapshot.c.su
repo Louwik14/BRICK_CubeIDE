@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:9:16:seq_step_snapshot_track_is_valid	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:37:9:seq_step_snapshot_validate_for_track	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:53:9:seq_step_snapshot_capture	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:78:9:seq_step_snapshot_capture_list	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:94:9:seq_step_snapshot_can_apply_list	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:130:9:seq_step_snapshot_apply_list	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:140:9:seq_step_snapshot_apply	12952	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_step_snapshot.c:150:9:seq_step_snapshot_equal	24	static

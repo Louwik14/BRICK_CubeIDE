@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_benchmark.c:27:6:sample_stream_benchmark_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_benchmark.c:43:6:sample_stream_benchmark_note_io	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_benchmark.c:98:6:sample_stream_benchmark_note_service	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_benchmark.c:116:6:sample_stream_benchmark_note_blocked_poll	0	static

@@ -16,12 +16,6 @@ extern "C" {
 #define SAMPLE_CAPTURE_PATH_MAX MULTI_RECORD_WRITER_PATH_MAX
 #define SAMPLE_CAPTURE_WAVEFORM_POINTS 1024U
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
-/* Threshold UI contract: signed dBFS, mapped later to the recorder bus scale. */
-#define SAMPLE_CAPTURE_LIVE_PCM24_FULL_SCALE 8388607U
-#define SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN (-60)
-#define SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX (-6)
-#define SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT (-36)
-#define SAMPLE_CAPTURE_THRESHOLD_DBFS_STEP 1
 #define SAMPLE_CAPTURE_DETAIL_POINTS 384U
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
 #define SAMPLE_CAPTURE_LINE_POINTS 128U
@@ -38,9 +32,7 @@ extern "C" {
 typedef enum
 {
     SAMPLE_CAPTURE_ARM_OFF = 0,
-    SAMPLE_CAPTURE_ARM_REC,
-    SAMPLE_CAPTURE_ARM_TRIG,
-    SAMPLE_CAPTURE_ARM_COUNT
+    SAMPLE_CAPTURE_ARM_REC
 } sample_capture_arm_t;
 
 typedef enum
@@ -113,24 +105,11 @@ typedef struct
 
 typedef struct
 {
-    /* Peak magnitude of the complete AUDIO REC block, before UI smoothing. */
-    uint32_t peak_pcm24;
-    uint32_t block_sequence;
-    uint8_t valid;
-    /* One-way event latch; no falling-edge/re-arm requirement is implied. */
-    uint8_t trigger_latched;
-} sample_capture_live_summary_t;
-
-typedef struct
-{
     sample_capture_view_t view;
     sample_capture_phase_t phase;
     sample_capture_arm_t arm;
     uint8_t len_bars; /* 0 = FREE, otherwise 1..64 steps */
     sample_capture_quant_t quant;
-    int8_t threshold_dbfs;
-    uint8_t mic_enabled;
-    uint8_t live_monitor_enabled;
     uint8_t route_enabled[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t armed_pending;
     uint8_t recording;
@@ -175,13 +154,6 @@ uint8_t sample_capture_get_status(multi_record_writer_status_t *out_status);
 
 void sample_capture_set_audio_hook_enabled(uint8_t enabled);
 uint8_t sample_capture_audio_hook_is_enabled(void);
-uint8_t sample_capture_recorder_is_active(void);
-
-void sample_capture_live_summary_reset(void);
-void sample_capture_live_publish_peak_from_irq(uint32_t peak_pcm24);
-void sample_capture_live_latch_trigger_from_irq(void);
-uint8_t sample_capture_live_take_trigger(void);
-void sample_capture_live_get_summary(sample_capture_live_summary_t *out_summary);
 
 void sample_capture_model_init(void);
 void sample_capture_model_service(void);
@@ -193,15 +165,6 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm);
 uint8_t sample_capture_model_step_arm(int16_t delta);
 uint8_t sample_capture_model_step_len(int16_t delta);
 uint8_t sample_capture_model_step_quant(int16_t delta);
-uint8_t sample_capture_model_set_threshold_dbfs(int16_t threshold_dbfs);
-int8_t sample_capture_model_get_threshold_dbfs(void);
-uint8_t sample_capture_model_step_threshold(int16_t delta);
-uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled);
-uint8_t sample_capture_model_mic_is_enabled(void);
-uint8_t sample_capture_model_toggle_mic(void);
-uint8_t sample_capture_model_set_live_monitor_enabled(uint8_t enabled);
-uint8_t sample_capture_model_live_monitor_is_enabled(void);
-uint8_t sample_capture_model_live_bus_required(void);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
 uint32_t sample_capture_model_tile_cache_capacity_frames(void);

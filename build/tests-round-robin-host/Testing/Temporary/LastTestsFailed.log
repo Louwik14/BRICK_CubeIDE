@@ -1,0 +1,8 @@
+1:encoder_detent
+2:mod_lfo_segment
+3:mod_matrix_ramp
+8:sample_stream_needs
+9:note_fx_state_restore
+10:note_fx_euclid_mask
+11:note_fx_euclid_runtime
+12:live_parameter_event

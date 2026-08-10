@@ -56,5 +56,8 @@ int16_t env_adsr_peaks_process_step(env_adsr_peaks_t *env);
 int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
                                        uint32_t steps,
                                        int16_t *first_value);
+uint32_t env_adsr_peaks_process_vca_block(env_adsr_peaks_t *env,
+                                          float *out_gain,
+                                          uint32_t frames);
 int16_t env_adsr_peaks_value(const env_adsr_peaks_t *env);
 env_adsr_peaks_stage_t env_adsr_peaks_stage(const env_adsr_peaks_t *env);

@@ -51,4 +51,5 @@ void vca_env_gate_off(vca_env_t *env);
 void vca_env_retrigger(vca_env_t *env, bool hard_reset);
 uint8_t vca_env_process_daisy(vca_env_t *env, float *out_gain);
 uint8_t vca_env_process_linear(vca_env_t *env, float *out_gain);
+uint32_t vca_env_process_block(vca_env_t *env, float *out_gain, uint32_t frames);
 vca_env_stage_t vca_env_stage(const vca_env_t *env);

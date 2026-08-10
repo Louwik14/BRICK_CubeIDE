@@ -36,8 +36,8 @@ sample_stream_coalesced_lifecycle 0 0
 sample_stream_deadline 0 0
 sd_stream_browser_lock 0 0
 synth_polyphony_boundary 0 0
-note_fx_step1_static_validation 11 0.0499054
-note_fx_step10_consolidation_validation 11 0.123959
+note_fx_step1_static_validation 13 0.0345381
+note_fx_step10_consolidation_validation 13 0.0853313
 note_fx_state_restore 0 0
 note_fx_euclid_mask 0 0
 note_fx_euclid_runtime 0 0
@@ -49,15 +49,7 @@ sample_stream_needs 0 0
 sample_stream_sequence 0 0
 sample_stream_snapshot 0 0
 sample_stream_scheduler 0 0
+stream_calibration_csv 0 0
+vca_env_block 0 0
+sample_stream_scheduler_n2 0 0
 ---
-encoder_detent
-mod_lfo_segment
-mod_matrix_ramp
-sample_stream_sequence
-sample_stream_snapshot
-sample_stream_scheduler
-sample_stream_needs
-note_fx_state_restore
-note_fx_euclid_mask
-note_fx_euclid_runtime
-live_parameter_event

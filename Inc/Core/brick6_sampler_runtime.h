@@ -21,6 +21,8 @@
 extern "C" {
 #endif
 
+struct multi_voice_dsp_slot_t;
+
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define STREAM_SAMPLER_ROOT_NOTE            (60U)
@@ -215,7 +217,9 @@ void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
 void brick6_sampler_runtime_render_multi_track_mono(const track_runtime_ctx_t *ctx,
                                                     float *out_mono,
                                                     uint32_t frames);
+struct multi_voice_dsp_slot_t *brick6_sampler_runtime_get_multi_voice_dsp(uint8_t voice_index);
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
+uint32_t brick6_sampler_runtime_render_track_mask(void);
 uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id);
 uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id);
 void brick6_sampler_runtime_render_ram_track_mono(const track_runtime_ctx_t *ctx,

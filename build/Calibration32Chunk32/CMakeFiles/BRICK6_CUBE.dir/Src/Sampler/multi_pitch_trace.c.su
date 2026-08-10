@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:468:6:brick6_multi_pitch_trace_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:469:6:brick6_multi_pitch_trace_block_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:475:6:brick6_multi_pitch_trace_block_end	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:476:10:brick6_multi_pitch_trace_voice_begin	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:484:6:brick6_multi_pitch_trace_voice_end	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_pitch_trace.c:492:6:brick6_multi_pitch_trace_segment	8	static

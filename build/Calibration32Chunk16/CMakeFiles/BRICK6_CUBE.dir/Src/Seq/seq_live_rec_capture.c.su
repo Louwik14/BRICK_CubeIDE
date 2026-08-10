@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:159:16:seq_live_rec_capture_find_pending_for_note	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:201:16:seq_live_rec_capture_find_pending_for_voice	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:375:16:seq_live_rec_capture_upsert_play_param	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:525:13:seq_live_rec_capture_finalize_pending	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:256:16:seq_live_rec_capture_track_accepts_source	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:428:16:seq_live_rec_capture_read_play_param	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:402:16:seq_live_rec_capture_delete_play_param	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:459:16:seq_live_rec_capture_restore_play_param	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:491:13:seq_live_rec_capture_clear_voice_play_params	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:571:6:seq_live_rec_capture_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:576:6:seq_live_rec_capture_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:581:6:seq_live_rec_capture_flush	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:589:6:seq_live_rec_capture_note_on	128	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c:755:6:seq_live_rec_capture_note_off	40	static

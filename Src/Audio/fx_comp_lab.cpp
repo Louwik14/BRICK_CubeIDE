@@ -96,6 +96,8 @@ static float brick_curve_db(float level, float threshold, float ratio, float kne
 void fx_comp_lab_process_block(fx_comp_lab_t *c, float *left, float *right, uint32_t frames)
 {
     if(!c || !left || !right) return;
+    /* Model 0 is a true bypass once its model-change crossfade has settled. */
+    if((c->model == 0U) && (c->transition >= 1.0f)) return;
     const float mix = c->mix;
     const float imix = 1.0f - mix;
     const uint32_t count = (frames > 64U) ? 64U : frames;

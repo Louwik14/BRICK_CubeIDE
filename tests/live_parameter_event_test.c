@@ -72,6 +72,9 @@ static void test_queue_saturation_and_reuse(void)
 int main(void)
 {
     assert(sizeof(live_parameter_audio_event_t) == 32U);
+    assert((LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP
+            & (LIVE_PARAMETER_EVENT_FLAG_BULK_INDEX_MASK
+               | LIVE_PARAMETER_EVENT_FLAG_BULK_COUNT_MASK)) == 0U);
     const float values[] = { -24.0f, -0.01f, 0.0f, 0.5f, 127.0f };
 
     for (unsigned int i = 0U; i < (sizeof(values) / sizeof(values[0])); ++i)

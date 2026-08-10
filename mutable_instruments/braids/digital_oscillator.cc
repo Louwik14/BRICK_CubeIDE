@@ -648,6 +648,11 @@ void DigitalOscillator::RenderVowelFof(
   uint32_t phase = phase_;
   int32_t previous_sample = state_.fof.previous_sample;
   int32_t next_saw_sample = state_.fof.next_saw_sample;
+  if (state_.fof.pending_sample_valid && size) {
+    *buffer++ = state_.fof.pending_sample;
+    state_.fof.pending_sample_valid = 0;
+    --size;
+  }
   uint32_t increment = phase_increment_ << 1;
   while (size) {
     int32_t this_saw_sample = next_saw_sample;
@@ -676,9 +681,15 @@ void DigitalOscillator::RenderVowelFof(
     }
     CLIP(out);
     *buffer++ = (out + previous_sample) >> 1;
-    *buffer++ = out;
+    --size;
+    if (size) {
+      *buffer++ = out;
+      --size;
+    } else {
+      state_.fof.pending_sample = out;
+      state_.fof.pending_sample_valid = 1;
+    }
     previous_sample = out;
-    size -= 2;
   }
   phase_ = phase;
   state_.fof.next_saw_sample = next_saw_sample;
@@ -1126,9 +1137,9 @@ void DigitalOscillator::RenderWaveParaphonic(
   const uint8_t* wave_2 = wt_waves + mini_wave_line[(parameter_[0] >> 10) + 1] * 129;
   uint16_t wave_xfade = parameter_[0] << 6;
   
-  while (size) {
+  auto render_sample = [&]() -> int32_t {
     int32_t sample = 0;
-    
+
     phase_0 += phase_increment_0;
     phase_1 += phase_increment[0];
     phase_2 += phase_increment[1];
@@ -1138,22 +1149,19 @@ void DigitalOscillator::RenderWaveParaphonic(
     sample += Crossfade(wave_1, wave_2, phase_1 >> 1, wave_xfade);
     sample += Crossfade(wave_1, wave_2, phase_2 >> 1, wave_xfade);
     sample += Crossfade(wave_1, wave_2, phase_3 >> 1, wave_xfade);
-    *buffer++ = sample >> 2;
-    
-    phase_0 += phase_increment_0;
-    phase_1 += phase_increment[0];
-    phase_2 += phase_increment[1];
-    phase_3 += phase_increment[2];
-    
-    sample = 0;
-    sample += Crossfade(wave_1, wave_2, phase_0 >> 1, wave_xfade);
-    sample += Crossfade(wave_1, wave_2, phase_1 >> 1, wave_xfade);
-    sample += Crossfade(wave_1, wave_2, phase_2 >> 1, wave_xfade);
-    sample += Crossfade(wave_1, wave_2, phase_3 >> 1, wave_xfade);
-    *buffer++ = sample >> 2;
+    return sample >> 2;
+  };
+
+  while (size >= 2) {
+    *buffer++ = render_sample();
+    *buffer++ = render_sample();
     size -= 2;
   }
-  
+
+  if (size) {
+    *buffer++ = render_sample();
+  }
+
   state_.saw.phase[0] = phase_0;
   state_.saw.phase[1] = phase_1;
   state_.saw.phase[2] = phase_2;
@@ -1184,7 +1192,7 @@ void DigitalOscillator::RenderFilteredNoise(
   }
   
   int32_t gain_correction = f > scale ? scale * 32767 / f : 32767;
-  while (size--) {
+  while (size) {
     int32_t notch, hp, in;
     
     in = Random::GetSample() >> 1;
@@ -1201,6 +1209,7 @@ void DigitalOscillator::RenderFilteredNoise(
     CLIP(result)
     result = result * gain_correction >> 15;
     *buffer++ = Interpolate88(ws_moderate_overdrive, result + 32768);
+    --size;
   }
   state_.svf.lp = lp;
   state_.svf.bp = bp;
@@ -1234,7 +1243,13 @@ void DigitalOscillator::RenderTwinPeaksNoise(
 
   int32_t makeup_gain = 8191 - (parameter_[0] >> 2);
   
-  while (size) {    
+  if (state_.pno.pending_sample_valid && size) {
+    *buffer++ = state_.pno.pending_sample;
+    state_.pno.pending_sample_valid = 0;
+    --size;
+  }
+
+  auto render_sample = [&]() -> int32_t {
     sample = Random::GetSample() >> 1;
     
     if (sample > 0) {
@@ -1263,9 +1278,21 @@ void DigitalOscillator::RenderTwinPeaksNoise(
     sample = y10;
     sample = Interpolate88(ws_moderate_overdrive, sample + 32768);
     
+    return sample;
+  };
+
+  while (size >= 2) {
+    sample = render_sample();
     *buffer++ = sample;
     *buffer++ = sample;
     size -= 2;
+  }
+
+  if (size) {
+    sample = render_sample();
+    *buffer++ = sample;
+    state_.pno.pending_sample = sample;
+    state_.pno.pending_sample_valid = 1;
   }
   
   state_.pno.filter_state[0][0] = y11;
@@ -1430,7 +1457,13 @@ void DigitalOscillator::RenderParticleNoise(
   int32_t s3 = state_.pno.filter_scale[2];
   int32_t c3 = state_.pno.filter_coefficient[2];
 
-  while (size) {
+  if (state_.pno.pending_sample_valid && size) {
+    *buffer++ = state_.pno.pending_sample;
+    state_.pno.pending_sample_valid = 0;
+    --size;
+  }
+
+  auto render_sample = [&]() -> int32_t {
     uint32_t noise = Random::GetWord();
     if ((noise & 0x7fffff) < density) {
       amplitude = 65535;
@@ -1489,9 +1522,21 @@ void DigitalOscillator::RenderParticleNoise(
     
     y10 += y20 + y30;
     CLIP(y10)
-    *buffer++ = y10;
-    *buffer++ = y10;
+    return y10;
+  };
+
+  while (size >= 2) {
+    sample = render_sample();
+    *buffer++ = sample;
+    *buffer++ = sample;
     size -= 2;
+  }
+
+  if (size) {
+    sample = render_sample();
+    *buffer++ = sample;
+    state_.pno.pending_sample = sample;
+    state_.pno.pending_sample_valid = 1;
   }
   
   state_.pno.amplitude = amplitude;

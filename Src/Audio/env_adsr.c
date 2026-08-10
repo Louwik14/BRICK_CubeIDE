@@ -69,6 +69,13 @@ uint8_t env_adsr_process_vca_sample(env_adsr_t *env, float *out_gain)
             && (release_terminal == 0U)) ? 1U : 0U;
 }
 
+uint32_t env_adsr_process_vca_block(env_adsr_t *env,
+                                    float *out_gain,
+                                    uint32_t frames)
+{
+    return env_adsr_peaks_process_vca_block(env, out_gain, frames);
+}
+
 int16_t env_adsr_process_advance(env_adsr_t *env,
                                  uint32_t steps,
                                  int16_t *first_value)

@@ -43,6 +43,7 @@ void mod_matrix_reset_runtime(void);
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
 void mod_matrix_rebuild_route_cache_track(uint8_t track);
 void mod_matrix_rebuild_route_cache_all(void);
+uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);
 uint8_t mod_matrix_get_selected_slot(uint8_t track, float *out_value);
@@ -83,6 +84,15 @@ void mod_matrix_process_track_ramped(uint8_t track,
                                      const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
                                      const uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT],
                                      uint32_t elapsed_frames);
+void mod_matrix_process_poly_voice_ramped(uint8_t track,
+                                          uint8_t voice_slot,
+                                          const track_runtime_ctx_t *ctx,
+                                          const float source_start[MOD_MATRIX_SOURCE_COUNT],
+                                          const float source_end[MOD_MATRIX_SOURCE_COUNT],
+                                          const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT]);
+void mod_matrix_reset_poly_voice(uint8_t track,
+                                 uint8_t voice_slot,
+                                 const track_runtime_ctx_t *ctx);
 void mod_matrix_process_operators(uint8_t track,
                                   float source_values[MOD_MATRIX_SOURCE_COUNT],
                                   uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],

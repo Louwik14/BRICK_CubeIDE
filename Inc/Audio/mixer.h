@@ -142,6 +142,28 @@ void mixer_multi_filter_note_on(uint32_t track_id,
 void mixer_multi_filter_note_off(struct multi_voice_dsp_slot_t *slot);
 uint8_t mixer_multi_voice_vca_requires_source(
     const struct multi_voice_dsp_slot_t *slot);
+void mixer_multi_filter_prepare_voice_block(uint32_t track_id,
+                                            struct multi_voice_dsp_slot_t *slot);
+void mixer_multi_filter_set_voice_cutoff(struct multi_voice_dsp_slot_t *slot, float cutoff_hz);
+void mixer_multi_filter_set_voice_resonance(struct multi_voice_dsp_slot_t *slot, float resonance);
+void mixer_multi_filter_set_voice_eg_amount(struct multi_voice_dsp_slot_t *slot, float amount);
+void mixer_multi_filter_set_voice_env_attack(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_set_voice_env_decay(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_set_voice_env_sustain(struct multi_voice_dsp_slot_t *slot, float sustain);
+void mixer_multi_filter_set_voice_env_release(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_set_voice_vca_attack(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_set_voice_vca_decay(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_set_voice_vca_sustain(struct multi_voice_dsp_slot_t *slot, float sustain);
+void mixer_multi_filter_set_voice_vca_release(struct multi_voice_dsp_slot_t *slot, float seconds);
+void mixer_multi_filter_process_prepared(uint32_t track_id,
+                                         struct multi_voice_dsp_slot_t *slot,
+                                         float *left,
+                                         float *right,
+                                         uint32_t frames);
+void mixer_multi_filter_process_mono_prepared(uint32_t track_id,
+                                              struct multi_voice_dsp_slot_t *slot,
+                                              float *mono,
+                                              uint32_t frames);
 void mixer_multi_filter_process(uint32_t track_id,
                                 struct multi_voice_dsp_slot_t *slot,
                                 float *left,
@@ -178,6 +200,27 @@ uint8_t mixer_process_external_poly_voice(uint32_t mix_track_id,
                                           float *mono,
                                           uint32_t frames,
                                           float voice_pan);
+uint8_t mixer_process_external_poly_voice_prepared(uint32_t mix_track_id,
+                                                   uint32_t poly_track_id,
+                                                   uint8_t voice,
+                                                   float *mono,
+                                                   uint32_t frames,
+                                                   float voice_pan);
+void mixer_prepare_external_poly_voice(uint32_t mix_track_id,
+                                       uint32_t poly_track_id,
+                                       uint8_t voice);
+void mixer_invalidate_external_poly_track(uint32_t poly_track_id);
+void mixer_poly_voice_set_cutoff(uint8_t voice_slot, float cutoff_hz);
+void mixer_poly_voice_set_resonance(uint8_t voice_slot, float resonance);
+void mixer_poly_voice_set_eg_amount(uint8_t voice_slot, float amount);
+void mixer_poly_voice_set_filter_attack(uint8_t voice_slot, float seconds);
+void mixer_poly_voice_set_filter_decay(uint8_t voice_slot, float seconds);
+void mixer_poly_voice_set_filter_sustain(uint8_t voice_slot, float sustain);
+void mixer_poly_voice_set_filter_release(uint8_t voice_slot, float seconds);
+void mixer_poly_voice_set_vca_attack(uint8_t voice_slot, float seconds);
+void mixer_poly_voice_set_vca_decay(uint8_t voice_slot, float seconds);
+void mixer_poly_voice_set_vca_sustain(uint8_t voice_slot, float sustain);
+void mixer_poly_voice_set_vca_release(uint8_t voice_slot, float seconds);
 void mixer_commit_external_poly(uint32_t track_id, uint32_t frames);
 void mixer_track_poly_note_on(uint32_t poly_track_id,
                               uint32_t mix_track_id,

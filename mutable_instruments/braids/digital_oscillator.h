@@ -119,6 +119,10 @@ struct ParticleNoiseState {
   int32_t filter_state[3][2];
   int32_t filter_scale[3];
   int32_t filter_coefficient[3];
+  // The pair renderers duplicate one computed sample; retain the second
+  // output when an arbitrary-size render ends after the first one.
+  int16_t pending_sample;
+  uint8_t pending_sample_valid;
 };
 
 struct Grain {
@@ -131,6 +135,8 @@ struct Grain {
 struct FofState {
   int32_t next_saw_sample;
   int16_t previous_sample;
+  int16_t pending_sample;
+  uint8_t pending_sample_valid;
   int32_t svf_lp[kNumFormants];
   int32_t svf_bp[kNumFormants];
 };
