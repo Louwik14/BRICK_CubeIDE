@@ -50,9 +50,6 @@ static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
     braids::MACRO_OSC_SHAPE_VOSIM,
     braids::MACRO_OSC_SHAPE_VOWEL,
     braids::MACRO_OSC_SHAPE_VOWEL_FOF,
-    // Keep the historical slot stable for persisted Prism values.  The
-    // removed model now falls back to CSAW and is no longer rendered.
-    braids::MACRO_OSC_SHAPE_CSAW,
     braids::MACRO_OSC_SHAPE_FM,
     braids::MACRO_OSC_SHAPE_FEEDBACK_FM,
     braids::MACRO_OSC_SHAPE_CHAOTIC_FEEDBACK_FM,
