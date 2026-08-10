@@ -630,6 +630,17 @@ set(AUDIO_LTO_SOURCES
 set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
+
+# LFO control/polyphonic preparation: keep the optimization scope limited to
+# the two translation units reached from the hard real-time audio path.
+set(MOD_LFO_O3_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_v1.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
+)
+set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
+)
+
 set(AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
