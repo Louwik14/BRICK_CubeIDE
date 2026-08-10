@@ -34,6 +34,25 @@ uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
 uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
                                                 uint8_t hall_index);
 
+uint8_t seq_edit_step_play_find(seq_track_id_t track,
+                                seq_step_id_t step,
+                                param_id_t param,
+                                seq_value16_t *out_value16);
+seq_plock_op_status_t seq_edit_step_play_upsert(seq_track_id_t track,
+                                                 seq_step_id_t step,
+                                                 param_id_t param,
+                                                 seq_value16_t value16);
+void seq_edit_step_play_commit(seq_track_id_t track,
+                               seq_step_id_t step,
+                               param_id_t param);
+seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
+                                                 seq_step_id_t step,
+                                                 param_id_t param);
+void seq_edit_step_play_clear_voice(seq_track_id_t track,
+                                    seq_step_id_t step,
+                                    uint8_t voice);
+void seq_edit_step_play_clear(seq_track_id_t track, seq_step_id_t step);
+
 uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_step_id_t step,
                                  uint8_t set_id,
