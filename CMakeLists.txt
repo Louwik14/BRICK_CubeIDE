@@ -658,6 +658,11 @@ set_source_files_properties(${AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/mixer.c"
+    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
+)
+
 # GCC 13.3 LTO can emit a corrupted .init_array relocation for the sole
 # non-trivial global C++ initializer in the diagnostic image. Keep this TU at
 # Release optimization while making its constructor relocation ordinary.
