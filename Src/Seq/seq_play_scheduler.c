@@ -614,6 +614,24 @@ static param_id_t seq_play_scheduler_param_for_play_kind(seq_play_scheduler_play
     return seq_play_scheduler_param_note(0U);
 }
 
+static seq_step_play_field_t seq_play_scheduler_field_for_play_kind(
+    seq_play_scheduler_play_param_t kind)
+{
+    switch (kind)
+    {
+        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE:
+            return SEQ_STEP_PLAY_FIELD_NOTE;
+        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL:
+            return SEQ_STEP_PLAY_FIELD_VELOCITY;
+        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN:
+            return SEQ_STEP_PLAY_FIELD_LENGTH;
+        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM:
+            return SEQ_STEP_PLAY_FIELD_MICROTIMING;
+        default:
+            return SEQ_STEP_PLAY_FIELD_NOTE;
+    }
+}
+
 /*
  * Explicit admission adapter for legacy internal engines.
  *
@@ -1075,21 +1093,14 @@ static seq_value16_t seq_play_scheduler_get_play_locked_or_default(const seq_pla
     const param_id_t target_param =
         seq_play_scheduler_param_for_play_kind(kind, item->target_voice);
 
-    seq_param_slot_t source_slot = 0U;
-    if (seq_param_iface_param_to_slot(item->source_track,
-                                      (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                      source_param,
-                                      &source_slot) != 0U)
+    int16_t stored_value = 0;
+    if (seq_model_step_play_get(item->source_track,
+                                item->source_step,
+                                item->source_voice,
+                                seq_play_scheduler_field_for_play_kind(kind),
+                                &stored_value) != 0U)
     {
-        seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(item->source_track,
-                                      item->source_step,
-                                      (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                      source_slot,
-                                      &entry) != 0U)
-        {
-            return entry.value16;
-        }
+        return seq_param_iface_encode_param_value(source_param, (float)stored_value);
     }
 
     seq_param_slot_t target_slot = 0U;

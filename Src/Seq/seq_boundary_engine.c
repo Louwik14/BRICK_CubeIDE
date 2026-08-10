@@ -247,21 +247,17 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
         return 1U;
     }
 
-    seq_plock_entry_t entries[SEQ_STEP_MAX_LOCKS];
-    uint8_t entry_count = 0U;
-    if (seq_model_step_plock_collect(track, step, entries, SEQ_STEP_MAX_LOCKS, &entry_count) == 0U)
-    {
-        return 0U;
-    }
+    const uint8_t entry_count = seq_model_step_param_plock_count(track, step);
 
     uint8_t count = 0U;
     for (uint8_t i = 0U; i < entry_count; ++i)
     {
-        const seq_plock_entry_t *const entry = &entries[i];
-        if (entry->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+        seq_plock_entry_t entry_storage;
+        if (seq_model_step_param_plock_get_at(track, step, i, &entry_storage) == 0U)
         {
-            continue;
+            return 0U;
         }
+        const seq_plock_entry_t *const entry = &entry_storage;
 
         if (seq_param_iface_slot_is_supported(track, entry->set_id, entry->param_slot) == 0U)
         {
