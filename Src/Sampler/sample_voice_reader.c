@@ -323,6 +323,89 @@ static uint8_t sample_voice_reader_pingpong_span_valid(const sample_voice_reader
     return (state->plan.loop_end > (state->plan.loop_begin + 1U)) ? 1U : 0U;
 }
 
+static uint32_t sample_voice_reader_forward_frames_before_boundary_q16(
+    float position,
+    float step,
+    uint32_t source_start_frame,
+    uint32_t limit_frame,
+    uint32_t max_frames,
+    uint32_t *out_position_q16,
+    uint32_t *out_step_q16)
+{
+    const uint32_t position_q16 =
+        (uint32_t)(((position - (float)source_start_frame)
+                    * (float)SAMPLE_Q16_ONE) + 0.5f);
+    uint32_t step_q16 =
+        (uint32_t)((step * (float)SAMPLE_Q16_ONE) + 0.5f);
+    if (step_q16 == 0U)
+    {
+        step_q16 = 1U;
+    }
+    *out_position_q16 = position_q16;
+    *out_step_q16 = step_q16;
+    if ((limit_frame <= source_start_frame) || (max_frames == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t limit_q16 =
+        ((uint64_t)(limit_frame - source_start_frame)) << 16U;
+    if ((uint64_t)position_q16 >= limit_q16)
+    {
+        return 0U;
+    }
+    /* Positions are pos + n*step and must stay strictly below limit. */
+    const uint64_t distance_q16 = limit_q16 - (uint64_t)position_q16;
+    uint64_t frames =
+        (distance_q16 + (uint64_t)step_q16 - 1ULL) / (uint64_t)step_q16;
+    if (frames > (uint64_t)max_frames)
+    {
+        frames = max_frames;
+    }
+    return (uint32_t)frames;
+}
+
+static uint32_t sample_voice_reader_reverse_frames_before_boundary_q16(
+    float position,
+    float step,
+    uint32_t source_start_frame,
+    uint32_t limit_frame,
+    uint32_t max_frames,
+    uint32_t *out_position_q16,
+    uint32_t *out_step_q16)
+{
+    const uint32_t position_q16 =
+        (uint32_t)(((position - (float)source_start_frame)
+                    * (float)SAMPLE_Q16_ONE) + 0.5f);
+    uint32_t step_q16 =
+        (uint32_t)((step * (float)SAMPLE_Q16_ONE) + 0.5f);
+    if (step_q16 == 0U)
+    {
+        step_q16 = 1U;
+    }
+    *out_position_q16 = position_q16;
+    *out_step_q16 = step_q16;
+    if ((limit_frame < source_start_frame) || (max_frames == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t limit_q16 =
+        ((uint64_t)(limit_frame - source_start_frame)) << 16U;
+    if ((uint64_t)position_q16 < limit_q16)
+    {
+        return 0U;
+    }
+    /* Reverse positions are pos - n*step and may equal the lower limit. */
+    uint64_t frames =
+        (((uint64_t)position_q16 - limit_q16) / (uint64_t)step_q16) + 1ULL;
+    if (frames > (uint64_t)max_frames)
+    {
+        frames = max_frames;
+    }
+    return (uint32_t)frames;
+}
+
 static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_reader_state_t *state,
                                                                  uint32_t max_frames,
                                                                  sample_audio_segment_t *out_segment)
@@ -350,73 +433,59 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
         }
     }
 
-    uint32_t segment_frames = 0U;
+    const uint32_t current_page_end =
+        state->audio_cursor.current_start_frame
+        + state->audio_cursor.current_frame_count;
+    const uint32_t segment_limit =
+        (forward_end < current_page_end) ? forward_end : current_page_end;
+    uint32_t position_q16 = 0U;
+    uint32_t step_q16 = 0U;
+    const uint32_t segment_frames =
+        sample_voice_reader_forward_frames_before_boundary_q16(
+            state->position,
+            state->step,
+            state->audio_cursor.current_start_frame,
+            segment_limit,
+            max_frames,
+            &position_q16,
+            &step_q16);
     uint8_t needs_neighbor = 0U;
     uint32_t neighbor_page_index = UINT32_MAX;
-    float scan_position = state->position;
-
-    while (segment_frames < max_frames)
-    {
-        if (scan_position >= (float)forward_end)
-        {
-            break;
-        }
-
-        const uint32_t base_frame = (uint32_t)scan_position;
-        if ((base_frame < state->audio_cursor.current_start_frame)
-            || (base_frame >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-        {
-            break;
-        }
-
-        if ((base_frame + 1U) < forward_end)
-        {
-            const uint32_t neighbor_frame = base_frame + 1U;
-            if ((neighbor_frame < state->audio_cursor.current_start_frame)
-                || (neighbor_frame
-                    >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-            {
-                needs_neighbor = 1U;
-                neighbor_page_index = sample_audio_format_page_index_from_frame(
-                    state->audio_cursor.format,
-                    neighbor_frame);
-            }
-        }
-        else if (loop_forward != 0U)
-        {
-            const uint32_t neighbor_frame = state->plan.loop_begin;
-            if ((neighbor_frame < state->audio_cursor.current_start_frame)
-                || (neighbor_frame
-                    >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-            {
-                needs_neighbor = 1U;
-                neighbor_page_index = sample_audio_format_page_index_from_frame(
-                    state->audio_cursor.format,
-                    neighbor_frame);
-            }
-        }
-
-        segment_frames++;
-        const float next_position = scan_position + state->step;
-        if (next_position >= (float)forward_end)
-        {
-            break;
-        }
-
-        const uint32_t next_base = (uint32_t)next_position;
-        if ((next_base < state->audio_cursor.current_start_frame)
-            || (next_base >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-        {
-            break;
-        }
-
-        scan_position = next_position;
-    }
 
     if (segment_frames == 0U)
     {
         out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
         return 1U;
+    }
+
+    const uint64_t last_position_q16 =
+        (uint64_t)position_q16
+        + ((uint64_t)step_q16 * (uint64_t)(segment_frames - 1U));
+    const uint32_t last_base_frame =
+        state->audio_cursor.current_start_frame
+        + (uint32_t)(last_position_q16 >> 16U);
+    if ((last_base_frame + 1U) < forward_end)
+    {
+        const uint32_t neighbor_frame = last_base_frame + 1U;
+        if (neighbor_frame >= current_page_end)
+        {
+            needs_neighbor = 1U;
+            neighbor_page_index = sample_audio_format_page_index_from_frame(
+                state->audio_cursor.format,
+                neighbor_frame);
+        }
+    }
+    else if (loop_forward != 0U)
+    {
+        const uint32_t neighbor_frame = state->plan.loop_begin;
+        if ((neighbor_frame < state->audio_cursor.current_start_frame)
+            || (neighbor_frame >= current_page_end))
+        {
+            needs_neighbor = 1U;
+            neighbor_page_index = sample_audio_format_page_index_from_frame(
+                state->audio_cursor.format,
+                neighbor_frame);
+        }
     }
 
     if ((needs_neighbor != 0U) && (sample_voice_reader_acquire_neighbor_page(state, neighbor_page_index) == 0U))
@@ -425,13 +494,15 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
         return 1U;
     }
 
-    const float last_segment_position = state->position + (state->step * (float)(segment_frames - 1U));
+    const uint64_t next_position_q16 = last_position_q16 + (uint64_t)step_q16;
+    const uint64_t forward_end_q16 =
+        ((uint64_t)(forward_end - state->audio_cursor.current_start_frame)) << 16U;
     const uint8_t loop_neighbor_in_current =
         (loop_forward != 0U)
             && (state->audio_cursor.current_start_frame <= state->plan.loop_begin)
             && (state->plan.loop_begin
                 < (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count))
-            && ((last_segment_position + state->step) >= (float)forward_end)
+            && (next_position_q16 >= forward_end_q16)
             ? 1U
             : 0U;
     const uint8_t is_mono = (state->audio_cursor.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 1U : 0U;
@@ -496,60 +567,48 @@ static uint8_t sample_voice_reader_prepare_pitch_reverse_segment(sample_voice_re
         }
     }
 
-    uint32_t segment_frames = 0U;
+    const uint32_t segment_limit =
+        (state->plan.region_begin > state->audio_cursor.current_start_frame)
+            ? state->plan.region_begin
+            : state->audio_cursor.current_start_frame;
+    uint32_t position_q16 = 0U;
+    uint32_t step_q16 = 0U;
+    const uint32_t segment_frames =
+        sample_voice_reader_reverse_frames_before_boundary_q16(
+            state->position,
+            state->step,
+            state->audio_cursor.current_start_frame,
+            segment_limit,
+            max_frames,
+            &position_q16,
+            &step_q16);
     uint8_t needs_neighbor = 0U;
     uint32_t neighbor_page_index = UINT32_MAX;
-    float scan_position = state->position;
-
-    while (segment_frames < max_frames)
-    {
-        if (scan_position < (float)state->plan.region_begin)
-        {
-            break;
-        }
-
-        const uint32_t base_frame = (uint32_t)scan_position;
-        if ((base_frame < state->audio_cursor.current_start_frame)
-            || (base_frame >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-        {
-            break;
-        }
-
-        if (base_frame > state->plan.region_begin)
-        {
-            const uint32_t neighbor_frame = base_frame - 1U;
-            if ((neighbor_frame < state->audio_cursor.current_start_frame)
-                || (neighbor_frame
-                    >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-            {
-                needs_neighbor = 1U;
-                neighbor_page_index = sample_audio_format_page_index_from_frame(
-                    state->audio_cursor.format,
-                    neighbor_frame);
-            }
-        }
-
-        segment_frames++;
-        const float next_position = scan_position - state->step;
-        if (next_position < (float)state->plan.region_begin)
-        {
-            break;
-        }
-
-        const uint32_t next_base = (uint32_t)next_position;
-        if ((next_base < state->audio_cursor.current_start_frame)
-            || (next_base >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-        {
-            break;
-        }
-
-        scan_position = next_position;
-    }
 
     if (segment_frames == 0U)
     {
         out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
         return 1U;
+    }
+
+    const uint64_t reverse_span_q16 =
+        (uint64_t)step_q16 * (uint64_t)(segment_frames - 1U);
+    const uint32_t last_position_q16 =
+        (reverse_span_q16 <= (uint64_t)position_q16)
+            ? (position_q16 - (uint32_t)reverse_span_q16)
+            : 0U;
+    const uint32_t last_base_frame =
+        state->audio_cursor.current_start_frame + (last_position_q16 >> 16U);
+    if (last_base_frame > state->plan.region_begin)
+    {
+        const uint32_t neighbor_frame = last_base_frame - 1U;
+        if (neighbor_frame < state->audio_cursor.current_start_frame)
+        {
+            needs_neighbor = 1U;
+            neighbor_page_index = sample_audio_format_page_index_from_frame(
+                state->audio_cursor.format,
+                neighbor_frame);
+        }
     }
 
     if ((needs_neighbor != 0U) && (sample_voice_reader_acquire_neighbor_page(state, neighbor_page_index) == 0U))
