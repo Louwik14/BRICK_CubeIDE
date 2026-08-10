@@ -104,6 +104,10 @@ typedef struct
 
 static mod_lfo_poly_segment_config_t
     g_mod_lfo_poly_segment_config[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+#define MOD_LFO_POLY_PREPARED_ENTRY_CAPACITY \
+    (SEQ_TRACK_COUNT * MOD_LFO_COUNT_PER_TRACK)
+static uint8_t g_mod_lfo_poly_prepared_entries[MOD_LFO_POLY_PREPARED_ENTRY_CAPACITY];
+static uint8_t g_mod_lfo_poly_prepared_entry_count = 0U;
 
 _Static_assert(SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET == MOD_LFO_POLY_SYNTH_SLOT_COUNT,
                "Poly LFO synth slot namespace changed");
@@ -520,12 +524,22 @@ static float mod_lfo_poly_random_slew_coeff(float phase_setting,
     return (float)frames / (time_constant_frames + (float)frames);
 }
 
+static void mod_lfo_clear_poly_segment_config(void)
+{
+    for (uint8_t i = 0U; i < g_mod_lfo_poly_prepared_entry_count; ++i)
+    {
+        const uint8_t entry = g_mod_lfo_poly_prepared_entries[i];
+        const uint8_t track = (uint8_t)(entry / MOD_LFO_COUNT_PER_TRACK);
+        const uint8_t lfo = (uint8_t)(entry % MOD_LFO_COUNT_PER_TRACK);
+        g_mod_lfo_poly_segment_config[track][lfo].valid = 0U;
+    }
+    g_mod_lfo_poly_prepared_entry_count = 0U;
+}
+
 static void mod_lfo_prepare_poly_segment(uint32_t frames,
                                          uint32_t bpm_milli)
 {
-    memset(g_mod_lfo_poly_segment_config,
-           0,
-           sizeof(g_mod_lfo_poly_segment_config));
+    mod_lfo_clear_poly_segment_config();
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -575,6 +589,8 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
             prepared->shape = (uint8_t)shape;
             prepared->trig = (uint8_t)trig;
             prepared->valid = 1U;
+            g_mod_lfo_poly_prepared_entries[g_mod_lfo_poly_prepared_entry_count++] =
+                (uint8_t)(track * MOD_LFO_COUNT_PER_TRACK + lfo);
         }
     }
 }
@@ -808,6 +824,10 @@ void mod_lfo_v1_init(void)
     memset(g_mod_lfo_poly_segment_config,
            0,
            sizeof(g_mod_lfo_poly_segment_config));
+    memset(g_mod_lfo_poly_prepared_entries,
+           0,
+           sizeof(g_mod_lfo_poly_prepared_entries));
+    g_mod_lfo_poly_prepared_entry_count = 0U;
     mod_destination_catalog_init();
     mod_env3_init();
     mod_matrix_init();
@@ -857,6 +877,10 @@ void mod_lfo_v1_reset_runtime(void)
     memset(g_mod_lfo_poly_segment_config,
            0,
            sizeof(g_mod_lfo_poly_segment_config));
+    memset(g_mod_lfo_poly_prepared_entries,
+           0,
+           sizeof(g_mod_lfo_poly_prepared_entries));
+    g_mod_lfo_poly_prepared_entry_count = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
