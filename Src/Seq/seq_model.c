@@ -923,6 +923,10 @@ uint8_t seq_model_step_play_set(seq_track_id_t track,
                                 seq_step_play_field_t field,
                                 int16_t value)
 {
+    if (seq_model_track_can_emit_notes(track) == 0U)
+    {
+        return 0U;
+    }
     seq_step_t *const s = seq_model_get_step_mut(track, step);
     return (s != NULL) ? seq_step_play_set(&s->play, voice, field, value) : 0U;
 }
@@ -968,6 +972,76 @@ uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step)
 {
     const seq_step_t *const s = seq_model_get_step_const(track, step);
     return (s != NULL) ? seq_step_play_has_any(&s->play) : 0U;
+}
+
+uint8_t seq_model_step_play_resolve_param(param_id_t param,
+                                          uint8_t *out_voice,
+                                          seq_step_play_field_t *out_field)
+{
+    if ((out_voice == NULL) || (out_field == NULL))
+    {
+        return 0U;
+    }
+
+    static const param_id_t play_params[SEQ_STEP_PLAY_VOICE_COUNT][SEQ_STEP_PLAY_FIELD_COUNT] = {
+        { PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V1_VEL,
+          PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V1_MICTIM },
+        { PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V2_VEL,
+          PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V2_MICTIM },
+        { PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V3_VEL,
+          PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V3_MICTIM },
+        { PARAM_SEQ_PLAY_V4_NOTE, PARAM_SEQ_PLAY_V4_VEL,
+          PARAM_SEQ_PLAY_V4_LEN, PARAM_SEQ_PLAY_V4_MICTIM }
+    };
+
+    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    {
+        for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
+        {
+            if (play_params[voice][field] == param)
+            {
+                *out_voice = voice;
+                *out_field = (seq_step_play_field_t)field;
+                return 1U;
+            }
+        }
+    }
+    return 0U;
+}
+
+uint8_t seq_model_step_play_param_get(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      param_id_t param,
+                                      int16_t *out_value)
+{
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_step_play_get(track, step, voice, field, out_value)
+        : 0U;
+}
+
+uint8_t seq_model_step_play_param_set(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      param_id_t param,
+                                      int16_t value)
+{
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_step_play_set(track, step, voice, field, value)
+        : 0U;
+}
+
+uint8_t seq_model_step_play_param_delete(seq_track_id_t track,
+                                         seq_step_id_t step,
+                                         param_id_t param)
+{
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_step_play_delete(track, step, voice, field)
+        : 0U;
 }
 
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track)

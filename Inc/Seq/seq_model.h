@@ -5,6 +5,7 @@
 
 #include "Seq/seq_types.h"
 #include "Seq/seq_lane.h"
+#include "Param/param_store.h"
 
 #define SEQ_STEP_PLAY_VOICE_COUNT 4U
 
@@ -190,6 +191,20 @@ uint8_t seq_model_step_play_voice_has_any(seq_track_id_t track,
                                           seq_step_id_t step,
                                           uint8_t voice);
 uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_play_resolve_param(param_id_t param,
+                                          uint8_t *out_voice,
+                                          seq_step_play_field_t *out_field);
+uint8_t seq_model_step_play_param_get(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      param_id_t param,
+                                      int16_t *out_value);
+uint8_t seq_model_step_play_param_set(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      param_id_t param,
+                                      int16_t value);
+uint8_t seq_model_step_play_param_delete(seq_track_id_t track,
+                                         seq_step_id_t step,
+                                         param_id_t param);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
