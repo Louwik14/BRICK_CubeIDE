@@ -508,6 +508,8 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_
                 return 0U;
             }
             if (pattern_live_play_is_valid(&saved->steps[step].play) == 0U) return 0U;
+            if ((seq_step_play_has_any(&saved->steps[step].play) != 0U)
+                    && (seq_model_track_can_store_play(track) == 0U)) return 0U;
 
             for (uint8_t lock = 0U; lock < lock_count; ++lock)
             {

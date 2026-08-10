@@ -169,6 +169,7 @@ uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_track_can_store_play(seq_track_id_t track);
 uint8_t seq_model_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,

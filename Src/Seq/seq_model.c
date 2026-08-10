@@ -907,6 +907,11 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
                      && (seq_model_step_is_empty(track, step) != 0U));
 }
 
+uint8_t seq_model_track_can_store_play(seq_track_id_t track)
+{
+    return seq_model_track_can_emit_notes(track);
+}
+
 uint8_t seq_model_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,
@@ -923,7 +928,7 @@ uint8_t seq_model_step_play_set(seq_track_id_t track,
                                 seq_step_play_field_t field,
                                 int16_t value)
 {
-    if (seq_model_track_can_emit_notes(track) == 0U)
+    if (seq_model_track_can_store_play(track) == 0U)
     {
         return 0U;
     }

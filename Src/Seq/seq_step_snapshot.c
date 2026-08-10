@@ -98,6 +98,8 @@ uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
     if ((seq_step_snapshot_track_is_valid(track) == 0U) || (snapshot == 0) || (snapshot->valid == 0U)
             || (snapshot->lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
             || (play_state_is_valid(&snapshot->play) == 0U)) return 0U;
+    if ((seq_step_play_has_any(&snapshot->play) != 0U)
+            && (seq_model_track_can_store_play(track) == 0U)) return 0U;
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
         const seq_step_snapshot_plock_t *lock = &snapshot->locks[i];
