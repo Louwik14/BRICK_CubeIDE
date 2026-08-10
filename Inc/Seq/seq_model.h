@@ -6,6 +6,47 @@
 #include "Seq/seq_types.h"
 #include "Seq/seq_lane.h"
 
+#define SEQ_STEP_PLAY_VOICE_COUNT 4U
+
+typedef enum
+{
+    SEQ_STEP_PLAY_FIELD_NOTE = 0,
+    SEQ_STEP_PLAY_FIELD_VELOCITY,
+    SEQ_STEP_PLAY_FIELD_LENGTH,
+    SEQ_STEP_PLAY_FIELD_MICROTIMING,
+    SEQ_STEP_PLAY_FIELD_COUNT
+} seq_step_play_field_t;
+
+typedef enum
+{
+    SEQ_STEP_PLAY_PRESENT_NOTE = (1U << SEQ_STEP_PLAY_FIELD_NOTE),
+    SEQ_STEP_PLAY_PRESENT_VELOCITY = (1U << SEQ_STEP_PLAY_FIELD_VELOCITY),
+    SEQ_STEP_PLAY_PRESENT_LENGTH = (1U << SEQ_STEP_PLAY_FIELD_LENGTH),
+    SEQ_STEP_PLAY_PRESENT_MICROTIMING = (1U << SEQ_STEP_PLAY_FIELD_MICROTIMING),
+    SEQ_STEP_PLAY_PRESENT_ALL = (SEQ_STEP_PLAY_PRESENT_NOTE
+                                 | SEQ_STEP_PLAY_PRESENT_VELOCITY
+                                 | SEQ_STEP_PLAY_PRESENT_LENGTH
+                                 | SEQ_STEP_PLAY_PRESENT_MICROTIMING)
+} seq_step_play_presence_t;
+
+typedef struct
+{
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t length;
+    int8_t microtiming;
+    uint8_t present_mask;
+} seq_step_play_voice_t;
+
+typedef struct
+{
+    seq_step_play_voice_t voices[SEQ_STEP_PLAY_VOICE_COUNT];
+} seq_step_play_t;
+
+_Static_assert(SEQ_STEP_PLAY_FIELD_COUNT == 4U, "PLAY field count changed");
+_Static_assert(sizeof(seq_step_play_voice_t) == 5U, "PLAY voice storage size changed");
+_Static_assert(sizeof(seq_step_play_t) == 20U, "PLAY step storage size changed");
+
 typedef struct
 {
     uint16_t next;
@@ -82,6 +123,22 @@ typedef enum
     SEQ_STEP_VISUAL_BLUE
 } seq_step_visual_t;
 
+void seq_step_play_init(seq_step_play_t *play);
+uint8_t seq_step_play_get(const seq_step_play_t *play,
+                          uint8_t voice,
+                          seq_step_play_field_t field,
+                          int16_t *out_value);
+uint8_t seq_step_play_set(seq_step_play_t *play,
+                          uint8_t voice,
+                          seq_step_play_field_t field,
+                          int16_t value);
+uint8_t seq_step_play_delete(seq_step_play_t *play,
+                             uint8_t voice,
+                             seq_step_play_field_t field);
+void seq_step_play_clear_voice(seq_step_play_t *play, uint8_t voice);
+void seq_step_play_clear(seq_step_play_t *play);
+uint8_t seq_step_play_voice_has_any(const seq_step_play_t *play, uint8_t voice);
+uint8_t seq_step_play_has_any(const seq_step_play_t *play);
 
 void seq_model_init_defaults(void);
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);

@@ -25,6 +25,160 @@ typedef struct
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
 
+static uint8_t seq_step_play_field_mask(seq_step_play_field_t field)
+{
+    return (field < SEQ_STEP_PLAY_FIELD_COUNT) ? (uint8_t)(1U << (uint8_t)field) : 0U;
+}
+
+static uint8_t seq_step_play_value_is_valid(seq_step_play_field_t field, int16_t value)
+{
+    switch (field)
+    {
+        case SEQ_STEP_PLAY_FIELD_NOTE:
+        case SEQ_STEP_PLAY_FIELD_VELOCITY:
+            return ((value >= 0) && (value <= 127)) ? 1U : 0U;
+
+        case SEQ_STEP_PLAY_FIELD_LENGTH:
+            return ((value >= 1) && (value <= 64)) ? 1U : 0U;
+
+        case SEQ_STEP_PLAY_FIELD_MICROTIMING:
+            return ((value >= -24) && (value <= 24)) ? 1U : 0U;
+
+        default:
+            return 0U;
+    }
+}
+
+void seq_step_play_init(seq_step_play_t *play)
+{
+    seq_step_play_clear(play);
+}
+
+uint8_t seq_step_play_get(const seq_step_play_t *play,
+                          uint8_t voice,
+                          seq_step_play_field_t field,
+                          int16_t *out_value)
+{
+    const uint8_t mask = seq_step_play_field_mask(field);
+    if ((play == NULL) || (out_value == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT)
+            || (mask == 0U) || ((play->voices[voice].present_mask & mask) == 0U))
+    {
+        return 0U;
+    }
+
+    const seq_step_play_voice_t *const state = &play->voices[voice];
+    switch (field)
+    {
+        case SEQ_STEP_PLAY_FIELD_NOTE:
+            *out_value = (int16_t)state->note;
+            break;
+        case SEQ_STEP_PLAY_FIELD_VELOCITY:
+            *out_value = (int16_t)state->velocity;
+            break;
+        case SEQ_STEP_PLAY_FIELD_LENGTH:
+            *out_value = (int16_t)state->length;
+            break;
+        case SEQ_STEP_PLAY_FIELD_MICROTIMING:
+            *out_value = (int16_t)state->microtiming;
+            break;
+        default:
+            return 0U;
+    }
+    return 1U;
+}
+
+uint8_t seq_step_play_set(seq_step_play_t *play,
+                          uint8_t voice,
+                          seq_step_play_field_t field,
+                          int16_t value)
+{
+    const uint8_t mask = seq_step_play_field_mask(field);
+    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT) || (mask == 0U)
+            || (seq_step_play_value_is_valid(field, value) == 0U))
+    {
+        return 0U;
+    }
+
+    seq_step_play_voice_t *const state = &play->voices[voice];
+    switch (field)
+    {
+        case SEQ_STEP_PLAY_FIELD_NOTE:
+            state->note = (uint8_t)value;
+            break;
+        case SEQ_STEP_PLAY_FIELD_VELOCITY:
+            state->velocity = (uint8_t)value;
+            break;
+        case SEQ_STEP_PLAY_FIELD_LENGTH:
+            state->length = (uint8_t)value;
+            break;
+        case SEQ_STEP_PLAY_FIELD_MICROTIMING:
+            state->microtiming = (int8_t)value;
+            break;
+        default:
+            return 0U;
+    }
+    state->present_mask = (uint8_t)(state->present_mask | mask);
+    return 1U;
+}
+
+uint8_t seq_step_play_delete(seq_step_play_t *play,
+                             uint8_t voice,
+                             seq_step_play_field_t field)
+{
+    const uint8_t mask = seq_step_play_field_mask(field);
+    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT) || (mask == 0U))
+    {
+        return 0U;
+    }
+
+    seq_step_play_voice_t *const state = &play->voices[voice];
+    const uint8_t was_present = ((state->present_mask & mask) != 0U) ? 1U : 0U;
+    state->present_mask = (uint8_t)(state->present_mask & (uint8_t)~mask);
+    return was_present;
+}
+
+void seq_step_play_clear_voice(seq_step_play_t *play, uint8_t voice)
+{
+    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT))
+    {
+        return;
+    }
+    memset(&play->voices[voice], 0, sizeof(play->voices[voice]));
+}
+
+void seq_step_play_clear(seq_step_play_t *play)
+{
+    if (play != NULL)
+    {
+        memset(play, 0, sizeof(*play));
+    }
+}
+
+uint8_t seq_step_play_voice_has_any(const seq_step_play_t *play, uint8_t voice)
+{
+    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT))
+    {
+        return 0U;
+    }
+    return ((play->voices[voice].present_mask & (uint8_t)SEQ_STEP_PLAY_PRESENT_ALL) != 0U) ? 1U : 0U;
+}
+
+uint8_t seq_step_play_has_any(const seq_step_play_t *play)
+{
+    if (play == NULL)
+    {
+        return 0U;
+    }
+    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    {
+        if (seq_step_play_voice_has_any(play, voice) != 0U)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 static uint32_t seq_model_enter_critical(void)
 {
     const uint32_t primask = __get_PRIMASK();
