@@ -33,7 +33,7 @@ typedef struct
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
-_Static_assert(sizeof(seq_runtime_project_data_t) == 106624U,
+_Static_assert(sizeof(seq_runtime_project_data_t) == 127104U,
                "sequencer project storage size changed");
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
@@ -821,6 +821,69 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
     }
     return (uint8_t)((seq_model_step_is_active(track, step) == 0U)
                      && (seq_model_step_is_empty(track, step) != 0U));
+}
+
+uint8_t seq_model_step_play_get(seq_track_id_t track,
+                                seq_step_id_t step,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t *out_value)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    return (s != NULL) ? seq_step_play_get(&s->play, voice, field, out_value) : 0U;
+}
+
+uint8_t seq_model_step_play_set(seq_track_id_t track,
+                                seq_step_id_t step,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t value)
+{
+    seq_step_t *const s = seq_model_get_step_mut(track, step);
+    return (s != NULL) ? seq_step_play_set(&s->play, voice, field, value) : 0U;
+}
+
+uint8_t seq_model_step_play_delete(seq_track_id_t track,
+                                   seq_step_id_t step,
+                                   uint8_t voice,
+                                   seq_step_play_field_t field)
+{
+    seq_step_t *const s = seq_model_get_step_mut(track, step);
+    return (s != NULL) ? seq_step_play_delete(&s->play, voice, field) : 0U;
+}
+
+void seq_model_step_play_clear_voice(seq_track_id_t track,
+                                     seq_step_id_t step,
+                                     uint8_t voice)
+{
+    seq_step_t *const s = seq_model_get_step_mut(track, step);
+    if (s != NULL)
+    {
+        seq_step_play_clear_voice(&s->play, voice);
+    }
+}
+
+void seq_model_step_play_clear(seq_track_id_t track, seq_step_id_t step)
+{
+    seq_step_t *const s = seq_model_get_step_mut(track, step);
+    if (s != NULL)
+    {
+        seq_step_play_clear(&s->play);
+    }
+}
+
+uint8_t seq_model_step_play_voice_has_any(seq_track_id_t track,
+                                          seq_step_id_t step,
+                                          uint8_t voice)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    return (s != NULL) ? seq_step_play_voice_has_any(&s->play, voice) : 0U;
+}
+
+uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    return (s != NULL) ? seq_step_play_has_any(&s->play) : 0U;
 }
 
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track)

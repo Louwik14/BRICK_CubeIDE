@@ -65,7 +65,10 @@ typedef struct
     uint8_t lock_set_mask;
     uint8_t roll;
     uint8_t reserved[2];
+    seq_step_play_t play;
 } seq_step_t;
+
+_Static_assert(sizeof(seq_step_t) == 28U, "sequencer step storage size changed");
 
 typedef enum
 {
@@ -165,6 +168,28 @@ uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_play_get(seq_track_id_t track,
+                                seq_step_id_t step,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t *out_value);
+uint8_t seq_model_step_play_set(seq_track_id_t track,
+                                seq_step_id_t step,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t value);
+uint8_t seq_model_step_play_delete(seq_track_id_t track,
+                                   seq_step_id_t step,
+                                   uint8_t voice,
+                                   seq_step_play_field_t field);
+void seq_model_step_play_clear_voice(seq_track_id_t track,
+                                     seq_step_id_t step,
+                                     uint8_t voice);
+void seq_model_step_play_clear(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_play_voice_has_any(seq_track_id_t track,
+                                          seq_step_id_t step,
+                                          uint8_t voice);
+uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);
