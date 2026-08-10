@@ -115,9 +115,6 @@ typedef struct
     uint8_t start_fade_remaining;
     uint16_t ram_channels;
     sampler_ram_format_t ram_format;
-    uint32_t slice_grid_generation;
-    uint32_t slice_begin[64U];
-    uint32_t slice_end[64U];
 } brick6_sampler_voice_t;
 
 typedef enum
@@ -234,9 +231,9 @@ static AUDIO_HOT brick6_sampler_voice_t
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
                "Multi runtime pool must remain globally capped at eight voices");
-_Static_assert(sizeof(brick6_sampler_voice_t) == 968U,
+_Static_assert(sizeof(brick6_sampler_voice_t) == 456U,
                "Sampler voice size changed; remeasure DTCM before accepting it");
-_Static_assert(sizeof(g_sampler_multi_voice) == 7744U,
+_Static_assert(sizeof(g_sampler_multi_voice) == 3648U,
                "Multi sampler voice pool size changed; remeasure DTCM before accepting it");
 #endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
@@ -344,9 +341,6 @@ static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *v
 static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
                                                          uint16_t *out_ram_slot,
                                                          const sampler_ram_slot_t **out_ram);
-static uint8_t brick6_sampler_runtime_prepare_ram_slice_grid(
-    uint8_t track_id,
-    const sampler_ram_slot_t **out_ram);
 static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     brick6_sampler_voice_t *voice,
@@ -2627,88 +2621,6 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     return 1U;
 }
 
-static uint8_t brick6_sampler_runtime_prepare_ram_slice_grid(uint8_t track_id,
-                                                              const sampler_ram_slot_t **out_ram)
-{
-    if (out_ram != NULL)
-    {
-        *out_ram = NULL;
-    }
-    if ((track_id >= SEQ_TRACK_COUNT)
-        || (brick6_sampler_runtime_ram_slice_mode_active(track_id) == 0U))
-    {
-        return 0U;
-    }
-
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const sampler_ram_slot_t *ram = NULL;
-    if (brick6_sampler_runtime_resolve_ram_source(voice->sample_id, NULL, &ram) == 0U)
-    {
-        voice->slice_grid_generation = 0U;
-        return 0U;
-    }
-    if ((voice->slice_grid_generation == ram->generation)
-        && (voice->slice_end[0] != 0U))
-    {
-        if (out_ram != NULL)
-        {
-            *out_ram = ram;
-        }
-        return 1U;
-    }
-    if (__get_IPSR() != 0U)
-    {
-        return 0U;
-    }
-
-    uint32_t slice_count = (uint32_t)brick6_sampler_runtime_resolve_grid_count(
-        voice->slice_count);
-    if (slice_count == 0U)
-    {
-        slice_count = 1U;
-    }
-    if (slice_count > 64U)
-    {
-        slice_count = 64U;
-    }
-
-    uint32_t region_begin = 0U;
-    uint32_t region_end = ram->frames;
-    brick6_sampler_runtime_build_effective_ram_region(ram->frames,
-                                                      voice->start,
-                                                      voice->end,
-                                                      &region_begin,
-                                                      &region_end);
-    for (uint32_t i = 0U; i < slice_count; ++i)
-    {
-        uint32_t begin = region_begin;
-        uint32_t end = region_end;
-        brick6_sampler_runtime_build_effective_ram_slice_region(region_begin,
-                                                                region_end,
-                                                                slice_count,
-                                                                i,
-                                                                &begin,
-                                                                &end);
-        voice->slice_begin[i] = begin;
-        voice->slice_end[i] = (end > begin) ? end : (begin + 1U);
-        if (voice->slice_end[i] > ram->frames)
-        {
-            voice->slice_end[i] = ram->frames;
-        }
-    }
-    for (uint32_t i = slice_count; i < 64U; ++i)
-    {
-        voice->slice_begin[i] = 0U;
-        voice->slice_end[i] = 0U;
-    }
-    voice->slice_grid_generation = ram->generation;
-    if (out_ram != NULL)
-    {
-        *out_ram = ram;
-    }
-    return 1U;
-}
-
 static uint8_t brick6_sampler_runtime_ram_slot_valid(const brick6_sampler_voice_t *voice,
                                                      const sampler_ram_slot_t **out_slot)
 {
@@ -3186,24 +3098,6 @@ static void brick6_sampler_runtime_reproject_ram_voice_tune_live(uint8_t track_i
     voice->step_signed = (float)step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
 }
 
-static void brick6_sampler_runtime_rebuild_grid(uint8_t track_id)
-{
-    if (track_id >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    voice->slice_grid_generation = 0U;
-    memset(voice->slice_begin, 0, sizeof(voice->slice_begin));
-    memset(voice->slice_end, 0, sizeof(voice->slice_end));
-
-    if (brick6_sampler_runtime_ram_slice_mode_active(track_id) != 0U)
-    {
-        (void)brick6_sampler_runtime_prepare_ram_slice_grid(track_id, NULL);
-    }
-}
-
 static float brick6_sampler_runtime_fade_gain(uint32_t frame_index,
                                               uint32_t loop_frames,
                                               uint32_t fade_in_frames,
@@ -3364,10 +3258,6 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     g_sampler_voice[track_id].sample_id = sample_id;
     g_sampler_voice[track_id].note = 60U;
     g_sampler_voice[track_id].position = 0.0f;
-    if (brick6_sampler_runtime_ram_slice_mode_active(track_id) != 0U)
-    {
-        brick6_sampler_runtime_rebuild_grid(track_id);
-    }
 }
 
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain)
@@ -3502,10 +3392,6 @@ void brick6_sampler_runtime_set_start(uint8_t track_id, float start)
     }
     g_sampler_voice[track_id].start = start;
     brick6_sampler_runtime_reconcile_ram_voice_bounds_live(track_id);
-    if (brick6_sampler_runtime_ram_slice_mode_active(track_id) != 0U)
-    {
-        brick6_sampler_runtime_rebuild_grid(track_id);
-    }
 }
 
 void brick6_sampler_runtime_set_end(uint8_t track_id, float end)
@@ -3516,10 +3402,6 @@ void brick6_sampler_runtime_set_end(uint8_t track_id, float end)
     }
     g_sampler_voice[track_id].end = end;
     brick6_sampler_runtime_reconcile_ram_voice_bounds_live(track_id);
-    if (brick6_sampler_runtime_ram_slice_mode_active(track_id) != 0U)
-    {
-        brick6_sampler_runtime_rebuild_grid(track_id);
-    }
 }
 
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode)
@@ -3563,7 +3445,6 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
     }
 
     g_sampler_voice[track_id].slice_count = brick6_sampler_runtime_resolve_grid_count(slice_count);
-    brick6_sampler_runtime_rebuild_grid(track_id);
 }
 
 uint8_t brick6_sampler_runtime_get_ram_playhead(uint8_t track_id,
