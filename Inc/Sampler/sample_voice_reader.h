@@ -81,6 +81,9 @@ typedef struct
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
+    uint8_t loop_cache_voice_id;
+    uint8_t loop_cache_valid;
+    uint32_t loop_cache_generation;
 } sample_voice_reader_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
@@ -172,6 +175,26 @@ void sample_voice_reader_mix_pitch_rev_linear_mono(const sample_audio_segment_t 
                                                    float *out_mono,
                                                    uint32_t out_offset,
                                                    float *out_last);
+uint8_t sample_voice_reader_render_multi_fwd_1x_stereo(
+    sample_voice_reader_t *reader,
+    float gain,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint32_t out_offset,
+    uint32_t *out_rendered,
+    sample_audio_segment_status_t *out_status,
+    float *out_last_l,
+    float *out_last_r);
+uint8_t sample_voice_reader_render_multi_fwd_1x_mono(
+    sample_voice_reader_t *reader,
+    float gain,
+    float *out_mono,
+    uint32_t frames,
+    uint32_t out_offset,
+    uint32_t *out_rendered,
+    sample_audio_segment_status_t *out_status,
+    float *out_last);
 uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *reader,
                                                        float gain,
                                                        float *out_l,

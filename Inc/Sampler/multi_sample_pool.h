@@ -112,6 +112,12 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
                                          uint8_t note,
                                          uint8_t velocity,
                                          sample_resolved_source_t *out_source);
+uint8_t multi_sample_pool_resolve_source_from_result(
+    uint16_t instrument_id,
+    uint8_t note,
+    uint8_t velocity,
+    const multi_sample_resolve_result_t *resolved,
+    sample_resolved_source_t *out_source);
 
 uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
                                                   const char *name,

@@ -49,6 +49,9 @@
 #define STEAL_DECLICK_EPSILON (0.0000001f)
 #define BRICK6_SAMPLER_RAM_OUTPUT_SAMPLE_RATE_HZ (48000U)
 #define BRICK6_SAMPLER_Q16_FRAC_MASK (BRICK6_SAMPLER_Q16_ONE - 1U)
+#define BRICK6_SAMPLER_MULTI_RENDER_PITCHED   (0U)
+#define BRICK6_SAMPLER_MULTI_RENDER_MONO_1X   (1U)
+#define BRICK6_SAMPLER_MULTI_RENDER_STEREO_1X (2U)
 
 typedef struct
 {
@@ -91,6 +94,7 @@ typedef struct
     uint8_t loop_mode;
     uint8_t use_slice;
     uint8_t use_segment_cursor;
+    uint8_t multi_renderer;
     uint8_t release_pending;
     uint8_t vca_note_released;
     uint8_t dsp_slot;
@@ -214,6 +218,7 @@ typedef struct
     brick6_sample_common_trigger_kind_t kind;
     const brick6_sampler_voice_t *voice;
     const sample_play_plan_t *runtime_plan;
+    const multi_sample_resolve_result_t *multi_resolved;
     uint32_t total_frames;
     uint32_t step_q16;
     float render_gain;
@@ -1092,10 +1097,17 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         {
             return BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG;
         }
-        if (multi_sample_pool_resolve_source(trigger->instrument_id,
-                                             trigger->note,
-                                             trigger->velocity,
-                                             out_source) == 0U)
+        if (((trigger->multi_resolved != NULL)
+                 ? multi_sample_pool_resolve_source_from_result(
+                       trigger->instrument_id,
+                       trigger->note,
+                       trigger->velocity,
+                       trigger->multi_resolved,
+                       out_source)
+                 : multi_sample_pool_resolve_source(trigger->instrument_id,
+                                                    trigger->note,
+                                                    trigger->velocity,
+                                                    out_source)) == 0U)
         {
             return BRICK6_SAMPLE_COMMON_PLAN_RESOLVE_FAIL;
         }
@@ -1483,6 +1495,106 @@ static void brick6_sampler_runtime_multi_diag_note_trigger(const brick6_sampler_
 
 }
 
+static void brick6_sampler_runtime_multi_direct_stop(
+    brick6_sampler_voice_t *voice,
+    sample_audio_segment_status_t status)
+{
+    const uint8_t stop_reason =
+        (status == SAMPLE_AUDIO_SEGMENT_DONE)
+            ? (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_DONE
+            : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
+    if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
+    {
+        g_brick6_sampler_runtime_diag.multi_page_underrun++;
+    }
+    brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
+    brick6_sampler_runtime_multi_mark_voice_stream_needs_release(voice);
+    brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
+    voice->active = 0U;
+    voice->position = 0.0f;
+    sample_voice_reader_stop(&voice->reader);
+}
+
+static void brick6_sampler_render_multi_mono_1x_direct(
+    brick6_sampler_voice_t *voice,
+    float *out_mono,
+    uint32_t frames)
+{
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    uint32_t produced = 0U;
+    while (produced < frames)
+    {
+        uint32_t rendered = 0U;
+        sample_audio_segment_status_t status = SAMPLE_AUDIO_SEGMENT_NOT_READY;
+        float last = 0.0f;
+        if ((sample_voice_reader_render_multi_fwd_1x_mono(
+                 &voice->reader,
+                 render_gain,
+                 out_mono,
+                 frames - produced,
+                 produced,
+                 &rendered,
+                 &status,
+                 &last) == 0U)
+            || (status != SAMPLE_AUDIO_SEGMENT_OK) || (rendered == 0U))
+        {
+            brick6_sampler_runtime_multi_direct_stop(voice, status);
+            break;
+        }
+        brick6_sampler_runtime_voice_note_output(voice, last, last);
+        produced += rendered;
+        voice->position = voice->reader.position;
+        if (voice->reader.active == 0U)
+        {
+            brick6_sampler_runtime_multi_direct_stop(
+                voice, SAMPLE_AUDIO_SEGMENT_DONE);
+            break;
+        }
+    }
+}
+
+static void brick6_sampler_render_multi_stereo_1x_direct(
+    brick6_sampler_voice_t *voice,
+    float *out_l,
+    float *out_r,
+    uint32_t frames)
+{
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    uint32_t produced = 0U;
+    while (produced < frames)
+    {
+        uint32_t rendered = 0U;
+        sample_audio_segment_status_t status = SAMPLE_AUDIO_SEGMENT_NOT_READY;
+        float last_l = 0.0f;
+        float last_r = 0.0f;
+        if ((sample_voice_reader_render_multi_fwd_1x_stereo(
+                 &voice->reader,
+                 render_gain,
+                 out_l,
+                 out_r,
+                 frames - produced,
+                 produced,
+                 &rendered,
+                 &status,
+                 &last_l,
+                 &last_r) == 0U)
+            || (status != SAMPLE_AUDIO_SEGMENT_OK) || (rendered == 0U))
+        {
+            brick6_sampler_runtime_multi_direct_stop(voice, status);
+            break;
+        }
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+        produced += rendered;
+        voice->position = voice->reader.position;
+        if (voice->reader.active == 0U)
+        {
+            brick6_sampler_runtime_multi_direct_stop(
+                voice, SAMPLE_AUDIO_SEGMENT_DONE);
+            break;
+        }
+    }
+}
+
 static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
                                              float *out_mono,
                                              uint32_t frames)
@@ -1493,6 +1605,13 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
         || (sample_audio_format_or_stereo(voice->play_plan.format)
             != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO))
     {
+        return;
+    }
+
+    if ((voice->multi_renderer == BRICK6_SAMPLER_MULTI_RENDER_MONO_1X)
+        && (voice->start_fade_remaining == 0U))
+    {
+        brick6_sampler_render_multi_mono_1x_direct(voice, out_mono, frames);
         return;
     }
 
@@ -4629,6 +4748,7 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     const brick6_sample_common_trigger_t common_trigger = {
         .kind = BRICK6_SAMPLE_COMMON_TRIGGER_MULTI,
         .runtime_plan = &play_plan,
+        .multi_resolved = &resolved,
         .total_frames = sample->total_frames,
         .step_q16 = play_plan.step_q16,
         .render_gain = expected_render_gain,
@@ -4694,12 +4814,11 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
             sample_page_cache_get_page_state_key(key, 0U));
         return 0U;
     }
+    multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     sample_voice_reader_bind_loop_cache_incarnation(
         &multi_voice->reader,
         brick6_sampler_runtime_multi_voice_index(multi_voice),
         multi_voice->trigger_order);
-
-    multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     const brick6_sampler_multi_voice_handle_t multi_handle =
         brick6_sampler_runtime_multi_voice_handle(multi_voice);
     uint8_t dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
@@ -4792,6 +4911,12 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_i
     multi_voice->loop_mode = common_plan.loop_mode;
     multi_voice->use_slice = 0U;
     multi_voice->use_segment_cursor = 1U;
+    multi_voice->multi_renderer =
+        (common_plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
+            ? BRICK6_SAMPLER_MULTI_RENDER_PITCHED
+            : ((common_plan.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
+                   ? BRICK6_SAMPLER_MULTI_RENDER_MONO_1X
+                   : BRICK6_SAMPLER_MULTI_RENDER_STEREO_1X);
     multi_voice->release_pending = 0U;
     multi_voice->vca_note_released = 0U;
     multi_voice->event_token = event_token;
@@ -5238,6 +5363,14 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
         || (voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_MULTI))
     {
+        return;
+    }
+
+
+    if ((voice->multi_renderer == BRICK6_SAMPLER_MULTI_RENDER_STEREO_1X)
+        && (voice->start_fade_remaining == 0U))
+    {
+        brick6_sampler_render_multi_stereo_1x_direct(voice, out_l, out_r, frames);
         return;
     }
 

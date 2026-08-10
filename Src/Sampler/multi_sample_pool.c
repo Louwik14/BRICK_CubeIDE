@@ -612,28 +612,25 @@ uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
     return 1U;
 }
 
-uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
-                                         uint8_t note,
-                                         uint8_t velocity,
-                                         sample_resolved_source_t *out_source)
+uint8_t multi_sample_pool_resolve_source_from_result(
+    uint16_t instrument_id,
+    uint8_t note,
+    uint8_t velocity,
+    const multi_sample_resolve_result_t *resolved,
+    sample_resolved_source_t *out_source)
 {
     if (out_source != 0)
     {
         sample_resolved_source_init(out_source);
     }
-    if ((out_source == 0) || (note > 127U) || (velocity > 127U))
-    {
-        return 0U;
-    }
-
-    multi_sample_resolve_result_t resolved;
-    if (multi_sample_pool_resolve(instrument_id, note, velocity, &resolved) == 0U)
+    if ((out_source == 0) || (resolved == 0)
+        || (note > 127U) || (velocity > 127U))
     {
         return 0U;
     }
 
     const multi_sample_desc_t *const sample =
-        multi_sample_pool_get_sample(resolved.multi_sample_id);
+        multi_sample_pool_get_sample(resolved->multi_sample_id);
     const multi_sample_instrument_t *const instrument =
         multi_sample_pool_get_instrument(instrument_id);
     if ((sample == 0) || (instrument == 0) || (sample->instrument_id != instrument_id)
@@ -652,7 +649,7 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     }
 
     out_source->key.domain = SAMPLE_AUDIO_DOMAIN_MULTI;
-    out_source->key.object_id = resolved.multi_sample_id;
+    out_source->key.object_id = resolved->multi_sample_id;
     out_source->path = sample->path;
     out_source->total_frames = sample->total_frames;
     out_source->data_offset = sample->data_offset;
@@ -665,7 +662,7 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     out_source->stride_floats = sample->stride_floats;
     out_source->frames_per_page = sample->frames_per_page;
     out_source->registration_epoch = 0U;
-    out_source->root_note = resolved.root_note;
+    out_source->root_note = resolved->root_note;
     out_source->fine_tune_cents = 0;
     out_source->region_begin = 0U;
     out_source->region_end = sample->total_frames;
@@ -681,8 +678,29 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     out_source->velocity = velocity;
     out_source->source_kind = 0U;
     out_source->instrument_id = instrument_id;
-    out_source->zone_id = resolved.zone_id;
+    out_source->zone_id = resolved->zone_id;
     return sample_resolved_source_is_valid(out_source);
+}
+
+uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
+                                         uint8_t note,
+                                         uint8_t velocity,
+                                         sample_resolved_source_t *out_source)
+{
+    multi_sample_resolve_result_t resolved;
+    if (multi_sample_pool_resolve(instrument_id, note, velocity, &resolved) == 0U)
+    {
+        if (out_source != 0)
+        {
+            sample_resolved_source_init(out_source);
+        }
+        return 0U;
+    }
+    return multi_sample_pool_resolve_source_from_result(instrument_id,
+                                                        note,
+                                                        velocity,
+                                                        &resolved,
+                                                        out_source);
 }
 
 uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
