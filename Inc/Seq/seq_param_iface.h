@@ -104,6 +104,12 @@ uint8_t seq_param_iface_get_play_base_value(seq_track_id_t track,
 uint8_t seq_param_iface_set_play_base_value(seq_track_id_t track,
                                             seq_param_slot_t param_slot,
                                             seq_value16_t value16);
+uint8_t seq_param_iface_get_play_base_param(seq_track_id_t track,
+                                            param_id_t param,
+                                            seq_value16_t *out_value16);
+uint8_t seq_param_iface_set_play_base_param(seq_track_id_t track,
+                                            param_id_t param,
+                                            seq_value16_t value16);
 uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd);
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,

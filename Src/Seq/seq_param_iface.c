@@ -7,6 +7,7 @@
  */
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_lane.h"
+#include "Seq/seq_model.h"
 
 #include <string.h>
 
@@ -27,6 +28,10 @@ SEQ_STATE_D2 static seq_param_slot_state_t
     g_seq_param_runtime_state[SEQ_LANE_CAPACITY][SEQ_PARAM_RUNTIME_SLOT_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
+SEQ_STATE_D2 static seq_value16_t
+    g_seq_play_base_values[SEQ_LANE_CAPACITY][SEQ_STEP_PLAY_VOICE_COUNT][SEQ_STEP_PLAY_FIELD_COUNT];
+SEQ_STATE_D2 static uint8_t
+    g_seq_play_base_valid[SEQ_LANE_CAPACITY][SEQ_STEP_PLAY_VOICE_COUNT];
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 
 typedef struct
@@ -322,38 +327,20 @@ static uint8_t seq_param_iface_is_play_param(param_id_t param)
 
 static void seq_param_iface_seed_play_defaults(void)
 {
+    memset(g_seq_play_base_values, 0, sizeof(g_seq_play_base_values));
+    memset(g_seq_play_base_valid, 0, sizeof(g_seq_play_base_valid));
     for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
         for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
         {
             const param_id_t param = (param_id_t)param_raw;
-            const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-            seq_param_slot_t param_slot = 0U;
-            seq_param_slot_state_t *state;
-
             if (seq_param_iface_is_play_param(param) == 0U)
             {
                 continue;
             }
-            if (seq_param_iface_param_to_slot(track, set_id, param, &param_slot) == 0U)
-            {
-                continue;
-            }
-
-            state = seq_param_iface_state_at(track, set_id, param_slot);
-            if (state == 0)
-            {
-                continue;
-            }
-            if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
-            {
-                const float default_value = param_registry[param].default_value;
-                const seq_value16_t encoded = seq_param_iface_encode_param_value(param, default_value);
-                state->base_value = encoded;
-                state->runtime_value = encoded;
-                seq_param_set_base_valid(track, set_id, param_slot, 1U);
-                seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
-            }
+            (void)seq_param_iface_set_play_base_param(
+                track, param,
+                seq_param_iface_encode_param_value(param, param_registry[param].default_value));
         }
     }
 }
@@ -923,14 +910,59 @@ uint8_t seq_param_iface_get_play_base_value(seq_track_id_t track,
                                             seq_param_slot_t param_slot,
                                             seq_value16_t *out_value16)
 {
-    return seq_param_iface_get_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param_slot, out_value16);
+    param_id_t param = PARAM_COUNT;
+    return (seq_param_iface_slot_to_param(track,
+                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                          param_slot,
+                                          &param) != 0U)
+        ? seq_param_iface_get_play_base_param(track, param, out_value16)
+        : 0U;
 }
 
 uint8_t seq_param_iface_set_play_base_value(seq_track_id_t track,
                                             seq_param_slot_t param_slot,
                                             seq_value16_t value16)
 {
-    return seq_param_iface_set_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param_slot, value16);
+    param_id_t param = PARAM_COUNT;
+    return (seq_param_iface_slot_to_param(track,
+                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                          param_slot,
+                                          &param) != 0U)
+        ? seq_param_iface_set_play_base_param(track, param, value16)
+        : 0U;
+}
+
+uint8_t seq_param_iface_get_play_base_param(seq_track_id_t track,
+                                            param_id_t param,
+                                            seq_value16_t *out_value16)
+{
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    if ((out_value16 == NULL) || (track >= SEQ_LANE_CAPACITY)
+            || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U)
+            || ((g_seq_play_base_valid[track][voice] & (uint8_t)(1U << field)) == 0U))
+    {
+        return 0U;
+    }
+    *out_value16 = g_seq_play_base_values[track][voice][field];
+    return 1U;
+}
+
+uint8_t seq_param_iface_set_play_base_param(seq_track_id_t track,
+                                            param_id_t param,
+                                            seq_value16_t value16)
+{
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    if ((track >= SEQ_LANE_CAPACITY)
+            || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U))
+    {
+        return 0U;
+    }
+    g_seq_play_base_values[track][voice][field] = value16;
+    g_seq_play_base_valid[track][voice] = (uint8_t)(g_seq_play_base_valid[track][voice]
+                                                    | (uint8_t)(1U << field));
+    return 1U;
 }
 
 uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd)

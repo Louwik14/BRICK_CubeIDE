@@ -1103,15 +1103,10 @@ static seq_value16_t seq_play_scheduler_get_play_locked_or_default(const seq_pla
         return seq_param_iface_encode_param_value(source_param, (float)stored_value);
     }
 
-    seq_param_slot_t target_slot = 0U;
-    if ((seq_param_iface_param_to_slot(item->target_track,
-                                       (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                       target_param,
-                                       &target_slot) != 0U))
     {
         seq_value16_t base_value16 = 0U;
-        if (seq_param_iface_get_play_base_value(item->target_track, target_slot, &base_value16) != 0U)
-        {
+        if (seq_param_iface_get_play_base_param(item->target_track, target_param, &base_value16) != 0U)
+    {
             return base_value16;
         }
     }
