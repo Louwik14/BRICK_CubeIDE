@@ -31,7 +31,7 @@ typedef struct
 {
     sample_voice_reader_state_t *reader;
     sample_audio_key_t key;
-    sample_page_ref_t refs[BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES];
+    sample_page_ref_t refs[SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES];
     uint32_t generation;
     uint8_t voice_id;
     uint8_t valid_mask;
@@ -60,7 +60,7 @@ static void sample_voice_reader_release_loop_cache(sample_voice_reader_state_t *
         {
             continue;
         }
-        for (uint32_t i = 0U; i < BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES; ++i)
+        for (uint32_t i = 0U; i < SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES; ++i)
         {
             if ((cache->valid_mask & (uint8_t)(1U << i)) != 0U)
             {
@@ -96,8 +96,9 @@ static void sample_voice_reader_capture_loop_page(sample_voice_reader_state_t *s
     }
     const uint32_t first = state->plan.loop_begin / state->frames_per_page;
     const uint32_t last = (state->plan.loop_end - 1U) / state->frames_per_page;
+    const uint32_t cache_pages = sample_audio_format_voice_loop_cache_pages(state->format);
     if ((span->page_index < first) || (span->page_index > last)
-        || ((span->page_index - first) >= BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES))
+        || ((span->page_index - first) >= cache_pages))
     {
         return;
     }

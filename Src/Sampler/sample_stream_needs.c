@@ -200,7 +200,8 @@ uint8_t sample_stream_needs_build(
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
         g_sample_stream_needs_calibration_depth;
 #else
-        SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
+        (uint8_t)sample_audio_format_multi_mobile_pages(
+            sample_audio_format_or_stereo(snapshot->format));
 #endif
     if (sample_stream_sequence_build(&sequence_input,
                                     pages,

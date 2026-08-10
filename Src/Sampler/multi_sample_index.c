@@ -157,12 +157,9 @@ static uint8_t multi_index_path_bytes_valid(const char *path, uint16_t len)
     return 1U;
 }
 
-static uint8_t multi_index_sample_format_valid(const multi_sample_index_sample_t *sample,
-                                               sample_audio_format_t expected_format)
+static uint8_t multi_index_sample_format_valid(const multi_sample_index_sample_t *sample)
 {
     if ((sample == 0) || (sample_audio_format_is_valid(sample->format) == 0U)
-        || ((expected_format != SAMPLE_AUDIO_FORMAT_INVALID)
-            && (sample->format != expected_format))
         || (sample_audio_format_matches_channels(sample->format, sample->channels) == 0U)
         || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
         || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format)))
@@ -179,17 +176,37 @@ static uint8_t multi_index_format_contract_valid(const multi_sample_index_t *idx
         return 1U;
     }
 
-    if ((idx->samples == 0)
-        || (sample_audio_format_is_valid(idx->format) == 0U)
+    if (idx->samples == 0)
+    {
+        return 0U;
+    }
+
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    const uint8_t homogeneous = sample_audio_format_is_valid(idx->format);
+    if (((homogeneous != 0U)
+         && ((idx->stride_floats != sample_audio_format_stride_floats(idx->format))
+             || (idx->frames_per_page != sample_audio_format_frames_per_page(idx->format))))
+        || ((homogeneous == 0U)
+            && ((idx->format != SAMPLE_AUDIO_FORMAT_INVALID)
+                || (idx->stride_floats != 0U)
+                || (idx->frames_per_page != 0U))))
+    {
+        return 0U;
+    }
+#else
+    const uint8_t homogeneous = 1U;
+    if ((sample_audio_format_is_valid(idx->format) == 0U)
         || (idx->stride_floats != sample_audio_format_stride_floats(idx->format))
         || (idx->frames_per_page != sample_audio_format_frames_per_page(idx->format)))
     {
         return 0U;
     }
+#endif
 
     for (uint16_t i = 0U; i < idx->sample_count; ++i)
     {
-        if (multi_index_sample_format_valid(&idx->samples[i], idx->format) == 0U)
+        if ((multi_index_sample_format_valid(&idx->samples[i]) == 0U)
+            || ((homogeneous != 0U) && (idx->samples[i].format != idx->format)))
         {
             return 0U;
         }
@@ -281,7 +298,13 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
         }
         else if (g_index_samples[i].format != out->format)
         {
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+            out->format = SAMPLE_AUDIO_FORMAT_INVALID;
+            out->stride_floats = 0U;
+            out->frames_per_page = 0U;
+#else
             return 0U;
+#endif
         }
     }
 
@@ -872,6 +895,9 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
         return MULTI_SAMPLE_INDEX_POOL_FAIL;
     }
     if ((idx->sample_count != 0U)
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+        && (sample_audio_format_is_valid(idx->format) != 0U)
+#endif
         && (multi_sample_pool_set_instrument_format(instrument_id,
                                                     idx->format)
             == 0U))

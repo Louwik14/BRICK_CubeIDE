@@ -298,7 +298,9 @@ static void ui_page_settings_multi_prepare_flush_progress(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
 static void ui_page_settings_flash_sample_header_memory(void);
-static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames);
+static uint32_t ui_page_settings_multi_sample_prep_bytes(
+    const multi_sample_index_sample_t *sample);
+static uint32_t ui_page_settings_multi_slot_bytes(void);
 static uint16_t ui_page_settings_global_entry_count_used(void);
 static void ui_page_settings_draw_progress_bar(uint8_t x,
                                                uint8_t y,
@@ -1148,7 +1150,13 @@ static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entr
     entry->prepared = 0U;
     entry->sample_count = 0U;
     entry->zone_count = 0U;
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    entry->slot_cost = (entry->wav_count > (UINT16_MAX / 2U))
+        ? UINT16_MAX
+        : (uint16_t)(entry->wav_count * 2U);
+#else
     entry->slot_cost = entry->wav_count;
+#endif
     if (entry->index_path[0] == '\0')
     {
         return;
@@ -1163,9 +1171,9 @@ static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entr
         uint32_t used_bytes = 0U;
         for (uint16_t i = 0U; i < index.sample_count; ++i)
         {
-            used_bytes += ui_page_settings_frames_to_prep_bytes(index.samples[i].total_frames);
+            used_bytes += ui_page_settings_multi_sample_prep_bytes(&index.samples[i]);
         }
-        const uint32_t slot_bytes = SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+        const uint32_t slot_bytes = ui_page_settings_multi_slot_bytes();
         const uint32_t slots = (slot_bytes == 0U)
             ? 0U
             : ((used_bytes + slot_bytes - 1U) / slot_bytes);
@@ -2289,7 +2297,7 @@ static uint16_t ui_page_settings_multi_required_slots(const ui_settings_multi_en
 
 static uint32_t ui_page_settings_multi_required_cost_bytes(const ui_settings_multi_entry_t *entry)
 {
-    const uint32_t slot_bytes = SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+    const uint32_t slot_bytes = ui_page_settings_multi_slot_bytes();
     return (uint32_t)ui_page_settings_multi_required_slots(entry) * slot_bytes;
 }
 
@@ -2413,18 +2421,34 @@ static void ui_page_settings_multi_prepare_poll(void)
     }
 }
 
-static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames)
+static uint32_t ui_page_settings_multi_sample_prep_bytes(
+    const multi_sample_index_sample_t *sample)
 {
-    if (frames == 0U)
+    if ((sample == 0) || (sample->total_frames == 0U))
     {
         return 0U;
     }
 
-    const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
-        ? frames
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    const sample_audio_format_t format = sample_audio_format_from_channels(sample->channels);
+    return sample_audio_format_multi_start_slot_cost(format)
+           * SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
+#else
+    const uint32_t prep_frames = (sample->total_frames < SAMPLE_PREP_MIN_READY_FRAMES)
+        ? sample->total_frames
         : SAMPLE_PREP_MIN_READY_FRAMES;
     const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
     return pages * SAMPLE_PAGE_BYTES;
+#endif
+}
+
+static uint32_t ui_page_settings_multi_slot_bytes(void)
+{
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    return SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
+#else
+    return SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+#endif
 }
 
 static uint32_t ui_page_settings_global_memory_used_bytes(void)
@@ -2444,6 +2468,22 @@ static void ui_page_settings_draw_global_sample_header(const char *title)
                                         sample_global_pool_get_entry_capacity(),
                                         ui_page_settings_global_memory_used_bytes(),
                                         SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
+}
+
+static void ui_page_settings_draw_multi_sample_header(void)
+{
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    const uint32_t slot_bytes = ui_page_settings_multi_slot_bytes();
+    const uint16_t total_slots = (uint16_t)(SAMPLE_GLOBAL_POOL_BUDGET_BYTES / slot_bytes);
+    const uint16_t free_slots = (uint16_t)(sample_global_pool_get_free_bytes() / slot_bytes);
+    ui_page_settings_draw_sample_header("M FREE",
+                                        free_slots,
+                                        total_slots,
+                                        ui_page_settings_global_memory_used_bytes(),
+                                        SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
+#else
+    ui_page_settings_draw_global_sample_header("MULTI");
+#endif
 }
 
 static void ui_page_settings_format_mb(char *out, uint32_t out_size, uint32_t bytes)
@@ -4837,7 +4877,7 @@ static void ui_page_settings_render_multi_browser(void)
 
     ui_page_settings_multi_prepare_poll();
 
-    ui_page_settings_draw_global_sample_header("MULTI");
+    ui_page_settings_draw_multi_sample_header();
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
     ui_page_settings_draw_multi_name_label();
 

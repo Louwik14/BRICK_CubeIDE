@@ -7245,6 +7245,18 @@ static uint8_t brick6_sampler_runtime_multi_voice_format_compatible(
         return 0U;
     }
 
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    const multi_sample_desc_t *const sample =
+        multi_sample_pool_get_sample(voice->multi_sample_id);
+    return ((sample != NULL)
+            && (sample->instrument_id == voice->multi_instrument_id)
+            && (sample_audio_format_is_valid(sample->format) != 0U)
+            && (voice->play_plan.format == sample->format)
+            && (voice->play_plan.stride_floats == sample->stride_floats)
+            && (voice->play_plan.frames_per_page == sample->frames_per_page))
+        ? 1U
+        : 0U;
+#else
     const multi_sample_instrument_t *const instrument =
         multi_sample_pool_get_instrument(voice->multi_instrument_id);
     return ((instrument != NULL)
@@ -7254,6 +7266,7 @@ static uint8_t brick6_sampler_runtime_multi_voice_format_compatible(
             && (voice->play_plan.frames_per_page == instrument->frames_per_page))
         ? 1U
         : 0U;
+#endif
 }
 
 void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,

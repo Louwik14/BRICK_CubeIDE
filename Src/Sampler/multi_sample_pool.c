@@ -542,13 +542,15 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     {
         return 0U;
     }
-    const multi_sample_instrument_t *const instrument =
+    multi_sample_instrument_t *const instrument =
         &g_multi_instruments[sample->instrument_id].desc;
+#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     if ((sample_audio_format_is_valid(instrument->format) != 0U)
         && (instrument->format != format))
     {
         return 0U;
     }
+#endif
     sample->data_offset = data_offset;
     sample->data_size = data_size;
     sample->sample_rate = sample_rate;
@@ -558,10 +560,25 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
     sample->frames_per_page = sample_audio_format_frames_per_page(format);
     sample->block_align = (uint16_t)((channels * bits_per_sample) / 8U);
+#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
+    if ((sample_audio_format_is_valid(instrument->format) == 0U)
+        && (instrument->sample_count == 1U))
+    {
+        (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
+    }
+    else if ((sample_audio_format_is_valid(instrument->format) != 0U)
+             && (instrument->format != format))
+    {
+        instrument->format = SAMPLE_AUDIO_FORMAT_INVALID;
+        instrument->stride_floats = 0U;
+        instrument->frames_per_page = 0U;
+    }
+#else
     if (sample_audio_format_is_valid(instrument->format) == 0U)
     {
         (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
     }
+#endif
     return (sample->block_align != 0U) ? 1U : 0U;
 }
 
@@ -619,10 +636,17 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
         multi_sample_pool_get_sample(resolved.multi_sample_id);
     const multi_sample_instrument_t *const instrument =
         multi_sample_pool_get_instrument(instrument_id);
-    if ((sample == 0) || (instrument == 0) || (sample->total_frames == 0U)
+    if ((sample == 0) || (instrument == 0) || (sample->instrument_id != instrument_id)
+        || (sample->total_frames == 0U)
+        || (sample_audio_format_is_valid(sample->format) == 0U)
+        || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
+        || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format))
+#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
         || (sample->format != instrument->format)
         || (sample->stride_floats != instrument->stride_floats)
-        || (sample->frames_per_page != instrument->frames_per_page))
+        || (sample->frames_per_page != instrument->frames_per_page)
+#endif
+        )
     {
         return 0U;
     }
@@ -686,10 +710,17 @@ uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
     }
 
     const multi_sample_desc_t *const sample = &g_multi_samples[zone->multi_sample_id];
-    if ((sample->vel_low > zone->vel_low) || (sample->vel_high < zone->vel_high)
+    if ((sample->instrument_id != instrument_id)
+        || (sample->vel_low > zone->vel_low) || (sample->vel_high < zone->vel_high)
+        || (sample_audio_format_is_valid(sample->format) == 0U)
+        || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
+        || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format))
+#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
         || (sample->format != instrument->format)
         || (sample->stride_floats != instrument->stride_floats)
-        || (sample->frames_per_page != instrument->frames_per_page))
+        || (sample->frames_per_page != instrument->frames_per_page)
+#endif
+        )
     {
         return 0U;
     }
