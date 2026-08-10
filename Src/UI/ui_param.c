@@ -1169,8 +1169,18 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
             set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
             break;
         case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
-            set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-            break;
+        {
+            uint8_t voice = 0U;
+            seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+            if ((seq_model_track_can_store_play(track) == 0U)
+                    || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U))
+            {
+                return 0U;
+            }
+            *out_set_id = 0U;
+            *out_param_slot = 0U;
+            return 1U;
+        }
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
             break;
@@ -1217,7 +1227,8 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
         return 0U;
     }
 
-    if (seq_runtime_live_rec_param_can_write(track, set_id, param_slot) == 0U)
+    if ((track_runtime_get_param_rule(param).domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+            && (seq_runtime_live_rec_param_can_write(track, set_id, param_slot) == 0U))
     {
         return 0U;
     }

@@ -192,90 +192,6 @@ uint8_t seq_step_play_has_any(const seq_step_play_t *play)
     return 0U;
 }
 
-static uint8_t seq_model_play_slot_decode(seq_param_slot_t param_slot,
-                                          uint8_t *out_voice,
-                                          seq_step_play_field_t *out_field)
-{
-    if ((out_voice == NULL) || (out_field == NULL) || (param_slot >= SEQ_PARAM_PLAY_SLOT_COUNT))
-    {
-        return 0U;
-    }
-
-    *out_voice = (uint8_t)(param_slot / (seq_param_slot_t)SEQ_STEP_PLAY_FIELD_COUNT);
-    *out_field = (seq_step_play_field_t)(param_slot % (seq_param_slot_t)SEQ_STEP_PLAY_FIELD_COUNT);
-    return (*out_voice < SEQ_STEP_PLAY_VOICE_COUNT) ? 1U : 0U;
-}
-
-static uint8_t seq_model_play_value_decode(seq_track_id_t track,
-                                           seq_param_slot_t param_slot,
-                                           seq_value16_t value16,
-                                           int16_t *out_value)
-{
-    param_id_t param = PARAM_COUNT;
-    if ((out_value == NULL)
-            || (seq_param_iface_slot_to_param(track,
-                                              (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                              param_slot,
-                                              &param) == 0U))
-    {
-        return 0U;
-    }
-
-    const float decoded = seq_param_iface_decode_param_value(param, value16);
-    *out_value = (int16_t)(decoded + ((decoded >= 0.0f) ? 0.5f : -0.5f));
-    return 1U;
-}
-
-static uint8_t seq_model_play_entry_read(seq_track_id_t track,
-                                         const seq_step_t *step,
-                                         seq_param_slot_t param_slot,
-                                         seq_plock_entry_t *out_entry)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    int16_t value = 0;
-    param_id_t param = PARAM_COUNT;
-    if ((step == NULL) || (out_entry == NULL)
-            || (seq_model_play_slot_decode(param_slot, &voice, &field) == 0U)
-            || (seq_step_play_get(&step->play, voice, field, &value) == 0U)
-            || (seq_param_iface_slot_to_param(track,
-                                              (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                              param_slot,
-                                              &param) == 0U))
-    {
-        return 0U;
-    }
-
-    out_entry->next = SEQ_LOCK_NONE;
-    out_entry->param_slot = param_slot;
-    out_entry->set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-    out_entry->value16 = seq_param_iface_encode_param_value(param, (float)value);
-    out_entry->flags = 0U;
-    out_entry->reserved = 0U;
-    return 1U;
-}
-
-static uint8_t seq_model_step_play_field_count(const seq_step_t *step)
-{
-    uint8_t count = 0U;
-    if (step == NULL)
-    {
-        return 0U;
-    }
-
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
-    {
-        uint8_t mask = (uint8_t)(step->play.voices[voice].present_mask
-                                 & (uint8_t)SEQ_STEP_PLAY_PRESENT_ALL);
-        while (mask != 0U)
-        {
-            count = (uint8_t)(count + (mask & 1U));
-            mask >>= 1U;
-        }
-    }
-    return count;
-}
-
 static uint32_t seq_model_enter_critical(void)
 {
     const uint32_t primask = __get_PRIMASK();
@@ -547,14 +463,7 @@ static void seq_model_step_scan_lock_sets(seq_track_id_t track,
             break;
         }
         (void)param_slot;
-        if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-        {
-            has_play_plock = 1U;
-        }
-        else
-        {
-            has_non_play_plock = 1U;
-        }
+        has_non_play_plock = 1U;
 
         idx = entry->next;
     }
@@ -1089,11 +998,6 @@ uint8_t seq_model_step_plock_find(seq_track_id_t track,
         return 0U;
     }
 
-    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-    {
-        return seq_model_play_entry_read(track, s, param_slot, out_entry);
-    }
-
     seq_plock_key_t key = 0U;
     if (seq_param_iface_address_to_key(set_id, param_slot, &key) == 0U)
     {
@@ -1136,30 +1040,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     if (seq_param_iface_slot_is_storable(track, set_id, param_slot) == 0U)
     {
         return SEQ_PLOCK_OP_INVALID;
-    }
-
-    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-    {
-        uint8_t voice = 0U;
-        seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-        int16_t value = 0;
-        if ((seq_model_play_slot_decode(param_slot, &voice, &field) == 0U)
-                || (seq_model_play_value_decode(track, param_slot, value16, &value) == 0U))
-        {
-            return SEQ_PLOCK_OP_INVALID;
-        }
-
-        const uint32_t primask = seq_model_enter_critical();
-        int16_t previous_value = 0;
-        const uint8_t existed = seq_step_play_get(&s->play, voice, field, &previous_value);
-        if (seq_step_play_set(&s->play, voice, field, value) == 0U)
-        {
-            seq_model_exit_critical(primask);
-            return SEQ_PLOCK_OP_INVALID;
-        }
-        seq_model_exit_critical(primask);
-        (void)flags;
-        return (existed != 0U) ? SEQ_PLOCK_OP_UPDATED : SEQ_PLOCK_OP_CREATED;
     }
 
     seq_plock_key_t key = 0U;
@@ -1218,20 +1098,6 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
         return SEQ_PLOCK_OP_INVALID;
     }
 
-    if (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-    {
-        uint8_t voice = 0U;
-        seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-        if (seq_model_play_slot_decode(param_slot, &voice, &field) == 0U)
-        {
-            return SEQ_PLOCK_OP_INVALID;
-        }
-        const uint32_t primask = seq_model_enter_critical();
-        const uint8_t deleted = seq_step_play_delete(&s->play, voice, field);
-        seq_model_exit_critical(primask);
-        return (deleted != 0U) ? SEQ_PLOCK_OP_DELETED : SEQ_PLOCK_OP_NOT_FOUND;
-    }
-
     seq_plock_key_t key = 0U;
     if (seq_param_iface_address_to_key(set_id, param_slot, &key) == 0U)
     {
@@ -1272,7 +1138,6 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
 void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
     seq_model_step_param_plock_clear(track, step);
-    seq_model_step_play_clear(track, step);
 }
 
 void seq_model_step_param_plock_clear(seq_track_id_t track, seq_step_id_t step)
@@ -1317,7 +1182,7 @@ uint8_t seq_model_step_plock_count(seq_track_id_t track, seq_step_id_t step)
         return 0U;
     }
 
-    return (uint8_t)(s->lock_count + seq_model_step_play_field_count(s));
+    return s->lock_count;
 }
 
 uint8_t seq_model_step_plock_collect(seq_track_id_t track,
@@ -1368,16 +1233,6 @@ uint8_t seq_model_step_plock_collect(seq_track_id_t track,
     }
 
 
-    for (seq_param_slot_t slot = 0U;
-         (slot < SEQ_PARAM_PLAY_SLOT_COUNT) && (count < max_entries);
-         ++slot)
-    {
-        if (seq_model_play_entry_read(track, s, slot, &out_entries[count]) != 0U)
-        {
-            count++;
-        }
-    }
-
     *out_count = count;
     return 1U;
 }
@@ -1389,7 +1244,7 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
 {
     const seq_step_t *const s = seq_model_get_step_const(track, step);
     if ((s == 0) || (out_entry == 0)
-            || (ordinal >= (uint8_t)(s->lock_count + seq_model_step_play_field_count(s))))
+            || (ordinal >= s->lock_count))
     {
         return 0U;
     }
@@ -1429,18 +1284,6 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
         idx = seq_model_pool_entry_const(track, idx)->next;
     }
 
-
-    for (seq_param_slot_t slot = 0U; slot < SEQ_PARAM_PLAY_SLOT_COUNT; ++slot)
-    {
-        if (seq_model_play_entry_read(track, s, slot, out_entry) != 0U)
-        {
-            if (index == ordinal)
-            {
-                return 1U;
-            }
-            index++;
-        }
-    }
 
     return 0U;
 }

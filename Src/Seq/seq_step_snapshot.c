@@ -103,8 +103,7 @@ uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
         const seq_step_snapshot_plock_t *lock = &snapshot->locks[i];
-        if ((lock->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-                || (seq_param_iface_slot_is_storable(track, lock->set_id, lock->param_slot) == 0U)) return 0U;
+        if (seq_param_iface_slot_is_storable(track, lock->set_id, lock->param_slot) == 0U) return 0U;
         for (uint8_t j = 0U; j < i; ++j)
             if ((snapshot->locks[j].set_id == lock->set_id)
                     && (snapshot->locks[j].param_slot == lock->param_slot)) return 0U;
@@ -178,6 +177,7 @@ static uint8_t write_step(seq_track_id_t track, seq_step_id_t step,
                           const seq_step_snapshot_t *snapshot)
 {
     seq_model_step_plock_clear(track, step);
+    seq_model_step_play_clear(track, step);
     if (apply_play(track, step, &snapshot->play) == 0U) return 0U;
     seq_model_set_trig(track, step, snapshot->trig);
     if (snapshot->trig != 0U) seq_model_set_step_roll(track, step, snapshot->roll);
@@ -195,7 +195,10 @@ uint8_t seq_step_snapshot_apply_list(seq_track_id_t track, const seq_step_snapsh
 {
     if (seq_step_snapshot_can_apply_list(track, list) == 0U) return 0U;
     for (uint8_t i = 0U; i < list->count; ++i)
+    {
         seq_model_step_plock_clear(track, list->entries[i].step);
+        seq_model_step_play_clear(track, list->entries[i].step);
+    }
     for (uint8_t i = 0U; i < list->count; ++i)
         if (write_step(track, list->entries[i].step, &list->entries[i].snapshot) == 0U) return 0U;
     return 1U;

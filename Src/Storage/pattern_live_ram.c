@@ -515,8 +515,7 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_
             {
                 const pattern_v1_plock_t *const plock = &saved->steps[step].locks[lock];
                 param_id_t param = PARAM_COUNT;
-                if ((plock->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-                        || (seq_param_iface_slot_to_param(track,
+                if ((seq_param_iface_slot_to_param(track,
                                                   plock->set_id,
                                                   plock->param_slot,
                                                   &param) == 0U))
@@ -718,6 +717,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
             seq_model_set_trig(track, step, saved_step->trig);
             seq_model_set_step_roll(track, step, saved_step->roll);
             seq_model_step_plock_clear(track, step);
+            seq_model_step_play_clear(track, step);
             if (pattern_live_apply_play(track, step, &saved_step->play) == 0U) return 0U;
 
             const uint8_t step_limit = seq_model_get_step_lock_limit(track);

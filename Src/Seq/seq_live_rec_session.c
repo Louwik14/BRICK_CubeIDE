@@ -260,13 +260,6 @@ static uint8_t seq_live_rec_session_upsert_play_param(seq_track_id_t track,
         return 0U;
     }
 
-    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-    seq_param_slot_t param_slot = 0U;
-    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
-    {
-        return 0U;
-    }
-
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param_id, value);
     const seq_plock_op_status_t st = seq_edit_step_play_upsert(track, step, param_id, encoded);
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
@@ -277,13 +270,6 @@ static uint8_t seq_live_rec_session_delete_play_param(seq_track_id_t track,
                                                       param_id_t param_id)
 {
     if (seq_edit_track_sequence_is_locked(track) != 0U)
-    {
-        return 0U;
-    }
-
-    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-    seq_param_slot_t param_slot = 0U;
-    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -311,13 +297,6 @@ static uint8_t seq_live_rec_session_read_play_param(seq_track_id_t track,
     out_saved->present = 0U;
     out_saved->value16 = 0U;
 
-    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-    seq_param_slot_t param_slot = 0U;
-    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
-    {
-        return 0U;
-    }
-
     seq_value16_t value16;
     if (seq_edit_step_play_find(track, step, param_id, &value16) == 0U)
     {
@@ -343,13 +322,6 @@ static uint8_t seq_live_rec_session_restore_play_param(seq_track_id_t track,
     {
         (void)seq_live_rec_session_delete_play_param(track, step, param_id);
         return 1U;
-    }
-
-    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-    seq_param_slot_t param_slot = 0U;
-    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
-    {
-        return 0U;
     }
 
     const seq_plock_op_status_t st = seq_edit_step_play_upsert(track, step, param_id, saved->value16);
@@ -529,14 +501,7 @@ static int32_t seq_live_rec_session_find_voice_with_note_lock(seq_track_id_t tra
                                                               uint8_t note)
 {
     for (uint8_t voice = 0U; voice < 4U; ++voice)
-    {
-        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-        seq_param_slot_t param_slot = 0U;
-        const param_id_t note_id = seq_live_rec_session_play_param_note(voice);
-        if (seq_param_iface_param_to_slot(track, set_id, note_id, &param_slot) == 0U)
-        {
-            continue;
-        }
+    {        const param_id_t note_id = seq_live_rec_session_play_param_note(voice);
 
         seq_value16_t value16;
         if (seq_edit_step_play_find(track, step, note_id, &value16) == 0U)
@@ -608,12 +573,6 @@ static uint8_t seq_live_rec_session_voice_has_any_lock(seq_track_id_t track,
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-        seq_param_slot_t param_slot = 0U;
-        if (seq_param_iface_param_to_slot(track, set_id, params[i], &param_slot) == 0U)
-        {
-            continue;
-        }
 
         seq_value16_t value16;
         if (seq_edit_step_play_find(track, step, params[i], &value16) != 0U)

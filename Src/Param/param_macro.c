@@ -130,8 +130,7 @@ static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t dom
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
             return 1U;
         case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
-            *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-            return 1U;
+            return 0U;
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
             return 1U;

@@ -82,8 +82,9 @@
 #define LED_MACRO_PRESSURE_RAW_NOISE_FLOOR 400U
 #define LED_MACRO_PRESSURE_LED_MARGIN 75U
 
-static uint8_t led_seq_collect_held_plock_set_mask(void)
+static uint8_t led_seq_collect_held_plock_set_mask(uint8_t *out_has_play)
 {
+    if (out_has_play != NULL) *out_has_play = 0U;
     if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
     {
         return 0U;
@@ -104,6 +105,8 @@ static uint8_t led_seq_collect_held_plock_set_mask(void)
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
+        const uint8_t has_play = seq_model_step_has_play_plock(held_track, step);
+        if ((out_has_play != NULL) && (has_play != 0U)) *out_has_play = 1U;
         const uint8_t plock_count = seq_model_step_plock_count(held_track, step);
         for (uint8_t p = 0U; p < plock_count; ++p)
         {
@@ -259,6 +262,7 @@ static button_id_t led_param_button_for_led(led_id_t led);
 
 static void led_apply_param_button_scene(led_id_t led,
                                          uint8_t held_plock_sets,
+                                         uint8_t held_has_play,
                                          button_id_t macro_button,
                                          led_id_t active_param_led)
 {
@@ -280,7 +284,7 @@ static void led_apply_param_button_scene(led_id_t led,
         b = LED_FIXED_WHITE_B;
     }
 
-    if (held_plock_sets != 0U)
+    if ((held_plock_sets != 0U) || (held_has_play != 0U))
     {
         uint8_t match_set = 0U;
         if ((led == led_remap_param_led_for_button(BTN_PARAM_1))
@@ -294,7 +298,7 @@ static void led_apply_param_button_scene(led_id_t led,
             match_set = 1U;
         }
         else if ((led == led_remap_param_led_for_button(BTN_PARAM_5))
-                 && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_PLAY)) != 0U))
+                 && (held_has_play != 0U))
         {
             match_set = 1U;
         }
@@ -677,7 +681,8 @@ static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
 
-    const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask();
+    uint8_t held_has_play = 0U;
+    const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask(&held_has_play);
     button_id_t macro_button = BTN_COUNT;
     param_id_t macro_param = PARAM_COUNT;
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
@@ -784,6 +789,7 @@ static void led_apply_fixed_scene(void)
         {
             led_apply_param_button_scene((led_id_t)led,
                                          held_plock_sets,
+                                         held_has_play,
                                          macro_button,
                                          active_param_led);
         }

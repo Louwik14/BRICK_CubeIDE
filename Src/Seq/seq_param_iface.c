@@ -68,25 +68,6 @@ static const param_id_t g_seq_param_env_slot_to_id[SEQ_PARAM_ENV_SLOT_COUNT] = {
     PARAM_ENV_RETRIG_MOD
 };
 
-static const param_id_t g_seq_param_play_slot_to_id[SEQ_PARAM_PLAY_SLOT_COUNT] = {
-    PARAM_SEQ_PLAY_V1_NOTE,
-    PARAM_SEQ_PLAY_V1_VEL,
-    PARAM_SEQ_PLAY_V1_LEN,
-    PARAM_SEQ_PLAY_V1_MICTIM,
-    PARAM_SEQ_PLAY_V2_NOTE,
-    PARAM_SEQ_PLAY_V2_VEL,
-    PARAM_SEQ_PLAY_V2_LEN,
-    PARAM_SEQ_PLAY_V2_MICTIM,
-    PARAM_SEQ_PLAY_V3_NOTE,
-    PARAM_SEQ_PLAY_V3_VEL,
-    PARAM_SEQ_PLAY_V3_LEN,
-    PARAM_SEQ_PLAY_V3_MICTIM,
-    PARAM_SEQ_PLAY_V4_NOTE,
-    PARAM_SEQ_PLAY_V4_VEL,
-    PARAM_SEQ_PLAY_V4_LEN,
-    PARAM_SEQ_PLAY_V4_MICTIM
-};
-
 static const param_id_t g_seq_param_mod_slot_to_id[SEQ_PARAM_MOD_SLOT_COUNT] = {
     PARAM_LFO1_RATE,
     PARAM_LFO1_SHAPE,
@@ -151,22 +132,6 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_ENV_RETRIG_FILTER] = { (uint8_t)SEQ_PLOCK_SET_ENV, 22U },
     [PARAM_ENV_RETRIG_VCA] = { (uint8_t)SEQ_PLOCK_SET_ENV, 23U },
     [PARAM_ENV_RETRIG_MOD] = { (uint8_t)SEQ_PLOCK_SET_ENV, 24U },
-    [PARAM_SEQ_PLAY_V1_NOTE] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 0U },
-    [PARAM_SEQ_PLAY_V1_VEL] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 1U },
-    [PARAM_SEQ_PLAY_V1_LEN] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 2U },
-    [PARAM_SEQ_PLAY_V1_MICTIM] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 3U },
-    [PARAM_SEQ_PLAY_V2_NOTE] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 4U },
-    [PARAM_SEQ_PLAY_V2_VEL] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 5U },
-    [PARAM_SEQ_PLAY_V2_LEN] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 6U },
-    [PARAM_SEQ_PLAY_V2_MICTIM] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 7U },
-    [PARAM_SEQ_PLAY_V3_NOTE] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 8U },
-    [PARAM_SEQ_PLAY_V3_VEL] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 9U },
-    [PARAM_SEQ_PLAY_V3_LEN] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 10U },
-    [PARAM_SEQ_PLAY_V3_MICTIM] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 11U },
-    [PARAM_SEQ_PLAY_V4_NOTE] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 12U },
-    [PARAM_SEQ_PLAY_V4_VEL] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 13U },
-    [PARAM_SEQ_PLAY_V4_LEN] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 14U },
-    [PARAM_SEQ_PLAY_V4_MICTIM] = { (uint8_t)SEQ_PLOCK_SET_PLAY, 15U },
     [PARAM_LFO1_RATE] = { (uint8_t)SEQ_PLOCK_SET_MOD, 0U },
     [PARAM_LFO1_SHAPE] = { (uint8_t)SEQ_PLOCK_SET_MOD, 1U },
     [PARAM_LFO1_TRIG] = { (uint8_t)SEQ_PLOCK_SET_MOD, 2U },
@@ -206,7 +171,6 @@ typedef struct
 static const seq_param_inverse_table_t g_seq_param_inverse_tables[SEQ_PLOCK_SET_COUNT] = {
     [SEQ_PLOCK_SET_ENV] = { g_seq_param_env_slot_to_id, SEQ_PARAM_ENV_SLOT_COUNT },
     [SEQ_PLOCK_SET_TONE] = { NULL, 0U },
-    [SEQ_PLOCK_SET_PLAY] = { g_seq_param_play_slot_to_id, SEQ_PARAM_PLAY_SLOT_COUNT },
     [SEQ_PLOCK_SET_MOD] = { g_seq_param_mod_slot_to_id, SEQ_PARAM_MOD_SLOT_COUNT },
     [SEQ_PLOCK_SET_MIDI_FX] = { g_seq_param_midi_fx_slot_to_id, SEQ_PARAM_MIDI_FX_SLOT_COUNT },
     [SEQ_PLOCK_SET_MIX] = { g_seq_param_mix_slot_to_id, SEQ_PARAM_MIX_SLOT_COUNT }
@@ -216,8 +180,6 @@ _Static_assert((sizeof(g_seq_param_param_to_slot) / sizeof(g_seq_param_param_to_
                "direct p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_env_slot_to_id) / sizeof(g_seq_param_env_slot_to_id[0])) == SEQ_PARAM_ENV_SLOT_COUNT,
                "ENV inverse p-lock mapping size changed");
-_Static_assert((sizeof(g_seq_param_play_slot_to_id) / sizeof(g_seq_param_play_slot_to_id[0])) == SEQ_PARAM_PLAY_SLOT_COUNT,
-               "PLAY inverse p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_mod_slot_to_id) / sizeof(g_seq_param_mod_slot_to_id[0])) == SEQ_PARAM_MOD_SLOT_COUNT,
                "MOD inverse p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_midi_fx_slot_to_id) / sizeof(g_seq_param_midi_fx_slot_to_id[0])) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
@@ -228,7 +190,6 @@ _Static_assert((sizeof(g_seq_param_mix_slot_to_id) / sizeof(g_seq_param_mix_slot
 static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_ENV_SLOT_OFFSET,
     SEQ_PARAM_TONE_SLOT_OFFSET,
-    SEQ_PARAM_PLAY_SLOT_OFFSET,
     SEQ_PARAM_MOD_SLOT_OFFSET,
     SEQ_PARAM_MIDI_FX_SLOT_OFFSET,
     SEQ_PARAM_MIX_SLOT_OFFSET
@@ -237,7 +198,6 @@ static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
 static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_ENV_SLOT_COUNT,
     SEQ_PARAM_TONE_SLOT_COUNT,
-    SEQ_PARAM_PLAY_SLOT_COUNT,
     SEQ_PARAM_MOD_SLOT_COUNT,
     SEQ_PARAM_MIDI_FX_SLOT_COUNT,
     SEQ_PARAM_MIX_SLOT_COUNT
@@ -440,7 +400,6 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
 
     return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
@@ -457,7 +416,6 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX))
     {
         return 0U;
@@ -468,10 +426,6 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         return 0U;
     }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) && (set_id != (uint8_t)SEQ_PLOCK_SET_TONE))
-    {
-        return 0U;
-    }
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) && (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY))
     {
         return 0U;
     }
@@ -560,13 +514,6 @@ static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
     {
         return 0U;
     }
-
-    if ((lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
-            && (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY))
-    {
-        return 0U;
-    }
-
     return 1U;
 }
 
@@ -594,7 +541,7 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
     }
     if (seq_param_iface_is_group_master(track) != 0U)
     {
-        return (set_id == (uint8_t)SEQ_PLOCK_SET_PLAY) ? 0U : 1U;
+        return 1U;
     }
     if ((allow_refused_euclid_param == 0U)
             && (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX))
@@ -904,32 +851,6 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
     }
 
     return 1U;
-}
-
-uint8_t seq_param_iface_get_play_base_value(seq_track_id_t track,
-                                            seq_param_slot_t param_slot,
-                                            seq_value16_t *out_value16)
-{
-    param_id_t param = PARAM_COUNT;
-    return (seq_param_iface_slot_to_param(track,
-                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                          param_slot,
-                                          &param) != 0U)
-        ? seq_param_iface_get_play_base_param(track, param, out_value16)
-        : 0U;
-}
-
-uint8_t seq_param_iface_set_play_base_value(seq_track_id_t track,
-                                            seq_param_slot_t param_slot,
-                                            seq_value16_t value16)
-{
-    param_id_t param = PARAM_COUNT;
-    return (seq_param_iface_slot_to_param(track,
-                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                          param_slot,
-                                          &param) != 0U)
-        ? seq_param_iface_set_play_base_param(track, param, value16)
-        : 0U;
 }
 
 uint8_t seq_param_iface_get_play_base_param(seq_track_id_t track,

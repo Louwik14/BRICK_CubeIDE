@@ -235,6 +235,7 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
         seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
         seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
         seq_model_step_plock_clear((seq_track_id_t)track, step);
+        seq_model_step_play_clear((seq_track_id_t)track, step);
         const seq_step_play_t *const play = &saved->track.steps[step].play;
         for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
         {
