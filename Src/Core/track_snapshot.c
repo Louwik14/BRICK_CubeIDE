@@ -181,10 +181,35 @@ static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *
         dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
         dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
         dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
-        if (seq_model_step_plock_collect((seq_track_id_t)track, step,
-                                         saved->step_locks[step].locks,
-                                         SEQ_STEP_MAX_LOCKS,
-                                         &saved->step_locks[step].count) == 0U) return 0U;
+        for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+        {
+            for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
+            {
+                int16_t value = 0;
+                if (seq_model_step_play_get((seq_track_id_t)track,
+                                            step,
+                                            voice,
+                                            (seq_step_play_field_t)field,
+                                            &value) != 0U)
+                {
+                    if (seq_step_play_set(&dst_step->play,
+                                          voice,
+                                          (seq_step_play_field_t)field,
+                                          value) == 0U) return 0U;
+                }
+            }
+        }
+
+        const uint8_t lock_count = seq_model_step_param_plock_count((seq_track_id_t)track, step);
+        if (lock_count > SEQ_STEP_MAX_LOCKS) return 0U;
+        saved->step_locks[step].count = lock_count;
+        for (uint8_t lock = 0U; lock < lock_count; ++lock)
+        {
+            if (seq_model_step_param_plock_get_at((seq_track_id_t)track,
+                                                  step,
+                                                  lock,
+                                                  &saved->step_locks[step].locks[lock]) == 0U) return 0U;
+        }
     }
 
     (void)seq_runtime_get_track_div((seq_track_id_t)track, &out_snapshot->seq_div);
@@ -210,6 +235,22 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
         seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
         seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
         seq_model_step_plock_clear((seq_track_id_t)track, step);
+        const seq_step_play_t *const play = &saved->track.steps[step].play;
+        for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+        {
+            for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
+            {
+                int16_t value = 0;
+                if (seq_step_play_get(play, voice, (seq_step_play_field_t)field, &value) != 0U)
+                {
+                    (void)seq_model_step_play_set((seq_track_id_t)track,
+                                                  step,
+                                                  voice,
+                                                  (seq_step_play_field_t)field,
+                                                  value);
+                }
+            }
+        }
         const uint8_t count = saved->step_locks[step].count;
         for (uint8_t lock = 0U; lock < count; ++lock)
         {
