@@ -81,6 +81,11 @@ static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
 static const char *const g_vca_env_type_labels[] = {"DAISY", "LINEAR", NULL};
 static const char *const g_fm_mode_labels[] = {"MODERN", "MARK I", "OPL", NULL};
 static const char *const g_fm_operator_mode_labels[] = {"RATIO", "FIXED", NULL};
+static const char *const g_fm_algorithm_labels[] = {
+    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
+    "17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32",NULL
+};
+static const char *const g_fm_operator_labels[] = {"1", "2", "3", "4", "5", "6", NULL};
 static const char *const g_midi_fx_style_labels[] = {"ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {
@@ -304,8 +309,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
     PARAM_DESC_EX(PARAM_VCA_ENV_TYPE, "TYPE", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, (float)VCA_ENV_TYPE_DAISY, PARAM_DISPLAY_ENUM, "", g_vca_env_type_labels, NULL),
     PARAM_DESC_EX(PARAM_FM_MODE, "MODE", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_mode_labels, NULL),
-    PARAM_DESC_EX(PARAM_FM_ALGORITHM, "ALGO", PARAM_TYPE_ENUM, 0.0f, 31.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_FEEDBACK, "FDBK", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_ALGORITHM, "ALGO", PARAM_TYPE_ENUM, 0.0f, 31.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_algorithm_labels, NULL),
+    PARAM_DESC_EX(PARAM_FM_FEEDBACK, "FDBK", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_SYNC, "SYNC", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_FM_BRIGHT, "BRIGHT", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_BODY, "BODY", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
@@ -414,11 +419,11 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FM_PLAY_KEY, "KEY", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PLAY_PITCH_ENV, "P ENV", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PLAY_PITCH_TIME, "P TIME", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_OPERATOR_SELECT, "OP", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_OPERATOR_SELECT, "OP", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_operator_labels, NULL),
 #define PARAM_DESC_FM_OPERATOR(_level, _freq, _detune, _attack, _decay, _sustain, _release, _on, _mode, _vel, _key) \
     PARAM_DESC_EX((_level), "LEVEL", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \
     PARAM_DESC_EX((_freq), "FREQ", PARAM_TYPE_FLOAT, 0.25f, 16.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "x", NULL, NULL), \
-    PARAM_DESC_EX((_detune), "DETUNE", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL), \
+    PARAM_DESC_EX((_detune), "DETUNE", PARAM_TYPE_BIPOLAR, -7.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \
     PARAM_DESC_EX((_attack), "ATTACK", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \
     PARAM_DESC_EX((_decay), "DECAY", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 92.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \
     PARAM_DESC_EX((_sustain), "SUSTAIN", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 80.0f, PARAM_DISPLAY_INT, "", NULL, NULL), \

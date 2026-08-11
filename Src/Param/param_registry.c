@@ -887,7 +887,7 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_FM_ALGORITHM:
             state->fm.algorithm = clamp_value(value, 0.0f, 31.0f); return 1U;
         case PARAM_FM_FEEDBACK:
-            state->fm.feedback = clamp_value(value, 0.0f, 8.0f); return 1U;
+            state->fm.feedback = clamp_value(value, 0.0f, 7.0f); return 1U;
         case PARAM_FM_SYNC:
             state->fm.sync = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
         case PARAM_FM_BRIGHT:

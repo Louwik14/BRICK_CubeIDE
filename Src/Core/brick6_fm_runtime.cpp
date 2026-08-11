@@ -32,7 +32,7 @@ struct fm_voice_t
     int32_t base_log_frequency[kOperatorCount];
     int32_t operator_level_offset[kOperatorCount];
     uint8_t operator_level[kOperatorCount];
-    uint8_t operator_frequency[kOperatorCount];
+    float operator_frequency[kOperatorCount];
     int8_t operator_detune[kOperatorCount];
     uint8_t operator_env[kOperatorCount][4];
     uint8_t operator_on[kOperatorCount];
@@ -71,6 +71,23 @@ static const int kEnvelopeRates[4] = { 99, 92, 80, 72 };
 static const int kEnvelopeLevels[4] = { 99, 92, 80, 0 };
 static const int kPitchEnvelopeRates[4] = { 0, 0, 0, 0 };
 static const int kPitchEnvelopeLevels[4] = { 49, 49, 49, 49 };
+static const int32_t kCoarseMul[32] = {
+    -16777216, 0, 16777216, 26591258, 33554432, 38955489, 43368474, 47099600,
+    50331648, 53182516, 55732705, 58039632, 60145690, 62083076, 63876816,
+    65546747, 67108864, 68576247, 69959732, 71268397, 72509921, 73690858,
+    74816848, 75892776, 76922906, 77910978, 78860292, 79773775, 80654032,
+    81503396, 82323963, 83117622
+};
+static const uint8_t kVelocityData[64] = {
+    0,70,86,97,106,114,121,126,132,138,142,148,152,156,160,163,
+    166,170,173,174,178,181,184,186,189,190,194,196,198,200,202,205,
+    206,209,211,214,216,218,220,222,224,225,227,229,230,232,233,235,
+    237,238,240,241,242,243,244,246,246,248,249,250,251,252,253,254
+};
+static const uint8_t kExpScaleData[33] = {
+    0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,
+    126,142,158,174,190,206,222,238,250
+};
 static const uint8_t kAlgorithmFlags[32][kOperatorCount] = {
     {0xc1,0x11,0x11,0x14,0x01,0x14}, {0x01,0x11,0x11,0x14,0xc1,0x14},
     {0xc1,0x11,0x14,0x01,0x11,0x14}, {0xc1,0x11,0x94,0x01,0x11,0x14},
@@ -95,72 +112,153 @@ static float clamp_macro(float value)
     return (value < 0.0f) ? 0.0f : ((value > 1.0f) ? 1.0f : value);
 }
 
+constexpr uint8_t brick_operator_to_msfa_index(uint8_t brick_operator)
+{
+    return (uint8_t)((kOperatorCount - 1) - brick_operator);
+}
+
+static_assert(brick_operator_to_msfa_index(0U) == 5U, "BRICK OP1 must target DX7 OP1");
+static_assert(brick_operator_to_msfa_index(5U) == 0U, "BRICK OP6 must target DX7 OP6");
+
 static int macro_delta(float value, int span)
 {
     return (int)((clamp_macro(value) - 0.5f) * (float)span);
 }
 
-static uint8_t operator_feeds_carrier(uint8_t algorithm, int op)
+static uint8_t operator_is_carrier(uint8_t algorithm, int op)
 {
-    const uint8_t output_bus = (uint8_t)(kAlgorithmFlags[algorithm & 31U][op] & 0x03U);
-    if (output_bus == 0U)
-        return 0U;
-    for (int candidate = 0; candidate < kOperatorCount; ++candidate)
+    return (uint8_t)((kAlgorithmFlags[algorithm & 31U][op] & 0x07U) == 0x04U);
+}
+
+static void algorithm_edges(uint8_t algorithm, uint8_t edges[kOperatorCount])
+{
+    uint8_t bus_sources[3] = { 0U, 0U, 0U };
+    memset(edges, 0, kOperatorCount);
+    for (int op = 0; op < kOperatorCount; ++op)
     {
-        const uint8_t flags = kAlgorithmFlags[algorithm & 31U][candidate];
-        if (((flags & 0x04U) != 0U) && (((flags >> 4) & 0x03U) == output_bus))
-            return 1U;
+        const uint8_t flags = kAlgorithmFlags[algorithm & 31U][op];
+        const uint8_t input_bus = (uint8_t)((flags >> 4) & 0x03U);
+        const uint8_t output_bus = (uint8_t)(flags & 0x03U);
+        if ((input_bus != 0U) && (input_bus < 3U))
+        {
+            const uint8_t sources = bus_sources[input_bus];
+            for (int source = 0; source < kOperatorCount; ++source)
+                if ((sources & (uint8_t)(1U << source)) != 0U)
+                    edges[source] |= (uint8_t)(1U << op);
+        }
+        if ((output_bus != 0U) && (output_bus < 3U))
+        {
+            const uint8_t self = (uint8_t)(1U << op);
+            bus_sources[output_bus] = ((flags & 0x04U) != 0U)
+                ? (uint8_t)(bus_sources[output_bus] | self) : self;
+        }
+    }
+}
+
+static uint8_t operator_reaches_carrier(uint8_t algorithm, int op,
+                                        const uint8_t edges[kOperatorCount])
+{
+    uint8_t pending = edges[op];
+    uint8_t visited = 0U;
+    while (pending != 0U)
+    {
+        int candidate = 0;
+        while ((pending & (uint8_t)(1U << candidate)) == 0U) ++candidate;
+        pending &= (uint8_t)~(1U << candidate);
+        if (operator_is_carrier(algorithm, candidate) != 0U) return 1U;
+        if ((visited & (uint8_t)(1U << candidate)) == 0U)
+        {
+            visited |= (uint8_t)(1U << candidate);
+            pending |= edges[candidate];
+        }
     }
     return 0U;
 }
 
-static uint8_t operator_feeds_modulator(uint8_t algorithm, int op)
+static uint8_t operator_is_direct_modulator(uint8_t algorithm, int op,
+                                            const uint8_t edges[kOperatorCount])
 {
-    const uint8_t output_bus = (uint8_t)(kAlgorithmFlags[algorithm & 31U][op] & 0x03U);
-    if (output_bus == 0U)
-        return 0U;
     for (int candidate = 0; candidate < kOperatorCount; ++candidate)
-    {
-        const uint8_t flags = kAlgorithmFlags[algorithm & 31U][candidate];
-        if (((flags & 0x04U) == 0U) && (((flags >> 4) & 0x03U) == output_bus))
+        if (((edges[op] & (uint8_t)(1U << candidate)) != 0U)
+                && (operator_is_carrier(algorithm, candidate) != 0U))
             return 1U;
-    }
     return 0U;
-}
-
-static int32_t note_log_frequency(uint8_t note, float ratio);
-
-static float operator_ratio(const fm_voice_t *voice, int op)
-{
-    const float encoded = (float)voice->operator_frequency[op] / 127.0f;
-    return 0.25f + (encoded * 15.75f);
 }
 
 static float operator_metal_semitones(const fm_voice_t *voice, int op)
 {
-    if (voice == nullptr || FmCore::isCarrier(voice->algorithm, op))
+    if (voice == nullptr || operator_is_carrier(voice->algorithm, op))
         return 0.0f;
+    uint8_t edges[kOperatorCount];
+    algorithm_edges(voice->algorithm, edges);
     const float amount = (voice->metal - 0.5f) * 2.0f;
-    const bool direct_modulator = operator_feeds_carrier(voice->algorithm, op) != 0U;
-    const bool deep_modulator = (operator_feeds_modulator(voice->algorithm, op) != 0U)
-        && !direct_modulator;
+    const bool direct_modulator = operator_is_direct_modulator(voice->algorithm, op, edges) != 0U;
+    const bool deep_modulator = !direct_modulator
+        && (operator_reaches_carrier(voice->algorithm, op, edges) != 0U);
     const float span = direct_modulator ? 7.0f : (deep_modulator ? 13.0f : 9.0f);
     return amount * span;
 }
 
+static void ratio_to_dx_frequency(float ratio, int *coarse, int *fine)
+{
+    float best_error = 1.0e30f;
+    int best_coarse = 0;
+    int best_fine = 0;
+    for (int candidate = 0; candidate < 32; ++candidate)
+    {
+        const float base = (candidate == 0) ? 0.5f : (float)candidate;
+        int candidate_fine = (int)(((ratio / base) - 1.0f) * 100.0f + 0.5f);
+        if (candidate_fine < 0) candidate_fine = 0;
+        if (candidate_fine > 99) candidate_fine = 99;
+        const float represented = base * (1.0f + 0.01f * (float)candidate_fine);
+        const float error = fabsf(represented - ratio);
+        if (error < best_error)
+        {
+            best_error = error;
+            best_coarse = candidate;
+            best_fine = candidate_fine;
+        }
+    }
+    *coarse = best_coarse;
+    *fine = best_fine;
+}
+
+static void fixed_to_dx_frequency(float brick_frequency, int *coarse, int *fine)
+{
+    const float hz = 440.0f * brick_frequency;
+    int code = (int)(log10f(hz) * 100.0f + 0.5f);
+    if (code < 0) code = 0;
+    if (code > 399) code = 399;
+    *coarse = code / 100;
+    *fine = code % 100;
+}
+
 static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int op)
 {
-    float ratio = operator_ratio(voice, op);
-    ratio *= powf(2.0f, (float)voice->operator_detune[op] / 12.0f);
-    const uint8_t reference_note = (voice->operator_mode[op] != 0U) ? 69U : note;
-    const float metal_semitones = operator_metal_semitones(voice, op);
-    const int32_t base = note_log_frequency(reference_note, ratio);
-    if (voice->operator_mode[op] != 0U)
+    int coarse = 0;
+    int fine = 0;
+    const int mode = voice->operator_mode[op];
+    if (mode == 0) ratio_to_dx_frequency(voice->operator_frequency[op], &coarse, &fine);
+    else fixed_to_dx_frequency(voice->operator_frequency[op], &coarse, &fine);
+
+    const int detune = (int)voice->operator_detune[op] + 7;
+    int32_t log_frequency;
+    if (mode == 0)
     {
-        return base + (int32_t)((metal_semitones / 12.0f) * (float)kQ24);
+        log_frequency = 50857777 + (int32_t)note * (kQ24 / 12);
+        const double detune_ratio = 0.0209 * exp(-0.396 * ((double)log_frequency / kQ24)) / 7.0;
+        log_frequency += (int32_t)(detune_ratio * log_frequency * (detune - 7));
+        log_frequency += kCoarseMul[coarse & 31];
+        if (fine != 0)
+            log_frequency += (int32_t)floor(24204406.323123 * log(1.0 + 0.01 * fine) + 0.5);
     }
-    return note_log_frequency(reference_note,
-                              ratio * powf(2.0f, metal_semitones / 12.0f));
+    else
+    {
+        log_frequency = (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
+        if (detune > 7) log_frequency += 13457 * (detune - 7);
+    }
+    return log_frequency
+        + (int32_t)((operator_metal_semitones(voice, op) / 12.0f) * (float)kQ24);
 }
 
 static float operator_gain_factor(const fm_voice_t *voice, int op)
@@ -168,25 +266,59 @@ static float operator_gain_factor(const fm_voice_t *voice, int op)
     if (voice == nullptr)
         return 1.0f;
     float factor = 1.0f;
-    if (!FmCore::isCarrier(voice->algorithm, op))
+    if (!operator_is_carrier(voice->algorithm, op))
     {
-        const bool direct_modulator = operator_feeds_carrier(voice->algorithm, op) != 0U;
-        const bool deep_modulator = (operator_feeds_modulator(voice->algorithm, op) != 0U)
-            && !direct_modulator;
+        uint8_t edges[kOperatorCount];
+        algorithm_edges(voice->algorithm, edges);
+        const bool direct_modulator = operator_is_direct_modulator(voice->algorithm, op, edges) != 0U;
+        const bool deep_modulator = !direct_modulator
+            && (operator_reaches_carrier(voice->algorithm, op, edges) != 0U);
         factor = 0.35f + (1.30f * voice->bright);
         if (direct_modulator)
             factor *= 1.0f + (voice->body - 0.5f) * 1.4f;
         if (deep_modulator)
             factor *= 1.0f + (voice->detail - 0.5f) * 1.6f;
     }
-    const float velocity = (float)voice->velocity / 127.0f;
-    const float velocity_sensitivity = (float)voice->operator_velocity[op] / 127.0f;
-    factor *= 1.0f - ((1.0f - velocity) * voice->play_velocity * velocity_sensitivity);
-    const float key_position = ((float)voice->note - 60.0f) / 60.0f;
-    const float key_factor = 1.0f + (key_position * voice->play_key
-                                     * ((float)voice->operator_key[op] / 127.0f));
-    factor *= (key_factor < 0.25f) ? 0.25f : ((key_factor > 2.0f) ? 2.0f : key_factor);
     return (factor < 0.01f) ? 0.01f : factor;
+}
+
+static int scale_velocity(int velocity, int sensitivity)
+{
+    const int clamped = (velocity < 0) ? 0 : ((velocity > 127) ? 127 : velocity);
+    const int value = (int)kVelocityData[clamped >> 1] - 239;
+    return ((sensitivity * value + 7) >> 3) << 4;
+}
+
+static int scale_curve(int group, int depth, int curve)
+{
+    int scale;
+    if ((curve == 0) || (curve == 3)) scale = (group * depth * 329) >> 12;
+    else
+    {
+        const int index = (group < 32) ? group : 32;
+        scale = ((int)kExpScaleData[index] * depth * 329) >> 15;
+    }
+    return (curve < 2) ? -scale : scale;
+}
+
+static int scale_level(int note, int depth)
+{
+    const int offset = note - 60;
+    if (offset >= 0) return scale_curve((offset + 1) / 3, depth, 3);
+    return scale_curve(-(offset - 1) / 3, depth, 0);
+}
+
+static int operator_output_level(const fm_voice_t *voice, int op)
+{
+    int level = Env::scaleoutlevel(voice->operator_level[op]);
+    level += scale_level(voice->note,
+                         (int)((float)voice->operator_key[op] * voice->play_key + 0.5f));
+    if (level > 127) level = 127;
+    level <<= 5;
+    level += scale_velocity(voice->velocity,
+                            (int)((float)voice->operator_velocity[op]
+                                  * voice->play_velocity + 0.5f));
+    return (level < 0) ? 0 : level;
 }
 
 static void refresh_voice_patch(fm_voice_t *voice)
@@ -218,15 +350,7 @@ static uint8_t feedback_shift(uint8_t feedback)
 {
     if (feedback == 0U)
         return 16U;
-    const uint8_t shift = (feedback >= 8U) ? 0U : (uint8_t)(8U - feedback);
-    return shift;
-}
-
-static int32_t note_log_frequency(uint8_t note, float ratio)
-{
-    const float hz = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f)
-        * (float)ratio;
-    return (int32_t)(log2f(hz) * (float)kQ24);
+    return (uint8_t)(8U - ((feedback > 7U) ? 7U : feedback));
 }
 
 static void reset_voice(fm_voice_t *voice)
@@ -243,7 +367,7 @@ static void reset_voice(fm_voice_t *voice)
     memset(voice->operator_env, 0, sizeof(voice->operator_env));
     memset(voice->operator_on, 1, sizeof(voice->operator_on));
     memset(voice->operator_mode, 0, sizeof(voice->operator_mode));
-    memset(voice->operator_velocity, 127, sizeof(voice->operator_velocity));
+    memset(voice->operator_velocity, 7, sizeof(voice->operator_velocity));
     memset(voice->operator_key, 0, sizeof(voice->operator_key));
     voice->mode = (uint8_t)BRICK6_FM_MODE_MODERN;
     voice->algorithm = (uint8_t)kDefaultAlgorithm;
@@ -264,17 +388,18 @@ static void reset_voice(fm_voice_t *voice)
     voice->note = 0U;
     voice->velocity = 0U;
     voice->active = 0U;
-    for (int op = 0; op < kOperatorCount; ++op)
+    for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
     {
-        voice->operator_level[op] = (uint8_t)kOperatorLevels[op];
-        voice->operator_frequency[op] = (uint8_t)(((float)kOperatorRatios[op] - 0.25f) * 127.0f / 15.75f + 0.5f);
+        const uint8_t op = brick_operator_to_msfa_index(brick_op);
+        voice->operator_level[op] = (uint8_t)kOperatorLevels[brick_op];
+        voice->operator_frequency[op] = (float)kOperatorRatios[brick_op];
         voice->operator_env[op][0] = (uint8_t)kEnvelopeRates[0];
         voice->operator_env[op][1] = (uint8_t)kEnvelopeRates[1];
         voice->operator_env[op][2] = (uint8_t)kEnvelopeLevels[2];
         voice->operator_env[op][3] = (uint8_t)kEnvelopeRates[3];
         voice->env[op].init(kEnvelopeRates,
                             kEnvelopeLevels,
-                            (int)voice->operator_level[op] << 5,
+                            Env::scaleoutlevel(voice->operator_level[op]) << 5,
                             0);
     }
     voice->pitch_env.set(kPitchEnvelopeRates, kPitchEnvelopeLevels);
@@ -324,10 +449,7 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
             if (levels[stage] < 0) levels[stage] = 0;
             if (levels[stage] > 99) levels[stage] = 99;
         }
-        voice->env[op].init(rates,
-                            levels,
-                            (int)voice->operator_level[op] << 5,
-                            0);
+        voice->env[op].init(rates, levels, operator_output_level(voice, op), 0);
         voice->base_log_frequency[op] = operator_log_frequency(voice, note, op);
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
         voice->operators[op].gain_out = 0;
@@ -402,7 +524,7 @@ void brick6_fm_runtime_set_feedback(uint8_t instance_id, uint8_t feedback)
 {
     if (valid_instance(instance_id) != 0U)
     {
-        g_fm_voice[instance_id].feedback_amount = (feedback > 8U) ? 8U : feedback;
+        g_fm_voice[instance_id].feedback_amount = (feedback > 7U) ? 7U : feedback;
     }
 }
 
@@ -488,7 +610,7 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             || (param >= BRICK6_FM_OPERATOR_PARAM_COUNT))
         return;
     fm_voice_t *const voice = &g_fm_voice[instance_id];
-    const int op = (int)operator_id;
+    const int op = (int)brick_operator_to_msfa_index(operator_id);
     switch (param)
     {
         case BRICK6_FM_OPERATOR_LEVEL:
@@ -496,12 +618,14 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             break;
         case BRICK6_FM_OPERATOR_FREQ:
         {
-            const float clamped = (value < 0.25f) ? 0.25f : ((value > 16.0f) ? 16.0f : value);
-            voice->operator_frequency[op] = (uint8_t)(((clamped - 0.25f) * 127.0f / 15.75f) + 0.5f);
+            voice->operator_frequency[op] = (value < 0.25f) ? 0.25f
+                : ((value > 16.0f) ? 16.0f : value);
             break;
         }
         case BRICK6_FM_OPERATOR_DETUNE:
-            voice->operator_detune[op] = (int8_t)((value < -24.0f) ? -24.0f : ((value > 24.0f) ? 24.0f : value + ((value < 0.0f) ? -0.5f : 0.5f)));
+            voice->operator_detune[op] = (int8_t)((value < -7.0f) ? -7.0f
+                : ((value > 7.0f) ? 7.0f
+                : value + ((value < 0.0f) ? -0.5f : 0.5f)));
             break;
         case BRICK6_FM_OPERATOR_ENV_ATTACK:
         case BRICK6_FM_OPERATOR_ENV_DECAY:
@@ -517,10 +641,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             voice->operator_mode[op] = (value >= 0.5f) ? 1U : 0U;
             break;
         case BRICK6_FM_OPERATOR_VEL:
-            voice->operator_velocity[op] = (uint8_t)(clamp_macro(value) * 127.0f + 0.5f);
+            voice->operator_velocity[op] = (uint8_t)(clamp_macro(value) * 7.0f + 0.5f);
             break;
         case BRICK6_FM_OPERATOR_KEY:
-            voice->operator_key[op] = (uint8_t)(clamp_macro(value) * 127.0f + 0.5f);
+            voice->operator_key[op] = (uint8_t)(clamp_macro(value) * 99.0f + 0.5f);
             break;
         default:
             break;
@@ -602,7 +726,7 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
     uint8_t carrier_active = 0U;
     for (int op = 0; op < kOperatorCount; ++op)
     {
-        if (FmCore::isCarrier(voice->algorithm, op) && voice->env[op].isActive())
+        if (operator_is_carrier(voice->algorithm, op) && voice->env[op].isActive())
         {
             carrier_active = 1U;
             break;
