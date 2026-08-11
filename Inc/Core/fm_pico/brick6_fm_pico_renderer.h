@@ -14,6 +14,7 @@ typedef struct
     uint8_t feedback;
     uint8_t sync;
     uint8_t note;
+    /* Resolved BRICK/MSFA phase increment, Q24; renderer converts to Q32. */
     int32_t phase_inc[BRICK6_FM_PICO_OPERATOR_COUNT];
     uint8_t rates[BRICK6_FM_PICO_OPERATOR_COUNT][BRICK6_FM_PICO_ENV_COUNT];
     uint8_t levels[BRICK6_FM_PICO_OPERATOR_COUNT][BRICK6_FM_PICO_ENV_COUNT];
