@@ -1194,6 +1194,11 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     uint8_t set_id = 0U;
+    if ((param >= PARAM_FM_OPERATOR_FIRST) && (param <= PARAM_FM_OPERATOR_LAST))
+    {
+        set_id = (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR;
+    }
+    else
     switch (rule.domain)
     {
         case TRACK_RUNTIME_PARAM_DOMAIN_CFG:

@@ -31,6 +31,14 @@ struct fm_voice_t
     int32_t feedback[2];
     int32_t base_log_frequency[kOperatorCount];
     int32_t operator_level_offset[kOperatorCount];
+    uint8_t operator_level[kOperatorCount];
+    uint8_t operator_frequency[kOperatorCount];
+    int8_t operator_detune[kOperatorCount];
+    uint8_t operator_env[kOperatorCount][4];
+    uint8_t operator_on[kOperatorCount];
+    uint8_t operator_mode[kOperatorCount];
+    uint8_t operator_velocity[kOperatorCount];
+    uint8_t operator_key[kOperatorCount];
     uint8_t mode;
     uint8_t algorithm;
     uint8_t feedback_amount;
@@ -43,6 +51,10 @@ struct fm_voice_t
     float env_decay;
     float env_sustain;
     float env_release;
+    float play_velocity;
+    float play_key;
+    float pitch_env_amount;
+    float pitch_env_time;
     uint8_t note;
     uint8_t velocity;
     uint8_t active;
@@ -118,19 +130,44 @@ static uint8_t operator_feeds_modulator(uint8_t algorithm, int op)
 
 static int32_t note_log_frequency(uint8_t note, float ratio);
 
+static float operator_ratio(const fm_voice_t *voice, int op)
+{
+    const float encoded = (float)voice->operator_frequency[op] / 127.0f;
+    return 0.25f + (encoded * 15.75f);
+}
+
+static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int op)
+{
+    float ratio = operator_ratio(voice, op);
+    ratio *= powf(2.0f, (float)voice->operator_detune[op] / 12.0f);
+    const uint8_t reference_note = (voice->operator_mode[op] != 0U) ? 69U : note;
+    return note_log_frequency(reference_note, ratio);
+}
+
 static float operator_gain_factor(const fm_voice_t *voice, int op)
 {
-    if ((voice == nullptr) || FmCore::isCarrier(voice->algorithm, op))
+    if (voice == nullptr)
         return 1.0f;
-    const bool direct_modulator = operator_feeds_carrier(voice->algorithm, op) != 0U;
-    const bool deep_modulator = (operator_feeds_modulator(voice->algorithm, op) != 0U)
-        && !direct_modulator;
-    float factor = 0.35f + (1.30f * voice->bright);
-    if (direct_modulator)
-        factor *= 1.0f + (voice->body - 0.5f) * 1.4f;
-    if (deep_modulator)
-        factor *= 1.0f + (voice->detail - 0.5f) * 1.6f;
-    return (factor < 0.05f) ? 0.05f : factor;
+    float factor = 1.0f;
+    if (!FmCore::isCarrier(voice->algorithm, op))
+    {
+        const bool direct_modulator = operator_feeds_carrier(voice->algorithm, op) != 0U;
+        const bool deep_modulator = (operator_feeds_modulator(voice->algorithm, op) != 0U)
+            && !direct_modulator;
+        factor = 0.35f + (1.30f * voice->bright);
+        if (direct_modulator)
+            factor *= 1.0f + (voice->body - 0.5f) * 1.4f;
+        if (deep_modulator)
+            factor *= 1.0f + (voice->detail - 0.5f) * 1.6f;
+    }
+    const float velocity = (float)voice->velocity / 127.0f;
+    const float velocity_sensitivity = (float)voice->operator_velocity[op] / 127.0f;
+    factor *= 1.0f - ((1.0f - velocity) * voice->play_velocity * velocity_sensitivity);
+    const float key_position = ((float)voice->note - 60.0f) / 60.0f;
+    const float key_factor = 1.0f + (key_position * voice->play_key
+                                     * ((float)voice->operator_key[op] / 127.0f));
+    factor *= (key_factor < 0.25f) ? 0.25f : ((key_factor > 2.0f) ? 2.0f : key_factor);
+    return (factor < 0.01f) ? 0.01f : factor;
 }
 
 static void refresh_voice_patch(fm_voice_t *voice)
@@ -143,11 +180,7 @@ static void refresh_voice_patch(fm_voice_t *voice)
             (int32_t)(log2f(operator_gain_factor(voice, op)) * (float)kQ24);
         if (voice->active != 0U)
         {
-            const bool carrier = FmCore::isCarrier(voice->algorithm, op);
-            const float ratio = (carrier != false)
-                ? (float)kOperatorRatios[op]
-                : ((float)kOperatorRatios[op] * (1.0f + ((voice->metal - 0.5f) * 0.20f)));
-            voice->base_log_frequency[op] = note_log_frequency(voice->note, ratio);
+            voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
         }
     }
 }
@@ -185,6 +218,14 @@ static void reset_voice(fm_voice_t *voice)
     memset(voice->operators, 0, sizeof(voice->operators));
     memset(voice->feedback, 0, sizeof(voice->feedback));
     memset(voice->base_log_frequency, 0, sizeof(voice->base_log_frequency));
+    memset(voice->operator_level, 0, sizeof(voice->operator_level));
+    memset(voice->operator_frequency, 0, sizeof(voice->operator_frequency));
+    memset(voice->operator_detune, 0, sizeof(voice->operator_detune));
+    memset(voice->operator_env, 0, sizeof(voice->operator_env));
+    memset(voice->operator_on, 1, sizeof(voice->operator_on));
+    memset(voice->operator_mode, 0, sizeof(voice->operator_mode));
+    memset(voice->operator_velocity, 127, sizeof(voice->operator_velocity));
+    memset(voice->operator_key, 0, sizeof(voice->operator_key));
     voice->mode = (uint8_t)BRICK6_FM_MODE_MODERN;
     voice->algorithm = (uint8_t)kDefaultAlgorithm;
     voice->feedback_amount = kDefaultFeedback;
@@ -197,14 +238,24 @@ static void reset_voice(fm_voice_t *voice)
     voice->env_decay = 0.5f;
     voice->env_sustain = 0.5f;
     voice->env_release = 0.5f;
+    voice->play_velocity = 1.0f;
+    voice->play_key = 0.0f;
+    voice->pitch_env_amount = 0.0f;
+    voice->pitch_env_time = 0.5f;
     voice->note = 0U;
     voice->velocity = 0U;
     voice->active = 0U;
     for (int op = 0; op < kOperatorCount; ++op)
     {
+        voice->operator_level[op] = (uint8_t)kOperatorLevels[op];
+        voice->operator_frequency[op] = (uint8_t)(((float)kOperatorRatios[op] - 0.25f) * 127.0f / 15.75f + 0.5f);
+        voice->operator_env[op][0] = (uint8_t)kEnvelopeRates[0];
+        voice->operator_env[op][1] = (uint8_t)kEnvelopeRates[1];
+        voice->operator_env[op][2] = (uint8_t)kEnvelopeLevels[2];
+        voice->operator_env[op][3] = (uint8_t)kEnvelopeRates[3];
         voice->env[op].init(kEnvelopeRates,
                             kEnvelopeLevels,
-                            (int)kOperatorLevels[op] << 5,
+                            (int)voice->operator_level[op] << 5,
                             0);
     }
     voice->pitch_env.set(kPitchEnvelopeRates, kPitchEnvelopeLevels);
@@ -236,16 +287,16 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
     for (int op = 0; op < kOperatorCount; ++op)
     {
         int rates[4] = {
-            kEnvelopeRates[0] + macro_delta(voice->env_attack, 18),
-            kEnvelopeRates[1] + macro_delta(voice->env_decay, 18),
+            (int)voice->operator_env[op][0] + macro_delta(voice->env_attack, 18),
+            (int)voice->operator_env[op][1] + macro_delta(voice->env_decay, 18),
             kEnvelopeRates[2],
-            kEnvelopeRates[3] + macro_delta(voice->env_release, 18)
+            (int)voice->operator_env[op][3] + macro_delta(voice->env_release, 18)
         };
         int levels[4] = {
-            kEnvelopeLevels[0],
-            kEnvelopeLevels[1],
-            kEnvelopeLevels[2] + macro_delta(voice->env_sustain, 38),
-            kEnvelopeLevels[3]
+            99,
+            92,
+            (int)voice->operator_env[op][2] + macro_delta(voice->env_sustain, 38),
+            0
         };
         for (int stage = 0; stage < 4; ++stage)
         {
@@ -254,21 +305,21 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
             if (levels[stage] < 0) levels[stage] = 0;
             if (levels[stage] > 99) levels[stage] = 99;
         }
-        const bool carrier = FmCore::isCarrier(voice->algorithm, op);
-        const float metal_ratio = (carrier != false)
-            ? (float)kOperatorRatios[op]
-            : ((float)kOperatorRatios[op] * (1.0f + ((voice->metal - 0.5f) * 0.20f)));
         voice->env[op].init(rates,
                             levels,
-                            (int)kOperatorLevels[op] << 5,
+                            (int)voice->operator_level[op] << 5,
                             0);
-        voice->base_log_frequency[op] = note_log_frequency(note, metal_ratio);
+        voice->base_log_frequency[op] = operator_log_frequency(voice, note, op);
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
         voice->operators[op].gain_out = 0;
         voice->env[op].keydown(true);
     }
     refresh_voice_patch(voice);
-    voice->pitch_env.set(kPitchEnvelopeRates, kPitchEnvelopeLevels);
+    const int pitch_depth = (int)(voice->pitch_env_amount * 49.0f);
+    const int pitch_rate = (int)(voice->pitch_env_time * 99.0f);
+    const int pitch_rates[4] = { pitch_rate, pitch_rate, pitch_rate, pitch_rate };
+    const int pitch_levels[4] = { 49 + pitch_depth, 49, 49, 49 };
+    voice->pitch_env.set(pitch_rates, pitch_levels);
     voice->pitch_env.keydown(true);
 }
 }
@@ -393,6 +444,71 @@ void brick6_fm_runtime_set_env(uint8_t instance_id,
     voice->env_release = clamp_macro(release);
 }
 
+void brick6_fm_runtime_set_play(uint8_t instance_id,
+                                float velocity,
+                                float key_scaling,
+                                float pitch_env,
+                                float pitch_time)
+{
+    if (valid_instance(instance_id) == 0U)
+        return;
+    fm_voice_t *const voice = &g_fm_voice[instance_id];
+    voice->play_velocity = clamp_macro(velocity);
+    voice->play_key = clamp_macro(key_scaling);
+    voice->pitch_env_amount = (pitch_env < -1.0f) ? -1.0f : ((pitch_env > 1.0f) ? 1.0f : pitch_env);
+    voice->pitch_env_time = clamp_macro(pitch_time);
+    refresh_voice_patch(voice);
+}
+
+void brick6_fm_runtime_set_operator(uint8_t instance_id,
+                                    uint8_t operator_id,
+                                    brick6_fm_operator_param_t param,
+                                    float value)
+{
+    if ((valid_instance(instance_id) == 0U) || (operator_id >= kOperatorCount)
+            || (param >= BRICK6_FM_OPERATOR_PARAM_COUNT))
+        return;
+    fm_voice_t *const voice = &g_fm_voice[instance_id];
+    const int op = (int)operator_id;
+    switch (param)
+    {
+        case BRICK6_FM_OPERATOR_LEVEL:
+            voice->operator_level[op] = (uint8_t)((value < 0.0f) ? 0.0f : ((value > 99.0f) ? 99.0f : value + 0.5f));
+            break;
+        case BRICK6_FM_OPERATOR_FREQ:
+        {
+            const float clamped = (value < 0.25f) ? 0.25f : ((value > 16.0f) ? 16.0f : value);
+            voice->operator_frequency[op] = (uint8_t)(((clamped - 0.25f) * 127.0f / 15.75f) + 0.5f);
+            break;
+        }
+        case BRICK6_FM_OPERATOR_DETUNE:
+            voice->operator_detune[op] = (int8_t)((value < -24.0f) ? -24.0f : ((value > 24.0f) ? 24.0f : value + ((value < 0.0f) ? -0.5f : 0.5f)));
+            break;
+        case BRICK6_FM_OPERATOR_ENV_ATTACK:
+        case BRICK6_FM_OPERATOR_ENV_DECAY:
+        case BRICK6_FM_OPERATOR_ENV_SUSTAIN:
+        case BRICK6_FM_OPERATOR_ENV_RELEASE:
+            voice->operator_env[op][(uint8_t)param - BRICK6_FM_OPERATOR_ENV_ATTACK] =
+                (uint8_t)((value < 0.0f) ? 0.0f : ((value > 99.0f) ? 99.0f : value + 0.5f));
+            break;
+        case BRICK6_FM_OPERATOR_ON:
+            voice->operator_on[op] = (value >= 0.5f) ? 1U : 0U;
+            break;
+        case BRICK6_FM_OPERATOR_MODE:
+            voice->operator_mode[op] = (value >= 0.5f) ? 1U : 0U;
+            break;
+        case BRICK6_FM_OPERATOR_VEL:
+            voice->operator_velocity[op] = (uint8_t)(clamp_macro(value) * 127.0f + 0.5f);
+            break;
+        case BRICK6_FM_OPERATOR_KEY:
+            voice->operator_key[op] = (uint8_t)(clamp_macro(value) * 127.0f + 0.5f);
+            break;
+        default:
+            break;
+    }
+    refresh_voice_patch(voice);
+}
+
 void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id)
 {
     if ((valid_instance(source_instance_id) == 0U)
@@ -412,6 +528,19 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     destination->env_decay = source->env_decay;
     destination->env_sustain = source->env_sustain;
     destination->env_release = source->env_release;
+    destination->play_velocity = source->play_velocity;
+    destination->play_key = source->play_key;
+    destination->pitch_env_amount = source->pitch_env_amount;
+    destination->pitch_env_time = source->pitch_env_time;
+    memcpy(destination->operator_level, source->operator_level, sizeof(destination->operator_level));
+    memcpy(destination->operator_frequency, source->operator_frequency, sizeof(destination->operator_frequency));
+    memcpy(destination->operator_detune, source->operator_detune, sizeof(destination->operator_detune));
+    memcpy(destination->operator_env, source->operator_env, sizeof(destination->operator_env));
+    memcpy(destination->operator_on, source->operator_on, sizeof(destination->operator_on));
+    memcpy(destination->operator_mode, source->operator_mode, sizeof(destination->operator_mode));
+    memcpy(destination->operator_velocity, source->operator_velocity, sizeof(destination->operator_velocity));
+    memcpy(destination->operator_key, source->operator_key, sizeof(destination->operator_key));
+    refresh_voice_patch(destination);
 }
 
 uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
@@ -435,6 +564,8 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
     {
         voice->operators[op].level_in = voice->env[op].getsample();
         voice->operators[op].level_in += voice->operator_level_offset[op];
+        if (voice->operator_on[op] == 0U)
+            voice->operators[op].level_in = 0;
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]
                                                      + pitch_log_frequency);
     }

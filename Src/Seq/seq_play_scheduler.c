@@ -1061,7 +1061,11 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
     uint8_t set_id = 0U;
-    switch (rule.domain)
+    if ((param_id >= PARAM_FM_OPERATOR_FIRST) && (param_id <= PARAM_FM_OPERATOR_LAST))
+    {
+        set_id = (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR;
+    }
+    else switch (rule.domain)
     {
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
             set_id = (uint8_t)SEQ_PLOCK_SET_TONE;

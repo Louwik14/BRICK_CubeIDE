@@ -34,6 +34,20 @@ SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_
 #define TRACK_TONE_FM_DEFAULT_FEEDBACK              0.0f
 #define TRACK_TONE_FM_DEFAULT_SYNC                  1.0f
 #define TRACK_TONE_FM_DEFAULT_MACRO                 0.0f
+#define TRACK_TONE_FM_DEFAULT_PLAY_VEL             1.0f
+#define TRACK_TONE_FM_DEFAULT_PLAY_KEY             0.0f
+#define TRACK_TONE_FM_DEFAULT_PITCH_ENV            0.0f
+#define TRACK_TONE_FM_DEFAULT_PITCH_TIME           0.5f
+#define TRACK_TONE_FM_DEFAULT_OPERATOR_SELECT      0.0f
+
+static const float g_track_tone_fm_operator_defaults[PARAM_FM_OPERATOR_COUNT][PARAM_FM_OPERATOR_PARAM_COUNT] = {
+    { 99.0f, 1.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
+    { 82.0f, 2.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
+    { 76.0f, 3.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
+    { 70.0f, 4.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
+    { 64.0f, 5.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
+    { 58.0f, 6.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f }
+};
 
 void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
 {
@@ -135,6 +149,18 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->fm.env_decay = TRACK_TONE_FM_DEFAULT_MACRO;
     state->fm.env_sustain = TRACK_TONE_FM_DEFAULT_MACRO;
     state->fm.env_release = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.play_vel = TRACK_TONE_FM_DEFAULT_PLAY_VEL;
+    state->fm.play_key = TRACK_TONE_FM_DEFAULT_PLAY_KEY;
+    state->fm.pitch_env = TRACK_TONE_FM_DEFAULT_PITCH_ENV;
+    state->fm.pitch_time = TRACK_TONE_FM_DEFAULT_PITCH_TIME;
+    state->fm.operator_select = TRACK_TONE_FM_DEFAULT_OPERATOR_SELECT;
+    for (uint8_t op = 0U; op < PARAM_FM_OPERATOR_COUNT; ++op)
+    {
+        for (uint8_t field = 0U; field < PARAM_FM_OPERATOR_PARAM_COUNT; ++field)
+        {
+            state->fm.operator_params[op][field] = g_track_tone_fm_operator_defaults[op][field];
+        }
+    }
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;

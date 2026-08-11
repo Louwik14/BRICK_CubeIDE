@@ -187,6 +187,12 @@ uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
             return 0U;
         }
 
+        if ((param >= PARAM_FM_OPERATOR_FIRST) && (param <= PARAM_FM_OPERATOR_LAST))
+        {
+            set_id = (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR;
+            return seq_param_iface_param_is_supported(track, set_id, param);
+        }
+
         if (param_macro_plock_set_for_domain(rule.domain, &set_id) != 0U)
         {
             return seq_param_iface_param_is_supported(track, set_id, param);

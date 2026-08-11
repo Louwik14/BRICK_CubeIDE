@@ -192,7 +192,8 @@ static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_TONE_SLOT_OFFSET,
     SEQ_PARAM_MOD_SLOT_OFFSET,
     SEQ_PARAM_MIDI_FX_SLOT_OFFSET,
-    SEQ_PARAM_MIX_SLOT_OFFSET
+    SEQ_PARAM_MIX_SLOT_OFFSET,
+    SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET
 };
 
 static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
@@ -200,7 +201,8 @@ static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_TONE_SLOT_COUNT,
     SEQ_PARAM_MOD_SLOT_COUNT,
     SEQ_PARAM_MIDI_FX_SLOT_COUNT,
-    SEQ_PARAM_MIX_SLOT_COUNT
+    SEQ_PARAM_MIX_SLOT_COUNT,
+    SEQ_PARAM_FM_OPERATOR_SLOT_COUNT
 };
 
 _Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT <= UINT8_MAX,
@@ -372,6 +374,7 @@ static uint8_t seq_param_iface_is_excluded_from_plock(param_id_t param_id)
         case PARAM_MOD_SLEW_1_AMOUNT:
         case PARAM_MOD_SLEW_2_SOURCE:
         case PARAM_MOD_SLEW_2_AMOUNT:
+        case PARAM_FM_OPERATOR_SELECT:
             return 1U;
         default:
             return 0U;
@@ -383,6 +386,11 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
     if (param_id >= PARAM_COUNT)
     {
         return 0U;
+    }
+
+    if ((param_id >= PARAM_FM_OPERATOR_FIRST) && (param_id <= PARAM_FM_OPERATOR_LAST))
+    {
+        return 1U;
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
@@ -407,6 +415,13 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
 
 static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
 {
+    if ((set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+            && (param >= PARAM_FM_OPERATOR_FIRST)
+            && (param <= PARAM_FM_OPERATOR_LAST))
+    {
+        return 1U;
+    }
+
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if (seq_param_iface_is_param_plockable(param) == 0U)
     {
@@ -539,6 +554,15 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
     {
         return 0U;
     }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+    {
+        track_runtime_type_t tone_type = TRACK_RUNTIME_TYPE_OTHER;
+        if ((seq_param_iface_resolve_runtime_tone_type(track, &tone_type) == 0U)
+                || (tone_type != TRACK_RUNTIME_TYPE_FM))
+        {
+            return 0U;
+        }
+    }
     if (seq_param_iface_is_group_master(track) != 0U)
     {
         return 1U;
@@ -669,6 +693,17 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
         *out_param_id = tone_param;
         return 1U;
     }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+    {
+        const param_id_t operator_param = (param_id_t)(PARAM_FM_OPERATOR_FIRST + param_slot);
+        if ((param_slot >= SEQ_PARAM_FM_OPERATOR_SLOT_COUNT)
+                || (seq_param_iface_param_matches_set_domain(set_id, operator_param) == 0U))
+        {
+            return 0U;
+        }
+        *out_param_id = operator_param;
+        return 1U;
+    }
     if (set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
     {
         return 0U;
@@ -724,6 +759,15 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
         *out_param_slot = (seq_param_slot_t)tone_slot;
         return 1U;
     }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+    {
+        if ((param_id < PARAM_FM_OPERATOR_FIRST) || (param_id > PARAM_FM_OPERATOR_LAST))
+        {
+            return 0U;
+        }
+        *out_param_slot = (seq_param_slot_t)(param_id - PARAM_FM_OPERATOR_FIRST);
+        return 1U;
+    }
     if (set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
     {
         return 0U;
@@ -772,6 +816,14 @@ uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
             return 0U;
         }
     }
+    else if (set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+    {
+        if (param_slot >= SEQ_PARAM_FM_OPERATOR_SLOT_COUNT)
+        {
+            return 0U;
+        }
+        param = (param_id_t)(PARAM_FM_OPERATOR_FIRST + param_slot);
+    }
     else
     {
         const seq_param_inverse_table_t inverse = g_seq_param_inverse_tables[set_id];
@@ -780,6 +832,12 @@ uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
             return 0U;
         }
         param = inverse.ids[param_slot];
+    }
+
+    if ((set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+            && (runtime_type != (uint8_t)TRACK_RUNTIME_TYPE_FM))
+    {
+        return 0U;
     }
 
     return seq_param_iface_param_matches_set_domain(set_id, param);

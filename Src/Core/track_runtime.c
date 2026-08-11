@@ -356,7 +356,12 @@ static const param_id_t g_track_runtime_tone_slots_fm[] = {
     PARAM_FM_ENV_ATTACK,
     PARAM_FM_ENV_DECAY,
     PARAM_FM_ENV_SUSTAIN,
-    PARAM_FM_ENV_RELEASE
+    PARAM_FM_ENV_RELEASE,
+    PARAM_FM_PLAY_VEL,
+    PARAM_FM_PLAY_KEY,
+    PARAM_FM_PLAY_PITCH_ENV,
+    PARAM_FM_PLAY_PITCH_TIME,
+    PARAM_FM_OPERATOR_SELECT
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -1710,6 +1715,13 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         .status = TRACK_RUNTIME_PARAM_ALLOWED
     };
 
+    if ((param >= PARAM_FM_OPERATOR_FIRST) && (param <= PARAM_FM_OPERATOR_LAST))
+    {
+        rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
+        rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+        return rule;
+    }
+
     switch (param)
     {
         case PARAM_FILTER_TYPE:
@@ -1792,6 +1804,11 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FM_ENV_DECAY:
         case PARAM_FM_ENV_SUSTAIN:
         case PARAM_FM_ENV_RELEASE:
+        case PARAM_FM_PLAY_VEL:
+        case PARAM_FM_PLAY_KEY:
+        case PARAM_FM_PLAY_PITCH_ENV:
+        case PARAM_FM_PLAY_PITCH_TIME:
+        case PARAM_FM_OPERATOR_SELECT:
         case PARAM_PRISM_OSC2_PHASE_RESET:
         case PARAM_PRISM_OSC2_LEVEL:
         case PARAM_STACK_OSC1_LEVEL:

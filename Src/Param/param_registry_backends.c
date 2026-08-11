@@ -378,6 +378,50 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
         return 0U;
     }
 
+    if (id == PARAM_FM_OPERATOR_SELECT)
+    {
+        if ((update_base_state != 0U) && (state != NULL))
+        {
+            state->fm.operator_select = param_backend_clamp_value(value, 0.0f, 5.0f);
+        }
+        return 1U;
+    }
+
+    if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_PLAY_PITCH_TIME))
+    {
+        float velocity = state->fm.play_vel;
+        float key_scaling = state->fm.play_key;
+        float pitch_env = state->fm.pitch_env;
+        float pitch_time = state->fm.pitch_time;
+        if (id == PARAM_FM_PLAY_VEL) velocity = param_backend_clamp_value(value, 0.0f, 1.0f);
+        else if (id == PARAM_FM_PLAY_KEY) key_scaling = param_backend_clamp_value(value, 0.0f, 1.0f);
+        else if (id == PARAM_FM_PLAY_PITCH_ENV) pitch_env = param_backend_clamp_value(value, -1.0f, 1.0f);
+        else pitch_time = param_backend_clamp_value(value, 0.0f, 1.0f);
+        if (update_base_state != 0U)
+        {
+            state->fm.play_vel = velocity;
+            state->fm.play_key = key_scaling;
+            state->fm.pitch_env = pitch_env;
+            state->fm.pitch_time = pitch_time;
+        }
+        brick6_fm_runtime_set_play(ctx->instance_id, velocity, key_scaling, pitch_env, pitch_time);
+        return 1U;
+    }
+
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint16_t offset = (uint16_t)(id - PARAM_FM_OPERATOR_FIRST);
+        const uint8_t operator_id = (uint8_t)(offset / PARAM_FM_OPERATOR_PARAM_COUNT);
+        const brick6_fm_operator_param_t operator_param =
+            (brick6_fm_operator_param_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT);
+        if (update_base_state != 0U)
+        {
+            state->fm.operator_params[operator_id][operator_param] = value;
+        }
+        brick6_fm_runtime_set_operator(ctx->instance_id, operator_id, operator_param, value);
+        return 1U;
+    }
+
     switch (id)
     {
         case PARAM_FM_MODE:
@@ -487,6 +531,21 @@ uint8_t param_backend_reapply_tone_fm_runtime(uint8_t track)
                               param_backend_fm_macro_unit(state->fm.env_decay),
                               param_backend_fm_macro_unit(state->fm.env_sustain),
                               param_backend_fm_macro_unit(state->fm.env_release));
+    brick6_fm_runtime_set_play(ctx->instance_id,
+                               state->fm.play_vel,
+                               state->fm.play_key,
+                               state->fm.pitch_env,
+                               state->fm.pitch_time);
+    for (uint8_t operator_id = 0U; operator_id < PARAM_FM_OPERATOR_COUNT; ++operator_id)
+    {
+        for (uint8_t operator_param = 0U; operator_param < PARAM_FM_OPERATOR_PARAM_COUNT; ++operator_param)
+        {
+            brick6_fm_runtime_set_operator(ctx->instance_id,
+                                           operator_id,
+                                           (brick6_fm_operator_param_t)operator_param,
+                                           state->fm.operator_params[operator_id][operator_param]);
+        }
+    }
     return 1U;
 }
 

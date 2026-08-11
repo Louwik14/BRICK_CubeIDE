@@ -438,6 +438,26 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         return 0U;
     }
 
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint16_t offset = (uint16_t)(id - PARAM_FM_OPERATOR_FIRST);
+        *out_value = state->fm.operator_params[offset / PARAM_FM_OPERATOR_PARAM_COUNT]
+                                            [offset % PARAM_FM_OPERATOR_PARAM_COUNT];
+        return 1U;
+    }
+    if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_OPERATOR_SELECT))
+    {
+        switch (id)
+        {
+            case PARAM_FM_PLAY_VEL: *out_value = state->fm.play_vel; return 1U;
+            case PARAM_FM_PLAY_KEY: *out_value = state->fm.play_key; return 1U;
+            case PARAM_FM_PLAY_PITCH_ENV: *out_value = state->fm.pitch_env; return 1U;
+            case PARAM_FM_PLAY_PITCH_TIME: *out_value = state->fm.pitch_time; return 1U;
+            case PARAM_FM_OPERATOR_SELECT: *out_value = state->fm.operator_select; return 1U;
+            default: break;
+        }
+    }
+
     switch (id)
     {
         case PARAM_SAMPLER_SAMPLE:
@@ -724,6 +744,26 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
     if (state == NULL)
     {
         return 0U;
+    }
+
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint16_t offset = (uint16_t)(id - PARAM_FM_OPERATOR_FIRST);
+        state->fm.operator_params[offset / PARAM_FM_OPERATOR_PARAM_COUNT]
+                                  [offset % PARAM_FM_OPERATOR_PARAM_COUNT] = value;
+        return 1U;
+    }
+    if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_OPERATOR_SELECT))
+    {
+        switch (id)
+        {
+            case PARAM_FM_PLAY_VEL: state->fm.play_vel = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_KEY: state->fm.play_key = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_PITCH_ENV: state->fm.pitch_env = clamp_value(value, -1.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_PITCH_TIME: state->fm.pitch_time = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_OPERATOR_SELECT: state->fm.operator_select = clamp_value(value, 0.0f, 5.0f); return 1U;
+            default: break;
+        }
     }
 
     switch (id)

@@ -238,6 +238,18 @@ static const ui_template_family_t g_ui_template_tone_family_fm = {
     .default_subpage = 0U,
 };
 
+static ui_template_family_t g_ui_template_tone_family_fm_operator = {
+    .family_title = "TONE 2/2",
+    .nav_labels = { "VOICE", "ENV", "MOD", "-" },
+    .subpages = {
+        { .title = "VOICE", .param_bank = { .params = { PARAM_FM_OPERATOR_SELECT, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_DETUNE } } },
+        { .title = "ENV", .param_bank = { .params = { PARAM_FM_OP1_ENV_ATTACK, PARAM_FM_OP1_ENV_DECAY, PARAM_FM_OP1_ENV_SUSTAIN, PARAM_FM_OP1_ENV_RELEASE } } },
+        { .title = "MOD", .param_bank = { .params = { PARAM_FM_OP1_ON, PARAM_FM_OP1_MODE, PARAM_FM_OP1_VEL, PARAM_FM_OP1_KEY } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 typedef param_prism_label_value_kind_t ui_prism_value_kind_t;
 typedef param_prism_param_label_t ui_prism_param_label_t;
 
@@ -302,6 +314,33 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
             && (g_ui_template_tone_subset != 0U))
     {
         return &g_ui_template_tone_family_stack_global;
+    }
+    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
+            && (g_ui_template_tone_subset != 0U))
+    {
+        const uint8_t active_track = ui_get_active_lane();
+        float selected_value = 0.0f;
+        (void)param_registry_get_track_value(PARAM_FM_OPERATOR_SELECT, active_track, &selected_value);
+        uint8_t selected = (uint8_t)(selected_value + 0.5f);
+        if (selected >= PARAM_FM_OPERATOR_COUNT)
+        {
+            selected = (uint8_t)(PARAM_FM_OPERATOR_COUNT - 1U);
+        }
+        const param_id_t first = (param_id_t)(PARAM_FM_OPERATOR_FIRST
+                                              + (selected * PARAM_FM_OPERATOR_PARAM_COUNT));
+        g_ui_template_tone_family_fm_operator.subpages[0].param_bank.params[1] = first;
+        g_ui_template_tone_family_fm_operator.subpages[0].param_bank.params[2] = (param_id_t)(first + 1U);
+        g_ui_template_tone_family_fm_operator.subpages[0].param_bank.params[3] = (param_id_t)(first + 2U);
+        g_ui_template_tone_family_fm_operator.subpages[1].param_bank.params[0] = (param_id_t)(first + 3U);
+        g_ui_template_tone_family_fm_operator.subpages[1].param_bank.params[1] = (param_id_t)(first + 4U);
+        g_ui_template_tone_family_fm_operator.subpages[1].param_bank.params[2] = (param_id_t)(first + 5U);
+        g_ui_template_tone_family_fm_operator.subpages[1].param_bank.params[3] = (param_id_t)(first + 6U);
+        g_ui_template_tone_family_fm_operator.subpages[2].param_bank.params[0] = (param_id_t)(first + 7U);
+        g_ui_template_tone_family_fm_operator.subpages[2].param_bank.params[1] = (param_id_t)(first + 8U);
+        g_ui_template_tone_family_fm_operator.subpages[2].param_bank.params[2] = (param_id_t)(first + 9U);
+        g_ui_template_tone_family_fm_operator.subpages[2].param_bank.params[3] = (param_id_t)(first + 10U);
+        return &g_ui_template_tone_family_fm_operator;
     }
     const ui_track_config_t config = ui_get_track_config(track);
     return ui_template_family_resolve(UI_TEMPLATE_FAMILY_TONE, track, config.family, config.type);
@@ -1662,6 +1701,14 @@ void ui_page_template_tone_toggle_subset(void)
     if (g_ui_template_tone_global_master != 0U)
     {
         g_ui_template_tone_subset = (uint8_t)((g_ui_template_tone_subset + 1U) % 3U);
+        g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
+        ui_navigation_restore_current_template_subpage();
+        return;
+    }
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_FM))
+    {
+        g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
         g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
         ui_navigation_restore_current_template_subpage();
         return;

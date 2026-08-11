@@ -94,6 +94,12 @@ typedef struct
         float env_decay;
         float env_sustain;
         float env_release;
+        float play_vel;
+        float play_key;
+        float pitch_env;
+        float pitch_time;
+        float operator_select;
+        float operator_params[6][11];
     } fm;
     float midi_program;
     float midi_cc[12];
@@ -115,7 +121,7 @@ typedef struct
     } md;
 } track_tone_sound_state_t;
 
-_Static_assert(sizeof(track_tone_sound_state_t) == 452U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 736U,
                "track tone state layout changed");
 
 void track_tone_sound_state_init(void);
