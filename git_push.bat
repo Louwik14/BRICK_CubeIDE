@@ -7,7 +7,7 @@ echo.
 
 set /p msg="Message du commit : "
 
-git add .
+git add -A
 git commit -m "%msg%"
 git push
 

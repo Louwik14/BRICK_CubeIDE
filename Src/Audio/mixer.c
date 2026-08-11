@@ -36,7 +36,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/multi_voice_dsp.h"
 
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core_runtime_bridge.h"
 
@@ -401,7 +401,6 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 #define MIXER_REVERB_SEND_INDEX 0U
 #define MIXER_DELAY_SEND_INDEX 1U
-#define MIXER_LOOPER_RECORD_CLIENT_ID 0U
 #define MIXER_LOOPER_RECORD_PCM24_MAX 8388607.0f
 #define MIXER_LOOPER_RECORD_PCM24_MIN (-8388608.0f)
 #define MIXER_LOOPER_XFADE_EPS 0.0001f
@@ -3776,8 +3775,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float looper_bus_main_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float sample_capture_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float sample_capture_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * MULTI_RECORD_WRITER_CHANNELS];
-    AUDIO_HOT ALIGN32 static int32_t sample_capture_i32[AUDIO_BLOCK_SIZE * MULTI_RECORD_WRITER_CHANNELS];
+    AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
+    AUDIO_HOT ALIGN32 static int32_t sample_capture_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
     if(frames > AUDIO_BLOCK_SIZE)
@@ -4612,16 +4611,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         for(uint32_t i = 0U; i < frames; ++i)
         {
-            const uint32_t out = i * MULTI_RECORD_WRITER_CHANNELS;
+            const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
             looper_record_i32[out] = mixer_looper_float_to_pcm24(looper_record_l[i]);
             looper_record_i32[out + 1U] = mixer_looper_float_to_pcm24(looper_record_r[i]);
         }
-        brick6_looper_runtime_preroll_capture_from_irq(looper_record_track,
-                                                       looper_record_i32,
-                                                       frames);
-        (void)multi_record_writer_push_audio_block_from_irq(MIXER_LOOPER_RECORD_CLIENT_ID,
-                                                            looper_record_i32,
-                                                            frames);
+        (void)brick6_looper_runtime_capture_from_irq(looper_record_track,
+                                                     looper_record_i32,
+                                                     frames);
     }
 
     mixer_external_inputs_clear();
@@ -4817,7 +4813,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         for(uint32_t i = 0U; i < frames; ++i)
         {
-            const uint32_t out = i * MULTI_RECORD_WRITER_CHANNELS;
+            const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
             sample_capture_i32[out] = mixer_looper_float_to_pcm24(sample_capture_l[i]);
             sample_capture_i32[out + 1U] = mixer_looper_float_to_pcm24(sample_capture_r[i]);
         }

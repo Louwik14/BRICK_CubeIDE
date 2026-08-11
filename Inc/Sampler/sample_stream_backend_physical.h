@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Sampler/sample_page_cache.h"
+#include "SD/sd_scheduler.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +21,12 @@ typedef struct
     uint8_t physical_reads;
     uint8_t active;
     uint8_t failed;
+    uint8_t completed;
+    uint32_t deadline_margin_us;
+    uint32_t deadline_started_ms;
+    uint32_t active_lba;
+    uint32_t active_sector_count;
+    uint8_t *active_buffer;
 } sample_stream_backend_physical_async_t;
 
 uint8_t sample_stream_backend_physical_begin(
@@ -28,7 +35,8 @@ uint8_t sample_stream_backend_physical_begin(
     const sample_page_load_target_t *target,
     sample_stream_physical_cursor_t *cursor,
     uint8_t *scratch,
-    uint32_t scratch_capacity);
+    uint32_t scratch_capacity,
+    uint32_t deadline_margin_us);
 uint8_t sample_stream_backend_physical_poll(
     sample_stream_backend_physical_async_t *async,
     sample_page_load_result_t *out_result,
@@ -37,6 +45,8 @@ uint8_t sample_stream_backend_physical_poll(
     uint8_t *out_physical_reads);
 void sample_stream_backend_physical_cancel(
     sample_stream_backend_physical_async_t *async);
+sd_scheduler_provider_t sample_stream_backend_physical_read_provider(void);
+uint8_t sample_stream_backend_physical_busy(void);
 
 #ifdef __cplusplus
 }

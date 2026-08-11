@@ -1,0 +1,6 @@
+#ifndef BRICK6_SD_CONFIG_H
+#define BRICK6_SD_CONFIG_H
+
+#define BRICK6_SD_TIMEOUT_MS 20U
+
+#endif

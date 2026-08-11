@@ -938,7 +938,6 @@ next_event:
     }
 
     ui_core_runtime_bridge_service_looper_record_control(0);
-    ui_core_runtime_bridge_service_looper_export_feedback(ui_core_set_feedback);
     sample_capture_model_service();
     ui_hall_mode_flow_service_pending(HAL_GetTick());
 

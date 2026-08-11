@@ -82,6 +82,20 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
     return 1U;
 }
 
+uint8_t sample_stream_transport_can_submit(void)
+{
+    __DMB();
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
+    {
+        if (g_sample_stream_transport_mailbox[i].state
+                == SAMPLE_STREAM_TRANSPORT_EMPTY)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 void sample_stream_transport_worker_poll(void)
 {
     __DMB();
@@ -111,7 +125,7 @@ void sample_stream_transport_worker_poll(void)
         ready->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
         ready = 0;
     }
-    if (ready != 0)
+    if ((ready != 0) && (active == 0))
     {
         memset(&ready->result, 0, sizeof(ready->result));
         if (sample_stream_io_begin(&ready->command) != 0U)

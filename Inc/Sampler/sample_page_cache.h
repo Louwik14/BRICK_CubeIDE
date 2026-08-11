@@ -117,7 +117,7 @@ typedef struct
     uint32_t frames_per_page;
     uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
-    uint8_t raw_pcm24;
+    uint8_t physical_only;
 } sample_page_stream_info_t;
 
 typedef struct
@@ -368,12 +368,20 @@ uint8_t sample_page_cache_register_stream_sample_key_no_map(
     const wav_info_t *info,
     uint32_t total_frames,
     uint32_t data_offset);
-uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
-                                                           const char *path,
-                                                           uint32_t total_frames);
-uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_t key,
-                                                               const char *path,
-                                                               uint32_t total_frames);
+uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
+    sample_audio_key_t key,
+    const char *path,
+    uint32_t total_frames,
+    uint32_t readable_frames,
+    uint32_t data_offset,
+    uint32_t file_size,
+    const sample_stream_physical_extent_t *extents,
+    uint16_t extent_count,
+    uint32_t media_epoch);
+uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
+                                                      uint32_t readable_frames);
+uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
+                                                  const char *path);
 
 /*
  * Legacy/transient range service kept for non-Sampler-pool users.

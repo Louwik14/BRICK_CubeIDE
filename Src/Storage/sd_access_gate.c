@@ -153,7 +153,8 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
-        && (client != SD_ACCESS_CLIENT_MULTI_BULK))
+        && (client != SD_ACCESS_CLIENT_MULTI_BULK)
+        && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
         g_sd_access_acquire_fail_count[(uint8_t)client]++;
         __enable_irq();
@@ -398,6 +399,8 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "KIT";
         case SD_ACCESS_CLIENT_MULTI_BULK:
             return "MBULK";
+        case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
+            return "SREC";
 #if BRICK_TEST_BUILD
         case SD_ACCESS_CLIENT_AUDIO_TEST:
             return "ATEST";

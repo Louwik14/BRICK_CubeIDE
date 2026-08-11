@@ -3,6 +3,66 @@ project(brick6_note_fx_step1_tests C)
 
 enable_testing()
 
+if(NOT CMAKE_CROSSCOMPILING)
+    add_executable(audio_recorder_wav_test
+        audio_recorder_wav_test.c
+        ../Src/Storage/audio_recorder_wav.c
+    )
+    target_include_directories(audio_recorder_wav_test PRIVATE ../Inc)
+    add_test(NAME audio_recorder_wav COMMAND audio_recorder_wav_test)
+
+    add_executable(generic_recorder_test
+        generic_recorder_test.c
+        ../Src/Storage/generic_recorder.c
+        ../Src/SD/sd_scheduler.c
+    )
+    target_include_directories(generic_recorder_test PRIVATE
+        stubs
+        ../Inc
+        ../Inc/SD
+        ../Inc/Storage
+        ../App/Middlewares/Third_Party/FatFs/src
+    )
+    add_test(NAME generic_recorder COMMAND generic_recorder_test)
+
+    add_executable(sd_scheduler_test
+        sd_scheduler_test.c
+        ../Src/SD/sd_scheduler.c
+    )
+    target_include_directories(sd_scheduler_test PRIVATE ../Inc)
+    add_test(NAME sd_scheduler COMMAND sd_scheduler_test)
+
+    add_executable(sd_block_device_async_write_test
+        sd_block_device_async_write_test.c
+        ../Src/SD/sd_block_device.c
+    )
+    target_include_directories(sd_block_device_async_write_test PRIVATE
+        sd_block_device_stubs
+        ../Inc
+    )
+    add_test(NAME sd_block_device_async_write COMMAND sd_block_device_async_write_test)
+
+    add_executable(recorder_file_reservation_test
+        recorder_file_reservation_test.c
+        ../Src/Storage/recorder_file_reservation.c
+        ../Src/Storage/audio_recorder_wav.c
+        ../Src/Storage/wav_parser.c
+        ../App/Middlewares/Third_Party/FatFs/src/ff.c
+        ../App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c
+    )
+    target_compile_definitions(recorder_file_reservation_test PRIVATE
+        BRICK6_VARIANT_PREMIUM
+    )
+    target_include_directories(recorder_file_reservation_test PRIVATE
+        stubs
+        ../Inc
+        ../Inc/SD
+        ../Inc/Storage
+        ../App/Middlewares/Third_Party/FatFs/src
+    )
+    add_test(NAME recorder_file_reservation COMMAND recorder_file_reservation_test)
+endif()
+
 add_executable(stream_calibration_csv_test
     stream_calibration_csv_test.c
     ../Src/Core/stream_calibration_csv.c

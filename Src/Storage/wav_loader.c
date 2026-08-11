@@ -23,7 +23,7 @@
 
 #include "memory_layout.h"
 #include "Storage/looper_storage.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "wav_parser.h"
 
@@ -714,8 +714,7 @@ void wav_loader_catalog_rebuild(void)
 {
 #if WAV_LOADER_HAS_FATFS
     g_wav_catalog_last_sd_busy = 0U;
-    if ((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U)
+    if ((audio_recorder_is_active() != 0U)
             || (sd_access_gate_streaming_critical_active() != 0U))
     {
         g_wav_catalog_last_sd_busy = 1U;

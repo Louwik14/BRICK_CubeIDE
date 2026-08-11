@@ -31,6 +31,7 @@ typedef struct
     sample_page_load_token_t token;
     sample_stream_io_target_t target;
     sample_page_stream_info_t stream_info;
+    uint32_t deadline_margin_us;
 } sample_stream_io_command_t;
 
 typedef struct

@@ -1351,11 +1351,8 @@ void sample_cache_service(uint32_t byte_budget)
     sample_stream_manager_service(byte_budget);
     if (sample_stream_manager_has_pending_sd_work() != 0U)
     {
-        if (sample_stream_manager_io_in_flight() == 0U)
-        {
-            sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
-            g_sample_cache_stream_gate_held = 0U;
-        }
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        g_sample_cache_stream_gate_held = 0U;
         return;
     }
     if (sample_page_cache_has_reserved_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) != 0U)
@@ -1545,7 +1542,6 @@ uint8_t sample_cache_resolve_classic_source(uint16_t sample_id,
     out_source->loop_end = desc->total_frames;
     out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
     out_source->reverse = 0U;
-    out_source->raw_pcm24 = 0U;
     out_source->rate = 1.0f;
     out_source->gain = 1.0f;
     out_source->owner_track_id = UINT8_MAX;

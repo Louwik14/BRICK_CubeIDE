@@ -685,6 +685,7 @@ void BSP_SD_WriteCpltCallback(void)
 {
 
   WriteStatus = 1;
+  brick_sd_async_write_complete_isr();
 }
 
 /**
@@ -732,7 +733,7 @@ void BSP_SD_ReadCpltCallback(void)
  */
 void BSP_SD_AbortCallback(void)
 {
-  brick_sd_async_error_isr();
+  brick_sd_async_abort_complete_isr();
 }
 
 /**

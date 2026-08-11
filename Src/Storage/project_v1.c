@@ -5,7 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/looper_storage.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
 #include "Storage/sd_preview.h"
@@ -782,8 +782,7 @@ static void project_v1_set_sd_operation_error(project_v1_error_t err)
 
 static uint8_t project_v1_record_active_guard(void)
 {
-    if ((multi_record_writer_any_active() == 0U)
-            && (looper_storage_raw_export_is_active() == 0U))
+    if (audio_recorder_is_active() == 0U)
     {
         return 0U;
     }

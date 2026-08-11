@@ -2,9 +2,8 @@
 
 #include "Core/rec_live_debug.h"
 #include "Sampler/sample_cache.h"
-#include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
@@ -306,14 +305,14 @@ static void waveform_cache_debug_mark(rec_live_debug_code_t code,
                                       const char *path,
                                       uint32_t result)
 {
-    multi_record_writer_status_t status;
+    audio_recorder_status_t status;
     uint32_t writer_state = 0U;
     uint32_t frames = 0U;
     uint32_t last_error = result;
-    if(multi_record_writer_get_status(SAMPLE_CAPTURE_RECORD_CLIENT_ID, &status) != 0U)
+    if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC, &status) != 0U)
     {
         writer_state = (uint32_t)status.state;
-        frames = (status.frames_written != 0U) ? status.frames_written : status.frames_received;
+        frames = (status.frames_committed != 0U) ? status.frames_committed : status.frames_received;
         if(result == 0U)
         {
             last_error = (uint32_t)status.error;
@@ -1178,8 +1177,7 @@ static void waveform_cache_service_build(uint32_t byte_budget)
         return;
     }
     if(sample_cache_has_pending_sd_work() != 0U
-            || multi_record_writer_any_active() != 0U
-            || looper_storage_raw_export_is_active() != 0U
+            || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
             || pattern_load_is_pending() != 0U)
     {
@@ -1348,8 +1346,7 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
         return;
     }
     if(sample_cache_has_pending_sd_work() != 0U
-            || multi_record_writer_any_active() != 0U
-            || looper_storage_raw_export_is_active() != 0U
+            || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
             || pattern_load_is_pending() != 0U)
     {

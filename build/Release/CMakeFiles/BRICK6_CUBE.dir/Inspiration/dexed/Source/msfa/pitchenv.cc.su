@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:22:6:static void PitchEnv::init(double)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:45:6:void PitchEnv::set(const int*, const int*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:55:9:int32_t PitchEnv::getsample()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:74:6:void PitchEnv::keydown(bool)	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:81:6:void PitchEnv::advance(int)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/msfa/pitchenv.cc:91:6:void PitchEnv::getPosition(char*)	0	static

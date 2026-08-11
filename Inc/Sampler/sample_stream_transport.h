@@ -23,6 +23,7 @@ typedef struct
 void sample_stream_transport_init(void);
 uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command,
                                        uint32_t *out_sequence);
+uint8_t sample_stream_transport_can_submit(void);
 void sample_stream_transport_worker_poll(void);
 uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
                                             sample_stream_io_result_t *out_result);

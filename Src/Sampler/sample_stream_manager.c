@@ -642,6 +642,9 @@ void sample_stream_manager_service(uint32_t byte_budget)
                                                    SAMPLE_PAGE_FINISH_ERROR);
             continue;
         }
+        io_command.deadline_margin_us = (remaining_frames >= 206159U)
+            ? UINT32_MAX
+            : (uint32_t)(((uint64_t)remaining_frames * 1000000ULL) / 48000ULL);
         brick6_stream_underrun_trace_io_begin(&candidate, &io_command);
         sample_stream_manager_pending_io_t *pending =
             &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];

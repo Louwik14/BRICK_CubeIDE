@@ -3,6 +3,12 @@
 
 #include <stdint.h>
 
+typedef struct
+{
+    uint32_t LogBlockNbr;
+    uint32_t LogBlockSize;
+} HAL_SD_CardInfoTypeDef;
+
 uint32_t HAL_GetTick(void);
 
 static inline uint32_t __get_PRIMASK(void) { return 0U; }

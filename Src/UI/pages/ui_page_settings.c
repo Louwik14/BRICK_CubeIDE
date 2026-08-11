@@ -12,8 +12,7 @@
 #include "Storage/sd_preview.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_convert.h"
-#include "Storage/looper_storage.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/project_v1.h"
 #include "Core/brick_build_config.h"
 #if BRICK_TEST_BUILD
@@ -1809,8 +1808,7 @@ static void ui_page_settings_sample_confirm_accept(void)
 
         if ((seq_runtime_is_running() != 0U)
             || (seq_runtime_is_start_pending() != 0U)
-            || (multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
+            || (audio_recorder_is_active() != 0U))
         {
             ui_page_settings_status("STOP AUDIO TO CONVERT");
             return;
@@ -1928,8 +1926,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         g_ui_settings.confirm_path[0] = '\0';
 
-        if ((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U)
+        if ((audio_recorder_is_active() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U)
             || (multi_sample_load_has_pending() != 0U))
         {

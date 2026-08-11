@@ -163,6 +163,34 @@ static uint8_t sample_stream_physical_map_append(sample_stream_physical_map_t *m
     return 1U;
 }
 
+uint8_t sample_stream_physical_map_import(
+    sample_stream_physical_map_t *map,
+    const sample_stream_physical_extent_t *extents,
+    uint16_t extent_count,
+    uint32_t media_epoch)
+{
+    if ((map == 0) || (extents == 0) || (extent_count == 0U)
+            || (extent_count > SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS)
+            || (media_epoch == 0U))
+    {
+        return 0U;
+    }
+    sample_stream_physical_map_release(map);
+    map->generation = sample_stream_physical_next_generation();
+    map->media_epoch = media_epoch;
+    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    for (uint16_t i = 0U; i < extent_count; ++i)
+    {
+        if (sample_stream_physical_map_append(map, &extents[i]) == 0U)
+        {
+            sample_stream_physical_map_release(map);
+            return 0U;
+        }
+    }
+    map->valid = 1U;
+    return 1U;
+}
+
 uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t *map)
 {
     return ((map != 0) && (map->valid != 0U) && (map->extent_count != 0U)

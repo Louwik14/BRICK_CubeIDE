@@ -11,9 +11,8 @@
 #include "Sampler/sample_cache.h"
 #include "SD/sd_diskio.h"
 #include "Seq/seq_runtime.h"
-#include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_parser.h"
 #include "stm32h7xx_hal.h"
@@ -497,8 +496,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U)
+    if ((audio_recorder_is_active() != 0U)
         || (sample_cache_has_pending_sd_work() != 0U)
         || (sample_stream_manager_has_pending_sd_work() != 0U))
     {

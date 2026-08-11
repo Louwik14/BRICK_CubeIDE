@@ -73,6 +73,11 @@ typedef struct
 
 void sample_stream_physical_map_pool_reset(void);
 void sample_stream_physical_map_release(sample_stream_physical_map_t *map);
+uint8_t sample_stream_physical_map_import(
+    sample_stream_physical_map_t *map,
+    const sample_stream_physical_extent_t *extents,
+    uint16_t extent_count,
+    uint32_t media_epoch);
 uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t *map);
 sample_stream_backend_kind_t sample_stream_safe_metadata_backend(
     const sample_stream_safe_metadata_t *metadata);

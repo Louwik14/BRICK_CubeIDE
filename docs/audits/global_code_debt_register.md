@@ -182,14 +182,7 @@ Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, top
 
 ### Z6-002 — export RAW monopolise volontairement un tour de superloop
 
-- **Priorité / statut / zones :** P1, `CONFIRMED`, Z6 avec Z0/Z1/Z5.
-- **Fichiers et symboles :** `Src/Core/brick6_app_init.c` (`brick6_app_process`) ; `Src/Storage/looper_storage.c` (`looper_storage_raw_export_service`, `g_storage_shared_io`) ; `Src/Storage/sd_access_gate.c`.
-- **Preuve :** quand l'export est actif, le superloop appelle le service avec 516096 octets et saute les services Sampler, Looper normal, multi-sample, Pattern, waveform cache et preview. Le service conserve le gate SD et boucle tant que le budget autorise des chunks ; le budget courant permet plusieurs grosses lectures/écritures FatFs dans un seul appel.
-- **Cause racine :** optimisation de débit d'export prioritaire sur la latence coopérative.
-- **Conséquence / déclencheur :** export après prise pendant audio ou interactions : latence UI, retard de refill et contention SD. Le gate arbitre l'exclusion, pas le temps de possession.
-- **Impact :** UX live et risque audio dépendant de la marge cache ; le worst-case n'est pas documenté par mesure.
-- **Correction recommandée / patch minimal probable :** plafonner par temps/chunks mesurés et maintenir les services vitaux entre chunks ; conserver l'atomicité des phases fichier.
-- **Validations / régression :** export maximal sous playback/stream, débit, fichier final et recovery erreur/alimentation ; risque moyen à élevé. Dépend de `Z6-001`.
+- **Statut :** `RESOLVED`. Le reservoir et l'export RAW ont ete supprimes; Looper enregistre directement via `audio_recorder`, avec arbitrage SD commun.
 
 ### Z6-003 — métadonnée `dirty_pending_persist` sans lecteur et au sens inversé
 

@@ -4,7 +4,6 @@
 
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/cpu_load.h"
-#include "Core/looper_raw_debug.h"
 #include "UI/ui_core.h"
 #include "UI/ui_hall_mode_state.h"
 #include "UI/ui_page_manager.h"
@@ -21,15 +20,12 @@ typedef struct
     uint32_t cpu_over_100;
     uint32_t sampler_underrun;
     uint32_t sampler_invalid;
-    uint32_t looper_cache_miss;
-    uint32_t looper_underrun;
     uint8_t active;
     uint32_t canary_tail;
 } monkey_test_monitor_runtime_t;
 
 static monkey_test_monitor_runtime_t g_monitor;
 static brick6_sampler_runtime_health_snapshot_t g_sampler_snapshot;
-static looper_raw_debug_health_snapshot_t g_looper_snapshot;
 
 static uint8_t counter_advanced(uint32_t current, uint32_t previous)
 {
@@ -65,7 +61,6 @@ static void capture_baselines(void)
     cpu_load_metrics_t cpu;
     cpu_load_get_metrics(&cpu);
     brick6_sampler_runtime_get_health_snapshot(&g_sampler_snapshot);
-    looper_raw_debug_get_health_snapshot(&g_looper_snapshot);
 
     g_monitor.cpu_over_90 = cpu.over_90_count;
     g_monitor.cpu_over_100 = cpu.over_100_count;
@@ -74,10 +69,6 @@ static void capture_baselines(void)
         + g_sampler_snapshot.multi_stop_underrun;
     g_monitor.sampler_invalid =
         g_sampler_snapshot.multi_invalid_instrument_id;
-    g_monitor.looper_cache_miss = g_looper_snapshot.cache_miss_count;
-    g_monitor.looper_underrun =
-        g_looper_snapshot.preroll_underrun_count
-        + g_looper_snapshot.preroll_reused_after_wrap_count;
 }
 
 void monkey_test_monitor_init(void)
@@ -124,7 +115,6 @@ uint8_t monkey_test_monitor_poll(uint32_t engine_tick,
     cpu_load_metrics_t cpu;
     cpu_load_get_metrics(&cpu);
     brick6_sampler_runtime_get_health_snapshot(&g_sampler_snapshot);
-    looper_raw_debug_get_health_snapshot(&g_looper_snapshot);
 
     if (counter_advanced(cpu.over_100_count, g_monitor.cpu_over_100) != 0U)
     {
@@ -142,9 +132,6 @@ uint8_t monkey_test_monitor_poll(uint32_t engine_tick,
         + g_sampler_snapshot.multi_stop_underrun;
     const uint32_t sampler_invalid =
         g_sampler_snapshot.multi_invalid_instrument_id;
-    const uint32_t looper_underrun =
-        g_looper_snapshot.preroll_underrun_count
-        + g_looper_snapshot.preroll_reused_after_wrap_count;
 
     if (counter_advanced(sampler_underrun, g_monitor.sampler_underrun) != 0U)
     {
@@ -154,17 +141,6 @@ uint8_t monkey_test_monitor_poll(uint32_t engine_tick,
     if (counter_advanced(sampler_invalid, g_monitor.sampler_invalid) != 0U)
     {
         result_note(out_result, MONKEY_TEST_ISSUE_SAMPLER_INVALID,
-                    MONKEY_TEST_SEVERITY_RECOVERABLE);
-    }
-    if (counter_advanced(g_looper_snapshot.cache_miss_count,
-                         g_monitor.looper_cache_miss) != 0U)
-    {
-        result_note(out_result, MONKEY_TEST_ISSUE_LOOPER_CACHE_MISS,
-                    MONKEY_TEST_SEVERITY_WARNING);
-    }
-    if (counter_advanced(looper_underrun, g_monitor.looper_underrun) != 0U)
-    {
-        result_note(out_result, MONKEY_TEST_ISSUE_LOOPER_UNDERRUN,
                     MONKEY_TEST_SEVERITY_RECOVERABLE);
     }
     if ((ui_get_active_track() >= UI_TRACK_COUNT)
@@ -179,8 +155,6 @@ uint8_t monkey_test_monitor_poll(uint32_t engine_tick,
     g_monitor.cpu_over_100 = cpu.over_100_count;
     g_monitor.sampler_underrun = sampler_underrun;
     g_monitor.sampler_invalid = sampler_invalid;
-    g_monitor.looper_cache_miss = g_looper_snapshot.cache_miss_count;
-    g_monitor.looper_underrun = looper_underrun;
     return 1U;
 }
 
@@ -198,10 +172,6 @@ const char *monkey_test_issue_label(monkey_test_issue_t issue)
             return "SAMP UND";
         case MONKEY_TEST_ISSUE_SAMPLER_INVALID:
             return "SAMP IDX";
-        case MONKEY_TEST_ISSUE_LOOPER_CACHE_MISS:
-            return "LOOP MISS";
-        case MONKEY_TEST_ISSUE_LOOPER_UNDERRUN:
-            return "LOOP UND";
         case MONKEY_TEST_ISSUE_UI_INVARIANT:
             return "UI INV";
         case MONKEY_TEST_ISSUE_MONITOR_CANARY:

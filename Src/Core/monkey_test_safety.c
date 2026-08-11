@@ -8,9 +8,8 @@
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/project_v1.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/undo_v2.h"
@@ -54,8 +53,7 @@ uint8_t monkey_test_safety_prepare(void)
         return 0U;
     }
     if ((sd_access_gate_current_owner() != SD_ACCESS_CLIENT_NONE)
-        || (multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U)
+        || (audio_recorder_is_active() != 0U)
         || (wav_convert_is_active() != 0U))
     {
         return 0U;

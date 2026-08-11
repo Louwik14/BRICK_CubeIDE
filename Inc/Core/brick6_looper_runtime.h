@@ -14,8 +14,7 @@ extern "C" {
 typedef enum
 {
     BRICK6_LOOPER_RUNTIME_SOURCE_NONE = 0,
-    BRICK6_LOOPER_RUNTIME_SOURCE_RAW = 1,
-    BRICK6_LOOPER_RUNTIME_SOURCE_WAV = 2
+    BRICK6_LOOPER_RUNTIME_SOURCE_WAV = 1
 } brick6_looper_runtime_source_t;
 
 typedef enum
@@ -46,7 +45,6 @@ typedef struct
     uint64_t record_stop_sample;
     uint16_t cache_id;
     uint8_t track_id;
-    uint8_t raw_slot;
     uint8_t play_auto;
     uint8_t scheduled_start_valid;
     uint8_t first_output_valid;
@@ -64,32 +62,25 @@ typedef struct
 void brick6_looper_runtime_init(void);
 void brick6_looper_runtime_service(uint32_t byte_budget);
 uint8_t brick6_looper_runtime_has_pending_sd_work(void);
-void brick6_looper_runtime_notify_raw_take_ready(uint8_t track_id,
-                                                 uint8_t raw_slot,
-                                                 const char *raw_path,
-                                                 uint32_t recorded_frames,
-                                                 uint8_t play_auto,
-                                                 uint64_t scheduled_start_sample);
-void brick6_looper_runtime_notify_preroll_take_ready(uint8_t track_id,
-                                                     uint8_t raw_slot,
-                                                     uint32_t expected_frames,
-                                                     uint8_t play_auto,
-                                                     uint64_t scheduled_start_sample);
+void brick6_looper_runtime_notify_live_take_finalized(uint8_t track_id,
+                                                      const char *wav_path,
+                                                      uint32_t recorded_frames);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);
 void brick6_looper_runtime_prepare_replace(uint8_t track_id);
-void brick6_looper_runtime_arm_record_start(uint8_t track_id,
-                                            uint8_t raw_slot,
-                                            uint8_t len_mode,
-                                            uint32_t expected_frames,
-                                            uint8_t play_auto,
-                                            uint64_t request_sample);
+void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
+                                                 uint8_t len_mode,
+                                                 uint32_t expected_frames,
+                                                 uint8_t play_auto,
+                                                 uint64_t request_sample);
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
 uint8_t brick6_looper_runtime_record_is_active_or_armed(void);
 uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
-void brick6_looper_runtime_preroll_begin(uint8_t track_id, uint8_t raw_slot);
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
                                                     const int32_t *lr_interleaved,
                                                     uint32_t frames);
+uint8_t brick6_looper_runtime_capture_from_irq(uint8_t track_id,
+                                               const int32_t *lr_interleaved,
+                                               uint32_t frames);
 void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto);
 void brick6_looper_runtime_set_stretch(uint8_t track_id,
                                        uint8_t mode,

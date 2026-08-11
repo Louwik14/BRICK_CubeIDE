@@ -17,7 +17,12 @@ void brick_sd_media_fault(void);
 uint8_t brick_sd_read_blocks_dma(uint32_t *data,
                                  uint32_t block_idx,
                                  uint32_t blocks_nbr);
+uint8_t brick_sd_write_blocks_dma(const uint32_t *data,
+                                  uint32_t block_idx,
+                                  uint32_t blocks_nbr);
 void brick_sd_async_read_complete_isr(void);
+void brick_sd_async_write_complete_isr(void);
+void brick_sd_async_abort_complete_isr(void);
 void brick_sd_async_error_isr(void);
 
 void sd_diskio_read_metrics_reset(void);

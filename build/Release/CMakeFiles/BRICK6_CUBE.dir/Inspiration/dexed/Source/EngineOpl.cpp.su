@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.h:31:7:EngineOpl::~EngineOpl()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.h:31:7:virtual EngineOpl::~EngineOpl()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.cpp:119:6:void EngineOpl::compute(int32_t*, const int32_t*, int32_t, int32_t, int32_t, int32_t, bool)	36	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.cpp:133:6:void EngineOpl::compute_pure(int32_t*, int32_t, int32_t, int32_t, int32_t, bool)	36	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.cpp:147:6:void EngineOpl::compute_fb(int32_t*, int32_t, int32_t, int32_t, int32_t, int32_t*, int, bool)	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inspiration/dexed/Source/EngineOpl.cpp:171:6:virtual void EngineOpl::render(int32_t*, FmOpParams*, int, int32_t*, int32_t)	112	static

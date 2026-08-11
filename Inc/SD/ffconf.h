@@ -66,6 +66,10 @@
 #define	_USE_EXPAND		1
 /* This option switches f_expand function. (0:Disable or 1:Enable) */
 
+/* BRICK recorder-only reservation primitives. They preserve the normal FatFs
+ * API and are used exclusively by Storage/recorder_file_reservation. */
+#define _BRICK_REC_RESERVE  1
+
 #define _USE_CHMOD		0
 /* This option switches attribute manipulation functions, f_chmod() and f_utime().
 /  (0:Disable or 1:Enable) Also _FS_READONLY needs to be 0 to enable this option. */

@@ -5,9 +5,8 @@
 
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_cache.h"
-#include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
@@ -1516,8 +1515,7 @@ multi_sample_import_result_t multi_sample_import_folder_with_progress(
         return g_import_last_result;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U)
+    if ((audio_recorder_is_active() != 0U)
         || (sample_cache_has_pending_sd_work() != 0U))
     {
         g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;

@@ -73,7 +73,6 @@ typedef struct
     uint32_t loop_end;
     uint8_t loop_mode;
     uint8_t reverse;
-    uint8_t raw_pcm24;
     uint8_t reserved;
     float rate;
     float gain;

@@ -29,9 +29,28 @@ uint8_t brick_sd_read_blocks_dma(uint32_t *data,
     return BSP_SD_ReadBlocks_DMA(data, block_idx, blocks_nbr);
 }
 
+uint8_t brick_sd_write_blocks_dma(const uint32_t *data,
+                                  uint32_t block_idx,
+                                  uint32_t blocks_nbr)
+{
+    return BSP_SD_WriteBlocks_DMA((uint32_t *)(uintptr_t)data,
+                                  block_idx,
+                                  blocks_nbr);
+}
+
 void brick_sd_async_read_complete_isr(void)
 {
     sd_block_device_async_read_complete_isr();
+}
+
+void brick_sd_async_write_complete_isr(void)
+{
+    sd_block_device_async_write_complete_isr();
+}
+
+void brick_sd_async_abort_complete_isr(void)
+{
+    sd_block_device_async_abort_complete_isr();
 }
 
 void brick_sd_async_error_isr(void)

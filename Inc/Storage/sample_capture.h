@@ -1,7 +1,7 @@
 #ifndef SAMPLE_CAPTURE_H
 #define SAMPLE_CAPTURE_H
 
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
 #include "Core/track_topology.h"
 
@@ -11,9 +11,8 @@
 extern "C" {
 #endif
 
-#define SAMPLE_CAPTURE_RECORD_CLIENT_ID 1U
 #define SAMPLE_CAPTURE_TRACK_COUNT TRACK_TOPOLOGY_TRACK_COUNT
-#define SAMPLE_CAPTURE_PATH_MAX MULTI_RECORD_WRITER_PATH_MAX
+#define SAMPLE_CAPTURE_PATH_MAX AUDIO_RECORDER_PATH_MAX
 #define SAMPLE_CAPTURE_WAVEFORM_POINTS 1024U
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
 #define SAMPLE_CAPTURE_DETAIL_POINTS 384U
@@ -150,7 +149,7 @@ uint8_t sample_capture_start(void);
 uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
                                                  uint32_t frames);
 uint8_t sample_capture_request_stop(void);
-uint8_t sample_capture_get_status(multi_record_writer_status_t *out_status);
+uint8_t sample_capture_get_status(audio_recorder_status_t *out_status);
 
 void sample_capture_set_audio_hook_enabled(uint8_t enabled);
 uint8_t sample_capture_audio_hook_is_enabled(void);

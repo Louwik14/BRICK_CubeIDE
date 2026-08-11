@@ -49,8 +49,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
-#include "Storage/looper_storage.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/wav_loader.h"
 #include "Core/brick_build_config.h"
@@ -129,10 +128,8 @@ void brick6_app_init(void)
     (void)waveform_cache_ensure_dirs();
     wav_loader_catalog_init_load();
     sd_preview_init();
-    looper_storage_raw_init();
-    (void)looper_storage_raw_validate();
-    multi_record_writer_init();
     sample_page_cache_init();
+    audio_recorder_init();
     sample_global_pool_init();
     sampler_ram_pool_init();
     wavetable_pool_init();
@@ -206,13 +203,13 @@ void brick6_app_init(void)
  */
 static void brick6_app_service_storage(void)
 {
+    audio_recorder_service();
     if (multi_sample_load_has_pending() != 0U)
     {
         multi_sample_service_load(0U);
     }
     else
     {
-        multi_record_writer_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
 #if BRICK_TEST_BUILD
         audio_test_csv_service();
         monkey_test_log_service();
@@ -220,24 +217,16 @@ static void brick6_app_service_storage(void)
         audio_test2_service();
         monkey_test_tick();
 #endif
-        if (looper_storage_raw_export_is_active() != 0U)
+        brick6_sampler_runtime_service();
+        sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
+        brick6_looper_runtime_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        if (brick6_looper_runtime_has_pending_sd_work() == 0U)
         {
-            looper_storage_raw_export_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+            multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         }
-        else
-        {
-            brick6_sampler_runtime_service();
-            sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
-            brick6_looper_runtime_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-            if (brick6_looper_runtime_has_pending_sd_work() == 0U)
-            {
-                looper_storage_raw_export_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-                multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-            }
-            pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
-            waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-            sd_preview_process();
-        }
+        pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
+        waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        sd_preview_process();
     }
 }
 

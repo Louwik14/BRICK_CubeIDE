@@ -8,6 +8,7 @@
 #include "Sampler/sample_stream_limits.h"
 #include "Sampler/sample_stream_manager.h"
 #include "SD/sd_block_device.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
@@ -285,6 +286,7 @@ void sample_stream_io_init(void)
     memset(g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
     g_sample_stream_io_next_order = 1U;
     sd_block_device_async_init();
+    sd_scheduler_runtime_init();
     sample_stream_io_invalidate_read_cache();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
     {
@@ -548,20 +550,36 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     async->reader = sample_stream_io_get_reader(command);
     sample_stream_physical_cursor_t *const cursor = (async->reader != 0)
         ? &async->reader->physical_cursor : &async->local_physical_cursor;
-    if ((command->stream_info.raw_pcm24 == 0U)
-        && (sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
-            == SAMPLE_STREAM_BACKEND_PHYSICAL)
-        && (sample_stream_backend_physical_begin(
-                &async->physical,
-                &async->command.stream_info,
-                &async->target,
-                cursor,
-                async->scratch,
-                SAMPLE_STREAM_IO_READ_SCRATCH_BYTES) != 0U))
+    const uint8_t physical_expected = (uint8_t)(
+        sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
+            == SAMPLE_STREAM_BACKEND_PHYSICAL);
+    if ((physical_expected != 0U)
+        && (sample_stream_backend_physical_busy() != 0U))
     {
-        async->physical_active = 1U;
-        async->state = SAMPLE_STREAM_IO_SCRATCH_DMA;
-        return 1U;
+        memset(async, 0, sizeof(*async));
+        return 0U;
+    }
+    if(physical_expected != 0U)
+    {
+        if(sample_stream_backend_physical_begin(
+                    &async->physical,
+                    &async->command.stream_info,
+                    &async->target,
+                    cursor,
+                    async->scratch,
+                    SAMPLE_STREAM_IO_READ_SCRATCH_BYTES,
+                    command->deadline_margin_us) != 0U)
+        {
+            async->physical_active = 1U;
+            async->state = SAMPLE_STREAM_IO_SCRATCH_DMA;
+            return 1U;
+        }
+        if(command->stream_info.physical_only != 0U)
+        {
+            async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+            async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+            return 1U;
+        }
     }
 
     sample_stream_io_run_fatfs_fallback(async);
@@ -623,7 +641,7 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
             async->result.backend = 1U;
             async->result.read_bytes = async->result.source_bytes;
         }
-        else
+        else if(async->command.stream_info.physical_only == 0U)
         {
             sample_stream_physical_cursor_t *const cursor = (async->reader != 0)
                 ? &async->reader->physical_cursor : &async->local_physical_cursor;

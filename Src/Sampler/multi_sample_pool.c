@@ -670,7 +670,6 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     out_source->loop_end = (sample->has_loop != 0U) ? sample->loop_end : sample->total_frames;
     out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
     out_source->reverse = 0U;
-    out_source->raw_pcm24 = 0U;
     out_source->rate = 1.0f;
     out_source->gain = 1.0f;
     out_source->owner_track_id = UINT8_MAX;

@@ -11,6 +11,7 @@
 #include "Sampler/sample_stream_time.h"
 #include "Sampler/sample_stream_underrun_trace.h"
 #include "Storage/sd_access_gate.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "stm32h7xx.h"
 
 static volatile uint32_t g_brick6_stream_audio_wake_sequence;
@@ -49,6 +50,7 @@ void brick6_stream_service_task_notify_audio_irq(void)
 
 void brick6_stream_service_task_poll(void)
 {
+    sd_scheduler_runtime_service();
     __DMB();
     const uint32_t requested_sequence = g_brick6_stream_audio_wake_sequence;
     brick6_stream_service_task_update_gate();
@@ -108,6 +110,7 @@ void brick6_stream_service_task_poll(void)
 
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
+    sd_scheduler_runtime_service();
     brick6_stream_service_task_update_gate();
     brick6_stream_underrun_trace_service_end(
         BRICK6_STREAM_TRACE_REASON_NONE,

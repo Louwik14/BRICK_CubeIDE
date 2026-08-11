@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Storage/looper_storage.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_needs.h"
@@ -37,6 +37,7 @@ typedef struct
     uint16_t first_slot;
     uint16_t page_count;
     uint32_t total_frames;
+    volatile uint32_t readable_frames;
     uint32_t data_offset;
     sample_audio_format_t format;
     uint16_t stride_floats;
@@ -45,7 +46,7 @@ typedef struct
     sample_stream_safe_metadata_t stream_safe;
     uint8_t valid;
     uint8_t fully_loaded;
-    uint8_t raw_pcm24;
+    uint8_t live_committed;
 } sample_page_sample_desc_t;
 
 typedef struct
@@ -481,6 +482,10 @@ static uint32_t sample_page_cache_stream_page_frame_count_key(sample_audio_key_t
             {
                 frame_count = frames_per_page;
             }
+            if (((uint64_t)start_frame + frame_count) > sample->readable_frames)
+            {
+                return 0U;
+            }
             return frame_count;
         }
     }
@@ -844,75 +849,6 @@ static sample_page_load_result_t sample_page_cache_decode_page(FIL *fp,
                      decoded_frames);
         write_frame += decoded_frames;
         remaining_frames -= decoded_frames;
-    }
-
-    sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
-    return SAMPLE_PAGE_LOAD_OK;
-}
-
-static float sample_page_cache_decode_s24_le(const uint8_t *src)
-{
-    int32_t value = ((int32_t)src[0]) | (((int32_t)src[1]) << 8) | (((int32_t)src[2]) << 16);
-    if((value & 0x00800000L) != 0)
-    {
-        value |= (int32_t)0xFF000000L;
-    }
-    return (float)value * (1.0f / 8388608.0f);
-}
-
-static sample_page_load_result_t sample_page_cache_decode_raw_pcm24_page(FIL *fp,
-                                                                         sample_page_desc_t *page,
-                                                                         uint8_t *io_buffer,
-                                                                         uint32_t io_buffer_size)
-{
-    if((fp == 0) || (page == 0) || (io_buffer == 0)
-            || (io_buffer_size < LOOPER_STORAGE_RAW_BYTES_PER_FRAME))
-    {
-        return SAMPLE_PAGE_LOAD_INVALID_ARG;
-    }
-
-    uint32_t remaining_frames = page->frame_count;
-    uint32_t write_frame = 0U;
-
-    while(remaining_frames != 0U)
-    {
-        uint32_t request_frames = remaining_frames;
-        uint32_t request_bytes = request_frames * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
-        if(request_bytes > io_buffer_size)
-        {
-            request_bytes = io_buffer_size
-                - (io_buffer_size % LOOPER_STORAGE_RAW_BYTES_PER_FRAME);
-        }
-        if(request_bytes == 0U)
-        {
-            return SAMPLE_PAGE_LOAD_INVALID_ARG;
-        }
-
-        UINT br = 0U;
-        const FRESULT fr = f_read(fp, io_buffer, request_bytes, &br);
-        if(fr != FR_OK)
-        {
-            return SAMPLE_PAGE_LOAD_READ_FAILED;
-        }
-
-        const uint32_t valid_bytes = br - (br % LOOPER_STORAGE_RAW_BYTES_PER_FRAME);
-        if(valid_bytes == 0U)
-        {
-            return SAMPLE_PAGE_LOAD_READ_FAILED;
-        }
-
-        uint32_t pos = 0U;
-        while((pos + LOOPER_STORAGE_RAW_BYTES_PER_FRAME <= valid_bytes)
-                && (remaining_frames != 0U))
-        {
-            page->data[(write_frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS)] =
-                sample_page_cache_decode_s24_le(&io_buffer[pos]);
-            page->data[(write_frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS) + 1U] =
-                sample_page_cache_decode_s24_le(&io_buffer[pos + 3U]);
-            write_frame++;
-            remaining_frames--;
-            pos += LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
-        }
     }
 
     sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
@@ -1511,7 +1447,13 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
     }
 
     sample_stream_physical_map_t *const map = &sample->stream_safe.physical_map;
-    if ((sample->raw_pcm24 == 0U) && (map->valid != 0U)
+    if((sample->live_committed != 0U)
+            && (sample_stream_physical_map_is_current(map) == 0U))
+    {
+        return 0U;
+    }
+    if ((sample->live_committed == 0U)
+        && (map->valid != 0U)
         && (sample_stream_physical_map_is_current(map) == 0U))
     {
         const uint64_t data_end = (uint64_t)sample->data_offset
@@ -1540,7 +1482,7 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
     out_info->frames_per_page = sample->frames_per_page;
     out_info->registration_epoch = sample->registration_epoch;
     out_info->stream_safe = sample->stream_safe;
-    out_info->raw_pcm24 = sample->raw_pcm24;
+    out_info->physical_only = sample->live_committed;
     return 1U;
 }
 uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
@@ -2139,6 +2081,7 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
     sample->key = key;
     sample->info = *info;
     sample->total_frames = total_frames;
+    sample->readable_frames = total_frames;
     sample->data_offset = data_offset;
     sample->format = format;
     sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
@@ -2185,6 +2128,7 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
     g_sample_page_sample_desc[key_slot].first_slot = (uint16_t)start_slot;
     g_sample_page_sample_desc[key_slot].page_count = (uint16_t)page_count;
     g_sample_page_sample_desc[key_slot].total_frames = total_frames;
+    g_sample_page_sample_desc[key_slot].readable_frames = total_frames;
     g_sample_page_sample_desc[key_slot].data_offset = data_offset;
     g_sample_page_sample_desc[key_slot].info = *info;
     g_sample_page_sample_desc[key_slot].valid = 1U;
@@ -2237,6 +2181,7 @@ static uint8_t sample_page_cache_register_stream_sample_key_internal(
     sample->key = key;
     sample->info = *info;
     sample->total_frames = total_frames;
+    sample->readable_frames = total_frames;
     sample->data_offset = data_offset;
     sample->format = format;
     sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
@@ -2324,54 +2269,105 @@ uint8_t sample_page_cache_register_stream_sample_key_no_map(
                                                                   0);
 }
 
-uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
-                                                           const char *path,
-                                                           uint32_t total_frames)
-{
-    return sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_classic(sample_id),
-                                                                  path,
-                                                                  total_frames);
-}
-
-uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_t key,
-                                                               const char *path,
-                                                               uint32_t total_frames)
+uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
+    sample_audio_key_t key,
+    const char *path,
+    uint32_t total_frames,
+    uint32_t readable_frames,
+    uint32_t data_offset,
+    uint32_t file_size,
+    const sample_stream_physical_extent_t *extents,
+    uint16_t extent_count,
+    uint32_t media_epoch)
 {
     const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0) || (total_frames == 0U))
+    const uint64_t data_bytes = (uint64_t)total_frames
+                              * AUDIO_RECORDER_BYTES_PER_FRAME;
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0)
+            || (total_frames == 0U) || (readable_frames > total_frames)
+            || (data_bytes > UINT32_MAX)
+            || (((uint64_t)data_offset + data_bytes) > file_size))
     {
         return 0U;
     }
 
     sample_page_cache_clear_key(key);
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if(sample_page_cache_trim_path_copy(sample->path, sizeof(sample->path), path) == 0U)
+    if (sample_page_cache_trim_path_copy(
+            sample->path, sizeof(sample->path), path) == 0U)
     {
         return 0U;
     }
-
     sample->key = key;
-    sample->info.sample_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ;
-    sample->info.channels = LOOPER_STORAGE_RAW_CHANNELS;
-    sample->info.bits_per_sample = LOOPER_STORAGE_RAW_BITS_PER_SAMPLE;
-    sample->info.block_align = LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
-    sample->info.byte_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
+    sample->info.sample_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ;
+    sample->info.channels = AUDIO_RECORDER_CHANNELS;
+    sample->info.bits_per_sample = 24U;
+    sample->info.block_align = AUDIO_RECORDER_BYTES_PER_FRAME;
+    sample->info.byte_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ
+                           * AUDIO_RECORDER_BYTES_PER_FRAME;
+    sample->info.data_size = (uint32_t)data_bytes;
     sample->total_frames = total_frames;
-    sample->data_offset = 0U;
+    sample->readable_frames = readable_frames;
+    sample->data_offset = data_offset;
     sample->format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
-    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(sample->format);
+    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(
+        sample->format);
     sample->frames_per_page = sample_audio_format_frames_per_page(sample->format);
     sample->registration_epoch = ++g_sample_page_cache_state.registration_epoch_counter;
     sample_stream_safe_metadata_init_fatfs(key,
                                            &sample->info,
                                            total_frames,
-                                           0U,
+                                           data_offset,
                                            &sample->stream_safe);
+    sample->stream_safe.file_size = file_size;
+    if (sample_stream_physical_map_import(
+            &sample->stream_safe.physical_map,
+            extents, extent_count, media_epoch) == 0U)
+    {
+        memset(sample, 0, sizeof(*sample));
+        return 0U;
+    }
     sample->valid = 1U;
     sample->fully_loaded = 0U;
-    sample->raw_pcm24 = 1U;
+    sample->live_committed = 1U;
     sample->first_slot = UINT16_MAX;
     return 1U;
+}
+
+uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
+                                                      uint32_t readable_frames)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        return 0U;
+    }
+    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    if ((sample->valid == 0U) || (readable_frames > sample->total_frames))
+    {
+        return 0U;
+    }
+    const uint32_t primask = sample_page_cache_lock();
+    if (readable_frames > sample->readable_frames)
+    {
+        sample->readable_frames = readable_frames;
+    }
+    sample_page_cache_unlock(primask);
+    return 1U;
+}
+
+uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
+                                                  const char *path)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0)
+            || (g_sample_page_sample_desc[key_slot].valid == 0U))
+    {
+        return 0U;
+    }
+    return (sample_page_cache_trim_path_copy(
+        g_sample_page_sample_desc[key_slot].path,
+        sizeof(g_sample_page_sample_desc[key_slot].path), path) != 0U) ? 1U : 0U;
 }
 
 void sample_page_cache_service_range(uint16_t first_sample_id,
@@ -2445,13 +2441,11 @@ void sample_page_cache_service_domain_range(sample_audio_domain_t domain,
 
             sample_page_cache_set_state(page, SAMPLE_PAGE_LOADING);
             const sample_page_load_result_t load_result =
-                (sample->raw_pcm24 != 0U)
-                    ? sample_page_cache_decode_raw_pcm24_page(&fp, page, io_buffer, sizeof(io_buffer))
-                    : sample_page_cache_decode_page(&fp,
-                                                    &sample->info,
-                                                    page,
-                                                    io_buffer,
-                                                    sizeof(io_buffer));
+                sample_page_cache_decode_page(&fp,
+                                              &sample->info,
+                                              page,
+                                              io_buffer,
+                                              sizeof(io_buffer));
             (void)f_close(&fp);
             if (load_result != SAMPLE_PAGE_LOAD_OK)
             {

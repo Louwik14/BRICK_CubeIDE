@@ -15,7 +15,7 @@
 #include "Sampler/sample_cache.h"
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "stm32h7xx_hal.h"
@@ -533,8 +533,7 @@ float sd_preview_get_gain(void)
 
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame)
 {
-    if ((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
+    if (audio_recorder_is_active() != 0U)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_RECORD_ACTIVE);
         return 0U;

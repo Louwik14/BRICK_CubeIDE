@@ -265,6 +265,51 @@ FRESULT f_getlabel (const TCHAR* path, TCHAR* label, DWORD* vsn);	/* Get volume 
 FRESULT f_setlabel (const TCHAR* label);							/* Set volume label */
 FRESULT f_forward (FIL* fp, UINT(*func)(const BYTE*,UINT), UINT btf, UINT* bf);	/* Forward data to the stream */
 FRESULT f_expand (FIL* fp, FSIZE_t szf, BYTE opt);					/* Allocate a contiguous block to the file */
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+/* BRICK recorder reservation extension. The file object is private to the
+ * reservation layer while these calls are in use. Normal FatFs users are not
+ * affected. */
+typedef struct {
+	FSIZE_t file_sector_start;
+	DWORD lba_start;
+	DWORD sector_count;
+	DWORD first_cluster;
+	DWORD cluster_count;
+} FF_BRICK_REC_EXTENT;
+
+typedef struct {
+	FSIZE_t reserved_bytes;
+	FSIZE_t valid_bytes;
+	DWORD cluster_bytes;
+	DWORD cluster_count;
+	DWORD first_cluster;
+	DWORD last_cluster;
+	BYTE fs_type;
+	BYTE chain_status;
+	WORD reserved;
+} FF_BRICK_REC_STATE;
+
+typedef struct {
+	DWORD metadata_sectors_read;
+	DWORD metadata_sectors_written;
+	DWORD sync_count;
+	DWORD clusters_allocated;
+	DWORD clusters_released;
+	DWORD extents_added;
+} FF_BRICK_REC_METRICS;
+
+FRESULT f_brick_rec_recover (FIL* fp, FF_BRICK_REC_STATE* state,
+	FF_BRICK_REC_EXTENT* extents, UINT extent_capacity, UINT* extent_count,
+	FF_BRICK_REC_METRICS* metrics);
+FRESULT f_brick_rec_reserve (FIL* fp, FSIZE_t target_reserved_bytes,
+	FF_BRICK_REC_STATE* state, FF_BRICK_REC_EXTENT* new_extents,
+	UINT extent_capacity, UINT* extent_count, FF_BRICK_REC_METRICS* metrics);
+FRESULT f_brick_rec_commit (FIL* fp, FSIZE_t valid_bytes,
+	FF_BRICK_REC_STATE* state, FF_BRICK_REC_METRICS* metrics);
+FRESULT f_brick_rec_release_tail (FIL* fp, FSIZE_t keep_bytes,
+	DWORD keep_last_cluster, DWORD first_unused_cluster,
+	FF_BRICK_REC_STATE* state, FF_BRICK_REC_METRICS* metrics);
+#endif
 FRESULT f_mount (FATFS* fs, const TCHAR* path, BYTE opt);			/* Mount/Unmount a logical drive */
 FRESULT f_mkfs (const TCHAR* path, BYTE opt, DWORD au, void* work, UINT len);	/* Create a FAT volume */
 FRESULT f_fdisk (BYTE pdrv, const DWORD* szt, void* work);			/* Divide a physical drive into some partitions */

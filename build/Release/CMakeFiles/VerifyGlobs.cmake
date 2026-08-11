@@ -57,7 +57,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:413 (file)
+# SRC_NOTE_FX_SRC at CMakeLists.txt:425 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_arp.c"
@@ -71,7 +71,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:413 (file)
+# SRC_NOTE_FX_SRC at CMakeLists.txt:425 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.cpp")
 set(OLD_GLOB
   )
@@ -157,6 +157,52 @@ endif()
 
 # SRC_SEQ_SRC at CMakeLists.txt:280 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_STORAGE_SRC at CMakeLists.txt:285 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_test_csv.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/boot_context_flash.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_sd_bank.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/kit_v1.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/monkey_test_log.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/pattern_live_ram.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/pattern_sd_bank.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_v1.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/storage_shared_io.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/undo_v2.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_convert.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/waveform_cache.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_STORAGE_SRC at CMakeLists.txt:285 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/*.cpp")
 set(OLD_GLOB
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")

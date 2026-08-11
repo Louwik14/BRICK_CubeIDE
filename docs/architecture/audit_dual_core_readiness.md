@@ -70,7 +70,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 | `sd_preview_render_main()` | `Src/Core/brick6_audio_runtime.c:257` | rendu RAM-only acceptable M7, mais etat ring produit par service SD M4 doit etre publie proprement |
 | `track_tone_sound_state_get_const()` par MasterFX | `Src/Audio/fx_master_macro.c:1110` | lecture directe d'etat canonique M4-cible depuis M7; a remplacer par snapshot MasterFX M7 |
 | `sample_page_cache_try_acquire/release` via readers | `Src/Sampler/sample_page_cache.c:1024-1136` | metadata/refcounts partages M4/M7 sans atomiques/cache protocol |
-| `multi_record_writer_push_audio_block_from_irq()` / Looper preroll | `Inc/Storage/multi_record_writer.h:101`, `Inc/Core/brick6_looper_runtime.h:90` | bon pattern ring RAM, mais devra etre une publication M7->M4 cache-safe |
+| `audio_recorder_push_from_irq_client()` / Looper preroll | `Inc/Storage/audio_recorder.h`, `Inc/Core/brick6_looper_runtime.h` | bon pattern ring RAM, mais devra etre une publication M7->M4 cache-safe |
 
 ## 3. Separation M7/M4 recommandee
 
@@ -162,7 +162,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 | `sample_stream_manager` | Z6/Sampler service | service, runtime queue | service | superloop | M4 | page requests M7->M4, READY M4->M7 |
 | `sampler_ram_pool` | Z6/Sampler RAM | audio RAM voices, UI | loaders/clear | superloop + IRQ | M4 load, M7 read snapshot | immutable slot publication |
 | Looper runtime | Z1/Z6 seam | audio render/service | UI/control/audio boundary/service | IRQ + superloop | M7 playback/capture, M4 storage | record ring + page publication |
-| `multi_record_writer` | Z6 writer | service/diag | audio push, UI stop | IRQ + superloop | M4 writer, M7 producer | M7->M4 ring |
+| `audio_recorder` / `generic_recorder` | Z6 writer | service/diag | audio push, UI stop | IRQ + superloop | M4 writer, M7 producer | M7->M4 ring |
 | `sd_preview` | Z6 preview | audio render, service/UI | SD service/UI | IRQ + superloop | M4 decode, M7 render ring | ring publication |
 | UI state | Z5 | UI/render/input | UI | superloop | M4 | telemetry only from M7 |
 | Persistence/Project/Pattern | Z6 | UI/storage | UI/storage | superloop | M4 | no direct M7; applies via snapshots/commands |
@@ -210,7 +210,7 @@ Regles:
 | Z5 UI | 3 | UI est deja hors audio et Board surface progresse; les commandes passent par Z2/Z3/Z4/Z6. Reste a transformer les appels directs en commandes M4->M7. |
 | Z6 persistence | 3 | SD/writer/cache services sont hors IRQ (`Src/Core/brick6_app_init.c:184-206`) et gates existent; la publication audio des pages/rings n'est pas encore cache-safe bicore. |
 | Sampler/cache | 2 | acquire/release, generations et keys existent (`Src/Sampler/sample_page_cache.c:1033-1136`), mais metadata/refcounts/statuts sont partages et modifies par les deux domaines. |
-| Looper/Recorder | 2 | bon pattern RAM ring/writer (`Inc/Storage/multi_record_writer.h:101`, `Src/Storage/multi_record_writer.c:822`), mais runtime playback/service/storage restent couples par globals. |
+| Looper/Recorder | 2 | bon pattern RAM ring/writer (`Inc/Storage/audio_recorder.h`, `Src/Storage/generic_recorder.c`), mais runtime playback/service/storage restent couples par globals. |
 | Mutable Instruments | 3 | wrappers BRICK statiques (`Src/Core/brick6_braids_runtime.cpp:88`, `Src/Audio/drum_synth.cpp:32`), pas d'allocation observee dans wrappers; dependances C++/tables MI a garder M7, avec isolation platform/sections. |
 | Abstraction Board | 2 | `board_audio_*`, `board_controls_*`, `board_surface_*` existent, mais generated `main.c`, clocks, IRQ et handles HAL restent single-core centralises. |
 
@@ -221,7 +221,7 @@ Echelle: 0 fortement couple, 1 embryonnaire, 2 frontiere visible mais fuites nom
 ### Phase 0 - Mesure H743 mono-core
 
 - Objectif: etablir worst-case audio et files.
-- Zones: `audio.c`, `cpu_load`, `seq_play_scheduler`, `sample_page_cache`, `multi_record_writer`.
+- Zones: `audio.c`, `cpu_load`, `seq_play_scheduler`, `sample_page_cache`, `audio_recorder`.
 - Resultat: compteurs max segments/events, duree IRQ max, underruns, queue high-water, SD contention.
 - Tests: transport + p-locks + LFO + Stream/Multi + Looper record + USB MIDI + UI stress.
 - Risques: instrumentation trop lourde en IRQ.
@@ -275,7 +275,7 @@ Echelle: 0 fortement couple, 1 embryonnaire, 2 frontiere visible mais fuites nom
 ### Phase 6 - Recorder/Looper ring propre
 
 - Objectif: M7 produit audio, M4 ecrit/finalise.
-- Zones: `brick6_looper_runtime`, `multi_record_writer`, `sample_capture`.
+- Zones: `brick6_looper_runtime`, `audio_recorder`, `sample_capture`.
 - Resultat: ring SPSC cache-safe + markers start/stop/version.
 - Tests: record long, stop sous SD busy, pattern load differe, export Looper.
 - Risques: overrun ring, perte marker stop.

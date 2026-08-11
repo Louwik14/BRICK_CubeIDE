@@ -175,10 +175,9 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Board/<Variant>/Generated/Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
 - `Board/<Variant>/Generated/Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
-- `Src/Core/brick6_app_init.c`: init et service cooperatif du `multi_record_writer` global, hors IRQ et sans client actif par defaut; le writer porte maintenant `LOOPER_RAW` et le backend `SAMPLE_WAV` utilise par Audio Rec.
-- `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
+- `Src/Core/brick6_app_init.c`: init et service cooperatif de l'`audio_recorder` commun Audio Rec/Looper, hors IRQ.
 - `Src/Core/brick6_app_init.c`: chargement boot de la photo catalogue samples persistante via `wav_loader_catalog_init_load()`, sans scan automatique de `0:/Samples`.
-- `Src/Core/brick6_app_init.c`: le recorder legacy `live_recorder` / `recorder_transport` n'est plus initialise ni servi; le record produit passe par Looper RAW + `multi_record_writer`.
+- `Src/Core/brick6_app_init.c`: les recorders historiques sont retires; le record produit passe par `audio_recorder` + `generic_recorder`.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -286,10 +285,10 @@ Z0 appelle principalement:
 - `g_sample_pool_data[...]` (SDRAM_SAMPLES float array):
   - Ecriture: `sample_pool` lors du chargement WAV ou du restore projet.
   - Role: arena residante des samples projet, dimensionnee pour absorber le reste disponible de la SDRAM apres les reserves fixes; le boot n'injecte plus de sample par defaut.
-- `g_record_rings[...]` dans `multi_record_writer.c` (SDRAM_RECORDER int32 stereo):
-  - Role: deux rings RAM du writer audio, client 0 Looper RAW et client 1 Audio Rec / Sample Capture, draines hors IRQ.
+- `g_audio_recorder_ring[...]` et les deux write buffers dans `audio_recorder.c` (SDRAM_RECORDER):
+  - Role: capture SPSC commune Looper/Audio Rec et double-buffer PCM24, draines hors IRQ.
 - `g_looper_preroll_pcm[...]` dans `brick6_looper_runtime.c` (SDRAM_RECORDER int32 stereo):
-  - Role: tampon de demarrage 0.25 s post-REC Looper avant disponibilite RAW/page-cache.
+  - Role: tampon de demarrage 0.25 s post-REC Looper avant disponibilite des pages SD engagees.
 
 ### `Src/Core/engine_tasklet.c` (cadence non-RTOS rattachee Z0)
 - `volatile uint32_t engine_tick_count`:
@@ -341,7 +340,7 @@ Z0 appelle principalement:
   - audio float tracks,
   - gate SD,
   - chargement de la photo catalogue Samples persistante si le fichier catalogue existe,
-  - validation reservoirs RAW Looper systeme,
+  - initialisation de l'`audio_recorder` commun et de sa recovery `.REC`,
   - synths/hall bridge,
   - runtime audio + wiring callback DSP,
   - engine_tasklet/param defaults,
@@ -370,7 +369,7 @@ Z0 appelle principalement:
 - `seq_runtime_time_adapter_process()`
 - `brick6_sampler_runtime_queue_stream_pages()`
 - `sample_cache_service(32768U)`
-- `multi_record_writer_service(16384U)`
+- `audio_recorder_service()`
 - `pattern_load_service(4096U)`
 - `pattern_live_service()`
 - `sd_preview_process()`
@@ -423,7 +422,7 @@ Z0 appelle principalement:
 
 - Vers Z1: wiring callback DSP (`audio_set_float_callback(brick6_audio_runtime_dsp)`), start audio, source de ticks via IRQ audio->engine tasklet.
 - Vers Z4: init seq runtime + service superloop transport/bridge; l'avance step (interne/externe) est consommee cote Z1 audio bloc.
-- Vers Z6: init pattern/project/undo, service `multi_record_writer_service` et appel `pattern_live_service` en runtime.
+- Vers Z6: init pattern/project/undo, service `audio_recorder_service` et appel `pattern_live_service` en runtime.
 - Vers Z5: init/tick UI via `ui_tasklet_poll`, service selection inputs dans app process.
 - Vers Z3/Z2: init param defaults et effets indirects via init/runtime des autres zones.
 
@@ -461,21 +460,10 @@ Z0 appelle principalement:
 
 ## 12. Addendum - ordre de service SD recording produit
 
-- Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
-- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` queue d'abord les pages STREAM Multi actives via `brick6_sampler_runtime_queue_stream_pages()`, puis sert `sample_cache_service(32768U)` avant le writer afin de charger les pages STREAM audio pending avant les clients SD moins critiques. `multi_record_writer_service(16384U)` passe ensuite pour terminer un drain/finalize deja actif. Si un SAVE Looper RAW -> WAV est actif, la superloop suspend ensuite `brick6_looper_runtime_service`, `pattern_load_service`, `waveform_cache_service` et `sd_preview_process`, puis appelle `looper_storage_raw_export_service(516096U)` comme operation SD prioritaire. Hors export actif, l'ordre reste `brick6_sampler_runtime_service()`, `sampler_ram_pool_waveform_service(4096U)`, `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` et `multi_sample_service_load(32768U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
-- `SAMPLE_WAV` reutilise ce meme service writer global; aucun second scheduler SD ni second writer FatFs n'est ajoute. `pattern_load_service()` reste cadence pendant Audio Rec; seuls les records/finalisations Looper RAW et exports Looper gardent les refus SD historiques.
-- Ordre cible pour la cohabitation SD audio:
-  1. `brick6_sampler_runtime_queue_stream_pages()` pour publier les besoins STREAM Multi actifs avant arbitrage SD.
-  2. `sample_cache_service(...)` prioritaire pour charger les pages STREAM audio deja pending.
-  3. `multi_record_writer_service(...)` pour drainer/finaliser les rings record deja actifs.
-  4. `looper_storage_raw_export_service(...)` prioritaire pendant SAVE RAW -> WAV, car SAVE n'est autorise que transport arrete.
-  5. `brick6_looper_runtime_service(...)` pour refill transient RAW/WAV hors export.
-  6. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
-  7. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
-- Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
-- Pendant une fenetre Sampler STREAM protegee active, `sd_access_gate` refuse toute nouvelle possession SD autre que `SD_ACCESS_CLIENT_SAMPLE_STREAM`: preview, convert/import, waveform/editor cache, pattern/project save/load et chargements samples non-stream sont differes tant que les locks de fenetre voix existent.
-- Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
-- Dimensionnement record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 3.072 MiB pour les 2 clients statiques actifs. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
+- Z0 cadence `audio_recorder_service()`, le streamer, le Looper et les services fichiers; `sd_scheduler` reste l'autorite d'arbitrage READ/WRITE/FILESYSTEM.
+- Audio Rec et Looper partagent le meme recorder et produisent directement `.REC` puis `.WAV`; aucun export RAW intermediaire n'existe.
+- Les operations project, preview, import et caches opportunistes sont refusees ou differees pendant une capture active ou une fenetre streaming protegee.
+- Le contrat complet, les tails, limites memoire et invariants sont documentes dans `docs/architecture/recorder_sd.md`.
 
 ## 13. Addendum - Audio Rec / Rec Edit skeleton
 

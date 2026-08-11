@@ -13,8 +13,8 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Storage/looper_storage.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_loader.h"
@@ -35,7 +35,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define UI_LOOPER_RECORD_CLIENT_ID 0U
 #define UI_LOOPER_LEN_STEPS_PER_BAR 16U
 #define UI_LOOPER_LEN_UNLIMITED_STEPS 0U
 
@@ -66,25 +65,15 @@ static uint8_t g_looper_record_auto_stop_latched = 0U;
 static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_transport_start_prearmed = 0U;
-static uint8_t g_looper_export_last_progress = 0xFFU;
-static looper_storage_raw_export_phase_t g_looper_export_last_phase =
-    LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
-UI_STATE_SDRAM static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
 
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
 static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
-static uint8_t ui_core_runtime_bridge_looper_resolve_raw_slot(uint8_t track, uint8_t *out_raw_slot);
-static const char *ui_core_runtime_bridge_looper_raw_feedback(uint8_t slot_failed);
 static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
     ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
                                                          ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_feedback_fn feedback);
-static void ui_core_runtime_bridge_looper_copy_diag_path(char *dst, const char *src);
-static uint8_t ui_core_runtime_bridge_looper_snapshot_matches(
-    const brick6_looper_runtime_diag_snapshot_t *before,
-    const brick6_looper_runtime_diag_snapshot_t *after);
 static void ui_core_runtime_bridge_prepare_restore_transition_request(ui_system_sync_request_t *request,
                                                                       uint8_t active_track_touched);
 static void ui_core_runtime_bridge_init_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
@@ -102,54 +91,6 @@ static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtim
 
 void ui_core_runtime_bridge_init(void)
 {
-    memset(&g_looper_save_diag, 0, sizeof(g_looper_save_diag));
-}
-
-static void ui_core_runtime_bridge_looper_copy_diag_path(char *dst, const char *src)
-{
-    if(dst == 0)
-    {
-        return;
-    }
-
-    dst[0] = '\0';
-    if(src == 0)
-    {
-        return;
-    }
-
-    for(uint32_t i = 0U; i < BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX; ++i)
-    {
-        dst[i] = src[i];
-        if(src[i] == '\0')
-        {
-            return;
-        }
-    }
-    dst[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX - 1U] = '\0';
-}
-
-static uint8_t ui_core_runtime_bridge_looper_snapshot_matches(
-    const brick6_looper_runtime_diag_snapshot_t *before,
-    const brick6_looper_runtime_diag_snapshot_t *after)
-{
-    if((before == 0) || (after == 0))
-    {
-        return 0U;
-    }
-
-    return (uint8_t)((before->playhead == after->playhead)
-            && (before->recorded_frames == after->recorded_frames)
-            && (before->scheduled_start_sample == after->scheduled_start_sample)
-            && (before->start_playhead == after->start_playhead)
-            && (before->cache_id == after->cache_id)
-            && (before->raw_slot == after->raw_slot)
-            && (before->source == after->source)
-            && (before->state == after->state)
-            && (before->cache_registered == after->cache_registered)
-            && (strncmp(before->active_path,
-                        after->active_path,
-                        BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX) == 0));
 }
 
 static uint8_t ui_core_runtime_bridge_track_is_sampler_looper(uint8_t track)
@@ -235,14 +176,6 @@ static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev
     seq_runtime_rec_toggle_arm();
     ui_core_runtime_bridge_service_looper_record_control(feedback);
     return 1U;
-}
-
-static uint8_t ui_core_runtime_bridge_looper_state_is_active(multi_record_writer_state_t state)
-{
-    return (uint8_t)((state == MULTI_RECORD_WRITER_STATE_RECORDING)
-        || (state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
-        || (state == MULTI_RECORD_WRITER_STATE_DRAINING)
-        || (state == MULTI_RECORD_WRITER_STATE_FINALIZING));
 }
 
 static uint32_t ui_core_runtime_bridge_looper_len_to_steps(float len)
@@ -333,13 +266,8 @@ static uint8_t ui_core_runtime_bridge_looper_record_is_active(void)
         return 1U;
     }
 
-    multi_record_writer_status_t status;
-    if (multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
-    {
-        return 0U;
-    }
-
-    return ui_core_runtime_bridge_looper_state_is_active(status.state);
+    return audio_recorder_client_is_active(
+        AUDIO_RECORDER_CLIENT_LOOPER);
 }
 
 static uint8_t ui_core_runtime_bridge_looper_track_has_route(uint8_t track)
@@ -360,9 +288,8 @@ static uint8_t ui_core_runtime_bridge_looper_track_has_route(uint8_t track)
     return 0U;
 }
 
-static void ui_core_runtime_bridge_looper_clear_take_metadata(multi_record_writer_state_t state)
+static void ui_core_runtime_bridge_looper_clear_take_metadata(void)
 {
-    (void)state;
     g_looper_take_track = 0xFFU;
     g_looper_take_notified = 0U;
 }
@@ -384,9 +311,7 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
         return 1U;
     }
 
-    multi_record_writer_status_t status;
-    if((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
-            && (ui_core_runtime_bridge_looper_state_is_active(status.state) != 0U))
+    if(audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
         if (feedback != 0)
         {
@@ -409,137 +334,31 @@ static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_
     {
         return 0U;
     }
-
-    if (looper_storage_raw_export_is_active() != 0U)
+    audio_recorder_status_t live_status;
+    if(audio_recorder_get_status_client(
+            AUDIO_RECORDER_CLIENT_LOOPER, &live_status) == 0U)
     {
-        if (feedback != 0)
-        {
-            char msg[16];
-            (void)snprintf(msg,
-                           sizeof(msg),
-                           "SAVE %u%%",
-                           (unsigned)looper_storage_raw_export_get_progress_percent());
-            feedback(msg);
-        }
+        if(feedback != 0) feedback("NO LOOP");
         return 1U;
     }
-
-    if (seq_runtime_is_running() != 0U)
+    if((live_status.state == AUDIO_RECORDER_STATE_PREPARED)
+            || (live_status.state == AUDIO_RECORDER_STATE_RECORDING)
+            || (live_status.state == AUDIO_RECORDER_STATE_DRAINING)
+            || (live_status.state == AUDIO_RECORDER_STATE_FINALIZING))
     {
-        if (feedback != 0)
-        {
-            feedback("STOP SAVE");
-        }
+        if(feedback != 0) feedback("LOOP BUSY");
         return 1U;
     }
-
-    if (sd_preview_is_active() != 0U)
+    if((live_status.state == AUDIO_RECORDER_STATE_FAILED)
+            || (live_status.error != AUDIO_RECORDER_ERROR_NONE))
     {
-        sd_preview_stop();
-    }
-
-    multi_record_writer_status_t status;
-    if (multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("LOOP FAIL");
-        }
+        if(feedback != 0) feedback("LOOP FAIL");
         return 1U;
     }
-
-    if (ui_core_runtime_bridge_looper_state_is_active(status.state) != 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("LOOP BUSY");
-        }
-        return 1U;
-    }
-
-    if ((status.state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
-        && (status.frames_written != 0U)
-        && (status.raw_slot != MULTI_RECORD_WRITER_RAW_SLOT_NONE)
-        && (g_looper_take_track == track))
-    {
-        uint8_t raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
-        const char *raw_path = 0;
-        uint32_t recorded_frames = 0U;
-        if (multi_record_writer_get_last_raw_take(UI_LOOPER_RECORD_CLIENT_ID,
-                                                  &raw_slot,
-                                                  &raw_path,
-                                                  &recorded_frames) == 0U)
-        {
-            if (feedback != 0)
-            {
-                feedback("NO LOOP");
-            }
-            return 1U;
-        }
-
-        char final_path[MULTI_RECORD_WRITER_PATH_MAX];
-        const looper_storage_path_result_t path_result =
-            looper_storage_make_next_path(track, final_path, sizeof(final_path));
-        if (path_result == LOOPER_STORAGE_PATH_BUSY)
-        {
-            if (feedback != 0)
-            {
-                feedback("LOOP BUSY");
-            }
-            return 1U;
-        }
-        if (path_result != LOOPER_STORAGE_PATH_OK)
-        {
-            if (feedback != 0)
-            {
-                feedback("LOOP FAIL");
-            }
-            return 1U;
-        }
-
-        if (looper_storage_raw_export_start(track,
-                                            raw_slot,
-                                            raw_path,
-                                            recorded_frames,
-                                            final_path) == 0U)
-        {
-            if (feedback != 0)
-            {
-                feedback("LOOP FAIL");
-            }
-            return 1U;
-        }
-
-        memset(&g_looper_save_diag, 0, sizeof(g_looper_save_diag));
-        g_looper_save_diag.recorded_frames = recorded_frames;
-        g_looper_save_diag.raw_slot = raw_slot;
-        ui_core_runtime_bridge_looper_copy_diag_path(g_looper_save_diag.raw_path, raw_path);
-        ui_core_runtime_bridge_looper_copy_diag_path(g_looper_save_diag.wav_path, final_path);
-        g_looper_export_last_progress = 0U;
-        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
-        if (feedback != 0)
-        {
-            feedback("SAVE WAIT");
-        }
-        return 1U;
-    }
-
-    if ((status.state != MULTI_RECORD_WRITER_STATE_TAKE_READY)
-        || (status.frames_written == 0U)
-        || (status.raw_slot != MULTI_RECORD_WRITER_RAW_SLOT_NONE)
-        || (g_looper_take_track != track))
-    {
-        if (feedback != 0)
-        {
-            feedback("NO LOOP");
-        }
-        return 1U;
-    }
-
-    if (feedback != 0)
-    {
-        feedback("NO LOOP");
-    }
+    if(feedback != 0)
+        feedback(((live_status.state == AUDIO_RECORDER_STATE_TAKE_READY)
+                && (live_status.frames_committed != 0U)
+                && (g_looper_take_track == track)) ? "LOOP SAVED" : "NO LOOP");
     return 1U;
 }
 
@@ -617,20 +436,11 @@ static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
         return 0U;
     }
 
-    if (multi_record_writer_any_active() != 0U)
+    if (audio_recorder_is_active() != 0U)
     {
         if (feedback != 0)
         {
             feedback("REC BUSY");
-        }
-        return 0U;
-    }
-
-    if (looper_storage_raw_export_is_active() != 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("SAVE BUSY");
         }
         return 0U;
     }
@@ -649,103 +459,31 @@ static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
     return ui_core_runtime_bridge_looper_start_track(eligible_track, feedback);
 }
 
-static uint8_t ui_core_runtime_bridge_looper_resolve_raw_slot(uint8_t track, uint8_t *out_raw_slot)
-{
-    if ((track >= UI_TRACK_COUNT) || (out_raw_slot == 0))
-    {
-        return 0U;
-    }
-
-    track_runtime_refresh_all();
-
-    if (looper_storage_raw_is_available() == 0U)
-    {
-        (void)looper_storage_raw_validate();
-    }
-
-    if (looper_storage_raw_is_available() == 0U)
-    {
-        return 0U;
-    }
-
-    return looper_storage_raw_get_slot_for_track(track, out_raw_slot);
-}
-
-static const char *ui_core_runtime_bridge_looper_raw_feedback(uint8_t slot_failed)
-{
-    if (slot_failed != 0U)
-    {
-        return "RAW SLOT";
-    }
-
-    switch (looper_storage_raw_get_last_error())
-    {
-        case LOOPER_STORAGE_RAW_ERROR_SD_BUSY:
-            return "RAW BUSY";
-        case LOOPER_STORAGE_RAW_ERROR_MOUNT_FAIL:
-            return "RAW MOUNT";
-        case LOOPER_STORAGE_RAW_ERROR_MISSING:
-            return "RAW MISS";
-        case LOOPER_STORAGE_RAW_ERROR_STAT_FAIL:
-            return "RAW STAT";
-        case LOOPER_STORAGE_RAW_ERROR_SIZE_MISMATCH:
-            return "RAW SIZE";
-        case LOOPER_STORAGE_RAW_ERROR_NOT_VALIDATED:
-            return "RAW INIT";
-        case LOOPER_STORAGE_RAW_ERROR_NONE:
-        default:
-            return "LOOP RAW";
-    }
-}
-
 static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
                                                          ui_core_runtime_bridge_feedback_fn feedback)
 {
-    multi_record_writer_status_t status;
-    if (multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("LOOP ERR");
-        }
-        return 1U;
-    }
-    if(((status.state == MULTI_RECORD_WRITER_STATE_PREPARED)
-            || (status.state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
-            || (status.state == MULTI_RECORD_WRITER_STATE_FAILED))
-            && (g_looper_take_track < UI_TRACK_COUNT))
-    {
-        brick6_looper_runtime_prepare_replace(g_looper_take_track);
-    }
-    ui_core_runtime_bridge_looper_clear_take_metadata(status.state);
-
-    uint8_t raw_slot = 0U;
-    if (ui_core_runtime_bridge_looper_resolve_raw_slot(track, &raw_slot) == 0U)
-    {
-        if (feedback != 0)
-        {
-            const uint8_t slot_failed = (looper_storage_raw_is_available() != 0U) ? 1U : 0U;
-            feedback(ui_core_runtime_bridge_looper_raw_feedback(slot_failed));
-        }
-        return 1U;
-    }
-
-    const char *const raw_path = looper_storage_raw_get_path(raw_slot);
-    if (raw_path == 0)
-    {
-        if (feedback != 0)
-        {
-            feedback("RAW SLOT");
-        }
-        return 1U;
-    }
+    const uint8_t previous_take_track = g_looper_take_track;
 
     const uint32_t expected_frames = ui_core_runtime_bridge_looper_expected_record_frames(track);
     const uint64_t rec_request_sample = seq_runtime_exec_get_audio_timeline_sample();
-    if (multi_record_writer_prepare_raw(UI_LOOPER_RECORD_CLIENT_ID,
-                                        raw_slot,
-                                        raw_path,
-                                        expected_frames) == 0U)
+    char final_path[LOOPER_STORAGE_PATH_MAX];
+    if(looper_storage_make_next_path(
+            track, final_path, sizeof(final_path)) != LOOPER_STORAGE_PATH_OK)
+    {
+        if(feedback != 0) feedback("LOOP PATH");
+        return 1U;
+    }
+    char temporary_path[LOOPER_STORAGE_PATH_MAX];
+    if(looper_storage_copy_wav_path_as_rec(
+            final_path, temporary_path, sizeof(temporary_path)) == 0U)
+    {
+        if(feedback != 0) feedback("LOOP PATH");
+        return 1U;
+    }
+    if (audio_recorder_prepare_client(AUDIO_RECORDER_CLIENT_LOOPER,
+                                      temporary_path,
+                                      final_path,
+                                      expected_frames) == 0U)
     {
         if (feedback != 0)
         {
@@ -754,16 +492,24 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
         return 1U;
     }
 
-    brick6_looper_runtime_prepare_replace(track);
+    if(previous_take_track < UI_TRACK_COUNT)
+    {
+        brick6_looper_runtime_prepare_replace(previous_take_track);
+    }
+    if(previous_take_track != track)
+    {
+        brick6_looper_runtime_prepare_replace(track);
+    }
+    ui_core_runtime_bridge_looper_clear_take_metadata();
     g_active_looper_record_track = track;
     g_looper_take_track = track;
     g_looper_take_notified = 0U;
-    brick6_looper_runtime_arm_record_start(track,
-                                           raw_slot,
-                                           ui_core_runtime_bridge_looper_len_mode(track),
-                                           expected_frames,
-                                           ui_core_runtime_bridge_looper_play_is_auto(track),
-                                           rec_request_sample);
+    brick6_looper_runtime_arm_live_record_start(
+        track,
+        ui_core_runtime_bridge_looper_len_mode(track),
+        expected_frames,
+        ui_core_runtime_bridge_looper_play_is_auto(track),
+        rec_request_sample);
     (void)param_registry_apply_track_value(PARAM_LOOPER_ARM, track, 0.0f);
     if (feedback != 0)
     {
@@ -800,33 +546,32 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
     g_looper_transport_was_running =
         (keep_prearmed_running_mirror != 0U) ? 1U : transport_running;
 
-    multi_record_writer_status_t status;
-    if ((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
-        && (status.state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
-        && (status.error == MULTI_RECORD_WRITER_ERROR_NONE)
-        && (status.frames_written != 0U)
-        && (g_looper_take_track < UI_TRACK_COUNT)
-        && (g_looper_take_notified == 0U))
+    audio_recorder_status_t live_status;
+    const uint8_t live_owned = audio_recorder_get_status_client(
+        AUDIO_RECORDER_CLIENT_LOOPER, &live_status);
+    if((live_owned != 0U)
+            && (live_status.state == AUDIO_RECORDER_STATE_TAKE_READY)
+            && (live_status.error == AUDIO_RECORDER_ERROR_NONE)
+            && (live_status.frames_committed != 0U)
+            && (g_looper_take_track < UI_TRACK_COUNT)
+            && (g_looper_take_notified == 0U))
     {
-        const uint8_t play_auto = ui_core_runtime_bridge_looper_play_is_auto(g_looper_take_track);
-        if(status.raw_slot != MULTI_RECORD_WRITER_RAW_SLOT_NONE)
+        const char *wav_path = 0;
+        uint32_t recorded_frames = 0U;
+        if(audio_recorder_get_last_take_client(
+                AUDIO_RECORDER_CLIENT_LOOPER,
+                &wav_path,
+                &recorded_frames) != 0U)
         {
-            uint8_t raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
-            const char *raw_path = 0;
-            uint32_t recorded_frames = 0U;
-            if(multi_record_writer_get_last_raw_take(UI_LOOPER_RECORD_CLIENT_ID,
-                                                     &raw_slot,
-                                                     &raw_path,
-                                                     &recorded_frames) != 0U)
-            {
-                brick6_looper_runtime_notify_raw_take_ready(g_looper_take_track,
-                                                            raw_slot,
-                                                            raw_path,
-                                                            recorded_frames,
-                                                            play_auto,
-                                                            0U);
-                g_looper_take_notified = 1U;
-            }
+            brick6_looper_runtime_notify_live_take_finalized(
+                g_looper_take_track, wav_path, recorded_frames);
+            (void)wav_loader_catalog_notify_file_created(wav_path);
+            (void)waveform_cache_request_for_wav_known_duration(
+                wav_path,
+                WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE,
+                recorded_frames,
+                AUDIO_RECORDER_SAMPLE_RATE_HZ);
+            g_looper_take_notified = 1U;
         }
     }
 
@@ -849,20 +594,11 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         return;
     }
 
-    if (multi_record_writer_any_active() != 0U)
+    if (audio_recorder_is_active() != 0U)
     {
         if (feedback != 0)
         {
             feedback("REC BUSY");
-        }
-        return;
-    }
-
-    if (looper_storage_raw_export_is_active() != 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("SAVE BUSY");
         }
         return;
     }
@@ -879,86 +615,6 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
     }
 
     (void)ui_core_runtime_bridge_looper_start_track(eligible_track, feedback);
-}
-
-void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridge_feedback_fn feedback)
-{
-    if (feedback == 0)
-    {
-        return;
-    }
-
-    const looper_storage_raw_export_state_t state = looper_storage_raw_export_get_state();
-    if (state == LOOPER_STORAGE_RAW_EXPORT_ACTIVE)
-    {
-        const looper_storage_raw_export_phase_t phase = looper_storage_raw_export_get_phase();
-        const uint8_t progress = looper_storage_raw_export_get_progress_percent();
-        if ((phase != g_looper_export_last_phase) || (progress != g_looper_export_last_progress))
-        {
-            char msg[16];
-            g_looper_export_last_progress = progress;
-            g_looper_export_last_phase = phase;
-            switch (phase)
-            {
-                case LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT:
-                    (void)snprintf(msg, sizeof(msg), "SAVE WAIT");
-                    break;
-                case LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN:
-                    (void)snprintf(msg, sizeof(msg), "SAVE OPEN");
-                    break;
-                case LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY:
-                    (void)snprintf(msg, sizeof(msg), "SAVE VERIFY");
-                    break;
-                case LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE:
-                default:
-                    (void)snprintf(msg, sizeof(msg), "SAVE %u%%", (unsigned)progress);
-                    break;
-            }
-            feedback(msg);
-        }
-        return;
-    }
-
-    if (state == LOOPER_STORAGE_RAW_EXPORT_DONE)
-    {
-        brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.before_success);
-        (void)wav_loader_catalog_notify_file_created(looper_storage_raw_export_get_final_path());
-        looper_storage_raw_export_diag_t export_diag;
-        looper_storage_raw_export_get_diag(&export_diag);
-        (void)waveform_cache_request_for_wav_known_duration(
-            looper_storage_raw_export_get_final_path(),
-            WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE,
-            export_diag.recorded_frames,
-            LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ);
-        feedback("LOOP SAVED");
-        g_looper_export_last_progress = 0xFFU;
-        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
-        looper_storage_raw_export_clear_finished();
-        brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.after_success);
-        g_looper_save_diag.valid = 1U;
-        g_looper_save_diag.playback_unchanged =
-            ui_core_runtime_bridge_looper_snapshot_matches(&g_looper_save_diag.before_success,
-                                                           &g_looper_save_diag.after_success);
-        return;
-    }
-
-    if (state == LOOPER_STORAGE_RAW_EXPORT_FAILED)
-    {
-        feedback("SAVE FAIL");
-        g_looper_export_last_progress = 0xFFU;
-        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
-        looper_storage_raw_export_clear_finished();
-    }
-}
-
-void ui_core_runtime_bridge_get_looper_save_diag(ui_core_runtime_bridge_looper_save_diag_t *out_diag)
-{
-    if(out_diag == 0)
-    {
-        return;
-    }
-
-    *out_diag = g_looper_save_diag;
 }
 
 static void ui_core_runtime_bridge_prepare_restore_transition_request(ui_system_sync_request_t *request,

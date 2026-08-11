@@ -5,7 +5,7 @@
 #include "Sampler/sample_cache.h"
 #include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
 #include "Storage/wav_audio_stream.h"
@@ -204,8 +204,7 @@ uint8_t wav_convert_path_needs_48k(const char *path, wav_info_t *out_info)
         return 0U;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U))
+    if (audio_recorder_is_active() != 0U)
     {
         return 0U;
     }
@@ -302,8 +301,7 @@ uint8_t wav_convert_start_destructive_48k(const char *path)
         return 0U;
     }
     if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
-        || (multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U)
+        || (audio_recorder_is_active() != 0U)
         || (sample_cache_has_pending_sd_work() != 0U))
     {
         return 0U;

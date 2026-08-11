@@ -6,7 +6,7 @@
 #include "Sampler/sample_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Storage/looper_storage.h"
+#include "Storage/audio_recorder_wav.h"
 #include "Storage/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sd_access_gate.h"
@@ -30,11 +30,12 @@
 #endif
 
 #define SAMPLE_CAPTURE_TEMP_REC_DIR "0:/PROJECT/REC"
-#define SAMPLE_CAPTURE_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
+#define SAMPLE_CAPTURE_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.REC"
+#define SAMPLE_CAPTURE_WORKING_WAV_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
 #define SAMPLE_CAPTURE_FINAL_DIR "0:/Samples"
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
 #define SAMPLE_CAPTURE_COPY_FRAMES 1024U
-#define SAMPLE_CAPTURE_WAV_DATA_OFFSET MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES
+#define SAMPLE_CAPTURE_WAV_DATA_OFFSET AUDIO_RECORDER_WAV_HEADER_BYTES
 #define SAMPLE_CAPTURE_EDIT_ZOOM_MAX 255U
 #define SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES 256U
 #define SAMPLE_CAPTURE_STEPS_PER_BAR 16U
@@ -51,7 +52,7 @@
 #define SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT 2U
 #define SAMPLE_CAPTURE_EDIT_VZOOM_MAX 8U
 #define SAMPLE_CAPTURE_EDITOR_TILE_COUNT 16U
-#define SAMPLE_CAPTURE_EDITOR_TILE_FRAMES (MULTI_RECORD_WRITER_SAMPLE_RATE_HZ / 2U)
+#define SAMPLE_CAPTURE_EDITOR_TILE_FRAMES (AUDIO_RECORDER_SAMPLE_RATE_HZ / 2U)
 #define SAMPLE_CAPTURE_EDITOR_CACHE_FRAMES \
     (SAMPLE_CAPTURE_EDITOR_TILE_COUNT * SAMPLE_CAPTURE_EDITOR_TILE_FRAMES)
 #define SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES 2048U
@@ -256,9 +257,9 @@ EDITOR_AUDIO_CACHE_SDRAM static sample_capture_editor_level_point_t
 EDITOR_AUDIO_CACHE_SDRAM static sample_capture_global_overview_point_t
     g_sample_capture_global_overview_points[SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS];
 RECORDER_SCRATCH_SDRAM static uint8_t
-    g_sample_capture_copy_buf[SAMPLE_CAPTURE_COPY_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+    g_sample_capture_copy_buf[SAMPLE_CAPTURE_COPY_FRAMES * AUDIO_RECORDER_BYTES_PER_FRAME];
 RECORDER_SCRATCH_SDRAM static uint8_t
-    g_sample_capture_detail_buf[SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+    g_sample_capture_detail_buf[SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES * AUDIO_RECORDER_BYTES_PER_FRAME];
 RECORDER_SCRATCH_SDRAM static int16_t
     g_sample_capture_line_source[SAMPLE_CAPTURE_LINE_MAX_SOURCE_FRAMES];
 #if SAMPLE_CAPTURE_DEBUG_UART
@@ -363,7 +364,7 @@ static uint32_t sample_capture_debug_state_word(void)
 }
 
 static void sample_capture_debug_mark(rec_live_debug_code_t code,
-                                      const multi_record_writer_status_t *status,
+                                      const audio_recorder_status_t *status,
                                       const char *path,
                                       uint32_t recorded_frames)
 {
@@ -729,8 +730,7 @@ static uint8_t sample_capture_global_overview_can_build(void)
     {
         return 0U;
     }
-    if((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U)
+    if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_load_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
@@ -813,20 +813,20 @@ static void sample_capture_global_overview_service(void)
 
     if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
             + (g_sample_capture_global_overview.build_next_frame
-               * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+               * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
     {
         goto done;
     }
 
-    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
     if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+            || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
     {
         goto done;
     }
 
-    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
     for(uint32_t i = 0U; i < frames_read; ++i)
     {
         const uint32_t frame_index = g_sample_capture_global_overview.build_next_frame + i;
@@ -838,7 +838,7 @@ static void sample_capture_global_overview_service(void)
             point = g_sample_capture_global_overview.point_count - 1U;
         }
 
-        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * AUDIO_RECORDER_BYTES_PER_FRAME];
         const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
         const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
         const int16_t sample_min = (l < r) ? l : r;
@@ -1318,14 +1318,9 @@ static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
     {
         return 0U;
     }
-    if(multi_record_writer_any_active() != 0U)
+    if(audio_recorder_is_active() != 0U)
     {
         if(out_reason != 0) { *out_reason = 1U; }
-        return 0U;
-    }
-    if(looper_storage_raw_export_is_active() != 0U)
-    {
-        if(out_reason != 0) { *out_reason = 2U; }
         return 0U;
     }
     if(sd_preview_is_active() != 0U)
@@ -1446,23 +1441,23 @@ static void sample_capture_editor_cache_service(void)
 
     const uint32_t absolute_frame = tile->start_frame + tile->load_next_frame;
     if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-            + (absolute_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+            + (absolute_frame * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
     {
         goto done;
     }
 
-    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
     if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+            || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
     {
         goto done;
     }
 
-    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
     for(uint32_t i = 0U; i < frames_read; ++i)
     {
-        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * AUDIO_RECORDER_BYTES_PER_FRAME];
         const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
         const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
         const uint32_t rel = tile->load_next_frame + i;
@@ -1757,8 +1752,7 @@ static uint8_t sample_capture_detail_can_build(void)
     {
         return 0U;
     }
-    if((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U)
+    if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_load_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
@@ -1780,8 +1774,7 @@ static uint8_t sample_capture_line_can_build(void)
     {
         return 0U;
     }
-    if((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U)
+    if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_load_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
@@ -1867,20 +1860,20 @@ static void sample_capture_detail_service(void)
     const uint32_t absolute_frame = g_sample_capture.detail_request_start_frame
         + g_sample_capture.detail_build_next_frame;
     if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-            + (absolute_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+            + (absolute_frame * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
     {
         goto done;
     }
 
-    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
     if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+            || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
     {
         goto done;
     }
 
-    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
     for(uint32_t i = 0U; i < frames_read; ++i)
     {
         const uint32_t rel_frame = g_sample_capture.detail_build_next_frame + i;
@@ -1892,7 +1885,7 @@ static void sample_capture_detail_service(void)
             col = g_sample_capture.detail_request_columns - 1U;
         }
 
-        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * AUDIO_RECORDER_BYTES_PER_FRAME];
         const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
         const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
         const int16_t sample_min = (l < r) ? l : r;
@@ -2104,21 +2097,21 @@ static void sample_capture_line_service(void)
         file_open = 1U;
 
         if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-                + (g_sample_capture_line_hot.build_start_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+                + (g_sample_capture_line_hot.build_start_frame * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
         {
             goto short_done;
         }
 
         const uint32_t bytes_to_read =
-            g_sample_capture_line_hot.build_frames * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+            g_sample_capture_line_hot.build_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
         UINT br = 0U;
         if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-                || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+                || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
         {
             goto short_done;
         }
 
-        const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+        const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
         if(frames_read == 0U)
         {
             goto short_done;
@@ -2126,7 +2119,7 @@ static void sample_capture_line_service(void)
 
         for(uint32_t i = 0U; i < frames_read; ++i)
         {
-            const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+            const uint8_t *frame = &g_sample_capture_detail_buf[i * AUDIO_RECORDER_BYTES_PER_FRAME];
             const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
             const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
             g_sample_capture_line_source[i] = (int16_t)(((int32_t)l + (int32_t)r) / 2);
@@ -2201,23 +2194,23 @@ short_done:
     const uint32_t absolute_frame = g_sample_capture_line_hot.build_start_frame
         + g_sample_capture_line_hot.build_next_frame;
     if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-            + (absolute_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+            + (absolute_frame * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
     {
         goto done;
     }
 
-    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
     if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+            || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
     {
         goto done;
     }
 
-    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
     for(uint32_t i = 0U; i < frames_read; ++i)
     {
-        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * AUDIO_RECORDER_BYTES_PER_FRAME];
         const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
         const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
         const int16_t sample = (int16_t)(((int32_t)l + (int32_t)r) / 2);
@@ -2250,7 +2243,7 @@ static uint8_t sample_capture_looper_record_conflict(void)
     {
         return 1U;
     }
-    return multi_record_writer_any_active_backend(MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW);
+    return audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER);
 }
 
 static uint32_t sample_capture_edit_marker_step(void)
@@ -2679,7 +2672,7 @@ static uint8_t sample_capture_start_now(void)
 
     const uint32_t frame_limit = sample_capture_len_to_frames(g_sample_capture.state.len_bars);
     if(sample_capture_prepare_temp(g_sample_capture.state.temp_path,
-                                   g_sample_capture.state.temp_path,
+                                   SAMPLE_CAPTURE_WORKING_WAV_PATH,
                                    frame_limit) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
@@ -2706,7 +2699,7 @@ static uint8_t sample_capture_start_now(void)
     return 1U;
 }
 
-static void sample_capture_on_take_ready(const multi_record_writer_status_t *status)
+static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
 {
     if((status == 0) || (g_sample_capture.last_take_notified != 0U))
     {
@@ -2715,7 +2708,7 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
 
     const char *path = 0;
     uint32_t frames = 0U;
-    if(multi_record_writer_get_last_sample_wav_take(SAMPLE_CAPTURE_RECORD_CLIENT_ID, &path, &frames) == 0U)
+    if(audio_recorder_get_last_take(&path, &frames) == 0U)
     {
         return;
     }
@@ -2769,7 +2762,7 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
                 path,
                 WAVEFORM_CACHE_REASON_POST_AUDIO_REC,
                 frames,
-                MULTI_RECORD_WRITER_SAMPLE_RATE_HZ);
+                AUDIO_RECORDER_SAMPLE_RATE_HZ);
             g_sample_capture.wave_cache_retry_countdown = 32U;
         }
         else
@@ -2802,29 +2795,24 @@ uint8_t sample_capture_prepare_temp(const char *temp_path,
                                     const char *final_path,
                                     uint32_t frame_limit)
 {
-    return multi_record_writer_prepare_sample_wav(SAMPLE_CAPTURE_RECORD_CLIENT_ID,
-                                                  temp_path,
-                                                  final_path,
-                                                  frame_limit);
+    return audio_recorder_prepare(temp_path, final_path, frame_limit);
 }
 
 uint8_t sample_capture_start(void)
 {
-    return multi_record_writer_start(SAMPLE_CAPTURE_RECORD_CLIENT_ID);
+    return audio_recorder_start();
 }
 
 uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
                                                  uint32_t frames)
 {
     sample_capture_waveform_push_minmax_from_irq(lr_interleaved, frames);
-    return multi_record_writer_push_audio_block_from_irq(SAMPLE_CAPTURE_RECORD_CLIENT_ID,
-                                                         lr_interleaved,
-                                                         frames);
+    return audio_recorder_push_from_irq(lr_interleaved, frames);
 }
 
 uint8_t sample_capture_request_stop(void)
 {
-    multi_record_writer_status_t status;
+    audio_recorder_status_t status;
     if(sample_capture_get_status(&status) != 0U)
     {
         sample_capture_debug_mark(REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
@@ -2832,12 +2820,12 @@ uint8_t sample_capture_request_stop(void)
                                   g_sample_capture.state.temp_path,
                                   status.frames_received);
     }
-    return multi_record_writer_request_stop(SAMPLE_CAPTURE_RECORD_CLIENT_ID);
+    return audio_recorder_request_stop();
 }
 
-uint8_t sample_capture_get_status(multi_record_writer_status_t *out_status)
+uint8_t sample_capture_get_status(audio_recorder_status_t *out_status)
 {
-    return multi_record_writer_get_status(SAMPLE_CAPTURE_RECORD_CLIENT_ID, out_status);
+    return audio_recorder_get_status(out_status);
 }
 
 void sample_capture_set_audio_hook_enabled(uint8_t enabled)
@@ -3457,8 +3445,8 @@ void sample_capture_model_note_rec_edit_first_render(void)
     }
     g_sample_capture.rec_edit_first_render_pending = 0U;
 
-    multi_record_writer_status_t status;
-    const multi_record_writer_status_t *status_ptr = 0;
+    audio_recorder_status_t status;
+    const audio_recorder_status_t *status_ptr = 0;
     if(sample_capture_get_status(&status) != 0U)
     {
         status_ptr = &status;
@@ -3771,7 +3759,7 @@ static void sample_capture_waveform_cache_service_handle(void)
 
 void sample_capture_model_service(void)
 {
-    multi_record_writer_status_t status;
+    audio_recorder_status_t status;
     if(sample_capture_get_status(&status) == 0U)
     {
         return;
@@ -3783,14 +3771,14 @@ void sample_capture_model_service(void)
         ((transport_running != 0U) && (g_sample_capture.transport_was_running == 0U)) ? 1U : 0U;
     g_sample_capture.transport_was_running = transport_running;
 
-    if((status.state == MULTI_RECORD_WRITER_STATE_FAILED)
+    if((status.state == AUDIO_RECORDER_STATE_FAILED)
             && ((g_sample_capture.state.recording != 0U) || (g_sample_capture.state.armed_pending != 0U)))
     {
         sample_capture_set_audio_hook_enabled(0U);
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
-        sample_capture_set_error((status.error == MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW)
+        sample_capture_set_error((status.error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE
             : SAMPLE_CAPTURE_ERROR_SD_IO);
         return;
@@ -3858,7 +3846,7 @@ void sample_capture_model_service(void)
         }
     }
 
-    if(status.state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
+    if(status.state == AUDIO_RECORDER_STATE_TAKE_READY)
     {
         sample_capture_on_take_ready(&status);
         if(g_sample_capture.rec_edit_enter_deferred_services != 0U)
@@ -3995,7 +3983,7 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
     }
 
     const uint32_t frames = end_frame - start_frame;
-    const uint32_t data_bytes = frames * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t data_bytes = frames * AUDIO_RECORDER_BYTES_PER_FRAME;
     header[4] = (uint8_t)(((SAMPLE_CAPTURE_WAV_DATA_OFFSET - 8U) + data_bytes) & 0xFFU);
     header[5] = (uint8_t)((((SAMPLE_CAPTURE_WAV_DATA_OFFSET - 8U) + data_bytes) >> 8) & 0xFFU);
     header[6] = (uint8_t)((((SAMPLE_CAPTURE_WAV_DATA_OFFSET - 8U) + data_bytes) >> 16) & 0xFFU);
@@ -4014,7 +4002,7 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
     }
 
     fr = f_lseek(&src, SAMPLE_CAPTURE_WAV_DATA_OFFSET +
-        (start_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME));
+        (start_frame * AUDIO_RECORDER_BYTES_PER_FRAME));
     if(fr != FR_OK)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
@@ -4105,7 +4093,7 @@ uint8_t sample_capture_model_save_trimmed(void)
         final_path,
         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
         g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,
-        MULTI_RECORD_WRITER_SAMPLE_RATE_HZ);
+        AUDIO_RECORDER_SAMPLE_RATE_HZ);
     return 1U;
 }
 

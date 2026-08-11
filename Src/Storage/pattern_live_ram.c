@@ -5,7 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/kit_v1.h"
-#include "Storage/multi_record_writer.h"
+#include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -1096,8 +1096,7 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if ((multi_record_writer_any_active_backend(MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW) != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
+    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
@@ -1142,8 +1141,7 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
-    if ((multi_record_writer_any_active_backend(MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW) != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
+    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
@@ -1239,8 +1237,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
-            || (looper_storage_raw_export_is_active() != 0U))
+    if (audio_recorder_is_active() != 0U)
     {
         /* TODO pending budgeted pattern save: defer the SD store instead of blocking record drain. */
         return 0U;
