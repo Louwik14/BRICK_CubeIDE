@@ -39,6 +39,12 @@ public:
       state[op_index].phase_inc_32 = table_dx_exp_32[f14];
    }
 
+   //! Set an already resolved 32-bit phase increment.
+   void setOpsPhaseInc(unsigned op_index, uint32_t phase_inc_32_)
+   {
+      state[op_index].phase_inc_32 = phase_inc_32_;
+   }
+
    //! Start of note
    void keyOn()
    {

@@ -64,7 +64,9 @@ static void configure_voice(pico_voice_t *voice,
     for (uint8_t op = 0U; op < kOperatorCount; ++op)
     {
         EnvGen *const env = voice->ops.getEgPointer(op);
-        voice->ops.setOpsFreq(op, (uint32_t)config->phase_inc[op]);
+        /* BRICK already provides the resolved MSFA phase increment.  It is
+           not the 14-bit DX7 frequency-table index expected by setOpsFreq(). */
+        voice->ops.setOpsPhaseInc(op, (uint32_t)config->phase_inc[op]);
 
         const uint8_t rate_scale = rate_scaling_qrate(config->note,
                                                        config->rate_scale[op]);
