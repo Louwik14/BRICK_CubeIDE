@@ -26,6 +26,16 @@ void brick6_fm_runtime_set_mode(uint8_t instance_id, brick6_fm_mode_t mode);
 void brick6_fm_runtime_set_algorithm(uint8_t instance_id, uint8_t algorithm);
 void brick6_fm_runtime_set_feedback(uint8_t instance_id, uint8_t feedback);
 void brick6_fm_runtime_set_sync(uint8_t instance_id, uint8_t enabled);
+void brick6_fm_runtime_set_bright(uint8_t instance_id, float value);
+void brick6_fm_runtime_set_body(uint8_t instance_id, float value);
+void brick6_fm_runtime_set_detail(uint8_t instance_id, float value);
+void brick6_fm_runtime_set_metal(uint8_t instance_id, float value);
+void brick6_fm_runtime_set_env(uint8_t instance_id,
+                               float attack,
+                               float decay,
+                               float sustain,
+                               float release);
+void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id);
 uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                           float *out_mono,
                                           uint32_t frames);

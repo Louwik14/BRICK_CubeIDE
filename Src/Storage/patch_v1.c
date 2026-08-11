@@ -166,6 +166,7 @@ static uint8_t patch_v1_family_type_is_valid(uint8_t family, uint8_t type)
             return ((type == (uint8_t)UI_TRACK_TYPE_PRISM)
                     || (type == (uint8_t)UI_TRACK_TYPE_WAVE)
                     || (type == (uint8_t)UI_TRACK_TYPE_STACK)
+                    || (type == (uint8_t)UI_TRACK_TYPE_FM)
                     ) ? 1U : 0U;
 
         case UI_TRACK_FAMILY_SAMPLER:

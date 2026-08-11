@@ -554,6 +554,18 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
                 default: return 0U;
             }
         }
+        case PARAM_FM_MODE: *out_value = state->fm.mode; return 1U;
+        case PARAM_FM_ALGORITHM: *out_value = state->fm.algorithm; return 1U;
+        case PARAM_FM_FEEDBACK: *out_value = state->fm.feedback; return 1U;
+        case PARAM_FM_SYNC: *out_value = state->fm.sync; return 1U;
+        case PARAM_FM_BRIGHT: *out_value = state->fm.bright; return 1U;
+        case PARAM_FM_BODY: *out_value = state->fm.body; return 1U;
+        case PARAM_FM_DETAIL: *out_value = state->fm.detail; return 1U;
+        case PARAM_FM_METAL: *out_value = state->fm.metal; return 1U;
+        case PARAM_FM_ENV_ATTACK: *out_value = state->fm.env_attack; return 1U;
+        case PARAM_FM_ENV_DECAY: *out_value = state->fm.env_decay; return 1U;
+        case PARAM_FM_ENV_SUSTAIN: *out_value = state->fm.env_sustain; return 1U;
+        case PARAM_FM_ENV_RELEASE: *out_value = state->fm.env_release; return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -830,6 +842,30 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
                 default: return 0U;
             }
         }
+        case PARAM_FM_MODE:
+            state->fm.mode = clamp_value(value, 0.0f, 2.0f); return 1U;
+        case PARAM_FM_ALGORITHM:
+            state->fm.algorithm = clamp_value(value, 0.0f, 31.0f); return 1U;
+        case PARAM_FM_FEEDBACK:
+            state->fm.feedback = clamp_value(value, 0.0f, 8.0f); return 1U;
+        case PARAM_FM_SYNC:
+            state->fm.sync = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
+        case PARAM_FM_BRIGHT:
+            state->fm.bright = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_BODY:
+            state->fm.body = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_DETAIL:
+            state->fm.detail = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_METAL:
+            state->fm.metal = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_ENV_ATTACK:
+            state->fm.env_attack = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_ENV_DECAY:
+            state->fm.env_decay = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_ENV_SUSTAIN:
+            state->fm.env_sustain = clamp_value(value, -1.0f, 1.0f); return 1U;
+        case PARAM_FM_ENV_RELEASE:
+            state->fm.env_release = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:

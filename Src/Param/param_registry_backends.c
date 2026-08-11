@@ -3,6 +3,7 @@
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
@@ -33,6 +34,11 @@ static float param_backend_clamp_value(float v, float lo, float hi)
         return hi;
     }
     return v;
+}
+
+static float param_backend_fm_macro_unit(float value)
+{
+    return 0.5f + (0.5f * param_backend_clamp_value(value, -1.0f, 1.0f));
 }
 
 static uint8_t param_backend_is_vca_param(param_id_t id)
@@ -358,6 +364,129 @@ uint8_t param_backend_reapply_tone_prism_runtime(uint8_t track)
         brick6_braids_runtime_set_osc_phase_reset(instance_id, osc, (state->prism.phase_reset[osc] >= 0.5f) ? 1U : 0U);
         brick6_braids_runtime_set_osc_level(instance_id, osc, state->prism.level[osc]);
     }
+    return 1U;
+}
+
+uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_FM_MODE:
+        {
+            const brick6_fm_mode_t mode = (brick6_fm_mode_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL)) state->fm.mode = (float)mode;
+            brick6_fm_runtime_set_mode(ctx->instance_id, mode);
+            return 1U;
+        }
+        case PARAM_FM_ALGORITHM:
+        {
+            const uint8_t algorithm = (uint8_t)(param_backend_clamp_value(value, 0.0f, 31.0f) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL)) state->fm.algorithm = (float)algorithm;
+            brick6_fm_runtime_set_algorithm(ctx->instance_id, algorithm);
+            return 1U;
+        }
+        case PARAM_FM_FEEDBACK:
+        {
+            const uint8_t feedback = (uint8_t)(param_backend_clamp_value(value, 0.0f, 8.0f) + 0.5f);
+            if ((update_base_state != 0U) && (state != NULL)) state->fm.feedback = (float)feedback;
+            brick6_fm_runtime_set_feedback(ctx->instance_id, feedback);
+            return 1U;
+        }
+        case PARAM_FM_SYNC:
+        {
+            const uint8_t sync = (value >= 0.5f) ? 1U : 0U;
+            if ((update_base_state != 0U) && (state != NULL)) state->fm.sync = (float)sync;
+            brick6_fm_runtime_set_sync(ctx->instance_id, sync);
+            return 1U;
+        }
+        case PARAM_FM_BRIGHT:
+        case PARAM_FM_BODY:
+        case PARAM_FM_DETAIL:
+        case PARAM_FM_METAL:
+        {
+            const float macro = param_backend_clamp_value(value, -1.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                if (id == PARAM_FM_BRIGHT) state->fm.bright = macro;
+                else if (id == PARAM_FM_BODY) state->fm.body = macro;
+                else if (id == PARAM_FM_DETAIL) state->fm.detail = macro;
+                else state->fm.metal = macro;
+            }
+            if (id == PARAM_FM_BRIGHT) brick6_fm_runtime_set_bright(ctx->instance_id, param_backend_fm_macro_unit(macro));
+            else if (id == PARAM_FM_BODY) brick6_fm_runtime_set_body(ctx->instance_id, param_backend_fm_macro_unit(macro));
+            else if (id == PARAM_FM_DETAIL) brick6_fm_runtime_set_detail(ctx->instance_id, param_backend_fm_macro_unit(macro));
+            else brick6_fm_runtime_set_metal(ctx->instance_id, param_backend_fm_macro_unit(macro));
+            return 1U;
+        }
+        case PARAM_FM_ENV_ATTACK:
+        case PARAM_FM_ENV_DECAY:
+        case PARAM_FM_ENV_SUSTAIN:
+        case PARAM_FM_ENV_RELEASE:
+        {
+            const float macro = param_backend_clamp_value(value, -1.0f, 1.0f);
+            float attack = (state != NULL) ? state->fm.env_attack : 0.0f;
+            float decay = (state != NULL) ? state->fm.env_decay : 0.0f;
+            float sustain = (state != NULL) ? state->fm.env_sustain : 0.0f;
+            float release = (state != NULL) ? state->fm.env_release : 0.0f;
+            if (id == PARAM_FM_ENV_ATTACK) attack = macro;
+            else if (id == PARAM_FM_ENV_DECAY) decay = macro;
+            else if (id == PARAM_FM_ENV_SUSTAIN) sustain = macro;
+            else release = macro;
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->fm.env_attack = attack;
+                state->fm.env_decay = decay;
+                state->fm.env_sustain = sustain;
+                state->fm.env_release = release;
+            }
+            brick6_fm_runtime_set_env(ctx->instance_id,
+                                      param_backend_fm_macro_unit(attack),
+                                      param_backend_fm_macro_unit(decay),
+                                      param_backend_fm_macro_unit(sustain),
+                                      param_backend_fm_macro_unit(release));
+            return 1U;
+        }
+        default:
+            return 0U;
+    }
+}
+
+uint8_t param_backend_reapply_tone_fm_runtime(uint8_t track)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((state == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
+    {
+        return 0U;
+    }
+    brick6_fm_runtime_set_mode(ctx->instance_id,
+                               (brick6_fm_mode_t)(uint8_t)(param_backend_clamp_value(state->fm.mode, 0.0f, 2.0f) + 0.5f));
+    brick6_fm_runtime_set_algorithm(ctx->instance_id,
+                                    (uint8_t)(param_backend_clamp_value(state->fm.algorithm, 0.0f, 31.0f) + 0.5f));
+    brick6_fm_runtime_set_feedback(ctx->instance_id,
+                                   (uint8_t)(param_backend_clamp_value(state->fm.feedback, 0.0f, 8.0f) + 0.5f));
+    brick6_fm_runtime_set_sync(ctx->instance_id, (state->fm.sync >= 0.5f) ? 1U : 0U);
+    brick6_fm_runtime_set_bright(ctx->instance_id, param_backend_fm_macro_unit(state->fm.bright));
+    brick6_fm_runtime_set_body(ctx->instance_id, param_backend_fm_macro_unit(state->fm.body));
+    brick6_fm_runtime_set_detail(ctx->instance_id, param_backend_fm_macro_unit(state->fm.detail));
+    brick6_fm_runtime_set_metal(ctx->instance_id, param_backend_fm_macro_unit(state->fm.metal));
+    brick6_fm_runtime_set_env(ctx->instance_id,
+                              param_backend_fm_macro_unit(state->fm.env_attack),
+                              param_backend_fm_macro_unit(state->fm.env_decay),
+                              param_backend_fm_macro_unit(state->fm.env_sustain),
+                              param_backend_fm_macro_unit(state->fm.env_release));
     return 1U;
 }
 

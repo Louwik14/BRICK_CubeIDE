@@ -344,6 +344,21 @@ static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_POS_SMOOTH
 };
 
+static const param_id_t g_track_runtime_tone_slots_fm[] = {
+    PARAM_FM_MODE,
+    PARAM_FM_ALGORITHM,
+    PARAM_FM_FEEDBACK,
+    PARAM_FM_SYNC,
+    PARAM_FM_BRIGHT,
+    PARAM_FM_BODY,
+    PARAM_FM_DETAIL,
+    PARAM_FM_METAL,
+    PARAM_FM_ENV_ATTACK,
+    PARAM_FM_ENV_DECAY,
+    PARAM_FM_ENV_SUSTAIN,
+    PARAM_FM_ENV_RELEASE
+};
+
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_GAIN,
@@ -411,6 +426,8 @@ _Static_assert((sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtim
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "STACK TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "WAVE TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_fm) / sizeof(g_track_runtime_tone_slots_fm[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "FM TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_sampler) / sizeof(g_track_runtime_tone_slots_sampler[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "SAMPLER TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]))
@@ -450,6 +467,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_WAVE:
             *out_table = g_track_runtime_tone_slots_wave;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_FM:
+            *out_table = g_track_runtime_tone_slots_fm;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_fm) / sizeof(g_track_runtime_tone_slots_fm[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_RAM:
@@ -1758,6 +1780,18 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_PRISM_OSC2_TIMBRE:
         case PARAM_PRISM_OSC2_MODULATION:
         case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_FM_MODE:
+        case PARAM_FM_ALGORITHM:
+        case PARAM_FM_FEEDBACK:
+        case PARAM_FM_SYNC:
+        case PARAM_FM_BRIGHT:
+        case PARAM_FM_BODY:
+        case PARAM_FM_DETAIL:
+        case PARAM_FM_METAL:
+        case PARAM_FM_ENV_ATTACK:
+        case PARAM_FM_ENV_DECAY:
+        case PARAM_FM_ENV_SUSTAIN:
+        case PARAM_FM_ENV_RELEASE:
         case PARAM_PRISM_OSC2_PHASE_RESET:
         case PARAM_PRISM_OSC2_LEVEL:
         case PARAM_STACK_OSC1_LEVEL:

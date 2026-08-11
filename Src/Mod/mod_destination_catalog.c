@@ -279,6 +279,24 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
     }
 }
 
+static uint8_t mod_destination_is_direct_fm(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_FM_BRIGHT:
+        case PARAM_FM_BODY:
+        case PARAM_FM_DETAIL:
+        case PARAM_FM_METAL:
+        case PARAM_FM_ENV_ATTACK:
+        case PARAM_FM_ENV_DECAY:
+        case PARAM_FM_ENV_SUSTAIN:
+        case PARAM_FM_ENV_RELEASE:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t mod_destination_is_direct_drum(param_id_t dest)
 {
     switch (dest)
@@ -611,6 +629,21 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
     }
 }
 
+static uint8_t mod_destination_apply_fm_rt(uint8_t track,
+                                          param_id_t dest,
+                                          const track_runtime_ctx_t *ctx,
+                                          float value)
+{
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+            || (mod_destination_is_direct_fm(dest) == 0U))
+    {
+        return 0U;
+    }
+    return param_registry_apply_track_value_rt_fast(dest, track, value);
+}
+
 static uint8_t mod_destination_stack_slot_for_id(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
 {
     if ((out_slot == NULL) || (out_param == NULL))
@@ -905,6 +938,10 @@ uint8_t mod_destination_catalog_apply_rt(uint8_t track,
     {
         return mod_destination_apply_prism_rt(track, dest, ctx, value);
     }
+    if (mod_destination_is_direct_fm(dest) != 0U)
+    {
+        return mod_destination_apply_fm_rt(track, dest, ctx, value);
+    }
     if (mod_destination_is_direct_stack(dest) != 0U)
     {
         return mod_destination_apply_stack_rt(track, dest, ctx, value);
@@ -1057,6 +1094,7 @@ uint8_t mod_destination_catalog_poly_voice_supported(param_id_t dest,
         case TRACK_RUNTIME_ENGINE_PRISM: return mod_destination_is_direct_prism(dest);
         case TRACK_RUNTIME_ENGINE_STACK: return mod_destination_is_direct_stack(dest);
         case TRACK_RUNTIME_ENGINE_WAVE: return mod_destination_is_direct_wave(dest);
+        case TRACK_RUNTIME_ENGINE_FM: return 0U;
         default: return 0U;
     }
 }
@@ -1182,6 +1220,10 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_WAVE)
         {
             return mod_destination_is_direct_wave(dest);
+        }
+        if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_FM)
+        {
+            return mod_destination_is_direct_fm(dest);
         }
         if ((dest == PARAM_LOOPER_ARM)
                 || (dest == PARAM_LOOPER_LEN)

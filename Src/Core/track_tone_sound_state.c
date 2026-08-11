@@ -29,6 +29,11 @@ SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_
 #define TRACK_TONE_CLIP_DEFAULT_GRAIN_SIZE           4.0f
 #define TRACK_TONE_CLIP_DEFAULT_HOP_SIZE             3.0f
 #define TRACK_TONE_CLIP_DEFAULT_SEARCH_SIZE          4.0f
+#define TRACK_TONE_FM_DEFAULT_MODE                  0.0f
+#define TRACK_TONE_FM_DEFAULT_ALGORITHM             0.0f
+#define TRACK_TONE_FM_DEFAULT_FEEDBACK              0.0f
+#define TRACK_TONE_FM_DEFAULT_SYNC                  1.0f
+#define TRACK_TONE_FM_DEFAULT_MACRO                 0.0f
 
 void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
 {
@@ -118,6 +123,18 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
     state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;
     state->wave.pos_smooth = param_registry[PARAM_WAVE_POS_SMOOTH].default_value;
+    state->fm.mode = TRACK_TONE_FM_DEFAULT_MODE;
+    state->fm.algorithm = TRACK_TONE_FM_DEFAULT_ALGORITHM;
+    state->fm.feedback = TRACK_TONE_FM_DEFAULT_FEEDBACK;
+    state->fm.sync = TRACK_TONE_FM_DEFAULT_SYNC;
+    state->fm.bright = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.body = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.detail = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.metal = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.env_attack = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.env_decay = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.env_sustain = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.env_release = TRACK_TONE_FM_DEFAULT_MACRO;
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;

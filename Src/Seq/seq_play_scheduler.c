@@ -803,7 +803,10 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)
     {
         if (is_note_on != 0U)
+        {
+            brick6_fm_runtime_sync_voice(resolved.descriptor.instance_id, instance);
             brick6_fm_runtime_note_on(instance, note, velocity);
+        }
         else
             brick6_fm_runtime_note_off(instance, note);
     }

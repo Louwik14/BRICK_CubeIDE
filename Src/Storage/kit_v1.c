@@ -49,6 +49,7 @@ static kit_v1_label_code_t kit_v1_resolve_label_code(ui_track_family_t family,
                 case UI_TRACK_TYPE_PRISM: return KIT_V1_LABEL_PR;
                 case UI_TRACK_TYPE_WAVE: return KIT_V1_LABEL_WV;
                 case UI_TRACK_TYPE_STACK: return KIT_V1_LABEL_SK;
+                case UI_TRACK_TYPE_FM: return KIT_V1_LABEL_FM;
                 default: return KIT_V1_LABEL_UNKNOWN;
             }
 
@@ -842,6 +843,7 @@ const char *kit_v1_label_code_short_name(uint8_t label_code)
         case KIT_V1_LABEL_OFF: return "X";
         case KIT_V1_LABEL_PR: return "PR";
         case KIT_V1_LABEL_WV: return "WV";
+        case KIT_V1_LABEL_FM: return "FM";
         case KIT_V1_LABEL_SK: return "SK";
         case KIT_V1_LABEL_RM: return "RM";
         case KIT_V1_LABEL_ST: return "ST";

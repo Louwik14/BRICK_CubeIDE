@@ -226,6 +226,18 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_fm = {
+    .family_title = "TONE 1/2",
+    .nav_labels = { "CORE", "COLOR", "ENV", "-" },
+    .subpages = {
+        { .title = "CORE", .param_bank = { .params = { PARAM_FM_MODE, PARAM_FM_ALGORITHM, PARAM_FM_FEEDBACK, PARAM_FM_SYNC } } },
+        { .title = "COLOR", .param_bank = { .params = { PARAM_FM_BRIGHT, PARAM_FM_BODY, PARAM_FM_DETAIL, PARAM_FM_METAL } } },
+        { .title = "ENV", .param_bank = { .params = { PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_ENV_SUSTAIN, PARAM_FM_ENV_RELEASE } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 typedef param_prism_label_value_kind_t ui_prism_value_kind_t;
 typedef param_prism_param_label_t ui_prism_param_label_t;
 
@@ -1585,6 +1597,10 @@ void ui_page_template_tone_register_families(void)
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_STACK))
             {
                 family_template = &g_ui_template_tone_family_stack;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_FM))
+            {
+                family_template = &g_ui_template_tone_family_fm;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_RAM))
             {

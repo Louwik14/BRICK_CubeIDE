@@ -415,6 +415,7 @@ static void brick6_render_fm_tracks(uint32_t frames, uint8_t *out_fm_tracks)
                 const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)pending);
                 pending &= (uint8_t)(pending - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+                brick6_fm_runtime_sync_voice(ctx->instance_id, instance);
                 if (brick6_fm_runtime_render_instance(instance, fm_tmp, frames) == 0U)
                     memset(fm_tmp, 0, frames * sizeof(float));
                 const uint8_t running = mixer_process_external_poly_voice(

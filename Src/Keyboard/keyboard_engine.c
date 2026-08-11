@@ -385,7 +385,10 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
     {
         if (is_note_on != 0U)
+        {
+            brick6_fm_runtime_sync_voice(ctx->instance_id, instance);
             brick6_fm_runtime_note_on(instance, note, velocity);
+        }
         else
             brick6_fm_runtime_note_off(instance, note);
     }
