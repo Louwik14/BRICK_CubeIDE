@@ -53,6 +53,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
                                     brick6_fm_operator_param_t param,
                                     float value);
 void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id);
+void brick6_fm_runtime_sync_voice_if_needed(uint8_t source_instance_id,
+                                            uint8_t destination_instance_id);
+void brick6_fm_runtime_move_voice(uint8_t source_instance_id, uint8_t destination_instance_id);
+uint8_t brick6_fm_runtime_voice_is_active(uint8_t instance_id);
 uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                           float *out_mono,
                                           uint32_t frames);

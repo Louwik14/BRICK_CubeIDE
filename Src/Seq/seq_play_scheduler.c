@@ -668,6 +668,8 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
             || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
             || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
             || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)));
+    const uint8_t uses_voice_allocator = (uint8_t)((is_poly_synth != 0U)
+        || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM));
     const uint8_t is_multi_sampler = (uint8_t)((resolved.descriptor.engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
@@ -696,13 +698,13 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
             return 1U;
         }
     }
-    const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
+    const uint8_t voice = (uses_voice_allocator == 0U) ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U)
                ? synth_polyphony_note_on_occurrence_from(
                    track, note, SYNTH_POLY_SOURCE_SEQUENCER, event_token)
                : synth_polyphony_note_off_occurrence_from(
                    track, SYNTH_POLY_SOURCE_SEQUENCER, event_token));
-    if ((is_poly_synth != 0U) && (voice == SYNTH_POLYPHONY_NO_VOICE))
+    if ((uses_voice_allocator != 0U) && (voice == SYNTH_POLYPHONY_NO_VOICE))
     {
         return 0U;
     }

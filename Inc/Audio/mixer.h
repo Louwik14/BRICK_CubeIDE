@@ -232,6 +232,13 @@ void mixer_track_poly_note_off(uint32_t poly_track_id,
                                uint8_t note);
 void mixer_track_poly_all_notes_off(uint32_t poly_track_id);
 void mixer_synth_voice_slot_reset(uint8_t slot);
+void mixer_synth_voice_slot_copy(uint8_t source_slot, uint8_t destination_slot);
+void mixer_track_voice_state_to_poly(uint32_t mix_track_id,
+                                     uint32_t poly_track_id,
+                                     uint8_t voice);
+void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
+                                       uint32_t poly_track_id,
+                                       uint8_t voice);
 uint8_t mixer_begin_external_stereo(uint32_t track_id,
                                     uint32_t frames,
                                     float **out_left,

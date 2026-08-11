@@ -257,7 +257,9 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)));
-    const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
+    const uint8_t uses_voice_allocator = (uint8_t)((is_poly_synth != 0U)
+        || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM));
+    const uint8_t voice = (uses_voice_allocator == 0U) ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U) ? synth_polyphony_note_on(track, note)
                               : synth_polyphony_note_off(track, note));
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)

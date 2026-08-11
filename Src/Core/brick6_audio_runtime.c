@@ -430,9 +430,8 @@ static void brick6_render_fm_tracks(uint32_t frames, uint8_t *out_fm_tracks)
                 const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)pending);
                 pending &= (uint8_t)(pending - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
-                brick6_fm_runtime_sync_voice(ctx->instance_id, instance);
-                if (brick6_fm_runtime_render_instance(instance, fm_tmp, frames) == 0U)
-                    memset(fm_tmp, 0, frames * sizeof(float));
+                brick6_fm_runtime_sync_voice_if_needed(ctx->instance_id, instance);
+                (void)brick6_fm_runtime_render_instance(instance, fm_tmp, frames);
                 const uint8_t running = mixer_process_external_poly_voice(
                     ctx->mix_track_id, track, voice, fm_tmp, frames,
                     synth_polyphony_get_voice_pan(track, voice));
@@ -457,6 +456,8 @@ static void brick6_render_fm_tracks(uint32_t frames, uint8_t *out_fm_tracks)
                 mixer_commit_external_mono_native(ctx->mix_track_id, frames);
                 fm_tracks++;
             }
+            else
+                synth_polyphony_voice_release_complete(track, 0U);
             continue;
         }
 
@@ -465,6 +466,8 @@ static void brick6_render_fm_tracks(uint32_t frames, uint8_t *out_fm_tracks)
             mixer_submit_external_mono_native(ctx->mix_track_id, fm_tmp, frames);
             fm_tracks++;
         }
+        else
+            synth_polyphony_voice_release_complete(track, 0U);
     }
 
     if (out_fm_tracks != NULL)

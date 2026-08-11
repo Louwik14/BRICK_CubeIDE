@@ -1733,8 +1733,24 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             }
             else
             {
-                keyboard_engine_all_notes_off_for_track(track);
-                (void)synth_polyphony_set_voice_count(track, (uint8_t)clamped);
+                const track_runtime_ctx_t *const runtime = track_runtime_get_ctx(track);
+                const uint8_t fm_transition = (uint8_t)((runtime != NULL)
+                    && (runtime->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                    && (runtime->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM));
+                const uint8_t old_count = synth_polyphony_get_voice_count(track);
+                const uint8_t new_count = (uint8_t)clamped;
+                uint8_t mix_track = 0U;
+                const uint8_t has_mix = track_runtime_get_mix_target_track(track, &mix_track);
+                if (fm_transition == 0U)
+                    keyboard_engine_all_notes_off_for_track(track);
+                const uint8_t applied = synth_polyphony_set_voice_count(track, new_count);
+                if ((fm_transition != 0U) && (has_mix != 0U))
+                {
+                    if ((old_count == 1U) && (applied > 1U))
+                        mixer_track_voice_state_to_poly(mix_track, track, 0U);
+                    else if ((old_count > 1U) && (applied == 1U))
+                        mixer_track_voice_state_from_poly(mix_track, track, 0U);
+                }
             }
         }
         else

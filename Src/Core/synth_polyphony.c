@@ -8,6 +8,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_fm_runtime.h"
+#include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "stm32h7xx.h"
 
@@ -220,6 +221,75 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
     const uint8_t maximum = synth_polyphony_get_available_for_track(track);
     if (count > maximum)
         count = maximum;
+    synth_poly_track_t *const poly = &g_synth_poly[track];
+    if (poly->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+    {
+        const uint8_t old_count = poly->voice_count;
+        const uint8_t primary_slot = synth_polyphony_find_slot(track, 0U);
+        poly->render_voice_count = 0U;
+        __DMB();
+
+        if ((old_count == 1U) && (primary_slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET))
+        {
+            if (brick6_fm_runtime_voice_is_active(primary_slot) != 0U)
+                poly->renderable_voice_mask |= 1U;
+            else
+            {
+                poly->renderable_voice_mask &= (uint8_t)~1U;
+                memset(&g_synth_voice[primary_slot], 0, sizeof(g_synth_voice[primary_slot]));
+            }
+        }
+
+        for (uint8_t voice = old_count; voice < count; ++voice)
+        {
+            const uint8_t slot = synth_polyphony_acquire_slot(track);
+            if (slot == SYNTH_POLYPHONY_NO_VOICE) { count = voice; break; }
+            poly->slots[voice] = slot;
+            synth_polyphony_reset_slot(slot);
+            memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
+        }
+
+        if ((count == 1U) && (((poly->renderable_voice_mask & 1U) == 0U)
+                || (brick6_fm_runtime_voice_is_active(primary_slot) == 0U)))
+        {
+            poly->renderable_voice_mask &= (uint8_t)~1U;
+            uint8_t candidates = (uint8_t)(poly->renderable_voice_mask
+                & (uint8_t)((1U << old_count) - 1U));
+            while (candidates != 0U)
+            {
+                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)candidates);
+                const uint8_t source_slot = synth_polyphony_find_slot(track, voice);
+                candidates &= (uint8_t)(candidates - 1U);
+                if ((source_slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+                        || (brick6_fm_runtime_voice_is_active(source_slot) == 0U))
+                    continue;
+                brick6_fm_runtime_move_voice(source_slot, primary_slot);
+                mixer_synth_voice_slot_copy(source_slot, primary_slot);
+                g_synth_voice[primary_slot] = g_synth_voice[source_slot];
+                poly->renderable_voice_mask |= 1U;
+                break;
+            }
+        }
+
+        uint8_t owned = old_count;
+        while (owned > count)
+        {
+            const uint8_t voice = (uint8_t)(owned - 1U);
+            const uint8_t slot = synth_polyphony_find_slot(track, voice);
+            synth_polyphony_reset_slot(slot);
+            synth_polyphony_release_slot(slot);
+            poly->slots[voice] = SYNTH_POLYPHONY_NO_VOICE;
+            if (slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+                memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
+            owned--;
+        }
+        poly->voice_count = count;
+        poly->renderable_voice_mask &= (uint8_t)((1U << count) - 1U);
+        synth_polyphony_refresh_voice_pan(poly);
+        __DMB();
+        poly->render_voice_count = count;
+        return count;
+    }
     g_synth_poly[track].render_voice_count = 0U;
     g_synth_poly[track].renderable_voice_mask = 0U;
     __DMB();
