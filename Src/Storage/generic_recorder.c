@@ -420,15 +420,29 @@ uint8_t generic_recorder_push(generic_recorder_t *recorder,
         recorder->state = GENERIC_RECORDER_DRAINING;
         return 0U;
     }
-    for (uint32_t frame = 0U; frame < frames; ++frame)
+    uint32_t first_frames = recorder->config.ring_capacity_frames
+        - recorder->write_frame_index;
+    if (first_frames > frames)
     {
-        const uint32_t ring_frame = (uint32_t)(
-            (recorder->accepted_frames + frame)
-            % recorder->config.ring_capacity_frames);
-        memcpy(&recorder->config.ring_interleaved[
-                   ring_frame * recorder->config.channels],
-               &pcm_interleaved[frame * recorder->config.channels],
-               (size_t)recorder->config.channels * sizeof(int32_t));
+        first_frames = frames;
+    }
+    const size_t bytes_per_ring_frame =
+        (size_t)recorder->config.channels * sizeof(int32_t);
+    memcpy(&recorder->config.ring_interleaved[
+               recorder->write_frame_index * recorder->config.channels],
+           pcm_interleaved,
+           (size_t)first_frames * bytes_per_ring_frame);
+    const uint32_t second_frames = frames - first_frames;
+    if (second_frames != 0U)
+    {
+        memcpy(recorder->config.ring_interleaved,
+               &pcm_interleaved[first_frames * recorder->config.channels],
+               (size_t)second_frames * bytes_per_ring_frame);
+    }
+    recorder->write_frame_index += first_frames;
+    if (recorder->write_frame_index == recorder->config.ring_capacity_frames)
+    {
+        recorder->write_frame_index = second_frames;
     }
     recorder->accepted_frames += frames;
     recorder->accepted_tail += additional_bytes;

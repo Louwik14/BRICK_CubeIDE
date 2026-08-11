@@ -532,6 +532,12 @@ uint8_t audio_recorder_client_is_active(audio_recorder_client_t client)
             && (audio_recorder_is_active() != 0U)) ? 1U : 0U;
 }
 
+uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client)
+{
+    return (uint8_t)((g_audio_recorder.client == client)
+            && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING));
+}
+
 uint8_t audio_recorder_prepare(const char *temporary_rec_path,
                                const char *final_wav_path,
                                uint32_t frame_limit)

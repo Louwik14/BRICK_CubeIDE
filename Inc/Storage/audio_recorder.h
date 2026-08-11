@@ -110,6 +110,7 @@ uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
 uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
                                        audio_recorder_live_stream_t *stream);
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
+uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
 
 #ifdef __cplusplus
 }

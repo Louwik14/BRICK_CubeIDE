@@ -197,6 +197,7 @@ typedef struct
     uint32_t media_epoch;
     uint32_t generation;
     uint32_t stop_started_us;
+    uint32_t write_frame_index;
     uint16_t last_extent_index;
     generic_recorder_state_t state;
     generic_recorder_error_t error;

@@ -1350,10 +1350,7 @@ uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track)
         return 0U;
     }
 
-    audio_recorder_status_t status;
-    if((audio_recorder_get_status_client(
-            AUDIO_RECORDER_CLIENT_LOOPER, &status) == 0U)
-            || (status.state != AUDIO_RECORDER_STATE_RECORDING))
+    if(audio_recorder_client_is_recording(AUDIO_RECORDER_CLIENT_LOOPER) == 0U)
     {
         return 0U;
     }

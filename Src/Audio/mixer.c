@@ -478,6 +478,24 @@ static uint8_t mixer_track_is_looper(uint8_t logical_track)
     return mixer_track_is_looper_ctx(track_runtime_get_ctx(logical_track));
 }
 
+static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
+                                           uint8_t mix_track)
+{
+    uint8_t source_track = mix_track;
+    (void)track_runtime_get_logical_track_for_mix_track(mix_track,
+                                                         &source_track);
+    if ((looper_track >= MIXER_MAX_TRACKS)
+            || (source_track >= MIXER_MAX_TRACKS)
+            || (source_track == looper_track)
+            || (mixer_track_is_looper(source_track) != 0U))
+    {
+        return 0U;
+    }
+
+    return ui_core_runtime_bridge_get_looper_route_enabled(looper_track,
+                                                            source_track);
+}
+
 static float mixer_get_looper_xfade(void)
 {
     const float target = audio_xfade_get();
@@ -3981,11 +3999,15 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
          * accumulates every destination while the source sample is live.
          */
         uint8_t direct_mono_fanout = 0U;
+        const uint8_t looper_record_route_active =
+            (looper_record_active != 0U)
+                ? mixer_lane_routes_to_looper(looper_record_track, (uint8_t)t)
+                : 0U;
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
                 && (diag_lane == 0U)
                 && (sample_capture_active == 0U)
-                && (looper_record_active == 0U)
+                && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
             uint8_t has_track_insert = 0U;
@@ -4126,7 +4148,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (diag_lane == 0U)
                 && (sample_capture_active == 0U)
-                && (looper_record_active == 0U)
+                && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U)
                 && (mt->route_master != 0U)
                 )
