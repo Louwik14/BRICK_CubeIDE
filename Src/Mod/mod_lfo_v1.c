@@ -1502,11 +1502,13 @@ uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t 
 void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
 {
     mod_destination_catalog_invalidate_track(track);
+    mod_matrix_rebuild_route_cache_track(track);
 }
 
 void mod_lfo_v1_invalidate_dest_cache_all(void)
 {
     mod_destination_catalog_invalidate_all();
+    mod_matrix_rebuild_route_cache_all();
 }
 
 uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)

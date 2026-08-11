@@ -16,6 +16,7 @@
 typedef struct
 {
     uint8_t valid;
+    uint8_t modulation_active;
     uint16_t destination;
     float base_value;
     float sum;
@@ -35,6 +36,30 @@ typedef struct
     uint8_t any_route;
     uint16_t source_mask;
 } mod_matrix_route_cache_t;
+
+typedef struct
+{
+    uint8_t source;
+    uint8_t destination_index;
+    float scale;
+} mod_matrix_track_route_t;
+
+typedef struct
+{
+    uint16_t destination;
+    uint8_t runtime_destination_index;
+    float min_value;
+    float max_value;
+    uint16_t discontinuity_source_mask;
+} mod_matrix_track_destination_t;
+
+typedef struct
+{
+    uint8_t route_count;
+    uint8_t destination_count;
+    mod_matrix_track_route_t routes[MOD_MATRIX_SLOT_COUNT];
+    mod_matrix_track_destination_t destinations[MOD_MATRIX_SLOT_COUNT];
+} mod_matrix_track_plan_t;
 
 typedef struct
 {
@@ -78,6 +103,7 @@ typedef struct
 } mod_matrix_poly_plan_t;
 
 static mod_matrix_poly_plan_t g_mod_matrix_poly_plan[SEQ_TRACK_COUNT];
+static mod_matrix_track_plan_t g_mod_matrix_track_plan[SEQ_TRACK_COUNT];
 static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_base_override_t
     g_mod_matrix_base_overrides[SEQ_TRACK_COUNT][MOD_MATRIX_SLOT_COUNT];
@@ -283,6 +309,7 @@ static void mod_matrix_release_destination(uint8_t track,
     }
 
     dst->valid = 0U;
+    dst->modulation_active = 0U;
     dst->destination = (uint16_t)MOD_DESTINATION_NONE;
     dst->base_value = 0.0f;
     dst->sum = 0.0f;
@@ -397,6 +424,7 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
 
         const param_desc_t *const desc = &param_registry[destination];
         dst->valid = 1U;
+        dst->modulation_active = 0U;
         dst->destination = (uint16_t)destination;
         dst->base_value = base;
         dst->sum = 0.0f;
@@ -408,6 +436,139 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
 
     *out_dst = dst;
     return 1U;
+}
+
+static void mod_matrix_restore_destination_value(uint8_t track,
+                                                 mod_matrix_runtime_destination_t *dst,
+                                                 ui_track_family_t family,
+                                                 ui_track_type_t type,
+                                                 const track_runtime_ctx_t *ctx)
+{
+    if ((dst == NULL) || (dst->valid == 0U))
+    {
+        return;
+    }
+
+    if ((dst->destination < (uint16_t)PARAM_COUNT)
+            && (mod_destination_catalog_supported_fast(track,
+                                                       (param_id_t)dst->destination,
+                                                       family,
+                                                       type,
+                                                       ctx) != 0U))
+    {
+        (void)mod_destination_catalog_apply_rt(track,
+                                               (param_id_t)dst->destination,
+                                               ctx,
+                                               dst->base_value);
+    }
+}
+
+static void mod_matrix_rebuild_track_plan(uint8_t track,
+                                          ui_track_family_t family,
+                                          ui_track_type_t type,
+                                          const track_runtime_ctx_t *ctx)
+{
+    typedef struct
+    {
+        uint8_t source;
+        uint16_t destination;
+        float depth;
+    } mod_matrix_track_candidate_t;
+
+    mod_matrix_track_candidate_t candidates[MOD_MATRIX_SLOT_COUNT];
+    mod_matrix_track_plan_t *const plan = &g_mod_matrix_track_plan[track];
+    mod_matrix_runtime_track_t *const rt = &g_mod_matrix_runtime[track];
+    uint8_t candidate_count = 0U;
+
+    memset(plan, 0, sizeof(*plan));
+
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
+        if ((mod_matrix_slot_is_effective(track, s, family, type, ctx) != 0U)
+                && (candidate_count < MOD_MATRIX_SLOT_COUNT))
+        {
+            candidates[candidate_count].source = s->source;
+            candidates[candidate_count].destination = s->destination;
+            candidates[candidate_count].depth = s->depth;
+            ++candidate_count;
+        }
+    }
+
+    for (uint8_t runtime_index = 0U; runtime_index < MOD_MATRIX_SLOT_COUNT; ++runtime_index)
+    {
+        mod_matrix_runtime_destination_t *const dst = &rt->destinations[runtime_index];
+        uint8_t still_used = 0U;
+        if ((dst->valid != 0U) && (dst->destination < (uint16_t)PARAM_COUNT))
+        {
+            for (uint8_t candidate = 0U; candidate < candidate_count; ++candidate)
+            {
+                if (candidates[candidate].destination == dst->destination)
+                {
+                    still_used = 1U;
+                    break;
+                }
+            }
+        }
+        if ((dst->valid != 0U) && (still_used == 0U))
+        {
+            mod_matrix_release_destination(track, dst, family, type, ctx);
+        }
+    }
+
+    for (uint8_t candidate = 0U; candidate < candidate_count; ++candidate)
+    {
+        uint8_t destination_index = plan->destination_count;
+        for (uint8_t i = 0U; i < plan->destination_count; ++i)
+        {
+            if (plan->destinations[i].destination == candidates[candidate].destination)
+            {
+                destination_index = i;
+                break;
+            }
+        }
+
+        if (destination_index == plan->destination_count)
+        {
+            mod_matrix_runtime_destination_t *dst = NULL;
+            if ((plan->destination_count >= MOD_MATRIX_SLOT_COUNT)
+                    || (mod_matrix_runtime_destination_prepare(
+                            track,
+                            rt,
+                            (param_id_t)candidates[candidate].destination,
+                            &dst) == 0U))
+            {
+                continue;
+            }
+
+            const uint8_t runtime_index = (uint8_t)(dst - &rt->destinations[0]);
+            if (runtime_index >= MOD_MATRIX_SLOT_COUNT)
+            {
+                continue;
+            }
+
+            destination_index = plan->destination_count;
+            plan->destinations[destination_index].destination = candidates[candidate].destination;
+            plan->destinations[destination_index].runtime_destination_index = runtime_index;
+            plan->destinations[destination_index].min_value = dst->min_value;
+            plan->destinations[destination_index].max_value = dst->max_value;
+            ++plan->destination_count;
+        }
+
+        if (plan->route_count >= MOD_MATRIX_SLOT_COUNT)
+        {
+            continue;
+        }
+
+        mod_matrix_track_route_t *const route = &plan->routes[plan->route_count++];
+        route->source = candidates[candidate].source;
+        route->destination_index = destination_index;
+        route->scale = (candidates[candidate].depth / 127.0f)
+            * (plan->destinations[destination_index].max_value
+               - plan->destinations[destination_index].min_value);
+        plan->destinations[destination_index].discontinuity_source_mask |=
+            (uint16_t)(1U << candidates[candidate].source);
+    }
 }
 
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot)
@@ -441,6 +602,7 @@ void mod_matrix_init(void)
 void mod_matrix_reset_runtime(void)
 {
     memset(g_mod_matrix_runtime, 0, sizeof(g_mod_matrix_runtime));
+    memset(g_mod_matrix_track_plan, 0, sizeof(g_mod_matrix_track_plan));
     memset(g_mod_matrix_operator_runtime, 0, sizeof(g_mod_matrix_operator_runtime));
     memset(g_mod_matrix_base_overrides, 0, sizeof(g_mod_matrix_base_overrides));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -478,6 +640,9 @@ void mod_matrix_rebuild_route_cache_track(uint8_t track)
     memset(plan, 0, sizeof(*plan));
     track_runtime_refresh_track(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
+    const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
+    mod_matrix_rebuild_track_plan(track, family, type, ctx);
     if (ctx != NULL)
     {
         for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
@@ -628,8 +793,8 @@ uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float
     s->destination = (uint16_t)mod_destination_catalog_param_from_index(track, index);
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
-    mod_matrix_rebuild_route_cache_track(track);
     mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
+    mod_matrix_rebuild_route_cache_track(track);
     return 1U;
 }
 
@@ -642,11 +807,11 @@ uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value)
     }
 
     s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
-    mod_matrix_rebuild_route_cache_track(track);
     if (s->depth == 0.0f)
     {
         mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
     }
+    mod_matrix_rebuild_route_cache_track(track);
     return 1U;
 }
 
@@ -661,8 +826,8 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
     s->source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
-    mod_matrix_rebuild_route_cache_track(track);
     mod_matrix_release_track(track, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
+    mod_matrix_rebuild_route_cache_track(track);
     return 1U;
 }
 
@@ -1161,83 +1326,95 @@ void mod_matrix_process_track_ramped(uint8_t track,
     {
         return;
     }
-    if (mod_matrix_track_has_configured_route(track) == 0U)
+    const mod_matrix_track_plan_t *const plan = &g_mod_matrix_track_plan[track];
+    if (plan->route_count == 0U)
     {
         return;
     }
 
-    (void)source_start;
     mod_matrix_runtime_track_t *const rt = &g_mod_matrix_runtime[track];
     const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
     const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
     uint8_t touched[MOD_MATRIX_SLOT_COUNT] = {0};
+    uint16_t discontinuity_source_mask = 0U;
 
-    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
+    for (uint8_t source = 0U; source < MOD_MATRIX_SOURCE_COUNT; ++source)
     {
-        rt->destinations[i].sum = 0.0f;
-        rt->destinations[i].sum_end = 0.0f;
+        if (source_discontinuous[source] != 0U)
+        {
+            discontinuity_source_mask |= (uint16_t)(1U << source);
+        }
     }
 
-    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
     {
-        const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
-        if (mod_matrix_slot_is_effective(track, s, family, type, ctx) == 0U)
+        const uint8_t runtime_index = plan->destinations[i].runtime_destination_index;
+        if (runtime_index >= MOD_MATRIX_SLOT_COUNT)
         {
             continue;
         }
-
-        const uint8_t source = s->source;
-        if ((source >= MOD_MATRIX_SOURCE_COUNT) || (source_valid[source] == 0U))
-        {
-            continue;
-        }
-
-        mod_matrix_runtime_destination_t *dst = NULL;
-        const param_id_t destination = (param_id_t)s->destination;
-        if (mod_matrix_runtime_destination_prepare(track, rt, destination, &dst) == 0U)
-        {
-            continue;
-        }
-
-        const uint8_t dst_index = (uint8_t)(dst - &rt->destinations[0]);
-        touched[dst_index] = 1U;
-        const float scale = (s->depth / 127.0f) * (dst->max_value - dst->min_value);
-        dst->sum += source_start[source] * scale;
-        dst->sum_end += source_end[source] * scale;
+        rt->destinations[runtime_index].sum = 0.0f;
+        rt->destinations[runtime_index].sum_end = 0.0f;
     }
 
-    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
+    for (uint8_t i = 0U; i < plan->route_count; ++i)
     {
-        mod_matrix_runtime_destination_t *const dst = &rt->destinations[i];
-        if (dst->valid == 0U)
+        const mod_matrix_track_route_t *const route = &plan->routes[i];
+        if ((route->source >= MOD_MATRIX_SOURCE_COUNT)
+                || (source_valid[route->source] == 0U)
+                || (route->destination_index >= plan->destination_count))
         {
             continue;
         }
+
+        const uint8_t runtime_index = plan->destinations[route->destination_index].runtime_destination_index;
+        if (runtime_index >= MOD_MATRIX_SLOT_COUNT)
+        {
+            continue;
+        }
+
+        mod_matrix_runtime_destination_t *const dst = &rt->destinations[runtime_index];
+        touched[route->destination_index] = 1U;
+        dst->modulation_active = 1U;
+        dst->sum += source_start[route->source] * route->scale;
+        dst->sum_end += source_end[route->source] * route->scale;
+    }
+
+    for (uint8_t i = 0U; i < plan->destination_count; ++i)
+    {
+        const mod_matrix_track_destination_t *const planned = &plan->destinations[i];
+        const uint8_t runtime_index = planned->runtime_destination_index;
+        if (runtime_index >= MOD_MATRIX_SLOT_COUNT)
+        {
+            continue;
+        }
+
+        mod_matrix_runtime_destination_t *const dst = &rt->destinations[runtime_index];
         if (touched[i] == 0U)
         {
-            mod_matrix_release_destination(track, dst, family, type, ctx);
+            if (dst->modulation_active != 0U)
+            {
+                mod_matrix_restore_destination_value(track,
+                                                     dst,
+                                                     family,
+                                                     type,
+                                                     ctx);
+                dst->modulation_active = 0U;
+            }
+            dst->sum = 0.0f;
+            dst->sum_end = 0.0f;
+            dst->ramp = (mod_destination_ramp_t){0};
             continue;
         }
 
         const float start = mod_matrix_clampf(dst->base_value + dst->sum,
-                                              dst->min_value,
-                                              dst->max_value);
+                                              planned->min_value,
+                                              planned->max_value);
         const float end = mod_matrix_clampf(dst->base_value + dst->sum_end,
-                                            dst->min_value,
-                                            dst->max_value);
-        uint8_t discontinuous = 0U;
-        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-        {
-            const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(track, slot);
-            if ((s != NULL)
-                    && (mod_matrix_slot_is_effective(track, s, family, type, ctx) != 0U)
-                    && ((param_id_t)s->destination == (param_id_t)dst->destination)
-                    && (source_discontinuous[s->source] != 0U))
-            {
-                discontinuous = 1U;
-                break;
-            }
-        }
+                                            planned->min_value,
+                                            planned->max_value);
+        const uint8_t discontinuous =
+            ((planned->discontinuity_source_mask & discontinuity_source_mask) != 0U) ? 1U : 0U;
         mod_destination_ramp_prepare(start,
                                      end,
                                      elapsed_frames,
@@ -1364,6 +1541,8 @@ void mod_matrix_release_track(uint8_t track,
     {
         mod_matrix_release_destination(track, &g_mod_matrix_runtime[track].destinations[i], family, type, ctx);
     }
+    g_mod_matrix_track_plan[track].route_count = 0U;
+    g_mod_matrix_track_plan[track].destination_count = 0U;
 }
 
 void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value)
