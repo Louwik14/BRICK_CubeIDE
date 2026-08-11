@@ -16,10 +16,12 @@
 #include "UI/ui_core.h"
 #include "UI/ui_core_runtime_bridge.h"
 #include "UI/ui_active_track_sync.h"
+#include "UI/ui_track_catalog.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_step_snapshot.h"
 #include "Param/param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -133,7 +135,9 @@ static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *st
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
                                                             uint16_t *out_required);
-static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_block_t *seq);
+static uint8_t pattern_live_seq_block_validate_plock_slots(
+    const pattern_v1_seq_block_t *seq,
+    const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
                                             const PatternSaveV1 *snapshot,
@@ -447,8 +451,8 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint16_t required = 0U;
-        const uint16_t track_capacity = seq_model_get_track_plock_capacity(track);
-        const uint8_t step_limit = seq_model_get_step_lock_limit(track);
+        const uint16_t track_capacity = (uint16_t)SEQ_PLOCK_BUDGET_PER_TRACK;
+        const uint8_t step_limit = (uint8_t)SEQ_STEP_MAX_LOCKS;
 
         for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
         {
@@ -489,39 +493,62 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
     return 1U;
 }
 
-static uint8_t pattern_live_seq_block_validate_plock_slots(const pattern_v1_seq_block_t *seq)
+static uint8_t pattern_live_seq_block_validate_plock_slots(
+    const pattern_v1_seq_block_t *seq,
+    const pattern_v1_track_cfg_block_t *track_cfg)
 {
-    if (seq == 0)
+    if ((seq == 0) || (track_cfg == 0))
     {
         return 0U;
     }
 
+    const uint8_t group_active = (uint8_t)(
+        track_cfg->type[SEQ_GROUP_PARENT_MAIN_TRACK] == (uint8_t)UI_TRACK_TYPE_GROUP);
+
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const pattern_v1_track_seq_t *const saved = &seq->tracks[track];
+        seq_lane_descriptor_t lane;
+        if (seq_lane_resolve(group_active, (seq_lane_id_t)track, &lane) == 0U)
+        {
+            return 0U;
+        }
+        const uint8_t runtime_type = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+            ? (uint8_t)TRACK_RUNTIME_TYPE_RAM
+            : ((track < SEQ_TRACK_COUNT) ? track_cfg->type[track]
+                                         : (uint8_t)TRACK_RUNTIME_TYPE_NONE);
 
         for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
         {
-            const uint8_t lock_count = saved->steps[step].lock_count;
-            if (lock_count > SEQ_STEP_MAX_LOCKS)
+            const pattern_v1_step_t *const saved_step = &saved->steps[step];
+            seq_step_snapshot_t snapshot;
+            memset(&snapshot, 0, sizeof(snapshot));
+            snapshot.valid = 1U;
+            snapshot.trig = saved_step->trig;
+            snapshot.roll = saved_step->roll;
+            snapshot.lock_count = saved_step->lock_count;
+            snapshot.play = saved_step->play;
+            if (snapshot.lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
             {
                 return 0U;
             }
-            if (pattern_live_play_is_valid(&saved->steps[step].play) == 0U) return 0U;
-            if ((seq_step_play_has_any(&saved->steps[step].play) != 0U)
-                    && (seq_model_track_can_store_play(track) == 0U)) return 0U;
-
-            for (uint8_t lock = 0U; lock < lock_count; ++lock)
+            for (uint8_t lock = 0U; lock < snapshot.lock_count; ++lock)
             {
-                const pattern_v1_plock_t *const plock = &saved->steps[step].locks[lock];
-                param_id_t param = PARAM_COUNT;
-                if ((seq_param_iface_slot_to_param(track,
-                                                  plock->set_id,
-                                                  plock->param_slot,
-                                                  &param) == 0U))
-                {
-                    return 0U;
-                }
+                const pattern_v1_plock_t *const source = &saved_step->locks[lock];
+                snapshot.locks[lock] = (seq_step_snapshot_plock_t){
+                    .set_id = source->set_id,
+                    .param_slot = source->param_slot,
+                    .value16 = pattern_live_plock_get_value16(source),
+                    .flags = source->flags
+                };
+            }
+            if (seq_step_snapshot_validate_for_target(
+                    (uint8_t)((lane.active != 0U) && (lane.can_emit_notes != 0U)),
+                    lane.active,
+                    runtime_type,
+                    &snapshot) == 0U)
+            {
+                return 0U;
             }
         }
     }
@@ -686,7 +713,8 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     return 1U;
 }
 
-static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
+static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq,
+                                            const pattern_v1_track_cfg_block_t *track_cfg)
 {
     if (seq == 0)
     {
@@ -698,7 +726,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
     if (pattern_live_seq_block_validate_plock_budget(seq, &overflow_track, &overflow_required) == 0U)
     {        return 0U;
     }
-    if (pattern_live_seq_block_validate_plock_slots(seq) == 0U)
+    if (pattern_live_seq_block_validate_plock_slots(seq, track_cfg) == 0U)
     {
         return 0U;
     }
@@ -783,7 +811,8 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
         return 0U;
     }
 
-    if (pattern_live_apply_seq_block(&ctx->pattern->seq) == 0U)
+    if (pattern_live_apply_seq_block(&ctx->pattern->seq,
+                                     &ctx->pattern->track_cfg) == 0U)
     {
         return 0U;
     }
@@ -903,19 +932,43 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     memcpy(&g_pattern_apply_normalized, pattern, sizeof(g_pattern_apply_normalized));
     pattern = &g_pattern_apply_normalized;
 
-    if (pattern_live_seq_block_validate_plock_budget(&pattern->seq, 0, 0) == 0U)
+    ui_track_config_t prospective_configs[SEQ_TRACK_COUNT];
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t family = pattern->track_cfg.family[track];
+        const uint8_t type = pattern->track_cfg.type[track];
+        if ((family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+                || (type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+                || ((family == (uint8_t)UI_TRACK_FAMILY_OFF)
+                    && (type != (uint8_t)UI_TRACK_TYPE_NONE)))
+        {
+            return 0U;
+        }
+        prospective_configs[track].family = (ui_track_family_t)family;
+        prospective_configs[track].type = (ui_track_type_t)type;
+    }
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if ((prospective_configs[track].family != UI_TRACK_FAMILY_OFF)
+                && (ui_track_catalog_type_is_available(
+                        track,
+                        prospective_configs[track].family,
+                        prospective_configs[track].type,
+                        prospective_configs) == false))
+        {
+            return 0U;
+        }
+    }
+
+    if ((pattern_live_seq_block_validate_plock_budget(&pattern->seq, 0, 0) == 0U)
+            || (pattern_live_seq_block_validate_plock_slots(
+                    &pattern->seq, &pattern->track_cfg) == 0U))
     {
         return 0U;
     }
 
-    ui_track_config_t ownership_configs[SEQ_TRACK_COUNT];
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        ownership_configs[track].family = (ui_track_family_t)pattern->track_cfg.family[track];
-        ownership_configs[track].type = (ui_track_type_t)pattern->track_cfg.type[track];
-    }
     if (track_input_ownership_validate_bulk(
-            ownership_configs, pattern->track_cfg.external_input) == 0U)
+            prospective_configs, pattern->track_cfg.external_input) == 0U)
     {
         return 0U;
     }

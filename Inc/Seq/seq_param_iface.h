@@ -76,6 +76,9 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
                                       seq_param_slot_t *out_param_slot);
 uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
 uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
+uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
+                                                   uint8_t set_id,
+                                                   seq_param_slot_t param_slot);
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
                                            uint8_t set_id,
                                            param_id_t param_id);

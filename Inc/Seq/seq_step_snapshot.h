@@ -53,6 +53,10 @@ uint8_t seq_step_snapshot_capture_list(seq_track_id_t track,
 
 uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
                                               const seq_step_snapshot_t *snapshot);
+uint8_t seq_step_snapshot_validate_for_target(uint8_t can_store_play,
+                                              uint8_t can_store_params,
+                                              uint8_t runtime_type,
+                                              const seq_step_snapshot_t *snapshot);
 
 uint8_t seq_step_snapshot_apply(seq_track_id_t track,
                                 seq_step_id_t step,

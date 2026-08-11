@@ -23,12 +23,15 @@
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_step_snapshot.h"
 #include "Seq/seq_runtime_control.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
 #include "UI/ui_active_track_sync.h"
 #include "UI/ui_param.h"
+#include "UI/ui_track_catalog.h"
 
 #define TRACK_SNAPSHOT_LOCK_NONE 0xFFFFU
 
@@ -218,46 +221,102 @@ static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *
     return 1U;
 }
 
-static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t *snapshot)
+static uint8_t track_snapshot_build_step_snapshot(const track_snapshot_sequence_t *saved,
+                                                  seq_step_id_t step,
+                                                  seq_step_snapshot_t *out_step)
+{
+    if ((saved == 0) || (out_step == 0) || (step >= (seq_step_id_t)SEQ_MAX_STEPS))
+    {
+        return 0U;
+    }
+
+    const seq_step_t *const source = &saved->track.steps[step];
+    const track_snapshot_step_locks_t *const source_locks = &saved->step_locks[step];
+    if (source_locks->count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
+    {
+        return 0U;
+    }
+
+    memset(out_step, 0, sizeof(*out_step));
+    out_step->valid = 1U;
+    out_step->trig = source->trig;
+    out_step->roll = source->roll;
+    out_step->lock_count = source_locks->count;
+    out_step->play = source->play;
+    for (uint8_t i = 0U; i < source_locks->count; ++i)
+    {
+        const seq_plock_entry_t *const lock = &source_locks->locks[i];
+        out_step->locks[i] = (seq_step_snapshot_plock_t){
+            .set_id = lock->set_id,
+            .param_slot = lock->param_slot,
+            .value16 = lock->value16,
+            .flags = lock->flags
+        };
+    }
+    return 1U;
+}
+
+static uint8_t track_snapshot_validate_sequence(uint8_t track,
+                                                const track_snapshot_t *snapshot,
+                                                uint8_t can_store_play,
+                                                uint8_t can_store_params,
+                                                uint8_t runtime_type)
 {
     if ((track >= SEQ_TRACK_COUNT) || (snapshot == 0))
     {
-        return;
+        return 0U;
     }
     if (seq_edit_track_sequence_is_locked((seq_track_id_t)track) != 0U)
     {
-        return;
+        return 0U;
     }
 
     const track_snapshot_sequence_t *const saved = &snapshot->sequence;
+    uint16_t incoming_lock_count = 0U;
+    seq_step_snapshot_t step_snapshot;
     for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
     {
-        seq_model_set_trig((seq_track_id_t)track, step, saved->track.steps[step].trig);
-        seq_model_set_step_roll((seq_track_id_t)track, step, saved->track.steps[step].roll);
+        if ((track_snapshot_build_step_snapshot(saved, step, &step_snapshot) == 0U)
+                || (seq_step_snapshot_validate_for_target(can_store_play,
+                                                          can_store_params,
+                                                          runtime_type,
+                                                          &step_snapshot) == 0U))
+        {
+            return 0U;
+        }
+        incoming_lock_count = (uint16_t)(incoming_lock_count + step_snapshot.lock_count);
+    }
+    if (incoming_lock_count > seq_model_get_track_plock_capacity((seq_track_id_t)track))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t *snapshot)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (snapshot == 0))
+    {
+        return 0U;
+    }
+
+    const track_snapshot_sequence_t *const saved = &snapshot->sequence;
+    seq_step_snapshot_t step_snapshot;
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    {
+        seq_model_set_trig((seq_track_id_t)track, step, 0U);
         seq_model_step_plock_clear((seq_track_id_t)track, step);
         seq_model_step_play_clear((seq_track_id_t)track, step);
-        const seq_step_play_t *const play = &saved->track.steps[step].play;
-        for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    }
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    {
+        if ((track_snapshot_build_step_snapshot(saved, step, &step_snapshot) == 0U)
+                || (seq_step_snapshot_apply((seq_track_id_t)track,
+                                            step,
+                                            &step_snapshot) == 0U))
         {
-            for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
-            {
-                int16_t value = 0;
-                if (seq_step_play_get(play, voice, (seq_step_play_field_t)field, &value) != 0U)
-                {
-                    (void)seq_model_step_play_set((seq_track_id_t)track,
-                                                  step,
-                                                  voice,
-                                                  (seq_step_play_field_t)field,
-                                                  value);
-                }
-            }
-        }
-        const uint8_t count = saved->step_locks[step].count;
-        for (uint8_t lock = 0U; lock < count; ++lock)
-        {
-            const seq_plock_entry_t *const entry = &saved->step_locks[step].locks[lock];
-            (void)seq_model_step_plock_upsert((seq_track_id_t)track, step, entry->set_id,
-                                              entry->param_slot, entry->value16, entry->flags);
+            return 0U;
         }
     }
     seq_model_set_track_length((seq_track_id_t)track, saved->track.length_steps);
@@ -265,6 +324,7 @@ static void track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t 
     seq_runtime_restore_track_div((seq_track_id_t)track, snapshot->seq_div);
     seq_runtime_set_track_quant((seq_track_id_t)track, snapshot->seq_quant);
     seq_runtime_set_track_swing((seq_track_id_t)track, snapshot->seq_swing);
+    return 1U;
 }
 
 static uint8_t track_snapshot_reapply_track_params(uint8_t track,
@@ -554,10 +614,44 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     ui_track_config_t ownership_configs[UI_TRACK_COUNT];
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
+        if ((family[track] >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+                || (type[track] >= (uint8_t)UI_TRACK_TYPE_COUNT)
+                || ((family[track] == (uint8_t)UI_TRACK_FAMILY_OFF)
+                    && (type[track] != (uint8_t)UI_TRACK_TYPE_NONE)))
+        {
+            return 0U;
+        }
         ownership_configs[track].family = (ui_track_family_t)family[track];
         ownership_configs[track].type = (ui_track_type_t)type[track];
     }
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if ((ownership_configs[track].family != UI_TRACK_FAMILY_OFF)
+                && (ui_track_catalog_type_is_available(
+                        track,
+                        ownership_configs[track].family,
+                        ownership_configs[track].type,
+                        ownership_configs) == false))
+        {
+            return 0U;
+        }
+    }
     if (track_input_ownership_validate_bulk(ownership_configs, external_input) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t group_active = (uint8_t)(type[SEQ_GROUP_PARENT_MAIN_TRACK]
+        == (uint8_t)UI_TRACK_TYPE_GROUP);
+    seq_lane_descriptor_t target_lane;
+    if ((seq_lane_resolve(group_active, (seq_lane_id_t)target_track, &target_lane) == 0U)
+            || (target_lane.active == 0U)
+            || (snapshot->audio_owned_count > TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS)
+            || (track_snapshot_validate_sequence(target_track,
+                                                 snapshot,
+                                                 target_lane.can_emit_notes,
+                                                 target_lane.active,
+                                                 type[target_track]) == 0U))
     {
         return 0U;
     }
@@ -644,7 +738,10 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         }
     }
 
-    track_snapshot_apply_sequence(target_track, snapshot);
+    if (track_snapshot_apply_sequence(target_track, snapshot) == 0U)
+    {
+        goto restore_done;
+    }
     if (track_snapshot_reapply_track_params(target_track, snapshot) == 0U)
     {
         goto restore_done;

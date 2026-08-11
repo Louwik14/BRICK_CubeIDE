@@ -753,6 +753,38 @@ uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track,
     return seq_param_iface_slot_is_storable_internal(track, set_id, param_slot);
 }
 
+uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
+                                                  uint8_t set_id,
+                                                  seq_param_slot_t param_slot)
+{
+    if (seq_param_iface_is_set_plockable(set_id) == 0U)
+    {
+        return 0U;
+    }
+
+    param_id_t param = PARAM_COUNT;
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+    {
+        if (track_runtime_tone_slot_to_param((track_runtime_type_t)runtime_type,
+                                             param_slot,
+                                             &param) == 0U)
+        {
+            return 0U;
+        }
+    }
+    else
+    {
+        const seq_param_inverse_table_t inverse = g_seq_param_inverse_tables[set_id];
+        if ((inverse.ids == NULL) || (param_slot >= inverse.count))
+        {
+            return 0U;
+        }
+        param = inverse.ids[param_slot];
+    }
+
+    return seq_param_iface_param_matches_set_domain(set_id, param);
+}
+
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
                                            uint8_t set_id,
                                            param_id_t param_id)

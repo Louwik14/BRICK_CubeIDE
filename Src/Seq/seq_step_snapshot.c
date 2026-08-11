@@ -92,18 +92,51 @@ static uint8_t apply_play(seq_track_id_t track, seq_step_id_t step, const seq_st
     return 1U;
 }
 
-uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
-                                              const seq_step_snapshot_t *snapshot)
+static uint8_t seq_step_snapshot_validate_structure(uint8_t can_store_play,
+                                                    const seq_step_snapshot_t *snapshot)
 {
-    if ((seq_step_snapshot_track_is_valid(track) == 0U) || (snapshot == 0) || (snapshot->valid == 0U)
+    if ((snapshot == 0) || (snapshot->valid == 0U)
+            || (snapshot->trig > 1U)
+            || (snapshot->roll >= (uint8_t)SEQ_STEP_ROLL_COUNT)
+            || ((snapshot->trig == 0U) && (snapshot->roll != (uint8_t)SEQ_STEP_ROLL_OFF))
             || (snapshot->lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
             || (play_state_is_valid(&snapshot->play) == 0U)) return 0U;
     if ((seq_step_play_has_any(&snapshot->play) != 0U)
-            && (seq_model_track_can_store_play(track) == 0U)) return 0U;
+            && (can_store_play == 0U)) return 0U;
+    if ((snapshot->trig != 0U) && (can_store_play == 0U)) return 0U;
+    return 1U;
+}
+
+uint8_t seq_step_snapshot_validate_for_track(seq_track_id_t track,
+                                              const seq_step_snapshot_t *snapshot)
+{
+    if ((seq_step_snapshot_track_is_valid(track) == 0U)
+            || (seq_step_snapshot_validate_structure(
+                    seq_model_track_can_store_play(track), snapshot) == 0U)) return 0U;
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
         const seq_step_snapshot_plock_t *lock = &snapshot->locks[i];
         if (seq_param_iface_slot_is_storable(track, lock->set_id, lock->param_slot) == 0U) return 0U;
+        for (uint8_t j = 0U; j < i; ++j)
+            if ((snapshot->locks[j].set_id == lock->set_id)
+                    && (snapshot->locks[j].param_slot == lock->param_slot)) return 0U;
+    }
+    return 1U;
+}
+
+uint8_t seq_step_snapshot_validate_for_target(uint8_t can_store_play,
+                                              uint8_t can_store_params,
+                                              uint8_t runtime_type,
+                                              const seq_step_snapshot_t *snapshot)
+{
+    if (seq_step_snapshot_validate_structure(can_store_play, snapshot) == 0U) return 0U;
+    if ((can_store_params == 0U) && (snapshot->lock_count != 0U)) return 0U;
+    for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
+    {
+        const seq_step_snapshot_plock_t *lock = &snapshot->locks[i];
+        if (seq_param_iface_slot_is_storable_for_type(runtime_type,
+                                                       lock->set_id,
+                                                       lock->param_slot) == 0U) return 0U;
         for (uint8_t j = 0U; j < i; ++j)
             if ((snapshot->locks[j].set_id == lock->set_id)
                     && (snapshot->locks[j].param_slot == lock->param_slot)) return 0U;
