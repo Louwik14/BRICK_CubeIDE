@@ -9,11 +9,6 @@ extern "C" {
 #define BRICK6_FM_VOICE_COUNT 16U
 #define BRICK6_FM_RENDER_BLOCK 64U
 
-/* Temporary hardware benchmark selector: 0 = MSFA Modern, 1 = picoX7. */
-#ifndef FM_RENDERER_BENCH
-#define FM_RENDERER_BENCH 0U
-#endif
-
 typedef enum
 {
     BRICK6_FM_OPERATOR_LEVEL = 0,
@@ -31,8 +26,6 @@ typedef enum
 } brick6_fm_operator_param_t;
 
 void brick6_fm_runtime_init(void);
-void brick6_fm_runtime_set_renderer_bench(uint8_t renderer);
-uint8_t brick6_fm_runtime_get_renderer_bench(void);
 void brick6_fm_runtime_reset_instance(uint8_t instance_id);
 void brick6_fm_runtime_all_notes_off(uint8_t instance_id);
 void brick6_fm_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);

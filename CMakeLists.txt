@@ -493,8 +493,6 @@ list(REMOVE_DUPLICATES ALL_USER_SOURCES)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${ALL_USER_SOURCES}
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_pico/brick6_fm_pico_renderer.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_pico/brick6_fm_pico_tables.cpp"
     "${UI_ROLL_POPUP_SRC}"
 )
 

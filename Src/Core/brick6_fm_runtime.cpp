@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Core/fm_pico/brick6_fm_pico_renderer.h"
 #include "Core/fm_dexed/msfa/env.h"
 #include "Core/fm_dexed/msfa/exp2.h"
 #include "Core/fm_dexed/msfa/fm_core.h"
@@ -38,7 +37,6 @@ struct fm_voice_t
     uint8_t operator_mode[kOperatorCount];
     uint8_t operator_velocity[kOperatorCount];
     uint8_t operator_key[kOperatorCount];
-    uint8_t operator_rate_scale[kOperatorCount];
     float ratio;
     uint8_t algorithm;
     uint8_t feedback_amount;
@@ -62,7 +60,6 @@ struct fm_voice_t
 
 AUDIO_HOT static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
 AUDIO_HOT static FmCore g_fm_modern;
-static uint8_t g_renderer_bench = (FM_RENDERER_BENCH != 0U) ? 1U : 0U;
 
 static const uint8_t kOperatorRatios[kOperatorCount] = { 1U, 2U, 3U, 4U, 5U, 6U };
 static const uint8_t kOperatorLevels[kOperatorCount] = { 99U, 82U, 76U, 70U, 64U, 58U };
@@ -376,7 +373,6 @@ static void reset_voice(fm_voice_t *voice)
     memset(voice->operator_mode, 0, sizeof(voice->operator_mode));
     memset(voice->operator_velocity, 7, sizeof(voice->operator_velocity));
     memset(voice->operator_key, 0, sizeof(voice->operator_key));
-    memset(voice->operator_rate_scale, 0, sizeof(voice->operator_rate_scale));
     voice->ratio = 0.5f;
     voice->algorithm = (uint8_t)kDefaultAlgorithm;
     voice->feedback_amount = kDefaultFeedback;
@@ -448,50 +444,6 @@ static void refresh_all_envelopes(fm_voice_t *voice)
     for (int op = 0; op < kOperatorCount; ++op) refresh_operator_envelope(voice, op);
 }
 
-static uint8_t pico_output_level(const fm_voice_t *voice, int op)
-{
-    int level = (int)voice->operator_level[op];
-    level += scale_level(voice->note,
-                         (int)((float)voice->operator_key[op]
-                               * voice->play_key + 0.5f)) / 4;
-    const int velocity = (int)voice->velocity - 64;
-    const int sensitivity = (int)((float)voice->operator_velocity[op]
-                                  * voice->play_velocity + 0.5f);
-    level += (velocity * sensitivity) / 64;
-    if (level < 0) level = 0;
-    if (level > 99) level = 99;
-    return (uint8_t)level;
-}
-
-static void make_pico_config(const fm_voice_t *voice,
-                             int32_t pitch_log_frequency,
-                             brick6_fm_pico_config_t *config)
-{
-    if (voice == nullptr || config == nullptr)
-        return;
-    memset(config, 0, sizeof(*config));
-    config->algorithm = voice->algorithm;
-    config->feedback = voice->feedback_amount;
-    config->sync = voice->sync;
-    config->note = voice->note;
-    for (int op = 0; op < kOperatorCount; ++op)
-    {
-        int rates[4];
-        int levels[4];
-        operator_envelope_values(voice, op, rates, levels);
-        config->phase_inc[op] = Freqlut::lookup(voice->base_log_frequency[op]
-                                                + pitch_log_frequency);
-        config->output_level[op] = pico_output_level(voice, op);
-        config->operator_on[op] = voice->operator_on[op];
-        config->rate_scale[op] = voice->operator_rate_scale[op];
-        for (int stage = 0; stage < 4; ++stage)
-        {
-            config->rates[op][stage] = (uint8_t)rates[stage];
-            config->levels[op][stage] = (uint8_t)levels[stage];
-        }
-    }
-}
-
 static void pitch_envelope_values(const fm_voice_t *voice, int rates[4], int levels[4])
 {
     const int depth = (int)(voice->pitch_env_amount * 49.0f);
@@ -529,10 +481,6 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
     pitch_envelope_values(voice, pitch_rates, pitch_levels);
     voice->pitch_env.set(pitch_rates, pitch_levels);
     voice->pitch_env.keydown(true);
-
-    brick6_fm_pico_config_t pico_config;
-    make_pico_config(voice, 0, &pico_config);
-    brick6_fm_pico_renderer_note_on((uint8_t)(voice - g_fm_voice), &pico_config);
 }
 }
 
@@ -543,28 +491,14 @@ void brick6_fm_runtime_init(void)
     Freqlut::init((double)kSampleRate);
     Env::init_sr((double)kSampleRate);
     PitchEnv::init((double)kSampleRate);
-    brick6_fm_pico_renderer_init();
     for (uint8_t instance = 0U; instance < BRICK6_FM_VOICE_COUNT; ++instance)
         reset_voice(&g_fm_voice[instance]);
-}
-
-void brick6_fm_runtime_set_renderer_bench(uint8_t renderer)
-{
-    g_renderer_bench = (renderer != 0U) ? 1U : 0U;
-}
-
-uint8_t brick6_fm_runtime_get_renderer_bench(void)
-{
-    return g_renderer_bench;
 }
 
 void brick6_fm_runtime_reset_instance(uint8_t instance_id)
 {
     if (valid_instance(instance_id) != 0U)
-    {
         reset_voice(&g_fm_voice[instance_id]);
-        brick6_fm_pico_renderer_reset(instance_id);
-    }
 }
 
 void brick6_fm_runtime_all_notes_off(uint8_t instance_id)
@@ -575,7 +509,6 @@ void brick6_fm_runtime_all_notes_off(uint8_t instance_id)
     for (int op = 0; op < kOperatorCount; ++op)
         voice->env[op].keydown(false);
     voice->pitch_env.keydown(false);
-    brick6_fm_pico_renderer_note_off(instance_id);
 }
 
 void brick6_fm_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity)
@@ -787,8 +720,6 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     memcpy(destination->operator_mode, source->operator_mode, sizeof(destination->operator_mode));
     memcpy(destination->operator_velocity, source->operator_velocity, sizeof(destination->operator_velocity));
     memcpy(destination->operator_key, source->operator_key, sizeof(destination->operator_key));
-    memcpy(destination->operator_rate_scale, source->operator_rate_scale,
-           sizeof(destination->operator_rate_scale));
     refresh_voice_patch(destination);
 }
 
@@ -807,28 +738,8 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
         return 0U;
     }
 
-    const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames);
-
-    if (g_renderer_bench != 0U)
-    {
-        brick6_fm_pico_config_t pico_config;
-        make_pico_config(voice, pitch_log_frequency, &pico_config);
-        brick6_fm_pico_renderer_render(instance_id, &pico_config, out_mono, frames);
-
-        uint8_t carrier_mask = 0U;
-        for (int op = 0; op < kOperatorCount; ++op)
-            if (operator_is_carrier(voice->algorithm, op) != 0U)
-                carrier_mask |= (uint8_t)(1U << op);
-        if (brick6_fm_pico_renderer_is_complete(instance_id, carrier_mask) != 0U)
-        {
-            voice->active = 0U;
-            memset(out_mono, 0, frames * sizeof(float));
-            return 0U;
-        }
-        return 1U;
-    }
-
     int32_t block[BRICK6_FM_RENDER_BLOCK] = { 0 };
+    const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames);
     for (int op = 0; op < kOperatorCount; ++op)
     {
         voice->operators[op].level_in = voice->env[op].getsample(frames);
