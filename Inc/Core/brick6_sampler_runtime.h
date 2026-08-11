@@ -221,6 +221,7 @@ struct multi_voice_dsp_slot_t *brick6_sampler_runtime_get_multi_voice_dsp(uint8_
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
 uint32_t brick6_sampler_runtime_render_track_mask(void);
 uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id);
+uint8_t brick6_sampler_runtime_track_is_mono_native_ctx(const track_runtime_ctx_t *ctx);
 uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id);
 void brick6_sampler_runtime_render_ram_track_mono(const track_runtime_ctx_t *ctx,
                                                   float *out_mono,

@@ -330,7 +330,7 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_is_audio_routable(track) == 0U)
+            || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
     {
         return 0U;
@@ -362,7 +362,7 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
 {
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_is_audio_routable(track) == 0U)
+            || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS)
             || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
@@ -420,7 +420,7 @@ static uint8_t mod_destination_apply_vca_rt(uint8_t track,
 {
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_is_audio_routable(track) == 0U)
+            || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
             || (ctx->mix_track_id >= MIXER_MAX_TRACKS)
             || (track_runtime_supports_vca_gate(ctx) == 0U))
     {
@@ -1292,7 +1292,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
         case TRACK_RUNTIME_RESOURCE_FILTER:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
-                    || (track_runtime_is_audio_routable(ctx->track_id) == 0U))
+                    || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1315,7 +1315,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (track_runtime_is_audio_routable(ctx->track_id) == 0U)
+                    || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
                     || (ctx->mix_track_id >= SEQ_MAIN_TRACK_COUNT))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

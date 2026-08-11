@@ -466,13 +466,17 @@ static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
     return 1U;
 }
 
-static uint8_t mixer_track_is_looper(uint8_t logical_track)
+static uint8_t mixer_track_is_looper_ctx(const track_runtime_ctx_t *ctx)
 {
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
     return (uint8_t)((ctx != 0)
             && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
             && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER));
+}
+
+static uint8_t mixer_track_is_looper(uint8_t logical_track)
+{
+    return mixer_track_is_looper_ctx(track_runtime_get_ctx(logical_track));
 }
 
 static float mixer_get_looper_xfade(void)
@@ -3852,7 +3856,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
         if((ctx != 0)
                 && (ctx->mix_track_id < MIXER_MAX_TRACKS)
-                && (mixer_track_is_looper(logical_track) != 0U)
+                && (mixer_track_is_looper_ctx(ctx) != 0U)
                 && (g_tracks[ctx->mix_track_id].mute == 0U)
                 && (brick6_looper_runtime_is_playing(logical_track) != 0U))
         {

@@ -1221,7 +1221,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                                       float value,
                                       uint8_t update_base_state)
 {
-    if ((ctx == NULL) || (track_runtime_is_audio_routable(track) == 0U))
+    if ((ctx == NULL) || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
     {
         return 0U;
     }

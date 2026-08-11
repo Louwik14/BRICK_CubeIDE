@@ -60,7 +60,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
         {
             continue;
         }
@@ -122,7 +122,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
         {
             continue;
         }
@@ -164,7 +164,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
         {
             const uint8_t multi_mono_native =
-                brick6_sampler_runtime_track_is_mono_native(ctx->track_id);
+                brick6_sampler_runtime_track_is_mono_native_ctx(ctx);
             if (multi_mono_native != 0U)
             {
                 float *direct_mono = NULL;
@@ -203,7 +203,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
 
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
         {
-            if (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) != 0U)
+            if (brick6_sampler_runtime_track_is_mono_native_ctx(ctx) != 0U)
             {
                 float *direct_mono = NULL;
                 if (mixer_begin_external_mono_native(ctx->mix_track_id,
@@ -280,7 +280,7 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
-                || (track_runtime_is_audio_routable(track) == 0U)
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
                 || (brick6_looper_runtime_is_playing(track) == 0U))
         {
             continue;
@@ -310,7 +310,7 @@ static void brick6_render_prism_tracks(uint32_t frames, uint8_t *out_prism_track
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
         {
             continue;
         }
@@ -394,7 +394,7 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
         {
             continue;
         }
@@ -486,7 +486,7 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
         {
             continue;
         }

@@ -213,6 +213,7 @@ uint32_t track_runtime_get_track_revision(uint8_t track);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
 /* Main tracks keep their physical identity; GROUP children expose sampler
  * runtime contexts without becoming UI tracks or mixer lanes. */
+uint8_t track_runtime_is_audio_routable_ctx(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capability);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);

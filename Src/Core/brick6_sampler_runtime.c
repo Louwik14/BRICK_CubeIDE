@@ -7254,16 +7254,17 @@ uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id)
             && (ram->format == SAMPLER_RAM_FORMAT_FLOAT32_MONO)) ? 1U : 0U;
 }
 
-uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
+uint8_t brick6_sampler_runtime_track_is_mono_native_ctx(const track_runtime_ctx_t *ctx)
 {
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track_id);
     if ((ctx == NULL)
+        || (ctx->track_id >= SEQ_TRACK_COUNT)
         || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
         || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
     {
         return 0U;
     }
 
+    const uint8_t track_id = ctx->track_id;
     if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STREAM)
     {
         const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
@@ -7308,6 +7309,11 @@ uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
     }
 
     return 0U;
+}
+
+uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id)
+{
+    return brick6_sampler_runtime_track_is_mono_native_ctx(track_runtime_get_ctx(track_id));
 }
 
 static uint8_t brick6_sampler_runtime_multi_voice_format_compatible(
@@ -7501,7 +7507,7 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_runtime_ctx_t *
         || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
         || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
         || ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
-        || (brick6_sampler_runtime_track_is_mono_native(track_id) == 0U))
+        || (brick6_sampler_runtime_track_is_mono_native_ctx(ctx) == 0U))
     {
         return;
     }
@@ -7730,7 +7736,7 @@ void brick6_sampler_runtime_render_multi_track_mono(const track_runtime_ctx_t *c
         || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
         || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
         || ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI)
-        || (brick6_sampler_runtime_track_is_mono_native(ctx->track_id) == 0U))
+        || (brick6_sampler_runtime_track_is_mono_native_ctx(ctx) == 0U))
     {
         return;
     }
