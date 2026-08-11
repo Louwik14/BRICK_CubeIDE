@@ -273,7 +273,7 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
     else
     {
         log_frequency = (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
-        if (detune > 7) log_frequency += 13457 * (detune - 7);
+        log_frequency += 13457 * (detune - 7);
     }
     return log_frequency
         + (int32_t)((operator_metal_semitones(voice, op) / 12.0f) * (float)kQ24);
@@ -352,6 +352,14 @@ static void refresh_voice_patch(fm_voice_t *voice)
             voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
         }
     }
+}
+
+static void refresh_operator_frequency(fm_voice_t *voice, int op)
+{
+    if ((voice == nullptr) || (op < 0) || (op >= kOperatorCount)
+            || (voice->active == 0U))
+        return;
+    voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
 }
 
 static uint8_t valid_instance(uint8_t instance_id)
@@ -809,7 +817,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
         default:
             break;
     }
-    refresh_voice_patch(voice);
+    if ((param == BRICK6_FM_OPERATOR_FREQ)
+            || (param == BRICK6_FM_OPERATOR_DETUNE)
+            || (param == BRICK6_FM_OPERATOR_MODE))
+        refresh_operator_frequency(voice, op);
     if ((param == BRICK6_FM_OPERATOR_LEVEL)
             || ((param >= BRICK6_FM_OPERATOR_ENV_ATTACK)
                 && (param <= BRICK6_FM_OPERATOR_ENV_RELEASE))
@@ -828,6 +839,28 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     fm_voice_t *const destination = &g_fm_voice[destination_instance_id];
     if (destination->applied_source_generation == source->parameter_generation)
         return;
+    const bool refresh_patch = (destination->ratio != source->ratio)
+        || (destination->algorithm != source->algorithm)
+        || (destination->bright != source->bright)
+        || (destination->body != source->body)
+        || (destination->detail != source->detail)
+        || (destination->metal != source->metal);
+    const bool refresh_global_env = (destination->env_attack != source->env_attack)
+        || (destination->env_decay != source->env_decay)
+        || (destination->env_sustain != source->env_sustain)
+        || (destination->env_release != source->env_release);
+    bool refresh_frequency[kOperatorCount] = {};
+    bool refresh_envelope[kOperatorCount] = {};
+    for (int op = 0; op < kOperatorCount; ++op)
+    {
+        refresh_frequency[op] = (destination->operator_frequency[op] != source->operator_frequency[op])
+            || (destination->operator_detune[op] != source->operator_detune[op])
+            || (destination->operator_mode[op] != source->operator_mode[op]);
+        refresh_envelope[op] = (destination->operator_level[op] != source->operator_level[op])
+            || (memcmp(destination->operator_env[op], source->operator_env[op], 4U) != 0)
+            || (destination->operator_velocity[op] != source->operator_velocity[op])
+            || (destination->operator_key[op] != source->operator_key[op]);
+    }
     destination->ratio = source->ratio;
     destination->algorithm = source->algorithm;
     destination->feedback_amount = source->feedback_amount;
@@ -852,8 +885,16 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     memcpy(destination->operator_mode, source->operator_mode, sizeof(destination->operator_mode));
     memcpy(destination->operator_velocity, source->operator_velocity, sizeof(destination->operator_velocity));
     memcpy(destination->operator_key, source->operator_key, sizeof(destination->operator_key));
-    refresh_voice_patch(destination);
-    refresh_all_envelopes(destination);
+    if (refresh_patch)
+        refresh_voice_patch(destination);
+    else
+        for (int op = 0; op < kOperatorCount; ++op)
+            if (refresh_frequency[op]) refresh_operator_frequency(destination, op);
+    if (refresh_global_env)
+        refresh_all_envelopes(destination);
+    else
+        for (int op = 0; op < kOperatorCount; ++op)
+            if (refresh_envelope[op]) refresh_operator_envelope(destination, op);
     if (destination->active != 0U)
     {
         int rates[4];

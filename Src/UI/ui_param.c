@@ -40,6 +40,7 @@
 #include "Core/live_parameter_migration.h"
 #include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
@@ -1491,6 +1492,13 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
     if ((desc == 0) || (ctx == 0))
     {
         return 0.0f;
+    }
+
+    if ((desc->id >= PARAM_FM_OPERATOR_FIRST) && (desc->id <= PARAM_FM_OPERATOR_LAST)
+            && ((((uint16_t)desc->id - (uint16_t)PARAM_FM_OPERATOR_FIRST)
+                 % PARAM_FM_OPERATOR_PARAM_COUNT) == BRICK6_FM_OPERATOR_FREQ))
+    {
+        return (ctx->shift_down != 0U) ? 0.01f : 1.0f;
     }
 
     if (ctx->shift_down != 0U)
