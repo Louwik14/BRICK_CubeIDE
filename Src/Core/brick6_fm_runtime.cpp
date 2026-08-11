@@ -350,6 +350,14 @@ static void refresh_voice_patch(fm_voice_t *voice)
         if (voice->active != 0U)
         {
             voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
+#if FM_KERNEL_BENCH
+            /* Keep the active log-domain phase increment in step with the
+             * live patch.  This changes no phase state and needs no retrigger. */
+            voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
+            dx7_log_kernel_set_phase_increment(&voice->log_kernel,
+                                               (uint32_t)op,
+                                               (uint32_t)voice->operators[op].freq << 8U);
+#endif
         }
     }
 }
@@ -360,6 +368,12 @@ static void refresh_operator_frequency(fm_voice_t *voice, int op)
             || (voice->active == 0U))
         return;
     voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
+#if FM_KERNEL_BENCH
+    voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
+    dx7_log_kernel_set_phase_increment(&voice->log_kernel,
+                                       (uint32_t)op,
+                                       (uint32_t)voice->operators[op].freq << 8U);
+#endif
 }
 
 static uint8_t valid_instance(uint8_t instance_id)

@@ -9,6 +9,8 @@ constexpr uint32_t kOperatorCount = 6U;
 constexpr uint32_t kLogFractionBits = 10U;
 constexpr uint32_t kLogTableSize = 1U << kLogFractionBits;
 constexpr uint32_t kLogMaximum = (1U << 14U) - 1U;
+/* Operator samples are signed Q14; the phase accumulator is Q32/cycle. */
+constexpr uint32_t kModulationToPhaseShift = 32U - 14U;
 constexpr int32_t kSilentAttenuationQ16 = (int32_t)kLogMaximum << 16;
 constexpr uint32_t kCarrierCompensation = 1U << kLogFractionBits;
 constexpr float kOutputScale = 1.0f / 32768.0f;
@@ -50,7 +52,8 @@ static inline __attribute__((always_inline)) int32_t render_operator(
     const int32_t attenuation = op->attenuation_q16
         + op->attenuation_delta_q16;
     const uint32_t phase_base = op->phase;
-    const uint32_t phase = phase_base + ((uint32_t)modulation << 20U);
+    const uint32_t phase = phase_base
+        + ((uint32_t)modulation << kModulationToPhaseShift);
 
     op->phase = phase_base + (uint32_t)increment;
     op->phase_increment = (uint32_t)increment;
