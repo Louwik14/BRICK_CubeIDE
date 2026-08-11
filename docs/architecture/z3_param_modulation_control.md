@@ -4,6 +4,8 @@ Le registre décrit chaque paramètre par ID, domaine, plage, affichage, persist
 
 La disponibilité dépend des capacités réelles du moteur projeté. Les p-locks stockent les valeurs complètes par step et utilisent le même catalogue pour les huit pistes. Les destinations incompatibles sont rejetées avant mutation.
 
+Le p-lock générique est un override temporaire réservé aux paramètres p-lockables. Il est appliqué au runtime puis restauré vers la base. NOTE et les autres champs PLAY de step n’empruntent pas ce catalogue ni ce runtime : ils appartiennent au payload structurel PLAY et utilisent la base PLAY de piste comme fallback.
+
 LFO, Matrix, ENV3, filtre et VCA gardent une seule autorité de contrôle. External et MIDI conservent leurs restrictions explicites. Aucun paramètre, backend ou état MacroFX n'appartient au produit courant.
 
 ## Contrat LFO segmenté et interpolé

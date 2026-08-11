@@ -105,6 +105,9 @@ static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t a
 static uint8_t ui_param_resolve_play_context(param_id_t param,
                                              uint8_t active_track,
                                              ui_page_template_play_context_t *out_context);
+static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
+                                                 uint8_t active_track,
+                                                 ui_param_live_rec_ctx_t *out_ctx);
 static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         param_id_t param,
                                         float value,
@@ -1103,6 +1106,22 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
 
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track)
 {
+    const uint8_t display_track = ui_param_resolve_effective_edit_track(param, active_track);
+    ui_param_live_rec_ctx_t live_rec_ctx;
+    if (ui_param_live_rec_resolve_context(param, display_track, &live_rec_ctx) != 0U)
+    {
+        seq_plock_entry_t entry;
+        if (ui_param_step_value_find(live_rec_ctx.track,
+                                     live_rec_ctx.step,
+                                     param,
+                                     live_rec_ctx.set_id,
+                                     live_rec_ctx.param_slot,
+                                     &entry) != 0U)
+        {
+            return seq_param_iface_decode_param_value(param, entry.value16);
+        }
+    }
+
     return ui_param_get_active_track_value(param, active_track);
 }
 
@@ -1194,7 +1213,7 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
             {
                 return 0U;
             }
-            *out_set_id = 0U;
+            *out_set_id = (uint8_t)SEQ_LIVE_REC_PARAM_SET_PLAY;
             *out_param_slot = 0U;
             return 1U;
         }
@@ -1244,14 +1263,11 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
         return 0U;
     }
 
-    if ((track_runtime_get_param_rule(param).domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-            && (seq_runtime_live_rec_param_can_write(track, set_id, param_slot) == 0U))
-    {
-        return 0U;
-    }
-
     seq_step_id_t step = 0U;
-    if (seq_runtime_get_playhead_step(track, &step) == 0U)
+    if (seq_runtime_live_rec_param_resolve_write_step(track,
+                                                      set_id,
+                                                      param_slot,
+                                                      &step) == 0U)
     {
         return 0U;
     }

@@ -5,26 +5,12 @@
 #include <string.h>
 
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_LANE_CAPACITY][PARAM_COUNT];
-SEQ_STATE_D2 static uint16_t g_param_runtime_track_generation[SEQ_LANE_CAPACITY][PARAM_COUNT];
 SEQ_STATE_D2 static uint8_t g_param_runtime_track_flags[SEQ_LANE_CAPACITY][PARAM_COUNT];
-static uint16_t g_param_runtime_generation_counter;
-
-static uint16_t param_registry_runtime_next_generation(void)
-{
-    ++g_param_runtime_generation_counter;
-    if (g_param_runtime_generation_counter == 0U)
-    {
-        ++g_param_runtime_generation_counter;
-    }
-    return g_param_runtime_generation_counter;
-}
 
 void param_registry_runtime_state_init(void)
 {
     memset(&g_param_runtime_track_values, 0, sizeof(g_param_runtime_track_values));
-    memset(&g_param_runtime_track_generation, 0, sizeof(g_param_runtime_track_generation));
     memset(&g_param_runtime_track_flags, 0, sizeof(g_param_runtime_track_flags));
-    g_param_runtime_generation_counter = 0U;
 }
 
 uint8_t param_registry_runtime_ui_value_get(uint8_t track,
@@ -43,7 +29,6 @@ uint8_t param_registry_runtime_ui_value_get(uint8_t track,
     }
 
     out_value->base_value = g_param_runtime_track_values[track][id];
-    out_value->generation = g_param_runtime_track_generation[track][id];
     out_value->flags = flags;
     return 1U;
 }
@@ -67,14 +52,7 @@ void param_registry_runtime_cache_set(uint8_t track, param_id_t id, float value)
         return;
     }
 
-    const uint8_t was_valid = (uint8_t)(g_param_runtime_track_flags[track][id]
-        & PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID);
-    if ((was_valid == 0U) || (g_param_runtime_track_values[track][id] != value))
-    {
-        g_param_runtime_track_values[track][id] = value;
-        g_param_runtime_track_generation[track][id] =
-            param_registry_runtime_next_generation();
-    }
+    g_param_runtime_track_values[track][id] = value;
     g_param_runtime_track_flags[track][id] = PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID;
 }
 
@@ -86,7 +64,6 @@ void param_registry_runtime_cache_clear_track(uint8_t track)
     }
 
     memset(g_param_runtime_track_values[track], 0, sizeof(g_param_runtime_track_values[track]));
-    memset(g_param_runtime_track_generation[track], 0, sizeof(g_param_runtime_track_generation[track]));
     memset(g_param_runtime_track_flags[track], 0, sizeof(g_param_runtime_track_flags[track]));
 }
 

@@ -1002,13 +1002,6 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
-    if (seq_param_iface_is_play_param(param) != 0U)
-    {
-        state->runtime_value = value16;
-        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
-        return 1U;
-    }
-
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
         uint8_t slot = 0U, fx_param = 0U;
@@ -1067,13 +1060,6 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         state->base_value = base_value16;
         state->runtime_value = base_value16;
         seq_param_set_base_valid(track, set_id, param_slot, 1U);
-        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
-        return 1U;
-    }
-
-    if (seq_param_iface_is_play_param(param) != 0U)
-    {
-        state->runtime_value = base_value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
         return 1U;
     }

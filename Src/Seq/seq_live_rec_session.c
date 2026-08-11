@@ -888,7 +888,8 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
                                                       uint8_t set_id,
                                                       seq_param_slot_t param_slot)
 {
-    const uint8_t is_dedicated_play = (set_id == (uint8_t)SEQ_PLOCK_SET_COUNT) ? 1U : 0U;
+    const uint8_t is_dedicated_play =
+        (set_id == (uint8_t)SEQ_LIVE_REC_PARAM_SET_PLAY) ? 1U : 0U;
     if ((track >= SEQ_TRACK_COUNT)
         || ((is_dedicated_play == 0U) && (seq_param_iface_is_set_plockable(set_id) == 0U))
         || (seq_live_rec_session_is_live_rec_active() == 0U)

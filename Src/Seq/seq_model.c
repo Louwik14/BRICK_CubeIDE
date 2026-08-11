@@ -422,17 +422,17 @@ static uint8_t seq_model_compute_step_mask(seq_track_id_t track, const seq_step_
 
 static void seq_model_step_scan_lock_sets(seq_track_id_t track,
                                           const seq_step_t *step,
-                                          uint8_t *out_has_play_plock,
+                                          uint8_t *out_has_play_data,
                                           uint8_t *out_has_non_play_plock)
 {
-    uint8_t has_play_plock = ((step != NULL) && (seq_step_play_has_any(&step->play) != 0U)) ? 1U : 0U;
+    uint8_t has_play_data = ((step != NULL) && (seq_step_play_has_any(&step->play) != 0U)) ? 1U : 0U;
     uint8_t has_non_play_plock = 0U;
 
     if ((seq_model_track_is_valid(track) == 0U) || (step == 0))
     {
-        if (out_has_play_plock != 0)
+        if (out_has_play_data != 0)
         {
-            *out_has_play_plock = 0U;
+            *out_has_play_data = 0U;
         }
         if (out_has_non_play_plock != 0)
         {
@@ -468,9 +468,9 @@ static void seq_model_step_scan_lock_sets(seq_track_id_t track,
         idx = entry->next;
     }
 
-    if (out_has_play_plock != 0)
+    if (out_has_play_data != 0)
     {
-        *out_has_play_plock = has_play_plock;
+        *out_has_play_data = has_play_data;
     }
     if (out_has_non_play_plock != 0)
     {
@@ -707,19 +707,19 @@ seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_
     {
         return SEQ_STEP_CONTENT_EMPTY;
     }
-    uint8_t has_play_plock = 0U;
+    uint8_t has_play_data = 0U;
     uint8_t has_non_play_plock = 0U;
-    seq_model_step_scan_lock_sets(track, s, &has_play_plock, &has_non_play_plock);
+    seq_model_step_scan_lock_sets(track, s, &has_play_data, &has_non_play_plock);
 
-    if ((has_play_plock == 0U) && (has_non_play_plock == 0U))
+    if ((has_play_data == 0U) && (has_non_play_plock == 0U))
     {
         return SEQ_STEP_CONTENT_EMPTY;
     }
-    if ((has_play_plock != 0U) && (has_non_play_plock != 0U))
+    if ((has_play_data != 0U) && (has_non_play_plock != 0U))
     {
         return SEQ_STEP_CONTENT_PLAY_AND_NON_PLAY;
     }
-    if (has_play_plock != 0U)
+    if (has_play_data != 0U)
     {
         return SEQ_STEP_CONTENT_PLAY_ONLY;
     }
@@ -748,7 +748,7 @@ seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t 
         return SEQ_STEP_VISUAL_BLUE;
     }
 
-    return SEQ_STEP_VISUAL_OFF;
+    return SEQ_STEP_VISUAL_GREEN;
 }
 
 seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t step)
@@ -775,7 +775,7 @@ seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t st
     return SEQ_STEP_STATE_NOTE;
 }
 
-uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step)
+uint8_t seq_model_step_has_play_data(seq_track_id_t track, seq_step_id_t step)
 {
     const seq_step_t *const s = seq_model_get_step_const(track, step);
     if (s == 0)
@@ -783,9 +783,9 @@ uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step)
         return 0U;
     }
 
-    uint8_t has_play_plock = 0U;
-    seq_model_step_scan_lock_sets(track, s, &has_play_plock, 0);
-    return has_play_plock;
+    uint8_t has_play_data = 0U;
+    seq_model_step_scan_lock_sets(track, s, &has_play_data, 0);
+    return has_play_data;
 }
 
 uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step)

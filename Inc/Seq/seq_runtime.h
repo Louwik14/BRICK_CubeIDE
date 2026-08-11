@@ -112,6 +112,9 @@ void seq_runtime_set_rec_len_mode(uint8_t mode);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
 void seq_runtime_rec_toggle_arm(void);
 /* Command surface: live-rec write routed through the runtime policy layer. */
+/* Dedicated PLAY target marker; never a generic p-lock set id. */
+enum { SEQ_LIVE_REC_PARAM_SET_PLAY = UINT8_MAX };
+
 uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
                                          seq_param_slot_t param_slot,
@@ -119,6 +122,10 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
 uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
                                              uint8_t set_id,
                                              seq_param_slot_t param_slot);
+uint8_t seq_runtime_live_rec_param_resolve_write_step(seq_track_id_t track,
+                                                      uint8_t set_id,
+                                                      seq_param_slot_t param_slot,
+                                                      seq_step_id_t *out_step);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,

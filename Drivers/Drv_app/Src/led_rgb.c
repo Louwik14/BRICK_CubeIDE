@@ -105,7 +105,7 @@ static uint8_t led_seq_collect_held_plock_set_mask(uint8_t *out_has_play)
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
-        const uint8_t has_play = seq_model_step_has_play_plock(held_track, step);
+        const uint8_t has_play = seq_model_step_has_play_data(held_track, step);
         if ((out_has_play != NULL) && (has_play != 0U)) *out_has_play = 1U;
         const uint8_t plock_count = seq_model_step_plock_count(held_track, step);
         for (uint8_t p = 0U; p < plock_count; ++p)

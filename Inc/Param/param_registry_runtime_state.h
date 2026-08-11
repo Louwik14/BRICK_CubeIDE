@@ -14,7 +14,6 @@ enum
 typedef struct
 {
     float base_value;
-    uint16_t generation;
     uint8_t flags;
 } param_registry_runtime_ui_value_t;
 

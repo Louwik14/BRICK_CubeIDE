@@ -165,7 +165,7 @@ uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step);
 seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step);
 seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t step);
 seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t step);
-uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_has_play_data(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);

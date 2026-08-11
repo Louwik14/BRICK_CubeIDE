@@ -7,3 +7,5 @@ Pattern stocke les configurations, paramètres, routes, Note FX et huit séquenc
 Le Master global n'est pas un slot de Pattern, Kit ou Patch et ne possède aucun état de piste. Looper et External sont persistés comme moteur et configuration du slot correspondant, avec l'entrée External exacte.
 
 La capture et l'application séparent état persistant et runtime transitoire. Toute validation précède la mutation. Un Pattern ou Project appliqué avec succès invalide Undo/Redo; un rejet laisse l'état courant intact.
+
+Track snapshot, Pattern snapshot et duplicate Pattern suivent le même contrat transactionnel : préflight complet de structure, type, configuration, PLAY, slots p-lock et budget global, puis mutation seulement après succès. Toute erreur déterministe de validation laisse la destination intacte, sans conversion, restauration partielle ni consommation du pool.
