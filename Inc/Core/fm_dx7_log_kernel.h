@@ -6,14 +6,19 @@
  * Experimental, algorithm-1-only DX7 renderer used by FM_KERNEL_BENCH.
  * The persistent state is deliberately self-contained and has no MSFA bus.
  */
+struct dx7_log_kernel_operator_t
+{
+    uint32_t phase;
+    uint32_t phase_increment;
+    int32_t phase_increment_delta;
+    int32_t attenuation_q16;
+    int32_t attenuation_delta_q16;
+};
+
 struct dx7_log_kernel_voice_t
 {
-    uint32_t phase[6];
-    uint32_t phase_increment[6];
-    int32_t phase_increment_delta[6];
+    dx7_log_kernel_operator_t operators[6];
     uint32_t phase_increment_target[6];
-    int32_t attenuation_q16[6];
-    int32_t attenuation_delta_q16[6];
     int32_t attenuation_target_q16[6];
     int32_t feedback[2];
 };
