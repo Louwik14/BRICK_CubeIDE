@@ -1,6 +1,7 @@
 #include "Core/fm_dx7_log_kernel.h"
 
 #include <string.h>
+#include "Storage/memory_layout.h"
 
 namespace
 {
@@ -13,19 +14,12 @@ constexpr uint32_t kCarrierCompensation = 1U << kLogFractionBits;
 constexpr float kOutputScale = 1.0f / 32768.0f;
 
 /* Four KiB total in Flash; the 4 KiB working set is D-cache friendly on H743. */
-alignas(32) static const uint16_t g_log_sine[kLogTableSize] = {
+static const uint16_t g_log_sine[kLogTableSize] = {
 #include "fm_dx7_log_sine_1024.inc"
 };
-alignas(32) static const uint16_t g_exp_mantissa[kLogTableSize] = {
+static const uint16_t g_exp_mantissa[kLogTableSize] = {
 #include "fm_dx7_exp_mantissa_1024.inc"
 };
-
-static inline __attribute__((always_inline)) uint32_t saturate_log14(uint32_t value)
-{
-    uint32_t result;
-    __asm__("usat %0, #14, %1" : "=r"(result) : "r"((int32_t)value));
-    return result;
-}
 
 static inline __attribute__((always_inline)) int32_t lookup_wave(uint32_t phase,
                                                                   int32_t attenuation_q16,
@@ -34,14 +28,14 @@ static inline __attribute__((always_inline)) int32_t lookup_wave(uint32_t phase,
     const uint32_t phase12 = phase >> 20U;
     const uint32_t reverse_mask = 0U - ((phase12 >> 10U) & 1U);
     const uint32_t index = (phase12 & 0x3ffU) ^ (reverse_mask & 0x3ffU);
-    const uint32_t log_value = (uint32_t)g_log_sine[index]
+    uint32_t log_value = (uint32_t)g_log_sine[index]
         + ((uint32_t)attenuation_q16 >> 16U)
         + compensation;
-    /* All terms are non-negative and the sum is below INT32_MAX. */
-    const uint32_t saturated_log_value = saturate_log14(log_value);
+    if (log_value > kLogMaximum)
+        log_value = kLogMaximum;
 
-    const uint32_t exponent = saturated_log_value >> kLogFractionBits;
-    const uint32_t fraction = saturated_log_value & (kLogTableSize - 1U);
+    const uint32_t exponent = log_value >> kLogFractionBits;
+    const uint32_t fraction = log_value & (kLogTableSize - 1U);
     const int32_t magnitude = (int32_t)(g_exp_mantissa[fraction] >> exponent);
     return ((phase12 & 0x800U) != 0U) ? -magnitude : magnitude;
 }
@@ -62,6 +56,25 @@ static inline __attribute__((always_inline)) int32_t render_operator(
     op->phase_increment = (uint32_t)increment;
     op->attenuation_q16 = attenuation;
     return lookup_wave(phase, attenuation, compensation);
+}
+
+static inline __attribute__((always_inline)) void render_sample(
+    dx7_log_kernel_voice_t *voice,
+    uint32_t feedback_shift,
+    int32_t &feedback_0,
+    int32_t &feedback_1,
+    float *output)
+{
+    const int32_t feedback = (feedback_0 + feedback_1) >> feedback_shift;
+    const int32_t op6 = render_operator(&voice->operators[0], feedback, 0U);
+    feedback_0 = feedback_1;
+    feedback_1 = op6;
+    const int32_t op5 = render_operator(&voice->operators[1], op6, 0U);
+    const int32_t op4 = render_operator(&voice->operators[2], op5, 0U);
+    const int32_t op3 = render_operator(&voice->operators[3], op4, kCarrierCompensation);
+    const int32_t op2 = render_operator(&voice->operators[4], 0, 0U);
+    const int32_t op1 = render_operator(&voice->operators[5], op2, kCarrierCompensation);
+    *output = (float)(op3 + op1) * kOutputScale;
 }
 }
 
@@ -140,7 +153,7 @@ void dx7_log_kernel_prepare_operator(dx7_log_kernel_voice_t *voice,
         increment_difference / (int32_t)frames;
 }
 
-void __attribute__((noinline, hot)) dx7_log_kernel_render_algorithm_1(
+ITCM_TEXT void __attribute__((hot)) dx7_log_kernel_render_algorithm_1(
     dx7_log_kernel_voice_t *voice,
     uint32_t feedback_shift,
     float *output,
@@ -151,19 +164,15 @@ void __attribute__((noinline, hot)) dx7_log_kernel_render_algorithm_1(
 
     int32_t feedback_0 = voice->feedback[0];
     int32_t feedback_1 = voice->feedback[1];
-    for (uint32_t i = 0U; i < frames; ++i)
+    float *cursor = output;
+    uint32_t pairs = frames >> 1U;
+    while (pairs-- != 0U)
     {
-        const int32_t feedback = (feedback_0 + feedback_1) >> feedback_shift;
-        const int32_t op6 = render_operator(&voice->operators[0], feedback, 0U);
-        feedback_0 = feedback_1;
-        feedback_1 = op6;
-        const int32_t op5 = render_operator(&voice->operators[1], op6, 0U);
-        const int32_t op4 = render_operator(&voice->operators[2], op5, 0U);
-        const int32_t op3 = render_operator(&voice->operators[3], op4, kCarrierCompensation);
-        const int32_t op2 = render_operator(&voice->operators[4], 0, 0U);
-        const int32_t op1 = render_operator(&voice->operators[5], op2, kCarrierCompensation);
-        output[i] = (float)(op3 + op1) * kOutputScale;
+        render_sample(voice, feedback_shift, feedback_0, feedback_1, cursor++);
+        render_sample(voice, feedback_shift, feedback_0, feedback_1, cursor++);
     }
+    if ((frames & 1U) != 0U)
+        render_sample(voice, feedback_shift, feedback_0, feedback_1, cursor);
     voice->feedback[0] = feedback_0;
     voice->feedback[1] = feedback_1;
 
