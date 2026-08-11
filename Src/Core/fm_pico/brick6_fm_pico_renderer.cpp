@@ -112,6 +112,8 @@ void brick6_fm_pico_renderer_note_on(uint8_t instance_id,
     if (instance_id >= kVoiceCount || config == nullptr)
         return;
     configure_voice(&g_voice[instance_id], config);
+    for (uint8_t op = 0U; op < kOperatorCount; ++op)
+        g_voice[instance_id].ops.getEgPointer(op)->keyOn();
     g_voice[instance_id].ops.keyOn();
     g_voice[instance_id].active = 1U;
 }
