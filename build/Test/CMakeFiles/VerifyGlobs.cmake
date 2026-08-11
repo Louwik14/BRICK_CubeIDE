@@ -138,7 +138,7 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_edit.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_led.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_capture.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_param_target.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_mute_bridge.c"

@@ -530,7 +530,6 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
                 | TRACK_CAPABILITY_MIDI
                 | TRACK_CAPABILITY_KEYBOARD
                 | TRACK_CAPABILITY_MIDI_FX
-                | TRACK_CAPABILITY_AUTOMATION
                 | TRACK_CAPABILITY_MUTE);
     }
     else
@@ -1426,7 +1425,7 @@ uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capabilit
                     || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL)) ? 1U : 0U);
 
         case TRACK_CAPABILITY_AUTOMATION:
-            return (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND) ? 1U : 0U;
+            return 0U;
 
         case TRACK_CAPABILITY_MUTE:
             return (uint8_t)(ctx->bind_state == TRACK_RUNTIME_BIND_BOUND);
@@ -1568,7 +1567,6 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
                 | TRACK_CAPABILITY_MIDI
                 | TRACK_CAPABILITY_KEYBOARD
                 | TRACK_CAPABILITY_MIDI_FX
-                | TRACK_CAPABILITY_AUTOMATION
                 | TRACK_CAPABILITY_MUTE);
     }
     else

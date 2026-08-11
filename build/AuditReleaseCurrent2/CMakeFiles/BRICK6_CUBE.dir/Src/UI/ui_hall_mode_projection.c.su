@@ -1,0 +1,10 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:30:6:ui_hall_patch_feedback_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:35:6:ui_hall_patch_feedback_end	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:40:6:ui_hall_kit_feedback_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:45:6:ui_hall_kit_feedback_end	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:50:24:ui_hall_mode_resolve_rout_context	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:69:31:ui_hall_mode_resolve_effective_view	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:101:9:ui_hall_allows_injection	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:111:9:ui_hall_is_seq_context	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:129:13:ui_get_hall_mode_short_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:181:13:ui_get_hall_mode_suffix_label	16	static

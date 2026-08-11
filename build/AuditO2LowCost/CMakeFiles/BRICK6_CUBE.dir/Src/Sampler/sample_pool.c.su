@@ -1,0 +1,17 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:243:13:sample_pool_clear_entry	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:90:13:sample_pool_release_gate_on_error	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:69:13:sample_pool_diag_record_open_fail	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:254:6:sample_pool_clear	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:331:6:sample_pool_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:347:6:sample_pool_capture_project_snapshot	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:406:6:sample_pool_load	1024	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:368:6:sample_pool_restore_project_snapshot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:616:22:sample_pool_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:624:6:sample_pool_is_loaded	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:631:26:sample_pool_get_state	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:663:26:sample_pool_get_last_load_error	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:668:9:sample_pool_get_last_sd_error_code	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:673:27:sample_pool_get_diag	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:678:9:sample_pool_prepare_batch_begin	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:708:6:sample_pool_prepare_batch_service	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:758:6:sample_pool_prepare_batch_get_result	0	static

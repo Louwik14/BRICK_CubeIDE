@@ -37,7 +37,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:692:9:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:703:20:seq_model_get_step_content	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:730:19:seq_model_get_step_visual	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:754:18:seq_model_get_step_state	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:778:9:seq_model_step_has_play_plock	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:778:9:seq_model_step_has_play_data	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:791:9:seq_model_step_has_non_play_plock	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:804:9:seq_model_step_is_empty	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_model.c:809:9:seq_model_step_is_quick_note_eligible	16	static

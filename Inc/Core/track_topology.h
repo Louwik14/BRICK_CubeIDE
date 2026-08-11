@@ -24,7 +24,7 @@ typedef enum
     TRACK_CAPABILITY_MIDI = (1U << 2),
     TRACK_CAPABILITY_KEYBOARD = (1U << 3),
     TRACK_CAPABILITY_MIDI_FX = (1U << 4),
-    TRACK_CAPABILITY_AUTOMATION = (1U << 5),
+    TRACK_CAPABILITY_AUTOMATION = (1U << 5), /* Reserved: no automation authority is implemented. */
     TRACK_CAPABILITY_MUTE = (1U << 6),
     TRACK_CAPABILITY_INPUT_RESERVATION = (1U << 7)
 } track_capability_t;

@@ -1,9 +1,8 @@
 # ninja log v5
-4	114	8078053613735956	CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj	fb8bc920b28ce054
-8	130	8078053613891707	CMakeFiles/sample_stream_sequence_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj	ccf251244e7e4d99
-130	232	8078053614877381	sample_stream_sequence_test.elf	7376f5b80f2ad9b2
-4	94	8078054155724332	CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj	fb8bc920b28ce054
-94	190	8078054156586148	sample_stream_sequence_test.elf	7376f5b80f2ad9b2
 5	104	8078055172433080	CMakeFiles/sample_stream_sequence_test.dir/sample_stream_sequence_test.c.obj	fb8bc920b28ce054
 9	117	8078055172573439	CMakeFiles/sample_stream_sequence_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c.obj	ccf251244e7e4d99
 117	212	8078055173483073	sample_stream_sequence_test.elf	7376f5b80f2ad9b2
+7	349	8081001651067237	build.ninja	e5d21a3c4bca195f
+8	398	8081001655256469	CMakeFiles/mod_lfo_segment_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Mod/mod_lfo_segment.c.obj	72ae0a116324716c
+4	401	8081001655136536	CMakeFiles/mod_lfo_segment_test.dir/mod_lfo_segment_test.c.obj	b38ee061a9c574cf
+3	115	8081015640592785	CMakeFiles/mod_lfo_segment_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Mod/mod_lfo_segment.c.obj	72ae0a116324716c
