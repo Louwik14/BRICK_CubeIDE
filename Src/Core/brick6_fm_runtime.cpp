@@ -4,15 +4,15 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "EngineMkI.h"
-#include "EngineOpl.h"
-#include "msfa/env.h"
-#include "msfa/exp2.h"
-#include "msfa/fm_core.h"
-#include "msfa/fm_op_kernel.h"
-#include "msfa/freqlut.h"
-#include "msfa/pitchenv.h"
-#include "msfa/sin.h"
+#include "Core/fm_dexed/EngineMkI.h"
+#include "Core/fm_dexed/EngineOpl.h"
+#include "Core/fm_dexed/msfa/env.h"
+#include "Core/fm_dexed/msfa/exp2.h"
+#include "Core/fm_dexed/msfa/fm_core.h"
+#include "Core/fm_dexed/msfa/fm_op_kernel.h"
+#include "Core/fm_dexed/msfa/freqlut.h"
+#include "Core/fm_dexed/msfa/pitchenv.h"
+#include "Core/fm_dexed/msfa/sin.h"
 
 namespace
 {
@@ -136,12 +136,31 @@ static float operator_ratio(const fm_voice_t *voice, int op)
     return 0.25f + (encoded * 15.75f);
 }
 
+static float operator_metal_semitones(const fm_voice_t *voice, int op)
+{
+    if (voice == nullptr || FmCore::isCarrier(voice->algorithm, op))
+        return 0.0f;
+    const float amount = (voice->metal - 0.5f) * 2.0f;
+    const bool direct_modulator = operator_feeds_carrier(voice->algorithm, op) != 0U;
+    const bool deep_modulator = (operator_feeds_modulator(voice->algorithm, op) != 0U)
+        && !direct_modulator;
+    const float span = direct_modulator ? 7.0f : (deep_modulator ? 13.0f : 9.0f);
+    return amount * span;
+}
+
 static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int op)
 {
     float ratio = operator_ratio(voice, op);
     ratio *= powf(2.0f, (float)voice->operator_detune[op] / 12.0f);
     const uint8_t reference_note = (voice->operator_mode[op] != 0U) ? 69U : note;
-    return note_log_frequency(reference_note, ratio);
+    const float metal_semitones = operator_metal_semitones(voice, op);
+    const int32_t base = note_log_frequency(reference_note, ratio);
+    if (voice->operator_mode[op] != 0U)
+    {
+        return base + (int32_t)((metal_semitones / 12.0f) * (float)kQ24);
+    }
+    return note_log_frequency(reference_note,
+                              ratio * powf(2.0f, metal_semitones / 12.0f));
 }
 
 static float operator_gain_factor(const fm_voice_t *voice, int op)
@@ -559,10 +578,10 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
     }
 
     int32_t block[BRICK6_FM_RENDER_BLOCK] = { 0 };
-    const int32_t pitch_log_frequency = voice->pitch_env.getsample();
+    const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames);
     for (int op = 0; op < kOperatorCount; ++op)
     {
-        voice->operators[op].level_in = voice->env[op].getsample();
+        voice->operators[op].level_in = voice->env[op].getsample(frames);
         voice->operators[op].level_in += voice->operator_level_offset[op];
         if (voice->operator_on[op] == 0U)
             voice->operators[op].level_in = 0;
@@ -573,7 +592,8 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                          voice->operators,
                                          voice->algorithm,
                                          voice->feedback,
-                                         feedback_shift(voice->feedback_amount));
+                                         feedback_shift(voice->feedback_amount),
+                                         (int)frames);
 
     constexpr float kOutputScale = 0.125f / (float)kQ24;
     for (uint32_t i = 0U; i < frames; ++i)

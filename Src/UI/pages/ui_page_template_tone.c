@@ -228,12 +228,12 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
 
 static const ui_template_family_t g_ui_template_tone_family_fm = {
     .family_title = "TONE 1/2",
-    .nav_labels = { "CORE", "COLOR", "ENV", "-" },
+    .nav_labels = { "CORE", "COLOR", "ENV", "PLAY" },
     .subpages = {
         { .title = "CORE", .param_bank = { .params = { PARAM_FM_MODE, PARAM_FM_ALGORITHM, PARAM_FM_FEEDBACK, PARAM_FM_SYNC } } },
         { .title = "COLOR", .param_bank = { .params = { PARAM_FM_BRIGHT, PARAM_FM_BODY, PARAM_FM_DETAIL, PARAM_FM_METAL } } },
         { .title = "ENV", .param_bank = { .params = { PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_ENV_SUSTAIN, PARAM_FM_ENV_RELEASE } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "PLAY", .param_bank = { .params = { PARAM_FM_PLAY_VEL, PARAM_FM_PLAY_KEY, PARAM_FM_PLAY_PITCH_ENV, PARAM_FM_PLAY_PITCH_TIME } } },
     },
     .default_subpage = 0U,
 };

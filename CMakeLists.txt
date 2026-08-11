@@ -394,15 +394,15 @@ set(MUTABLE_BRAIDS_SRC
 )
 
 set(DEXED_FM_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/EngineMkI.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/EngineOpl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/env.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/exp2.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/fm_core.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/fm_op_kernel.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/freqlut.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/pitchenv.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/sin.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/EngineMkI.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/EngineOpl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/env.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/exp2.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/fm_core.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/fm_op_kernel.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/freqlut.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/pitchenv.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/sin.cc"
 )
 
 file(GLOB MUTABLE_STMLIB_DSP_SRC
@@ -518,9 +518,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source
-
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
     ${BRICK6_VARIANT_DRIVER_INC_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
