@@ -14,6 +14,7 @@
 #include "ui_macro_interaction.h"
 #include "ui_param.h"
 #include "ui_widgets.h"
+#include "pages/ui_page_template_play.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_stack_waveform.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -639,6 +640,13 @@ static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_templ
     return widget;
 }
 
+static uint8_t ui_renderer_template_get_param_authority_track(param_id_t id)
+{
+    uint8_t track = ui_get_active_track();
+    (void)ui_page_template_play_resolve_param_track(id, ui_get_active_lane(), &track);
+    return track;
+}
+
 static float ui_renderer_template_get_param_display_value(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -648,7 +656,8 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
         return param_get(id);
     }
 
-    return ui_param_get_active_track_display_value(id, ui_get_active_track());
+    return ui_param_get_active_track_display_value(id,
+                                                    ui_renderer_template_get_param_authority_track(id));
 }
 
 static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
@@ -675,7 +684,7 @@ static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_p
                                                   &macro_lock_scene_value);
     const uint8_t macro_value_visible =
         (uint8_t)((has_macro_lock_value != 0U)
-                && (macro_lock_track == ui_get_active_track()));
+                && (macro_lock_track == ui_renderer_template_get_param_authority_track(id)));
 
     if (macro_value_visible != 0U)
     {
@@ -759,7 +768,11 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
     float flash_value = 0.0f;
     ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
     const uint8_t flash_active =
-        ui_param_get_slot_value_flash(slot, id, ui_get_active_track(), &flash_value, &flash_kind);
+        ui_param_get_slot_value_flash(slot,
+                                      id,
+                                      ui_renderer_template_get_param_authority_track(id),
+                                      &flash_value,
+                                      &flash_kind);
     if (out_flash_active != NULL)
     {
         *out_flash_active = flash_active;

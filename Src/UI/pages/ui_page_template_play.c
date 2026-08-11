@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "Core/track_runtime.h"
+#include "Seq/seq_lane.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 
@@ -81,10 +82,15 @@ static ui_template_page_state_t g_ui_template_play_state = {
 
 uint8_t ui_page_template_play_resolve_param_track(param_id_t param, uint8_t active_track, uint8_t *out_track)
 {
-    (void)param;
-    (void)active_track;
-    (void)out_track;
-    return 0U;
+    ui_page_template_play_context_t context;
+    if ((out_track == NULL)
+            || (ui_page_template_play_resolve_context(param, active_track, &context) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_track = context.target_track;
+    return 1U;
 }
 
 uint8_t ui_page_template_play_resolve_context(param_id_t param,
@@ -92,14 +98,28 @@ uint8_t ui_page_template_play_resolve_context(param_id_t param,
                                               ui_page_template_play_context_t *out_context)
 {
     if ((out_context == NULL)
-            || (active_track >= SEQ_TRACK_COUNT)
+            || (active_track >= SEQ_LANE_CAPACITY)
             || (ui_page_get_id() != UI_PAGE_TEMPLATE_PLAY)
             || (ui_page_template_play_is_play_param(param) == 0U))
     {
         return 0U;
     }
 
-    return 0U;
+    seq_lane_descriptor_t lane;
+    if ((seq_lane_get_descriptor((seq_lane_id_t)active_track, &lane) == 0U)
+            || (lane.active == 0U)
+            || (lane.can_sequence == 0U))
+    {
+        return 0U;
+    }
+
+    out_context->owner_track = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+        ? (uint8_t)lane.parent_lane_id : (uint8_t)lane.lane_id;
+    out_context->member_index = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+        ? lane.child_index : 0U;
+    out_context->target_track = (uint8_t)lane.lane_id;
+    out_context->base_param = param;
+    return 1U;
 }
 
 void ui_page_template_play_open_primary(void)
