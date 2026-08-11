@@ -1428,25 +1428,6 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
     return 1U;
 }
 
-static uint8_t seq_play_scheduler_context_has_play_plock(const seq_play_scheduler_play_context_t *context)
-{
-    if (context == NULL)
-    {
-        return 0U;
-    }
-
-    for (uint8_t i = 0U; i < context->item_count; ++i)
-    {
-        const seq_play_scheduler_play_item_t *const item = &context->items[i];
-        if (seq_model_step_has_play_plock(item->source_track, item->source_step) != 0U)
-        {
-            return 1U;
-        }
-    }
-
-    return 0U;
-}
-
 static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      seq_step_id_t step,
                                                      uint64_t step_sample_time,
@@ -1490,11 +1471,6 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     }
     if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
-    {
-        goto finish;
-    }
-
-    if (seq_play_scheduler_context_has_play_plock(&play_context) == 0U)
     {
         goto finish;
     }

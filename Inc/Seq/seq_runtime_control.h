@@ -46,6 +46,10 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
 uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
                                              uint8_t set_id,
                                              seq_param_slot_t param_slot);
+uint8_t seq_runtime_live_rec_param_resolve_write_step(seq_track_id_t track,
+                                                      uint8_t set_id,
+                                                      seq_param_slot_t param_slot,
+                                                      seq_step_id_t *out_step);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
