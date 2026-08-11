@@ -17,7 +17,6 @@
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_surface.h"
 #include "Core/track_runtime.h"
-#include "param_registry.h"
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
 
@@ -70,10 +69,12 @@ SEQ_STATE_D2 static seq_edit_hold_state_t g_seq_hold_state;
 SEQ_STATE_D2 static seq_edit_length_flash_t g_seq_length_flash;
 #endif
 
+#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status)
 {
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
+#endif
 
 uint8_t seq_edit_step_play_find(seq_track_id_t track,
                                 seq_step_id_t step,
@@ -526,19 +527,6 @@ static void seq_edit_apply_short_action(uint8_t hall)
             && (seq_model_step_is_quick_note_eligible(track, step) != 0U))
     {
         seq_model_set_trig(track, step, 1U);
-        float note_value = 60.0f;
-        if (param_registry_get_track_value(PARAM_SEQ_PLAY_V1_NOTE, track, &note_value) == 0U)
-        {
-            note_value = param_get(PARAM_SEQ_PLAY_V1_NOTE);
-        }
-
-        const seq_value16_t encoded = seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_V1_NOTE, note_value);
-        const seq_plock_op_status_t status = seq_edit_step_play_upsert(
-            track, step, PARAM_SEQ_PLAY_V1_NOTE, encoded);
-        if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
-        {
-            seq_model_set_trig(track, step, 0U);
-        }
         seq_edit_finish_snapshot_undo(undo_started);
         return;
     }
@@ -768,7 +756,7 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
                                                            held_steps,
                                                            (uint8_t)SEQ_STEPS_PER_PAGE,
                                                            1U);
-    if (seq_edit_track_sequence_is_locked(held_track) != 0U)
+    if ((held_count == 0U) || (seq_edit_track_sequence_is_locked(held_track) != 0U))
     {
         return 0U;
     }
@@ -779,6 +767,10 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
         return 0U;
     }
 
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(held_track,
+                                                              held_steps,
+                                                              held_count);
+    uint8_t applied = 0U;
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
@@ -804,22 +796,26 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
         seq_edit_mark_step_edited(held_track, step);
         seq_edit_clear_auto_note_pending(held_track, step);
 
-        if (out_track != 0)
+        if (applied == 0U)
         {
-            *out_track = held_track;
+            if (out_track != 0)
+            {
+                *out_track = held_track;
+            }
+            if (out_step != 0)
+            {
+                *out_step = step;
+            }
+            if (out_roll != 0)
+            {
+                *out_roll = roll;
+            }
         }
-        if (out_step != 0)
-        {
-            *out_step = step;
-        }
-        if (out_roll != 0)
-        {
-            *out_roll = roll;
-        }
-        return 1U;
+        applied = 1U;
     }
 
-    return 0U;
+    seq_edit_finish_snapshot_undo(undo_started);
+    return applied;
 }
 
 uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,

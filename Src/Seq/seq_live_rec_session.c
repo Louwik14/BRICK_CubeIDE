@@ -3,7 +3,7 @@
  * Role: Etat et orchestration live-rec du sequenceur.
  * Responsibilities: arming/count-in/pattern-rec, capture note, ecriture plock
  * live-rec et gestion des transitions de session.
- * Integration: consomme seq_live_rec_capture et seq_edit, sans porter le transport.
+ * Integration: possede la capture live-rec et consomme seq_edit, sans porter le transport.
  */
 #include "Seq/seq_live_rec_session.h"
 
@@ -14,7 +14,6 @@
 #include "Core/track_state.h"
 
 #include "Seq/seq_edit.h"
-#include "Seq/seq_live_rec_capture.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_model.h"
@@ -394,6 +393,22 @@ static void seq_live_rec_session_finalize_pending(seq_live_rec_session_pending_n
     pending->active = 0U;
 }
 
+static void seq_live_rec_session_reset_pending(void)
+{
+    memset(g_seq_live_rec_pending, 0, sizeof(g_seq_live_rec_pending));
+}
+
+static void seq_live_rec_session_flush_pending(uint64_t stop_sample,
+                                               uint32_t samples_per_step_q16)
+{
+    for (uint8_t i = 0U; i < 64U; ++i)
+    {
+        seq_live_rec_session_finalize_pending(&g_seq_live_rec_pending[i],
+                                              stop_sample,
+                                              samples_per_step_q16);
+    }
+}
+
 static void seq_live_rec_session_finalize_slot(int32_t slot,
                                                uint64_t stop_sample,
                                                uint32_t samples_per_step_q16)
@@ -624,7 +639,7 @@ static void seq_live_rec_session_pattern_rec_start_now(void)
         steps[i] = (seq_step_id_t)i;
     }
     seq_edit_clear_steps_without_undo(track, steps, length);
-    seq_live_rec_capture_reset();
+    seq_live_rec_session_reset_pending();
 }
 
 static void seq_live_rec_session_pattern_rec_cancel(void)
@@ -636,8 +651,8 @@ static void seq_live_rec_session_pattern_rec_cancel(void)
 
 static void seq_live_rec_session_flush_and_reset(uint64_t stop_sample, uint32_t samples_per_step_q16)
 {
-    seq_live_rec_capture_flush(stop_sample, samples_per_step_q16);
-    seq_live_rec_capture_reset();
+    seq_live_rec_session_flush_pending(stop_sample, samples_per_step_q16);
+    seq_live_rec_session_reset_pending();
 }
 
 static void seq_live_rec_session_pattern_rec_on_step_advanced(const seq_runtime_state_t *runtime_state,
@@ -667,8 +682,7 @@ static void seq_live_rec_session_pattern_rec_on_step_advanced(const seq_runtime_
 
     if (g_seq_live_rec_pattern_steps_remaining == 0U)
     {
-        seq_live_rec_capture_flush(now_sample, runtime_state->samples_per_step_q16);
-        seq_live_rec_capture_reset();
+        seq_live_rec_session_flush_and_reset(now_sample, runtime_state->samples_per_step_q16);
         seq_live_rec_session_pattern_rec_cancel();
         g_seq_live_rec_armed = 0U;
     }
@@ -676,7 +690,7 @@ static void seq_live_rec_session_pattern_rec_on_step_advanced(const seq_runtime_
 
 void seq_live_rec_session_init(void)
 {
-    memset(g_seq_live_rec_pending, 0, sizeof(g_seq_live_rec_pending));
+    seq_live_rec_session_reset_pending();
     g_seq_live_rec_armed = 0U;
     g_seq_live_rec_start_mode = (uint8_t)SEQ_REC_START_DEFAULT;
     g_seq_live_rec_waiting_trigger_start = 0U;
@@ -687,12 +701,11 @@ void seq_live_rec_session_init(void)
     g_seq_live_rec_pattern_track = 0U;
     g_seq_live_rec_pattern_steps_remaining = 0U;
     seq_edit_init();
-    seq_live_rec_capture_init();
 }
 
 void seq_live_rec_session_reset_capture(void)
 {
-    seq_live_rec_capture_reset();
+    seq_live_rec_session_reset_pending();
 }
 
 void seq_live_rec_session_on_transport_start(void)
@@ -875,8 +888,9 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
                                                       uint8_t set_id,
                                                       seq_param_slot_t param_slot)
 {
+    const uint8_t is_dedicated_play = (set_id == (uint8_t)SEQ_PLOCK_SET_COUNT) ? 1U : 0U;
     if ((track >= SEQ_TRACK_COUNT)
-        || (seq_param_iface_is_set_plockable(set_id) == 0U)
+        || ((is_dedicated_play == 0U) && (seq_param_iface_is_set_plockable(set_id) == 0U))
         || (seq_live_rec_session_is_live_rec_active() == 0U)
         || (seq_edit_track_sequence_is_locked(track) != 0U))
     {
@@ -884,7 +898,9 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
     }
 
     track_runtime_refresh_track(track);
-    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
+    if (((is_dedicated_play != 0U) && (seq_model_track_can_store_play(track) == 0U))
+        || ((is_dedicated_play == 0U)
+            && (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)))
     {
         return 0U;
     }
@@ -1097,25 +1113,22 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
         return;
     }
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t pending_index = 0U; pending_index < 64U; ++pending_index)
     {
-        const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
-        if (track_ch != channel_zero_based)
+        const seq_live_rec_session_pending_note_t *const pending =
+            &g_seq_live_rec_pending[pending_index];
+        if ((pending->active == 0U)
+                || (pending->source != (uint8_t)source)
+                || (pending->channel != channel_zero_based)
+                || (pending->note != note)
+                || ((occurrence_id != 0U)
+                    && (pending->occurrence_id != occurrence_id)))
         {
             continue;
         }
 
-        if (seq_live_rec_session_track_accepts_source(track, source) == 0U)
-        {
-            continue;
-        }
-
-        const int32_t pending_slot = seq_live_rec_session_find_pending_for_note(track,
-                                                                                 source,
-                                                                                 channel_zero_based,
-                                                                                 note,
-                                                                                 occurrence_id);
-        if (pending_slot < 0)
+        const seq_track_id_t track = pending->track;
+        if (track >= SEQ_TRACK_COUNT)
         {
             continue;
         }
@@ -1135,7 +1148,7 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                                           stop_mictim,
                                                           runtime_state,
                                                           now_sample);
-        seq_live_rec_session_finalize_slot(pending_slot,
+        seq_live_rec_session_finalize_slot((int32_t)pending_index,
                                            recorded_stop_sample,
                                            runtime_state->samples_per_step_q16);
     }
