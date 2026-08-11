@@ -21,6 +21,14 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
+set(FM_KERNEL_BENCH "0" CACHE STRING
+    "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
+set_property(CACHE FM_KERNEL_BENCH PROPERTY STRINGS 0 1)
+if(NOT FM_KERNEL_BENCH MATCHES "^[01]$")
+    message(FATAL_ERROR "FM_KERNEL_BENCH must be 0 or 1")
+endif()
+message("FM kernel bench: ${FM_KERNEL_BENCH}")
+
 option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
 option(BRICK6_MULTI_PITCH_TRACE "Capture bounded Multi pitched voice trace for GDB" OFF)
 option(BRICK6_SD_INIT_DIAG "Capture SD initialization diagnostics" OFF)
@@ -553,6 +561,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:DEBUG>
+    FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")
@@ -628,6 +637,7 @@ set(AUDIO_LTO_SOURCES
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
     ${DEXED_FM_CORE_SRC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dx7_log_kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
@@ -656,6 +666,7 @@ set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
 set(AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
     ${DEXED_FM_CORE_SRC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dx7_log_kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp

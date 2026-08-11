@@ -11,6 +11,15 @@
 #include "Core/fm_dexed/msfa/freqlut.h"
 #include "Core/fm_dexed/msfa/pitchenv.h"
 #include "Core/fm_dexed/msfa/sin.h"
+#include "Core/fm_dx7_log_kernel.h"
+
+#ifndef FM_KERNEL_BENCH
+#define FM_KERNEL_BENCH 0
+#endif
+
+#if (FM_KERNEL_BENCH != 0) && (FM_KERNEL_BENCH != 1)
+#error "FM_KERNEL_BENCH must be 0 or 1"
+#endif
 
 namespace
 {
@@ -56,6 +65,9 @@ struct fm_voice_t
     uint8_t note;
     uint8_t velocity;
     uint8_t active;
+#if FM_KERNEL_BENCH
+    dx7_log_kernel_voice_t log_kernel;
+#endif
 };
 
 AUDIO_HOT static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
@@ -357,6 +369,15 @@ static uint8_t feedback_shift(uint8_t feedback)
     return (uint8_t)(8U - ((feedback > 7U) ? 7U : feedback));
 }
 
+#if FM_KERNEL_BENCH
+static uint8_t log_feedback_shift(uint8_t feedback)
+{
+    if (feedback == 0U)
+        return 17U;
+    return (uint8_t)(9U - ((feedback > 7U) ? 7U : feedback));
+}
+#endif
+
 static void reset_voice(fm_voice_t *voice)
 {
     if (voice == nullptr)
@@ -392,6 +413,9 @@ static void reset_voice(fm_voice_t *voice)
     voice->note = 0U;
     voice->velocity = 0U;
     voice->active = 0U;
+#if FM_KERNEL_BENCH
+    dx7_log_kernel_reset(&voice->log_kernel);
+#endif
     for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
     {
         const uint8_t op = brick_operator_to_msfa_index(brick_op);
@@ -475,6 +499,13 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
         voice->operators[op].gain_out = 0;
         voice->env[op].keydown(true);
     }
+#if FM_KERNEL_BENCH
+    dx7_log_kernel_note_on(&voice->log_kernel, voice->sync != 0U);
+    for (uint32_t op = 0U; op < (uint32_t)kOperatorCount; ++op)
+        dx7_log_kernel_set_phase_increment(&voice->log_kernel,
+                                           op,
+                                           (uint32_t)voice->operators[op].freq << 8U);
+#endif
     refresh_voice_patch(voice);
     int pitch_rates[4];
     int pitch_levels[4];
@@ -491,6 +522,9 @@ void brick6_fm_runtime_init(void)
     Freqlut::init((double)kSampleRate);
     Env::init_sr((double)kSampleRate);
     PitchEnv::init((double)kSampleRate);
+#if FM_KERNEL_BENCH
+    dx7_log_kernel_init();
+#endif
     for (uint8_t instance = 0U; instance < BRICK6_FM_VOICE_COUNT; ++instance)
         reset_voice(&g_fm_voice[instance]);
 }
@@ -738,7 +772,6 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
         return 0U;
     }
 
-    int32_t block[BRICK6_FM_RENDER_BLOCK] = { 0 };
     const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames);
     for (int op = 0; op < kOperatorCount; ++op)
     {
@@ -749,16 +782,35 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]
                                                      + pitch_log_frequency);
     }
-    g_fm_modern.render(block,
-                       voice->operators,
-                       voice->algorithm,
-                       voice->feedback,
-                       feedback_shift(voice->feedback_amount),
-                       (int)frames);
+#if FM_KERNEL_BENCH
+    if (voice->algorithm == 0U)
+    {
+        for (uint32_t op = 0U; op < (uint32_t)kOperatorCount; ++op)
+            dx7_log_kernel_prepare_operator(&voice->log_kernel,
+                                             op,
+                                             voice->operators[op].level_in,
+                                             (uint32_t)voice->operators[op].freq << 8U,
+                                             frames);
+        dx7_log_kernel_render_algorithm_1(&voice->log_kernel,
+                                          log_feedback_shift(voice->feedback_amount),
+                                          out_mono,
+                                          frames);
+    }
+    else
+#endif
+    {
+        int32_t block[BRICK6_FM_RENDER_BLOCK] = { 0 };
+        g_fm_modern.render(block,
+                           voice->operators,
+                           voice->algorithm,
+                           voice->feedback,
+                           feedback_shift(voice->feedback_amount),
+                           (int)frames);
 
-    constexpr float kOutputScale = 0.125f / (float)kQ24;
-    for (uint32_t i = 0U; i < frames; ++i)
-        out_mono[i] = (float)block[i] * kOutputScale;
+        constexpr float kOutputScale = 0.125f / (float)kQ24;
+        for (uint32_t i = 0U; i < frames; ++i)
+            out_mono[i] = (float)block[i] * kOutputScale;
+    }
 
     uint8_t carrier_active = 0U;
     for (int op = 0; op < kOperatorCount; ++op)
