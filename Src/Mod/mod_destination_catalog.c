@@ -283,6 +283,7 @@ static uint8_t mod_destination_is_direct_fm(param_id_t dest)
 {
     switch (dest)
     {
+        case PARAM_FM_RATIO:
         case PARAM_FM_BRIGHT:
         case PARAM_FM_BODY:
         case PARAM_FM_DETAIL:

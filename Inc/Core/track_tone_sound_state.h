@@ -82,7 +82,7 @@ typedef struct
     } wave;
     struct
     {
-        float mode;
+        float ratio;
         float algorithm;
         float feedback;
         float sync;

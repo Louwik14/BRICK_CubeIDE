@@ -28,6 +28,7 @@ class PitchEnv {
   // The rates and levels arrays are calibrated to match the Dx7 parameters
   // (ie, value 0..99).
   void set(const int rates[4], const int levels[4]);
+  void update(const int rates[4], const int levels[4]);
 
   // Result is in Q24/octave
   int32_t getsample(uint32_t frames = N);

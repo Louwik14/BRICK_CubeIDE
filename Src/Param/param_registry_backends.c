@@ -424,11 +424,11 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
 
     switch (id)
     {
-        case PARAM_FM_MODE:
+        case PARAM_FM_RATIO:
         {
-            const brick6_fm_mode_t mode = (brick6_fm_mode_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
-            if ((update_base_state != 0U) && (state != NULL)) state->fm.mode = (float)mode;
-            brick6_fm_runtime_set_mode(ctx->instance_id, mode);
+            const float ratio = param_backend_clamp_value(value, -1.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL)) state->fm.ratio = ratio;
+            brick6_fm_runtime_set_ratio(ctx->instance_id, param_backend_fm_macro_unit(ratio));
             return 1U;
         }
         case PARAM_FM_ALGORITHM:
@@ -515,8 +515,8 @@ uint8_t param_backend_reapply_tone_fm_runtime(uint8_t track)
     {
         return 0U;
     }
-    brick6_fm_runtime_set_mode(ctx->instance_id,
-                               (brick6_fm_mode_t)(uint8_t)(param_backend_clamp_value(state->fm.mode, 0.0f, 2.0f) + 0.5f));
+    brick6_fm_runtime_set_ratio(ctx->instance_id,
+                                param_backend_fm_macro_unit(state->fm.ratio));
     brick6_fm_runtime_set_algorithm(ctx->instance_id,
                                     (uint8_t)(param_backend_clamp_value(state->fm.algorithm, 0.0f, 31.0f) + 0.5f));
     brick6_fm_runtime_set_feedback(ctx->instance_id,

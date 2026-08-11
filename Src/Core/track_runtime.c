@@ -345,7 +345,7 @@ static const param_id_t g_track_runtime_tone_slots_wave[] = {
 };
 
 static const param_id_t g_track_runtime_tone_slots_fm[] = {
-    PARAM_FM_MODE,
+    PARAM_FM_RATIO,
     PARAM_FM_ALGORITHM,
     PARAM_FM_FEEDBACK,
     PARAM_FM_SYNC,
@@ -1792,7 +1792,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_PRISM_OSC2_TIMBRE:
         case PARAM_PRISM_OSC2_MODULATION:
         case PARAM_PRISM_OSC2_COLOR:
-        case PARAM_FM_MODE:
+        case PARAM_FM_RATIO:
         case PARAM_FM_ALGORITHM:
         case PARAM_FM_FEEDBACK:
         case PARAM_FM_SYNC:

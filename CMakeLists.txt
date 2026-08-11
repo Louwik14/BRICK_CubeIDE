@@ -394,8 +394,6 @@ set(MUTABLE_BRAIDS_SRC
 )
 
 set(DEXED_FM_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/EngineMkI.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/EngineOpl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/env.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/exp2.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/fm_core.cc"

@@ -171,15 +171,7 @@ void Env::update(const int r[4], const int l[4], int ol, int rate_scaling) {
     }
     outlevel_ = ol;
     rate_scaling_ = rate_scaling;
-    if ( down_ ) {
-        // for now we simply reset ourselves at level 3
-        int newlevel = levels_[2];
-        int actuallevel = scaleoutlevel(newlevel) >> 1;
-        actuallevel = (actuallevel << 6) - 4256;
-        actuallevel = actuallevel < 16 ? 16 : actuallevel;
-        targetlevel_ = actuallevel << 16;
-        advance(2);
-    }
+    if (ix_ < 4) advance(ix_);
 }
 
 void Env::getPosition(char *step) {

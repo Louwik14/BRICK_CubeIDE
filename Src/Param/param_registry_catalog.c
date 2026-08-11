@@ -79,7 +79,6 @@ static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "M
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
 static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
 static const char *const g_vca_env_type_labels[] = {"DAISY", "LINEAR", NULL};
-static const char *const g_fm_mode_labels[] = {"MODERN", "MARK I", "OPL", NULL};
 static const char *const g_fm_operator_mode_labels[] = {"RATIO", "FIXED", NULL};
 static const char *const g_fm_algorithm_labels[] = {
     "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
@@ -308,7 +307,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_HOP, "Hop", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 3.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_hop_labels, apply_sampler_clip_hop),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
     PARAM_DESC_EX(PARAM_VCA_ENV_TYPE, "TYPE", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, (float)VCA_ENV_TYPE_DAISY, PARAM_DISPLAY_ENUM, "", g_vca_env_type_labels, NULL),
-    PARAM_DESC_EX(PARAM_FM_MODE, "MODE", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_mode_labels, NULL),
+    PARAM_DESC_EX(PARAM_FM_RATIO, "RATIO", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_ALGORITHM, "ALGO", PARAM_TYPE_ENUM, 0.0f, 31.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_algorithm_labels, NULL),
     PARAM_DESC_EX(PARAM_FM_FEEDBACK, "FDBK", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_SYNC, "SYNC", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
