@@ -16,6 +16,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
@@ -193,7 +194,8 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
             && ((resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
                 || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
-                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)));
+                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+                || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)));
         if (is_poly_synth != 0U)
         {
             synth_poly_release_t released[SYNTH_POLYPHONY_MAX_VOICES];
@@ -222,6 +224,10 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                 else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
                 {
                     brick6_wave_runtime_note_off(instance, note);
+                }
+                else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)
+                {
+                    brick6_fm_runtime_note_off(instance, note);
                 }
             }
             continue;
@@ -253,6 +259,10 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
         {
             brick6_wave_runtime_all_notes_off(resolved.descriptor.instance_id);
+        }
+        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+        {
+            brick6_fm_runtime_all_notes_off(resolved.descriptor.instance_id);
         }
     }
     seq_play_scheduler_terminal_reset();

@@ -393,6 +393,18 @@ set(MUTABLE_BRAIDS_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/resources.cc"
 )
 
+set(DEXED_FM_CORE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/EngineMkI.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/EngineOpl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/env.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/exp2.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/fm_core.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/fm_op_kernel.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/freqlut.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/pitchenv.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source/msfa/sin.cc"
+)
+
 file(GLOB MUTABLE_STMLIB_DSP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/dsp/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/dsp/*.cc"
@@ -475,6 +487,7 @@ set(ALL_USER_SOURCES
     ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC}
     ${MUTABLE_STMLIB_UTILS_SRC}
+    ${DEXED_FM_CORE_SRC}
 )
 
 list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
@@ -505,6 +518,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/dexed/Source
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
     ${BRICK6_VARIANT_DRIVER_INC_DIRS}
@@ -617,6 +632,8 @@ set(AUDIO_LTO_SOURCES
     ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
+    ${DEXED_FM_CORE_SRC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
@@ -643,6 +660,8 @@ set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
 
 set(AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
+    ${DEXED_FM_CORE_SRC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c

@@ -8,6 +8,7 @@
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_looper_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
 #include "Param/param_registry_backends.h"
@@ -120,6 +121,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_GROUP;
         case UI_TRACK_TYPE_STACK:
             return TRACK_RUNTIME_TYPE_STACK;
+        case UI_TRACK_TYPE_FM:
+            return TRACK_RUNTIME_TYPE_FM;
         case UI_TRACK_TYPE_EXTERNAL:
             return TRACK_RUNTIME_TYPE_EXTERNAL;
 
@@ -604,6 +607,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         case TRACK_RUNTIME_ENGINE_PRISM:
         case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_WAVE:
+        case TRACK_RUNTIME_ENGINE_FM:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -621,7 +625,8 @@ uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
     }
     if ((ctx != NULL) && ((ctx->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)))
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == TRACK_RUNTIME_ENGINE_FM)))
         return synth_polyphony_get_voice_count(ctx->track_id);
     return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
 }
@@ -640,7 +645,8 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
     }
     if ((descriptor->engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (descriptor->engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (descriptor->engine == TRACK_RUNTIME_ENGINE_WAVE))
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (descriptor->engine == TRACK_RUNTIME_ENGINE_FM))
         return synth_polyphony_get_voice_count(descriptor->instance_id);
 
     switch ((track_runtime_engine_t)descriptor->engine)
@@ -652,6 +658,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_PRISM:
         case TRACK_RUNTIME_ENGINE_STACK:
         case TRACK_RUNTIME_ENGINE_WAVE:
+        case TRACK_RUNTIME_ENGINE_FM:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -675,7 +682,8 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM))
     {
         return 1U;
     }
@@ -881,6 +889,16 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
+    if (type == TRACK_RUNTIME_TYPE_FM)
+    {
+        if (synth_polyphony_set_track_active(ctx->track_id, 1U,
+                (uint8_t)TRACK_RUNTIME_ENGINE_FM) == 0U)
+        { track_runtime_set_quota_blocked(ctx); return; }
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_FM,
+                                synth_polyphony_get_slot(ctx->track_id, 0U));
+        return;
+    }
+
     (void)synth_polyphony_set_track_active(ctx->track_id, 0U, 0U);
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
@@ -1002,6 +1020,7 @@ static void track_runtime_recompute_synth_usage(void)
             case TRACK_RUNTIME_ENGINE_PRISM: usage.prism_tracks++; break;
             case TRACK_RUNTIME_ENGINE_STACK: usage.stack_tracks++; break;
             case TRACK_RUNTIME_ENGINE_WAVE: usage.wave_tracks++; break;
+            case TRACK_RUNTIME_ENGINE_FM: usage.fm_tracks++; break;
             default: break;
         }
     }
@@ -1047,6 +1066,18 @@ static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
     {
         (void)param_backend_reapply_tone_wave_runtime(current_ctx->track_id);
     }
+}
+
+static void track_runtime_reset_fm_if_owner_changed(uint8_t previous_engine,
+                                                    uint8_t previous_instance,
+                                                    const track_runtime_ctx_t *current_ctx)
+{
+    (void)previous_instance;
+    const uint8_t current_is_fm = ((current_ctx != NULL)
+            && (current_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && (current_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)) ? 1U : 0U;
+    if ((current_is_fm != 0U) && (previous_engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
+        brick6_fm_runtime_reset_instance(current_ctx->instance_id);
 }
 
 void track_runtime_init(void)
@@ -1188,6 +1219,7 @@ void track_runtime_refresh_all(void)
                 case TRACK_RUNTIME_ENGINE_PRISM: synth_usage.prism_tracks++; break;
                 case TRACK_RUNTIME_ENGINE_STACK: synth_usage.stack_tracks++; break;
                 case TRACK_RUNTIME_ENGINE_WAVE: synth_usage.wave_tracks++; break;
+                case TRACK_RUNTIME_ENGINE_FM: synth_usage.fm_tracks++; break;
                 default: break;
             }
         }
@@ -1216,6 +1248,8 @@ void track_runtime_refresh_all(void)
             (void)param_backend_reapply_tone_stack_runtime(track);
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             (void)param_backend_reapply_tone_wave_runtime(track);
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+            brick6_fm_runtime_reset_instance(ctx->instance_id);
     }
 
     g_track_runtime_synth_usage = synth_usage;
@@ -1310,6 +1344,7 @@ void track_runtime_refresh_track(uint8_t track)
         track_runtime_reset_prism_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_reset_stack_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_reset_wave_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
+        track_runtime_reset_fm_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         if ((previous_engine == (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
                 && (g_track_runtime_ctx[track].engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER))
         {

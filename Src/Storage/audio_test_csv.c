@@ -227,6 +227,7 @@ static const char *engine_name(const track_runtime_ctx_t *ctx)
         case TRACK_RUNTIME_ENGINE_DRUM: return "DRUM";
         case TRACK_RUNTIME_ENGINE_STACK: return "STACK";
         case TRACK_RUNTIME_ENGINE_WAVE: return "WAVE";
+        case TRACK_RUNTIME_ENGINE_FM: return "FM";
         default: return "INACTIVE";
     }
 }

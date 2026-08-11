@@ -16,6 +16,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_mute.h"
@@ -665,7 +666,8 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
     const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
         && ((resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PRISM)
             || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)));
+            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+            || (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)));
     const uint8_t is_multi_sampler = (uint8_t)((resolved.descriptor.engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
@@ -797,6 +799,13 @@ static uint8_t seq_play_scheduler_admit_internal_note(seq_track_id_t track,
         {
             brick6_wave_runtime_note_off(instance, note);
         }
+    }
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_FM)
+    {
+        if (is_note_on != 0U)
+            brick6_fm_runtime_note_on(instance, note, velocity);
+        else
+            brick6_fm_runtime_note_off(instance, note);
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {

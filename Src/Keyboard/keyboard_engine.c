@@ -22,6 +22,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
@@ -171,7 +172,8 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     if ((synth_polyphony_get_voice_count(track) > 1U)
             && ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
                 || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)))
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+                || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)))
     {
         synth_poly_release_t released[SYNTH_POLYPHONY_MAX_VOICES];
         const uint8_t released_count =
@@ -188,6 +190,8 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
                 (void)brick6_stack_runtime_submit_note_off(instance, note);
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
                 brick6_wave_runtime_note_off(instance, note);
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+                brick6_fm_runtime_note_off(instance, note);
         }
         mod_lfo_v1_all_notes_off(track);
         return;
@@ -251,7 +255,8 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
     const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
         && ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)));
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)));
     const uint8_t voice = (is_poly_synth == 0U) ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U) ? synth_polyphony_note_on(track, note)
                               : synth_polyphony_note_off(track, note));
@@ -376,6 +381,13 @@ static void __attribute__((unused)) keyboard_engine_emit_note_for_track(uint8_t 
         {
             brick6_wave_runtime_note_off(instance, note);
         }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+    {
+        if (is_note_on != 0U)
+            brick6_fm_runtime_note_on(instance, note, velocity);
+        else
+            brick6_fm_runtime_note_off(instance, note);
     }
 }
 

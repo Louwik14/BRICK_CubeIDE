@@ -7,6 +7,7 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "stm32h7xx.h"
 
@@ -84,9 +85,11 @@ static void synth_polyphony_reset_slot(uint8_t slot)
     brick6_braids_runtime_all_notes_off(slot);
     brick6_stack_runtime_all_notes_off(slot);
     brick6_wave_runtime_all_notes_off(slot);
+    brick6_fm_runtime_all_notes_off(slot);
     brick6_braids_runtime_reset_instance(slot);
     brick6_stack_runtime_reset_instance(slot);
     brick6_wave_runtime_reset_instance(slot);
+    brick6_fm_runtime_reset_instance(slot);
     mixer_synth_voice_slot_reset(slot);
     mod_lfo_v1_poly_voice_reset(slot);
 }
