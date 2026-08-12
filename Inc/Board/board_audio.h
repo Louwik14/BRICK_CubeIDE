@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio_float.h"
+#include "Audio/audio_physical_inputs.h"
 
 #include <stdint.h>
 
@@ -71,7 +72,7 @@ uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 
 void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
-                              StereoTrack *AUDIO_RESTRICT track_buf,
+                              audio_physical_inputs_t *AUDIO_RESTRICT physical_inputs,
                               uint32_t frames,
                               float in_scale);
 

@@ -15,7 +15,6 @@
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
-#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_lowcost_button_test.h"
@@ -23,8 +22,8 @@
 #include "ui_template_page.h"
 #include "lowcost_button_test_config.h"
 
-/* Keep the stable page-ID slot formerly occupied by the removed standalone UI. */
-static const ui_page_t g_ui_page_reserved_legacy_slot = { 0 };
+/* Placeholder for intentionally unavailable page slots. */
+static const ui_page_t g_ui_page_reserved_slot = { 0 };
 
 void ui_bootstrap_init(void)
 {
@@ -60,19 +59,18 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_template_macro);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
-    ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
+    ui_page_manager_register(&g_ui_page_reserved_slot);
     ui_page_manager_register(&g_ui_page_audio_rec);
     ui_page_manager_register(&g_ui_page_rec_edit);
     ui_page_manager_register(&g_ui_page_patch_assign);
-    ui_page_manager_register(&g_ui_page_kit_assign);
     ui_page_manager_register(&g_ui_page_name_edit);
     ui_page_manager_register(&g_ui_page_settings);
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_manager_register(&g_ui_page_lowcost_button_test);
 #else
-    ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
+    ui_page_manager_register(&g_ui_page_reserved_slot);
 #endif
-    ui_page_manager_register(&g_ui_page_reserved_legacy_slot);
+    ui_page_manager_register(&g_ui_page_reserved_slot);
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

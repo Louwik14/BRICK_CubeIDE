@@ -261,6 +261,10 @@ add_test(NAME note_fx_step1_static_validation
          COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                  -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step1_static_validation.ps1)
 
+add_test(NAME seq_step_note_capture_static_validation
+         COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                 -File ${CMAKE_CURRENT_SOURCE_DIR}/seq_step_note_capture_static_validation.ps1)
+
 add_test(NAME note_fx_step10_consolidation_validation
          COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                  -File ${CMAKE_CURRENT_SOURCE_DIR}/note_fx_step10_consolidation_validation.ps1)

@@ -21,6 +21,10 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
+option(BRICK6_ITCM_AUDIT_32
+       "Place the 32 KiB I-cache audit candidate set in ITCM"
+       OFF)
+
 set(FM_KERNEL_BENCH "0" CACHE STRING
     "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
 set_property(CACHE FM_KERNEL_BENCH PROPERTY STRINGS 0 1)
@@ -302,8 +306,6 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_sd_bank.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_v1.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/kit_sd_bank.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/kit_v1.c"
 )
 
 file(GLOB SRC_UI_SRC
@@ -326,7 +328,6 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_seq_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_shortcuts.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_kit_assign.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_lowcost_button_test.c"
 )
@@ -557,6 +558,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES=${BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES}
     BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST=${BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST}
     BRICK6_STREAM_READ_CHUNK_KIB=${BRICK6_STREAM_EFFECTIVE_READ_CHUNK_KIB}
+    $<$<BOOL:${BRICK6_ITCM_AUDIT_32}>:BRICK6_ITCM_AUDIT_32=1>
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

@@ -1,8 +1,11 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:12:9:brick_sd_is_detected	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:19:6:brick_sd_media_fault	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:32:6:brick_sd_async_read_complete_isr	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:37:6:brick_sd_async_error_isr	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:42:6:sd_diskio_read_metrics_reset	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:48:6:sd_diskio_read_metrics_get	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:56:6:sd_diskio_read_metrics_note_blocks	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:32:9:brick_sd_write_blocks_dma	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:41:6:brick_sd_async_read_complete_isr	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:46:6:brick_sd_async_write_complete_isr	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:51:6:brick_sd_async_abort_complete_isr	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:56:6:brick_sd_async_error_isr	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:61:6:sd_diskio_read_metrics_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:67:6:sd_diskio_read_metrics_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:75:6:sd_diskio_read_metrics_note_blocks	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_io_hooks.c:24:9:brick_sd_read_blocks_dma	16	static

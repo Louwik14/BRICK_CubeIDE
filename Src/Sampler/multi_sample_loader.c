@@ -9,11 +9,9 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Sampler/sample_cache.h"
-#include "SD/sd_diskio.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/memory_layout.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/sd_access_gate.h"
 #include "Storage/wav_parser.h"
 #include "stm32h7xx_hal.h"
 
@@ -66,7 +64,6 @@ typedef struct
 {
     uint16_t plan_count;
     uint16_t current_plan;
-    uint8_t exclusive;
     uint32_t started_at_ms;
 } multi_sample_bulk_state_t;
 
@@ -222,15 +219,6 @@ static wav_info_t multi_loader_wav_info_from_index_sample(
     return info;
 }
 
-static void multi_loader_bulk_release_exclusive(void)
-{
-    if (g_multi_bulk.exclusive != 0U)
-    {
-        sd_access_gate_end_bulk_exclusive();
-        g_multi_bulk.exclusive = 0U;
-    }
-}
-
 static uint8_t multi_loader_bulk_runtime_stopped(void)
 {
     return ((seq_runtime_is_running() == 0U)
@@ -240,7 +228,6 @@ static uint8_t multi_loader_bulk_runtime_stopped(void)
 static void multi_loader_set_error(multi_sample_load_result_t error,
                                    uint16_t failed_sample)
 {
-    multi_loader_bulk_release_exclusive();
     if (g_multi_bulk.started_at_ms != 0U)
     {
         g_multi_load_diag.elapsed_ms = HAL_GetTick() - g_multi_bulk.started_at_ms;
@@ -779,7 +766,16 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
         g_multi_load_diag.read_calls++;
         g_multi_load_diag.file_opens += result.file_opens;
         g_multi_load_diag.seeks += result.seeks;
+        g_multi_load_diag.physical_reads += result.physical_reads;
         g_multi_load_diag.bytes_read += result.source_bytes;
+        if (result.backend != 0U)
+        {
+            g_multi_load_diag.physical_bytes += result.read_bytes;
+            if (result.read_bytes > g_multi_load_diag.max_read_bytes)
+            {
+                g_multi_load_diag.max_read_bytes = result.read_bytes;
+            }
+        }
         g_multi_load_diag.decode_cycles += result.decode_cycles;
         const uint8_t published = sample_stream_publish_result(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
@@ -828,7 +824,6 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
         return 0U;
     }
 
-    multi_loader_bulk_release_exclusive();
     g_multi_load_active = 0U;
     g_multi_load_diag.elapsed_ms = HAL_GetTick() - g_multi_bulk.started_at_ms;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_READY;
@@ -858,16 +853,6 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
-    if (g_multi_bulk.exclusive == 0U)
-    {
-        if (sd_access_gate_begin_bulk_exclusive() == 0U)
-        {
-            return;
-        }
-        g_multi_bulk.exclusive = 1U;
-        sd_diskio_read_metrics_reset();
-    }
-
     if (g_multi_bulk.current_plan >= g_multi_bulk.plan_count)
     {
         if (multi_loader_bulk_finish_instrument() == 0U)
@@ -878,10 +863,6 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_MULTI_BULK) == 0U)
-    {
-        return;
-    }
     g_multi_load_diag.service_passes++;
     g_multi_load_diag.saved_page_checks +=
         (uint32_t)g_multi_load_diag.total_samples + g_multi_load_diag.pages_requested;
@@ -902,14 +883,6 @@ void multi_sample_service_load(uint32_t byte_budget)
             g_multi_load_diag.samples_remaining--;
         }
     }
-    sd_access_gate_release(SD_ACCESS_CLIENT_MULTI_BULK);
-
-    sd_diskio_read_metrics_t physical_metrics;
-    sd_diskio_read_metrics_get(&physical_metrics);
-    g_multi_load_diag.physical_reads = physical_metrics.read_transactions;
-    g_multi_load_diag.physical_bytes = physical_metrics.read_bytes;
-    g_multi_load_diag.max_read_bytes = physical_metrics.max_read_bytes;
-
     if (ok == 0U)
     {
         sample_stream_io_release_key(sample_audio_key_multi(plan->sample_id));
@@ -942,6 +915,11 @@ uint8_t multi_sample_load_has_pending(void)
     return 0U;
 }
 
+uint8_t multi_sample_load_is_active(void)
+{
+    return g_multi_load_active;
+}
+
 uint8_t multi_sample_cancel_load(void)
 {
     if (g_multi_load_active == 0U)
@@ -949,15 +927,10 @@ uint8_t multi_sample_cancel_load(void)
         return 0U;
     }
 
-    if ((g_multi_bulk.exclusive != 0U)
-        && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_MULTI_BULK) != 0U))
+    if (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
     {
-        if (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
-        {
-            sample_stream_io_release_key(sample_audio_key_multi(
-                g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id));
-        }
-        sd_access_gate_release(SD_ACCESS_CLIENT_MULTI_BULK);
+        sample_stream_io_release_key(sample_audio_key_multi(
+            g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id));
     }
     multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
                            (g_multi_bulk.current_plan < g_multi_bulk.plan_count)

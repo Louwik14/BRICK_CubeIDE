@@ -20,7 +20,6 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
-#include "Storage/kit_v1.h"
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -125,27 +124,6 @@ static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t
 
     const char bank = (char)('A' + (pattern_state.active_bank & 0x0FU));
     (void)snprintf(out, out_len, "%c-%02u", bank, (unsigned int)(pattern_state.active_pattern + 1U));
-}
-
-static void ui_renderer_template_format_active_kit_label(char *out, uint32_t out_len)
-{
-    char name[KIT_V1_NAME_MAX];
-    if ((out == NULL) || (out_len == 0U))
-    {
-        return;
-    }
-
-    if (kit_v1_get_current_name(name, sizeof(name)) == 0U)
-    {
-        (void)snprintf(out, out_len, "Kit: ---");
-        return;
-    }
-
-    (void)snprintf(out,
-                   out_len,
-                   "Kit: %s%s",
-                   name,
-                   (kit_v1_is_dirty() != 0U) ? "*" : "");
 }
 
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 64U, 96U};
@@ -4551,9 +4529,6 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    const ui_template_subpage_t *const active_subpage = ui_template_page_get_active_subpage(state);
-    const uint8_t compact_wave_header =
-        (ui_renderer_template_is_wave_wavetable_subpage(active_subpage) != 0U) ? 1U : 0U;
     drv_display_set_font(&FONT_4X6);
     const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
     const uint8_t bpm_w = (draw_bpm != 0U) ? drv_display_text_width(bpm_label) : 0U;
@@ -4569,18 +4544,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     drv_display_draw_text(cpu_x, 1U, cpu_avg_label);
 
-    if (compact_wave_header != 0U)
-    {
-        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 8U, pattern_label);
-    }
-    else
-    {
-        char kit_label[44];
-        ui_renderer_template_format_active_kit_label(kit_label, sizeof(kit_label));
-        ui_renderer_template_fit_text(kit_label, 42U);
-        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(kit_label)), 8U, kit_label);
-        drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 14U, pattern_label);
-    }
+    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 8U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)

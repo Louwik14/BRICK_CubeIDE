@@ -1,14 +1,1 @@
-1:stream_calibration_csv
-2:encoder_detent
-3:mod_lfo_segment
-4:mod_matrix_ramp
-5:sample_stream_sequence
-6:sample_stream_snapshot
-7:vca_env_block
-8:sample_stream_scheduler_n2
-9:sample_stream_scheduler
-10:sample_stream_needs
-11:note_fx_state_restore
-12:note_fx_euclid_mask
-13:note_fx_euclid_runtime
-14:live_parameter_event
+2:generic_recorder

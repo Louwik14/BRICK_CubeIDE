@@ -256,7 +256,7 @@ static void audio_process_seq_event_segment(int32_t *rx,
     }
 
 }
-static void process_half(uint32_t half_index)
+ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 {
     const uint32_t offset =
         half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;

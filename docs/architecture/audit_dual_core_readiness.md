@@ -89,7 +89,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 - UI, controles, Hall/STEP, keyboard input, OLED, LEDs.
 - MIDI USB host/device et dispatch MIDI externe.
 - SDMMC/FatFs, `sd_access_gate`, sample loaders, page fill, preview decode, waveform cache, persistence.
-- Preparation musicale lente: editions params, snapshots, Kit/Patch/Project/Pattern.
+- Preparation musicale lente: editions params, snapshots, Patch/Project/Pattern.
 - Preparation des evenements de sequence par bloc ou par horizon borne, puis publication M4->M7.
 - Publication de pages sample READY et de snapshots de parametres.
 
@@ -146,7 +146,7 @@ La separation hard-RT/systeme est reelle: les FatFs/SD services restent dans `br
 
 | Etat | Proprietaire actuel | Lecteurs | Ecrivains | Contextes actuels | Proprietaire cible | Echange requis |
 |---|---|---|---|---|---|---|
-| `track_state` | Z2/Z5 canonique | Z2, Z3, Z5, Z6 | UI, restore, Kit/Patch | superloop/UI/storage | M4 | snapshot structure M4->M7 |
+| `track_state` | Z2/Z5 canonique | Z2, Z3, Z5, Z6 | UI, restore, Patch | superloop/UI/storage | M4 | snapshot structure M4->M7 |
 | `track_runtime` | Z2 projection | Z1, Z3, Z4, Z5 | refresh explicite Z2 | superloop + lecture IRQ | M7 copie publiee, M4 source | snapshot versionne immutable |
 | `track_sound_state` | Z3 canonique commun | Z3, Z6, LFO | param writes, restore | superloop + LFO audio | M4 canonique, M7 snapshot | snapshot param audio |
 | `track_tone_sound_state` | Z3 canonique TONE | Z3, Z6, MasterFX | param writes, restore | superloop + audio | M4 canonique, M7 snapshot | snapshot TONE/MasterFX |
@@ -259,7 +259,7 @@ Echelle: 0 fortement couple, 1 embryonnaire, 2 frontiere visible mais fuites nom
 - Objectif: M4 garde canonique, M7 recoit snapshots/commandes.
 - Zones: `param_registry_backends`, `mod_lfo_v1`, mixer setters, sampler setters, MasterFX.
 - Resultat: LFO et engines lisent un etat M7 local.
-- Tests: edits rapides, restore Kit/Patch/Project, LFO release/base, MasterFX.
+- Tests: edits rapides, restore Patch/Project, LFO release/base, MasterFX.
 - Risques: divergence UI/base/runtime.
 - Passage suivant: revision param M7 observable et coherente.
 
@@ -313,7 +313,7 @@ Echelle: 0 fortement couple, 1 embryonnaire, 2 frontiere visible mais fuites nom
 - Objectif: valider produit.
 - Zones: toutes.
 - Resultat: profil worst-case avec SD streaming, USB MIDI, UI OLED/LED, record, project load refused/deferred.
-- Tests: soak, transport start/stop, clock externe, multi record, sampler streaming, Kit/Patch.
+- Tests: soak, transport start/stop, clock externe, multi record, sampler streaming, Patch.
 - Risques: contention SDRAM/FMC, D-cache bugs, pertes events.
 - Passage suivant: criteres audio stables et diagnostics propres.
 

@@ -11,11 +11,13 @@
  */
 
 #include "brick6_audio_runtime.h"
+#include "Storage/memory_layout.h"
 
 #include <stddef.h>
 #include <string.h>
 
 #include "Audio/drum_synth.h"
+#include "Audio/audio_io.h"
 #include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
@@ -31,11 +33,37 @@
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
+#include "Core/track_input_ownership.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
+
+static void brick6_publish_owned_physical_line(uint32_t frames)
+{
+    uint8_t owner = TRACK_INPUT_OWNER_NONE;
+    if (track_input_ownership_get_external_owner(0U, &owner) == 0U)
+    {
+        return;
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(owner);
+    if ((ctx == NULL)
+            || ((track_runtime_family_t)ctx->family != TRACK_RUNTIME_FAMILY_EXTERNAL)
+            || (track_runtime_is_audio_routable_ctx(ctx) == 0U)
+            || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+    {
+        return;
+    }
+
+    const audio_physical_inputs_t *const inputs =
+        audio_io_get_current_physical_inputs();
+    mixer_submit_external_stereo(ctx->mix_track_id,
+                                 inputs->line.left,
+                                 inputs->line.right,
+                                 frames);
+}
 
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
@@ -415,12 +443,14 @@ static void brick6_render_fm_tracks(uint32_t frames, uint8_t *out_fm_tracks)
             continue;
         }
 
-        const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
-        if ((voice_count == 0U) || (renderable == 0U))
+        if (voice_count == 0U)
             continue;
         if (voice_count > 1U)
         {
+            const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            if (renderable == 0U)
+                continue;
             if (mixer_begin_external_poly(ctx->mix_track_id, frames) == 0U)
                 continue;
             uint8_t voices_published = 0U;
@@ -668,7 +698,7 @@ void brick6_audio_runtime_init(void)
     metronome_runtime_init();
 }
 
-void brick6_audio_runtime_dsp(StereoTrack *tracks,
+ITCM_AUDIT_32_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
@@ -688,6 +718,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     track_runtime_synth_usage_t synth_usage = { 0U };
     (void)track_runtime_refresh_if_dirty();
+    brick6_publish_owned_physical_line(frames);
     track_runtime_get_cached_synth_usage(&synth_usage);
     const uint8_t synth_runtime_enabled = (synth_usage.drum_tracks > 0U) ? 1U : 0U;
 
@@ -754,6 +785,8 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
+        memset(tracks[0].L, 0, frames * sizeof(float));
+        memset(tracks[0].R, 0, frames * sizeof(float));
         voice_manager_process(tracks[0].L, tracks[0].R, frames);
     }
 

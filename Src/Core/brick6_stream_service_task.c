@@ -86,19 +86,18 @@ void brick6_stream_service_task_poll(void)
 
     g_brick6_stream_service_stats.poll_count++;
     if ((sample_stream_manager_io_in_flight() == 0U)
-        && ((multi_sample_load_has_pending() != 0U)
-            || (sd_access_gate_bulk_exclusive_active() != 0U)))
+        && (multi_sample_load_is_active() != 0U))
     {
         sample_stream_manager_note_blocked_poll(
-            multi_sample_load_has_pending(),
-            sd_access_gate_bulk_exclusive_active(),
+            multi_sample_load_is_active(),
+            0U,
             poll_delay_frames);
         brick6_stream_underrun_trace_service_blocked(
-            BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
+            BRICK6_STREAM_TRACE_REASON_MULTI_LOAD_BLOCKED,
             (uint8_t)sd_access_gate_current_owner(),
             poll_delay_frames);
         brick6_stream_underrun_trace_service_end(
-            BRICK6_STREAM_TRACE_REASON_MULTI_BULK_BLOCKED,
+            BRICK6_STREAM_TRACE_REASON_MULTI_LOAD_BLOCKED,
             pending,
             g_brick6_stream_service_stats.streaming_active);
         g_brick6_stream_service_stats.busy_poll_count++;

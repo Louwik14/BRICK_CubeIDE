@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "audio_float.h"
+#include "audio_physical_inputs.h"
 
 /**
  * @file audio_io.h
@@ -24,14 +25,19 @@
  * @brief Dépaquette RX TDM vers buffers de tracks stéréo.
  *
  * @param rx Buffer RX int32 (int24 packed).
- * @param track_buf Tableau des tracks destination.
  * @param frames Nombre de frames à traiter.
  * @param in_scale Gain d'échelle d'entrée.
  */
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
-                     StereoTrack *AUDIO_RESTRICT track_buf,
                      uint32_t frames,
                      float in_scale);
+
+/*
+ * Returns the physical input lanes decoded for the current audio block.
+ * The pointer remains valid until the next audio_io_unpack() call and is
+ * intended for the audio/runtime consumer only.
+ */
+const audio_physical_inputs_t *audio_io_get_current_physical_inputs(void);
 
 /**
  * @brief Repaquette MAIN float vers buffer TX stereo.

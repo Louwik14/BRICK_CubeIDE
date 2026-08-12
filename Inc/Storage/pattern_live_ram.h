@@ -65,9 +65,7 @@ typedef struct
     uint8_t clock_src;
     uint8_t rec_start_mode;
     uint8_t rec_len_mode;
-    uint8_t linked_kit_valid;
     uint8_t reserved;
-    uint16_t linked_kit_slot;
     uint8_t track_div[SEQ_LANE_CAPACITY];
     uint8_t track_quant[SEQ_LANE_CAPACITY];
     uint8_t track_swing[SEQ_LANE_CAPACITY];
@@ -106,8 +104,5 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
 uint8_t pattern_live_is_apply_in_progress(void);
 uint8_t pattern_live_last_voice_limited(void);
-uint8_t pattern_live_get_active_linked_kit(uint16_t *out_slot);
-uint8_t pattern_live_link_active_kit(uint16_t slot);
-void pattern_live_clear_active_kit_link_if_slot(uint16_t slot);
 
 #endif

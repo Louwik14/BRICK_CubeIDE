@@ -22,7 +22,7 @@ Le prétraitement Low-Cost du catalogue donne **321 initializers désignés, tou
 
 ## 2. Table exhaustive des IDs concernés
 
-Légende formats : `P4` = Pattern v4, `Pr4` = Project v4, `Pa3` = Patch v3, `K3` = Kit v3, `TS/U` = snapshot Track et Undo/Redo RAM. « layout » signifie que l'ordinal existe dans les matrices `PARAM_PERSIST_COUNT`, sans valeur valide produite. Les globals reverb appartiennent à la page TONE du rôle Master, mais restent `domain NONE` dans `track_runtime_get_param_rule`; leur caractère global est codé localement dans Pattern.
+Légende formats : `P4` = Pattern v4, `Pr4` = Project v4, `Pa3` = Patch v3, `TS/U` = snapshot Track et Undo/Redo RAM. « layout » signifie que l'ordinal existe dans les matrices `PARAM_PERSIST_COUNT`, sans valeur valide produite. Les globals reverb appartiennent à la page TONE du rôle Master, mais restent `domain NONE` dans `track_runtime_get_param_rule`; leur caractère global est codé localement dans Pattern.
 
 | ID | Symbole canonique produit | Ancien symbole même valeur | Domaine / propriétaire actuel | Descriptor et apply/runtime | P-lock | Modulation | Formats / tests directs | Statut |
 |---:|---|---|---|---|:---:|:---:|---|---|
@@ -85,7 +85,6 @@ Les plages MIX historiques sont donc intégralement couvertes : gain `6..9`, pan
 | Pattern v4 | layout persistant + slots | matrices `sound`, `mix`, `globals` indexées par `PARAM_PERSIST_COUNT`; p-locks stockent `set_id + param_slot`; reverb globales et branches de plage actives |
 | Project v4 | layout persistant + valeur brute | embarque `PatternSaveV1` et stocke les IDs bruts des locks Macro ; double motif d'invalidation |
 | Patch v3 | layout agrégé, pas d'ID brut | MD et mute dans états agrégés, cardinalité voix séparée ; boucle de reapply parcourt les symboles courants ; pas de reverb globale ni granular |
-| Kit v3 | layout agrégé, pas d'ID brut | MD/mute/voix/spread agrégés ; boucle de reapply symbolique ; pas de reverb globale ni granular |
 | tests | symboles et valeurs attendues | `cfg_polyphony_ownership_validation.ps1` fige explicitement 16/17 et les aliases ; `synth_voice_budget_validation.ps1`, `special_track_role_validation.ps1`, `env_ownership_validation.ps1` couvrent des frontières connexes ; aucun test exhaustif MD/reverb/granular n'existe |
 | outils | parsing enum/layout | `tools/patch_bank/generate_musical_patch_bank.ps1` parse `PARAM_COUNT` et encode le layout Patch agrégé ; tout changement exige régénération/validation de banque |
 
@@ -135,7 +134,7 @@ Conclusion granular : **suppression complète du produit et du code compilé, av
 | Gain sémantique | élevé : un nom canonique par valeur et plus de logique MIX mensongère | moyen à élevé, mais les numéros eux-mêmes ne donnent aucun contrat utile | élevé sur le papier, faible gain produit supplémentaire par rapport à A |
 | Ordre de grandeur | ~45 symboles, 12–18 fichiers, 4–8 tests | ~19 IDs déplacés, 20–30 fichiers, 8–12 tests/fixtures | 323 IDs audités, 35–60 fichiers, outils et toutes les fixtures |
 | Formats | **conserver P4/Pr4/Pa3/K3** | **P5 + Pr5**, invalidation franche ; Pa3/K3 conservables si leurs structs agrégés ne changent pas | **P5 + Pr5** au minimum ; Pa3/K3 restent techniquement compatibles si structs inchangés, sinon bump conjoint explicite à v4 |
-| Tests requis | unicité/coverage registre, classification de chaque réservé, capture/restore reverb+CFG+MD, p-lock MD, macro, clipboard/undo, deux variantes | A + round-trip/rejet P4/Pr4, mapping de chaque p-lock, locks Macro bruts, fichiers mal formés | B + matrice exhaustive des 323 IDs, banques Patch/Kit, tous domaines et outils |
+| Tests requis | unicité/coverage registre, classification de chaque réservé, capture/restore reverb+CFG+MD, p-lock MD, macro, clipboard/undo, deux variantes | A + round-trip/rejet P4/Pr4, mapping de chaque p-lock, locks Macro bruts, fichiers mal formés | B + matrice exhaustive des 323 IDs, banque Patch, tous domaines et outils |
 | Corruption silencieuse | faible si chaque ordinal conserve exactement son sens courant | élevée sans bump : globals/locks Macro changent d'index et slots MD peuvent viser un autre TONE | très élevée sans invalidation globale et couverture exhaustive |
 | Revert | facile, mécanique et atomique par sous-étape | moyen ; exige revert code + fixtures/formats | difficile ; gros commit transversal |
 | Redondance H747 | faible : clarifie le seam à porter | forte | très forte |
@@ -153,7 +152,7 @@ Exécuter **A sous forme de `PARTIAL CLEANUP`**, sans compaction :
 4. **Plages MD** : conserver MODEL puis P1..P8 contigus aux mêmes valeurs, ou remplacer toutes les arithmétiques par une table dans une sous-étape distincte ; ne pas mélanger ce choix avec granular.
 5. **Validation** : ajouter un test qui énumère 0..`PARAM_COUNT-1`, prouve l'unicité des descriptors actifs, l'inertie des réservés, la classification persistence, les exclusions CFG, les neuf p-locks MD et leurs destinations de modulation ; faire les round-trips P4/Pr4/Pa3/K3 et les deux variantes.
 
-Versions à conserver pour ce plan : **Pattern v4, Project v4, Patch v3, Kit v3**. Aucun layout, aucune taille, aucun mapping p-lock et aucun sens d'ordinal courant ne doit changer. Si une sous-étape ne peut respecter cette condition, elle sort du scénario A et doit être reportée comme rupture P5/Pr5, avec rejet strict des anciens payloads plutôt qu'une compatibilité partielle.
+Versions à conserver pour ce plan : **Pattern v4, Project v4, Patch v3**. Aucun layout, aucune taille, aucun mapping p-lock et aucun sens d'ordinal courant ne doit changer. Si une sous-étape ne peut respecter cette condition, elle sort du scénario A et doit être reportée comme rupture P5/Pr5, avec rejet strict des anciens payloads plutôt qu'une compatibilité partielle.
 
 Dette à conserver avant H747 : les ordinaux historiques dispersés, les six slots granular réservés, les slots MIX réservés et le fait que les globals reverb ne sont pas encore déclarés `GLOBAL_ALLOWED` par Z2. Cette dette est documentaire et de lisibilité ; elle ne justifie pas à elle seule une reconstruction numérique.
 
@@ -162,5 +161,5 @@ Dette à conserver avant H747 : les ordinaux historiques dispersés, les six slo
 - base validée : commits `559bc74a5` et `31a860f58` présents en tête d'historique ;
 - descriptors : 321 initializers uniques, aucun doublon ; deux trous sans rapport signalés explicitement ;
 - comparaisons de plages : deux plages MIX persistence et les plages contiguës MD recensées ; aucun littéral numérique caché trouvé ;
-- versions confirmées dans le code : Pattern **v4**, Project **v4**, Patch **v3**, Kit **v3** ;
+- versions confirmées dans le code : Pattern **v4**, Project **v4**, Patch **v3** ;
 - VOICES/SPREAD confirmés CFG, ressource SYNTH, non p-lockables, non modulables et sans fallback Pattern MIX après `31a860f58`.

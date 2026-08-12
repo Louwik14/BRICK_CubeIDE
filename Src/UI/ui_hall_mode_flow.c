@@ -1,11 +1,8 @@
 #include "ui_hall_mode_flow.h"
 
 #include "Board/board_product.h"
-#include "Storage/kit_v1.h"
-#include "Storage/pattern_live_ram.h"
 #include "Storage/patch_v1.h"
 #include "pages/ui_page_audio_rec.h"
-#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_template_tone.h"
@@ -17,7 +14,6 @@
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_HALL_PATCH_SAVE_ARM_MS 80U
-#define UI_HALL_KIT_SAVE_ARM_MS 80U
 
 typedef struct
 {
@@ -30,16 +26,7 @@ typedef struct
     uint8_t save_track;
 } ui_hall_mode_flow_patch_pending_t;
 
-typedef struct
-{
-    uint8_t active;
-    uint32_t tap_ms;
-    uint8_t save_pending;
-    uint32_t save_due_ms;
-} ui_hall_mode_flow_kit_pending_t;
-
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
-static ui_hall_mode_flow_kit_pending_t g_kit_pending;
 static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
@@ -72,6 +59,18 @@ static void ui_hall_mode_flow_open_midi_fx(void)
     ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
 }
 
+static uint8_t ui_hall_mode_flow_open_looper_rout(void)
+{
+    if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
+            == UI_HALL_ROUT_CONTEXT_NONE)
+    {
+        return 0U;
+    }
+
+    ui_hall_mode_flow_open_midi_fx();
+    return 1U;
+}
+
 static void ui_hall_mode_flow_close_lowcost_rec(void)
 {
     if (ui_page_audio_rec_is_open() == 0U)
@@ -95,11 +94,6 @@ static void ui_hall_mode_flow_leave_lowcost_modal_page(void)
     if (ui_page_patch_assign_is_open() != 0U)
     {
         ui_page_patch_assign_close();
-        return;
-    }
-    if (ui_page_kit_assign_is_open() != 0U)
-    {
-        ui_page_kit_assign_close();
         return;
     }
     if (ui_page_settings_is_open() != 0U)
@@ -133,7 +127,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
 
     hall_note_suppressed[hall] = 1U;
     g_patch_pending.active = 0U;
-    g_kit_pending.active = 0U;
 
     ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
     uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;
@@ -150,18 +143,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             break;
 
         case 2U:
-            if (ui_page_kit_assign_is_open() != 0U)
-            {
-                ui_page_kit_assign_close();
-                return 1U;
-            }
-            if (track_topology_is_active(ui_get_active_track()) == 0U)
-            {
-                ui_core_feedback_set("TRACK ONLY", now_ms);
-                return 1U;
-            }
-            ui_hall_mode_flow_leave_lowcost_modal_page();
-            ui_page_kit_assign_open();
             return 1U;
 
         case 3U:
@@ -210,7 +191,11 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             break;
 
         case 6U:
-            ui_hall_mode_flow_open_midi_fx();
+            if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
+                    == UI_HALL_ROUT_CONTEXT_NONE)
+            {
+                ui_hall_mode_flow_open_midi_fx();
+            }
             return 1U;
 
         case 7U:
@@ -242,7 +227,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             return 1U;
 
         case 14U:
-            ui_core_navigation_bridge_open_rec_cfg_page();
+            (void)ui_hall_mode_flow_open_looper_rout();
             return 1U;
 
         default:
@@ -297,7 +282,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     {
         hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
-        g_kit_pending.active = 0U;
         if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
                 && (ui_page_template_tone_is_global_master() != 0U))
         {
@@ -319,7 +303,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     if (hall == 0U)
     {
         hall_note_suppressed[hall] = 1U;
-        g_kit_pending.active = 0U;
         if (track_topology_is_active(ui_get_active_track()) == 0U)
         {
             g_patch_pending.active = 0U;
@@ -349,35 +332,26 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     {
         hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
-        if (track_topology_is_active(ui_get_active_track()) == 0U)
-        {
-            g_kit_pending.active = 0U;
-            ui_core_feedback_set("TRACK ONLY", now_ms);
-            return;
-        }
-        if ((g_kit_pending.active != 0U)
-                && ((now_ms - g_kit_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
-        {
-            ui_hall_kit_feedback_begin(now_ms);
-            ui_core_feedback_set("KIT SAVE", now_ms);
-            g_kit_pending.save_pending = 1U;
-            g_kit_pending.save_due_ms = now_ms + UI_HALL_KIT_SAVE_ARM_MS;
-            g_kit_pending.active = 0U;
-            return;
-        }
-
-        g_kit_pending.active = 1U;
-        g_kit_pending.tap_ms = now_ms;
         return;
     }
 
     g_patch_pending.active = 0U;
-    g_kit_pending.active = 0U;
 
     if (hall == 9U)
     {
         hall_note_suppressed[hall] = 1U;
-        ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
+        if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
+                == UI_HALL_ROUT_CONTEXT_NONE)
+        {
+            ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
+        }
+        return;
+    }
+
+    if (hall == 14U)
+    {
+        hall_note_suppressed[hall] = 1U;
+        (void)ui_hall_mode_flow_open_looper_rout();
         return;
     }
 
@@ -430,26 +404,6 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
         return;
     }
 
-    if (g_kit_pending.save_pending != 0U)
-    {
-        if ((int32_t)(now_ms - g_kit_pending.save_due_ms) < 0)
-        {
-            return;
-        }
-
-        uint16_t saved_slot = KIT_V1_INVALID_SLOT;
-        const kit_v1_result_t result = kit_v1_save_direct(&saved_slot);
-        if ((result == KIT_V1_RESULT_OK) && (saved_slot < KIT_V1_SLOT_COUNT))
-        {
-            (void)pattern_live_link_active_kit(saved_slot);
-        }
-        const uint32_t done_ms = HAL_GetTick();
-        ui_hall_kit_feedback_end(done_ms);
-        g_kit_pending.save_pending = 0U;
-        ui_core_feedback_set(kit_v1_result_label(result), done_ms);
-        return;
-    }
-
     if (g_patch_pending.active != 0U)
     {
         if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
@@ -468,23 +422,6 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
         ui_page_patch_assign_open(target_track, previous_mode);
         return;
     }
-
-    if (g_kit_pending.active == 0U)
-    {
-        return;
-    }
-
-    if ((now_ms - g_kit_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
-    {
-        return;
-    }
-
-    g_kit_pending.active = 0U;
-    if (ui_macro_overlay_is_active() != 0U)
-    {
-        ui_macro_overlay_on_hall_mode_changed();
-    }
-    ui_page_kit_assign_open();
 }
 
 void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,

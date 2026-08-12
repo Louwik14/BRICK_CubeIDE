@@ -42,6 +42,17 @@ typedef struct
     uint8_t edited[SEQ_STEPS_PER_PAGE];
     uint8_t pressed_active[SEQ_STEPS_PER_PAGE];
     seq_step_content_t pressed_content[SEQ_STEPS_PER_PAGE];
+    uint8_t quick_length_applied;
+    seq_edit_held_content_t held_content;
+    uint8_t captured_note_count[128U];
+    uint8_t note_capture_target_valid;
+    seq_track_id_t note_capture_track;
+    uint8_t note_capture_step_count;
+    seq_step_id_t note_capture_steps[SEQ_STEPS_PER_PAGE];
+    uint8_t note_capture_note_count;
+    uint8_t note_capture_notes[SEQ_STEP_PLAY_VOICE_COUNT];
+    uint8_t note_capture_velocities[SEQ_STEP_PLAY_VOICE_COUNT];
+    uint8_t note_capture_undo_open;
     uint32_t press_tick[SEQ_STEPS_PER_PAGE];
     seq_step_id_t step_id[SEQ_STEPS_PER_PAGE];
     seq_track_id_t track_id[SEQ_STEPS_PER_PAGE];
@@ -63,11 +74,30 @@ typedef struct
 
 static void seq_edit_mark_step_edited(seq_track_id_t track, seq_step_id_t step);
 static void seq_edit_clear_auto_note_pending(seq_track_id_t track, seq_step_id_t step);
+static void seq_edit_finish_snapshot_undo(uint8_t started);
 
 SEQ_STATE_D2 static seq_edit_hold_state_t g_seq_hold_state;
 #if defined(BRICK6_VARIANT_LOWCOST)
 SEQ_STATE_D2 static seq_edit_length_flash_t g_seq_length_flash;
 #endif
+
+static void seq_edit_reset_gesture_if_idle(void)
+{
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if ((g_seq_hold_state.pending[hall] != 0U)
+                || (g_seq_hold_state.held[hall] != 0U))
+        {
+            return;
+        }
+    }
+
+    g_seq_hold_state.quick_length_applied = 0U;
+    g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_NONE;
+    seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
+    g_seq_hold_state.note_capture_undo_open = 0U;
+    g_seq_hold_state.note_capture_target_valid = 0U;
+}
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status)
@@ -367,6 +397,7 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
                 || (seq_edit_lowcost_source_is_held_or_pending(hall) == 0U)
                 || (hall_surface_is_pressed(hall) == 0U)
                 || (g_seq_hold_state.track_id[hall] != track)
+                || (seq_model_step_is_empty(track, g_seq_hold_state.step_id[hall]) != 0U)
                 || (g_seq_hold_state.step_id[hall] >= end_step))
         {
             continue;
@@ -478,6 +509,8 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
     }
     seq_edit_mark_step_edited(track, start_step);
     seq_edit_lowcost_length_flash_start(track, start_step, end_step);
+    g_seq_hold_state.quick_length_applied = 1U;
+    g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_QUICK_LENGTH;
     return 1U;
 }
 #else
@@ -553,6 +586,7 @@ static void seq_edit_reset_hall_press_state(uint8_t hall)
     g_seq_hold_state.edited[hall] = 0U;
     g_seq_hold_state.pending[hall] = 0U;
     g_seq_hold_state.held[hall] = 0U;
+    seq_edit_reset_gesture_if_idle();
 }
 
 void seq_edit_init(void)
@@ -585,6 +619,11 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
 
 void seq_edit_change_page(seq_track_id_t track, int8_t delta)
 {
+    if (delta != 0)
+    {
+        seq_edit_note_capture_reset();
+    }
+
     uint8_t page = seq_model_get_track_page(track);
 
     if (delta > 0)
@@ -668,6 +707,10 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
     g_seq_hold_state.pending[hall_index] = 1U;
     g_seq_hold_state.held[hall_index] = 0U;
     g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
+    if (g_seq_hold_state.quick_length_applied == 0U)
+    {
+        g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_NONE;
+    }
 }
 
 void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index)
@@ -722,6 +765,332 @@ void seq_edit_step_hold_update(void)
             g_seq_hold_state.pending[hall] = 0U;
         }
     }
+}
+
+seq_edit_held_content_t seq_edit_classify_held_steps(void)
+{
+    if (g_seq_hold_state.quick_length_applied != 0U)
+    {
+        return SEQ_EDIT_HELD_CONTENT_QUICK_LENGTH;
+    }
+
+    seq_track_id_t track = 0U;
+    seq_step_id_t steps[SEQ_STEPS_PER_PAGE];
+    const uint8_t count = seq_edit_collect_held_steps(&track,
+                                                      steps,
+                                                      (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                      1U);
+    if (count == 0U)
+    {
+        g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_NONE;
+        return SEQ_EDIT_HELD_CONTENT_NONE;
+    }
+
+    const uint8_t first_empty = seq_model_step_is_empty(track, steps[0]);
+    for (uint8_t i = 1U; i < count; ++i)
+    {
+        if (seq_model_step_is_empty(track, steps[i]) != first_empty)
+        {
+            g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_MIXED;
+            return SEQ_EDIT_HELD_CONTENT_MIXED;
+        }
+    }
+
+    g_seq_hold_state.held_content = (first_empty != 0U)
+        ? SEQ_EDIT_HELD_CONTENT_ALL_EMPTY
+        : SEQ_EDIT_HELD_CONTENT_ALL_FILLED;
+    return g_seq_hold_state.held_content;
+}
+
+uint8_t seq_edit_prepare_held_note_capture(seq_track_id_t *out_track,
+                                            seq_step_id_t *out_steps,
+                                            uint8_t max_steps,
+                                            uint8_t *out_count)
+{
+    if (out_count != 0)
+    {
+        *out_count = 0U;
+    }
+    if ((out_track == 0) || (out_steps == 0) || (out_count == 0)
+            || (max_steps == 0U))
+    {
+        return 0U;
+    }
+
+    const seq_edit_held_content_t content = seq_edit_classify_held_steps();
+    if ((content != SEQ_EDIT_HELD_CONTENT_ALL_EMPTY)
+            && (content != SEQ_EDIT_HELD_CONTENT_ALL_FILLED))
+    {
+        return 0U;
+    }
+
+    const uint8_t count = seq_edit_collect_held_steps(out_track,
+                                                      out_steps,
+                                                      max_steps,
+                                                      1U);
+    if (count == 0U)
+    {
+        return 0U;
+    }
+
+    *out_count = count;
+    return 1U;
+}
+
+static uint8_t seq_edit_replace_step_play_notes_impl(seq_track_id_t track,
+                                                     const seq_step_id_t *steps,
+                                                     uint8_t step_count,
+                                                     const uint8_t *notes,
+                                                     const uint8_t *velocities,
+                                                     uint8_t note_count,
+                                                     uint8_t with_undo)
+{
+    if ((steps == 0) || (notes == 0) || (velocities == 0)
+            || (step_count == 0U) || (step_count > (uint8_t)SEQ_MAX_STEPS)
+            || (note_count == 0U) || (note_count > (uint8_t)SEQ_STEP_PLAY_VOICE_COUNT)
+            || (seq_edit_track_sequence_is_locked(track) != 0U)
+            || (seq_model_track_can_store_play(track) == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < step_count; ++i)
+    {
+        if (seq_model_is_step_editable_index(steps[i]) == 0U)
+        {
+            return 0U;
+        }
+        for (uint8_t j = 0U; j < i; ++j)
+        {
+            if (steps[j] == steps[i])
+            {
+                return 0U;
+            }
+        }
+    }
+
+    for (uint8_t voice = 0U; voice < note_count; ++voice)
+    {
+        if ((notes[voice] > 127U) || (velocities[voice] > 127U))
+        {
+            return 0U;
+        }
+    }
+
+    const uint8_t undo_started = (with_undo != 0U)
+        ? seq_edit_begin_snapshot_undo(track, steps, step_count)
+        : 0U;
+
+    for (uint8_t i = 0U; i < step_count; ++i)
+    {
+        const seq_step_id_t step = steps[i];
+        for (uint8_t voice = 0U; voice < (uint8_t)SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+        {
+            (void)seq_model_step_play_delete(track,
+                                              step,
+                                              voice,
+                                              SEQ_STEP_PLAY_FIELD_NOTE);
+            (void)seq_model_step_play_delete(track,
+                                              step,
+                                              voice,
+                                              SEQ_STEP_PLAY_FIELD_VELOCITY);
+            (void)seq_model_step_play_delete(track,
+                                              step,
+                                              voice,
+                                              SEQ_STEP_PLAY_FIELD_MICROTIMING);
+        }
+
+        for (uint8_t voice = 0U; voice < note_count; ++voice)
+        {
+            if ((seq_model_step_play_set(track,
+                                         step,
+                                         voice,
+                                         SEQ_STEP_PLAY_FIELD_NOTE,
+                                         (int16_t)notes[voice]) == 0U)
+                    || (seq_model_step_play_set(track,
+                                                step,
+                                                voice,
+                                                SEQ_STEP_PLAY_FIELD_VELOCITY,
+                                                (int16_t)velocities[voice]) == 0U)
+                    || (seq_model_step_play_set(track,
+                                                step,
+                                                voice,
+                                                SEQ_STEP_PLAY_FIELD_MICROTIMING,
+                                                0) == 0U))
+            {
+                if (undo_started != 0U)
+                {
+                    undo_v2_cancel_transaction();
+                }
+                return 0U;
+            }
+        }
+
+        seq_model_set_trig(track, step, 1U);
+        seq_edit_mark_step_edited(track, step);
+        seq_edit_clear_auto_note_pending(track, step);
+    }
+
+    if (with_undo != 0U)
+    {
+        seq_edit_finish_snapshot_undo(undo_started);
+    }
+    return 1U;
+}
+
+uint8_t seq_edit_replace_step_play_notes(seq_track_id_t track,
+                                         const seq_step_id_t *steps,
+                                         uint8_t step_count,
+                                         const uint8_t *notes,
+                                         const uint8_t *velocities,
+                                         uint8_t note_count)
+{
+    return seq_edit_replace_step_play_notes_impl(track,
+                                                 steps,
+                                                 step_count,
+                                                 notes,
+                                                 velocities,
+                                                 note_count,
+                                                 1U);
+}
+
+uint8_t seq_edit_capture_held_note_on(uint8_t note, uint8_t velocity)
+{
+    if ((note >= 128U) || (velocity == 0U))
+    {
+        return 0U;
+    }
+
+    if (g_seq_hold_state.note_capture_target_valid == 0U)
+    {
+        seq_step_id_t steps[SEQ_STEPS_PER_PAGE];
+        uint8_t step_count = 0U;
+        if (seq_edit_prepare_held_note_capture(&g_seq_hold_state.note_capture_track,
+                                                steps,
+                                                (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                &step_count) == 0U)
+        {
+            return 0U;
+        }
+
+        memcpy(g_seq_hold_state.note_capture_steps,
+               steps,
+               (size_t)step_count * sizeof(steps[0]));
+        g_seq_hold_state.note_capture_step_count = step_count;
+        g_seq_hold_state.note_capture_note_count = 0U;
+        if (seq_edit_begin_snapshot_undo(g_seq_hold_state.note_capture_track,
+                                          g_seq_hold_state.note_capture_steps,
+                                          g_seq_hold_state.note_capture_step_count) == 0U)
+        {
+            g_seq_hold_state.note_capture_step_count = 0U;
+            return 0U;
+        }
+        g_seq_hold_state.note_capture_undo_open = 1U;
+        g_seq_hold_state.note_capture_target_valid = 1U;
+    }
+
+    uint8_t voice = 0U;
+    uint8_t existing = 0U;
+    for (; voice < g_seq_hold_state.note_capture_note_count; ++voice)
+    {
+        if (g_seq_hold_state.note_capture_notes[voice] == note)
+        {
+            existing = 1U;
+            break;
+        }
+    }
+
+    if (existing == 0U)
+    {
+        if (g_seq_hold_state.note_capture_note_count >= SEQ_STEP_PLAY_VOICE_COUNT)
+        {
+            if (g_seq_hold_state.captured_note_count[note] < 0xFFU)
+            {
+                g_seq_hold_state.captured_note_count[note]++;
+            }
+            return 1U;
+        }
+        voice = g_seq_hold_state.note_capture_note_count++;
+        g_seq_hold_state.note_capture_notes[voice] = note;
+    }
+
+    g_seq_hold_state.note_capture_velocities[voice] = velocity;
+    if (seq_edit_replace_step_play_notes_impl(g_seq_hold_state.note_capture_track,
+                                              g_seq_hold_state.note_capture_steps,
+                                              g_seq_hold_state.note_capture_step_count,
+                                              g_seq_hold_state.note_capture_notes,
+                                              g_seq_hold_state.note_capture_velocities,
+                                              g_seq_hold_state.note_capture_note_count,
+                                              0U) == 0U)
+    {
+        if (existing == 0U)
+        {
+            g_seq_hold_state.note_capture_note_count--;
+        }
+        if (g_seq_hold_state.note_capture_undo_open != 0U)
+        {
+            undo_v2_cancel_transaction();
+            g_seq_hold_state.note_capture_undo_open = 0U;
+        }
+        g_seq_hold_state.note_capture_target_valid = 0U;
+        return 0U;
+    }
+
+    if (g_seq_hold_state.captured_note_count[note] < 0xFFU)
+    {
+        g_seq_hold_state.captured_note_count[note]++;
+    }
+    return 1U;
+}
+
+uint8_t seq_edit_note_capture_note_off(uint8_t note)
+{
+    if ((note >= 128U) || (g_seq_hold_state.captured_note_count[note] == 0U))
+    {
+        return 0U;
+    }
+
+    g_seq_hold_state.captured_note_count[note]--;
+    uint8_t active = 0U;
+    for (uint16_t i = 0U; i < 128U; ++i)
+    {
+        if (g_seq_hold_state.captured_note_count[i] != 0U)
+        {
+            active = 1U;
+            break;
+        }
+    }
+    if (active == 0U)
+    {
+        seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
+        g_seq_hold_state.note_capture_undo_open = 0U;
+        g_seq_hold_state.note_capture_target_valid = 0U;
+        g_seq_hold_state.note_capture_step_count = 0U;
+        g_seq_hold_state.note_capture_note_count = 0U;
+    }
+    return 1U;
+}
+
+void seq_edit_note_capture_reset(void)
+{
+    seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
+    g_seq_hold_state.note_capture_undo_open = 0U;
+    memset(g_seq_hold_state.captured_note_count,
+           0,
+           sizeof(g_seq_hold_state.captured_note_count));
+    g_seq_hold_state.note_capture_target_valid = 0U;
+    g_seq_hold_state.note_capture_track = 0U;
+    g_seq_hold_state.note_capture_step_count = 0U;
+    g_seq_hold_state.note_capture_note_count = 0U;
+    memset(g_seq_hold_state.note_capture_steps,
+           0,
+           sizeof(g_seq_hold_state.note_capture_steps));
+    memset(g_seq_hold_state.note_capture_notes,
+           0,
+           sizeof(g_seq_hold_state.note_capture_notes));
+    memset(g_seq_hold_state.note_capture_velocities,
+           0,
+           sizeof(g_seq_hold_state.note_capture_velocities));
 }
 
 uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step)

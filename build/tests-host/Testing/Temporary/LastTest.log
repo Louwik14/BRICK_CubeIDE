@@ -1,259 +1,35 @@
-Start testing: Aug 11 09:47 Paris, Madrid (heure d’été)
+Start testing: Aug 12 17:19 Paris, Madrid (heure d’été)
 ----------------------------------------------------------
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/stream_calibration_csv_test.exe
-1/16 Testing: stream_calibration_csv
-1/16 Test: stream_calibration_csv
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"stream_calibration_csv" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"stream_calibration_csv" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"stream_calibration_csv" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/encoder_detent_test.exe
-2/16 Testing: encoder_detent
-2/16 Test: encoder_detent
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"encoder_detent" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"encoder_detent" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"encoder_detent" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/mod_lfo_segment_test.exe
-3/16 Testing: mod_lfo_segment
-3/16 Test: mod_lfo_segment
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"mod_lfo_segment" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"mod_lfo_segment" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"mod_lfo_segment" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/mod_matrix_ramp_test.exe
-4/16 Testing: mod_matrix_ramp
-4/16 Test: mod_matrix_ramp
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"mod_matrix_ramp" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"mod_matrix_ramp" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"mod_matrix_ramp" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/sample_stream_sequence_test.exe
-5/16 Testing: sample_stream_sequence
-5/16 Test: sample_stream_sequence
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"sample_stream_sequence" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"sample_stream_sequence" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"sample_stream_sequence" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/sample_stream_snapshot_test.exe
-6/16 Testing: sample_stream_snapshot
-6/16 Test: sample_stream_snapshot
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"sample_stream_snapshot" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"sample_stream_snapshot" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"sample_stream_snapshot" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/vca_env_block_test.exe
-7/16 Testing: vca_env_block
-7/16 Test: vca_env_block
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"vca_env_block" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"vca_env_block" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"vca_env_block" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/sample_stream_scheduler_n2_test.exe
-8/16 Testing: sample_stream_scheduler_n2
-8/16 Test: sample_stream_scheduler_n2
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"sample_stream_scheduler_n2" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"sample_stream_scheduler_n2" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"sample_stream_scheduler_n2" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/sample_stream_scheduler_test.exe
-9/16 Testing: sample_stream_scheduler
-9/16 Test: sample_stream_scheduler
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"sample_stream_scheduler" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"sample_stream_scheduler" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"sample_stream_scheduler" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/sample_stream_needs_test.exe
-10/16 Testing: sample_stream_needs
-10/16 Test: sample_stream_needs
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"sample_stream_needs" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"sample_stream_needs" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"sample_stream_needs" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/note_fx_state_restore_test.exe
-11/16 Testing: note_fx_state_restore
-11/16 Test: note_fx_state_restore
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"note_fx_state_restore" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"note_fx_state_restore" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"note_fx_state_restore" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/note_fx_euclid_mask_test.exe
-12/16 Testing: note_fx_euclid_mask
-12/16 Test: note_fx_euclid_mask
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"note_fx_euclid_mask" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"note_fx_euclid_mask" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"note_fx_euclid_mask" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/note_fx_euclid_runtime_test.exe
-13/16 Testing: note_fx_euclid_runtime
-13/16 Test: note_fx_euclid_runtime
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"note_fx_euclid_runtime" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"note_fx_euclid_runtime" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"note_fx_euclid_runtime" time elapsed: 00:00:00
-----------------------------------------------------------
-
-Unable to find executable: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/live_parameter_event_test.exe
-14/16 Testing: live_parameter_event
-14/16 Test: live_parameter_event
-Command: ""
-Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"live_parameter_event" start time: 
-Output:
-----------------------------------------------------------
-<end of output>
-Test time =   0.00 sec
-----------------------------------------------------------
-Test Passed.
-"live_parameter_event" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"live_parameter_event" time elapsed: 00:00:00
-----------------------------------------------------------
-
-15/16 Testing: note_fx_step1_static_validation
-15/16 Test: note_fx_step1_static_validation
+20/22 Testing: note_fx_step1_static_validation
+20/22 Test: note_fx_step1_static_validation
 Command: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/note_fx_step1_static_validation.ps1"
 Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"note_fx_step1_static_validation" start time: Aug 11 09:47 Paris, Madrid (heure d’été)
+"note_fx_step1_static_validation" start time: Aug 12 17:19 Paris, Madrid (heure d’été)
 Output:
 ----------------------------------------------------------
 note_fx_step1_static_validation=PASS adapter=explicit terminal=independent owner=queued restore=model-defaults clock=uint32-overflow
 <end of output>
-Test time =   0.53 sec
+Test time =   0.55 sec
 ----------------------------------------------------------
 Test Passed.
-"note_fx_step1_static_validation" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
+"note_fx_step1_static_validation" end time: Aug 12 17:19 Paris, Madrid (heure d’été)
 "note_fx_step1_static_validation" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-16/16 Testing: note_fx_step10_consolidation_validation
-16/16 Test: note_fx_step10_consolidation_validation
-Command: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/note_fx_step10_consolidation_validation.ps1"
+21/22 Testing: seq_step_note_capture_static_validation
+21/22 Test: seq_step_note_capture_static_validation
+Command: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/seq_step_note_capture_static_validation.ps1"
 Directory: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
-"note_fx_step10_consolidation_validation" start time: Aug 11 09:47 Paris, Madrid (heure d’été)
+"seq_step_note_capture_static_validation" start time: Aug 12 17:19 Paris, Madrid (heure d’été)
 Output:
 ----------------------------------------------------------
-note_fx_step10_consolidation_validation=PASS cardinality=3 euclid=bounded terminal=64 hot_path=static-safe measurements=deferred
+seq_step_note_capture_static_validation=PASS empty-semantics=existing quick-length=priority play=len-preserved mictim=zero undo=grouped live-rec=arbitrated
 <end of output>
-Test time =   1.34 sec
+Test time =   0.49 sec
 ----------------------------------------------------------
 Test Passed.
-"note_fx_step10_consolidation_validation" end time: Aug 11 09:47 Paris, Madrid (heure d’été)
-"note_fx_step10_consolidation_validation" time elapsed: 00:00:01
+"seq_step_note_capture_static_validation" end time: Aug 12 17:19 Paris, Madrid (heure d’été)
+"seq_step_note_capture_static_validation" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-End testing: Aug 11 09:47 Paris, Madrid (heure d’été)
+End testing: Aug 12 17:19 Paris, Madrid (heure d’été)

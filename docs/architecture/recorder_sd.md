@@ -18,6 +18,8 @@ Le block device n'autorise qu'un WRITE DMA actif. `begin/poll/take_result` publi
 
 Les compteurs ont des sens distincts: `received` accepte par le ring, `packed` converti, `submitted` transmis au block device, `committed` confirme physiquement. Le streamer Looper ne peut lire que jusqu'au tail `committed`. Ses lectures de la prise active utilisent exclusivement la carte physique; aucun fallback FatFs n'est permis tant que le fichier est en cours de construction.
 
+Le page-cache Looper remplace sa carte live uniquement lorsque la generation de reservation change et qu'aucune lecture Looper n'est en vol. Le remplacement construit d'abord une carte valide, la publie atomiquement, puis libere l'ancienne; le renommage seul ne change pas la generation.
+
 Au stop Looper, le preroll RAM de 0,25 s permet le premier passage immediat. Le page-cache rejoint ensuite le tail SD engage et le preroll n'est pas rejoue apres le premier wrap. Le chemin du stream passe de `.REC` a `.WAV` apres finalisation sans recharger la prise. Le transport de pages et le recorder partagent le scheduler et peuvent coexister; l'absence de page produit le fallback audio existant, sans lecture synchrone depuis l'IRQ.
 
 ## Memoire et limites

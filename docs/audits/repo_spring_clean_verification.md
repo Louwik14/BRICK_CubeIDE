@@ -45,7 +45,7 @@ La passe a aussi vérifié les modifications non commitées déjà présentes da
 | Patch | capture/apply Play-only ; toutes les Specials refusées | `play_special_storage_validation`, inspection `patch_v1.c` | conforme |
 | Clipboard/snapshot/undo | rôles stricts, clear et undo/redo présents ; ENV/CFG/MIDI FX capturés selon leur scope | `play_special_storage_validation`, `note_fx_persistence_validation`, `env_ownership_validation` | conforme statiquement |
 | Macro scènes | wrappers et aliases bank/slot absents du code actif ; API scène/lock compilée | recherche négative, deux builds Release | conforme |
-| Formats | Pattern v4, Project v4, Patch v3, Kit v3 ; validation stricte version/taille | `play_special_storage_validation`, `env_ownership_validation`, `cfg_polyphony_ownership_validation` | conforme |
+| Formats | Pattern v4, Project v4, Patch v3 ; validation stricte version/taille | `play_special_storage_validation`, `env_ownership_validation`, `cfg_polyphony_ownership_validation` | conforme |
 | Rejets anciens | Pattern/Project v3 refusés par l'égalité stricte version/taille ; aucune migration ajoutée | inspection des validateurs SD | conforme |
 | Registre | `PARAM_COUNT == 323`, `PARAM_PERSIST_COUNT == 307`, MD MODEL/P1..P8 contigus, valeurs inchangées | asserts, `param_reserved_slots_validation`, tests CFG/MD | conforme |
 | Réservés | `PARAM_RESERVED_000..005` et réserves MIX inertes, cachés UI, non p-lockables, non modulables, apply nul | `param_reserved_slots_validation` | conforme |
@@ -70,7 +70,7 @@ Absents du code produit actif :
 - `control_router`, `control_events`, `seq_param8_t`, `dirty_pending_persist` ;
 - `ui_page_template_filter` comme fichier/symbole actif ;
 - aliases, typedefs et wrappers Macro bank/slot ;
-- scheduler `linked` produit et résultats Kit `*_TODO` liés au chantier.
+- scheduler `linked` produit et résultats `*_TODO` liés au chantier.
 
 Occurrences restantes justifiées :
 
@@ -78,7 +78,6 @@ Occurrences restantes justifiées :
 - `PARAM_MASTER_FX` dans `special_track_role_validation.ps1` est une sentinelle négative ;
 - `COLORS` dans Z1/Z3 décrit explicitement le retrait historique ;
 - `fx_master_macro` est le nom technique du processeur post-mix/master-bus ;
-- `linked_kit` concerne les Kits liés et non l'ancienne séquence groupée ;
 - ARP reste présent uniquement dans les contextes produit autorisés.
 
 ## 5. Builds et tests
@@ -130,7 +129,7 @@ Les modifications source déjà présentes avant la passe, relatives aux noms sc
 | Pas de runner hôte disponible sur la machine | les six exécutables C de `tests/CMakeLists.txt` ne sont pas rejoués ici | installer/configurer un compilateur C hôte + Ninja ou NMake |
 | Pas de banc dynamique quatre-formats | couverture statique seulement pour plusieurs round-trips | ajouter ultérieurement un banc hôte de sérialisation P4/Pr4/Pa3/K3, sans migration |
 | `AGENT.md` dit encore que la « reconstruction des IDs » est planifiée | formulation ambiguë après canonisation sans renumérotation | préciser que la canonisation est terminée et que la compaction reste interdite/reportée |
-| commentaire `param_store.h` : domaine MIDI FX « jusqu'à l'étape 7 » | commentaire périmé ; la frontière 307 reste volontaire | reformuler comme frontière persistante Patch/Kit et stockage MIDI FX séparé |
+| commentaire `param_store.h` : domaine MIDI FX « jusqu'à l'étape 7 » | commentaire périmé ; la frontière 307 reste volontaire | reformuler comme frontière persistante Patch et stockage MIDI FX séparé |
 
 Aucune de ces dettes n'est un changement d'ID/format, une migration persistence, un bug hard real-time, une modification audio/DSP ou une préparation dual-core à effectuer dans cette passe.
 

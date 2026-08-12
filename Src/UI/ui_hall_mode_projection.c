@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include "Board/board_product.h"
-#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
@@ -15,16 +14,10 @@
 #define UI_HALL_PATCH_FEEDBACK_MS 1000U
 
 static uint32_t g_ui_hall_patch_feedback_until_ms = 0U;
-static uint32_t g_ui_hall_kit_feedback_until_ms = 0U;
 
 static uint8_t ui_hall_patch_feedback_active(uint32_t now_ms)
 {
     return ((int32_t)(g_ui_hall_patch_feedback_until_ms - now_ms) > 0) ? 1U : 0U;
-}
-
-static uint8_t ui_hall_kit_feedback_active(uint32_t now_ms)
-{
-    return ((int32_t)(g_ui_hall_kit_feedback_until_ms - now_ms) > 0) ? 1U : 0U;
 }
 
 void ui_hall_patch_feedback_begin(uint32_t now_ms)
@@ -35,16 +28,6 @@ void ui_hall_patch_feedback_begin(uint32_t now_ms)
 void ui_hall_patch_feedback_end(uint32_t now_ms)
 {
     g_ui_hall_patch_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
-}
-
-void ui_hall_kit_feedback_begin(uint32_t now_ms)
-{
-    g_ui_hall_kit_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
-}
-
-void ui_hall_kit_feedback_end(uint32_t now_ms)
-{
-    g_ui_hall_kit_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
 }
 
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)
@@ -148,12 +131,6 @@ const char *ui_get_hall_mode_short_label(void)
         return "PATCH";
     }
 
-    if ((ui_page_kit_assign_is_open() != 0U)
-            || (ui_hall_kit_feedback_active(HAL_GetTick()) != 0U))
-    {
-        return "KIT";
-    }
-
     if (ui_page_get_id() == UI_PAGE_MIDI_FX)
     {
         return (ui_hall_mode_resolve_rout_context(active_track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
@@ -195,9 +172,7 @@ const char *ui_get_hall_mode_suffix_label(void)
     }
 
     if ((ui_page_patch_assign_is_open() != 0U)
-            || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U)
-            || (ui_page_kit_assign_is_open() != 0U)
-            || (ui_hall_kit_feedback_active(HAL_GetTick()) != 0U))
+            || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U))
     {
         return "";
     }

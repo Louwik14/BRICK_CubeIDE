@@ -32,6 +32,7 @@
 #include "fx_reverb.h"
 #include "Audio/spectral_window.h"
 #include "Core/brick6_looper_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Audio/multi_voice_dsp.h"
@@ -204,7 +205,7 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float cutoff_mod_start_hz,
                                                            float resonance_start,
                                                            float keytrack_ratio_start);
-static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
                                                      float *mono,
                                                      uint32_t frames,
                                                      const mixer_poly_cutoff_override_t *poly_cutoff);
@@ -1622,7 +1623,7 @@ static void mixer_lane_run_stereo_path(uint32_t track_id,
     }
 }
 
-static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
                                                      float *mono,
                                                      uint32_t frames,
                                                      const mixer_poly_cutoff_override_t *poly_cutoff)
@@ -3822,7 +3823,7 @@ void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
+ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
     AUDIO_HOT ALIGN32 static float mono_pan_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
@@ -4145,7 +4146,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float right = sample_processed * pan_r;
                 const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                 const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
-
                 if (send_bus_active != 0U)
                 {
                     for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)

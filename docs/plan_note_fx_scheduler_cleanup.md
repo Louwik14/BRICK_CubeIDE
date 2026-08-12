@@ -528,7 +528,7 @@ Correction normative de la ligne MUTE: `MUTE_TRIGS` bloque les nouveaux Note On 
 - UI, param registry, restore, Undo/Redo, clavier et MIDI publient des commandes fixes; ils lisent des snapshots cohérents.
 - les commandes sont appliquées à une frontière déterministe avant le traitement des événements dus.
 
-Aucune commande ne transporte un pointeur vers un état mutable et aucune API n'attend une section critique implicite. Les copies Pattern, Project, Patch, Kit, snapshot, clipboard et Undo contiennent seulement la base `note_fx_track_state_t`; token, generation, phase, owned, file et timestamp courant sont explicitement exclus.
+Aucune commande ne transporte un pointeur vers un état mutable et aucune API n'attend une section critique implicite. Les copies Pattern, Project, Patch, snapshot, clipboard et Undo contiennent seulement la base `note_fx_track_state_t`; token, generation, phase, owned, file et timestamp courant sont explicitement exclus.
 
 ## 14. Code mort, duplications et documentation
 
@@ -856,7 +856,7 @@ Il n'y a aucune dette active qualifiée `CONSERVER`. Les compromis intentionnels
 - Euclid, Harmony, Probability, Gate, Groove et tout nouveau modèle MIDI FX;
 - Live Record post-FX, bounce vers piste et nouvelle UI fonctionnelle;
 - changement de limite globale de polyphonie;
-- migration historique de formats Pattern/Project/Patch/Kit;
+- migration historique de formats Pattern/Project/Patch;
 - RTOS, allocation dynamique, bus général et split dual-core;
 - refonte générale de la file Stack ou du mixeur hors dépendance démontrée.
 

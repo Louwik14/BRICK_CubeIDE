@@ -8,13 +8,23 @@
 #include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
+#include "Storage/memory_layout.h"
+
+static AUDIO_HOT ALIGN32 audio_physical_inputs_t g_audio_physical_inputs;
 
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
-                     StereoTrack *AUDIO_RESTRICT track_buf,
                      uint32_t frames,
                      float in_scale)
 {
-    board_audio_unpack_input(rx, track_buf, frames, in_scale);
+    board_audio_unpack_input(rx,
+                             &g_audio_physical_inputs,
+                             frames,
+                             in_scale);
+}
+
+const audio_physical_inputs_t *audio_io_get_current_physical_inputs(void)
+{
+    return &g_audio_physical_inputs;
 }
 
 void audio_io_pack(int32_t *AUDIO_RESTRICT tx,

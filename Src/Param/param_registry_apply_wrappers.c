@@ -13,7 +13,6 @@
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
-#include "Storage/kit_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
@@ -170,10 +169,7 @@ void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to
 
 static void apply_lfo_active_track(uint8_t lfo, mod_lfo_param_t param, float v)
 {
-    if (mod_lfo_v1_set_track_param(ui_get_active_track(), lfo, param, v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_lfo_v1_set_track_param(ui_get_active_track(), lfo, param, v);
 }
 
 void apply_lfo1_rate(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_RATE, v); }
@@ -191,42 +187,27 @@ void apply_lfo3_phase(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_PHASE,
 
 void apply_mod_matrix_slot(float v)
 {
-    if (mod_matrix_set_selected_slot(ui_get_active_track(), v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_selected_slot(ui_get_active_track(), v);
 }
 
 void apply_mod_matrix_source(float v)
 {
-    if (mod_matrix_set_selected_slot_source(ui_get_active_track(), v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_selected_slot_source(ui_get_active_track(), v);
 }
 
 void apply_mod_matrix_dest(float v)
 {
-    if (mod_matrix_set_selected_slot_destination_index(ui_get_active_track(), v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_selected_slot_destination_index(ui_get_active_track(), v);
 }
 
 void apply_mod_matrix_depth(float v)
 {
-    if (mod_matrix_set_selected_slot_depth(ui_get_active_track(), v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_selected_slot_depth(ui_get_active_track(), v);
 }
 
 static void apply_mod_multi_active_track(uint8_t op, uint8_t input, float v)
 {
-    if (mod_matrix_set_multi_source(ui_get_active_track(), op, input, v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_multi_source(ui_get_active_track(), op, input, v);
 }
 
 void apply_mod_multi_1_a(float v) { apply_mod_multi_active_track(0U, 0U, v); }
@@ -236,18 +217,12 @@ void apply_mod_multi_2_b(float v) { apply_mod_multi_active_track(1U, 1U, v); }
 
 static void apply_mod_slew_source_active_track(uint8_t op, float v)
 {
-    if (mod_matrix_set_slew_source(ui_get_active_track(), op, v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_slew_source(ui_get_active_track(), op, v);
 }
 
 static void apply_mod_slew_amount_active_track(uint8_t op, float v)
 {
-    if (mod_matrix_set_slew_amount(ui_get_active_track(), op, v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_matrix_set_slew_amount(ui_get_active_track(), op, v);
 }
 
 void apply_mod_slew_1_source(float v) { apply_mod_slew_source_active_track(0U, v); }
@@ -257,10 +232,7 @@ void apply_mod_slew_2_amount(float v) { apply_mod_slew_amount_active_track(1U, v
 
 static void apply_env3_active_track(mod_env3_param_t param, float v)
 {
-    if (mod_env3_set_track_param(ui_get_active_track(), param, v) != 0U)
-    {
-        kit_v1_mark_dirty();
-    }
+    (void)mod_env3_set_track_param(ui_get_active_track(), param, v);
 }
 
 void apply_env3_attack(float v) { apply_env3_active_track(MOD_ENV3_PARAM_ATTACK, v); }
@@ -297,7 +269,6 @@ void apply_cfg_track(float v)
     {
         return;
     }
-    kit_v1_mark_dirty();
 }
 
 void apply_cfg_track_type(float v)
@@ -335,7 +306,6 @@ void apply_cfg_track_type(float v)
         g_param_cfg_track_type_apply_stage = 4U;
         return;
     }
-    kit_v1_mark_dirty();
     g_param_cfg_track_type_apply_stage = 4U;
 }
 

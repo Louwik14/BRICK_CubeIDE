@@ -1,5 +1,6 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_lfo_segment.h"
+#include "Storage/memory_layout.h"
 
 #include <string.h>
 
@@ -1150,7 +1151,7 @@ void mod_lfo_v1_process_sample_all(void)
     mod_lfo_v1_process_block(1U);
 }
 
-void mod_lfo_v1_process_block(uint32_t frames)
+ITCM_AUDIT_32_TEXT void mod_lfo_v1_process_block(uint32_t frames)
 {
     if (frames == 0U)
     {

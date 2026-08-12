@@ -35,7 +35,7 @@ Passe de conception uniquement. Les deux mémoires locales ont été lus intégr
 - `Src/UI/pages/ui_page_template_tone.c` : précédent de pages dynamiques par famille/type; `TRX_BD` tombe actuellement sur une page vide.
 - `Src/Mod/mod_destination_catalog.c` : destinations contextuelles; MD devra exclure `MODEL` de la modulation et exposer seulement les slots du modèle courant.
 - `Src/Seq/seq_boundary_engine.c` : les p-locks sont `(set_id,param_slot,value16)` et appliqués dans l'ordre collecté. Le plan impose une pré-passe `MODEL`, puis les slots.
-- `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `pattern_sd_bank.c`, `project_v1.*`, `patch_v1.c`, `kit_v1.c`, `undo_v2.c`, `track_snapshot.c` : matrice dense indexée par `PARAM_COUNT`; le format est explicitement prototype.
+- `Inc/Storage/pattern_live_ram.h`, `Src/Storage/pattern_live_ram.c`, `pattern_sd_bank.c`, `project_v1.*`, `patch_v1.c`, `undo_v2.c`, `track_snapshot.c` : matrice dense indexée par `PARAM_COUNT`; le format est explicitement prototype.
 - `Src/Core/cpu_load.c` et `Src/Core/brick6_wave_runtime.c` fournissent une instrumentation existante; son emploi reste facultatif et manuel.
 
 ## 4. Ce que révèlent réellement les mémoires
@@ -311,7 +311,7 @@ Cet ordre réutilise chaque primitive après validation manuelle et s'arrête ex
 - Runtime : `ui_core.h`, `ui_track_catalog.c`, `track_runtime.h/.c`, `brick6_audio_runtime.c`.
 - Paramètres/état : `param_store.h`, `param_registry*.c`, `track_tone_sound_state.*`, `mod_destination_catalog.c`.
 - Séquence/UI : `seq_boundary_engine.c`, interfaces p-lock, `ui_page_template_tone.c`, labels et clipboard si nécessaire.
-- Persistance : `pattern_live_ram.*`, `pattern_sd_bank.c`, `project_v1.*`, `patch_v1.c`, `kit_v1.c`, `undo_v2.c`, `track_snapshot.c`.
+- Persistance : `pattern_live_ram.*`, `pattern_sd_bank.c`, `project_v1.*`, `patch_v1.c`, `undo_v2.c`, `track_snapshot.c`.
 - Audio/build : `drum_synth.*`, `drum_model_ids.h`, fichiers de primitives MD et CMake; le mixer reste consommateur, pas autorité MD.
 - Documentation : `z1`, `z2`, `z3`, `z5`, `z6`, `ARCHITECTURE_GLOBAL.md`, `readme.md` selon l'étape 10.
 - Dépendances interdites : Plaits, copie Deluge pour la LUT MD, accès SD/allocations dans l'audio, moteur générique surdimensionné.

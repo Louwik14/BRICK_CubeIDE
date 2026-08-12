@@ -24,7 +24,7 @@ Le risque dominant est déjà monocœur. Huit sujets P0 sont confirmés : mutati
 | Z3 | Valeurs de paramètres, catalogue, état son track, bases modulation et bases MIDI FX | Apply track-aware vers Z1/Z2 ; overlays p-lock/modulation vers les mêmes backends | `Inc/Param/param_store.h`, `Src/Param/param_registry*.c`, `Src/Core/track_sound_state.c`, `Src/Mod/*.c`, `Src/NoteFx/note_fx_state.c` |
 | Z4 | Projet séquenceur, transport/FSM, timeline audio et scheduler | Événements sample-domain vers moteurs, MIDI et MIDI FX ; clock interne/externe | `Src/Seq/seq_model.c`, `Src/Seq/seq_runtime.c`, `Src/Seq/seq_runtime_exec.c`, `Src/Seq/seq_boundary_engine.c`, `Src/Seq/seq_play_scheduler.c`, `Src/Seq/seq_output_guard.c`, `Src/MIDI/midi.c` |
 | Z5 | État UI, navigation, focus, modes Hall, clipboard et pages | Projections family/type/capability ; commandes vers transitions, paramètres, séquenceur et stockage | `Src/UI/ui_core*.c`, `Src/UI/ui_navigation.c`, `Src/UI/ui_event.c`, `Src/UI/ui_param.c`, `Src/UI/pages/*.c`, `Src/App/Hall/*.c`, `Src/Keyboard/*.c` |
-| Z6 | Snapshots Pattern/Project/Patch/Kit, undo, catalogues, pools et services SD | Restore transactionnel vers Z2/Z3/Z4/Z5 ; flux page-cache/writer vers Z1 | `Src/Storage/pattern_live_ram.c`, `Src/Storage/pattern_sd_bank.c`, `Src/Storage/project_v1.c`, `Src/Storage/project_sd_bank.c`, `Src/Storage/patch_v1.c`, `Src/Storage/kit_v1.c`, `Src/Storage/looper_storage.c`, `Src/Storage/sd_access_gate.c` |
+| Z6 | Snapshots Pattern/Project/Patch, undo, catalogues, pools et services SD | Restore transactionnel vers Z2/Z3/Z4/Z5 ; flux page-cache/writer vers Z1 | `Src/Storage/pattern_live_ram.c`, `Src/Storage/pattern_sd_bank.c`, `Src/Storage/project_v1.c`, `Src/Storage/project_sd_bank.c`, `Src/Storage/patch_v1.c`, `Src/Storage/looper_storage.c`, `Src/Storage/sd_access_gate.c` |
 
 Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, topologie, mute, snapshots et le nouveau MIDI FX. Aucun test observé n'exerce la saturation des files, le worst-case de rattrapage clock externe, la préemption main/IRQ, le temps maximal des services SD/USB ou le high-water de stack.
 
@@ -208,7 +208,7 @@ Les tests hôte observés couvrent surtout filtres, modulation, Hall, Stack, top
 ### DOC-002 — politique de version de persistence contradictoire avec le code
 
 - **Priorité / statut / zones :** DOC, `DOC DIVERGENCE`, Z6/Z3.
-- **Fichiers et symboles :** `AGENT.md`, tête de `docs/architecture/z6_state_persistence_patterns_projects.md`, `Src/Storage/pattern_sd_bank.c` (`PATTERN_VERSION`), `Inc/Storage/project_v1.h`, `Inc/Storage/patch_sd_bank.h`, `Inc/Storage/kit_sd_bank.h`.
+- **Fichiers et symboles :** `AGENT.md`, tête de `docs/architecture/z6_state_persistence_patterns_projects.md`, `Src/Storage/pattern_sd_bank.c` (`PATTERN_VERSION`), `Inc/Storage/project_v1.h`, `Inc/Storage/patch_sd_bank.h`.
 - **Preuve :** le guide impose de garder les versions à 1, tandis que les quatre formats courants utilisent la version 3 et que les addendums récents Z6 documentent des évolutions de payload.
 - **Cause racine :** règle de prototype non mise à jour après migrations de structures.
 - **Conséquence / déclencheur / impact :** futur changement de payload susceptible de suivre la mauvaise règle ; compatibilité non requise ne signifie pas absence de validation de format.

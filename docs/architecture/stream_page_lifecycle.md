@@ -41,5 +41,6 @@ establish the safety contract required by the later inter-core transport.
 
 Bulk preparation leaves pages reserved. Each bounded plan batch transitions its
 pages to loading, then sends each page through the common transport, backend,
-decoder and token publication path. The bulk loader remains exclusive on SD
-and keeps its existing start/loop guarantees.
+decoder and token publication path. Multi READs are serialized by the common SD
+scheduler; the loader has no separate bulk gate or block-device owner. It keeps
+its existing start/loop guarantees.

@@ -39,7 +39,7 @@ Les écarts les plus dangereux ne sont pas esthétiques :
 | Boucle audio | Looper | Special Looper projetée en `Sampler/Looper` | `LOOPER` côté rôle ; représentation interne explicitement documentée tant qu'elle simplifie le binding | Special Looper | TONE/ROUT, `brick6_looper_runtime`, route matrix | conserver temporairement la projection Sampler/Looper ; ne pas la réexposer comme type Play |
 | Tracks musicales | Play | familles Off/Synth/Sampler/Drum/MIDI/External | identique | `track_topology` + `track_state` | indices 0..7 | éliminer les anciens contrats de 14 tracks uniformément configurables |
 | Tracks réservées | Special | Master, Looper, Input1..N, FX | rôles fixes avec projection famille/type interne | identique, avec noms de projection séparés des choix utilisateur | `track_topology`, `track_runtime` | conserver les représentations Input/Looper utiles au runtime ; supprimer les filtres Patch qui les présentent comme patches Play |
-| Formats persistés courants | Pattern/Project/Patch/Kit | types et fonctions `*V1` mais versions de fichier 3 | `*_current` ou nom sans génération après décision atomique | Storage | Z6 / `Src/Storage` | éliminer le mensonge V1 ; ne pas confondre symbole C et version de fichier |
+| Formats persistés courants | Pattern/Project/Patch | types et fonctions `*V1` mais versions de fichier 3 | `*_current` ou nom sans génération après décision atomique | Storage | Z6 / `Src/Storage` | éliminer le mensonge V1 ; ne pas confondre symbole C et version de fichier |
 
 Les noms `Braids` et `Daisy` sont des noms d'implémentation amont, pas des concepts produit obsolètes. `Prism` reste le nom produit du wrapper Braids ; `Wave`, `Stack` et `DELUGE` sont des moteurs distincts actuellement exposés. Aucun renommage n'est recommandé dans ces cas.
 
@@ -47,17 +47,17 @@ Les noms `Braids` et `Daisy` sont des noms d'implémentation amont, pas des conc
 
 ### CFG
 
-`ui_page_template_cfg.c` expose `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, MIDI channel/source et `PARAM_CFG_POLY_VOICES/SPREAD`; les réglages REC globaux partagent certaines pages. Famille/type aboutissent à `track_state` puis à la projection `track_runtime`. VOICES/SPREAD aboutissent à `synth_polyphony`. Les paramètres transport/REC aboutissent au séquenceur ou à l'état global correspondant. Les changements structurants sont exclus des p-locks et passent par snapshots/undo. Pattern stocke la configuration de track et les globals ; Project enveloppe Pattern ; Patch ne capture que les Play tracks ; Kit capture la structure de l'ensemble des rôles utiles. README, Z2, Z3, Z5 et Z6 décrivent cette chaîne. Écart : VOICES/SPREAD réutilisent des IDs MIX et sont classés PLAY alors que l'UI exclut explicitement VOICES du p-lock (`ui_param.c:121`, `:1086`).
+`ui_page_template_cfg.c` expose `PARAM_CFG_TRACK`, `PARAM_CFG_TRACK_TYPE`, MIDI channel/source et `PARAM_CFG_POLY_VOICES/SPREAD`; les réglages REC globaux partagent certaines pages. Famille/type aboutissent à `track_state` puis à la projection `track_runtime`. VOICES/SPREAD aboutissent à `synth_polyphony`. Les paramètres transport/REC aboutissent au séquenceur ou à l'état global correspondant. Les changements structurants sont exclus des p-locks et passent par snapshots/undo. Pattern stocke la configuration de track et les globals ; Project enveloppe Pattern ; Patch ne capture que les Play tracks. README, Z2, Z3, Z5 et Z6 décrivent cette chaîne. Écart : VOICES/SPREAD réutilisent des IDs MIX et sont classés PLAY alors que l'UI exclut explicitement VOICES du p-lock (`ui_param.c:121`, `:1086`).
 
 ### ENV
 
 Le bouton produit ENV ouvre aujourd'hui `UI_PAGE_TEMPLATE_COLORS`; `ui_page_template_env.c` affiche les pages `ENV 1/2` et `ENV 2/2`. Ses banques contiennent filtre, ADSR filtre, ADSR VCA, ADSR ENV3 et retriggers FLT/VCA/MOD. L'état canonique est regroupé dans `track_sound_state`. Les apply aboutissent respectivement au filtre, au mixer/VCA et à `mod_env3`.
 
-La chaîne se fracture ensuite : `track_runtime_get_param_rule()` classe filtre en COLORS, VCA en MIX, ENV3 en MOD ; `seq_param_iface.c` range donc VCA dans les slots MIX et ENV3 dans MOD. `ui_param`, `param_macro`, `mod_destination_catalog`, `track_snapshot`, Pattern et Kit consomment ces domaines. Clipboard/clear résolvent la famille de template COLORS. La correction canonique est un domaine logique ENV unique, tout en gardant trois backends d'exécution. Les IDs numériques du set p-lock doivent rester stables pendant le renommage mécanique ; la reclassification sémantique doit être une étape distincte et testée.
+La chaîne se fracture ensuite : `track_runtime_get_param_rule()` classe filtre en COLORS, VCA en MIX, ENV3 en MOD ; `seq_param_iface.c` range donc VCA dans les slots MIX et ENV3 dans MOD. `ui_param`, `param_macro`, `mod_destination_catalog`, `track_snapshot` et Pattern consomment ces domaines. Clipboard/clear résolvent la famille de template COLORS. La correction canonique est un domaine logique ENV unique, tout en gardant trois backends d'exécution. Les IDs numériques du set p-lock doivent rester stables pendant le renommage mécanique ; la reclassification sémantique doit être une étape distincte et testée.
 
 ### TONE
 
-`ui_page_template_tone.c` résout des tables par famille/type/rôle. Les IDs moteur sont projetés par `track_runtime_tone_slot_to_param`; l'état track-aware vit dans `track_tone_sound_state`, puis les apply appellent Prism/Braids, Wave, Stack, DELUGE, Sampler, Drum, MIDI/External, Looper ou MacroFX. Le set p-lock est TONE et sa validité dépend du runtime effectif. Clipboard/undo capturent le template ou le snapshot track. Pattern, Patch, Kit et Project transportent l'état de ton selon leur scope. Master utilise ici les effets globaux ; FX utilise les quatre MacroFX. L'écart majeur est uniquement le nom propriétaire `MASTER_FX` de ces derniers.
+`ui_page_template_tone.c` résout des tables par famille/type/rôle. Les IDs moteur sont projetés par `track_runtime_tone_slot_to_param`; l'état track-aware vit dans `track_tone_sound_state`, puis les apply appellent Prism/Braids, Wave, Stack, DELUGE, Sampler, Drum, MIDI/External, Looper ou MacroFX. Le set p-lock est TONE et sa validité dépend du runtime effectif. Clipboard/undo capturent le template ou le snapshot track. Pattern, Patch et Project transportent l'état de ton selon leur scope. Master utilise ici les effets globaux ; FX utilise les quatre MacroFX. L'écart majeur est uniquement le nom propriétaire `MASTER_FX` de ces derniers.
 
 ### MOD
 
@@ -65,7 +65,7 @@ La page MOD expose LFO, matrice, Multi et Slew ; `track_sound_state`, `mod_lfo`,
 
 ### MIX
 
-La page MIX expose niveau, pan et sends track-aware ; le mute suit l'autorité dédiée et le mixer. `track_sound_state` est la source canonique persistable. Le set p-lock MIX contient quatre slots produit mais aussi l'ADSR VCA historique. Pattern possède un bloc `mix`, tandis que les snapshots track/Kit/Patch transportent l'état agrégé. Après migration ENV, MIX doit ne contenir que les contrôles de mixage logique. Les anciens `PARAM_MIX_TRACKx_*` ne sont pas l'API de cette page : ce sont des lanes physiques/tombstones dont plusieurs valeurs sont recyclées par des paramètres sans rapport.
+La page MIX expose niveau, pan et sends track-aware ; le mute suit l'autorité dédiée et le mixer. `track_sound_state` est la source canonique persistable. Le set p-lock MIX contient quatre slots produit mais aussi l'ADSR VCA historique. Pattern possède un bloc `mix`, tandis que les snapshots track/Patch transportent l'état agrégé. Après migration ENV, MIX doit ne contenir que les contrôles de mixage logique. Les anciens `PARAM_MIX_TRACKx_*` ne sont pas l'API de cette page : ce sont des lanes physiques/tombstones dont plusieurs valeurs sont recyclées par des paramètres sans rapport.
 
 ### PLAY
 
@@ -73,7 +73,7 @@ Les pages PLAY présentent quatre voix par Play track. `seq_model` porte bases e
 
 ### MIDI FX
 
-`ui_page_midi_fx.c` expose 16 IDs génériques répartis sur quatre slots. `note_fx_state` est canonique ; le pipeline NoteFx et ses moteurs, dont `note_fx_arp`, exécutent la chaîne. Le set p-lock est `SEQ_PLOCK_SET_MIDI_FX`. Les snapshots track, Pattern et Project ont un stockage NoteFx dédié ; Patch/Kit ne l'incluent pas via le tableau générique. Le bouton physique ARP ouvre cette page sur Play et sert de contexte ROUT sur Special. ARP reste un modèle MIDI FX, pas une capacité ou un ensemble autonome.
+`ui_page_midi_fx.c` expose 16 IDs génériques répartis sur quatre slots. `note_fx_state` est canonique ; le pipeline NoteFx et ses moteurs, dont `note_fx_arp`, exécutent la chaîne. Le set p-lock est `SEQ_PLOCK_SET_MIDI_FX`. Les snapshots track, Pattern, Patch et Project ont un stockage NoteFx dédié ; Patch ne l'inclut pas via le tableau générique. Le bouton physique ARP ouvre cette page sur Play et sert de contexte ROUT sur Special. ARP reste un modèle MIDI FX, pas une capacité ou un ensemble autonome.
 
 ### Master et FX
 
@@ -85,7 +85,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 
 ### Tracks Play et Special
 
-`track_topology.[ch]` définit 14 slots de stockage, 8 Play et des Specials fixes. Low-Cost expose 12 rôles actifs ; Premium 14. `track_state` configure uniquement Play et représente les Specials pour les consommateurs communs ; `track_runtime` est la projection autoritaire ; `seq_model` porte des modèles hétérogènes. Le clipboard track applique les règles de rôle, Pattern persiste identité rôle/ordinal, Patch est Play-only, Kit peut capturer l'ensemble. Les anciens groupes master/slave et `SEQ LINK` ne subsistent plus comme comportement actif ; seuls des champs scheduler `linked` toujours nuls et la documentation historique restent.
+`track_topology.[ch]` définit 14 slots de stockage, 8 Play et des Specials fixes. Low-Cost expose 12 rôles actifs ; Premium 14. `track_state` configure uniquement Play et représente les Specials pour les consommateurs communs ; `track_runtime` est la projection autoritaire ; `seq_model` porte des modèles hétérogènes. Le clipboard track applique les règles de rôle, Pattern persiste identité rôle/ordinal et Patch est Play-only. Les anciens groupes master/slave et `SEQ LINK` ne subsistent plus comme comportement actif ; seuls des champs scheduler `linked` toujours nuls et la documentation historique restent.
 
 ## 4. Registre du ménage
 
@@ -117,7 +117,7 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Ancien concept : VCA hébergé dans MIX.
 - Produit actuel : ADSR VCA dans ENV.
 - Preuves : page ENV contient `PARAM_VCA_ATTACK..RELEASE`; `track_runtime.c:1867-1871` les classe avec retrig VCA dans MIX ; `seq_param_iface.c` inclut VCA dans la table MIX ; Pattern sépare `sound`/`mix` selon ce domaine.
-- Références actives : UI p-lock, `param_macro`, clipboard, snapshot, Pattern, Kit, modulation.
+- Références actives : UI p-lock, `param_macro`, clipboard, snapshot, Pattern, modulation.
 - Effet : p-locks et copie/clear sont attachés à un ensemble qui n'est plus visible comme propriétaire ; le bloc de persistence dépend du passé.
 - Portée : rattacher `PARAM_VCA_ATTACK..RELEASE` et `PARAM_ENV_RETRIG_VCA` au domaine logique et au set p-lock ENV, les retirer de MIX, puis faire utiliser ce propriétaire unique par p-lock, modulation, clipboard/clear/undo et persistence. L'état canonique et l'apply DSP VCA restent dans le mixer : le backend physique n'est pas déplacé.
 - Risque : changement de disposition de p-lock et incompatibilité des snapshots v3 existants ; aucune rétrocompatibilité n'étant requise, faire une rupture explicite et atomique.
@@ -171,8 +171,8 @@ La Special Looper est fixe. `track_runtime` la projette actuellement avec une re
 - Effet : surface latente de p-lock/automation et persistence artificielle, même si des gardes UI masquent le cas normal.
 - Portée : propriétaire CFG/non-lockable explicite ; stockage Pattern canonique unique ; IDs propres dans CLEAN-OWNER-003.
 - Risque : budget de voix et restore ; préserver `synth_polyphony` comme autorité.
-- Tests : budget voix, Pattern/Project/Kit restore, absence dans maps p-lock/modulation.
-Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource `SYNTH`; les p-locks, macros et destinations MOD refusent ces deux IDs, Pattern/Project utilisent le bloc `sound` canonique et les snapshots/Kit restaurent aussi `SPREAD`. Les IDs restent inchanges pour l'etape 4C.
+- Tests : budget voix, Pattern/Project restore, absence dans maps p-lock/modulation.
+Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource `SYNTH`; les p-locks, macros et destinations MOD refusent ces deux IDs, Pattern/Project utilisent le bloc `sound` canonique et les snapshots restaurent aussi `SPREAD`. Les IDs restent inchanges pour l'etape 4C.
 - Dépendances : séparer correction de domaine et renumérotation.
 
 ### CLEAN-OWNER-003 — `ALIAS`, `WRONG OWNER` — IDs actuels superposés aux tombstones MIX
@@ -180,7 +180,7 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 - Ancien concept : lanes physiques `PARAM_MIX_TRACK0..3_*` utilisées comme réserve numérique.
 - Produit actuel : paramètres track-aware, Drum MD, polyphonie et reverb globale.
 - Preuves : `param_store.h:361-381` aliasent mute, VOICES/SPREAD, MD MODEL/P1..P8 et reverb à des IDs MIX ; `param_registry_catalog.c` donne aux mêmes indices leur sens moderne ; `pattern_live_ram.c` contient des exceptions de plage pour les globals reverb et une migration poly `mix` vers `sound`.
-- Références actives : registre, runtime, p-lock, Pattern/Project/Patch/Kit, undo, macros, modulation, tests.
+- Références actives : registre, runtime, p-lock, Pattern/Project/Patch, undo, macros, modulation, tests.
 - Effet : plages mensongères et branches spéciales ; risque de filtrer ou restaurer un paramètre selon son ancien sens.
 - Portée : attribuer un ID unique à chaque concept actuel, supprimer les tombstones physiques sans consommateur, reconstruire les tables désignées et supprimer les exceptions. Conserver seulement les paramètres MIX globaux réellement utilisés.
 - Risque : élevé et sémantique ; IDs présents dans tous les payloads et slots p-lock. Aucun simple search/replace.
@@ -225,7 +225,7 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 - Ancien concept : séquence liée/groupée et transition `seq_param8_t`.
 - Produit actuel : scheduler mono-track sans groupes.
 - Preuves : `seq_play_scheduler` copie `linked`, mais le contexte l'initialise toujours à 0 et aucune lecture fonctionnelle n'existe ; `typedef seq_param_slot_t seq_param8_t` n'a aucun consommateur.
-- Portée : champs/assignations `linked` et alias de type ; ne pas toucher au linked Kit de Pattern, concept distinct et actif.
+- Portée : champs/assignations `linked` et alias de type.
 - Risque : faible ; attention à ne pas rechercher/supprimer tous les mots `linked` globalement.
 - Tests : tests scheduler/Play, build, recherche ciblée des symboles.
 - Dépendances : aucune.
@@ -240,14 +240,14 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 - Tests : Pattern store/load et recherche ciblée.
 - Dépendances : aucune.
 
-### CLEAN-DEAD-007 — `DEAD` — exclusions CMake de fichiers absents et résultats Kit TODO
+### CLEAN-DEAD-007 — `DEAD` — exclusions CMake de fichiers absents et résultats TODO
 
-- Ancien concept : anciens backends recorder et opérations Kit non implémentées.
-- Produit actuel : fichiers absents ; apply/rename/delete Kit implémentés.
-- Preuves : exclusions `live_recorder.c`, `recorder_transport.c`, `brick6_recorder_runtime.c` sans fichier correspondant ; `KIT_V1_RESULT_*_TODO` n'a aucun site de retour, seulement enum et libellé.
+- Ancien concept : anciens backends recorder et opérations de stockage non implémentées.
+- Produit actuel : fichiers absents ; les opérations de stockage actives sont séparées.
+- Preuves : exclusions `live_recorder.c`, `recorder_transport.c`, `brick6_recorder_runtime.c` sans fichier correspondant ; les résultats `*_TODO` n'ont aucun site de retour, seulement enum et libellé.
 - Portée : règles d'exclusion et valeurs/libellés TODO.
 - Risque : faible ; contrôler scripts externes et ordinals exposés uniquement en interne.
-- Tests : configure/build, opérations Kit.
+- Tests : configure/build, opérations de stockage.
 - Dépendances : aucune.
 
 ### CLEAN-DEAD-008 — `DEAD` — filtres Patch Input/Looper
@@ -264,8 +264,8 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 ### CLEAN-NAME-004 — `RENAME` — symboles persistence V1 alors que le format courant est v3
 
 - Ancien concept : première génération des structs et modules.
-- Produit actuel : Pattern/Project/Patch/Kit version 3.
-- Preuves : `PATTERN_VERSION`, `PROJECT_V1_FILE_VERSION`, `PATCH_SD_FILE_VERSION`, `KIT_SD_FILE_VERSION` valent 3 ; types/fonctions/fichiers restent `PatternSaveV1`, `ProjectSaveV1`, `patch_v1`, `kit_v1`; le commentaire de `PARAM_PERSIST_COUNT` dit encore « until step 7 » alors que NoteFx est persisté séparément.
+- Produit actuel : Pattern/Project/Patch version 3.
+- Preuves : `PATTERN_VERSION`, `PROJECT_V1_FILE_VERSION`, `PATCH_SD_FILE_VERSION` et les types/fonctions/fichiers Pattern/Project/Patch ; le commentaire de `PARAM_PERSIST_COUNT` dit encore « until step 7 » alors que NoteFx est persisté séparément.
 - Effet : commentaires de migration devenus contrat apparent ; pas de bug runtime.
 - Portée : nommer les types/modules `current` ou sans suffixe ; séparer clairement version de fichier et génération d'API ; corriger commentaires.
 - Risque : propagation mécanique très large, sans changer layout/version dans la même étape.
@@ -322,7 +322,7 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 | scheduler `linked` | toujours initialisé à 0, copié, jamais lu | supprimer champs/assignations ciblés |
 | `dirty_pending_persist` | écrit, jamais lu | supprimer champ/écritures |
 | exclusions CMake recorder absentes | aucune source correspondante | supprimer entrées |
-| résultats Kit `*_TODO` | aucun site de retour, opérations présentes | supprimer valeurs/libellés |
+| résultats `*_TODO` | aucun site de retour, opérations présentes | supprimer valeurs/libellés |
 
 ### Surface encore compilée mais inaccessible
 
@@ -356,7 +356,7 @@ Statut Etape 4B (2026-08-01) : DONE. Le domaine runtime est `CFG` avec ressource
 | COLORS → ENV | enums UI/runtime, set p-lock, navigation, clipboard, modulation, persistence, tests | toutes les couches de la carte ENV | conserver les ordinals pendant ce lot | mécanique |
 | MASTER_FX → MACRO_FX | 16 IDs, état `master_fx`, helpers UI/backend, routes, diagnostics | TONE FX, snapshots, audio tests | conserver IDs et layout | mécanique avec clarification propriétaire/insertion |
 | alias de capacité ARP → MIDI_FX | topology/runtime/test | capacité seulement | alias supprimé sans impact d'ordinal | terminé |
-| `*V1` API → courant | structs, fichiers, fonctions Pattern/Project/Patch/Kit | Storage, undo, tests, crash/monkey | ne changer ni version ni layout | mécanique, lot large isolé |
+| `*V1` API → courant | structs, fichiers, fonctions Pattern/Project/Patch | Storage, undo, tests, crash/monkey | ne changer ni version ni layout | mécanique, lot large isolé |
 | Macro bank/slot → scene/lock | wrappers Project et clipboard | UI clipboard, persistence Project | vérifier scène exacte | sémantique localisée |
 | `PARAM_PERSIST_COUNT` | borne générique ambiguë | registre/persistence | aucun ordinal si macro seulement renommée | commentaire et nom sémantique |
 
@@ -395,11 +395,11 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 
 ### Étape 2A — Supprimer les morts certains sans impact d'ID
 
-- Objectif : retirer scheduler `linked`, `seq_param8_t`, `dirty_pending_persist`, exclusions CMake absentes et résultats Kit TODO.
-- Fichiers probables : `seq_play_scheduler.*`, `seq_types.h`, `pattern_live_ram.c`, `CMakeLists.txt`, `kit_v1.[ch]`, tests associés.
+- Objectif : retirer scheduler `linked`, `seq_param8_t`, `dirty_pending_persist` et exclusions CMake absentes.
+- Fichiers probables : `seq_play_scheduler.*`, `seq_types.h`, `pattern_live_ram.c`, `CMakeLists.txt`, tests associés.
 - Autorisé : suppressions strictement prouvées, ajustement de tests.
-- Interdit : groupes/linked Kit actifs, persistence layout, paramètres, hard-RT.
-- Tests/builds : configure et build Low-Cost/Premium ; tests scheduler, Pattern et Kit.
+- Interdit : groupes/linked actifs, persistence layout, paramètres, hard-RT.
+- Tests/builds : configure et build Low-Cost/Premium ; tests scheduler et Pattern.
 - Docs : Z4/Z6 seulement si un contrat courant les mentionne ; Z4 dans passe séparée si nécessaire.
 - Dépendances : étape 1 ; revert indépendant.
 
@@ -418,7 +418,7 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 - Objectif : rendre Patch strictement Play-only dans UI et validation.
 - Fichiers probables : page Patch assign, `patch_v1.[ch]`, tests Z5/Z6.
 - Autorisé : supprimer Input/Looper des filtres et métadonnées admises.
-- Interdit : changer Kit ou le binding des Specials.
+- Interdit : changer le binding des Specials.
 - Tests/builds : capture/apply toutes familles Play, refus de chaque Special, builds deux variantes.
 - Docs : README, Z5, Z6.
 - Dépendances : étape 1 ; revert indépendant.
@@ -467,7 +467,7 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 ### Étape 4A — Unifier le propriétaire logique ENV
 
 - Objectif : FLT, VCA, ENV3 et retriggers appartiennent au domaine/set ENV unique, après disparition du chemin UI VCA autonome.
-- Fichiers/symboles : `track_runtime_get_param_rule`, `seq_param_iface`, `ui_param`, `param_macro`, destination catalog, Pattern, Kit, snapshots, clipboard.
+- Fichiers/symboles : `track_runtime_get_param_rule`, `seq_param_iface`, `ui_param`, `param_macro`, destination catalog, Pattern, snapshots, clipboard.
 - Autorisé : reclassification logique et migration/invalidation v3 explicitement choisie.
 - Interdit : déplacer le backend VCA du mixer ou `mod_env3`, recréer une famille/ensemble VCA, optimiser le chemin audio.
 - Tests/builds : table exhaustive param→domain→set ; VCA absent du domaine/set MIX et présent dans ENV ; p-locks ENV/MIX/MOD ; modulation ; clipboard/clear/undo sous ENV uniquement ; navigation Premium vers ENV ; quatre formats ; builds Low-Cost/Premium ; recherche zéro des symboles VCA autonomes hors paramètres/état/backend DSP légitimes.
@@ -480,7 +480,7 @@ Chaque étape ci-dessous peut être demandée par `Go étape X` et doit produire
 - Fichiers/symboles : runtime rule, seq interface, UI guards, Pattern migration, polyphony, undo/tests.
 - Autorisé : supprimer les fallbacks de domaine une fois le nouveau contrat validé.
 - Interdit : changer budget de voix ou comportement Synth.
-- Tests/builds : voice budget, absence maps p-lock/mod, Pattern/Project/Kit restore, deux variantes.
+- Tests/builds : voice budget, absence maps p-lock/mod, Pattern/Project restore, deux variantes.
 Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-Cost/Premium requis par la passe; le budget Synth et le moteur `synth_polyphony` restent inchanges.
 - Docs : Z2/Z3/Z5/Z6.
 - Dépendances : étape 1 ; IDs encore inchangés jusqu'à 4C.
@@ -493,7 +493,7 @@ Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-
 ### Étape 4C — Reconstruire les IDs et retirer granular/tombstones MIX
 
 - Objectif : un ID par concept actuel, aucune collision sémantique.
-- Fichiers/symboles restants : `param_store.h`, catalogue, runtime/apply, Pattern/Project/Patch/Kit, p-lock, macro/mod, tests ; tombstones `PARAM_MIX_TRACKx_*` morts.
+- Fichiers/symboles restants : `param_store.h`, catalogue, runtime/apply, Pattern/Project/Patch, p-lock, macro/mod, tests ; tombstones `PARAM_MIX_TRACKx_*` morts.
 - Autorisé : nouvelle numérotation atomique, invalidation documentée des anciens fichiers, suppression des branches compensatoires.
 - Interdit : conserver une fausse compatibilité partielle, changer DSP ou UI produit.
 - Tests/builds : unicité et couverture du registre, round-trip exhaustif, p-lock/clipboard/undo, builds Debug/Release Low-Cost/Premium.
@@ -521,7 +521,7 @@ Etat : TERMINEE le 2026-08-01. Validation statique dediee et builds Release Low-
 ### Étape 6A — Renommer l'API persistence courante
 
 - Objectif : supprimer le mensonge `V1` sans changer le format v3.
-- Fichiers probables : tous modules/types Pattern/Project/Patch/Kit, SD banks, undo, tests.
+- Fichiers probables : tous modules/types Pattern/Project/Patch, SD banks, undo, tests.
 - Autorisé : rename mécanique, commentaires exacts, asserts de taille.
 - Interdit : modifier version, layout, checksum ou sémantique.
 - Tests/builds : quatre round-trips, compatibilité interne des fichiers v3 créés avant/après, builds deux variantes.

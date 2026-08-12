@@ -18,6 +18,7 @@
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/keyboard_input.h"
+#include "Seq/seq_edit.h"
 #include "NoteFx/note_fx_pipeline.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
@@ -287,6 +288,7 @@ void keyboard_runtime_all_notes_off(void)
 {
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
+    seq_edit_note_capture_reset();
     if (seq_play_scheduler_transition_all(
             SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) != 0U)
     {

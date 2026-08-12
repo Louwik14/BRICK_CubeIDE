@@ -31,13 +31,11 @@
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
-#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_lowcost_button_test.h"
 #if defined(BRICK6_VARIANT_LOWCOST)
 #include "pages/ui_page_template_keyboard.h"
 #endif
-#include "Storage/kit_v1.h"
 #include "Storage/sample_capture.h"
 #include "Core/track_input_ownership.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -333,7 +331,6 @@ bool ui_set_track_external_input(uint8_t track, uint8_t input)
         }
         return false;
     }
-    kit_v1_mark_dirty();
     return true;
 }
 
@@ -868,10 +865,6 @@ void ui_core_tick(void)
         {
             (void)ui_page_patch_assign_handle_encoder(encoder, delta);
         }
-        else if (ui_page_kit_assign_is_open() != 0U)
-        {
-            (void)ui_page_kit_assign_handle_encoder(encoder, delta);
-        }
         else if (ui_page_audio_rec_is_open() != 0U)
         {
             (void)ui_page_audio_rec_handle_encoder(encoder, delta);
@@ -1060,7 +1053,6 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
             {
                 return false;
             }
-            kit_v1_mark_dirty();
         }
         if (track == g_ui_track_state.active_track)
         {
@@ -1105,7 +1097,6 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    kit_v1_mark_dirty();
     return true;
 }
 
@@ -1162,7 +1153,6 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
-    kit_v1_mark_dirty();
     return true;
 }
 

@@ -41,6 +41,232 @@ include CMakeFiles/rules.ninja
 
 cmake_ninja_workdir = C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host/
 # =============================================================================
+# Object build statements for EXECUTABLE target audio_recorder_wav_test
+
+
+#############################################
+# Order-only phony target for audio_recorder_wav_test
+
+build cmake_object_order_depends_target_audio_recorder_wav_test: phony || CMakeFiles/audio_recorder_wav_test.dir
+
+build CMakeFiles/audio_recorder_wav_test.dir/audio_recorder_wav_test.c.obj: C_COMPILER__audio_recorder_wav_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/audio_recorder_wav_test.c || cmake_object_order_depends_target_audio_recorder_wav_test
+  DEP_FILE = CMakeFiles\audio_recorder_wav_test.dir\audio_recorder_wav_test.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\audio_recorder_wav_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\audio_recorder_wav_test.dir
+
+build CMakeFiles/audio_recorder_wav_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c.obj: C_COMPILER__audio_recorder_wav_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c || cmake_object_order_depends_target_audio_recorder_wav_test
+  DEP_FILE = CMakeFiles\audio_recorder_wav_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage\audio_recorder_wav.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\audio_recorder_wav_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\audio_recorder_wav_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target audio_recorder_wav_test
+
+
+#############################################
+# Link the executable audio_recorder_wav_test.exe
+
+build audio_recorder_wav_test.exe: C_EXECUTABLE_LINKER__audio_recorder_wav_test_Release CMakeFiles/audio_recorder_wav_test.dir/audio_recorder_wav_test.c.obj CMakeFiles/audio_recorder_wav_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c.obj
+  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\audio_recorder_wav_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = audio_recorder_wav_test.exe
+  TARGET_IMPLIB = libaudio_recorder_wav_test.dll.a
+  TARGET_PDB = audio_recorder_wav_test.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target generic_recorder_test
+
+
+#############################################
+# Order-only phony target for generic_recorder_test
+
+build cmake_object_order_depends_target_generic_recorder_test: phony || CMakeFiles/generic_recorder_test.dir
+
+build CMakeFiles/generic_recorder_test.dir/generic_recorder_test.c.obj: C_COMPILER__generic_recorder_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/generic_recorder_test.c || cmake_object_order_depends_target_generic_recorder_test
+  DEP_FILE = CMakeFiles\generic_recorder_test.dir\generic_recorder_test.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\generic_recorder_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\generic_recorder_test.dir
+
+build CMakeFiles/generic_recorder_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder.c.obj: C_COMPILER__generic_recorder_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder.c || cmake_object_order_depends_target_generic_recorder_test
+  DEP_FILE = CMakeFiles\generic_recorder_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage\generic_recorder.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\generic_recorder_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\generic_recorder_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage
+
+build CMakeFiles/generic_recorder_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c.obj: C_COMPILER__generic_recorder_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c || cmake_object_order_depends_target_generic_recorder_test
+  DEP_FILE = CMakeFiles\generic_recorder_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD\sd_scheduler.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\generic_recorder_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\generic_recorder_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target generic_recorder_test
+
+
+#############################################
+# Link the executable generic_recorder_test.exe
+
+build generic_recorder_test.exe: C_EXECUTABLE_LINKER__generic_recorder_test_Release CMakeFiles/generic_recorder_test.dir/generic_recorder_test.c.obj CMakeFiles/generic_recorder_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder.c.obj CMakeFiles/generic_recorder_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c.obj
+  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\generic_recorder_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = generic_recorder_test.exe
+  TARGET_IMPLIB = libgeneric_recorder_test.dll.a
+  TARGET_PDB = generic_recorder_test.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sd_scheduler_test
+
+
+#############################################
+# Order-only phony target for sd_scheduler_test
+
+build cmake_object_order_depends_target_sd_scheduler_test: phony || CMakeFiles/sd_scheduler_test.dir
+
+build CMakeFiles/sd_scheduler_test.dir/sd_scheduler_test.c.obj: C_COMPILER__sd_scheduler_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sd_scheduler_test.c || cmake_object_order_depends_target_sd_scheduler_test
+  DEP_FILE = CMakeFiles\sd_scheduler_test.dir\sd_scheduler_test.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sd_scheduler_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sd_scheduler_test.dir
+
+build CMakeFiles/sd_scheduler_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c.obj: C_COMPILER__sd_scheduler_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c || cmake_object_order_depends_target_sd_scheduler_test
+  DEP_FILE = CMakeFiles\sd_scheduler_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD\sd_scheduler.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sd_scheduler_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sd_scheduler_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sd_scheduler_test
+
+
+#############################################
+# Link the executable sd_scheduler_test.exe
+
+build sd_scheduler_test.exe: C_EXECUTABLE_LINKER__sd_scheduler_test_Release CMakeFiles/sd_scheduler_test.dir/sd_scheduler_test.c.obj CMakeFiles/sd_scheduler_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c.obj
+  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\sd_scheduler_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sd_scheduler_test.exe
+  TARGET_IMPLIB = libsd_scheduler_test.dll.a
+  TARGET_PDB = sd_scheduler_test.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target sd_block_device_async_write_test
+
+
+#############################################
+# Order-only phony target for sd_block_device_async_write_test
+
+build cmake_object_order_depends_target_sd_block_device_async_write_test: phony || CMakeFiles/sd_block_device_async_write_test.dir
+
+build CMakeFiles/sd_block_device_async_write_test.dir/sd_block_device_async_write_test.c.obj: C_COMPILER__sd_block_device_async_write_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sd_block_device_async_write_test.c || cmake_object_order_depends_target_sd_block_device_async_write_test
+  DEP_FILE = CMakeFiles\sd_block_device_async_write_test.dir\sd_block_device_async_write_test.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sd_block_device_stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sd_block_device_async_write_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sd_block_device_async_write_test.dir
+
+build CMakeFiles/sd_block_device_async_write_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_block_device.c.obj: C_COMPILER__sd_block_device_async_write_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_block_device.c || cmake_object_order_depends_target_sd_block_device_async_write_test
+  DEP_FILE = CMakeFiles\sd_block_device_async_write_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD\sd_block_device.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/sd_block_device_stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc
+  OBJECT_DIR = CMakeFiles\sd_block_device_async_write_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\sd_block_device_async_write_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\SD
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target sd_block_device_async_write_test
+
+
+#############################################
+# Link the executable sd_block_device_async_write_test.exe
+
+build sd_block_device_async_write_test.exe: C_EXECUTABLE_LINKER__sd_block_device_async_write_test_Release CMakeFiles/sd_block_device_async_write_test.dir/sd_block_device_async_write_test.c.obj CMakeFiles/sd_block_device_async_write_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_block_device.c.obj
+  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\sd_block_device_async_write_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = sd_block_device_async_write_test.exe
+  TARGET_IMPLIB = libsd_block_device_async_write_test.dll.a
+  TARGET_PDB = sd_block_device_async_write_test.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target recorder_file_reservation_test
+
+
+#############################################
+# Order-only phony target for recorder_file_reservation_test
+
+build cmake_object_order_depends_target_recorder_file_reservation_test: phony || CMakeFiles/recorder_file_reservation_test.dir
+
+build CMakeFiles/recorder_file_reservation_test.dir/recorder_file_reservation_test.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/recorder_file_reservation_test.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\recorder_file_reservation_test.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir
+
+build CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage\recorder_file_reservation.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage
+
+build CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage\audio_recorder_wav.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage
+
+build CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage\wav_parser.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\Src\Storage
+
+build CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/ff.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/ff.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\App\Middlewares\Third_Party\FatFs\src\ff.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\App\Middlewares\Third_Party\FatFs\src
+
+build CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj: C_COMPILER__recorder_file_reservation_test_unscanned_Release C$:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c || cmake_object_order_depends_target_recorder_file_reservation_test
+  DEFINES = -DBRICK6_VARIANT_PREMIUM
+  DEP_FILE = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\App\Middlewares\Third_Party\FatFs\src\option\ccsbcs.c.obj.d
+  INCLUDES = -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/stubs -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/SD -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../Inc/Storage -IC:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/tests/../App/Middlewares/Third_Party/FatFs/src
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\recorder_file_reservation_test.dir\C_\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\App\Middlewares\Third_Party\FatFs\src\option
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target recorder_file_reservation_test
+
+
+#############################################
+# Link the executable recorder_file_reservation_test.exe
+
+build recorder_file_reservation_test.exe: C_EXECUTABLE_LINKER__recorder_file_reservation_test_Release CMakeFiles/recorder_file_reservation_test.dir/recorder_file_reservation_test.c.obj CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c.obj CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder_wav.c.obj CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_parser.c.obj CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/ff.c.obj CMakeFiles/recorder_file_reservation_test.dir/C_/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.obj
+  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\recorder_file_reservation_test.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = recorder_file_reservation_test.exe
+  TARGET_IMPLIB = librecorder_file_reservation_test.dll.a
+  TARGET_PDB = recorder_file_reservation_test.exe.dbg
+
+# =============================================================================
 # Object build statements for EXECUTABLE target stream_calibration_csv_test
 
 
@@ -675,7 +901,11 @@ build rebuild_cache: phony CMakeFiles/rebuild_cache.util
 # =============================================================================
 # Target aliases.
 
+build audio_recorder_wav_test: phony audio_recorder_wav_test.exe
+
 build encoder_detent_test: phony encoder_detent_test.exe
+
+build generic_recorder_test: phony generic_recorder_test.exe
 
 build live_parameter_event_test: phony live_parameter_event_test.exe
 
@@ -689,6 +919,8 @@ build note_fx_euclid_runtime_test: phony note_fx_euclid_runtime_test.exe
 
 build note_fx_state_restore_test: phony note_fx_state_restore_test.exe
 
+build recorder_file_reservation_test: phony recorder_file_reservation_test.exe
+
 build sample_stream_needs_test: phony sample_stream_needs_test.exe
 
 build sample_stream_scheduler_n2_test: phony sample_stream_scheduler_n2_test.exe
@@ -698,6 +930,10 @@ build sample_stream_scheduler_test: phony sample_stream_scheduler_test.exe
 build sample_stream_sequence_test: phony sample_stream_sequence_test.exe
 
 build sample_stream_snapshot_test: phony sample_stream_snapshot_test.exe
+
+build sd_block_device_async_write_test: phony sd_block_device_async_write_test.exe
+
+build sd_scheduler_test: phony sd_scheduler_test.exe
 
 build stream_calibration_csv_test: phony stream_calibration_csv_test.exe
 
@@ -711,7 +947,7 @@ build vca_env_block_test: phony vca_env_block_test.exe
 #############################################
 # Folder: C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/tests-host
 
-build all: phony stream_calibration_csv_test.exe encoder_detent_test.exe mod_lfo_segment_test.exe mod_matrix_ramp_test.exe sample_stream_sequence_test.exe sample_stream_snapshot_test.exe sample_stream_needs_test.exe sample_stream_scheduler_test.exe vca_env_block_test.exe sample_stream_scheduler_n2_test.exe note_fx_state_restore_test.exe note_fx_euclid_mask_test.exe note_fx_euclid_runtime_test.exe live_parameter_event_test.exe
+build all: phony audio_recorder_wav_test.exe generic_recorder_test.exe sd_scheduler_test.exe sd_block_device_async_write_test.exe recorder_file_reservation_test.exe stream_calibration_csv_test.exe encoder_detent_test.exe mod_lfo_segment_test.exe mod_matrix_ramp_test.exe sample_stream_sequence_test.exe sample_stream_snapshot_test.exe sample_stream_needs_test.exe sample_stream_scheduler_test.exe vca_env_block_test.exe sample_stream_scheduler_n2_test.exe note_fx_state_restore_test.exe note_fx_euclid_mask_test.exe note_fx_euclid_runtime_test.exe live_parameter_event_test.exe
 
 # =============================================================================
 # Built-in targets

@@ -23,12 +23,33 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
 
+//Place the 32 KiB I-cache audit candidate set in ITCM
+BRICK6_ITCM_AUDIT_32:BOOL=OFF
+
+//Capture bounded Multi pitched voice trace for GDB
+BRICK6_MULTI_PITCH_TRACE:BOOL=OFF
+
 //Capture the first Multi stream failure for GDB
 BRICK6_MULTI_STREAM_DIAG:BOOL=ON
 
 //Use Release code generation for the Debug Multi stream diagnostic
 // build
 BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN:BOOL=OFF
+
+//Capture SD initialization diagnostics
+BRICK6_SD_INIT_DIAG:BOOL=OFF
+
+//Enable manual streamer calibration cases in Multi TONE
+BRICK6_STREAM_CALIBRATION:BOOL=OFF
+
+//Streamer calibration page size (32 KiB)
+BRICK6_STREAM_CALIBRATION_PAGE_KIB:STRING=32
+
+//Streamer application read quantum in KiB
+BRICK6_STREAM_READ_CHUNK_KIB:STRING=32
+
+//Capture bounded causal streaming underrun trace for GDB
+BRICK6_STREAM_UNDERRUN_TRACE:BOOL=OFF
 
 //Firmware product variant
 BRICK6_VARIANT:STRING=lowcost
@@ -242,6 +263,10 @@ CMAKE_TOOLCHAIN_FILE:FILEPATH=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
+//Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric
+// log kernel
+FM_KERNEL_BENCH:STRING=0
+
 
 ########################
 # INTERNAL cache entries
@@ -393,4 +418,6 @@ CMAKE_STRIP-ADVANCED:INTERNAL=1
 CMAKE_TAPI-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_VERBOSE_MAKEFILE
 CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
+//STRINGS property for variable: FM_KERNEL_BENCH
+FM_KERNEL_BENCH-STRINGS:INTERNAL=0;1
 

@@ -16,7 +16,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:289:9:patch_sd_bank_get_slot_metadata	80	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:347:9:patch_sd_bank_store_slot	728	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:431:9:patch_sd_bank_delete_slot	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:475:9:patch_sd_bank_rename_slot	896	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:475:9:patch_sd_bank_rename_slot	1232	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:499:9:patch_sd_bank_load_slot	720	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:576:23:patch_sd_bank_get_last_error	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c:581:13:patch_sd_bank_error_to_string	16	static

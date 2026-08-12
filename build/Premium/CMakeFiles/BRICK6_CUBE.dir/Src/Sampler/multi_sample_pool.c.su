@@ -18,5 +18,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_p
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:523:9:multi_sample_pool_set_sample_format	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:585:9:multi_sample_pool_set_sample_loop	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:615:9:multi_sample_pool_resolve_source_from_result	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:685:9:multi_sample_pool_resolve_source	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:706:9:multi_sample_pool_debug_add_zone	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:684:9:multi_sample_pool_resolve_source	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:705:9:multi_sample_pool_debug_add_zone	16	static

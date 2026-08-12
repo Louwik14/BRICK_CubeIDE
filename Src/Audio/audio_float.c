@@ -584,7 +584,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.25f;
     const float out_gain_end = output_adjust * master_gain_smoothed;
 
-    audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
+    audio_io_unpack(rx, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
     audio_io_pack_ramped(tx,
                          tracks[0].L,

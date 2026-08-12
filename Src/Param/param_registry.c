@@ -40,7 +40,6 @@
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
 #include "Core/live_parameter_migration.h"
-#include "Storage/kit_v1.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -1764,7 +1763,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 synth_polyphony_set_spread(track, clamped);
             }
         }
-        kit_v1_mark_dirty();
         return 1U;
     }
 
@@ -1776,10 +1774,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 SEQ_PLAY_TRANSITION_STOP_CLOSE) == 0U)
             return 0U;
         const uint8_t ok = param_apply_cfg_track_value(id, track, clamped);
-        if (ok != 0U)
-        {
-            kit_v1_mark_dirty();
-        }
         return ok;
     }
 
@@ -1789,10 +1783,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
         {
             const uint8_t ok = mod_lfo_v1_set_track_param(track, lfo_index, lfo_param, clamped);
-            if (ok != 0U)
-            {
-                kit_v1_mark_dirty();
-            }
             return ok;
         }
     }
@@ -1803,10 +1793,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             || (id == PARAM_MOD_MATRIX_DEPTH))
     {
         const uint8_t ok = param_matrix_set_track_value(id, track, clamped);
-        if (ok != 0U)
-        {
-            kit_v1_mark_dirty();
-        }
         return ok;
     }
 
@@ -1820,10 +1806,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             || (id == PARAM_MOD_SLEW_2_AMOUNT))
     {
         const uint8_t ok = param_mod_operator_set_track_value(id, track, clamped);
-        if (ok != 0U)
-        {
-            kit_v1_mark_dirty();
-        }
         return ok;
     }
 
@@ -1832,10 +1814,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         if (param_env3_map(id, &env_param) != 0U)
         {
             const uint8_t ok = mod_env3_set_track_param(track, env_param, clamped);
-            if (ok != 0U)
-            {
-                kit_v1_mark_dirty();
-            }
             return ok;
         }
     }
@@ -1843,34 +1821,16 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     if (id == PARAM_ENV_RETRIG_MOD)
     {
         const uint8_t ok = mod_env3_set_track_retrigger_hard(track, clamped);
-        if (ok != 0U)
-        {
-            kit_v1_mark_dirty();
-        }
         return ok;
     }
 
     if (param_filter_is_param(id) != 0U)
     {
         const uint8_t ok = param_apply_filter_track_value(id, track, clamped);
-        if (ok != 0U)
-        {
-            kit_v1_mark_dirty();
-        }
         return ok;
     }
 
     const uint8_t ok = param_apply_non_filter_track_value(id, track, clamped);
-    if (ok != 0U)
-    {
-        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV))
-        {
-            kit_v1_mark_dirty();
-        }
-    }
     return ok;
 }
 

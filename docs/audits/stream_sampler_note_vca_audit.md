@@ -315,7 +315,7 @@ uint8_t flags;
 
 Le champ peut conserver son nom actuel si renommer entraînerait trop de bruit, mais son nouveau contrat doit être clair.
 
-Les versions de Pattern/Project/Kit concernées doivent être incrémentées ou les données existantes doivent être explicitement invalidées.
+Les versions de Pattern/Project concernées doivent être incrémentées ou les données existantes doivent être explicitement invalidées.
 
 Aucune migration depuis l’ancien format n’est demandée.
 

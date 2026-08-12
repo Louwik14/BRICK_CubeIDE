@@ -43,7 +43,7 @@
 #include "pages/ui_page_calibration.h"
 #endif
 
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
 #endif
@@ -66,14 +66,16 @@ typedef enum
 #if defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_CALIBRATION,
 #endif
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_TEST,
 #if defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_TEST_HALL,
 #endif
+#if BRICK_TEST_BUILD
     UI_SETTINGS_VIEW_TEST_AUDIO,
     UI_SETTINGS_VIEW_TEST_AUDIO2,
     UI_SETTINGS_VIEW_TEST_MONKEY,
+#endif
 #endif
 
     UI_SETTINGS_VIEW_COUNT
@@ -213,7 +215,7 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
     uint8_t hall_test_key;
     uint8_t hall_test_mux;
 #endif
@@ -3089,19 +3091,21 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
 #endif
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST:
             return "TEST";
 #if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST_HALL:
             return "TEST > HALL";
 #endif
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST_AUDIO:
             return "AUDIO TEST";
         case UI_SETTINGS_VIEW_TEST_AUDIO2:
             return "AUDIO TEST 2";
         case UI_SETTINGS_VIEW_TEST_MONKEY:
             return "MONKEY TEST";
+#endif
 #endif
         default:
             return "SETTINGS";
@@ -3113,7 +3117,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-#if defined(BRICK6_VARIANT_LOWCOST) && BRICK_TEST_BUILD
+#if defined(BRICK6_VARIANT_LOWCOST)
             return 4U;
 #elif defined(BRICK6_VARIANT_LOWCOST) || BRICK_TEST_BUILD
             return 3U;
@@ -3146,10 +3150,14 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return 2U;
 #endif
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST:
 #if defined(BRICK6_VARIANT_LOWCOST)
+#if BRICK_TEST_BUILD
             return 4U;
+#else
+            return 1U;
+#endif
 #else
             return 3U;
 #endif
@@ -3157,10 +3165,12 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_TEST_HALL:
             return 0U;
 #endif
+#if BRICK_TEST_BUILD
         case UI_SETTINGS_VIEW_TEST_AUDIO:
         case UI_SETTINGS_VIEW_TEST_AUDIO2:
         case UI_SETTINGS_VIEW_TEST_MONKEY:
             return 0U;
+#endif
 #endif
         default:
             return 0U;
@@ -3478,7 +3488,7 @@ static void ui_page_settings_apply_action(void)
 #endif
             else
             {
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST);
 #endif
             }
@@ -3497,7 +3507,7 @@ static void ui_page_settings_apply_action(void)
             break;
 #endif
 
-#if BRICK_TEST_BUILD
+#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_TEST:
 #if defined(BRICK6_VARIANT_LOWCOST)
             if (level->selected_index == 0U)
@@ -3508,6 +3518,7 @@ static void ui_page_settings_apply_action(void)
                 g_ui_settings.encoder_accum[1U] = 0;
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
             }
+#if BRICK_TEST_BUILD
             else if (level->selected_index == 1U)
             {
                 memset(g_ui_settings.encoder_accum, 0, sizeof(g_ui_settings.encoder_accum));
@@ -3519,6 +3530,15 @@ static void ui_page_settings_apply_action(void)
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO2);
             }
             else
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_MONKEY);
+            }
+#else
+            else
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
+            }
+#endif
 #else
             if (level->selected_index == 0U)
             {
@@ -3531,10 +3551,10 @@ static void ui_page_settings_apply_action(void)
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST_AUDIO2);
             }
             else
-#endif
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_TEST_MONKEY);
             }
+#endif
             break;
 #endif
 
@@ -3807,7 +3827,7 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
     g_ui_settings.hall_test_key = 0U;
     g_ui_settings.hall_test_mux = 0U;
 #endif
@@ -5259,7 +5279,7 @@ static void ui_page_settings_render_wavetable_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
 static void ui_page_settings_render_test_hall(void)
 {
     char line[24];
@@ -5514,7 +5534,7 @@ static void ui_page_settings_render(void)
         ui_page_settings_render_wavetable_browser();
         return;
     }
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
     if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
     {
         ui_page_settings_render_test_hall();
@@ -5674,7 +5694,7 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     }
 #endif
 
-#if BRICK_TEST_BUILD && defined(BRICK6_VARIANT_LOWCOST)
+#if defined(BRICK6_VARIANT_LOWCOST)
     if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
     {
         if (encoder > 1U)

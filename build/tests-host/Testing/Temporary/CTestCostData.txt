@@ -36,8 +36,8 @@ sample_stream_coalesced_lifecycle 0 0
 sample_stream_deadline 0 0
 sd_stream_browser_lock 0 0
 synth_polyphony_boundary 0 0
-note_fx_step1_static_validation 14 0.0377672
-note_fx_step10_consolidation_validation 14 0.09605
+note_fx_step1_static_validation 17 0.032523
+note_fx_step10_consolidation_validation 15 0.0797754
 note_fx_state_restore 0 0
 note_fx_euclid_mask 0 0
 note_fx_euclid_runtime 0 0
@@ -52,18 +52,10 @@ sample_stream_scheduler 0 0
 stream_calibration_csv 0 0
 vca_env_block 0 0
 sample_stream_scheduler_n2 0 0
+audio_recorder_wav 0 0
+generic_recorder 0 0
+sd_scheduler 0 0
+sd_block_device_async_write 0 0
+recorder_file_reservation 0 0
+seq_step_note_capture_static_validation 3 0.161827
 ---
-stream_calibration_csv
-encoder_detent
-mod_lfo_segment
-mod_matrix_ramp
-sample_stream_sequence
-sample_stream_snapshot
-vca_env_block
-sample_stream_scheduler_n2
-sample_stream_scheduler
-sample_stream_needs
-note_fx_state_restore
-note_fx_euclid_mask
-note_fx_euclid_runtime
-live_parameter_event

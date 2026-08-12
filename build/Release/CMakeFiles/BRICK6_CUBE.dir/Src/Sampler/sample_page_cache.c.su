@@ -85,6 +85,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_ca
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2256:9:sample_page_cache_register_stream_sample_key_no_map	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2272:9:sample_page_cache_register_live_pcm24_stereo_sample_key	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2337:9:sample_page_cache_update_readable_frames_key	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2359:9:sample_page_cache_update_stream_path_key	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2383:6:sample_page_cache_service_domain_range	4776	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2373:6:sample_page_cache_service_range	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2359:9:sample_page_cache_update_live_map_key	120	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2396:9:sample_page_cache_update_stream_path_key	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2420:6:sample_page_cache_service_domain_range	4776	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:2410:6:sample_page_cache_service_range	8	static

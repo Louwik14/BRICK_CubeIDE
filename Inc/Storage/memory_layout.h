@@ -21,6 +21,12 @@
 #define ITCM_TEXT_NAMED(name) __attribute__((section(".itcm_text." name), noinline))
 #define AUDIO_CODE_HOT ITCM_TEXT
 
+#if defined(BRICK6_ITCM_AUDIT_32)
+#define ITCM_AUDIT_32_TEXT ITCM_TEXT
+#else
+#define ITCM_AUDIT_32_TEXT
+#endif
+
 /* HOT: IRQ critical data/state */
 #define AUDIO_HOT SEC_ATTR(".dtcm_audio")
 

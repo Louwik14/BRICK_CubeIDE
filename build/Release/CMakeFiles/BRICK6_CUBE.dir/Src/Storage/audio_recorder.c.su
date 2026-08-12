@@ -17,9 +17,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:499:9:audio_recorder_is_active	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:507:9:audio_recorder_get_live_stream	80	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:529:9:audio_recorder_client_is_active	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:535:9:audio_recorder_prepare	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:545:9:audio_recorder_start	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:550:9:audio_recorder_push_from_irq	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:557:9:audio_recorder_request_stop	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:562:9:audio_recorder_get_status	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:568:9:audio_recorder_get_last_take	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:535:9:audio_recorder_client_is_recording	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:541:9:audio_recorder_prepare	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:551:9:audio_recorder_start	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:556:9:audio_recorder_push_from_irq	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:563:9:audio_recorder_request_stop	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:568:9:audio_recorder_get_status	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:574:9:audio_recorder_get_last_take	16	static

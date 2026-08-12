@@ -702,13 +702,17 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 #error "UI proto wired input count cannot exceed product input resource count"
 #endif
 
-    for (uint8_t input = 0U; input < 3U; ++input)
-    {
-        uint8_t owner = TRACK_INPUT_OWNER_NONE;
-        const uint8_t enabled = (uint8_t)((input < UI_AUDIO_INPUT_PROTO_WIRED_COUNT)
-            && (track_input_ownership_get_external_owner(input, &owner) != 0U));
-        track_enable(input, enabled);
-    }
+    uint8_t line_owner = TRACK_INPUT_OWNER_NONE;
+    const uint8_t line_owned = (uint8_t)((UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 0U)
+        && (track_input_ownership_get_external_owner(0U, &line_owner) != 0U));
+
+    /*
+     * Physical LINE is published directly to its owner's runtime mixer lane.
+     * Lane 0 remains enabled only as the legacy voice-manager transport.
+     */
+    track_enable(0U, line_owned);
+    track_enable(1U, 0U);
+    track_enable(2U, 0U);
     /*
      * Internal engines publish directly into mixer external lanes.  Physical
      * track 3 has no input source, so enabling it only creates a second,
@@ -1025,12 +1029,21 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
             || (ui_page_get_id() != UI_PAGE_MIDI_FX)
             || (track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
-            || (ev->id >= UI_TRACK_COUNT))
+            || (ev->id >= HALL_UI_LANE_COUNT))
     {
         return 0U;
     }
 
     const uint8_t hall = (uint8_t)ev->id;
+    if (hall >= UI_TRACK_COUNT)
+    {
+        if (suppress_hall_note != 0)
+        {
+            suppress_hall_note(hall);
+        }
+        return 1U;
+    }
+
     if (hall == active_track)
     {
         if (suppress_hall_note != 0)
@@ -1186,6 +1199,7 @@ void ui_core_runtime_bridge_notify_hall_mode_changed(ui_hall_mode_t previous_mod
 {
     ui_macro_overlay_on_hall_mode_changed();
     ui_macro_interaction_reset();
+    seq_edit_note_capture_reset();
     keyboard_runtime_on_hall_mode_changed(previous_mode, next_mode);
 }
 
@@ -1251,6 +1265,10 @@ void ui_core_runtime_bridge_get_pattern_stub_state(ui_pattern_stub_state_t *out_
 
 void ui_core_runtime_bridge_sync_active_track_context(uint8_t include_keyboard_focus_sync)
 {
+    if (include_keyboard_focus_sync != 0U)
+    {
+        seq_edit_note_capture_reset();
+    }
     ui_active_track_sync_mirror();
     ui_edit_context_sync_active_track(include_keyboard_focus_sync);
 }

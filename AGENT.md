@@ -35,8 +35,8 @@ Ce fichier guide les interventions dans BRICK6. La carte canonique vit dans `doc
 
 ## Persistance
 
-- Pattern v6, Project v6, Kit v4 et Patch v4, avec rejet strict de toute autre version/taille.
-- Pattern, Project et Kit indexent directement huit slots `0..7`; Patch représente un slot unique.
+- Pattern v12, Project v12 et Patch v6, avec rejet strict de toute autre version/taille.
+- Pattern et Project indexent directement huit slots `0..7`; Patch représente un slot unique.
 - Aucun remap, rôle ou ordinal topologique persistant.
 - Valider l'intégralité d'un snapshot, les quotas Looper et les conflits External avant toute mutation.
 

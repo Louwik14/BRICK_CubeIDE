@@ -20,6 +20,7 @@
 #include "midi.h"
 
 #include "Seq/seq_model.h"
+#include "Seq/seq_edit.h"
 #include "Seq/seq_lane.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_play_scheduler.h"
@@ -217,6 +218,7 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
+    seq_edit_note_capture_reset();
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
     metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
@@ -914,6 +916,18 @@ uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
     return seq_live_rec_session_live_rec_param_can_write(track, set_id, param_slot);
 }
 
+static uint8_t seq_runtime_try_held_step_note_capture(seq_live_rec_source_t source,
+                                                             uint8_t note,
+                                                             uint8_t velocity)
+{
+    if (source != SEQ_LIVE_REC_SRC_INTERNAL)
+    {
+        return 0U;
+    }
+
+    return seq_edit_capture_held_note_on(note, velocity);
+}
+
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
@@ -932,6 +946,11 @@ void seq_runtime_live_rec_note_on_at_sample(seq_live_rec_source_t source,
                                             uint8_t velocity,
                                             uint64_t sample_time)
 {
+    if (seq_runtime_try_held_step_note_capture(source, note, velocity) != 0U)
+    {
+        return;
+    }
+
     if (seq_live_rec_session_consume_trigger_start_note_on() != 0U)
     {
         g_seq_runtime_trigger_start_bypass = 1U;
@@ -962,6 +981,12 @@ void seq_runtime_live_rec_note_off_at_sample(seq_live_rec_source_t source,
                                              uint8_t note,
                                              uint64_t sample_time)
 {
+    if ((source == SEQ_LIVE_REC_SRC_INTERNAL)
+            && (seq_edit_note_capture_note_off(note) != 0U))
+    {
+        return;
+    }
+
     seq_live_rec_session_live_rec_note_off(source,
                                            channel_zero_based,
                                            note,
@@ -977,6 +1002,11 @@ static void seq_runtime_live_rec_note_on_at_sample_occurrence(seq_live_rec_sourc
                                                                uint64_t sample_time,
                                                                uint32_t occurrence_id)
 {
+    if (seq_runtime_try_held_step_note_capture(source, note, velocity) != 0U)
+    {
+        return;
+    }
+
     if (seq_live_rec_session_consume_trigger_start_note_on() != 0U)
     {
         g_seq_runtime_trigger_start_bypass = 1U;
@@ -998,6 +1028,12 @@ static void seq_runtime_live_rec_note_off_at_sample_occurrence(seq_live_rec_sour
                                                                 uint64_t sample_time,
                                                                 uint32_t occurrence_id)
 {
+    if ((source == SEQ_LIVE_REC_SRC_INTERNAL)
+            && (seq_edit_note_capture_note_off(note) != 0U))
+    {
+        return;
+    }
+
     seq_live_rec_session_live_rec_note_off(source,
                                            channel_zero_based,
                                            note,
@@ -1145,6 +1181,7 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
 
 void seq_runtime_on_track_pattern_change(uint8_t track)
 {
+    seq_edit_note_capture_reset();
     if (track >= SEQ_TRACK_COUNT)
     {
         return;

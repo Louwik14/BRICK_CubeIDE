@@ -5,7 +5,6 @@
 #include "Core/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "pages/ui_page_audio_rec.h"
-#include "pages/ui_page_kit_assign.h"
 #include "pages/ui_page_patch_assign.h"
 #include "ui_core.h"
 #include "ui_core_mute.h"
@@ -61,7 +60,6 @@ void hall_keyboard_bridge_process(void)
             ui_get_active_track(), input_mode);
         if ((has_separate_hall_keyboard != 0U)
                 && ((input_mode == UI_HALL_MODE_SEQ)
-                    || (ui_page_kit_assign_is_open() != 0U)
                     || (ui_page_patch_assign_is_open() != 0U)
                     || (ui_page_audio_rec_is_open() != 0U)))
         {

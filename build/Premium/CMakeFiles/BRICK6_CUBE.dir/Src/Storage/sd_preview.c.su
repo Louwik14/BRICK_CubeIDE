@@ -21,7 +21,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:5
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:515:6:sd_preview_set_gain	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:529:7:sd_preview_get_gain	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:534:9:sd_preview_begin_range	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:663:9:sd_preview_begin	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:668:6:sd_preview_stop	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:674:6:sd_preview_process	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:709:9:sd_preview_render_main	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:662:9:sd_preview_begin	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:667:6:sd_preview_stop	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:673:6:sd_preview_process	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_preview.c:708:9:sd_preview_render_main	48	static

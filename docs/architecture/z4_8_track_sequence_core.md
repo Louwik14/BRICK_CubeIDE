@@ -16,7 +16,7 @@ L'historique conserve huit transactions dans un anneau commun Undo/Redo. Une tra
 
 Les invariants restent : no-op non enregistré, nouvelle branche supprimant le Redo, éviction du plus ancien élément, échange image courante/image stockée, préflight de capacité, application atomique, suspension explicite de capture et invalidation après remplacement global Pattern/Project.
 
-Les formats Pattern, Project, Kit et Patch restent hors de cette étape et sont migrés dans l'étape 2.
+Les formats Pattern, Project et Patch restent hors de cette étape et sont migrés dans l'étape 2.
 
 ## Contrat PLAY, enregistrement et affichage
 

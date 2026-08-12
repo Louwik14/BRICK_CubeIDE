@@ -1,3 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:73:13:brick6_process_hall_ui_keyboard_chain	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:100:6:brick6_app_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:208:6:brick6_app_process	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:202:13:brick6_app_service_storage	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:71:13:brick6_process_hall_ui_keyboard_chain	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:98:6:brick6_app_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_app_init.c:231:6:brick6_app_process	8	static

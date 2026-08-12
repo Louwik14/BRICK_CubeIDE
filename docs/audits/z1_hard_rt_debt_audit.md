@@ -24,7 +24,7 @@ La frame automatique IRQ de `process_half` est connue (1632 octets dans les `.su
 
 ```text
 hors IRQ
-  UI / clipboard / macro / restore Pattern-Patch-Kit / transitions track
+  UI / clipboard / macro / restore Pattern-Patch / transitions track
     -> param_registry_apply_track_value()
     -> param_filter / param_registry_backends / apply wrappers
     -> mixer_set_*() / fx_*_global_set_*()

@@ -38,6 +38,29 @@ static float filter_cutoff(float value, float min_hz, float scale_hz)
 }
 }
 
+namespace mifx
+{
+ITCM_AUDIT_32_TEXT void Reverb::ProcessStereoWetAdd(const float *in_l,
+                                                    const float *in_r,
+                                                    float *out_l,
+                                                    float *out_r,
+                                                    const float *wet,
+                                                    size_t size)
+{
+    StereoWetInput input = {in_l, in_r, wet};
+    AddOutput output = {out_l, out_r};
+    if (tbd_delays_) {
+        ProcessCore<TbdMemory>(input, output, size,
+                               6815.2383f, 54.42177f,
+                               4854.4219f, 43.53742f);
+    } else {
+        ProcessCore<DelugeMemory>(input, output, size,
+                                  6261.0f, 50.0f,
+                                  4460.0f, 40.0f);
+    }
+}
+}
+
 void fx_reverb_revb_global_init(float sample_rate)
 {
     g_revb.sample_rate = (sample_rate > 0.0f) ? sample_rate : kDefaultSampleRate;

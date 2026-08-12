@@ -21,12 +21,10 @@ typedef enum
     SD_ACCESS_CLIENT_WAVEFORM_CACHE = 9,
     SD_ACCESS_CLIENT_SAMPLE_STREAM = 10,
     SD_ACCESS_CLIENT_PATCH = 11,
-    SD_ACCESS_CLIENT_KIT = 12,
-    SD_ACCESS_CLIENT_MULTI_BULK = 13,
-    SD_ACCESS_CLIENT_SCHEDULED_RECORDER = 14,
+    SD_ACCESS_CLIENT_SCHEDULED_RECORDER = 12,
 #if BRICK_TEST_BUILD
-    SD_ACCESS_CLIENT_AUDIO_TEST = 15,
-    SD_ACCESS_CLIENT_DIAGNOSTIC_LOG = 16,
+    SD_ACCESS_CLIENT_AUDIO_TEST = 13,
+    SD_ACCESS_CLIENT_DIAGNOSTIC_LOG = 14,
     SD_ACCESS_CLIENT_MAX = SD_ACCESS_CLIENT_DIAGNOSTIC_LOG
 #else
     SD_ACCESS_CLIENT_MAX = SD_ACCESS_CLIENT_SCHEDULED_RECORDER
@@ -38,9 +36,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client);
 void sd_access_gate_release(sd_access_client_t client);
 void sd_access_gate_set_streaming_critical(uint8_t active);
 uint8_t sd_access_gate_streaming_critical_active(void);
-uint8_t sd_access_gate_begin_bulk_exclusive(void);
-void sd_access_gate_end_bulk_exclusive(void);
-uint8_t sd_access_gate_bulk_exclusive_active(void);
 sd_access_client_t sd_access_gate_current_owner(void);
 sd_access_client_t sd_access_gate_last_owner(void);
 uint32_t sd_access_gate_max_hold_ticks(void);

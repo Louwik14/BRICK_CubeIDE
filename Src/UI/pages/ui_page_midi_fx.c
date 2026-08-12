@@ -3,6 +3,9 @@
 #include "Core/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_division_catalog.h"
+#include "drv_display.h"
+#include "font.h"
+#include "ui_core_runtime_bridge.h"
 #include "ui_template_page.h"
 
 #include <stdio.h>
@@ -182,6 +185,42 @@ static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
     ui_template_page_handle_event(ev);
 }
 
+static void ui_page_midi_fx_render(void)
+{
+    ui_template_page_render();
+
+    const uint8_t active_track = ui_get_active_track();
+    if (ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode())
+            == UI_HALL_ROUT_CONTEXT_NONE)
+    {
+        return;
+    }
+
+    drv_display_clear_rect(0, 16, 128, 48);
+    drv_display_set_font(&FONT_5X7);
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const uint8_t column = (uint8_t)(track & 3U);
+        const uint8_t row = (uint8_t)(track >> 2U);
+        const uint8_t x = (uint8_t)(2U + (column * 32U));
+        const uint8_t y = (uint8_t)(19U + (row * 22U));
+        const uint8_t routed = ui_core_runtime_bridge_get_looper_route_enabled(active_track, track);
+        char label[4];
+        (void)snprintf(label, sizeof(label), "T%u", (unsigned int)(track + 1U));
+
+        if (routed != 0U)
+        {
+            drv_display_fill_rect(x, y, 28, 18);
+            drv_display_draw_text_inverted((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
+        }
+        else
+        {
+            drv_display_draw_rect(x, y, 28, 18);
+            drv_display_draw_text((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
+        }
+    }
+}
+
 void ui_page_template_midi_fx_register_families(void)
 {
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
@@ -211,6 +250,6 @@ const ui_page_t g_ui_page_midi_fx = {
     .handle_event = ui_page_midi_fx_handle_event,
     .tick = ui_template_page_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
-    .render = ui_template_page_render,
+    .render = ui_page_midi_fx_render,
     .context = &g_ui_template_midi_fx_state,
 };

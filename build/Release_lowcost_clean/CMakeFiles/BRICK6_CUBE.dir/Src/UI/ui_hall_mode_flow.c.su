@@ -1,7 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:75:13:ui_hall_mode_flow_close_lowcost_rec	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:93:13:ui_hall_mode_flow_leave_lowcost_modal_page	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:113:13:ui_hall_mode_flow_handle_lowcost_nav_button	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:265:25:ui_hall_mode_flow_resolve_direct_action	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:286:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:413:6:ui_hall_mode_flow_service_pending	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:490:6:ui_hall_mode_flow_handle_track_hall_action	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:74:13:ui_hall_mode_flow_close_lowcost_rec	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:92:13:ui_hall_mode_flow_leave_lowcost_modal_page	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:62:16:ui_hall_mode_flow_open_looper_rout	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:107:13:ui_hall_mode_flow_handle_lowcost_nav_button	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:250:25:ui_hall_mode_flow_resolve_direct_action	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:271:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:387:6:ui_hall_mode_flow_service_pending	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:427:6:ui_hall_mode_flow_handle_track_hall_action	16	static

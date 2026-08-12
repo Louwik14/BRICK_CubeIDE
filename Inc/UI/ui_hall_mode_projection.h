@@ -15,8 +15,6 @@ uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode);
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode);
 void ui_hall_patch_feedback_begin(uint32_t now_ms);
 void ui_hall_patch_feedback_end(uint32_t now_ms);
-void ui_hall_kit_feedback_begin(uint32_t now_ms);
-void ui_hall_kit_feedback_end(uint32_t now_ms);
 const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
 

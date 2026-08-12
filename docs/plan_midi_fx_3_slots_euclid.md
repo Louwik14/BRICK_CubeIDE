@@ -82,7 +82,7 @@ Le plan de nettoyage historique indique que les anciens problèmes « premier AR
 - Chaque occurrence EUCLID dure exactement une période de DIV. À sample égal, un Off est traité avant un nouvel On.
 - Les trois instances peuvent être EUCLID simultanément si les bornes et mesures H743 le permettent. Toute limite inférieure doit être mesurée et documentée.
 - Les admissions interne et MIDI restent indépendantes ; un Off vise uniquement les destinations qui ont admis l’On.
-- Les formats courants V1 sont réécrits de façon cohérente. Aucune migration historique Pattern/Project/Patch/Kit n’est requise ni à créer.
+- Les formats courants V1 sont réécrits de façon cohérente. Aucune migration historique Pattern/Project/Patch n’est requise ni à créer.
 - Live Record post-FX reste hors périmètre ; seul le seam terminal commun doit rester observable par un futur chantier.
 
 ## 4. Cartographie actuelle des slots MIDI FX
@@ -338,7 +338,7 @@ Un changement de modèle ferme les occurrences possédées de l’ancien modèle
 
 ## 13. Persistance, clipboard et Undo/Redo
 
-Le format courant persiste uniquement les valeurs de base des trois slots : 3 × 4 octets par piste. Aucun masque, phase, deadline, source active, owned, token, génération runtime, file ou compteur de saturation ne doit entrer dans Pattern, Project, Patch, Kit, snapshot ou clipboard.
+Le format courant persiste uniquement les valeurs de base des trois slots : 3 × 4 octets par piste. Aucun masque, phase, deadline, source active, owned, token, génération runtime, file ou compteur de saturation ne doit entrer dans Pattern, Project, Patch, snapshot ou clipboard.
 
 `PatternSaveV1.note_fx`, `track_snapshot_t.note_fx`, capture/apply, duplication et reset doivent utiliser la nouvelle structure. Project V1 transporte Pattern par composition ; les vérifications de taille et buffers temporaires doivent suivre `sizeof(PatternSaveV1)`. Un ancien payload quatre slots n’est pas migré : il est incompatible avec le format V1 courant et doit être rejeté/initialisé selon le contrat de chargement existant, jamais interprété en recréant S4.
 

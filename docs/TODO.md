@@ -55,8 +55,6 @@
   - gestion de la courbe de vélocité  
   - gestion de la luminosité des LED
 
-- Mettre en place un système de preset et de kit, surtout trouver comment le mettre en place  
-  Piste : aucune.
 
 - Mettre en place un système de flash firmware utilisateur  
   Piste : utiliser la carte SD. Au boot, le système vérifie s’il y a un firmware à flasher ; si oui, il le flash puis supprime le fichier ou le marque comme traité pour éviter de reflasher à chaque boot.

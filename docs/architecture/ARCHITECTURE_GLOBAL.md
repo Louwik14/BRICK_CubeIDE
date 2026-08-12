@@ -22,7 +22,7 @@ STEP 1 à 8 sélectionnent les pistes. STEP 9 à 16 sont contextuels; `SHIFT + S
 
 ## Persistance
 
-Pattern v9, Project v9, Kit v6 et Patch v6 sont des formats stricts sans conversion d'anciens payloads. Pattern/Project embarquent trois slots MIDI FX par piste ; les p-locks MIDI FX courants occupent 12 positions. Les collections de pistes sont indexées directement `0..7`; Patch représente un slot unique. Un Pattern ou Project appliqué avec succès invalide Undo/Redo.
+Pattern v12, Project v12 et Patch v6 sont des formats stricts sans conversion d'anciens payloads. Pattern/Project embarquent trois slots MIDI FX par piste ; les p-locks MIDI FX courants occupent 12 positions. Les collections de pistes sont indexées directement `0..7`; Patch représente un slot unique. Un Pattern ou Project appliqué avec succès invalide Undo/Redo.
 
 ## Cartographie
 

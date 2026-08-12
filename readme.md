@@ -26,6 +26,6 @@ Les ensembles de piste sont `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI 
 
 ## Persistance
 
-Les versions courantes strictes sont Pattern v6, Project v6, Kit v4 et Patch v4. Une version ou une taille différente est rejetée sans migration. Pattern, Project et Kit utilisent huit slots directs `0..7`; Patch est le snapshot d'un seul slot et ne stocke aucune identité topologique.
+Les versions courantes strictes sont Pattern v12, Project v12 et Patch v6. Une version ou une taille différente est rejetée sans migration. Pattern et Project utilisent huit slots directs `0..7`; Patch est le snapshot d'un seul slot et ne stocke aucune identité topologique.
 
 La carte détaillée est dans [docs/architecture/ARCHITECTURE_GLOBAL.md](docs/architecture/ARCHITECTURE_GLOBAL.md).

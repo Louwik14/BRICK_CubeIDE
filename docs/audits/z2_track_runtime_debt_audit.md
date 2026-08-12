@@ -47,7 +47,7 @@ Nuance importante : le registre affirme que la garde IPSR interdit le refresh de
 - Z3 : `param_registry*.c`, transition family/type, destinations MOD et backends utilisent ctx/résolveurs, en général après un refresh explicite.
 - Z4 : `keyboard_engine.c`, `seq_play_scheduler.c`, `seq_param_iface.c`, live-record et output guard font de même. Le scheduler peut aussi atteindre son refresh pendant la collecte audio de `Src/Audio/audio.c` via `seq_runtime_audio_collect_block_events()` → `seq_runtime_exec_collect_block_events()` → scheduling.
 - Z5 : `ui_core_runtime_bridge.c` passe par `track_state_set_track_family/type()` puis le system-sync qui invalide ; navigation, pages, mute et clipboard appellent ensuite un refresh explicite.
-- Z6 : `track_snapshot.c`, `patch_v1.c`, `kit_v1.c` et les restores Pattern/Project passent par bulk mutation, invalidation et refresh. Undo/Redo applique `pattern_live_apply_snapshot()` dans `undo_v2.c`, donc suit le même restore structurel plutôt qu'une copie directe de ctx.
+- Z6 : `track_snapshot.c`, `patch_v1.c` et les restores Pattern/Project passent par bulk mutation, invalidation et refresh. Undo/Redo applique `pattern_live_apply_snapshot()` dans `undo_v2.c`, donc suit le même restore structurel plutôt qu'une copie directe de ctx.
 
 ## 5. Bugs confirmés
 

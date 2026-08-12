@@ -247,26 +247,23 @@ static inline int32_t f2s24_fast_ssat(float x)
 }
 
 void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
-                              StereoTrack *AUDIO_RESTRICT track_buf,
+                              audio_physical_inputs_t *AUDIO_RESTRICT physical_inputs,
                               uint32_t frames,
                               float in_scale)
 {
-    float *AUDIO_RESTRICT tr0_l = track_buf[0].L;
-    float *AUDIO_RESTRICT tr0_r = track_buf[0].R;
-
-    for (uint32_t tr = 1U; tr < 4U; tr++)
-    {
-        memset(track_buf[tr].L, 0, frames * sizeof(float));
-        memset(track_buf[tr].R, 0, frames * sizeof(float));
-    }
-
+    float *AUDIO_RESTRICT line_l = physical_inputs->line.left;
+    float *AUDIO_RESTRICT line_r = physical_inputs->line.right;
     const int32_t *AUDIO_RESTRICT prx = rx;
     for (uint32_t n = 0; n < frames; n++)
     {
-        tr0_l[n] = s242f_fast(prx[0], in_scale);
-        tr0_r[n] = s242f_fast(prx[1], in_scale);
+        const float left = s242f_fast(prx[0], in_scale);
+        const float right = s242f_fast(prx[1], in_scale);
+        line_l[n] = left;
+        line_r[n] = right;
         prx += BOARD_AUDIO_TDM_SLOTS;
     }
+
+    memset(physical_inputs->mic.mono, 0, frames * sizeof(float));
 }
 
 void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,

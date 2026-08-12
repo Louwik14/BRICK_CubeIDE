@@ -9,7 +9,6 @@ static volatile uint8_t g_sd_access_total_count;
 static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_MAX + 1U];
 static volatile uint32_t g_sd_access_acquire_fail_count[SD_ACCESS_CLIENT_MAX + 1U];
 static volatile uint8_t g_sd_access_streaming_critical;
-static volatile uint8_t g_sd_access_bulk_exclusive;
 static volatile uint32_t g_sd_access_owner_acquire_tick;
 static volatile uint32_t g_sd_access_max_hold_ticks;
 static volatile uint32_t g_sd_access_owner_acquire_cycle;
@@ -29,7 +28,6 @@ void sd_access_gate_init(void)
     g_sd_access_last_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     g_sd_access_total_count = 0U;
     g_sd_access_streaming_critical = 0U;
-    g_sd_access_bulk_exclusive = 0U;
     g_sd_access_owner_acquire_tick = 0U;
     g_sd_access_max_hold_ticks = 0U;
     for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_MAX; ++i)
@@ -123,13 +121,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
 
     __disable_irq();
-    if ((g_sd_access_bulk_exclusive != 0U)
-        && (client != SD_ACCESS_CLIENT_MULTI_BULK))
-    {
-        g_sd_access_acquire_fail_count[(uint8_t)client]++;
-        __enable_irq();
-        return 0U;
-    }
 #if BRICK_TEST_BUILD
     if (g_sd_access_diagnostic_read_only != 0U)
     {
@@ -138,7 +129,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
              || (client == SD_ACCESS_CLIENT_SAMPLE_CACHE)
              || (client == SD_ACCESS_CLIENT_PREVIEW)
              || (client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-             || (client == SD_ACCESS_CLIENT_MULTI_BULK)
              || (client == SD_ACCESS_CLIENT_DIAGNOSTIC_LOG))
                 ? 1U
                 : 0U;
@@ -153,7 +143,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
-        && (client != SD_ACCESS_CLIENT_MULTI_BULK)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
         g_sd_access_acquire_fail_count[(uint8_t)client]++;
@@ -190,15 +179,13 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         const uint8_t owner_is_project_pattern =
             ((g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PROJECT)
              || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATTERN)
-             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATCH)
-             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_KIT))
+             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATCH))
                 ? 1U
                 : 0U;
         const uint8_t requester_is_project_pattern =
             ((client == SD_ACCESS_CLIENT_PROJECT)
              || (client == SD_ACCESS_CLIENT_PATTERN)
-             || (client == SD_ACCESS_CLIENT_PATCH)
-             || (client == SD_ACCESS_CLIENT_KIT))
+             || (client == SD_ACCESS_CLIENT_PATCH))
                 ? 1U
                 : 0U;
 
@@ -214,40 +201,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     g_sd_access_client_count[(uint8_t)client]++;
     __enable_irq();
     return 1U;
-}
-
-uint8_t sd_access_gate_begin_bulk_exclusive(void)
-{
-    uint8_t ok = 0U;
-    __disable_irq();
-    if ((g_sd_access_bulk_exclusive != 0U)
-        || (g_sd_access_total_count == 0U))
-    {
-        g_sd_access_bulk_exclusive = 1U;
-        ok = 1U;
-    }
-    __enable_irq();
-    return ok;
-}
-
-void sd_access_gate_end_bulk_exclusive(void)
-{
-    __disable_irq();
-    if ((g_sd_access_total_count == 0U)
-        || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_MULTI_BULK))
-    {
-        g_sd_access_bulk_exclusive = 0U;
-    }
-    __enable_irq();
-}
-
-uint8_t sd_access_gate_bulk_exclusive_active(void)
-{
-    uint8_t active;
-    __disable_irq();
-    active = g_sd_access_bulk_exclusive;
-    __enable_irq();
-    return active;
 }
 
 #if BRICK_TEST_BUILD
@@ -395,10 +348,6 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "STREAM";
         case SD_ACCESS_CLIENT_PATCH:
             return "PATCH";
-        case SD_ACCESS_CLIENT_KIT:
-            return "KIT";
-        case SD_ACCESS_CLIENT_MULTI_BULK:
-            return "MBULK";
         case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
             return "SREC";
 #if BRICK_TEST_BUILD

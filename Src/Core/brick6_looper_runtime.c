@@ -61,6 +61,7 @@ typedef struct
     uint32_t resync_old_playhead;
     uint32_t resync_old_frac_q16;
     sample_audio_key_t cache_key;
+    uint32_t stream_map_generation;
     sample_page_ref_t current_page_ref;
     const float *current_base;
     uint32_t current_start_frame;
@@ -605,6 +606,7 @@ static void looper_clear_stream(brick6_looper_track_state_t *state)
     looper_release_reader(state);
     sample_page_cache_clear_key(state->cache_key);
     state->cache_registered = 0U;
+    state->stream_map_generation = 0U;
 }
 
 static void looper_reset_take_state(brick6_looper_track_state_t *state)
@@ -688,6 +690,7 @@ static uint8_t looper_register_live_stream(brick6_looper_track_state_t *state)
         return 0U;
     }
     state->cache_registered = 1U;
+    state->stream_map_generation = live.reservation.generation;
     state->stream_registration_pending = 0U;
     looper_request_playhead_pages(state);
     return 1U;
@@ -709,6 +712,18 @@ static void looper_live_stream_refresh(brick6_looper_track_state_t *state)
             AUDIO_RECORDER_CLIENT_LOOPER, &live) == 0U)
     {
         return;
+    }
+    if ((live.reservation.generation != state->stream_map_generation)
+            && (g_looper_live_load.active == 0U)
+            && (live.reservation.reserved_file_bytes <= UINT32_MAX)
+            && (sample_page_cache_update_live_map_key(
+                    state->cache_key,
+                    (uint32_t)live.reservation.reserved_file_bytes,
+                    live.reservation.extents,
+                    live.reservation.extent_count,
+                    live.reservation.media_epoch) != 0U))
+    {
+        state->stream_map_generation = live.reservation.generation;
     }
     (void)sample_page_cache_update_readable_frames_key(
         state->cache_key, live.committed_frames);
@@ -753,6 +768,7 @@ static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
 
     return (uint8_t)(((state->preroll_valid != 0U)
             && (state->preroll_relay_done == 0U)
+            && (state->preroll_consumed == 0U)
             && (playhead < state->preroll_frames)) ? 1U : 0U);
 }
 
@@ -2068,8 +2084,12 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
 
     brick6_looper_track_state_t *state = &g_looper_tracks[track];
     if((state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
-            || (state->frames_total == 0U)
-            || ((state->cache_registered == 0U) && (state->preroll_valid == 0U)))
+            || (state->frames_total == 0U))
+    {
+        return;
+    }
+
+    if ((state->cache_registered == 0U) && (state->preroll_valid == 0U))
     {
         return;
     }

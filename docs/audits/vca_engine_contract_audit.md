@@ -87,7 +87,7 @@ Le défaut actuel est donc une rupture d'application entre l'état canonique et 
 - Le clipboard lit les valeurs du registre et les réapplique par la même API (`Src/UI/ui_core_clipboard.c:402`, `:543`, `:602`). Copy/query fonctionne statiquement ; clear/paste VCA ne projette pas la valeur au runtime.
 - Les destinations de modulation VCA contournent cette entrée et appellent directement le mixer (`Src/Mod/mod_destination_catalog.c:94-98`, `:386-400`). Cela peut faire fonctionner une modulation runtime tout en laissant la base canonique/édition UI inchangée : les deux chemins ne sont pas équivalents.
 
-Les IDs et versions ne sont pas en cause. Les validations confirment les versions Pattern/Project v4 et Patch/Kit v3 ; aucune extension de format n'est requise par cet audit.
+Les IDs et versions ne sont pas en cause. Les validations confirment les versions Pattern/Project v4 et Patch v3 ; aucune extension de format n'est requise par cet audit.
 
 ## Architecture audio VCA
 
@@ -142,7 +142,7 @@ La capacité est explicitement refusée pour Sampler Stream et Looper dans `Src/
 
 Toutes les validations ci-dessous ont retourné `PASS` sur le snapshot audité :
 
-- `env_ownership_validation.ps1` — ENV 25/256, MIX 4, MOD 12, Pattern/Project v4, Kit v3.
+- `env_ownership_validation.ps1` — ENV 25/256, MIX 4, MOD 12, Pattern/Project v4, Patch v3.
 - `param_reserved_slots_validation.ps1`.
 - `pattern_persistence_classification_validation.ps1`.
 - `track_topology_validation.ps1`.

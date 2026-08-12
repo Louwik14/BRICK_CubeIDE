@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:9:14:spectral_window_clampf	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:16:33:spectral_window_normalize_limits	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:30:26:spectral_window_reverb_limits	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:40:26:spectral_window_delay_limits	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:50:6:spectral_window_calculate	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c:96:7:spectral_window_log_position	40	static

@@ -32,7 +32,7 @@ typedef enum
  * voice_index addresses g_sampler_multi_voice[] and generation is the
  * non-zero trigger_order captured at allocation. The pair is invalidated
  * before a slot is reused. This value is never persisted in a step, pattern,
- * project, patch or kit.
+ * project, patch or track snapshot.
  */
 typedef struct
 {

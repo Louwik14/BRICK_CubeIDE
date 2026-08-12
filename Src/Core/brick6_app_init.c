@@ -44,7 +44,6 @@
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
-#include "Storage/kit_v1.h"
 #include "Storage/patch_v1.h"
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
@@ -129,13 +128,13 @@ void brick6_app_init(void)
     wav_loader_catalog_init_load();
     sd_preview_init();
     sample_page_cache_init();
-    audio_recorder_init();
     sample_global_pool_init();
     sampler_ram_pool_init();
     wavetable_pool_init();
     multi_sample_pool_init();
 
     brick6_sampler_bootstrap_load_pool();
+    audio_recorder_init();
 
     drum_synth_init(48000.0f);
     hall_keyboard_bridge_init();
@@ -161,7 +160,6 @@ void brick6_app_init(void)
     ui_core_init();
     pattern_live_init();
     patch_v1_init();
-    kit_v1_init();
     project_v1_init();
     ui_boot_loading_begin();
     undo_v2_init();
