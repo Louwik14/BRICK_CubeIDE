@@ -38,6 +38,7 @@ struct fm_voice_t
     int32_t feedback[2];
     int32_t base_log_frequency[kOperatorCount];
     int32_t operator_level_offset[kOperatorCount];
+    int32_t operator_output_level_offset[kOperatorCount];
     uint8_t operator_level[kOperatorCount];
     float operator_frequency[kOperatorCount];
     int8_t operator_detune[kOperatorCount];
@@ -81,6 +82,7 @@ static const int kEnvelopeRates[4] = { 99, 92, 80, 72 };
 static const int kEnvelopeLevels[4] = { 99, 92, 80, 0 };
 static const int kPitchEnvelopeRates[4] = { 0, 0, 0, 0 };
 static const int kPitchEnvelopeLevels[4] = { 49, 49, 49, 49 };
+constexpr int kEnvelopeReferenceOutlevel = 127 << 5;
 static const int32_t kCoarseMul[32] = {
     -16777216, 0, 16777216, 26591258, 33554432, 38955489, 43368474, 47099600,
     50331648, 53182516, 55732705, 58039632, 60145690, 62083076, 63876816,
@@ -98,7 +100,7 @@ static const uint8_t kExpScaleData[33] = {
     0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,
     126,142,158,174,190,206,222,238,250
 };
-static const uint8_t kAlgorithmFlags[32][kOperatorCount] = {
+constexpr uint8_t kAlgorithmFlags[32][kOperatorCount] = {
     {0xc1,0x11,0x11,0x14,0x01,0x14}, {0x01,0x11,0x11,0x14,0xc1,0x14},
     {0xc1,0x11,0x14,0x01,0x11,0x14}, {0xc1,0x11,0x94,0x01,0x11,0x14},
     {0xc1,0x14,0x01,0x14,0x01,0x14}, {0xc1,0x94,0x01,0x14,0x01,0x14},
@@ -116,6 +118,37 @@ static const uint8_t kAlgorithmFlags[32][kOperatorCount] = {
     {0xc1,0x14,0x01,0x14,0x04,0x04}, {0x04,0xc1,0x11,0x14,0x04,0x04},
     {0xc1,0x14,0x04,0x04,0x04,0x04}, {0xc4,0x04,0x04,0x04,0x04,0x04}
 };
+
+constexpr int feedback_operator_for_algorithm(uint8_t algorithm)
+{
+    for (int op = 0; op < kOperatorCount; ++op)
+        if ((kAlgorithmFlags[algorithm][op] & 0xc0U) == 0xc0U)
+            return op;
+    return -1;
+}
+
+constexpr bool feedback_topology_is_complete(void)
+{
+    for (uint8_t algorithm = 0U; algorithm < 32U; ++algorithm)
+    {
+        int feedback_operators = 0;
+        for (int op = 0; op < kOperatorCount; ++op)
+            feedback_operators +=
+                ((kAlgorithmFlags[algorithm][op] & 0xc0U) == 0xc0U) ? 1 : 0;
+        if (feedback_operators != 1)
+            return false;
+    }
+    return true;
+}
+
+static_assert(feedback_topology_is_complete(),
+              "Every DX7 algorithm must have exactly one feedback operator");
+static_assert(feedback_operator_for_algorithm(0U) == 0, "Algorithm 1 feedback is DX7 OP6");
+static_assert(feedback_operator_for_algorithm(1U) == 4, "Algorithm 2 feedback is DX7 OP2");
+static_assert(feedback_operator_for_algorithm(7U) == 2, "Algorithm 8 feedback is DX7 OP4");
+static_assert(feedback_operator_for_algorithm(9U) == 3, "Algorithm 10 feedback is DX7 OP3");
+static_assert(feedback_operator_for_algorithm(27U) == 1, "Algorithm 28 feedback is DX7 OP5");
+static_assert(feedback_operator_for_algorithm(31U) == 0, "Algorithm 32 feedback is DX7 OP6");
 
 static float clamp_macro(float value)
 {
@@ -273,7 +306,8 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
     else
     {
         log_frequency = (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
-        log_frequency += 13457 * (detune - 7);
+        if (detune > 7)
+            log_frequency += 13457 * (detune - 7);
     }
     return log_frequency
         + (int32_t)((operator_metal_semitones(voice, op) / 12.0f) * (float)kQ24);
@@ -339,6 +373,20 @@ static int operator_output_level(const fm_voice_t *voice, int op)
     return (level < 0) ? 0 : level;
 }
 
+static void refresh_operator_output_level(fm_voice_t *voice, int op)
+{
+    if ((voice == nullptr) || (op < 0) || (op >= kOperatorCount))
+        return;
+    voice->operator_output_level_offset[op] =
+        (operator_output_level(voice, op) - kEnvelopeReferenceOutlevel) * 65536;
+}
+
+static void refresh_all_operator_output_levels(fm_voice_t *voice)
+{
+    for (int op = 0; op < kOperatorCount; ++op)
+        refresh_operator_output_level(voice, op);
+}
+
 static void refresh_voice_patch(fm_voice_t *voice)
 {
     if (voice == nullptr)
@@ -396,7 +444,7 @@ static uint8_t clamp_algorithm(uint8_t algorithm)
     return (algorithm < 32U) ? algorithm : 31U;
 }
 
-static uint8_t feedback_shift(uint8_t feedback)
+constexpr uint8_t feedback_shift(uint8_t feedback)
 {
     if (feedback == 0U)
         return 16U;
@@ -404,12 +452,17 @@ static uint8_t feedback_shift(uint8_t feedback)
 }
 
 #if FM_KERNEL_BENCH
-static uint8_t log_feedback_shift(uint8_t feedback)
+constexpr uint8_t log_feedback_shift(uint8_t feedback)
 {
     if (feedback == 0U)
         return 17U;
     return (uint8_t)(9U - ((feedback > 7U) ? 7U : feedback));
 }
+static_assert(log_feedback_shift(0U) > 16U, "Zero feedback must be silent");
+static_assert(log_feedback_shift(1U) == feedback_shift(1U) + 1U,
+              "Q14 feedback must match the MSFA Q24 phase scale");
+static_assert(log_feedback_shift(7U) == feedback_shift(7U) + 1U,
+              "Q14 feedback must match the MSFA Q24 phase scale");
 #endif
 
 static void reset_voice(fm_voice_t *voice)
@@ -420,6 +473,8 @@ static void reset_voice(fm_voice_t *voice)
     memset(voice->operators, 0, sizeof(voice->operators));
     memset(voice->feedback, 0, sizeof(voice->feedback));
     memset(voice->base_log_frequency, 0, sizeof(voice->base_log_frequency));
+    memset(voice->operator_output_level_offset, 0,
+           sizeof(voice->operator_output_level_offset));
     memset(voice->operator_level, 0, sizeof(voice->operator_level));
     memset(voice->operator_frequency, 0, sizeof(voice->operator_frequency));
     memset(voice->operator_detune, 0, sizeof(voice->operator_detune));
@@ -461,10 +516,9 @@ static void reset_voice(fm_voice_t *voice)
         voice->operator_env[op][1] = (uint8_t)kEnvelopeRates[1];
         voice->operator_env[op][2] = (uint8_t)kEnvelopeLevels[2];
         voice->operator_env[op][3] = (uint8_t)kEnvelopeRates[3];
-        voice->env[op].init(kEnvelopeRates,
-                            kEnvelopeLevels,
-                            Env::scaleoutlevel(voice->operator_level[op]) << 5,
-                            0);
+        voice->env[op].init(kEnvelopeRates, kEnvelopeLevels,
+                            kEnvelopeReferenceOutlevel, 0);
+        refresh_operator_output_level(voice, op);
     }
     voice->pitch_env.set(kPitchEnvelopeRates, kPitchEnvelopeLevels);
     refresh_voice_patch(voice);
@@ -496,7 +550,7 @@ static void refresh_operator_envelope(fm_voice_t *voice, int op)
     int rates[4];
     int levels[4];
     operator_envelope_values(voice, op, rates, levels);
-    voice->env[op].update(rates, levels, operator_output_level(voice, op), 0);
+    voice->env[op].update(rates, levels, kEnvelopeReferenceOutlevel, 0);
 }
 
 static void refresh_all_envelopes(fm_voice_t *voice)
@@ -529,7 +583,8 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
         int rates[4];
         int levels[4];
         operator_envelope_values(voice, op, rates, levels);
-        voice->env[op].init(rates, levels, operator_output_level(voice, op), 0);
+        voice->env[op].init(rates, levels, kEnvelopeReferenceOutlevel, 0);
+        refresh_operator_output_level(voice, op);
         voice->base_log_frequency[op] = operator_log_frequency(voice, note, op);
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
         voice->operators[op].gain_out = 0;
@@ -743,6 +798,7 @@ void brick6_fm_runtime_set_play(uint8_t instance_id,
     voice->pitch_env_time = next_pitch_time;
     refresh_voice_patch(voice);
     refresh_all_envelopes(voice);
+    refresh_all_operator_output_levels(voice);
     if (voice->active != 0U)
     {
         int rates[4];
@@ -835,12 +891,13 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             || (param == BRICK6_FM_OPERATOR_DETUNE)
             || (param == BRICK6_FM_OPERATOR_MODE))
         refresh_operator_frequency(voice, op);
-    if ((param == BRICK6_FM_OPERATOR_LEVEL)
-            || ((param >= BRICK6_FM_OPERATOR_ENV_ATTACK)
+    if ((param >= BRICK6_FM_OPERATOR_ENV_ATTACK)
                 && (param <= BRICK6_FM_OPERATOR_ENV_RELEASE))
+        refresh_operator_envelope(voice, op);
+    if ((param == BRICK6_FM_OPERATOR_LEVEL)
             || (param == BRICK6_FM_OPERATOR_VEL)
             || (param == BRICK6_FM_OPERATOR_KEY))
-        refresh_operator_envelope(voice, op);
+        refresh_operator_output_level(voice, op);
     mark_parameters_changed(voice);
 }
 
@@ -863,15 +920,20 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
         || (destination->env_decay != source->env_decay)
         || (destination->env_sustain != source->env_sustain)
         || (destination->env_release != source->env_release);
+    const bool refresh_play_level = (destination->play_velocity != source->play_velocity)
+        || (destination->play_key != source->play_key);
     bool refresh_frequency[kOperatorCount] = {};
     bool refresh_envelope[kOperatorCount] = {};
+    bool refresh_output_level[kOperatorCount] = {};
     for (int op = 0; op < kOperatorCount; ++op)
     {
         refresh_frequency[op] = (destination->operator_frequency[op] != source->operator_frequency[op])
             || (destination->operator_detune[op] != source->operator_detune[op])
             || (destination->operator_mode[op] != source->operator_mode[op]);
-        refresh_envelope[op] = (destination->operator_level[op] != source->operator_level[op])
-            || (memcmp(destination->operator_env[op], source->operator_env[op], 4U) != 0)
+        refresh_envelope[op] =
+            memcmp(destination->operator_env[op], source->operator_env[op], 4U) != 0;
+        refresh_output_level[op] =
+            (destination->operator_level[op] != source->operator_level[op])
             || (destination->operator_velocity[op] != source->operator_velocity[op])
             || (destination->operator_key[op] != source->operator_key[op]);
     }
@@ -909,6 +971,11 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     else
         for (int op = 0; op < kOperatorCount; ++op)
             if (refresh_envelope[op]) refresh_operator_envelope(destination, op);
+    if (refresh_play_level)
+        refresh_all_operator_output_levels(destination);
+    else
+        for (int op = 0; op < kOperatorCount; ++op)
+            if (refresh_output_level[op]) refresh_operator_output_level(destination, op);
     if (destination->active != 0U)
     {
         int rates[4];
@@ -965,6 +1032,7 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
     for (int op = 0; op < kOperatorCount; ++op)
     {
         voice->operators[op].level_in = voice->env[op].getsample(frames);
+        voice->operators[op].level_in += voice->operator_output_level_offset[op];
         voice->operators[op].level_in += voice->operator_level_offset[op];
         if (voice->operator_on[op] == 0U)
             voice->operators[op].level_in = 0;
