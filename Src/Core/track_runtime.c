@@ -47,6 +47,15 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
         entity_id, PARAM_CFG_POLY_VOICES, &voices);
     (void)param_registry_runtime_cache_get(
         entity_id, PARAM_CFG_POLY_SPREAD, &spread);
+    entity_topology_descriptor_t topology;
+    uint8_t audio_flags = ctx->flags;
+    if (entity_topology_get(entity_id, &topology) != 0U)
+    {
+        if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+            audio_flags |= AUDIO_RUNTIME_FLAG_GROUP_MASTER;
+        else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
+            audio_flags |= AUDIO_RUNTIME_FLAG_GROUP_CHILD;
+    }
     const control_audio_event_t command = {
         .due_sample = due_sample,
         .source_generation = track_runtime_encode_float(spread),
@@ -56,7 +65,7 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
         .note = ctx->type,
         .velocity = ctx->midi_channel_1_16,
         .provenance = ctx->family,
-        .flags = ctx->flags
+        .flags = audio_flags
     };
     (void)control_audio_queue_publish(&command);
 }

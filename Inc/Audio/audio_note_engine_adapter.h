@@ -7,6 +7,9 @@
 #include "Core/entity_topology.h"
 #include "Core/track_runtime.h"
 
+#define AUDIO_RUNTIME_FLAG_GROUP_MASTER (1U << 6)
+#define AUDIO_RUNTIME_FLAG_GROUP_CHILD  (1U << 7)
+
 typedef struct
 {
     brick_entity_id_t entity_id;

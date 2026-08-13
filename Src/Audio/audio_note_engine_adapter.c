@@ -352,6 +352,9 @@ static uint8_t audio_note_engine_adapter_mix_target_available(
 {
     if (mix_track >= MIXER_MAX_TRACKS)
         return 0U;
+    if ((mix_track == MIXER_GROUP_BUS_TRACK)
+            && (entity_id != BRICK_ENTITY_GROUP_MASTER_ID))
+        return 0U;
     for (brick_entity_id_t other = 0U;
          other < BRICK_ENTITY_CAPACITY; ++other)
     {

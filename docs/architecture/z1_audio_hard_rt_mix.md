@@ -1,6 +1,6 @@
 # Z1 — Audio hard-RT et mix
 
-L'IRQ audio exécute des chemins bornés et préalloués. Une piste `0..7` configurée avec un moteur audio obtient une voie physique; `Off` et `MIDI` n'en consomment pas. L'identité logique ne dépend jamais du numéro de voie.
+L'IRQ audio exécute des chemins bornés et préalloués. Une entité audio configurée obtient une voie physique; `Off` et `MIDI` n'en consomment pas. L'identité logique ne dépend jamais du numéro de voie.
 
 Les moteurs locaux sont Synth, Drum, Sampler RAM/Stream/Multi/Looper et External. Looper possède son runtime par slot. External lit uniquement l'entrée physique dont le slot est propriétaire; les entrées sans propriétaire sont désactivées et aucun monitoring parallèle n'est créé.
 
@@ -15,6 +15,13 @@ Le panorama de spread est précalculé lors des changements de configuration; la
 Le runtime conserve un décompte par moteur synthétique. Les balayages Prism, Stack et Wave ne sont exécutés que si au moins une track liée utilise le moteur correspondant; la consommation fixe d'une configuration qui n'emploie pas ce moteur est ainsi évitée.
 
 Le mixer applique niveau, pan, inserts valides, sends et traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Il n'existe plus de piste FX ni de chaîne MacroFX.
+
+Le bus GROUP est une réalisation exclusivement AUDIO. Chaque child conserve
+son chemin mono ou stéréo, son filtre/MIX/inserts et ses sends pré-somme. Son
+dry est dirigé vers la somme GROUP au lieu de MAIN. Cette somme traverse une
+seule fois le filtre, le MIX, les inserts, les sends et le routing du master
+GROUP, puis rejoint MAIN. Le rôle GROUP est projeté dans le binding AUDIO par
+le contrat CONTROL→AUDIO; CONTROL et UI ne connaissent pas le slot du bus.
 
 Les quotas Low-Cost/Premium limitent les ressources physiques, jamais la topologie logique de huit pistes.
 

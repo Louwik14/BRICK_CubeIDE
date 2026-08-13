@@ -3850,6 +3850,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_group_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_group_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float reverb_return_l[AUDIO_BLOCK_SIZE];
@@ -3898,6 +3900,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
+    memset(bus_group_l, 0, sizeof(bus_group_l));
+    memset(bus_group_r, 0, sizeof(bus_group_r));
     if(send_bus_active != 0U)
     {
         memset(send_l, 0, sizeof(send_l));
@@ -3987,6 +3991,14 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         const uint32_t t = (uint32_t)__builtin_ctz(lane_mask);
         lane_mask &= lane_mask - 1U;
         mixer_track_t *mt = &g_tracks[t];
+        uint8_t source_entity = 0xFFU;
+        const track_audio_runtime_ctx_t *source_ctx = NULL;
+        const uint8_t group_child = (uint8_t)(
+            (mixer_entity_for_lane((uint8_t)t, &source_entity) != 0U)
+            && ((source_ctx = audio_note_engine_adapter_audio_ctx(source_entity)) != NULL)
+            && ((source_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U));
+        float *const dry_bus_l = (group_child != 0U) ? bus_group_l : bus_main_l;
+        float *const dry_bus_r = (group_child != 0U) ? bus_group_r : bus_main_r;
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
         const mixer_lane_plan_t lane_plan = mixer_build_lane_plan(t,
                                                                   mt,
@@ -4184,8 +4196,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
                 if (mt->route_master != 0U)
                 {
-                    bus_main_l[i] += left_trimmed;
-                    bus_main_r[i] += right_trimmed;
+                    dry_bus_l[i] += left_trimmed;
+                    dry_bus_r[i] += right_trimmed;
                 }
 
                 if (coefficient_plan.stable == 0U)
@@ -4296,8 +4308,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
-                        bus_main_l[i] += left_trimmed;
-                        bus_main_r[i] += right_trimmed;
+                        dry_bus_l[i] += left_trimmed;
+                        dry_bus_r[i] += right_trimmed;
                         if (coefficient_plan.stable == 0U)
                         {
                             mixer_advance_track_ramps(&gain_cur, gain_step,
@@ -4322,8 +4334,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
                         send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
-                        bus_main_l[i] += left_trimmed;
-                        bus_main_r[i] += right_trimmed;
+                        dry_bus_l[i] += left_trimmed;
+                        dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
                         if (coefficient_plan.stable == 0U)
                         {
@@ -4349,8 +4361,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
-                        bus_main_l[i] += left_trimmed;
-                        bus_main_r[i] += right_trimmed;
+                        dry_bus_l[i] += left_trimmed;
+                        dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_DELAY_SEND_INDEX] += send_step[MIXER_DELAY_SEND_INDEX];
                         if (coefficient_plan.stable == 0U)
                         {
@@ -4378,8 +4390,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
-                        bus_main_l[i] += left_trimmed;
-                        bus_main_r[i] += right_trimmed;
+                        dry_bus_l[i] += left_trimmed;
+                        dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
                         send_cur[MIXER_DELAY_SEND_INDEX] += send_step[MIXER_DELAY_SEND_INDEX];
                         if (coefficient_plan.stable == 0U)
@@ -4666,8 +4678,109 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             {
                 const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
                 const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
-                bus_main_l[i] += l_nom;
-                bus_main_r[i] += r_nom;
+                dry_bus_l[i] += l_nom;
+                dry_bus_r[i] += r_nom;
+            }
+        }
+    }
+
+    const track_audio_runtime_ctx_t *const group_master_ctx =
+        audio_note_engine_adapter_audio_ctx(BRICK_ENTITY_GROUP_MASTER_ID);
+    if ((group_master_ctx != NULL)
+            && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U))
+    {
+        mixer_track_t *const group = &g_tracks[MIXER_GROUP_BUS_TRACK];
+
+        /* AUDIO-owned GROUP order:
+         * child sends have already left pre-sum; child dry is summed here,
+         * then master filter -> master MIX -> inserts -> master sends/dry.
+         */
+        mixer_lane_run_stereo_path(MIXER_GROUP_BUS_TRACK,
+                                   group,
+                                   &g_track_filters[MIXER_GROUP_BUS_TRACK],
+                                   bus_group_l,
+                                   bus_group_r,
+                                   frames,
+                                   0U);
+
+        float gain_cur = group->gain_current;
+        float pan_cur = group->pan_current;
+        float mute_gain_cur = group->mute_gain_current;
+        const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
+        const float gain_step = (group->gain - gain_cur) * inv_frames;
+        const float pan_step = (group->pan - pan_cur) * inv_frames;
+        const float mute_target = (group->mute != 0U) ? 0.0f : 1.0f;
+        const float mute_step = 1.0f / 240.0f;
+        const mixer_track_coefficient_plan_t coefficient_plan =
+            mixer_prepare_track_coefficients(gain_cur,
+                                              group->gain,
+                                              pan_cur,
+                                              group->pan,
+                                              mute_gain_cur,
+                                              mute_target);
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            float gain_l = 0.0f;
+            float gain_r = 0.0f;
+            mixer_track_coefficients_at(&coefficient_plan,
+                                        gain_cur,
+                                        pan_cur,
+                                        mute_gain_cur,
+                                        &gain_l,
+                                        &gain_r);
+            bus_group_l[i] *= gain_l;
+            bus_group_r[i] *= gain_r;
+            if (coefficient_plan.stable == 0U)
+                mixer_advance_track_ramps(&gain_cur, gain_step,
+                                          &pan_cur, pan_step,
+                                          &mute_gain_cur, mute_target, mute_step);
+        }
+        group->gain_current = group->gain;
+        group->pan_current = group->pan;
+        group->mute_gain_current = mute_gain_cur;
+
+        for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+        {
+            const int8_t slot = group->insert_slot[insert];
+            if (slot >= 0)
+                fx_chain_process_slot_for_track(MIXER_GROUP_BUS_TRACK,
+                                                (uint32_t)slot,
+                                                bus_group_l,
+                                                bus_group_r,
+                                                frames);
+        }
+
+        if (send_bus_active != 0U)
+        {
+            for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+            {
+                float send_cur = group->send_level_current[s];
+                const float send_step =
+                    (group->send_level[s] - send_cur) * inv_frames;
+                const uint8_t send_enabled = (uint8_t)(
+                    (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
+                     || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
+                     || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))));
+                if ((send_enabled != 0U)
+                        && !((send_cur <= 0.0f) && (group->send_level[s] <= 0.0f)))
+                {
+                    for (uint32_t i = 0U; i < frames; ++i)
+                    {
+                        send_l[s][i] += bus_group_l[i] * send_cur;
+                        send_r[s][i] += bus_group_r[i] * send_cur;
+                        send_cur += send_step;
+                    }
+                }
+                group->send_level_current[s] = group->send_level[s];
+            }
+        }
+
+        if (group->route_master != 0U)
+        {
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                bus_main_l[i] += bus_group_l[i];
+                bus_main_r[i] += bus_group_r[i];
             }
         }
     }
