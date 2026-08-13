@@ -4,6 +4,7 @@
 #include "App/Hall/hall_engine.h"
 #include "Audio/control_audio_queue.h"
 #include "Core/live_clock.h"
+#include "Core/control_routing.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -58,7 +59,6 @@ typedef struct
     ui_core_runtime_bridge_post_sync_fn post_sync;
 } ui_core_runtime_bridge_track_transition_ctx_t;
 
-static uint8_t g_looper_route_enabled[UI_TRACK_COUNT][UI_TRACK_COUNT];
 static uint8_t g_active_looper_record_track = 0xFFU;
 static uint8_t g_looper_take_track = 0xFFU;
 static uint8_t g_looper_record_auto_stop_latched = 0U;
@@ -291,7 +291,7 @@ static uint8_t ui_core_runtime_bridge_looper_track_has_route(uint8_t track)
 
     for (uint8_t source = 0U; source < UI_TRACK_COUNT; ++source)
     {
-        if ((source != track) && (g_looper_route_enabled[track][source] != 0U))
+        if ((source != track) && (control_routing_get_looper_source(track,source) != 0U))
         {
             return 1U;
         }
@@ -1065,8 +1065,8 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
 
     if (is_sampler_looper != 0U)
     {
-        g_looper_route_enabled[active_track][hall] =
-            (g_looper_route_enabled[active_track][hall] == 0U) ? 1U : 0U;
+        (void)control_routing_set_looper_source(active_track,hall,
+            (control_routing_get_looper_source(active_track,hall) == 0U) ? 1U : 0U);
     }
     if (suppress_hall_note != 0)
     {
@@ -1082,7 +1082,7 @@ uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, ui
         return 0U;
     }
 
-    return g_looper_route_enabled[looper_track][source_track];
+    return control_routing_get_looper_source(looper_track,source_track);
 }
 
 void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8_t source_track, uint8_t enabled)
@@ -1092,7 +1092,7 @@ void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8
         return;
     }
 
-    g_looper_route_enabled[looper_track][source_track] = (enabled != 0U) ? 1U : 0U;
+    (void)control_routing_set_looper_source(looper_track,source_track,enabled);
 }
 
 uint8_t ui_core_runtime_bridge_get_active_looper_record_track(uint8_t *out_track)
