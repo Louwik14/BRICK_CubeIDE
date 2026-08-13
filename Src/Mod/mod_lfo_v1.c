@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "Core/brick6_audio_event_grid.h"
+#include "Core/entity_topology.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_runtime.h"
@@ -18,7 +19,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
-/* Modulation state is owned by sequence lanes, including GROUP children. */
+/* GROUP modulation state is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
 #define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
@@ -935,6 +936,9 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     track_mod_lfo_state_t *const s = mod_lfo_track_settings_mut(track, lfo_index);
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
 
@@ -1006,6 +1010,9 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
     if (s == NULL)
@@ -1076,6 +1083,9 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
         return;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    track = owner;
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     const mod_lfo_trig_mode_t old_trig = (s != NULL)
@@ -1106,6 +1116,9 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     if (s == NULL)
     {
@@ -1442,6 +1455,9 @@ void mod_lfo_v1_all_notes_off(uint8_t track)
 
 uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)
 {
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     if (s == NULL)
     {
@@ -1457,6 +1473,9 @@ uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, u
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     if (s == NULL)
     {

@@ -123,6 +123,21 @@ uint8_t entity_topology_has_capability(brick_entity_id_t entity_id,
                 & (uint16_t)capability) != 0U));
 }
 
+uint8_t entity_topology_mod_owner(brick_entity_id_t entity_id,
+                                  brick_entity_id_t *out_owner_id)
+{
+    entity_topology_descriptor_t descriptor;
+    if ((out_owner_id == NULL)
+            || (entity_topology_get(entity_id, &descriptor) == 0U)
+            || (descriptor.active == 0U))
+    {
+        return 0U;
+    }
+    *out_owner_id = (descriptor.role == ENTITY_ROLE_GROUP_CHILD)
+        ? descriptor.parent_entity_id : descriptor.entity_id;
+    return 1U;
+}
+
 uint8_t entity_topology_get_top_level_count(void)
 {
     return BRICK_ENTITY_TOP_LEVEL_COUNT;

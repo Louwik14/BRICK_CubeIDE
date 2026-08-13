@@ -6,10 +6,11 @@
 
 #include "Audio/env_adsr.h"
 #include "Core/track_sound_state.h"
+#include "Core/entity_topology.h"
 #include "Param/param_filter.h"
 #include "Seq/seq_types.h"
 
-/* ENV3 is per sequence lane, not per physical UI track. */
+/* GROUP ENV3 configuration is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
 #define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
@@ -153,6 +154,9 @@ uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float va
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     track_mod_env3_state_t *const s = mod_env3_track_settings(track);
     if (s == NULL)
     {
@@ -169,6 +173,9 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_mod_env3_state_t *const s = mod_env3_track_settings_const(track);
     if (s == NULL)
     {
@@ -192,6 +199,9 @@ uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value)
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     track_sound_state_t *const sound = track_sound_state_get(track);
     if (sound == NULL)
     {
@@ -209,6 +219,9 @@ uint8_t mod_env3_get_track_retrigger_hard(uint8_t track, float *out_value)
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     const track_sound_state_t *const sound = track_sound_state_get_const(track);
     if (sound == NULL)
     {
@@ -226,6 +239,9 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
         return 0U;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track = owner;
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
     if (rt->temp_valid == 0U)
     {
@@ -255,6 +271,9 @@ void mod_env3_clear_track_param_temp(uint8_t track, mod_env3_param_t param)
         return;
     }
 
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    track = owner;
     g_mod_env3_runtime[track].temp_valid = 0U;
     mod_env3_apply_settings(track);
 }

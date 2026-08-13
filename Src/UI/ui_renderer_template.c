@@ -1352,18 +1352,20 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
 
 static uint8_t ui_renderer_template_matrix_slot_is_filled(uint8_t track, uint8_t slot)
 {
-    const track_sound_state_t *const state = track_sound_state_get_const(track);
-    if ((state == NULL) || (slot >= MOD_MATRIX_SLOT_COUNT))
+    float source = 0.0f;
+    float destination = 0.0f;
+    float depth = 0.0f;
+    if ((slot >= MOD_MATRIX_SLOT_COUNT)
+            || (mod_matrix_get_slot_source(track, slot, &source) == 0U)
+            || (mod_matrix_get_slot_destination_index(track, slot, &destination) == 0U)
+            || (mod_matrix_get_slot_depth(track, slot, &depth) == 0U))
     {
         return 0U;
     }
-
-    const track_mod_matrix_slot_t *const matrix_slot = &state->mod_matrix[slot];
-    return ((matrix_slot->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
-            && (matrix_slot->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
-            && (matrix_slot->destination != (uint16_t)MOD_DESTINATION_NONE)
-            && (matrix_slot->destination < (uint16_t)PARAM_COUNT)
-            && (matrix_slot->depth != 0.0f)) ? 1U : 0U;
+    return ((source > (float)MOD_MATRIX_SOURCE_NONE)
+            && (source < (float)MOD_MATRIX_SOURCE_COUNT)
+            && (destination > 0.0f)
+            && (depth != 0.0f)) ? 1U : 0U;
 }
 
 static void ui_renderer_template_draw_matrix_rows(int x, int y, const uint32_t rows[24])

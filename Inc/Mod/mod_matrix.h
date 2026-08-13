@@ -4,6 +4,7 @@
 
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_ramp.h"
+#include "Mod/mod_destination_catalog.h"
 #include "Param/param_store.h"
 #include "Seq/seq_types.h"
 #include "ui_core.h"
@@ -34,7 +35,7 @@ typedef struct
 {
     uint8_t enabled;
     uint8_t source;
-    uint16_t destination;
+    mod_destination_address_t destination;
     float depth;
 } track_mod_matrix_slot_t;
 

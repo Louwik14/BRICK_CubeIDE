@@ -8,6 +8,15 @@ Le p-lock générique est un override temporaire réservé aux paramètres p-loc
 
 LFO, Matrix, ENV3, filtre et VCA gardent une seule autorité de contrôle. External et MIDI conservent leurs restrictions explicites. Aucun paramètre, backend ou état MacroFX n'appartient au produit courant.
 
+## Autorité MOD du GROUP
+
+Le GROUP master est l'unique autorité CONTROL de la Matrix, des trois LFO,
+d'ENV3 et des opérateurs partagés. Un accès MOD depuis un child résout donc le
+même owner master. Les sources sont exclusivement celles du master; aucun ENV
+child n'est une source. Une destination Matrix est une adresse logique
+`{entity_id, param_id}` : AUDIO résout cette adresse vers un seul master ou un
+seul SUB, sans fan-out et sans faire remonter un `mix_track_id` dans CONTROL.
+
 ## Contrat LFO segmenté et interpolé
 
 `mod_lfo_v1` reste l'autorité unique de phase, de forme, de déclenchement et de

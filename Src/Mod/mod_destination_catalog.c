@@ -1,4 +1,6 @@
 #include "Mod/mod_destination_catalog.h"
+
+#include <stdio.h>
 #include "Audio/audio_note_engine_adapter.h"
 
 #include "Audio/audio_xfade.h"
@@ -10,6 +12,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/entity_topology.h"
 #include "Core/track_tone_sound_state.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry.h"
@@ -55,6 +58,35 @@ typedef struct
 
 static mod_destination_cache_t g_mod_destination_cache[SEQ_TRACK_COUNT];
 static mod_destination_midi_cc_cache_t g_mod_destination_midi_cc_cache[SEQ_TRACK_COUNT][12U];
+
+mod_destination_address_t mod_destination_address_make(uint8_t entity_id,
+                                                       param_id_t param)
+{
+    if ((entity_id >= BRICK_ENTITY_CAPACITY)
+            || ((uint16_t)param > MOD_DESTINATION_PARAM_MASK)
+            || (param >= PARAM_COUNT))
+    {
+        return MOD_DESTINATION_NONE;
+    }
+    return (mod_destination_address_t)(((uint16_t)entity_id << MOD_DESTINATION_PARAM_BITS)
+            | (uint16_t)param);
+}
+
+uint8_t mod_destination_address_resolve(mod_destination_address_t address,
+                                        uint8_t *out_entity_id,
+                                        param_id_t *out_param)
+{
+    const uint8_t entity_id = (uint8_t)(address >> MOD_DESTINATION_PARAM_BITS);
+    const param_id_t param = (param_id_t)(address & MOD_DESTINATION_PARAM_MASK);
+    if ((address == MOD_DESTINATION_NONE) || (entity_id >= BRICK_ENTITY_CAPACITY)
+            || (param >= PARAM_COUNT) || (out_entity_id == NULL) || (out_param == NULL))
+    {
+        return 0U;
+    }
+    *out_entity_id = entity_id;
+    *out_param = param;
+    return 1U;
+}
 
 static float mod_destination_clampf(float v, float lo, float hi)
 {
@@ -1496,7 +1528,7 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
         .audio_routable = (uint8_t)(
             (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
             && (snapshot.binding.mix_track_id != 0xFFU)
-            && (snapshot.type != (uint8_t)TRACK_RUNTIME_TYPE_GROUP)),
+            ),
         .supports_vca_gate = (uint8_t)(
             (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
             && ((snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
@@ -1565,12 +1597,113 @@ void mod_destination_catalog_invalidate_all(void)
 
 uint16_t mod_destination_catalog_count(uint8_t track)
 {
+    entity_topology_descriptor_t owner;
+    if ((entity_topology_get(track, &owner) != 0U)
+            && (owner.role == ENTITY_ROLE_GROUP_MASTER))
+    {
+        uint16_t count = 1U;
+        for (uint8_t target = BRICK_ENTITY_GROUP_MASTER_ID;
+             target < BRICK_ENTITY_CAPACITY; ++target)
+        {
+            mod_destination_cache_t *const target_cache =
+                mod_destination_cache_resolve(target);
+            if ((target_cache != NULL) && (target_cache->count > 1U))
+            {
+                count = (uint16_t)(count + target_cache->count - 1U);
+            }
+        }
+        return count;
+    }
     mod_destination_cache_t *const cache = mod_destination_cache_resolve(track);
     return (cache != NULL) ? cache->count : 1U;
 }
 
+mod_destination_address_t mod_destination_catalog_address_from_index(uint8_t owner,
+                                                                     uint16_t dest_index)
+{
+    if ((owner >= SEQ_TRACK_COUNT) || (dest_index == 0U))
+    {
+        return MOD_DESTINATION_NONE;
+    }
+
+    entity_topology_descriptor_t descriptor;
+    if ((entity_topology_get(owner, &descriptor) != 0U)
+            && (descriptor.role == ENTITY_ROLE_GROUP_MASTER))
+    {
+        uint16_t cursor = 1U;
+        for (uint8_t target = BRICK_ENTITY_GROUP_MASTER_ID;
+             target < BRICK_ENTITY_CAPACITY; ++target)
+        {
+            mod_destination_cache_t *const cache = mod_destination_cache_resolve(target);
+            const uint16_t target_count = ((cache != NULL) && (cache->count > 1U))
+                ? (uint16_t)(cache->count - 1U) : 0U;
+            if (dest_index < (uint16_t)(cursor + target_count))
+            {
+                return mod_destination_address_make(
+                    target, cache->index_to_param[dest_index - cursor + 1U]);
+            }
+            cursor = (uint16_t)(cursor + target_count);
+        }
+        return MOD_DESTINATION_NONE;
+    }
+
+    const param_id_t param = mod_destination_catalog_param_from_index(owner, dest_index);
+    return mod_destination_address_make(owner, param);
+}
+
+uint16_t mod_destination_catalog_index_from_address(uint8_t owner,
+                                                    mod_destination_address_t address)
+{
+    uint8_t target = 0U;
+    param_id_t param = PARAM_COUNT;
+    if ((mod_destination_address_resolve(address, &target, &param) == 0U)
+            || (owner >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    entity_topology_descriptor_t descriptor;
+    if ((entity_topology_get(owner, &descriptor) != 0U)
+            && (descriptor.role == ENTITY_ROLE_GROUP_MASTER))
+    {
+        uint16_t cursor = 1U;
+        for (uint8_t candidate = BRICK_ENTITY_GROUP_MASTER_ID;
+             candidate < BRICK_ENTITY_CAPACITY; ++candidate)
+        {
+            mod_destination_cache_t *const cache = mod_destination_cache_resolve(candidate);
+            if (cache == NULL)
+            {
+                continue;
+            }
+            if (candidate == target)
+            {
+                const uint16_t local_index = cache->param_to_index[(uint16_t)param];
+                return (local_index != 0U)
+                    ? (uint16_t)(cursor + local_index - 1U) : 0U;
+            }
+            if (cache->count > 1U)
+            {
+                cursor = (uint16_t)(cursor + cache->count - 1U);
+            }
+        }
+        return 0U;
+    }
+
+    return (target == owner) ? mod_destination_catalog_index_from_param(owner, param) : 0U;
+}
+
 param_id_t mod_destination_catalog_param_from_index(uint8_t track, uint16_t dest_index)
 {
+    entity_topology_descriptor_t descriptor;
+    if ((entity_topology_get(track, &descriptor) != 0U)
+            && (descriptor.role == ENTITY_ROLE_GROUP_MASTER))
+    {
+        uint8_t target = 0U;
+        param_id_t param = PARAM_COUNT;
+        return (mod_destination_address_resolve(
+            mod_destination_catalog_address_from_index(track, dest_index),
+            &target, &param) != 0U) ? param : MOD_DESTINATION_NONE;
+    }
     if ((track >= SEQ_TRACK_COUNT) || (dest_index == 0U))
     {
         return MOD_DESTINATION_NONE;
@@ -1637,8 +1770,11 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
         return 0U;
     }
 
-    const param_id_t dest = mod_destination_catalog_param_from_index(track, dest_index);
-    if (dest == MOD_DESTINATION_NONE)
+    uint8_t target = track;
+    param_id_t dest = PARAM_COUNT;
+    const mod_destination_address_t address =
+        mod_destination_catalog_address_from_index(track, dest_index);
+    if (address == MOD_DESTINATION_NONE)
     {
         out[0] = 'O';
         out[1] = 'f';
@@ -1647,7 +1783,8 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
         return 1U;
     }
 
-    if (dest >= PARAM_COUNT)
+    if ((mod_destination_address_resolve(address, &target, &dest) == 0U)
+            || (dest >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -1667,7 +1804,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     }
     else if ((name = mod_destination_prism_label_for_param(dest)) == NULL)
     {
-        if (mod_destination_stack_label_for_track_param(track, dest, &name) == 0U)
+        if (mod_destination_stack_label_for_track_param(target, dest, &name) == 0U)
         {
             name = mod_destination_wave_label_for_param(dest);
             if (name == NULL)
@@ -1681,10 +1818,26 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
         return 0U;
     }
 
-    uint32_t i = 0U;
-    for (; (i + 1U) < out_len; ++i)
+    uint32_t prefix_len = 0U;
+    entity_topology_descriptor_t owner;
+    if ((entity_topology_get(track, &owner) != 0U)
+            && (owner.role == ENTITY_ROLE_GROUP_MASTER))
     {
-        const char c = name[i];
+        const int written = (target == BRICK_ENTITY_GROUP_MASTER_ID)
+            ? snprintf(out, out_len, "MASTER ")
+            : snprintf(out, out_len, "SUB%u ",
+                (unsigned int)(target - BRICK_ENTITY_FIRST_GROUP_CHILD_ID + 1U));
+        if ((written < 0) || ((uint32_t)written >= out_len))
+        {
+            return 0U;
+        }
+        prefix_len = (uint32_t)written;
+    }
+    uint32_t name_index = 0U;
+    uint32_t i = prefix_len;
+    for (; (i + 1U) < out_len; ++i, ++name_index)
+    {
+        const char c = name[name_index];
         out[i] = c;
         if (c == '\0')
         {
@@ -1778,14 +1931,18 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
         return 0U;
     }
 
-    const param_id_t dest = mod_destination_catalog_param_from_index(track, dest_index);
-    if (dest == MOD_DESTINATION_NONE)
+    uint8_t target = track;
+    param_id_t dest = PARAM_COUNT;
+    const mod_destination_address_t address =
+        mod_destination_catalog_address_from_index(track, dest_index);
+    if (address == MOD_DESTINATION_NONE)
     {
         mod_destination_copy_short_label("Off", out, out_len);
         return 1U;
     }
 
-    if (dest >= PARAM_COUNT)
+    if ((mod_destination_address_resolve(address, &target, &dest) == 0U)
+            || (dest >= PARAM_COUNT))
     {
         return 0U;
     }
@@ -1794,9 +1951,9 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     label = mod_destination_short_label_for_param(dest);
     if (label == NULL)
     {
-        if (mod_destination_stack_label_for_track_param(track, dest, &label) == 0U)
+        if (mod_destination_stack_label_for_track_param(target, dest, &label) == 0U)
         {
-            (void)param_prism_label_for_track_param(track, dest, &label);
+            (void)param_prism_label_for_track_param(target, dest, &label);
         }
     }
     if (label == NULL)
@@ -1808,6 +1965,19 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
         return 0U;
     }
 
+    entity_topology_descriptor_t owner;
+    if ((entity_topology_get(track, &owner) != 0U)
+            && (owner.role == ENTITY_ROLE_GROUP_MASTER)
+            && (out_len >= 5U))
+    {
+        out[0] = (target == BRICK_ENTITY_GROUP_MASTER_ID)
+            ? 'M' : (char)('1' + target - BRICK_ENTITY_FIRST_GROUP_CHILD_ID);
+        out[1] = ':';
+        out[2] = label[0];
+        out[3] = (label[1] != '\0') ? label[1] : '\0';
+        out[4] = '\0';
+        return 1U;
+    }
     mod_destination_copy_short_label(label, out, out_len);
     return 1U;
 }
