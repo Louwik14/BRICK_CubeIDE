@@ -1,16 +1,16 @@
-# GROUP child audio contract
+# GROUP audio contract
 
-Track 8 is the GROUP control and post-sum bus. Lanes 8..15 (UI 9..16)
-are eight independent sampler children. Each child owns a distinct sampler
-voice and mixer lane, including native mono/stereo format, filter, VCA,
-level, pan, inserts and sends.
+Entity 7 is the GROUP master and logical control owner. Entities 8..15 are
+eight independent children with canonical engine configurations. A child may
+use any supported child engine and keeps its native mono/stereo path, filter,
+VCA, level, pan, mute and sends.
 
-The mixer processes every child lane independently, then redirects its dry
-post-insert output into the dedicated GROUP bus. The GROUP bus is processed
-after all children and is the only GROUP dry route to MAIN/CUE. Parent mute
-and parent audio parameters therefore apply after summation; they never
-replace child state.
+The mixer processes each child independently. Child sends leave before the dry
+sum; child dry is redirected into the dedicated GROUP bus and cannot also reach
+MAIN. The post-sum bus applies the master filter and master MIX before routing
+to MAIN. Parent mute cuts the bus and every child's pre-sum sends without
+rewriting local child mute state.
 
-UI parameter pages resolve lane-owned values through `ui_get_active_lane()`.
-Main-track configuration and topology operations remain based on
-`ui_get_active_track()`.
+The physical bus is AUDIO-owned. CONTROL and UI use `entity_id` and derive
+roles, membership and ensemble ownership from `entity_topology`. MOD belongs
+to the master; child-owned ensembles retain the selected child identity.

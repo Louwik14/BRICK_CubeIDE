@@ -1,5 +1,10 @@
 # Contrat audio mono du sampler
 
+> Mise a jour GROUP: ce contrat est realise pour les GROUP children. Leur
+> moteur conserve le chemin mono natif ou stereo de sa configuration canonique
+> avant la redirection du dry vers le bus GROUP, sans renderer particulier.
+> La mention historique de "futur GROUP" ci-dessous est obsolete.
+
 ## État courant
 
 Le sampler conserve le format mono depuis le stockage jusqu'au dernier

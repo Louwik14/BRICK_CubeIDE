@@ -1,9 +1,19 @@
-# Z5 — Navigation et interaction UI
+# Z5 - Navigation et interaction UI
 
-La piste active est toujours un index `0..7`. STEP 1 à 8 sont ses seules touches de sélection. STEP 9 à 16 sont contextuels et ne créent aucune identité logique.
+La selection UI distingue la piste top-level active `0..7` de la lane
+selectionnee. En contexte GROUP, STEP 9 a 16 selectionnent les huit identities
+children `8..15`.
 
-Les ensembles de piste `CFG`, `ENV`, `TONE`, `MOD`, `MIX`, `PLAY` et `MIDI FX` projettent le moteur du slot actif. La page MIDI FX expose exactement `SLOT 1`, `SLOT 2` et `SLOT 3`; la quatrième case de l'infrastructure de footer reste non sélectionnable et n'est pas un slot MIDI FX. Les pages indisponibles sont filtrées par capacités, sans branches Play/Special.
+CFG, ENV, TONE, MIX et PLAY utilisent la lane selectionnee. MOD derive son
+owner de `entity_topology`: depuis un child il edite l'ensemble partage du
+GROUP master. Le master expose TONE, ENV, MOD et MIX, masque PLAY et ne propose
+jamais MIDI FX. Les pages indisponibles sont filtrees par les capacites runtime.
 
-`SHIFT + STEP 16` ouvre prioritairement la page Master globale, y compris sur Low-Cost, sans modifier la piste active. Cette page expose reverb, delay et compresseur; elle n'a ni séquence, mute, clipboard de piste ou Undo. Settings reste accessible par son bouton dédié.
+`SHIFT + STEP 16` ouvre la page Master globale sans modifier la selection.
+Cette page expose reverb, delay et compresseur; elle n'a ni sequence, mute,
+clipboard de piste ou Undo.
 
-Les clipboards Track/Page/Ensemble transportent des états de slots. Un collage MIDI FX applique `MODEL` avant ses paramètres dépendants afin de conserver un état normalisé ; les paramètres et modèles MIDI FX restent hors Undo/Redo, sans capturer le runtime. Un collage Track conserve exactement l'entrée External demandée et échoue en cas de conflit au lieu de déplacer ou normaliser un propriétaire.
+Les clipboards transportent des etats logiques, jamais le runtime. Copier le
+GROUP master capture le master et ses huit children; copier un child reste une
+operation locale. Un collage MIDI FX applique MODEL avant ses parametres. Un
+collage Track conserve l'entree External demandee et echoue en cas de conflit.
