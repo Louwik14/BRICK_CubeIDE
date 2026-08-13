@@ -57,34 +57,34 @@ typedef enum
 } persist_control_entity_role_t;
 
 static inline persist_control_entity_role_t persist_control_entity_role(
-    persist_control_entity_id_t entity)
+    uint8_t group_active, persist_control_entity_id_t entity)
 {
-    if (entity == PERSIST_CONTROL_GROUP_MASTER_ID)
+    if ((group_active != 0U) && (entity == PERSIST_CONTROL_GROUP_MASTER_ID))
     {
         return PERSIST_ENTITY_ROLE_GROUP_MASTER;
     }
-    return (entity >= PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)
+    return ((group_active != 0U) && (entity >= PERSIST_CONTROL_FIRST_GROUP_CHILD_ID))
         ? PERSIST_ENTITY_ROLE_GROUP_CHILD : PERSIST_ENTITY_ROLE_MAIN;
 }
 
 static inline uint8_t persist_control_entity_play_limit(
-    persist_control_entity_id_t entity)
+    uint8_t group_active, persist_control_entity_id_t entity)
 {
-    return (persist_control_entity_role(entity) == PERSIST_ENTITY_ROLE_GROUP_CHILD)
+    return (persist_control_entity_role(group_active, entity) == PERSIST_ENTITY_ROLE_GROUP_CHILD)
         ? PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT : PERSIST_CONTROL_PLAY_ITEM_COUNT;
 }
 
 static inline uint8_t persist_control_entity_allows_note_fx(
-    persist_control_entity_id_t entity)
+    uint8_t group_active, persist_control_entity_id_t entity)
 {
-    return (persist_control_entity_role(entity) != PERSIST_ENTITY_ROLE_GROUP_MASTER)
+    return (persist_control_entity_role(group_active, entity) != PERSIST_ENTITY_ROLE_GROUP_MASTER)
         ? 1U : 0U;
 }
 
 static inline uint8_t persist_control_entity_is_mod_owner(
-    persist_control_entity_id_t entity)
+    uint8_t group_active, persist_control_entity_id_t entity)
 {
-    return (entity == PERSIST_CONTROL_GROUP_MASTER_ID) ? 1U : 0U;
+    return ((group_active != 0U) && (entity == PERSIST_CONTROL_GROUP_MASTER_ID)) ? 1U : 0U;
 }
 
 /* Stable product keys. Their numeric values are explicit contracts and must
@@ -159,6 +159,12 @@ typedef enum
     PERSIST_MOD_SOURCE_SLEW1   = 0x534C5731UL, /* SLW1 */
     PERSIST_MOD_SOURCE_SLEW2   = 0x534C5732UL  /* SLW2 */
 } persist_control_mod_source_key_value_t;
+
+typedef enum { PERSIST_INPUT_NONE=0x4E4F4E45UL, PERSIST_INPUT_PHYSICAL_1=0x494E5031UL } persist_control_input_key_value_t;
+typedef enum { PERSIST_LFO_SHAPE_SINE=0x53494E45UL,PERSIST_LFO_SHAPE_TRIANGLE=0x54524920UL,PERSIST_LFO_SHAPE_SAW=0x53415720UL,PERSIST_LFO_SHAPE_SQUARE=0x53515220UL,PERSIST_LFO_SHAPE_RANDOM_SH=0x524E444DUL,PERSIST_LFO_SHAPE_SINE_POS=0x53494E50UL,PERSIST_LFO_SHAPE_TRIANGLE_POS=0x54524950UL,PERSIST_LFO_SHAPE_SQUARE_POS=0x53515250UL,PERSIST_LFO_SHAPE_REVERSE_SAW=0x52534157UL } persist_control_lfo_shape_key_value_t;
+typedef enum { PERSIST_LFO_TRIGGER_FREE=0x46524545UL,PERSIST_LFO_TRIGGER_TRIG=0x54524947UL,PERSIST_LFO_TRIGGER_HOLD=0x484F4C44UL,PERSIST_LFO_TRIGGER_ONE=0x4F4E4520UL,PERSIST_LFO_TRIGGER_POLY_TRIG=0x50545247UL,PERSIST_LFO_TRIGGER_POLY_HOLD=0x50484C44UL,PERSIST_LFO_TRIGGER_POLY_ONE=0x504F4E45UL } persist_control_lfo_trigger_key_value_t;
+typedef enum { PERSIST_RECORD_START_DEFAULT=0x44454620UL,PERSIST_RECORD_START_TRIGGER=0x54524947UL,PERSIST_RECORD_START_ROLL_QUARTER=0x52313420UL,PERSIST_RECORD_START_ROLL_HALF=0x52313220UL,PERSIST_RECORD_START_ROLL_BAR=0x52313120UL } persist_control_record_start_key_value_t;
+typedef enum { PERSIST_RECORD_LENGTH_OVERDUB=0x4F564552UL,PERSIST_RECORD_LENGTH_PATTERN=0x50415454UL } persist_control_record_length_key_value_t;
 
 /* Parameter keys use an explicit namespace plus a stable semantic code.  The
  * parameter catalog owns the eventual internal-ID <-> key translation. */

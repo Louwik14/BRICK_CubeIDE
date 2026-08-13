@@ -1,4 +1,5 @@
 #include "Storage/persistent_control_codec.h"
+#include "Storage/persistent_key_catalog.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -108,9 +109,8 @@ static uint8_t codec_value_kind_valid(persist_control_value_kind_t kind)
 
 static uint8_t codec_parameter_key_valid(uint32_t key)
 {
-    const uint8_t ns=(uint8_t)(key>>24U);
-    return (uint8_t)((ns>=PERSIST_PARAM_NAMESPACE_CONFIG)
-        &&(ns<=PERSIST_PARAM_NAMESPACE_GLOBAL)&&((key&0x00FFFFFFUL)!=0U));
+    param_id_t id=0U;
+    return persist_key_param_from_disk(key,&id);
 }
 
 static uint8_t codec_family_valid(uint32_t key)
@@ -170,7 +170,7 @@ static void codec_asset(codec_io_t *io, persist_control_asset_ref_t *a)
     if((io->mode==CODEC_READ)&&(a->path_length<PERSIST_CONTROL_ASSET_PATH_BYTES))a->path[a->path_length]='\0';
 }
 
-static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity)
+static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint8_t group_active)
 {
     persist_control_sequence_t *s=&entity->sequence;
     codec_u8(io,&s->length); codec_u8(io,&s->division); codec_u8(io,&s->quantization); codec_u8(io,&s->swing);
@@ -178,9 +178,9 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity)
     {
         persist_control_step_t *st=&s->steps[step];
         codec_u8(io,&st->trigger);codec_u8(io,&st->roll);codec_u8(io,&st->play_count);codec_u8(io,&st->lock_count);
-        if((st->play_count>persist_control_entity_play_limit(entity->entity_id))
+        if((st->play_count>persist_control_entity_play_limit(group_active,entity->entity_id))
                 ||(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT))
-        {io->result=(st->play_count>persist_control_entity_play_limit(entity->entity_id))?PERSIST_CODEC_INVALID_PLAY:PERSIST_CODEC_INVALID_PLOCK;return;}
+        {io->result=(st->play_count>persist_control_entity_play_limit(group_active,entity->entity_id))?PERSIST_CODEC_INVALID_PLAY:PERSIST_CODEC_INVALID_PLOCK;return;}
         for(uint8_t i=0U;i<st->play_count;++i)
         {
             persist_control_play_item_t *p=&st->play[i];
@@ -197,7 +197,7 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity)
     }
 }
 
-static void codec_entity(codec_io_t *io, persist_control_entity_t *e)
+static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t group_active)
 {
     codec_u8(io,&e->entity_id);codec_u32(io,&e->family);codec_u32(io,&e->type);
     codec_u8(io,&e->midi_channel);codec_u32(io,&e->midi_source_key);codec_u32(io,&e->input_key);
@@ -206,11 +206,11 @@ static void codec_entity(codec_io_t *io, persist_control_entity_t *e)
     for(uint16_t i=0U;i<e->parameter_count;++i)codec_parameter(io,&e->parameters[i]);
     codec_u8(io,&e->note_fx_count);
     if((e->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)
-            ||((persist_control_entity_allows_note_fx(e->entity_id)==0U)&&(e->note_fx_count!=0U)))
+            ||((persist_control_entity_allows_note_fx(group_active,e->entity_id)==0U)&&(e->note_fx_count!=0U)))
     {io->result=PERSIST_CODEC_INVALID_ENTITY;return;}
     for(uint8_t i=0U;i<e->note_fx_count;++i)
     { codec_u32(io,&e->note_fx[i].model_key);codec_bytes(io,e->note_fx[i].values,PERSIST_CONTROL_NOTE_FX_VALUE_COUNT); }
-    codec_sequence(io,e);
+    codec_sequence(io,e,group_active);
 }
 
 static void codec_modulation(codec_io_t *io, persist_control_modulation_t *m)
@@ -228,7 +228,8 @@ static void codec_pattern_body(codec_io_t *io, persist_control_pattern_t *p)
 {
     uint8_t entity_count=PERSIST_CONTROL_ENTITY_COUNT;codec_u8(io,&entity_count);
     if(entity_count!=PERSIST_CONTROL_ENTITY_COUNT){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}
-    for(uint8_t i=0U;i<PERSIST_CONTROL_ENTITY_COUNT;++i)codec_entity(io,&p->entities[i]);
+    const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
+    for(uint8_t i=0U;i<PERSIST_CONTROL_ENTITY_COUNT;++i)codec_entity(io,&p->entities[i],group_active);
     codec_modulation(io,&p->group_modulation);codec_u16(io,&p->route_count);
     if(p->route_count>(PERSIST_CONTROL_ENTITY_COUNT*PERSIST_CONTROL_ENTITY_COUNT)){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
     for(uint16_t i=0U;i<p->route_count;++i)
@@ -250,7 +251,7 @@ static void codec_macros(codec_io_t *io,persist_control_macros_t *m)
 static persist_codec_result_t codec_validate_parameters(const persist_control_parameter_t *p,uint16_t count)
 {
     for(uint16_t i=0U;i<count;++i)
-    { if((codec_parameter_key_valid(p[i].key)==0U)||(codec_value_kind_valid(p[i].kind)==0U))return PERSIST_CODEC_UNKNOWN_KEY;
+    { param_id_t id=0U;persist_param_descriptor_t d;if((persist_key_param_from_disk(p[i].key,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.persistent==0U)||(p[i].kind!=d.kind)||(codec_value_kind_valid(p[i].kind)==0U))return PERSIST_CODEC_UNKNOWN_KEY;
       if((p[i].kind==PERSIST_VALUE_FLOAT32)&&(!isfinite(p[i].value.f32)))return PERSIST_CODEC_UNKNOWN_KEY;
       for(uint16_t j=0U;j<i;++j)if(p[j].key==p[i].key)return PERSIST_CODEC_DUPLICATE; }
     return PERSIST_CODEC_OK;
@@ -259,17 +260,21 @@ static persist_codec_result_t codec_validate_parameters(const persist_control_pa
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *p)
 {
     if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;
+    const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
-    { const persist_control_entity_t *x=&p->entities[e];if((x->entity_id!=e)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(x->muted>1U))return PERSIST_CODEC_INVALID_ENTITY;
-      if((e==PERSIST_CONTROL_GROUP_MASTER_ID)&&(x->type!=PERSIST_TYPE_GROUP))return PERSIST_CODEC_INVALID_ENTITY;
+    { const persist_control_entity_t *x=&p->entities[e];uint8_t input=0U;if((x->entity_id!=e)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->muted>1U))return PERSIST_CODEC_INVALID_ENTITY;
+      if((group_active==0U)&&(e>=PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)&&((x->family!=PERSIST_FAMILY_OFF)||(x->type!=PERSIST_TYPE_NONE)))return PERSIST_CODEC_INVALID_ENTITY;
       if((x->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT)||(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT))return PERSIST_CODEC_CAPACITY_EXCEEDED;
-      if((persist_control_entity_allows_note_fx(e)==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
+      if((persist_control_entity_allows_note_fx(group_active,e)==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
+      if((x->sequence.length<1U)||(x->sequence.length>PERSIST_CONTROL_STEP_COUNT)||((x->sequence.division!=1U)&&(x->sequence.division!=2U)&&(x->sequence.division!=4U)&&(x->sequence.division!=8U))||(x->sequence.quantization>100U)||(x->sequence.swing>100U))return PERSIST_CODEC_INVALID_ENTITY;
       persist_codec_result_t r=codec_validate_parameters(x->parameters,x->parameter_count);if(r!=PERSIST_CODEC_OK)return r;
       for(uint8_t n=0U;n<x->note_fx_count;++n)if(codec_note_fx_valid(x->note_fx[n].model_key)==0U)return PERSIST_CODEC_UNKNOWN_KEY;
-      uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->play_count>persist_control_entity_play_limit(e))return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT)return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){if((codec_parameter_key_valid(st->locks[i].parameter)==0U)||(codec_value_kind_valid(st->locks[i].kind)==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>1024U)return PERSIST_CODEC_INVALID_PLOCK; }
-    if((p->route_count>(PERSIST_CONTROL_ENTITY_COUNT*PERSIST_CONTROL_ENTITY_COUNT))||(codec_clock_valid(p->globals.clock_source_key)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
+      uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->play_count>persist_control_entity_play_limit(group_active,e))return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT)return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id=0U;persist_param_descriptor_t d;if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(st->locks[i].kind!=d.kind)||(st->locks[i].flags!=0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>1024U)return PERSIST_CODEC_INVALID_PLOCK; }
+    uint8_t record_mode=0U;if((p->route_count>(PERSIST_CONTROL_ENTITY_COUNT*PERSIST_CONTROL_ENTITY_COUNT))||(codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
     for(uint16_t i=0U;i<p->route_count;++i){if((p->routes[i].kind!=PERSIST_ROUTE_LOOPER_SOURCE)||(p->routes[i].source>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].destination>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].enabled>1U))return PERSIST_CODEC_INVALID_ENTITY;for(uint16_t j=0U;j<i;++j)if((p->routes[j].kind==p->routes[i].kind)&&(p->routes[j].source==p->routes[i].source)&&(p->routes[j].destination==p->routes[i].destination))return PERSIST_CODEC_DUPLICATE;}
-    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const persist_control_mod_route_t *r=&p->group_modulation.routes[i];if((codec_mod_source_valid(r->source_key)==0U)||(r->destination_entity>=PERSIST_CONTROL_ENTITY_COUNT)||(r->destination_entity<PERSIST_CONTROL_GROUP_MASTER_ID)||(codec_parameter_key_valid(r->destination_parameter)==0U)||(r->enabled>1U)||!isfinite(r->depth))return PERSIST_CODEC_INVALID_MODULATION;}
+    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trigger;if((persist_key_lfo_shape_from_disk(p->group_modulation.lfos[i].shape_key,&shape)==0U)||(persist_key_lfo_trigger_from_disk(p->group_modulation.lfos[i].trigger_key,&trigger)==0U)||!isfinite(p->group_modulation.lfos[i].rate)||!isfinite(p->group_modulation.lfos[i].phase_offset))return PERSIST_CODEC_INVALID_MODULATION;}
+    for(uint8_t i=0U;i<2U;++i){uint8_t source;if((persist_key_mod_source_from_disk(p->group_modulation.multi[i].source_a_key,&source)==0U)||(persist_key_mod_source_from_disk(p->group_modulation.multi[i].source_b_key,&source)==0U)||(persist_key_mod_source_from_disk(p->group_modulation.slew[i].source_key,&source)==0U)||!isfinite(p->group_modulation.slew[i].amount))return PERSIST_CODEC_INVALID_MODULATION;}
+    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const persist_control_mod_route_t *r=&p->group_modulation.routes[i];uint8_t destination_entity;param_id_t destination;if((codec_mod_source_valid(r->source_key)==0U)||((group_active!=0U)&&(r->destination_entity<PERSIST_CONTROL_GROUP_MASTER_ID))||(persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,group_active,&destination_entity,&destination)==0U)||(r->enabled>1U)||!isfinite(r->depth))return PERSIST_CODEC_INVALID_MODULATION;}
     return codec_validate_parameters(p->globals.parameters,p->globals.parameter_count);
 }
 
