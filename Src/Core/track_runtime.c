@@ -146,11 +146,10 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 {
     uint8_t flags = 0U;
 
-    /* The GROUP parent is a control/sequencer identity, not an audio source.
-     * Child sampler lanes will receive their own runtime contexts later. */
+    /* GROUP has no note engine, but owns the post-sum filter/MIX bus. */
     if (type == TRACK_RUNTIME_TYPE_GROUP)
     {
-        return 0U;
+        return TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
 
     if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
@@ -372,6 +371,17 @@ static const param_id_t g_track_runtime_tone_slots_drum_md[] = {
     PARAM_DRUM_MD_P5, PARAM_DRUM_MD_P6, PARAM_DRUM_MD_P7, PARAM_DRUM_MD_P8
 };
 
+/* Deliberately minimal until the GROUP TONE product surface is completed. */
+static const param_id_t g_track_runtime_tone_slots_group[] = {
+    PARAM_FILTER_TYPE,
+    PARAM_FILTER_CUTOFF,
+    PARAM_FILTER_RESONANCE,
+    PARAM_FILTER_KEYTRK,
+    PARAM_FILTER_EQ_LOW,
+    PARAM_FILTER_EQ_MID,
+    PARAM_FILTER_EQ_HIGH
+};
+
 _Static_assert((sizeof(g_track_runtime_tone_slots_prism) / sizeof(g_track_runtime_tone_slots_prism[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "PRISM TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_stack) / sizeof(g_track_runtime_tone_slots_stack[0]))
@@ -394,6 +404,8 @@ _Static_assert((sizeof(g_track_runtime_tone_slots_drum_bd_analog) / sizeof(g_tra
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "DRUM BD TONE slots exceed compact capacity");
 _Static_assert((sizeof(g_track_runtime_tone_slots_drum_md) / sizeof(g_track_runtime_tone_slots_drum_md[0]))
                    <= SEQ_PARAM_TONE_SLOT_COUNT, "DRUM MD TONE slots exceed compact capacity");
+_Static_assert((sizeof(g_track_runtime_tone_slots_group) / sizeof(g_track_runtime_tone_slots_group[0]))
+                   <= SEQ_PARAM_TONE_SLOT_COUNT, "GROUP TONE slots exceed compact capacity");
 
 static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
                                                  const param_id_t **out_table,
@@ -466,6 +478,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_drum_md) / sizeof(g_track_runtime_tone_slots_drum_md[0]));
             return 1U;
 
+        case TRACK_RUNTIME_TYPE_GROUP:
+            *out_table = g_track_runtime_tone_slots_group;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_group) / sizeof(g_track_runtime_tone_slots_group[0]));
+            return 1U;
+
         default:
             return 0U;
     }
@@ -509,6 +526,17 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(
     uint16_t mask = 0U;
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_CFG);
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_SEQ);
+    if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+    {
+        if (bind_state == TRACK_RUNTIME_BIND_BOUND)
+        {
+            mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
+            mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ENV);
+            mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
+            mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
+        }
+        return mask;
+    }
     if ((topology_capabilities & (uint16_t)TRACK_CAPABILITY_KEYBOARD) != 0U)
     {
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD);
@@ -819,10 +847,6 @@ uint8_t track_runtime_is_audio_routable_ctx(const track_runtime_ctx_t *ctx)
     {
         return 0U;
     }
-    if (snapshot.type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
-    {
-        return 0U;
-    }
     if ((track_runtime_family_t)snapshot.family
             == TRACK_RUNTIME_FAMILY_EXTERNAL)
     {
@@ -900,8 +924,7 @@ uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track
         return 0U;
     }
 
-    if ((track_runtime_is_audio_routable(track) == 0U)
-            && (snapshot.type != (uint8_t)TRACK_RUNTIME_TYPE_GROUP))
+    if (track_runtime_is_audio_routable(track) == 0U)
     {
         return 0U;
     }
@@ -1511,6 +1534,37 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     if (ctx == 0)
     {
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+    }
+
+    if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+    {
+        if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+        {
+            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        }
+        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+        {
+            return TRACK_RUNTIME_PARAM_ALLOWED;
+        }
+        switch (param)
+        {
+            case PARAM_FILTER_TYPE:
+            case PARAM_FILTER_CUTOFF:
+            case PARAM_FILTER_RESONANCE:
+            case PARAM_FILTER_KEYTRK:
+            case PARAM_FILTER_EQ_LOW:
+            case PARAM_FILTER_EQ_MID:
+            case PARAM_FILTER_EQ_HIGH:
+            case PARAM_ENV3_ATTACK:
+            case PARAM_ENV3_DECAY:
+            case PARAM_ENV3_SUSTAIN:
+            case PARAM_ENV3_RELEASE:
+            case PARAM_ENV_RETRIG_MOD:
+                return TRACK_RUNTIME_PARAM_ALLOWED;
+            default:
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        }
     }
 
     switch (rule.resource)

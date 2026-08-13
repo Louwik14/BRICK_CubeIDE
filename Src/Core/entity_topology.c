@@ -86,10 +86,17 @@ uint16_t entity_topology_get_capabilities(const entity_topology_descriptor_t *de
         return 0U;
     }
 
-    uint16_t capabilities = (uint16_t)(TRACK_CAPABILITY_MIDI
+    uint16_t capabilities = (uint16_t)(TRACK_CAPABILITY_MUTE
+            | TRACK_CAPABILITY_AUTOMATION);
+
+    if (descriptor->role == ENTITY_ROLE_GROUP_MASTER)
+    {
+        return (uint16_t)(capabilities | TRACK_CAPABILITY_AUDIO);
+    }
+
+    capabilities |= (uint16_t)(TRACK_CAPABILITY_MIDI
             | TRACK_CAPABILITY_KEYBOARD
-            | TRACK_CAPABILITY_MIDI_FX
-            | TRACK_CAPABILITY_MUTE);
+            | TRACK_CAPABILITY_MIDI_FX);
 
     if (entity_topology_can_emit_notes(descriptor) != 0U)
     {

@@ -213,6 +213,7 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
                                                         seq_param_slot_t param_slot);
 static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track,
                                                          track_runtime_type_t *out_type);
+static uint8_t seq_param_iface_is_group_master(seq_track_id_t track);
 static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
     return ((uint32_t)track * SEQ_PARAM_RUNTIME_SLOT_COUNT)
@@ -411,7 +412,9 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
 }
 
-static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
+static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
+                                                        uint8_t set_id,
+                                                        param_id_t param)
 {
     if ((set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
             && (param >= PARAM_FM_OPERATOR_FIRST)
@@ -434,6 +437,12 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         return 0U;
     }
 
+    if ((seq_param_iface_is_group_master(track) != 0U)
+            && (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+            && (rule.resource == TRACK_RUNTIME_RESOURCE_FILTER))
+    {
+        return 1U;
+    }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV) && (set_id != (uint8_t)SEQ_PLOCK_SET_ENV))
     {
         return 0U;
@@ -473,11 +482,6 @@ static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, t
         return 0U;
     }
 
-    if (entity.role == ENTITY_ROLE_GROUP_MASTER)
-    {
-        return 0U;
-    }
-
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
             || (descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND))
@@ -504,7 +508,7 @@ static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
         return 0U;
     }
 
-    if (seq_param_iface_param_matches_set_domain(set_id, param) == 0U)
+    if (seq_param_iface_param_matches_set_domain(track, set_id, param) == 0U)
     {
         return 0U;
     }
@@ -520,6 +524,18 @@ static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
             || (seq_param_iface_is_slot_addressable(track, set_id, param_slot) == 0U))
     {
         return 0U;
+    }
+    if (seq_param_iface_is_group_master(track) != 0U)
+    {
+        param_id_t param = PARAM_COUNT;
+        if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+        {
+            return 0U;
+        }
+        const track_runtime_param_status_t status =
+            track_runtime_get_effective_param_status(track, param);
+        return (uint8_t)((status == TRACK_RUNTIME_PARAM_ALLOWED)
+                || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED));
     }
     return 1U;
 }
@@ -554,10 +570,6 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
         {
             return 0U;
         }
-    }
-    if (seq_param_iface_is_group_master(track) != 0U)
-    {
-        return 1U;
     }
     if ((allow_refused_euclid_param == 0U)
             && (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX))
@@ -677,7 +689,7 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
         {
             return 0U;
         }
-        if ((tone_param >= PARAM_COUNT) || (seq_param_iface_param_matches_set_domain(set_id, tone_param) == 0U))
+        if ((tone_param >= PARAM_COUNT) || (seq_param_iface_param_matches_set_domain(track, set_id, tone_param) == 0U))
         {
             return 0U;
         }
@@ -689,7 +701,7 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
     {
         const param_id_t operator_param = (param_id_t)(PARAM_FM_OPERATOR_FIRST + param_slot);
         if ((param_slot >= SEQ_PARAM_FM_OPERATOR_SLOT_COUNT)
-                || (seq_param_iface_param_matches_set_domain(set_id, operator_param) == 0U))
+                || (seq_param_iface_param_matches_set_domain(track, set_id, operator_param) == 0U))
         {
             return 0U;
         }
@@ -709,7 +721,7 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
 
     const param_id_t param = inverse.ids[param_slot];
 
-    if (seq_param_iface_param_matches_set_domain(set_id, param) == 0U)
+    if (seq_param_iface_param_matches_set_domain(track, set_id, param) == 0U)
     {
         return 0U;
     }
@@ -729,7 +741,7 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
         return 0U;
     }
 
-    if (seq_param_iface_param_matches_set_domain(set_id, param_id) == 0U)
+    if (seq_param_iface_param_matches_set_domain(track, set_id, param_id) == 0U)
     {
         return 0U;
     }
@@ -832,7 +844,13 @@ uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
         return 0U;
     }
 
-    return seq_param_iface_param_matches_set_domain(set_id, param);
+    if ((runtime_type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+            && (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+            && (track_runtime_get_param_rule(param).resource == TRACK_RUNTIME_RESOURCE_FILTER))
+    {
+        return 1U;
+    }
+    return seq_param_iface_param_matches_set_domain(0U, set_id, param);
 }
 
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
@@ -1045,13 +1063,6 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         seq_param_set_base_valid(track, set_id, param_slot, 1U);
     }
 
-    if (seq_param_iface_is_group_master(track) != 0U)
-    {
-        state->runtime_value = value16;
-        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
-        return 1U;
-    }
-
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
         uint8_t slot = 0U, fx_param = 0U;
@@ -1103,15 +1114,6 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
-    }
-
-    if (seq_param_iface_is_group_master(track) != 0U)
-    {
-        state->base_value = base_value16;
-        state->runtime_value = base_value16;
-        seq_param_set_base_valid(track, set_id, param_slot, 1U);
-        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
-        return 1U;
     }
 
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)

@@ -120,8 +120,7 @@ uint8_t audio_note_engine_adapter_ctx_is_audio_routable(
 {
     return (uint8_t)((ctx != NULL)
         && (ctx->audio_binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
-        && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
-        && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_GROUP));
+        && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS));
 }
 
 uint8_t audio_note_engine_adapter_ctx_supports_vca_gate(
@@ -451,8 +450,13 @@ void audio_note_engine_adapter_install_intent(
     if ((family == TRACK_RUNTIME_FAMILY_OFF)
             || (family == TRACK_RUNTIME_FAMILY_OTHER))
         installed.bind_reason = TRACK_RUNTIME_BIND_REASON_TRACK_OFF;
-    else if ((family == TRACK_RUNTIME_FAMILY_MIDI)
-            || (type == TRACK_RUNTIME_TYPE_GROUP))
+    else if (type == TRACK_RUNTIME_TYPE_GROUP)
+    {
+        installed.mix_track_id = MIXER_GROUP_BUS_TRACK;
+        installed.bind_state = TRACK_RUNTIME_BIND_BOUND;
+        installed.bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
+    }
+    else if (family == TRACK_RUNTIME_FAMILY_MIDI)
     {
         installed.bind_state = TRACK_RUNTIME_BIND_BOUND;
         installed.bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;

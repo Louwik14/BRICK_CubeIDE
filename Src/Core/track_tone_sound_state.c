@@ -8,7 +8,7 @@
 #include "Seq/seq_types.h"
 #include "Sampler/sample_global_pool.h"
 
-SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_COUNT];
+SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_LANE_CAPACITY];
 
 #define TRACK_TONE_PRISM_DEFAULT_EDIT               0.0f
 #define TRACK_TONE_PRISM_DEFAULT_FINE               0.5f
@@ -194,7 +194,7 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
 
 void track_tone_sound_state_init(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         track_tone_sound_state_make_default(&g_track_tone_sound_state[track]);
     }
@@ -202,7 +202,7 @@ void track_tone_sound_state_init(void)
 
 track_tone_sound_state_t *track_tone_sound_state_get(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return NULL;
     }

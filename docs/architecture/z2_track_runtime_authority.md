@@ -13,3 +13,5 @@ Une mutation suit `validation -> commit canonique -> refresh runtime`. Les opér
 Looper est le moteur `Sampler / Looper`, avec état et stockage attachés au même index. External conserve l'identité exacte de son entrée physique; `track_input_ownership` refuse tout second propriétaire. L'allocation mixer reste séparée de l'entrée physique.
 
 Les révisions et la configuration MIDI suivent les seize identités. Les formats bulk, snapshots et persistence restent volontairement top-level tant que leur migration GROUP complète n'est pas réalisée au chantier 5; ils préservent la configuration canonique déjà portée par les children.
+
+Le GROUP master est lié logiquement au bus post-somme AUDIO réservé, sans moteur ni capacité d'émission de notes. Sa politique de ressources expose CFG, SEQ, un TONE minimal de filtre, ENV3 comme source de modulation, MOD et MIX. PLAY reste stocké mais masqué dans l'UI; Keyboard et MIDI FX sont absents. Les paramètres d'enveloppe de filtre et de VCA sont refusés au master : il ne possède pas d'enveloppe de filtre dédiée et ses ENV ne pilotent pas directement l'amplitude.
