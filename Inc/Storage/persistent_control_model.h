@@ -84,7 +84,9 @@ static inline uint8_t persist_control_entity_allows_note_fx(
 static inline uint8_t persist_control_entity_is_mod_owner(
     uint8_t group_active, persist_control_entity_id_t entity)
 {
-    return ((group_active != 0U) && (entity == PERSIST_CONTROL_GROUP_MASTER_ID)) ? 1U : 0U;
+    if (entity >= PERSIST_CONTROL_ENTITY_COUNT) return 0U;
+    if ((group_active != 0U) && (entity >= PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)) return 0U;
+    return 1U;
 }
 
 /* Stable product keys. Their numeric values are explicit contracts and must
@@ -231,7 +233,7 @@ typedef struct
     uint8_t velocity;
     uint8_t length;
     int8_t microtiming;
-    uint8_t present;
+    uint8_t present_mask;
 } persist_control_play_item_t;
 
 typedef struct
@@ -293,6 +295,7 @@ typedef struct
     float decay;
     float sustain;
     float release;
+    uint8_t retrigger_hard;
 } persist_control_mod_envelope_t;
 
 typedef struct
@@ -327,6 +330,8 @@ typedef struct
     persist_control_parameter_t parameters[PERSIST_CONTROL_ENTITY_PARAM_COUNT];
     uint8_t note_fx_count;
     persist_control_note_fx_t note_fx[PERSIST_CONTROL_NOTE_FX_COUNT];
+    uint8_t modulation_present;
+    persist_control_modulation_t modulation;
     persist_control_sequence_t sequence;
 } persist_control_entity_t;
 
@@ -377,7 +382,6 @@ typedef struct
 typedef struct
 {
     persist_control_entity_t entities[PERSIST_CONTROL_ENTITY_COUNT];
-    persist_control_modulation_t group_modulation;
     uint16_t route_count;
     persist_control_route_t routes[PERSIST_CONTROL_ENTITY_COUNT * PERSIST_CONTROL_ENTITY_COUNT];
     persist_control_globals_t globals;

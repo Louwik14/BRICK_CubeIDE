@@ -57,6 +57,12 @@ uint8_t mod_matrix_get_selected_slot_source(uint8_t track, float *out_value);
 uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value);
+uint8_t mod_matrix_set_slot_state(uint8_t track,
+                                  uint8_t slot,
+                                  uint8_t source,
+                                  mod_destination_address_t destination,
+                                  float depth,
+                                  uint8_t enabled);
 uint8_t mod_matrix_get_slot_destination_index(uint8_t track, uint8_t slot, float *out_value);
 uint8_t mod_matrix_get_slot_depth(uint8_t track, uint8_t slot, float *out_value);
 uint8_t mod_matrix_get_slot_source(uint8_t track, uint8_t slot, float *out_value);

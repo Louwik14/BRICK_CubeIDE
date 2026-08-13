@@ -110,6 +110,13 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     const track_mute_kind_t kind = track_mute_get_kind(track);
     if ((kind == TRACK_MUTE_KIND_NONE) || (track_mute_is_available(track) == 0U))
     {
+        track_sound_state_t *const inactive = track_sound_state_get(track);
+        if ((inactive != NULL) && (muted == 0U))
+        {
+            inactive->mix_mute = 0.0f;
+            param_registry_runtime_cache_set(track, PARAM_MIX_MUTE, 0.0f);
+            return 1U;
+        }
         return 0U;
     }
 

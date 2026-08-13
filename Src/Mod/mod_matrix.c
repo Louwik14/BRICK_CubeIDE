@@ -1000,6 +1000,36 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
     return 1U;
 }
 
+uint8_t mod_matrix_set_slot_state(uint8_t track,
+                                  uint8_t slot,
+                                  uint8_t source,
+                                  mod_destination_address_t destination,
+                                  float depth,
+                                  uint8_t enabled)
+{
+    brick_entity_id_t owner = track;
+    if ((source >= MOD_MATRIX_SOURCE_COUNT)
+            || (entity_topology_mod_owner(track, &owner) == 0U)
+            || ((destination != MOD_DESTINATION_NONE)
+                && (mod_destination_catalog_index_from_address(owner, destination) == UINT16_MAX)))
+    {
+        return 0U;
+    }
+    track_mod_matrix_slot_t *const state = mod_matrix_track_slot_mut(track, slot);
+    if (state == NULL)
+    {
+        return 0U;
+    }
+    state->source = source;
+    state->destination = destination;
+    state->depth = mod_matrix_clampf(depth, -127.0f, 127.0f);
+    state->enabled = ((enabled != 0U)
+            && (source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
+            && (destination != MOD_DESTINATION_NONE)) ? 1U : 0U;
+    mod_matrix_rebuild_route_cache_track(owner);
+    return 1U;
+}
+
 uint8_t mod_matrix_get_slot_destination_index(uint8_t track, uint8_t slot, float *out_value)
 {
     brick_entity_id_t owner = track;
