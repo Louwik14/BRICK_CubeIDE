@@ -2,7 +2,10 @@
 
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_event.h"
+#include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_mod_matrix.h"
 #include "Param/param_registry.h"
+#include "Param/param_registry_runtime_state.h"
 #include "memory_layout.h"
 
 typedef struct
@@ -19,7 +22,6 @@ typedef struct
 
 SEQ_STATE_D2 static live_parameter_audio_runtime_slot_t
     g_live_parameter_audio_runtime_slots[LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY];
-SEQ_STATE_D2 static live_parameter_audio_runtime_diag_t g_live_parameter_audio_runtime_diag;
 
 static float live_parameter_audio_runtime_clamp(param_id_t parameter, float value)
 {
@@ -77,16 +79,39 @@ static uint8_t live_parameter_audio_runtime_apply_target(
     {
         if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
         {
-            return param_registry_apply_track_value_runtime_temp(event->parameter_id,
-                                                                  event->track,
-                                                                  value);
+            return param_registry_apply_track_value_runtime_temp_audio(
+                event->parameter_id, event->track, value);
         }
-        return param_registry_apply_track_value_audio(event->parameter_id,
-                                                       event->track,
-                                                       value);
+        if ((event->parameter_id == PARAM_CFG_POLY_VOICES)
+                || (event->parameter_id == PARAM_CFG_POLY_SPREAD))
+        {
+            float voices = 1.0f;
+            float spread = 0.0f;
+            (void)param_registry_runtime_cache_get(
+                event->track, PARAM_CFG_POLY_VOICES, &voices);
+            (void)param_registry_runtime_cache_get(
+                event->track, PARAM_CFG_POLY_SPREAD, &spread);
+            if (event->parameter_id == PARAM_CFG_POLY_VOICES)
+                voices = value;
+            else
+                spread = value;
+            const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
+                event->track, (uint8_t)voices, spread);
+            if (applied != 0U)
+                param_registry_runtime_commit_authoritative_write(
+                    event->track, event->parameter_id, value, 1U);
+            return applied;
+        }
+        const uint8_t applied = param_registry_apply_track_value_audio(
+            event->parameter_id, event->track, value);
+        if (applied != 0U)
+            audio_mod_matrix_rebuild_track(event->track);
+        return applied;
     }
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
     {
+        if (event->parameter_id == PARAM_MASTER_GAIN)
+            return audio_note_engine_adapter_set_master(value);
         return param_registry_apply_global_value_rt_fast(event->parameter_id, value);
     }
     return 0U;
@@ -102,10 +127,7 @@ static uint8_t live_parameter_audio_runtime_apply_event(
     live_parameter_audio_runtime_slot_t *const slot =
         live_parameter_audio_runtime_find_slot(event);
     if (slot == 0)
-    {
-        g_live_parameter_audio_runtime_diag.slot_drop_count++;
         return 0U;
-    }
 
     const uint8_t new_slot = (slot->valid == 0U) ? 1U : 0U;
     if ((new_slot != 0U)
@@ -117,20 +139,6 @@ static uint8_t live_parameter_audio_runtime_apply_event(
         slot->slot = event->slot;
         slot->parameter_id = event->parameter_id;
         slot->last_sample_time = now;
-        if (new_slot != 0U)
-        {
-            g_live_parameter_audio_runtime_diag.active_slots++;
-            if (g_live_parameter_audio_runtime_diag.active_slots
-                    > g_live_parameter_audio_runtime_diag.high_water)
-            {
-                g_live_parameter_audio_runtime_diag.high_water =
-                    g_live_parameter_audio_runtime_diag.active_slots;
-            }
-        }
-    }
-    else
-    {
-        g_live_parameter_audio_runtime_diag.retarget_count++;
     }
 
     const float target = live_parameter_audio_runtime_clamp(
@@ -142,12 +150,7 @@ static uint8_t live_parameter_audio_runtime_apply_event(
     slot->last_sample_time = now;
 
     if (live_parameter_audio_runtime_apply_target(event, target) == 0U)
-    {
-        g_live_parameter_audio_runtime_diag.rejected_count++;
         return 0U;
-    }
-
-    g_live_parameter_audio_runtime_diag.applied_count++;
     return 1U;
 }
 
@@ -158,8 +161,6 @@ void live_parameter_audio_runtime_init(void)
         g_live_parameter_audio_runtime_slots[i] =
             (live_parameter_audio_runtime_slot_t){ 0 };
     }
-    g_live_parameter_audio_runtime_diag =
-        (live_parameter_audio_runtime_diag_t){ 0 };
 }
 
 uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
@@ -181,12 +182,4 @@ void live_parameter_audio_runtime_process(uint64_t block_start,
 {
     (void)block_start;
     (void)frames;
-}
-
-void live_parameter_audio_runtime_get_diag(
-    live_parameter_audio_runtime_diag_t *out_diag)
-{
-    if (out_diag == 0)
-        return;
-    *out_diag = g_live_parameter_audio_runtime_diag;
 }

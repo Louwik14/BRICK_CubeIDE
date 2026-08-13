@@ -1,10 +1,10 @@
 /*
  * Module: seq_runtime
- * Role: Orchestrateur principal du séquenceur en exécution.
+ * Role: Orchestrateur principal du sï¿½quenceur en exï¿½cution.
  * Responsibilities: cycle start/stop/process, gestion playhead/ticks,
  * coordination clock bridge, transport FSM, scheduler, boundary engine
  * et facade live-rec.
- * Integration: point d'intégration central des modules Src/Seq avec MIDI et engine_tasklet.
+ * Integration: point d'intï¿½gration central des modules Src/Seq avec MIDI et engine_tasklet.
  */
 #include "Seq/seq_runtime.h"
 
@@ -14,14 +14,17 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/metronome_runtime.h"
+#include "Audio/control_audio_queue.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Core/engine_tasklet.h"
+#include "Core/live_clock.h"
 #include "Core/track_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_output_guard.h"
@@ -49,7 +52,6 @@ SEQ_STATE_D2 static struct
 } g_seq_runtime_control;
 static volatile uint32_t g_seq_internal_time_tick;
 SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_LANE_CAPACITY];
-SEQ_STATE_D2 static seq_runtime_diag_t g_seq_runtime_diag;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 typedef struct
@@ -68,9 +70,11 @@ static seq_runtime_live_rec_event_t
 static volatile uint8_t g_seq_runtime_live_rec_head;
 static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
-static uint32_t g_seq_runtime_live_rec_drop_count;
+static uint64_t g_seq_runtime_control_sample_cursor;
 static uint8_t g_seq_runtime_trigger_start_bypass;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
+static void seq_runtime_control_apply_event(
+    const seq_runtime_control_event_t *event);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
 static uint64_t seq_runtime_get_now_sample(void);
@@ -83,8 +87,8 @@ static void seq_runtime_send_transport_realtime(uint8_t status);
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void);
 static uint8_t seq_runtime_clamp_track_div(uint8_t div);
 static uint8_t seq_runtime_clamp_percent(uint8_t value);
-static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *scheduler_event,
-                                         const seq_runtime_audio_event_t *event);
+static void seq_runtime_copy_control_event(seq_play_scheduler_event_t *scheduler_event,
+                                         const seq_runtime_control_event_t *event);
 static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
@@ -113,8 +117,8 @@ static uint8_t seq_runtime_clamp_percent(uint8_t value)
     return (value > 100U) ? 100U : value;
 }
 
-static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *scheduler_event,
-                                         const seq_runtime_audio_event_t *event)
+static void seq_runtime_copy_control_event(seq_play_scheduler_event_t *scheduler_event,
+                                         const seq_runtime_control_event_t *event)
 {
     if ((scheduler_event == NULL) || (event == NULL))
     {
@@ -169,8 +173,8 @@ static void seq_runtime_send_transport_start(void)
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_running(false);
     seq_runtime_send_transport_realtime(0xFAU);
-    seq_runtime_exec_set_midi_clock_audio_enabled(1U);
-    seq_runtime_exec_rebase_midi_clock_audio(seq_runtime_exec_get_audio_timeline_sample());
+    seq_runtime_exec_set_midi_clock_enabled(1U);
+    seq_runtime_exec_rebase_midi_clock(seq_runtime_get_now_sample());
 }
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
@@ -190,7 +194,9 @@ static uint32_t seq_runtime_get_now_tick(void)
 
 static uint64_t seq_runtime_get_now_sample(void)
 {
-    return seq_runtime_exec_get_audio_timeline_sample();
+    uint64_t sample = 0U;
+    (void)live_clock_read_audio_sample(&sample);
+    return sample;
 }
 
 static uint32_t seq_runtime_enter_critical(void)
@@ -211,9 +217,7 @@ static void seq_runtime_exit_critical(uint32_t primask)
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.active != 0U);
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
@@ -278,11 +282,9 @@ void seq_runtime_init(void)
     g_seq_runtime_control.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_internal_time_tick = 0U;
     seq_runtime_exec_set_external_step_pulses_pending(0U);
-    g_seq_runtime_diag = (seq_runtime_diag_t){0};
     g_seq_runtime_live_rec_head = 0U;
     g_seq_runtime_live_rec_tail = 0U;
     g_seq_runtime_live_rec_count = 0U;
-    g_seq_runtime_live_rec_drop_count = 0U;
     memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
     seq_play_scheduler_init();
@@ -292,9 +294,9 @@ void seq_runtime_init(void)
     seq_clock_bridge_init(&g_seq_clock_bridge,
                           &g_seq_runtime,
                           SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI);
-    seq_runtime_exec_reset_audio_timeline(0U);
+    seq_runtime_exec_reset_sample_timeline(0U);
     g_seq_runtime.step_sample_q16 = 0U;
-    seq_runtime_exec_set_midi_clock_audio_enabled(0U);
+    seq_runtime_exec_set_midi_clock_enabled(0U);
     seq_runtime_exec_set_midi_clock_period_q16(1U);
     seq_runtime_update_samples_per_step_from_tempo();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
@@ -348,7 +350,7 @@ void seq_runtime_start(void)
                                                      &g_seq_transport_fsm,
                                                      &g_seq_clock_bridge,
                                                      seq_runtime_get_now_tick(),
-                                                     (uint64_t)seq_runtime_exec_get_audio_timeline_sample() << 16);
+                                                     (uint64_t)seq_runtime_get_now_sample() << 16);
     }
     seq_runtime_exit_critical(primask);
 
@@ -420,6 +422,51 @@ static void seq_runtime_process_core(void)
     /* Orchestration seam: clock bridge only supervises cadence policy here; transport state is checked separately. */
     seq_clock_bridge_on_process(&g_seq_clock_bridge, seq_runtime_get_clock_source_internal(), now_tick);
 
+    const uint64_t audio_sample = seq_runtime_get_now_sample();
+    if (g_seq_runtime_control_sample_cursor > audio_sample)
+        g_seq_runtime_control_sample_cursor = audio_sample;
+    while (g_seq_runtime_control_sample_cursor < audio_sample)
+    {
+        const uint64_t remaining = audio_sample - g_seq_runtime_control_sample_cursor;
+        const uint16_t frames = (remaining > UINT16_MAX)
+            ? UINT16_MAX : (uint16_t)remaining;
+        seq_runtime_control_event_t events[128];
+        note_fx_pipeline_begin_control_window(frames);
+        seq_play_scheduler_control_begin_window(SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA);
+        const uint16_t count = seq_runtime_exec_collect_block_events(
+            &g_seq_runtime, &g_seq_transport_fsm, &g_seq_clock_bridge,
+            g_seq_track_loop_generation,
+            events, 128U, frames, seq_runtime_get_clock_source_internal(),
+            g_seq_runtime.running);
+        g_seq_runtime_control_sample_cursor += frames;
+
+        for (uint16_t i = 0U; i < count; ++i)
+        {
+            const seq_runtime_control_event_t *const event = &events[i];
+            if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                    || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
+            {
+                const control_audio_event_t audio_event = {
+                    .due_sample = event->sample_abs,
+                    .entity_id = (brick_entity_id_t)event->track,
+                    .kind = (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                        ? (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE
+                        : (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK,
+                    .flags = event->velocity
+                };
+                (void)control_audio_queue_publish(&audio_event);
+            }
+            else
+            {
+                seq_runtime_control_apply_event(event);
+            }
+        }
+        note_fx_pipeline_process(g_seq_runtime_control_sample_cursor - frames,
+                                 frames, g_seq_runtime.samples_per_step_q16);
+        note_fx_pipeline_end_control_window();
+        seq_play_scheduler_control_end_window();
+    }
+
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
     {
         g_seq_runtime.last_tick_count = now_tick;
@@ -456,42 +503,19 @@ void seq_runtime_time_adapter_process_internal_from_irq(void)
     if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
     {
         g_seq_internal_time_tick++;
-        g_seq_runtime_diag.internal_irq_tick_count++;
     }
 }
 
-uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
-                                                uint16_t max_events,
-                                                uint16_t block_frames)
-{
-    if ((out_events == NULL) || (max_events == 0U))
-    {
-        return 0U;
-    }
-
-    /* Audio-block seam: collect via execution owner, then hand events to audio. */
-    return seq_runtime_exec_collect_block_events(&g_seq_runtime,
-                                                 &g_seq_transport_fsm,
-                                                 &g_seq_clock_bridge,
-                                                 &g_seq_runtime_diag,
-                                                 g_seq_track_loop_generation,
-                                                 out_events,
-                                                 max_events,
-                                                 block_frames,
-                                                 seq_runtime_get_clock_source_internal(),
-                                                 g_seq_runtime.running);
-}
-
-void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
+static void seq_runtime_control_apply_event(const seq_runtime_control_event_t *event)
 {
     if (event == NULL)
     {
         return;
     }
     /* Audio apply seam: runtime forwards collected events to scheduler/engines only. */
-    seq_play_scheduler_audio_event_t scheduler_event;
-    seq_runtime_copy_audio_event(&scheduler_event, event);
-    seq_play_scheduler_audio_apply_event(&scheduler_event);
+    seq_play_scheduler_event_t scheduler_event;
+    seq_runtime_copy_control_event(&scheduler_event, event);
+    seq_play_scheduler_control_apply_event(&scheduler_event);
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
@@ -517,7 +541,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
         /* Execution seam: external clock disables audio clock TX and pending step pulses. */
-        seq_runtime_exec_set_midi_clock_audio_enabled(0U);
+        seq_runtime_exec_set_midi_clock_enabled(0U);
         midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_SLAVE);
     }
@@ -527,7 +551,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
         /* Execution seam: rebase audio clock timeline after clock-source policy changes. */
-        seq_runtime_exec_rebase_midi_clock_audio(seq_runtime_exec_get_audio_timeline_sample());
+        seq_runtime_exec_rebase_midi_clock(seq_runtime_get_now_sample());
     }
     seq_runtime_exit_critical(primask);
 }
@@ -566,31 +590,6 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
     const uint32_t primask = seq_runtime_enter_critical();
     /* Execution seam: external MIDI clock pulses are converted to pending step work by seq_runtime_exec. */
     seq_runtime_exec_increment_external_step_pulses_pending();
-    seq_runtime_exit_critical(primask);
-}
-
-void seq_runtime_diag_reset(void)
-{
-    const uint32_t primask = seq_runtime_enter_critical();
-    g_seq_runtime_diag = (seq_runtime_diag_t){0};
-    g_seq_runtime_live_rec_head = 0U;
-    g_seq_runtime_live_rec_tail = 0U;
-    g_seq_runtime_live_rec_count = 0U;
-    g_seq_runtime_live_rec_drop_count = 0U;
-    memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
-    seq_runtime_exit_critical(primask);
-}
-
-void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag)
-{
-    if (out_diag == NULL)
-    {
-        return;
-    }
-
-    const uint32_t primask = seq_runtime_enter_critical();
-    g_seq_runtime_diag.live_rec_event_drop_count = g_seq_runtime_live_rec_drop_count;
-    *out_diag = g_seq_runtime_diag;
     seq_runtime_exit_critical(primask);
 }
 
@@ -637,21 +636,21 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
          * Without this rebase, step_sample_q16 can remain at 0 while
          * audio_timeline_sample is monotonic, causing boundary misalignment.
          */
-        g_seq_runtime.step_sample_q16 = (uint64_t)seq_runtime_exec_get_audio_timeline_sample() << 16;
+        g_seq_runtime.step_sample_q16 = (uint64_t)seq_runtime_get_now_sample() << 16;
         /* Boundary advance is driven from the execution block path. */
     }
 
     if (seq_clock_bridge_is_external_source(source) != 0U)
     {
-        seq_runtime_exec_set_midi_clock_audio_enabled(0U);
+        seq_runtime_exec_set_midi_clock_enabled(0U);
         midi_clock_set_running(false);
         return;
     }
 
     midi_clock_set_running(false);
     seq_runtime_send_transport_realtime(0xFBU);
-    seq_runtime_exec_set_midi_clock_audio_enabled(1U);
-    seq_runtime_exec_rebase_midi_clock_audio(seq_runtime_exec_get_audio_timeline_sample());
+    seq_runtime_exec_set_midi_clock_enabled(1U);
+    seq_runtime_exec_rebase_midi_clock(seq_runtime_get_now_sample());
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
@@ -1077,7 +1076,6 @@ uint8_t seq_runtime_live_rec_submit_effective(seq_live_rec_source_t source,
 
     if (g_seq_runtime_live_rec_count >= SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY)
     {
-        ++g_seq_runtime_live_rec_drop_count;
         seq_runtime_exit_critical(primask);
         return 0U;
     }
@@ -1195,5 +1193,3 @@ void seq_runtime_on_track_pattern_change(uint8_t track)
     /* Post-commit notification: pattern changes are forwarded to the scheduler only when running. */
     seq_play_scheduler_notify_track_pattern_change(track);
 }
-
-

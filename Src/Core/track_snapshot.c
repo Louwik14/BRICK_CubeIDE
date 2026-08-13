@@ -2,20 +2,12 @@
 
 #include <string.h>
 
-#include "Audio/drum_synth.h"
-#include "Audio/mixer.h"
-#include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_sampler_runtime.h"
-#include "Core/brick6_stack_runtime.h"
-#include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/live_clock.h"
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
-#include "Core/synth_polyphony.h"
 #include "Keyboard/keyboard_engine.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -23,7 +15,7 @@
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_step_snapshot.h"
 #include "Seq/seq_runtime_control.h"
@@ -102,19 +94,11 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
     note_fx_pipeline_reset_runtime_overrides(track);
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
-    brick6_sampler_runtime_reset_track(track);
-    brick6_looper_runtime_stop_playback(track);
-    brick6_looper_runtime_prepare_replace(track);
-    synth_polyphony_reset_track(track);
-    drum_synth_all_notes_off_for_instance(track);
     param_registry_clear_track_runtime_state(track);
 }
 
 static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
 {
-    uint8_t filter_track = 0U;
-    uint8_t mix_track = 0U;
-
     if (track >= SEQ_TRACK_COUNT)
     {
         return;
@@ -127,20 +111,6 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
         return;
     keyboard_engine_all_notes_off_for_track(track);
     mod_lfo_v1_all_notes_off(track);
-    brick6_sampler_runtime_reset_track(track);
-    brick6_looper_runtime_stop_playback(track);
-    synth_polyphony_reset_track(track);
-    drum_synth_all_notes_off_for_instance(track);
-
-    track_runtime_refresh_track(track);
-    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
-    {
-        mixer_track_filter_all_notes_off(filter_track);
-    }
-    if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
-    {
-        mixer_track_vca_all_notes_off(mix_track);
-    }
     param_registry_clear_track_runtime_state(track);
 }
 
@@ -184,18 +154,18 @@ static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *
         dst_step->lock_head = TRACK_SNAPSHOT_LOCK_NONE;
         dst_step->trig = seq_model_get_trig((seq_track_id_t)track, step);
         dst_step->roll = seq_model_get_step_roll((seq_track_id_t)track, step);
-        for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+        for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
         {
             for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
             {
                 int16_t value = 0;
-                if (seq_model_step_play_get((seq_track_id_t)track,
+                if (seq_model_play_get((seq_track_id_t)track,
                                             step,
                                             voice,
                                             (seq_step_play_field_t)field,
                                             &value) != 0U)
                 {
-                    if (seq_step_play_set(&dst_step->play,
+                    if (seq_play_snapshot_set(&saved->play[step],
                                           voice,
                                           (seq_step_play_field_t)field,
                                           value) == 0U) return 0U;
@@ -242,7 +212,7 @@ static uint8_t track_snapshot_build_step_snapshot(const track_snapshot_sequence_
     out_step->trig = source->trig;
     out_step->roll = source->roll;
     out_step->lock_count = source_locks->count;
-    out_step->play = source->play;
+    out_step->play = saved->play[step];
     for (uint8_t i = 0U; i < source_locks->count; ++i)
     {
         const seq_plock_entry_t *const lock = &source_locks->locks[i];
@@ -307,7 +277,7 @@ static uint8_t track_snapshot_apply_sequence(uint8_t track, const track_snapshot
     {
         seq_model_set_trig((seq_track_id_t)track, step, 0U);
         seq_model_step_plock_clear((seq_track_id_t)track, step);
-        seq_model_step_play_clear((seq_track_id_t)track, step);
+        seq_model_play_clear_step((seq_track_id_t)track, step);
     }
     for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
     {
@@ -463,14 +433,22 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     if ((out_snapshot->config.family == UI_TRACK_FAMILY_SYNTH)
             || (out_snapshot->config.family == UI_TRACK_FAMILY_DRUM))
     {
-        out_snapshot->poly_voice_count = synth_polyphony_get_voice_count(track);
-        out_snapshot->poly_spread = synth_polyphony_get_spread(track);
+        float voices = 1.0f;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_VOICES, track, &voices);
+        out_snapshot->poly_voice_count = (uint8_t)voices;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_SPREAD, track, &out_snapshot->poly_spread);
     }
     else if ((out_snapshot->config.family == UI_TRACK_FAMILY_SAMPLER)
             && (out_snapshot->config.type == UI_TRACK_TYPE_MULTI))
     {
-        out_snapshot->poly_voice_count = brick6_sampler_runtime_get_multi_voice_count(track);
-        out_snapshot->poly_spread = brick6_sampler_runtime_get_multi_spread(track);
+        float voices = 1.0f;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_VOICES, track, &voices);
+        out_snapshot->poly_voice_count = (uint8_t)voices;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_SPREAD, track, &out_snapshot->poly_spread);
     }
     memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
     memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
@@ -500,7 +478,7 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     memset(out_snapshot, 0, sizeof(*out_snapshot));
     out_snapshot->config.family = UI_TRACK_FAMILY_OFF;
     out_snapshot->config.type = UI_TRACK_TYPE_NONE;
-    out_snapshot->external_input = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+    out_snapshot->external_input = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
     out_snapshot->poly_voice_count = 1U;
@@ -580,12 +558,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         && (snapshot->config.type == UI_TRACK_TYPE_MULTI));
     if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM))
     {
-        const uint8_t maximum = synth_polyphony_get_available_for_track(target_track);
-        if (maximum == 0U)
-        {
-            g_track_snapshot_voice_max = 1U;
-            return 0U;
-        }
+        const uint8_t maximum = (uint8_t)param_registry[PARAM_CFG_POLY_VOICES].max;
         if (applied_voice_count < 1U) applied_voice_count = 1U;
         if (target_family == UI_TRACK_FAMILY_DRUM) applied_voice_count = 1U;
         if (applied_voice_count > maximum)
@@ -596,12 +569,13 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
     else if (target_is_multi != 0U)
     {
+        const uint8_t maximum = (uint8_t)param_registry[PARAM_CFG_POLY_VOICES].max;
         if (applied_voice_count < 1U) applied_voice_count = 1U;
-        if (applied_voice_count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+        if (applied_voice_count > maximum)
         {
-            applied_voice_count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+            applied_voice_count = maximum;
             g_track_snapshot_voice_limited = 1U;
-            g_track_snapshot_voice_max = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+            g_track_snapshot_voice_max = maximum;
         }
     }
 
@@ -611,7 +585,11 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     midi_channel[target_track] = snapshot->midi_channel;
     midi_source[target_track] = (uint8_t)snapshot->midi_source;
 
-    ui_track_config_t ownership_configs[UI_TRACK_COUNT];
+    ui_track_config_t ownership_configs[BRICK_ENTITY_CAPACITY];
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
+    {
+        ownership_configs[track] = track_state_get_config(track);
+    }
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         if ((family[track] >= (uint8_t)UI_TRACK_FAMILY_COUNT)
@@ -624,8 +602,16 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         ownership_configs[track].family = (ui_track_family_t)family[track];
         ownership_configs[track].type = (ui_track_type_t)type[track];
     }
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    const uint8_t prospective_group_active = (uint8_t)(
+        ownership_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == UI_TRACK_TYPE_GROUP);
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
+        entity_topology_descriptor_t entity;
+        if ((entity_topology_resolve(prospective_group_active, track, &entity) == 0U)
+                || (entity.active == 0U))
+        {
+            continue;
+        }
         if ((ownership_configs[track].family != UI_TRACK_FAMILY_OFF)
                 && (ui_track_catalog_type_is_available(
                         track,
@@ -643,14 +629,16 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
 
     const uint8_t group_active = (uint8_t)(type[SEQ_GROUP_PARENT_MAIN_TRACK]
         == (uint8_t)UI_TRACK_TYPE_GROUP);
-    seq_lane_descriptor_t target_lane;
-    if ((seq_lane_resolve(group_active, (seq_lane_id_t)target_track, &target_lane) == 0U)
-            || (target_lane.active == 0U)
+    entity_topology_descriptor_t target_entity;
+    if ((entity_topology_resolve(group_active,
+                                 (brick_entity_id_t)target_track,
+                                 &target_entity) == 0U)
+            || (target_entity.active == 0U)
             || (snapshot->audio_owned_count > TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS)
             || (track_snapshot_validate_sequence(target_track,
                                                  snapshot,
-                                                 target_lane.can_emit_notes,
-                                                 target_lane.active,
+                                                 seq_model_track_can_store_play((seq_track_id_t)target_track),
+                                                 target_entity.active,
                                                  type[target_track]) == 0U))
     {
         return 0U;

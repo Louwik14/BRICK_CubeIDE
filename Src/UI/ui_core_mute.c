@@ -8,7 +8,7 @@
 #include "Core/track_runtime.h"
 #include "ui_page_manager.h"
 #include "ui_step_led_ownership.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -149,9 +149,7 @@ static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn s
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
-        seq_lane_descriptor_t lane;
-        if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-                || (lane.active == 0U)
+        if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
                 || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
         {
             continue;
@@ -176,9 +174,7 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
 
 static void ui_core_mute_toggle_prepared_track(uint8_t track)
 {
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-            || (lane.active == 0U)
+    if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
             || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
     {
         return;
@@ -267,9 +263,7 @@ uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
         return 1U;
     }
 
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) == 0U)
-            || (lane.active == 0U))
+    if (entity_topology_is_active((brick_entity_id_t)hall) == 0U)
     {
         return 1U;
     }

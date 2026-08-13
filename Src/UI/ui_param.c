@@ -41,7 +41,7 @@
 #include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
 #include "Core/brick6_fm_runtime.h"
-#include "Core/synth_polyphony.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
 #include "encoders.h"
@@ -303,7 +303,7 @@ static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
 static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track)
 {
     return (uint8_t)(((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
-            && (track < UI_TRACK_COUNT)
+            && (track < BRICK_ENTITY_CAPACITY)
             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_PRISM));
 }
@@ -374,7 +374,7 @@ void ui_param_note_user_value_flash(uint8_t slot,
                                     float value,
                                     ui_param_value_flash_kind_t kind)
 {
-    if ((slot >= 4U) || (param >= PARAM_COUNT) || (track >= UI_TRACK_COUNT))
+    if ((slot >= 4U) || (param >= PARAM_COUNT) || (track >= BRICK_ENTITY_CAPACITY))
     {
         return;
     }
@@ -1035,7 +1035,10 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         }
         else
         {
-            *out_max = (float)synth_polyphony_get_available_for_track(track);
+            audio_binding_snapshot_t snapshot;
+            *out_max = (audio_note_engine_adapter_snapshot_read(
+                    track, &snapshot) != 0U)
+                ? (float)snapshot.physical_voice_capacity : 0.0f;
         }
     }
     else if (param == PARAM_MOD_MATRIX_DEST)
@@ -1215,7 +1218,7 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
             uint8_t voice = 0U;
             seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
             if ((seq_model_track_can_store_play(track) == 0U)
-                    || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U))
+                    || (seq_model_play_resolve_param(param, &voice, &field) == 0U))
             {
                 return 0U;
             }

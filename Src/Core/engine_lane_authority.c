@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 
 void engine_lane_authority_count(const ui_track_config_t *configs,
                                  uint8_t config_count,
@@ -20,14 +20,14 @@ void engine_lane_authority_count(const ui_track_config_t *configs,
         return;
     }
 
-    if (config_count > TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY)
+    if (config_count > BRICK_ENTITY_TOP_LEVEL_COUNT)
     {
-        config_count = TRACK_TOPOLOGY_STORAGE_TRACK_CAPACITY;
+        config_count = BRICK_ENTITY_TOP_LEVEL_COUNT;
     }
 
     for (uint8_t track = 0U; track < config_count; ++track)
     {
-        if (track_topology_is_active(track) == 0U)
+        if (entity_topology_is_active(track) == 0U)
         {
             continue;
         }

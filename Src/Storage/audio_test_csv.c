@@ -1,4 +1,5 @@
 #include "Storage/audio_test_csv.h"
+#include "Audio/audio_note_engine_adapter.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -212,13 +213,13 @@ static float global_rms(const audio_global_diag_snapshot_t *snapshot,
     return sqrtf(energy / (float)snapshot->samples[stage]);
 }
 
-static const char *engine_name(const track_runtime_ctx_t *ctx)
+static const char *engine_name(const audio_binding_snapshot_t *snapshot)
 {
-    if (ctx == 0)
+    if (snapshot == 0)
     {
         return "INACTIVE";
     }
-    switch ((track_runtime_engine_t)ctx->engine)
+    switch ((track_runtime_engine_t)snapshot->binding.engine)
     {
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK: return "AUDIO";
         case TRACK_RUNTIME_ENGINE_SAMPLER: return "SAMPLER";
@@ -247,18 +248,18 @@ static float track_param(param_id_t id, uint8_t track)
 }
 
 static void capture_models(char *out, uint32_t size, uint8_t track,
-                           const track_runtime_ctx_t *ctx)
+                           const audio_binding_snapshot_t *snapshot)
 {
     if ((out == 0) || (size == 0U))
     {
         return;
     }
     out[0] = '\0';
-    if (ctx == 0)
+    if (snapshot == 0)
     {
         return;
     }
-    switch ((track_runtime_engine_t)ctx->engine)
+    switch ((track_runtime_engine_t)snapshot->binding.engine)
     {
         case TRACK_RUNTIME_ENGINE_PRISM:
             (void)snprintf(out, size, "%ld/%ld",
@@ -332,9 +333,12 @@ uint8_t audio_test_csv_enqueue_auto(uint8_t track,
     copy_text(g_request.fx, sizeof(g_request.fx), test_case->fx_config);
     copy_text(g_request.master, sizeof(g_request.master), test_case->master_config);
 
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    copy_text(g_request.engine, sizeof(g_request.engine), engine_name(ctx));
-    capture_models(g_request.models, sizeof(g_request.models), track, ctx);
+    audio_binding_snapshot_t binding_snapshot;
+    const audio_binding_snapshot_t *const snapshot =
+        (audio_note_engine_adapter_snapshot_read(track, &binding_snapshot) != 0U)
+            ? &binding_snapshot : 0;
+    copy_text(g_request.engine, sizeof(g_request.engine), engine_name(snapshot));
+    capture_models(g_request.models, sizeof(g_request.models), track, snapshot);
     g_request.track_gain = track_param(PARAM_MIX_LEVEL, track);
     g_request.pan = track_param(PARAM_MIX_PAN, track);
     g_request.send1 = track_param(PARAM_MIX_SEND1, track);

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Core/track_runtime.h"
+#include "Audio/audio_note_engine_adapter.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,7 +97,7 @@ uint8_t brick6_looper_runtime_is_ready(uint8_t track_id);
 uint8_t brick6_looper_runtime_is_playing(uint8_t track_id);
 uint16_t brick6_looper_runtime_playing_mask(void);
 uint16_t brick6_looper_runtime_scheduled_start_mask(void);
-void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
+void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
                                         float *out_l,
                                         float *out_r,
                                         uint32_t frames);

@@ -26,7 +26,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "buttons.h"
@@ -43,7 +43,6 @@
 #include "UI/ui_page_manager.h"
 #include "UI/ui_step_led_ownership.h"
 #include "UI/pages/ui_page_patch_assign.h"
-#include "Seq/seq_lane.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
@@ -363,16 +362,16 @@ static button_id_t led_param_button_for_led(led_id_t led)
 static void led_apply_default_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    seq_lane_descriptor_t lane = { 0 };
+    entity_topology_descriptor_t entity = { 0 };
 
-    if ((seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) == 0U)
-            || (lane.active == 0U))
+    if ((entity_topology_get((brick_entity_id_t)hall, &entity) == 0U)
+            || (entity.active == 0U))
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;
     }
 
-    if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+    if (entity.role == ENTITY_ROLE_GROUP_CHILD)
     {
         led_layer_set(LED_LAYER_UI,
                       led,
@@ -382,7 +381,7 @@ static void led_apply_default_hall_scene(uint8_t hall)
         return;
     }
 
-    if (lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
+    if (entity.role == ENTITY_ROLE_GROUP_MASTER)
     {
         led_layer_set(LED_LAYER_UI,
                       led,
@@ -594,10 +593,10 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
     }
     else if (mute_led.muted != 0U)
     {
-        seq_lane_descriptor_t lane = { 0 };
+        entity_topology_descriptor_t entity = { 0 };
         const uint8_t is_group_child =
-            (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
-            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD);
+            (entity_topology_get((brick_entity_id_t)hall, &entity) != 0U)
+            && (entity.role == ENTITY_ROLE_GROUP_CHILD);
         led_layer_set(LED_LAYER_UI,
                       led,
                       is_group_child ? LED_FIXED_ORANGE_R : LED_FIXED_RED_R,
@@ -606,10 +605,10 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
     }
     else
     {
-        seq_lane_descriptor_t lane = { 0 };
+        entity_topology_descriptor_t entity = { 0 };
         const uint8_t is_group_child =
-            (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
-            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD);
+            (entity_topology_get((brick_entity_id_t)hall, &entity) != 0U)
+            && (entity.role == ENTITY_ROLE_GROUP_CHILD);
         led_layer_set(LED_LAYER_UI,
                       led,
                       is_group_child ? LED_FIXED_TEAL_R : LED_FIXED_GREEN_R,

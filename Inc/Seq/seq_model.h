@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Param/param_store.h"
 
-#define SEQ_STEP_PLAY_VOICE_COUNT 4U
+#define SEQ_PLAY_MAX_CAPACITY 8U
 
 typedef enum
 {
@@ -37,16 +37,16 @@ typedef struct
     uint8_t length;
     int8_t microtiming;
     uint8_t present_mask;
-} seq_step_play_voice_t;
+} seq_play_item_t;
 
 typedef struct
 {
-    seq_step_play_voice_t voices[SEQ_STEP_PLAY_VOICE_COUNT];
-} seq_step_play_t;
+    seq_play_item_t items[SEQ_PLAY_MAX_CAPACITY];
+} seq_play_snapshot_t;
 
 _Static_assert(SEQ_STEP_PLAY_FIELD_COUNT == 4U, "PLAY field count changed");
-_Static_assert(sizeof(seq_step_play_voice_t) == 5U, "PLAY voice storage size changed");
-_Static_assert(sizeof(seq_step_play_t) == 20U, "PLAY step storage size changed");
+_Static_assert(sizeof(seq_play_item_t) == 5U, "PLAY voice storage size changed");
+_Static_assert(sizeof(seq_play_snapshot_t) == 40U, "PLAY snapshot storage size changed");
 
 typedef struct
 {
@@ -66,10 +66,9 @@ typedef struct
     uint8_t lock_set_mask;
     uint8_t roll;
     uint8_t reserved[2];
-    seq_step_play_t play;
 } seq_step_t;
 
-_Static_assert(sizeof(seq_step_t) == 28U, "sequencer step storage size changed");
+_Static_assert(sizeof(seq_step_t) == 8U, "sequencer step metadata size changed");
 
 typedef enum
 {
@@ -127,22 +126,27 @@ typedef enum
     SEQ_STEP_VISUAL_BLUE
 } seq_step_visual_t;
 
-void seq_step_play_init(seq_step_play_t *play);
-uint8_t seq_step_play_get(const seq_step_play_t *play,
+typedef uint8_t (*seq_model_play_iter_fn)(seq_track_id_t track,
+                                          seq_step_id_t step,
+                                          uint8_t play_index,
+                                          void *context);
+
+void seq_play_snapshot_init(seq_play_snapshot_t *play);
+uint8_t seq_play_snapshot_get(const seq_play_snapshot_t *play,
                           uint8_t voice,
                           seq_step_play_field_t field,
                           int16_t *out_value);
-uint8_t seq_step_play_set(seq_step_play_t *play,
+uint8_t seq_play_snapshot_set(seq_play_snapshot_t *play,
                           uint8_t voice,
                           seq_step_play_field_t field,
                           int16_t value);
-uint8_t seq_step_play_delete(seq_step_play_t *play,
+uint8_t seq_play_snapshot_delete(seq_play_snapshot_t *play,
                              uint8_t voice,
                              seq_step_play_field_t field);
-void seq_step_play_clear_voice(seq_step_play_t *play, uint8_t voice);
-void seq_step_play_clear(seq_step_play_t *play);
-uint8_t seq_step_play_voice_has_any(const seq_step_play_t *play, uint8_t voice);
-uint8_t seq_step_play_has_any(const seq_step_play_t *play);
+void seq_play_snapshot_clear_item(seq_play_snapshot_t *play, uint8_t voice);
+void seq_play_snapshot_clear(seq_play_snapshot_t *play);
+uint8_t seq_play_snapshot_item_has_any(const seq_play_snapshot_t *play, uint8_t voice);
+uint8_t seq_play_snapshot_has_any(const seq_play_snapshot_t *play);
 
 void seq_model_init_defaults(void);
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
@@ -170,40 +174,45 @@ uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t st
 uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_track_can_store_play(seq_track_id_t track);
-uint8_t seq_model_step_play_get(seq_track_id_t track,
+uint8_t seq_model_play_capacity(seq_track_id_t track);
+uint8_t seq_model_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,
                                 seq_step_play_field_t field,
                                 int16_t *out_value);
-uint8_t seq_model_step_play_set(seq_track_id_t track,
+uint8_t seq_model_play_set(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,
                                 seq_step_play_field_t field,
                                 int16_t value);
-uint8_t seq_model_step_play_delete(seq_track_id_t track,
+uint8_t seq_model_play_clear(seq_track_id_t track,
                                    seq_step_id_t step,
                                    uint8_t voice,
                                    seq_step_play_field_t field);
-void seq_model_step_play_clear_voice(seq_track_id_t track,
+void seq_model_play_clear_item(seq_track_id_t track,
                                      seq_step_id_t step,
                                      uint8_t voice);
-void seq_model_step_play_clear(seq_track_id_t track, seq_step_id_t step);
-uint8_t seq_model_step_play_voice_has_any(seq_track_id_t track,
+void seq_model_play_clear_step(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_play_item_has_any(seq_track_id_t track,
                                           seq_step_id_t step,
                                           uint8_t voice);
-uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step);
-uint8_t seq_model_step_play_resolve_param(param_id_t param,
+uint8_t seq_model_play_has_any(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_play_iterate(seq_track_id_t track,
+                               seq_step_id_t step,
+                               seq_model_play_iter_fn callback,
+                               void *context);
+uint8_t seq_model_play_resolve_param(param_id_t param,
                                           uint8_t *out_voice,
                                           seq_step_play_field_t *out_field);
-uint8_t seq_model_step_play_param_get(seq_track_id_t track,
+uint8_t seq_model_play_param_get(seq_track_id_t track,
                                       seq_step_id_t step,
                                       param_id_t param,
                                       int16_t *out_value);
-uint8_t seq_model_step_play_param_set(seq_track_id_t track,
+uint8_t seq_model_play_param_set(seq_track_id_t track,
                                       seq_step_id_t step,
                                       param_id_t param,
                                       int16_t value);
-uint8_t seq_model_step_play_param_delete(seq_track_id_t track,
+uint8_t seq_model_play_param_delete(seq_track_id_t track,
                                          seq_step_id_t step,
                                          param_id_t param);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);

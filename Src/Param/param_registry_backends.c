@@ -1,4 +1,5 @@
 #include "Param/param_registry_backends.h"
+#include "Audio/audio_note_engine_adapter.h"
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
@@ -221,15 +222,15 @@ static uint8_t param_backend_clip_search_index(float value)
 uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
     {
         return 0U;
     }
 
-    const uint8_t instance_id = ctx->instance_id;
+    const uint8_t instance_id = ctx->audio_binding.instance_id;
 
     uint8_t osc = 0U;
     uint8_t param = 0U;
@@ -342,16 +343,16 @@ uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value
 uint8_t param_backend_reapply_tone_prism_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
     {
         return 0U;
     }
 
-    const uint8_t instance_id = ctx->instance_id;
+    const uint8_t instance_id = ctx->audio_binding.instance_id;
     for (uint8_t osc = 0U; osc < 2U; ++osc)
     {
         brick6_braids_runtime_set_osc_edit(instance_id, osc, state->prism.edit[osc]);
@@ -370,10 +371,10 @@ uint8_t param_backend_reapply_tone_prism_runtime(uint8_t track)
 uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
     {
         return 0U;
     }
@@ -404,7 +405,7 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
             state->fm.pitch_env = pitch_env;
             state->fm.pitch_time = pitch_time;
         }
-        brick6_fm_runtime_set_play(ctx->instance_id, velocity, key_scaling, pitch_env, pitch_time);
+        brick6_fm_runtime_set_play(ctx->audio_binding.instance_id, velocity, key_scaling, pitch_env, pitch_time);
         return 1U;
     }
 
@@ -418,7 +419,7 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
         {
             state->fm.operator_params[operator_id][operator_param] = value;
         }
-        brick6_fm_runtime_set_operator(ctx->instance_id, operator_id, operator_param, value);
+        brick6_fm_runtime_set_operator(ctx->audio_binding.instance_id, operator_id, operator_param, value);
         return 1U;
     }
 
@@ -428,28 +429,28 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
         {
             const float ratio = param_backend_clamp_value(value, -1.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL)) state->fm.ratio = ratio;
-            brick6_fm_runtime_set_ratio(ctx->instance_id, param_backend_fm_macro_unit(ratio));
+            brick6_fm_runtime_set_ratio(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(ratio));
             return 1U;
         }
         case PARAM_FM_ALGORITHM:
         {
             const uint8_t algorithm = (uint8_t)(param_backend_clamp_value(value, 0.0f, 31.0f) + 0.5f);
             if ((update_base_state != 0U) && (state != NULL)) state->fm.algorithm = (float)algorithm;
-            brick6_fm_runtime_set_algorithm(ctx->instance_id, algorithm);
+            brick6_fm_runtime_set_algorithm(ctx->audio_binding.instance_id, algorithm);
             return 1U;
         }
         case PARAM_FM_FEEDBACK:
         {
             const uint8_t feedback = (uint8_t)(param_backend_clamp_value(value, 0.0f, 7.0f) + 0.5f);
             if ((update_base_state != 0U) && (state != NULL)) state->fm.feedback = (float)feedback;
-            brick6_fm_runtime_set_feedback(ctx->instance_id, feedback);
+            brick6_fm_runtime_set_feedback(ctx->audio_binding.instance_id, feedback);
             return 1U;
         }
         case PARAM_FM_SYNC:
         {
             const uint8_t sync = (value >= 0.5f) ? 1U : 0U;
             if ((update_base_state != 0U) && (state != NULL)) state->fm.sync = (float)sync;
-            brick6_fm_runtime_set_sync(ctx->instance_id, sync);
+            brick6_fm_runtime_set_sync(ctx->audio_binding.instance_id, sync);
             return 1U;
         }
         case PARAM_FM_BRIGHT:
@@ -465,10 +466,10 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
                 else if (id == PARAM_FM_DETAIL) state->fm.detail = macro;
                 else state->fm.metal = macro;
             }
-            if (id == PARAM_FM_BRIGHT) brick6_fm_runtime_set_bright(ctx->instance_id, param_backend_fm_macro_unit(macro));
-            else if (id == PARAM_FM_BODY) brick6_fm_runtime_set_body(ctx->instance_id, param_backend_fm_macro_unit(macro));
-            else if (id == PARAM_FM_DETAIL) brick6_fm_runtime_set_detail(ctx->instance_id, param_backend_fm_macro_unit(macro));
-            else brick6_fm_runtime_set_metal(ctx->instance_id, param_backend_fm_macro_unit(macro));
+            if (id == PARAM_FM_BRIGHT) brick6_fm_runtime_set_bright(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(macro));
+            else if (id == PARAM_FM_BODY) brick6_fm_runtime_set_body(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(macro));
+            else if (id == PARAM_FM_DETAIL) brick6_fm_runtime_set_detail(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(macro));
+            else brick6_fm_runtime_set_metal(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(macro));
             return 1U;
         }
         case PARAM_FM_ENV_ATTACK:
@@ -492,7 +493,7 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
                 state->fm.env_sustain = sustain;
                 state->fm.env_release = release;
             }
-            brick6_fm_runtime_set_env(ctx->instance_id,
+            brick6_fm_runtime_set_env(ctx->audio_binding.instance_id,
                                       param_backend_fm_macro_unit(attack),
                                       param_backend_fm_macro_unit(decay),
                                       param_backend_fm_macro_unit(sustain),
@@ -507,31 +508,31 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
 uint8_t param_backend_reapply_tone_fm_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM))
     {
         return 0U;
     }
-    brick6_fm_runtime_set_ratio(ctx->instance_id,
+    brick6_fm_runtime_set_ratio(ctx->audio_binding.instance_id,
                                 param_backend_fm_macro_unit(state->fm.ratio));
-    brick6_fm_runtime_set_algorithm(ctx->instance_id,
+    brick6_fm_runtime_set_algorithm(ctx->audio_binding.instance_id,
                                     (uint8_t)(param_backend_clamp_value(state->fm.algorithm, 0.0f, 31.0f) + 0.5f));
-    brick6_fm_runtime_set_feedback(ctx->instance_id,
+    brick6_fm_runtime_set_feedback(ctx->audio_binding.instance_id,
                                    (uint8_t)(param_backend_clamp_value(state->fm.feedback, 0.0f, 7.0f) + 0.5f));
-    brick6_fm_runtime_set_sync(ctx->instance_id, (state->fm.sync >= 0.5f) ? 1U : 0U);
-    brick6_fm_runtime_set_bright(ctx->instance_id, param_backend_fm_macro_unit(state->fm.bright));
-    brick6_fm_runtime_set_body(ctx->instance_id, param_backend_fm_macro_unit(state->fm.body));
-    brick6_fm_runtime_set_detail(ctx->instance_id, param_backend_fm_macro_unit(state->fm.detail));
-    brick6_fm_runtime_set_metal(ctx->instance_id, param_backend_fm_macro_unit(state->fm.metal));
-    brick6_fm_runtime_set_env(ctx->instance_id,
+    brick6_fm_runtime_set_sync(ctx->audio_binding.instance_id, (state->fm.sync >= 0.5f) ? 1U : 0U);
+    brick6_fm_runtime_set_bright(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(state->fm.bright));
+    brick6_fm_runtime_set_body(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(state->fm.body));
+    brick6_fm_runtime_set_detail(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(state->fm.detail));
+    brick6_fm_runtime_set_metal(ctx->audio_binding.instance_id, param_backend_fm_macro_unit(state->fm.metal));
+    brick6_fm_runtime_set_env(ctx->audio_binding.instance_id,
                               param_backend_fm_macro_unit(state->fm.env_attack),
                               param_backend_fm_macro_unit(state->fm.env_decay),
                               param_backend_fm_macro_unit(state->fm.env_sustain),
                               param_backend_fm_macro_unit(state->fm.env_release));
-    brick6_fm_runtime_set_play(ctx->instance_id,
+    brick6_fm_runtime_set_play(ctx->audio_binding.instance_id,
                                state->fm.play_vel,
                                state->fm.play_key,
                                state->fm.pitch_env,
@@ -540,7 +541,7 @@ uint8_t param_backend_reapply_tone_fm_runtime(uint8_t track)
     {
         for (uint8_t operator_param = 0U; operator_param < PARAM_FM_OPERATOR_PARAM_COUNT; ++operator_param)
         {
-            brick6_fm_runtime_set_operator(ctx->instance_id,
+            brick6_fm_runtime_set_operator(ctx->audio_binding.instance_id,
                                            operator_id,
                                            (brick6_fm_operator_param_t)operator_param,
                                            state->fm.operator_params[operator_id][operator_param]);
@@ -576,11 +577,11 @@ static uint8_t param_backend_stack_slot_for_id(param_id_t id, uint8_t *out_slot,
 uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->audio_binding.instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -594,10 +595,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         }
         if (update_base_state == 0U)
         {
-            brick6_stack_runtime_set_noise_level(ctx->instance_id, clamped);
+            brick6_stack_runtime_set_noise_level(ctx->audio_binding.instance_id, clamped);
             return 1U;
         }
-        return brick6_stack_runtime_submit_noise_level(ctx->instance_id, clamped);
+        return brick6_stack_runtime_submit_noise_level(ctx->audio_binding.instance_id, clamped);
     }
     if (id == PARAM_STACK_OSC_DETUNE)
     {
@@ -608,10 +609,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         }
         if (update_base_state == 0U)
         {
-            brick6_stack_runtime_set_osc_detune(ctx->instance_id, clamped);
+            brick6_stack_runtime_set_osc_detune(ctx->audio_binding.instance_id, clamped);
             return 1U;
         }
-        return brick6_stack_runtime_submit_osc_detune(ctx->instance_id, clamped);
+        return brick6_stack_runtime_submit_osc_detune(ctx->audio_binding.instance_id, clamped);
     }
     if (id == PARAM_STACK_PHASE_RESET)
     {
@@ -622,10 +623,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         }
         if (update_base_state == 0U)
         {
-            brick6_stack_runtime_set_phase_reset(ctx->instance_id, enabled);
+            brick6_stack_runtime_set_phase_reset(ctx->audio_binding.instance_id, enabled);
             return 1U;
         }
-        return brick6_stack_runtime_submit_phase_reset(ctx->instance_id, enabled);
+        return brick6_stack_runtime_submit_phase_reset(ctx->audio_binding.instance_id, enabled);
     }
 
     uint8_t slot = 0U;
@@ -646,10 +647,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_level(ctx->instance_id, slot, clamped);
+                brick6_stack_runtime_set_slot_level(ctx->audio_binding.instance_id, slot, clamped);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_level(ctx->instance_id, slot, clamped);
+            return brick6_stack_runtime_submit_slot_level(ctx->audio_binding.instance_id, slot, clamped);
         }
         case 1U:
         {
@@ -661,10 +662,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_model(ctx->instance_id, slot, model);
+                brick6_stack_runtime_set_slot_model(ctx->audio_binding.instance_id, slot, model);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_model(ctx->instance_id, slot, model);
+            return brick6_stack_runtime_submit_slot_model(ctx->audio_binding.instance_id, slot, model);
         }
         case 2U:
         {
@@ -675,10 +676,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_tune(ctx->instance_id, slot, clamped);
+                brick6_stack_runtime_set_slot_tune(ctx->audio_binding.instance_id, slot, clamped);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_tune(ctx->instance_id, slot, clamped);
+            return brick6_stack_runtime_submit_slot_tune(ctx->audio_binding.instance_id, slot, clamped);
         }
         case 3U:
         {
@@ -689,10 +690,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_timbre(ctx->instance_id, slot, clamped);
+                brick6_stack_runtime_set_slot_timbre(ctx->audio_binding.instance_id, slot, clamped);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, clamped);
+            return brick6_stack_runtime_submit_slot_timbre(ctx->audio_binding.instance_id, slot, clamped);
         }
         case 4U:
         {
@@ -703,10 +704,10 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             }
             if (update_base_state == 0U)
             {
-                brick6_stack_runtime_set_slot_color(ctx->instance_id, slot, clamped);
+                brick6_stack_runtime_set_slot_color(ctx->audio_binding.instance_id, slot, clamped);
                 return 1U;
             }
-            return brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, clamped);
+            return brick6_stack_runtime_submit_slot_color(ctx->audio_binding.instance_id, slot, clamped);
         }
         default:
             return 0U;
@@ -716,33 +717,33 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
 uint8_t param_backend_reapply_tone_stack_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->audio_binding.instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
 
     for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
     {
-        (void)brick6_stack_runtime_submit_slot_level(ctx->instance_id, slot, state->stack.level[slot]);
-        (void)brick6_stack_runtime_submit_slot_model(ctx->instance_id,
+        (void)brick6_stack_runtime_submit_slot_level(ctx->audio_binding.instance_id, slot, state->stack.level[slot]);
+        (void)brick6_stack_runtime_submit_slot_model(ctx->audio_binding.instance_id,
                                                      slot,
                                                      (brick6_stack_model_t)(uint8_t)(param_backend_clamp_value(state->stack.model[slot],
                                                                                                                0.0f,
                                                                                                                (float)(BRICK6_STACK_MODEL_COUNT - 1U)) + 0.5f));
-        (void)brick6_stack_runtime_submit_slot_tune(ctx->instance_id,
+        (void)brick6_stack_runtime_submit_slot_tune(ctx->audio_binding.instance_id,
                                                     slot,
                                                     param_backend_clamp_value(state->stack.tune[slot], -24.0f, 24.0f));
-        (void)brick6_stack_runtime_submit_slot_timbre(ctx->instance_id, slot, state->stack.timbre[slot]);
-        (void)brick6_stack_runtime_submit_slot_color(ctx->instance_id, slot, state->stack.color[slot]);
+        (void)brick6_stack_runtime_submit_slot_timbre(ctx->audio_binding.instance_id, slot, state->stack.timbre[slot]);
+        (void)brick6_stack_runtime_submit_slot_color(ctx->audio_binding.instance_id, slot, state->stack.color[slot]);
     }
-    (void)brick6_stack_runtime_submit_noise_level(ctx->instance_id, state->stack.noise_level);
-    (void)brick6_stack_runtime_submit_osc_detune(ctx->instance_id, state->stack.osc_detune);
-    (void)brick6_stack_runtime_submit_phase_reset(ctx->instance_id, (state->stack.phase_reset >= 0.5f) ? 1U : 0U);
+    (void)brick6_stack_runtime_submit_noise_level(ctx->audio_binding.instance_id, state->stack.noise_level);
+    (void)brick6_stack_runtime_submit_osc_detune(ctx->audio_binding.instance_id, state->stack.osc_detune);
+    (void)brick6_stack_runtime_submit_phase_reset(ctx->audio_binding.instance_id, (state->stack.phase_reset >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 
@@ -764,11 +765,11 @@ static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, u
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->audio_binding.instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
@@ -780,7 +781,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         {
             state->wave.frame_interp = (float)enabled;
         }
-        brick6_wave_runtime_set_frame_interp(ctx->instance_id, enabled);
+        brick6_wave_runtime_set_frame_interp(ctx->audio_binding.instance_id, enabled);
         return 1U;
     }
     if (id == PARAM_WAVE_SAMPLE_INTERP)
@@ -790,7 +791,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         {
             state->wave.sample_interp = (float)enabled;
         }
-        brick6_wave_runtime_set_sample_interp(ctx->instance_id, enabled);
+        brick6_wave_runtime_set_sample_interp(ctx->audio_binding.instance_id, enabled);
         return 1U;
     }
     if (id == PARAM_WAVE_POS_UPDATE)
@@ -801,7 +802,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         {
             state->wave.pos_update = (float)(uint8_t)update;
         }
-        brick6_wave_runtime_set_pos_update(ctx->instance_id, update);
+        brick6_wave_runtime_set_pos_update(ctx->audio_binding.instance_id, update);
         return 1U;
     }
     if (id == PARAM_WAVE_POS_SMOOTH)
@@ -811,7 +812,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         {
             state->wave.pos_smooth = (float)enabled;
         }
-        brick6_wave_runtime_set_pos_smooth(ctx->instance_id, enabled);
+        brick6_wave_runtime_set_pos_smooth(ctx->audio_binding.instance_id, enabled);
         return 1U;
     }
 
@@ -831,7 +832,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.table[osc] = (float)global_slot;
             }
-            brick6_wave_runtime_set_osc_table_global(ctx->instance_id, osc, global_slot);
+            brick6_wave_runtime_set_osc_table_global(ctx->audio_binding.instance_id, osc, global_slot);
             return 1U;
         }
         case 1U:
@@ -841,7 +842,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.pos[osc] = clamped;
             }
-            brick6_wave_runtime_set_osc_pos(ctx->instance_id, osc, clamped);
+            brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         case 2U:
@@ -851,7 +852,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.start[osc] = clamped;
             }
-            brick6_wave_runtime_set_osc_start(ctx->instance_id, osc, clamped);
+            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         case 3U:
@@ -861,7 +862,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.end[osc] = clamped;
             }
-            brick6_wave_runtime_set_osc_end(ctx->instance_id, osc, clamped);
+            brick6_wave_runtime_set_osc_end(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         case 4U:
@@ -871,7 +872,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.level[osc] = clamped;
             }
-            brick6_wave_runtime_set_osc_level(ctx->instance_id, osc, clamped);
+            brick6_wave_runtime_set_osc_level(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         case 5U:
@@ -881,7 +882,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
             {
                 state->wave.tune[osc] = clamped;
             }
-            brick6_wave_runtime_set_osc_tune(ctx->instance_id, osc, clamped);
+            brick6_wave_runtime_set_osc_tune(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         default:
@@ -892,30 +893,30 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
 uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->audio_binding.instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT))
     {
         return 0U;
     }
 
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
-        brick6_wave_runtime_set_osc_table_global(ctx->instance_id, osc, (uint16_t)(param_backend_clamp_value(state->wave.table[osc], 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f));
-        brick6_wave_runtime_set_osc_pos(ctx->instance_id, osc, param_backend_clamp_value(state->wave.pos[osc], 0.0f, 1.0f));
-        brick6_wave_runtime_set_osc_start(ctx->instance_id, osc, param_backend_clamp_value(state->wave.start[osc], 0.0f, 1.0f));
-        brick6_wave_runtime_set_osc_end(ctx->instance_id, osc, param_backend_clamp_value(state->wave.end[osc], 0.0f, 1.0f));
-        brick6_wave_runtime_set_osc_level(ctx->instance_id, osc, param_backend_clamp_value(state->wave.level[osc], 0.0f, 1.0f));
-        brick6_wave_runtime_set_osc_tune(ctx->instance_id, osc, param_backend_clamp_value(state->wave.tune[osc], -60.0f, 60.0f));
+        brick6_wave_runtime_set_osc_table_global(ctx->audio_binding.instance_id, osc, (uint16_t)(param_backend_clamp_value(state->wave.table[osc], 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f));
+        brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, osc, param_backend_clamp_value(state->wave.pos[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, osc, param_backend_clamp_value(state->wave.start[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_end(ctx->audio_binding.instance_id, osc, param_backend_clamp_value(state->wave.end[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_level(ctx->audio_binding.instance_id, osc, param_backend_clamp_value(state->wave.level[osc], 0.0f, 1.0f));
+        brick6_wave_runtime_set_osc_tune(ctx->audio_binding.instance_id, osc, param_backend_clamp_value(state->wave.tune[osc], -60.0f, 60.0f));
     }
-    brick6_wave_runtime_set_frame_interp(ctx->instance_id, (state->wave.frame_interp >= 0.5f) ? 1U : 0U);
-    brick6_wave_runtime_set_sample_interp(ctx->instance_id, (state->wave.sample_interp >= 0.5f) ? 1U : 0U);
-    brick6_wave_runtime_set_pos_update(ctx->instance_id,
+    brick6_wave_runtime_set_frame_interp(ctx->audio_binding.instance_id, (state->wave.frame_interp >= 0.5f) ? 1U : 0U);
+    brick6_wave_runtime_set_sample_interp(ctx->audio_binding.instance_id, (state->wave.sample_interp >= 0.5f) ? 1U : 0U);
+    brick6_wave_runtime_set_pos_update(ctx->audio_binding.instance_id,
                                        (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(state->wave.pos_update, 0.0f, 3.0f) + 0.5f));
-    brick6_wave_runtime_set_pos_smooth(ctx->instance_id, (state->wave.pos_smooth >= 0.5f) ? 1U : 0U);
+    brick6_wave_runtime_set_pos_smooth(ctx->audio_binding.instance_id, (state->wave.pos_smooth >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 
@@ -936,7 +937,7 @@ uint8_t param_backend_midi_cc_number_from_id(param_id_t id)
 
 uint8_t param_backend_track_supports_midi_tone_ctx(const track_runtime_ctx_t *ctx)
 {
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if (ctx == NULL)
     {
         return 0U;
     }
@@ -988,7 +989,7 @@ uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
 uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
 
     switch (id)
     {
@@ -1256,7 +1257,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
 uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
 
     if ((ctx == NULL)
             || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
@@ -1326,7 +1327,7 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
 }
 
 uint8_t param_backend_apply_tone_drum(uint8_t track,
-                                      const track_runtime_ctx_t *ctx,
+                                      const track_audio_runtime_ctx_t *ctx,
                                       param_id_t id,
                                       float value,
                                       uint8_t update_base_state)
@@ -1400,22 +1401,22 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
         }
     }
 
-    return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
+    return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id, id, value);
 }
 
-uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
+uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
                                       uint8_t track,
                                       param_id_t id,
                                       float value,
                                       uint8_t update_base_state)
 {
-    if ((ctx == NULL) || (track_runtime_is_audio_routable_ctx(ctx) == 0U))
+    if ((ctx == NULL) || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U))
     {
         return 0U;
     }
 
     if ((param_backend_is_vca_param(id) != 0U)
-            && (track_runtime_supports_vca_gate(ctx) == 0U))
+            && (audio_note_engine_adapter_ctx_supports_vca_gate(ctx) == 0U))
     {
         return 0U;
     }
@@ -1429,7 +1430,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_level = param_backend_clamp_value(value, 0.0f, 2.0f);
             }
-            mixer_set_track_gain(ctx->mix_track_id, param_backend_clamp_value(value, 0.0f, 2.0f));
+            mixer_set_track_gain(ctx->audio_binding.mix_track_id, param_backend_clamp_value(value, 0.0f, 2.0f));
             return 1U;
         }
 
@@ -1440,7 +1441,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_pan = param_backend_clamp_value(value, -1.0f, 1.0f);
             }
-            mixer_set_track_pan(ctx->mix_track_id, param_backend_clamp_value(value, -1.0f, 1.0f));
+            mixer_set_track_pan(ctx->audio_binding.mix_track_id, param_backend_clamp_value(value, -1.0f, 1.0f));
             return 1U;
         }
 
@@ -1451,7 +1452,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_send1 = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            mixer_set_track_send_level(ctx->mix_track_id, 0U, param_backend_clamp_value(value, 0.0f, 1.0f));
+            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 0U, param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         }
 
@@ -1462,14 +1463,13 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->mix_send2 = param_backend_clamp_value(value, 0.0f, 1.0f);
             }
-            mixer_set_track_send_level(ctx->mix_track_id, 1U, param_backend_clamp_value(value, 0.0f, 1.0f));
+            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 1U, param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         }
 
         case PARAM_MIX_MUTE:
-            return track_mute_apply(track,
-                                    (value >= 0.5f) ? 1U : 0U,
-                                    update_base_state);
+            return audio_note_engine_adapter_set_mute(
+                track, (value >= 0.5f) ? 1U : 0U);
 
         case PARAM_ENV_RETRIG_FILTER:
         {
@@ -1480,11 +1480,11 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                 state->env_retrig_filter = (float)hard;
             }
 
-            track_runtime_resolved_track_t resolved;
-            if ((track_runtime_resolve_track(track, &resolved) != 0U)
-                    && (resolved.has_filter_target != 0U))
+            if (((ctx->flags & 1U) != 0U)
+                    && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS))
             {
-                mixer_set_track_filter_retrigger_hard(resolved.filter_track_id, hard);
+                mixer_set_track_filter_retrigger_hard(
+                    ctx->audio_binding.mix_track_id, hard);
             }
             return 1U;
         }
@@ -1497,7 +1497,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->env_retrig_vca = (float)hard;
             }
-            mixer_set_track_vca_retrigger_hard(ctx->mix_track_id, hard);
+            mixer_set_track_vca_retrigger_hard(ctx->audio_binding.mix_track_id, hard);
             return 1U;
         }
 
@@ -1511,7 +1511,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_env_type = (float)type;
             }
-            mixer_set_track_vca_env_type(ctx->mix_track_id, type);
+            mixer_set_track_vca_env_type(ctx->audio_binding.mix_track_id, type);
             return 1U;
         }
 
@@ -1525,7 +1525,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_attack = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_attack(ctx->mix_track_id, param_filter_ui127_to_attack_s(value));
+            mixer_set_track_vca_attack(ctx->audio_binding.mix_track_id, param_filter_ui127_to_attack_s(value));
             return 1U;
         }
 
@@ -1536,7 +1536,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_decay = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_decay(ctx->mix_track_id, param_filter_ui127_to_decay_s(value));
+            mixer_set_track_vca_decay(ctx->audio_binding.mix_track_id, param_filter_ui127_to_decay_s(value));
             return 1U;
         }
 
@@ -1547,7 +1547,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_sustain = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_sustain(ctx->mix_track_id, param_filter_ui127_to_sustain(value));
+            mixer_set_track_vca_sustain(ctx->audio_binding.mix_track_id, param_filter_ui127_to_sustain(value));
             return 1U;
         }
 
@@ -1559,10 +1559,10 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
             {
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_release(ctx->mix_track_id, release_s);
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+            mixer_set_track_vca_release(ctx->audio_binding.mix_track_id, release_s);
+            if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             {
-                brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
+                brick6_braids_runtime_set_vca_release_seconds(ctx->audio_binding.instance_id, release_s);
             }
             return 1U;
         }
@@ -1572,17 +1572,17 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
     }
 }
 
-uint8_t param_backend_apply_env_track(const track_runtime_ctx_t *ctx, param_id_t id, float value)
+uint8_t param_backend_apply_env_track(const track_audio_runtime_ctx_t *ctx, param_id_t id, float value)
 {
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((ctx == NULL) || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
     }
 
-    switch (ctx->engine)
+    switch (ctx->audio_binding.engine)
     {
         case (uint8_t)TRACK_RUNTIME_ENGINE_DRUM:
-            return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
+            return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id, id, value);
         default:
             return 0U;
     }

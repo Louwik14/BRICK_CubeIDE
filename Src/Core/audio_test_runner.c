@@ -1,4 +1,5 @@
 #include "Core/audio_test_runner.h"
+#include "Audio/audio_note_engine_adapter.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -730,29 +731,29 @@ static uint8_t configure_current(void)
     param_set(PARAM_MASTER_GAIN, g_runner.current.master_gain_max ? 1.0f : 0.75f);
     param_registry_batch_end();
 
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(0U);
-    if ((ctx == 0) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    audio_binding_snapshot_t reference;
+    if ((audio_note_engine_adapter_snapshot_read(0U, &reference) == 0U)
+            || (reference.binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
     }
     uint16_t used_mix_tracks = 0U;
     for (uint8_t track = 0U; track < g_runner.current.track_count; ++track)
     {
-        const track_runtime_ctx_t *const active_ctx =
-            track_runtime_get_ctx(track);
-        if ((active_ctx == 0)
-            || (active_ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (active_ctx->engine != ctx->engine)
-            || (active_ctx->type != ctx->type)
-            || (active_ctx->mix_track_id >= SEQ_TRACK_COUNT)
-            || ((used_mix_tracks & (uint16_t)(1U << active_ctx->mix_track_id))
+        audio_binding_snapshot_t active;
+        if ((audio_note_engine_adapter_snapshot_read(track, &active) == 0U)
+            || (active.binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (active.binding.engine != reference.binding.engine)
+            || (active.type != reference.type)
+            || (active.binding.mix_track_id >= SEQ_TRACK_COUNT)
+            || ((used_mix_tracks & (uint16_t)(1U << active.binding.mix_track_id))
                 != 0U))
         {
             return 0U;
         }
-        used_mix_tracks |= (uint16_t)(1U << active_ctx->mix_track_id);
+        used_mix_tracks |= (uint16_t)(1U << active.binding.mix_track_id);
     }
-    audio_track_diag_open(0U, ctx->mix_track_id,
+    audio_track_diag_open(0U, reference.binding.mix_track_id,
                           (g_runner.current.engine == TEST_ENGINE_STACK) ? 1U : 0U);
     audio_track_diag_reset_all();
     audio_global_diag_reset();

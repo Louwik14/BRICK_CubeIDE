@@ -3,10 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
-#include "Core/synth_polyphony.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Param/param_registry.h"
 #include "Storage/patch_sd_bank.h"
@@ -229,14 +227,22 @@ static patch_v1_result_t patch_v1_capture_payload(uint8_t track,
     out_track->type = (uint8_t)ui_get_track_type(track);
     if (out_track->family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
     {
-        out_track->poly_voice_count = synth_polyphony_get_voice_count(track);
-        out_track->poly_spread = synth_polyphony_get_spread(track);
+        float voices = 1.0f;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_VOICES, track, &voices);
+        out_track->poly_voice_count = (uint8_t)voices;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_SPREAD, track, &out_track->poly_spread);
     }
     else if ((out_track->family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
              && (out_track->type == (uint8_t)UI_TRACK_TYPE_MULTI))
     {
-        out_track->poly_voice_count = brick6_sampler_runtime_get_multi_voice_count(track);
-        out_track->poly_spread = brick6_sampler_runtime_get_multi_spread(track);
+        float voices = 1.0f;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_VOICES, track, &voices);
+        out_track->poly_voice_count = (uint8_t)voices;
+        (void)param_registry_get_track_value(
+            PARAM_CFG_POLY_SPREAD, track, &out_track->poly_spread);
     }
     memcpy(&out_track->sound, sound, sizeof(out_track->sound));
     memcpy(&out_track->tone, tone, sizeof(out_track->tone));
@@ -351,28 +357,18 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
 
     uint8_t applied_voice_count = 0U;
     uint8_t voice_limited = 0U;
-    uint8_t available = synth_polyphony_get_free_count();
-    if (synth_polyphony_get_track_active(target) != 0U)
-    {
-        available = (uint8_t)(available + synth_polyphony_get_voice_count(target));
-    }
+    const uint8_t available = (uint8_t)param_registry[PARAM_CFG_POLY_VOICES].max;
     if ((patch->track.family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
             || (patch->track.family == (uint8_t)UI_TRACK_FAMILY_DRUM))
     {
-        if (available == 0U) return PATCH_V1_RESULT_VOICE_MAX;
         applied_voice_count = 1U;
-        available--;
     }
     if (patch->track.family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
     {
         uint8_t requested = patch->track.poly_voice_count;
         if (requested < 1U) requested = 1U;
-        if (requested > SYNTH_POLYPHONY_MAX_VOICES) requested = SYNTH_POLYPHONY_MAX_VOICES;
-        while ((applied_voice_count < requested) && (available > 0U))
-        {
-            applied_voice_count++;
-            available--;
-        }
+        if (requested > available) requested = available;
+        applied_voice_count = requested;
         if (applied_voice_count < requested) voice_limited = 1U;
     }
     else if ((patch->track.family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
@@ -380,9 +376,9 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
     {
         applied_voice_count = patch->track.poly_voice_count;
         if (applied_voice_count < 1U) applied_voice_count = 1U;
-        if (applied_voice_count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
+        if (applied_voice_count > available)
         {
-            applied_voice_count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
+            applied_voice_count = available;
             voice_limited = 1U;
         }
     }
@@ -402,8 +398,6 @@ static patch_v1_result_t patch_v1_apply_loaded_patch(const PatchSaveV1 *patch, u
     type[target] = patch->track.type;
 
     keyboard_engine_all_notes_off_for_track(target);
-    brick6_sampler_runtime_reset_track(target);
-    synth_polyphony_reset_track(target);
     if (ui_apply_track_config_bulk_mutation(family, type, midi_channel, midi_source) == false)
     {
         return PATCH_V1_RESULT_APPLY_FAIL;

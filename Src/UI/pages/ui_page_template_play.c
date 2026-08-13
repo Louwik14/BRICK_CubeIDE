@@ -3,12 +3,15 @@
 #include <stddef.h>
 
 #include "Core/track_runtime.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
+#include "Seq/seq_model.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 
-static const ui_template_family_t g_ui_template_play_family = {
-    .family_title = "PLAY",
+static uint8_t g_ui_template_play_subset;
+
+static const ui_template_family_t g_ui_template_play_families[2] = {{
+    .family_title = "PLAY 1/2",
     .nav_labels = { "V1", "V2", "V3", "V4" },
     .subpages = {
         { .title = "Voice 1", .param_bank = { .params = { PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V1_MICTIM } } },
@@ -17,16 +20,28 @@ static const ui_template_family_t g_ui_template_play_family = {
         { .title = "Voice 4", .param_bank = { .params = { PARAM_SEQ_PLAY_V4_NOTE, PARAM_SEQ_PLAY_V4_VEL, PARAM_SEQ_PLAY_V4_LEN, PARAM_SEQ_PLAY_V4_MICTIM } } },
     },
     .default_subpage = 0U,
-};
+}, {
+    .family_title = "PLAY 2/2",
+    .nav_labels = { "V5", "V6", "V7", "V8" },
+    .subpages = {
+        { .title = "Voice 5", .param_bank = { .params = { PARAM_SEQ_PLAY_V5_NOTE, PARAM_SEQ_PLAY_V5_VEL, PARAM_SEQ_PLAY_V5_LEN, PARAM_SEQ_PLAY_V5_MICTIM } } },
+        { .title = "Voice 6", .param_bank = { .params = { PARAM_SEQ_PLAY_V6_NOTE, PARAM_SEQ_PLAY_V6_VEL, PARAM_SEQ_PLAY_V6_LEN, PARAM_SEQ_PLAY_V6_MICTIM } } },
+        { .title = "Voice 7", .param_bank = { .params = { PARAM_SEQ_PLAY_V7_NOTE, PARAM_SEQ_PLAY_V7_VEL, PARAM_SEQ_PLAY_V7_LEN, PARAM_SEQ_PLAY_V7_MICTIM } } },
+        { .title = "Voice 8", .param_bank = { .params = { PARAM_SEQ_PLAY_V8_NOTE, PARAM_SEQ_PLAY_V8_VEL, PARAM_SEQ_PLAY_V8_LEN, PARAM_SEQ_PLAY_V8_MICTIM } } },
+    },
+    .default_subpage = 0U,
+}};
 
 static uint8_t ui_page_template_play_is_play_param(param_id_t param)
 {
-    return (uint8_t)((param >= PARAM_SEQ_PLAY_V1_NOTE) && (param <= PARAM_SEQ_PLAY_V4_MICTIM));
+    uint8_t play_index = 0U;
+    seq_step_play_field_t play_field = SEQ_STEP_PLAY_FIELD_NOTE;
+    return seq_model_play_resolve_param(param, &play_index, &play_field);
 }
 
 static const ui_template_family_t *ui_page_template_play_resolve_family(void)
 {
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_PLAY);
+    return &g_ui_template_play_families[g_ui_template_play_subset];
 }
 
 static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
@@ -40,7 +55,8 @@ static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
         return 0U;
     }
 
-    return (subpage_index < track_runtime_get_play_voice_count_from_descriptor(&resolved.descriptor)) ? 1U : 0U;
+    const uint8_t play_index = (uint8_t)(g_ui_template_play_subset * 4U + subpage_index);
+    return (play_index < seq_model_play_capacity((seq_track_id_t)active_track)) ? 1U : 0U;
 }
 
 static uint8_t ui_page_template_play_virtual_slot_text(uint8_t slot,
@@ -59,10 +75,7 @@ static ui_template_custom_widget_kind_t ui_page_template_play_pick_custom_widget
 {
     (void)subpage;
     if ((slot == 0U)
-            && ((id == PARAM_SEQ_PLAY_V1_NOTE)
-                || (id == PARAM_SEQ_PLAY_V2_NOTE)
-                || (id == PARAM_SEQ_PLAY_V3_NOTE)
-                || (id == PARAM_SEQ_PLAY_V4_NOTE)))
+            && (ui_page_template_play_is_play_param(id) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE;
     }
@@ -105,31 +118,39 @@ uint8_t ui_page_template_play_resolve_context(param_id_t param,
         return 0U;
     }
 
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)active_track, &lane) == 0U)
-            || (lane.active == 0U)
-            || (lane.can_sequence == 0U))
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_get((brick_entity_id_t)active_track, &entity) == 0U)
+            || (entity_topology_can_sequence(&entity) == 0U))
     {
         return 0U;
     }
 
-    out_context->owner_track = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-        ? (uint8_t)lane.parent_lane_id : (uint8_t)lane.lane_id;
-    out_context->member_index = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-        ? lane.child_index : 0U;
-    out_context->target_track = (uint8_t)lane.lane_id;
+    out_context->owner_track = (entity.role == ENTITY_ROLE_GROUP_CHILD)
+        ? (uint8_t)entity.parent_entity_id : (uint8_t)entity.entity_id;
+    out_context->member_index = (entity.role == ENTITY_ROLE_GROUP_CHILD)
+        ? entity.member_index : 0U;
+    out_context->target_track = (uint8_t)entity.entity_id;
     out_context->base_param = param;
     return 1U;
 }
 
 void ui_page_template_play_open_primary(void)
 {
+    g_ui_template_play_subset = 0U;
+    g_ui_template_play_state.navigation_subset = 0U;
     g_ui_template_play_state.resolved_family = ui_page_template_play_resolve_family();
     ui_template_page_select_subpage(&g_ui_template_play_state, 0U);
 }
 
 void ui_page_template_play_toggle_subset(void)
 {
+    const uint8_t active_track = ui_get_active_lane();
+    if (seq_model_play_capacity((seq_track_id_t)active_track) > 4U)
+    {
+        g_ui_template_play_subset ^= 1U;
+        g_ui_template_play_state.navigation_subset = g_ui_template_play_subset;
+        g_ui_template_play_state.resolved_family = ui_page_template_play_resolve_family();
+    }
     ui_template_page_select_subpage(&g_ui_template_play_state, g_ui_template_play_state.active_subpage);
 }
 
@@ -155,7 +176,7 @@ void ui_page_template_play_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_PLAY,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_play_family);
+                                        &g_ui_template_play_families[0]);
         }
     }
 }

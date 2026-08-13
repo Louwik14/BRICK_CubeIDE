@@ -35,6 +35,7 @@
 #include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
 
 #include "Storage/audio_recorder.h"
@@ -466,25 +467,45 @@ static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
     return 1U;
 }
 
-static uint8_t mixer_track_is_looper_ctx(const track_runtime_ctx_t *ctx)
+static uint8_t mixer_track_is_looper_ctx(const track_audio_runtime_ctx_t *ctx)
 {
     return (uint8_t)((ctx != 0)
-            && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && (ctx->audio_binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
             && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER));
 }
 
 static uint8_t mixer_track_is_looper(uint8_t logical_track)
 {
-    return mixer_track_is_looper_ctx(track_runtime_get_ctx(logical_track));
+    return mixer_track_is_looper_ctx(audio_note_engine_adapter_audio_ctx(logical_track));
+}
+
+static uint8_t mixer_entity_for_lane(uint8_t mix_track, uint8_t *out_entity)
+{
+    if ((out_entity == NULL) || (mix_track >= MIXER_MAX_TRACKS))
+        return 0U;
+    for (brick_entity_id_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const track_audio_runtime_ctx_t *const ctx =
+            audio_note_engine_adapter_audio_ctx(entity);
+        const track_audio_binding_t *const binding =
+            (ctx != NULL) ? &ctx->audio_binding : NULL;
+        if ((binding != NULL)
+                && (binding->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (binding->mix_track_id == mix_track))
+        {
+            *out_entity = entity;
+            return 1U;
+        }
+    }
+    return 0U;
 }
 
 static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
                                            uint8_t mix_track)
 {
     uint8_t source_track = mix_track;
-    (void)track_runtime_get_logical_track_for_mix_track(mix_track,
-                                                         &source_track);
+    (void)mixer_entity_for_lane(mix_track, &source_track);
     if ((looper_track >= MIXER_MAX_TRACKS)
             || (source_track >= MIXER_MAX_TRACKS)
             || (source_track == looper_track)
@@ -2191,12 +2212,12 @@ void mixer_multi_filter_process_mono(uint32_t track_id,
 /**
  * @brief Point d'entrée clamp01.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à clamp01.
  *
  * @param v Paramètre d'entrée de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour definie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2211,12 +2232,12 @@ static float clamp01(float v)
 /**
  * @brief Point d'entrée clamp_pan.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à clamp_pan.
  *
- * @param pan Paramètre d'entrée de l'API.
+ * @param pan Parametre d'entree de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour definie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2316,7 +2337,7 @@ static inline void mixer_track_coefficients_at(
 /**
  * @brief Point d'entrée mixer_init.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_init.
  *
  *
@@ -2418,10 +2439,10 @@ void mixer_init(void)
 /**
  * @brief Point d'entrée mixer_set_master.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_master.
  *
- * @param gain Paramètre d'entrée de l'API.
+ * @param gain Parametre d'entree de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2439,11 +2460,11 @@ void mixer_set_master(float gain)
 /**
  * @brief Point d'entrée mixer_get_master.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_get_master.
  *
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour definie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2456,11 +2477,11 @@ float mixer_get_master(void)
 /**
  * @brief Point d'entrée mixer_set_track_gain.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_gain.
  *
- * @param track_id Paramètre d'entrée de l'API.
- * @param gain Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
+ * @param gain Parametre d'entree de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2481,12 +2502,12 @@ void mixer_set_track_gain(uint32_t track_id, float gain)
 /**
  * @brief Point d'entrée mixer_get_track_gain.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_get_track_gain.
  *
- * @param track_id Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour definie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2502,11 +2523,11 @@ float mixer_get_track_gain(uint32_t track_id)
 /**
  * @brief Point d'entrée mixer_set_track_pan.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_pan.
  *
- * @param track_id Paramètre d'entrée de l'API.
- * @param pan Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
+ * @param pan Parametre d'entree de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2522,10 +2543,10 @@ void mixer_set_track_pan(uint32_t track_id, float pan)
 /**
  * @brief Point d'entrée mixer_set_track_mute.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_mute.
  *
- * @param track_id Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
  * @param mute Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
@@ -2550,10 +2571,10 @@ uint8_t mixer_get_track_mute(uint32_t track_id)
 /**
  * @brief Point d'entrée mixer_set_track_route.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_route.
  *
- * @param track_id Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
  * @param route Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
@@ -2571,12 +2592,12 @@ void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
 /**
  * @brief Point d'entrée mixer_set_track_insert_slot.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_insert_slot.
  *
- * @param track_id Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
  * @param insert_idx Paramètre d'entrée de l'API.
- * @param slot Paramètre d'entrée de l'API.
+ * @param slot Parametre d'entree de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2592,11 +2613,11 @@ void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t 
 /**
  * @brief Point d'entrée mixer_set_track_send_level.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_track_send_level.
  *
- * @param track_id Paramètre d'entrée de l'API.
- * @param send_idx Paramètre d'entrée de l'API.
+ * @param track_id Parametre d'entree de l'API.
+ * @param send_idx Parametre d'entree de l'API.
  * @param level Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
@@ -2613,11 +2634,11 @@ void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float leve
 /**
  * @brief Point d'entrée mixer_set_send_fx_slot.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_set_send_fx_slot.
  *
- * @param send_idx Paramètre d'entrée de l'API.
- * @param slot Paramètre d'entrée de l'API.
+ * @param send_idx Parametre d'entree de l'API.
+ * @param slot Parametre d'entree de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -3813,7 +3834,7 @@ void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
 /**
  * @brief Point d'entrée mixer_process.
  *
- * Rôle:
+ * Role:
  * - Exécuter le traitement associé à mixer_process.
  *
  * @param tracks Paramètre d'entrée de l'API.
@@ -3920,16 +3941,16 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     {
         const uint8_t logical_track = (uint8_t)__builtin_ctz((unsigned)looper_mask);
         looper_mask &= (uint16_t)(looper_mask - 1U);
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
+        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(logical_track);
         if((ctx != 0)
-                && (ctx->mix_track_id < MIXER_MAX_TRACKS)
+                && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
                 && (mixer_track_is_looper_ctx(ctx) != 0U)
-                && (g_tracks[ctx->mix_track_id].mute == 0U)
+                && (g_tracks[ctx->audio_binding.mix_track_id].mute == 0U)
                 && (brick6_looper_runtime_is_playing(logical_track) != 0U))
         {
             looper_output_active[logical_track] = 1U;
             looper_playback_active = 1U;
-            if(g_tracks[ctx->mix_track_id].route_master != 0U)
+            if(g_tracks[ctx->audio_binding.mix_track_id].route_master != 0U)
             {
                 looper_playback_routes_main = 1U;
             }
@@ -4555,7 +4576,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
         {
             uint8_t source_track = (uint8_t)t;
-            (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track);
+            (void)mixer_entity_for_lane((uint8_t)t, &source_track);
             if((source_track < MIXER_MAX_TRACKS) && (mixer_track_is_looper(source_track) != 0U))
             {
                 if((sample_capture_active != 0U)

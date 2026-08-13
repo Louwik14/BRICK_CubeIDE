@@ -29,17 +29,16 @@
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_param_iface.h"
-#include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
-#include "Core/synth_polyphony.h"
-#include "Audio/mixer.h"
 #include "Core/track_tone_sound_state.h"
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
 #include "Core/live_parameter_migration.h"
+#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_clock.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -53,8 +52,29 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
                                                        float clamped,
                                                        uint8_t rt_fast);
+
+static uint8_t param_registry_submit_audio_value(param_id_t id,
+                                                 uint8_t track,
+                                                 float value,
+                                                 uint8_t scope)
+{
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 1U,
+        .item = {{
+            .parameter_id = (uint16_t)id,
+            .scope = scope,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .value = live_parameter_event_encode_float(value)
+        }}
+    };
+    return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
+}
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
-static uint8_t param_registry_track_is_sampler_multi(uint8_t track);
 static float clamp_value(float v, float lo, float hi);
 
 static uint8_t param_registry_prism_param_slot(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
@@ -148,14 +168,6 @@ static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float c
     }
 
     return 0U;
-}
-
-static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
-{
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    return (uint8_t)((ctx != NULL)
-                     && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
 }
 
 /**
@@ -1108,7 +1120,8 @@ static uint8_t param_track_exec_apply_tone_drum_range(const param_track_exec_ctx
         return 0U;
     }
 
-    return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    return param_backend_apply_track_value(
+        ctx->track, ctx->id, ctx->clamped, 0U);
 }
 
 static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
@@ -1248,7 +1261,7 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
         }
         return ui_set_track_external_input(
             track, (uint8_t)(clamp_value(clamped, 0.0f,
-                (float)(TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U)) + 0.5f)) ? 1U : 0U;
+                (float)(ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U)) + 0.5f)) ? 1U : 0U;
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -1336,20 +1349,6 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
 
     if (track < SEQ_LANE_CAPACITY)
     {
-        if (id == PARAM_CFG_POLY_VOICES)
-        {
-            *out_value = (float)((param_registry_track_is_sampler_multi(track) != 0U)
-                ? brick6_sampler_runtime_get_multi_voice_count(track)
-                : synth_polyphony_get_voice_count(track));
-            return 1U;
-        }
-        if (id == PARAM_CFG_POLY_SPREAD)
-        {
-            *out_value = (param_registry_track_is_sampler_multi(track) != 0U)
-                ? brick6_sampler_runtime_get_multi_spread(track)
-                : synth_polyphony_get_spread(track);
-            return 1U;
-        }
         switch (id)
         {
             case PARAM_CFG_TRACK:
@@ -1502,6 +1501,9 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
+    if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
+        return 0U;
+
     if (param_filter_is_param(id) != 0U)
     {
         const uint8_t applied = param_filter_apply_value(id,
@@ -1559,6 +1561,8 @@ uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
 
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
+    if (id == PARAM_MASTER_GAIN)
+        return 0U;
     if (desc->apply == NULL)
     {
         return 0U;
@@ -1569,6 +1573,31 @@ uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
 }
 
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
+{
+    if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
+            || (param_id_is_reserved(id) != 0U))
+        return 0U;
+    const float clamped = clamp_value(
+        value, param_registry[id].min, param_registry[id].max);
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = 1U,
+        .item = {{
+            .parameter_id = (uint16_t)id,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+                                | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
+            .value = live_parameter_event_encode_float(clamped)
+        }}
+    };
+    return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
+}
+
+uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value)
 {
     if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
     {
@@ -1717,53 +1746,26 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 1U;
     }
 
-    if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
     {
-        const uint8_t is_multi = param_registry_track_is_sampler_multi(track);
-        if ((is_multi == 0U) && (track >= SYNTH_POLYPHONY_TRACK_CAPACITY))
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        const uint8_t midi_tone = (uint8_t)(
+            (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (param_backend_track_supports_midi_tone_ctx(
+                    track_runtime_get_ctx(track)) != 0U));
+        const uint8_t audio_command = (uint8_t)(
+            (live_parameter_is_audio_owned(id) != 0U)
+            || (id == PARAM_CFG_POLY_VOICES)
+            || (id == PARAM_CFG_POLY_SPREAD)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+            || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                && (midi_tone == 0U))
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
+        if (audio_command != 0U)
         {
-            return 0U;
+            param_registry_runtime_cache_set(track, id, clamped);
+            return param_registry_submit_audio_value(
+                id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
         }
-        if (id == PARAM_CFG_POLY_VOICES)
-        {
-            if (is_multi != 0U)
-            {
-                brick6_sampler_runtime_set_multi_voice_count(track, (uint8_t)clamped);
-            }
-            else
-            {
-                const track_runtime_ctx_t *const runtime = track_runtime_get_ctx(track);
-                const uint8_t fm_transition = (uint8_t)((runtime != NULL)
-                    && (runtime->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                    && (runtime->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM));
-                const uint8_t old_count = synth_polyphony_get_voice_count(track);
-                const uint8_t new_count = (uint8_t)clamped;
-                uint8_t mix_track = 0U;
-                const uint8_t has_mix = track_runtime_get_mix_target_track(track, &mix_track);
-                if (fm_transition == 0U)
-                    keyboard_engine_all_notes_off_for_track(track);
-                const uint8_t applied = synth_polyphony_set_voice_count(track, new_count);
-                if ((fm_transition != 0U) && (has_mix != 0U))
-                {
-                    if ((old_count == 1U) && (applied > 1U))
-                        mixer_track_voice_state_to_poly(mix_track, track, 0U);
-                    else if ((old_count > 1U) && (applied == 1U))
-                        mixer_track_voice_state_from_poly(mix_track, track, 0U);
-                }
-            }
-        }
-        else
-        {
-            if (is_multi != 0U)
-            {
-                brick6_sampler_runtime_set_multi_spread(track, clamped);
-            }
-            else
-            {
-                synth_polyphony_set_spread(track, clamped);
-            }
-        }
-        return 1U;
     }
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
@@ -1927,9 +1929,13 @@ void param_set(param_id_t id, float value)
     /* Global audio-owned values also have a control-side target shadow.  Keep
      * authoritative writes such as defaults/project restore coherent with the
      * encoder command path, which uses cache slot zero for global scope. */
-    if (live_parameter_is_audio_owned(id) != 0U)
+    if ((live_parameter_is_audio_owned(id) != 0U)
+            || (id == PARAM_MASTER_GAIN))
     {
         param_registry_runtime_cache_set(0U, id, clamped);
+        (void)param_registry_submit_audio_value(
+            id, 0U, clamped, LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+        return;
     }
 
     if (desc->apply != NULL)

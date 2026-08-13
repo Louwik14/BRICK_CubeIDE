@@ -57,7 +57,7 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
             return UI_HALL_MODE_VIEW_SEQ;
 
         case UI_HALL_MODE_KEYBOARD:
-            return (track_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) != 0U)
+            return (entity_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) != 0U)
                     ? UI_HALL_MODE_VIEW_KEYBOARD
                     : UI_HALL_MODE_VIEW_SEQ;
 
@@ -83,7 +83,7 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
 
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
 {
-    if (track_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) == 0U)
+    if (entity_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) == 0U)
     {
         return 0U;
     }

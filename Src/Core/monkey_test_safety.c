@@ -2,7 +2,6 @@
 
 #include <string.h>
 
-#include "Audio/mixer.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_output_guard.h"
@@ -14,6 +13,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
+#include "Param/param_registry.h"
 #include "UI/ui_core.h"
 
 #define MONKEY_TEST_SAFE_MASTER_GAIN 0.25f
@@ -63,7 +63,7 @@ uint8_t monkey_test_safety_prepare(void)
     g_monkey_test_safety.saved_active_track = ui_get_active_track();
     g_monkey_test_safety.saved_hall_mode = ui_get_hall_mode();
     g_monkey_test_safety.restore_transport = seq_runtime_is_running();
-    g_monkey_test_safety.saved_master_gain = mixer_get_master();
+    g_monkey_test_safety.saved_master_gain = param_get(PARAM_MASTER_GAIN);
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; track++)
     {
         (void)seq_runtime_get_playhead_step(
@@ -92,7 +92,7 @@ uint8_t monkey_test_safety_prepare(void)
         (g_monkey_test_safety.saved_master_gain < MONKEY_TEST_SAFE_MASTER_GAIN)
             ? g_monkey_test_safety.saved_master_gain
             : MONKEY_TEST_SAFE_MASTER_GAIN;
-    mixer_set_master(safe_gain);
+    param_set(PARAM_MASTER_GAIN, safe_gain);
     g_monkey_test_safety.active = 1U;
     return 1U;
 }
@@ -128,7 +128,7 @@ uint8_t monkey_test_safety_restore(void)
         }
     }
 
-    mixer_set_master(g_monkey_test_safety.saved_master_gain);
+    param_set(PARAM_MASTER_GAIN, g_monkey_test_safety.saved_master_gain);
     undo_v2_set_capture_suspended(0U);
     g_monkey_test_safety.active = 0U;
     g_monkey_test_safety.snapshot_valid = 0U;

@@ -151,7 +151,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_page_patch_assign_close();
                 return 1U;
             }
-            if (track_topology_is_active(ui_get_active_track()) == 0U)
+            if (entity_topology_is_active(ui_get_active_track()) == 0U)
             {
                 ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
@@ -303,7 +303,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     if (hall == 0U)
     {
         hall_note_suppressed[hall] = 1U;
-        if (track_topology_is_active(ui_get_active_track()) == 0U)
+        if (entity_topology_is_active(ui_get_active_track()) == 0U)
         {
             g_patch_pending.active = 0U;
             ui_core_feedback_set("TRACK ONLY", now_ms);
@@ -450,7 +450,7 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                    && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
     cfg_tap_ms[hall] = now_ms;
 
-    if (track_topology_is_active(hall) == 0U)
+    if (entity_topology_is_active(hall) == 0U)
     {
         if (set_active_track != 0)
         {

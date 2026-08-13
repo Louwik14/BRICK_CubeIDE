@@ -42,13 +42,29 @@ static uint32_t g_param_macro_touch_seq;
 CONTROL_STATE_SDRAM static param_macro_pending_resolution_t
     g_param_macro_pending_resolutions[PARAM_MACRO_PENDING_RESOLUTION_CAPACITY];
 
+static uint8_t param_macro_target_is_audio_owned(uint8_t track,
+                                                 param_id_t param)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((live_parameter_is_audio_owned(param) != 0U)
+            || (param == PARAM_CFG_POLY_VOICES)
+            || (param == PARAM_CFG_POLY_SPREAD)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+        return 1U;
+    if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        return 0U;
+    return (param_backend_track_supports_midi_tone_ctx(
+                track_runtime_get_ctx(track)) == 0U) ? 1U : 0U;
+}
+
 static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
                                     param_id_t param,
                                     uint8_t track,
                                     float value)
 {
     if ((bulk == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
-            || (live_parameter_is_audio_owned(param) == 0U))
+            || (param_macro_target_is_audio_owned(track, param) == 0U))
     {
         return 0U;
     }
@@ -212,7 +228,7 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     track_runtime_resolved_track_t resolved;
 
-    if ((live_parameter_is_audio_owned(param) != 0U)
+    if ((param_macro_target_is_audio_owned(track, param) != 0U)
             || (param_macro_lock_target_is_supported(track, param) == 0U))
     {
         return 0U;
@@ -255,11 +271,6 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
         return param_registry_apply_track_value(param, track, value);
     }
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-    {
-        return param_backend_apply_mix_track(track_runtime_get_ctx(track), track, param, value, 0U);
-    }
-
     return param_backend_apply_track_value(track, param, value, 0U);
 }
 
@@ -268,7 +279,7 @@ static uint8_t param_macro_collect_value(live_parameter_audio_bulk_t *bulk,
                                          param_id_t param,
                                          float value)
 {
-    if (live_parameter_is_audio_owned(param) != 0U)
+    if (param_macro_target_is_audio_owned(track, param) != 0U)
     {
         return param_macro_bulk_add(bulk, param, track, value);
     }
@@ -337,7 +348,8 @@ static void param_macro_apply_non_audio_releases(void)
             if ((last->track >= SEQ_LANE_CAPACITY)
                     || (last->param >= PARAM_COUNT)
                     || (last->resolved_value == last->base_value)
-                    || (live_parameter_is_audio_owned(last->param) != 0U))
+                    || (param_macro_target_is_audio_owned(
+                            last->track, last->param) != 0U))
             {
                 continue;
             }
@@ -361,7 +373,8 @@ static void param_macro_apply_non_audio_pending(
     for (uint16_t i = 0U; i < pending_count; ++i)
     {
         const param_macro_resolution_t *const resolution = &pending[i].resolution;
-        if ((live_parameter_is_audio_owned(resolution->param) != 0U)
+        if ((param_macro_target_is_audio_owned(
+                    resolution->track, resolution->param) != 0U)
                 || (param_macro_apply_backend_value(resolution->track,
                                                     resolution->param,
                                                     resolution->resolved_value) == 0U))
@@ -421,7 +434,8 @@ static void param_macro_recompute_sources(void)
                 continue;
             }
 
-            if ((live_parameter_is_audio_owned(last->param) != 0U)
+            if ((param_macro_target_is_audio_owned(
+                        last->track, last->param) != 0U)
                     && (param_macro_bulk_add(&bulk,
                                              last->param,
                                              last->track,
@@ -565,7 +579,8 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
         return 0U;
     }
 
-    if (live_parameter_is_audio_owned(resolution->param) == 0U)
+    if (param_macro_target_is_audio_owned(
+            resolution->track, resolution->param) == 0U)
     {
         return param_macro_apply_backend_value(resolution->track,
                                                resolution->param,

@@ -24,6 +24,7 @@ typedef struct
 typedef struct
 {
     seq_track_data_t track;
+    seq_play_snapshot_t play[SEQ_MAX_STEPS];
     track_snapshot_step_locks_t step_locks[SEQ_MAX_STEPS];
 } track_snapshot_sequence_t;
 

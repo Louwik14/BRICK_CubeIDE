@@ -28,15 +28,14 @@
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
+#include "Audio/control_audio_queue.h"
+#include "Audio/audio_note_admission.h"
+#include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_mod_matrix.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Seq/seq_runtime.h"
-#include "Seq/seq_runtime_control.h"
-#include "Seq/seq_runtime_exec.h"
-#define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
-#include "NoteFx/note_fx_pipeline.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Sampler/sample_stream_time.h"
 #include "Core/brick6_stream_service_task.h"
 
@@ -63,7 +62,6 @@
 
 /* Taille totale des buffers DMA (en int32) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
-#define AUDIO_SEQ_MAX_BLOCK_EVENTS 128U
 
 /* ============================================================
    DMA BUFFERS
@@ -87,37 +85,82 @@ static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
    ============================================================ */
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
-
+static uint64_t g_audio_sample_clock;
 /* ============================================================
    INTERNAL PROCESSING
    Hardware layer only: calls float engine
    ============================================================ */
 
-static void audio_apply_seq_event_at_sample(const seq_runtime_audio_event_t *event,
-                                            uint64_t event_sample_time)
+static void audio_apply_control_events_at_sample(uint64_t sample_time)
 {
-    if (event == NULL)
+    control_audio_event_t event;
+    while ((control_audio_queue_audio_peek(&event) != 0U)
+            && (event.due_sample <= sample_time))
     {
-        return;
-    }
-
-    if (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
-    {
-        brick6_looper_runtime_on_boundary_edge(event->track, event_sample_time);
-    }
-    else if (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK)
-    {
-        metronome_runtime_trigger_at(0U,
-                                     (event->velocity != 0U) ? METRONOME_CLICK_ACCENT
-                                                             : METRONOME_CLICK_NORMAL);
-    }
-    else
-    {
-        seq_runtime_audio_event_t applied_event = *event;
-        /* The application seam owns the actual integer sample after offset conversion. */
-        applied_event.sample_offset_in_block = 0U;
-        applied_event.sample_abs = event_sample_time;
-        seq_runtime_audio_apply_event(&applied_event);
+        (void)control_audio_queue_audio_pop();
+        if (event.kind <= (uint8_t)CONTROL_AUDIO_EVENT_NOTE_ON)
+        {
+            (void)audio_note_admission_apply(&event);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE)
+        {
+            brick6_looper_runtime_on_boundary_edge(event.entity_id,
+                                                   event.due_sample);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK)
+        {
+            metronome_runtime_trigger_at(
+                0U, (event.flags != 0U) ? METRONOME_CLICK_ACCENT
+                                        : METRONOME_CLICK_NORMAL);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ENTITY)
+        {
+            audio_note_admission_close_entity(event.entity_id);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ALL)
+        {
+            audio_note_admission_close_all();
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BINDING_INTENT)
+        {
+            audio_note_admission_close_entity(event.entity_id);
+            audio_note_engine_adapter_install_intent(&event);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MOD_MATRIX_SNAPSHOT)
+        {
+            audio_mod_matrix_apply_snapshot(&event);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START)
+        {
+            brick6_looper_runtime_on_transport_start();
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_STOP)
+        {
+            brick6_looper_runtime_on_transport_stop();
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_RECORD_STOP)
+        {
+            brick6_looper_runtime_arm_record_stop(event.due_sample);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE)
+        {
+            brick6_looper_runtime_prepare_replace(event.entity_id);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_RECORD_START)
+        {
+            brick6_looper_runtime_arm_live_record_start(
+                event.entity_id, event.note, event.source_generation,
+                event.velocity, event.due_sample);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MULTI_ASSIGN)
+        {
+            brick6_sampler_runtime_set_multi_instrument(event.entity_id,
+                                                        event.param_id);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MULTI_STOP)
+        {
+            brick6_sampler_runtime_stop_multi_instrument(event.param_id);
+        }
     }
 }
 static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
@@ -126,11 +169,11 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
     while (cursor < frames)
     {
         const uint64_t now = sample_time + cursor;
-        note_fx_pipeline_process(now, 1U, seq_runtime_get_samples_per_step_q16());
+        audio_apply_control_events_at_sample(now);
         (void)live_parameter_audio_queue_consume_due(now);
         (void)live_parameter_audio_runtime_apply_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
-        uint16_t span = note_fx_pipeline_frames_until_deadline(now, remaining);
+        uint16_t span = remaining;
         if (span == 0U)
         {
             span = 1U;
@@ -165,96 +208,17 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static uint16_t audio_seq_collect_frames_until_next_internal_pulse(uint16_t remaining_frames)
-{
-    const seq_runtime_state_t *const state = seq_runtime_exec_state_const();
-    if ((state == NULL)
-        || (remaining_frames == 0U)
-        || (state->running == 0U)
-        || (state->samples_per_step_q16 == 0U)
-        || ((seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL)))
-    {
-        return remaining_frames;
-    }
-
-    const uint64_t block_start_sample = seq_runtime_exec_get_audio_timeline_sample();
-    const uint64_t block_start_q16 = block_start_sample << 16;
-    const uint64_t block_end_q16 = (block_start_sample + (uint64_t)remaining_frames) << 16;
-    const uint64_t next_pulse_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
-
-    if ((next_pulse_q16 <= block_start_q16) || (next_pulse_q16 >= block_end_q16))
-    {
-        return remaining_frames;
-    }
-
-    const uint64_t next_pulse_sample = next_pulse_q16 >> 16;
-    if (next_pulse_sample <= block_start_sample)
-    {
-        return remaining_frames;
-    }
-
-    const uint64_t frames_until_pulse = next_pulse_sample - block_start_sample;
-    if ((frames_until_pulse == 0U) || (frames_until_pulse > (uint64_t)remaining_frames))
-    {
-        return remaining_frames;
-    }
-
-    return (uint16_t)frames_until_pulse;
-}
-
-static void audio_process_seq_event_segment(int32_t *rx,
+static void audio_process_event_segment(int32_t *rx,
                                             int32_t *tx,
                                             uint32_t half_cursor,
                                             uint64_t block_start_sample,
-                                            uint16_t block_frames,
-                                            seq_runtime_audio_event_t *events,
-                                            uint16_t event_count)
+                                            uint16_t block_frames)
 {
-    uint32_t cursor = 0U;
-    uint16_t event_index = 0U;
-
-    while (cursor < block_frames)
-    {
-        uint32_t next_event_offset = block_frames;
-        if (event_index < event_count)
-        {
-            next_event_offset = events[event_index].sample_offset_in_block;
-            if (next_event_offset > block_frames)
-            {
-                next_event_offset = block_frames;
-            }
-        }
-
-        if (next_event_offset > cursor)
-        {
-            const uint32_t segment_frames = next_event_offset - cursor;
-            const uint64_t segment_sample = block_start_sample + (uint64_t)cursor;
-            const uint32_t frame_offset = half_cursor + cursor;
-            brick6_looper_runtime_on_scheduled_start(segment_sample);
-            process_audio_segment(&rx[frame_offset * AUDIO_WORDS_PER_FRAME],
-                                  &tx[frame_offset * AUDIO_WORDS_PER_FRAME],
-                                  segment_sample,
-                                  segment_frames);
-            cursor = next_event_offset;
-            continue;
-        }
-
-        while ((event_index < event_count)
-               && (events[event_index].sample_offset_in_block <= cursor))
-        {
-            audio_apply_seq_event_at_sample(&events[event_index],
-                                            block_start_sample + (uint64_t)cursor);
-            event_index++;
-        }
-    }
-
-    while (event_index < event_count)
-    {
-        audio_apply_seq_event_at_sample(&events[event_index],
-                                        block_start_sample + (uint64_t)block_frames);
-        event_index++;
-    }
-
+    brick6_looper_runtime_on_scheduled_start(block_start_sample);
+    process_audio_segment(&rx[half_cursor * AUDIO_WORDS_PER_FRAME],
+                          &tx[half_cursor * AUDIO_WORDS_PER_FRAME],
+                          block_start_sample,
+                          block_frames);
 }
 ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 {
@@ -274,41 +238,29 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traite. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
-    note_fx_pipeline_begin_audio_half(AUDIO_FRAMES_PER_HALF);
-    seq_play_scheduler_audio_begin_half(SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA);
-
     uint32_t half_cursor = 0U;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
-        uint16_t block_frames = audio_seq_collect_frames_until_next_internal_pulse(remaining);
-        block_frames = note_fx_pipeline_frames_until_deadline(
-            seq_runtime_exec_get_audio_timeline_sample(), block_frames);
+        uint16_t block_frames = remaining;
+        block_frames = control_audio_queue_audio_frames_until_due(
+            g_audio_sample_clock, block_frames);
         block_frames = live_parameter_audio_queue_frames_until_deadline(
-            seq_runtime_exec_get_audio_timeline_sample(), block_frames);
+            g_audio_sample_clock, block_frames);
         if (block_frames == 0U)
         {
             block_frames = 1U;
         }
 
-        seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
-        const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
-                                                                            AUDIO_SEQ_MAX_BLOCK_EVENTS,
-                                                                            block_frames);
-        const uint64_t block_start_sample =
-            seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)block_frames;
-        audio_process_seq_event_segment(rx,
+        const uint64_t block_start_sample = g_audio_sample_clock;
+        g_audio_sample_clock += (uint64_t)block_frames;
+        audio_process_event_segment(rx,
                                         tx,
                                         half_cursor,
                                         block_start_sample,
-                                        block_frames,
-                                        block_events,
-                                        event_count);
+                                        block_frames);
         half_cursor += block_frames;
     }
-
-    note_fx_pipeline_end_audio_half();
-    seq_play_scheduler_audio_end_half();
 
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx, half_bytes);
@@ -337,13 +289,15 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 void audio_init(void)
 {
     live_clock_init();
+    control_audio_queue_init();
+    audio_note_admission_init();
+    audio_note_engine_adapter_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
+    g_audio_sample_clock = 0U;
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
     /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
@@ -427,8 +381,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
+        audio_note_engine_adapter_audio_publish_snapshot();
         live_clock_audio_publish_anchor(
-            seq_runtime_exec_get_audio_timeline_sample());
+            g_audio_sample_clock);
         cpu_load_irq_begin();
 
         process_half(0);
@@ -471,8 +426,9 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
+        audio_note_engine_adapter_audio_publish_snapshot();
         live_clock_audio_publish_anchor(
-            seq_runtime_exec_get_audio_timeline_sample());
+            g_audio_sample_clock);
         cpu_load_irq_begin();
 
         process_half(1);

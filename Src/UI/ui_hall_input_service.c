@@ -7,7 +7,7 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #if defined(BRICK6_VARIANT_LOWCOST)
 #include "Seq/seq_edit.h"
 #include "ui_core.h"
@@ -108,12 +108,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    seq_lane_descriptor_t lane;
+    entity_topology_descriptor_t entity;
     if ((hall < HALL_UI_LANE_COUNT)
-            && (seq_lane_get_descriptor((seq_lane_id_t)hall, &lane) != 0U)
-            && (lane.active != 0U))
+            && (entity_topology_get((brick_entity_id_t)hall, &entity) != 0U)
+            && (entity.active != 0U))
     {
-        if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
+        if (entity.role == ENTITY_ROLE_GROUP_CHILD)
         {
             hall_note_suppressed[hall] = 1U;
             if (set_active_track != 0)

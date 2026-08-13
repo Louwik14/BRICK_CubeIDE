@@ -70,19 +70,7 @@ typedef struct
     uint64_t sample_abs;
     uint32_t generation;
     uint32_t event_token;
-} seq_runtime_audio_event_t;
-
-typedef struct
-{
-    uint32_t internal_irq_tick_count;
-    uint32_t internal_non_audio_step_pulse_count;
-    uint32_t internal_step_burst_block_count;
-    uint16_t max_internal_step_pulses_per_block;
-    uint32_t external_pulses_coalesced;
-    uint32_t external_pulses_overflowed;
-    uint16_t max_external_pulses_per_block;
-    uint32_t live_rec_event_drop_count;
-} seq_runtime_diag_t;
+} seq_runtime_control_event_t;
 
 /*
  * Contract surface:
@@ -95,12 +83,6 @@ void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
-/* Hybrid seam: query of due events with explicit audio-timeline advance. */
-uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
-                                                uint16_t max_events,
-                                                uint16_t block_frames);
-/* Audio apply seam: forwards collected runtime events to the scheduler apply surface. */
-void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
 
 /* Orchestration / policy surface. */
@@ -160,7 +142,7 @@ void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
 
-/* Queries / diagnostics. */
+/* Queries. */
 uint8_t seq_runtime_is_running(void);
 uint8_t seq_runtime_is_start_pending(void);
 uint8_t seq_runtime_rec_is_armed(void);
@@ -171,7 +153,4 @@ uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
 uint32_t seq_runtime_get_tempo_bpm_milli(void);
 uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
-void seq_runtime_diag_reset(void);
-void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
-
 #endif /* SEQ_RUNTIME_H */

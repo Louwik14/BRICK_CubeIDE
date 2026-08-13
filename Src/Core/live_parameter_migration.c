@@ -15,6 +15,8 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND0_FX:
+        case PARAM_MIX_SEND1_FX:
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
         case PARAM_PRISM_FINE:
@@ -51,6 +53,12 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_MIX_REVERB_WIDTH:
         case PARAM_MIX_REVERB_HPF:
         case PARAM_MIX_REVERB_LPF:
+        case PARAM_MIX_REVERB_DELAYS:
+        case PARAM_MIX_DELAY_TYPE:
+        case PARAM_MIX_DELAY_MODE:
+        case PARAM_MIX_DELAY_TIME:
+        case PARAM_MIX_DELAY_TIME_R:
+        case PARAM_MIX_DELAY_PINGPONG:
         case PARAM_MIX_DELAY_WIDTH:
         case PARAM_MIX_DELAY_FEEDBACK:
         case PARAM_MIX_DELAY_SPECTRAL_POSITION:

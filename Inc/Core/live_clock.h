@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "Board/board_audio_format.h"
+#include "Core/entity_topology.h"
 
 /* One complete SAI half is the bounded normal transport guard: an input
  * captured just after an anchor is consumed at the following audio boundary.
@@ -20,6 +21,7 @@ typedef struct
 {
     uint32_t tim5_tick;
     uint64_t audio_sample;
+    uint32_t binding_generation[BRICK_ENTITY_CAPACITY];
 } live_clock_anchor_t;
 
 void live_clock_init(void);
@@ -34,6 +36,10 @@ void live_clock_audio_publish_anchor(uint64_t audio_sample);
 
 /* Read a coherent snapshot of the latest audio-owned anchor. */
 bool live_clock_read_anchor(live_clock_anchor_t *out_anchor);
+bool live_clock_read_audio_sample(uint64_t *out_audio_sample);
+uint64_t live_clock_audio_sample(void);
+bool live_clock_read_binding_generation(brick_entity_id_t entity_id,
+                                        uint32_t *out_generation);
 
 /* Convert a TIM5 capture tick to the absolute audio sample timeline. */
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,

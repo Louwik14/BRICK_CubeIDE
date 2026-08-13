@@ -102,9 +102,9 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
 static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
                                                  ui_track_family_t family,
                                                  ui_track_type_t type,
-                                                 const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                                 const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
-    if ((track >= UI_TRACK_COUNT) || (track_configs == 0))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (track_configs == 0))
     {
         return 0U;
     }
@@ -113,18 +113,26 @@ static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
 }
 
 static uint8_t ui_track_catalog_count_sampler_clip_tracks(uint8_t track,
-                                                          const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                                          const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
     uint8_t count = 0U;
 
-    if ((track_configs == 0) || (track >= UI_TRACK_COUNT))
+    if ((track_configs == 0) || (track >= BRICK_ENTITY_CAPACITY))
     {
         return 0U;
     }
 
-    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+    const uint8_t group_active = (uint8_t)(
+        track_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == UI_TRACK_TYPE_GROUP);
+    for (uint8_t other_track = 0U; other_track < BRICK_ENTITY_CAPACITY; ++other_track)
     {
+        entity_topology_descriptor_t entity;
         if (other_track == track)
+        {
+            continue;
+        }
+        if ((entity_topology_resolve(group_active, other_track, &entity) == 0U)
+                || (entity.active == 0U))
         {
             continue;
         }
@@ -177,18 +185,31 @@ bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_trac
 bool ui_track_catalog_type_is_available(uint8_t track,
                                         ui_track_family_t family,
                                         ui_track_type_t type,
-                                        const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                        const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
-    if ((track >= UI_TRACK_COUNT)
+    if ((track >= BRICK_ENTITY_CAPACITY)
             || (track_configs == 0)
             || !ui_track_catalog_type_is_valid_for_family(family, type))
     {
         return false;
     }
 
-    if ((family == UI_TRACK_FAMILY_SAMPLER)
-            && (type == UI_TRACK_TYPE_GROUP)
-            && (track != TRACK_TOPOLOGY_GROUP_PARENT_TRACK))
+    const uint8_t group_active = (uint8_t)(
+        (track_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == UI_TRACK_TYPE_GROUP)
+        || ((track == BRICK_ENTITY_GROUP_MASTER_ID) && (type == UI_TRACK_TYPE_GROUP)));
+    entity_topology_descriptor_t entity;
+    if (entity_topology_resolve(group_active, track, &entity) == 0U)
+    {
+        return false;
+    }
+    if ((type == UI_TRACK_TYPE_GROUP)
+            && (entity.role != ENTITY_ROLE_GROUP_MASTER))
+    {
+        return false;
+    }
+    if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
+            && (family != UI_TRACK_FAMILY_OFF)
+            && !ui_track_catalog_family_is_engine(family))
     {
         return false;
     }
@@ -213,9 +234,9 @@ bool ui_track_catalog_type_is_available(uint8_t track,
 
 bool ui_track_catalog_family_is_available(uint8_t track,
                                           ui_track_family_t family,
-                                          const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                          const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
-    if ((track >= UI_TRACK_COUNT) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return false;
     }
@@ -232,7 +253,7 @@ ui_track_family_t ui_track_catalog_cfg_family_step(
     ui_track_family_t current,
     int8_t direction,
     uint8_t track,
-    const ui_track_config_t track_configs[UI_TRACK_COUNT])
+    const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
     uint8_t position = 0U;
     const uint8_t order_count = ui_track_catalog_cfg_family_order_count();
@@ -277,16 +298,16 @@ ui_track_family_t ui_track_catalog_cfg_family_step(
 
 bool ui_track_catalog_family_has_available_type(uint8_t track,
                                                 ui_track_family_t family,
-                                                const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                                const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
     return ui_track_catalog_family_is_available(track, family, track_configs);
 }
 
 uint8_t ui_track_catalog_type_count_for_family(ui_track_family_t family,
                                                uint8_t track,
-                                               const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                               const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
-    if ((track >= UI_TRACK_COUNT) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return 0U;
     }
@@ -318,7 +339,7 @@ uint8_t ui_track_catalog_type_count_for_family(ui_track_family_t family,
 uint8_t ui_track_catalog_type_index_for_family(ui_track_family_t family,
                                                ui_track_type_t type,
                                                uint8_t track,
-                                               const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                               const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
     if (!ui_track_catalog_type_is_available(track, family, type, track_configs))
     {
@@ -355,9 +376,9 @@ uint8_t ui_track_catalog_type_index_for_family(ui_track_family_t family,
 ui_track_type_t ui_track_catalog_type_from_family_index(ui_track_family_t family,
                                                         uint8_t index,
                                                         uint8_t track,
-                                                        const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                                        const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
-    if ((track >= UI_TRACK_COUNT)
+    if ((track >= BRICK_ENTITY_CAPACITY)
             || (track_configs == 0)
             || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
@@ -398,7 +419,7 @@ ui_track_type_t ui_track_catalog_type_from_family_index(ui_track_family_t family
 
 ui_track_type_t ui_track_catalog_first_available_type(ui_track_family_t family,
                                                       uint8_t track,
-                                                      const ui_track_config_t track_configs[UI_TRACK_COUNT])
+                                                      const ui_track_config_t track_configs[BRICK_ENTITY_CAPACITY])
 {
     uint8_t catalog_count = 0U;
     const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);

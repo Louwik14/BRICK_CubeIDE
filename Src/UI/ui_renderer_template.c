@@ -17,12 +17,13 @@
 #include "pages/ui_page_template_play.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_stack_waveform.h"
-#include "Core/brick6_sampler_runtime.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_model.h"
 #include "Core/track_sound_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_lfo_v1.h"
@@ -352,7 +353,13 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    if ((id == PARAM_SEQ_PLAY_V1_VEL) || (id == PARAM_SEQ_PLAY_V2_VEL) || (id == PARAM_SEQ_PLAY_V3_VEL) || (id == PARAM_SEQ_PLAY_V4_VEL))
+    uint8_t play_index = 0U;
+    seq_step_play_field_t play_field = SEQ_STEP_PLAY_FIELD_COUNT;
+    const uint8_t is_play_param = seq_model_play_resolve_param(id,
+                                                               &play_index,
+                                                               &play_field);
+    (void)play_index;
+    if ((is_play_param != 0U) && (play_field == SEQ_STEP_PLAY_FIELD_VELOCITY))
     {
         if (value < 0.5f)
         {
@@ -361,7 +368,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         }
     }
 
-    if ((id == PARAM_SEQ_PLAY_V1_NOTE) || (id == PARAM_SEQ_PLAY_V2_NOTE) || (id == PARAM_SEQ_PLAY_V3_NOTE) || (id == PARAM_SEQ_PLAY_V4_NOTE))
+    if ((is_play_param != 0U) && (play_field == SEQ_STEP_PLAY_FIELD_NOTE))
     {
         int32_t note = (int32_t)(value + 0.5f);
         if (note < 0)
@@ -3643,18 +3650,20 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
                                                            int inner_w,
                                                            int inner_h)
 {
-    brick6_sampler_ram_playhead_snapshot_t playhead;
-    if ((brick6_sampler_runtime_get_ram_playhead(ui_get_active_track(),
-                                                 global_slot,
-                                                 &playhead) == 0U)
-        || (playhead.active == 0U)
-        || (playhead.frame_count == 0U))
+    audio_binding_snapshot_t snapshot;
+    if ((audio_note_engine_adapter_snapshot_read(
+            ui_get_active_track(), &snapshot) == 0U)
+        || (snapshot.sampler_playhead_active == 0U)
+        || (snapshot.sampler_playhead_sample_id != global_slot)
+        || (snapshot.sampler_playhead_frame_count == 0U))
     {
         return;
     }
 
-    const uint32_t scale_frames = (frame_count != 0U) ? frame_count : playhead.frame_count;
-    const int x = ui_renderer_template_sampler_ram_frame_to_x(playhead.frame,
+    const uint32_t scale_frames = (frame_count != 0U)
+        ? frame_count : snapshot.sampler_playhead_frame_count;
+    const int x = ui_renderer_template_sampler_ram_frame_to_x(
+        snapshot.sampler_playhead_frame,
                                                               scale_frames,
                                                               inner_x,
                                                               inner_w);
@@ -3769,7 +3778,10 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
                                                  inner_h,
                                                  'E',
                                                  0U);
-    if (brick6_sampler_runtime_ram_slice_mode_active(ui_get_active_track()) == 0U)
+    audio_binding_snapshot_t snapshot;
+    if ((audio_note_engine_adapter_snapshot_read(
+            ui_get_active_track(), &snapshot) == 0U)
+            || (snapshot.sampler_slice_mode_active == 0U))
     {
         ui_renderer_template_draw_sampler_ram_marker(loop_value,
                                                      overview->frame_count,

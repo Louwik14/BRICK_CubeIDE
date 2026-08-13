@@ -6,7 +6,7 @@
  * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
  */
 #include "Seq/seq_param_iface.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_model.h"
 
 #include <string.h>
@@ -29,9 +29,9 @@ SEQ_STATE_D2 static seq_param_slot_state_t
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static seq_value16_t
-    g_seq_play_base_values[SEQ_LANE_CAPACITY][SEQ_STEP_PLAY_VOICE_COUNT][SEQ_STEP_PLAY_FIELD_COUNT];
+    g_seq_play_base_values[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY][SEQ_STEP_PLAY_FIELD_COUNT];
 SEQ_STATE_D2 static uint8_t
-    g_seq_play_base_valid[SEQ_LANE_CAPACITY][SEQ_STEP_PLAY_VOICE_COUNT];
+    g_seq_play_base_valid[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY];
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 
 typedef struct
@@ -309,9 +309,7 @@ static void seq_param_iface_seed_play_defaults(void)
 
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.active != 0U);
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
@@ -468,30 +466,26 @@ static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, t
         return 0U;
     }
 
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-            || (lane.active == 0U))
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
+            || (entity.active == 0U))
     {
         return 0U;
     }
 
-    if (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-    {
-        *out_type = TRACK_RUNTIME_TYPE_RAM;
-        return 1U;
-    }
-    if (lane.role == SEQ_LANE_ROLE_GROUP_MASTER)
+    if (entity.role == ENTITY_ROLE_GROUP_MASTER)
     {
         return 0U;
     }
 
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    track_runtime_descriptor_t descriptor;
+    if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
+            || (descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
     }
 
-    *out_type = (track_runtime_type_t)ctx->type;
+    *out_type = descriptor.type;
     return 1U;
 }
 
@@ -522,9 +516,7 @@ static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
                                                          uint8_t set_id,
                                                          seq_param_slot_t param_slot)
 {
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-            || (lane.active == 0U)
+    if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
             || (seq_param_iface_is_slot_addressable(track, set_id, param_slot) == 0U))
     {
         return 0U;
@@ -534,9 +526,9 @@ static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
 
 static uint8_t seq_param_iface_is_group_master(seq_track_id_t track)
 {
-    seq_lane_descriptor_t lane;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &lane) != 0U)
-            && (lane.role == SEQ_LANE_ROLE_GROUP_MASTER);
+    entity_topology_descriptor_t entity;
+    return (entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity.role == ENTITY_ROLE_GROUP_MASTER);
 }
 
 static uint8_t seq_param_iface_slot_is_supported_internal(
@@ -950,7 +942,7 @@ uint8_t seq_param_iface_get_play_base_param(seq_track_id_t track,
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
     if ((out_value16 == NULL) || (track >= SEQ_LANE_CAPACITY)
-            || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U)
+            || (seq_model_play_resolve_param(param, &voice, &field) == 0U)
             || ((g_seq_play_base_valid[track][voice] & (uint8_t)(1U << field)) == 0U))
     {
         return 0U;
@@ -966,7 +958,7 @@ uint8_t seq_param_iface_set_play_base_param(seq_track_id_t track,
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
     if ((track >= SEQ_LANE_CAPACITY)
-            || (seq_model_step_play_resolve_param(param, &voice, &field) == 0U))
+            || (seq_model_play_resolve_param(param, &voice, &field) == 0U))
     {
         return 0U;
     }

@@ -567,7 +567,7 @@ static uint8_t ui_page_patch_assign_target_count(void)
 
 static void ui_page_patch_assign_toggle_target(uint8_t track)
 {
-    if ((track >= UI_ACTIVE_TRACK_COUNT) || (track_topology_is_active(track) == 0U))
+    if ((track >= UI_ACTIVE_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -788,11 +788,11 @@ static void ui_page_patch_assign_leave(void)
 
 void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hall_mode)
 {
-    if (track_topology_is_active(target_track) == 0U)
+    if (entity_topology_is_active(target_track) == 0U)
     {
         target_track = ui_get_active_track();
     }
-    if (track_topology_is_active(target_track) == 0U)
+    if (entity_topology_is_active(target_track) == 0U)
     {
         return;
     }

@@ -7,8 +7,6 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
-#include "Core/brick6_sampler_runtime.h"
-#include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
@@ -18,7 +16,7 @@
 #include "UI/ui_track_catalog.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_step_snapshot.h"
 #include "Param/param_registry.h"
@@ -52,58 +50,6 @@ UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
 UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
 UI_SDRAM static PatternSaveV1 g_pattern_apply_normalized;
-static uint8_t g_pattern_voice_limited;
-
-uint8_t pattern_live_last_voice_limited(void) { return g_pattern_voice_limited; }
-
-static uint8_t pattern_live_resolve_voice_budget(const PatternSaveV1 *pattern,
-                                                 uint8_t assigned[SEQ_TRACK_COUNT],
-                                                 uint8_t *out_limited)
-{
-    if ((pattern == 0) || (assigned == 0) || (out_limited == 0)) return 0U;
-    memset(assigned, 0, SEQ_TRACK_COUNT);
-    uint8_t remaining = SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET;
-    uint8_t limited = 0U;
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        const uint8_t family = pattern->track_cfg.family[track];
-        const uint8_t type = pattern->track_cfg.type[track];
-        if ((family == (uint8_t)UI_TRACK_FAMILY_SYNTH)
-                || (family == (uint8_t)UI_TRACK_FAMILY_DRUM))
-        {
-            if (remaining == 0U) return 0U;
-            assigned[track] = 1U;
-            remaining--;
-        }
-        else if ((family == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
-                && (type == (uint8_t)UI_TRACK_TYPE_MULTI))
-        {
-            float raw = 1.0f;
-            if (pattern->sound.track_valid[track][PARAM_CFG_POLY_VOICES] != 0U)
-            {
-                raw = pattern->sound.track_values[track][PARAM_CFG_POLY_VOICES];
-            }
-            assigned[track] = (uint8_t)((raw < 1.0f)
-                ? 1U
-                : ((raw > (float)SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
-                    ? SAMPLER_MULTI_MAX_VOICES_PER_TRACK
-                    : (uint8_t)raw));
-        }
-    }
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (pattern->track_cfg.family[track] != (uint8_t)UI_TRACK_FAMILY_SYNTH) continue;
-        float raw = 1.0f;
-        if (pattern->sound.track_valid[track][PARAM_CFG_POLY_VOICES] != 0U)
-            raw = pattern->sound.track_values[track][PARAM_CFG_POLY_VOICES];
-        uint8_t requested = (uint8_t)((raw < 1.0f) ? 1U : ((raw > 8.0f) ? 8U : (uint8_t)raw));
-        while ((assigned[track] < requested) && (remaining > 0U))
-        { assigned[track]++; remaining--; }
-        if (assigned[track] < requested) limited = 1U;
-    }
-    *out_limited = limited;
-    return 1U;
-}
 STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
 static uint8_t g_active_bank;
@@ -221,9 +167,7 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
 static uint8_t pattern_live_param_is_storable_for_track(uint8_t track, param_id_t id)
 {
     (void)id;
-    seq_lane_descriptor_t lane = { 0 };
-    return ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) != 0U)
-            && (lane.active != 0U)) ? 1U : 0U;
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
@@ -369,21 +313,21 @@ static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *st
     return pattern_live_locks_required(step->locks, count);
 }
 
-static uint8_t pattern_live_play_is_valid(const seq_step_play_t *play)
+static uint8_t pattern_live_play_is_valid(const seq_play_snapshot_t *play)
 {
     if (play == NULL) return 0U;
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
-        if ((play->voices[voice].present_mask & (uint8_t)~SEQ_STEP_PLAY_PRESENT_ALL) != 0U) return 0U;
+        if ((play->items[voice].present_mask & (uint8_t)~SEQ_STEP_PLAY_PRESENT_ALL) != 0U) return 0U;
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
-            if ((play->voices[voice].present_mask & (uint8_t)(1U << field)) != 0U)
+            if ((play->items[voice].present_mask & (uint8_t)(1U << field)) != 0U)
             {
                 int16_t value = 0;
-                seq_step_play_t validated;
-                seq_step_play_init(&validated);
-                if ((seq_step_play_get(play, voice, (seq_step_play_field_t)field, &value) == 0U)
-                        || (seq_step_play_set(&validated,
+                seq_play_snapshot_t validated;
+                seq_play_snapshot_init(&validated);
+                if ((seq_play_snapshot_get(play, voice, (seq_step_play_field_t)field, &value) == 0U)
+                        || (seq_play_snapshot_set(&validated,
                                               voice,
                                               (seq_step_play_field_t)field,
                                               value) == 0U)) return 0U;
@@ -395,18 +339,18 @@ static uint8_t pattern_live_play_is_valid(const seq_step_play_t *play)
 
 static uint8_t pattern_live_capture_play(seq_track_id_t track,
                                          seq_step_id_t step,
-                                         seq_step_play_t *out_play)
+                                         seq_play_snapshot_t *out_play)
 {
     if (out_play == NULL) return 0U;
-    seq_step_play_init(out_play);
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    seq_play_snapshot_init(out_play);
+    for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
             int16_t value = 0;
-            if (seq_model_step_play_get(track, step, voice, (seq_step_play_field_t)field, &value) != 0U)
+            if (seq_model_play_get(track, step, voice, (seq_step_play_field_t)field, &value) != 0U)
             {
-                if (seq_step_play_set(out_play, voice, (seq_step_play_field_t)field, value) == 0U) return 0U;
+                if (seq_play_snapshot_set(out_play, voice, (seq_step_play_field_t)field, value) == 0U) return 0U;
             }
         }
     }
@@ -415,18 +359,18 @@ static uint8_t pattern_live_capture_play(seq_track_id_t track,
 
 static uint8_t pattern_live_apply_play(seq_track_id_t track,
                                        seq_step_id_t step,
-                                       const seq_step_play_t *play)
+                                       const seq_play_snapshot_t *play)
 {
     if (pattern_live_play_is_valid(play) == 0U) return 0U;
-    seq_model_step_play_clear(track, step);
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    seq_model_play_clear_step(track, step);
+    for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
             int16_t value = 0;
-            if (seq_step_play_get(play, voice, (seq_step_play_field_t)field, &value) != 0U)
+            if (seq_play_snapshot_get(play, voice, (seq_step_play_field_t)field, &value) != 0U)
             {
-                if (seq_model_step_play_set(track,
+                if (seq_model_play_set(track,
                                             step,
                                             voice,
                                             (seq_step_play_field_t)field,
@@ -506,15 +450,16 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const pattern_v1_track_seq_t *const saved = &seq->tracks[track];
-        seq_lane_descriptor_t lane;
-        if (seq_lane_resolve(group_active, (seq_lane_id_t)track, &lane) == 0U)
+        entity_topology_descriptor_t entity;
+        if (entity_topology_resolve(group_active,
+                                    (brick_entity_id_t)track,
+                                    &entity) == 0U)
         {
             return 0U;
         }
-        const uint8_t runtime_type = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-            ? (uint8_t)TRACK_RUNTIME_TYPE_RAM
-            : ((track < SEQ_TRACK_COUNT) ? track_cfg->type[track]
-                                         : (uint8_t)TRACK_RUNTIME_TYPE_NONE);
+        const uint8_t runtime_type = (track < SEQ_TRACK_COUNT)
+            ? track_cfg->type[track]
+            : (uint8_t)track_state_get_type(track);
 
         for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
         {
@@ -541,8 +486,8 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(
                 };
             }
             if (seq_step_snapshot_validate_for_target(
-                    (uint8_t)((lane.active != 0U) && (lane.can_emit_notes != 0U)),
-                    lane.active,
+                    entity_topology_can_emit_notes(&entity),
+                    entity.active,
                     runtime_type,
                     &snapshot) == 0U)
             {
@@ -741,7 +686,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq,
             seq_model_set_trig(track, step, saved_step->trig);
             seq_model_set_step_roll(track, step, saved_step->roll);
             seq_model_step_plock_clear(track, step);
-            seq_model_step_play_clear(track, step);
+            seq_model_play_clear_step(track, step);
             if (pattern_live_apply_play(track, step, &saved_step->play) == 0U) return 0U;
 
             const uint8_t step_limit = seq_model_get_step_lock_limit(track);
@@ -770,7 +715,6 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq,
 typedef struct
 {
     const PatternSaveV1 *pattern;
-    uint8_t voice_count[SEQ_TRACK_COUNT];
     uint8_t resume_transport;
     uint8_t was_running;
 } pattern_live_transition_ctx_t;
@@ -827,16 +771,9 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
                 if (pattern_live_param_is_storable_for_track(track, id) == 0U) continue;
                 if (ctx->pattern->sound.track_valid[track][id] != 0U)
                 {
-                    float value = ctx->pattern->sound.track_values[track][id];
-                    if ((id == PARAM_CFG_POLY_VOICES)
-                            && (track < SEQ_TRACK_COUNT)
-                            && ((ctx->pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
-                                || (ctx->pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_DRUM))
-                            && (ctx->voice_count[track] != 0U))
-                    {
-                        value = (float)ctx->voice_count[track];
-                    }
-                    (void)param_registry_apply_track_value(id, track, value);
+                    (void)param_registry_apply_track_value(
+                        id, track,
+                        ctx->pattern->sound.track_values[track][id]);
                 }
 
                 if ((pattern_live_is_param_in_mix_domain(id) != 0U)
@@ -928,7 +865,11 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     memcpy(&g_pattern_apply_normalized, pattern, sizeof(g_pattern_apply_normalized));
     pattern = &g_pattern_apply_normalized;
 
-    ui_track_config_t prospective_configs[SEQ_TRACK_COUNT];
+    ui_track_config_t prospective_configs[BRICK_ENTITY_CAPACITY];
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
+    {
+        prospective_configs[track] = track_state_get_config(track);
+    }
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const uint8_t family = pattern->track_cfg.family[track];
@@ -943,8 +884,16 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         prospective_configs[track].family = (ui_track_family_t)family;
         prospective_configs[track].type = (ui_track_type_t)type;
     }
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    const uint8_t prospective_group_active = (uint8_t)(
+        prospective_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == UI_TRACK_TYPE_GROUP);
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
+        entity_topology_descriptor_t entity;
+        if ((entity_topology_resolve(prospective_group_active, track, &entity) == 0U)
+                || (entity.active == 0U))
+        {
+            continue;
+        }
         if ((prospective_configs[track].family != UI_TRACK_FAMILY_OFF)
                 && (ui_track_catalog_type_is_available(
                         track,
@@ -969,14 +918,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         return 0U;
     }
 
-    g_pattern_voice_limited = 0U;
-    uint8_t resolved_voice_count[SEQ_TRACK_COUNT];
-    if (pattern_live_resolve_voice_budget(pattern,
-                                          resolved_voice_count,
-                                          &g_pattern_voice_limited) == 0U)
-    {
-        return 0U;
-    }
     g_apply_in_progress = 1U;
     note_fx_pipeline_reset_all_runtime_overrides();
 
@@ -985,7 +926,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         .resume_transport = resume_transport,
         .was_running = 0U
     };
-    memcpy(transition_ctx.voice_count, resolved_voice_count, sizeof(transition_ctx.voice_count));
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
         .prepare_fn = pattern_live_transition_prepare,
         .mutate_fn = pattern_live_transition_mutate,

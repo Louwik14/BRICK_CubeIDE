@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define TRACK_CONFIG_CAPACITY BRICK_ENTITY_CAPACITY
+
 void track_state_init(void);
 
 const ui_track_config_t *track_state_get_configs(void);

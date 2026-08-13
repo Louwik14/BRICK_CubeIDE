@@ -3,7 +3,7 @@
 
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 
 #include <stdint.h>
 
@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define SAMPLE_CAPTURE_TRACK_COUNT TRACK_TOPOLOGY_TRACK_COUNT
+#define SAMPLE_CAPTURE_TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
 #define SAMPLE_CAPTURE_PATH_MAX AUDIO_RECORDER_PATH_MAX
 #define SAMPLE_CAPTURE_WAVEFORM_POINTS 1024U
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767

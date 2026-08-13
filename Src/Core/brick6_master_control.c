@@ -16,8 +16,8 @@
 
 #include "App/mux_pots.h"
 #include "Board/board_surface.h"
-#include "mixer.h"
 #include "Param/param_macro.h"
+#include "Param/param_registry.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 #define LOWCOST_FALLBACK_MASTER_GAIN 0.75f
@@ -84,14 +84,14 @@ void brick6_master_control_process(void)
     {
         if (initialized == 0U)
         {
-            mixer_set_master(LOWCOST_FALLBACK_MASTER_GAIN);
+            param_set(PARAM_MASTER_GAIN, LOWCOST_FALLBACK_MASTER_GAIN);
             initialized = 1U;
         }
         return;
     }
 
     const float gain = (float)raw / 65535.0f;
-    mixer_set_master(gain * gain);
+    param_set(PARAM_MASTER_GAIN, gain * gain);
     initialized = 1U;
     return;
 #else
@@ -106,7 +106,7 @@ void brick6_master_control_process(void)
     {
         if ((initialized == 0U) || (last_step != 0U))
         {
-            mixer_set_master(0.0f);
+            param_set(PARAM_MASTER_GAIN, 0.0f);
             last_step = 0U;
             initialized = 1U;
         }
@@ -132,7 +132,7 @@ void brick6_master_control_process(void)
     const float level = (float)step / (float)(POT_MASTER_STEPS - 1U);
     const float gain = level * level;
 
-    mixer_set_master(gain);
+    param_set(PARAM_MASTER_GAIN, gain);
 
     last_step = step;
     initialized = 1U;

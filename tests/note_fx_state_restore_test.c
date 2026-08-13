@@ -1,12 +1,13 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include "Core/entity_topology.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_division_catalog.h"
 
-uint8_t track_topology_is_active(uint8_t track)
+uint8_t entity_topology_is_active(brick_entity_id_t entity_id)
 {
-    return (track < NOTE_FX_TRACK_COUNT) ? 1U : 0U;
+    return (entity_id < NOTE_FX_TRACK_COUNT) ? 1U : 0U;
 }
 
 static void assert_slot_defaults(const note_fx_track_state_t *state,

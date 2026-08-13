@@ -2,8 +2,7 @@
 
 #include <string.h>
 
-#include "Core/track_topology.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
@@ -182,10 +181,8 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
 {
     uint8_t slot = 0U;
     uint8_t param = 0U;
-    seq_lane_descriptor_t lane;
     if ((track >= NOTE_FX_TRACK_COUNT)
-            || (seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-            || (lane.active == 0U)
+            || (entity_topology_is_active((brick_entity_id_t)track) == 0U)
             || (note_fx_state_param_map(id, &slot, &param) == 0U))
     {
         return 0U;

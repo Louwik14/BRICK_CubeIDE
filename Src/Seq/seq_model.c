@@ -28,12 +28,14 @@ _Static_assert(sizeof(seq_plock_node_t) == 6U, "internal p-lock node size change
 typedef struct
 {
     seq_track_data_t tracks[SEQ_LANE_CAPACITY];
+    seq_play_item_t top_level_play[BRICK_ENTITY_TOP_LEVEL_COUNT][SEQ_MAX_STEPS][SEQ_PLAY_MAX_CAPACITY];
+    seq_play_item_t group_child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
     seq_plock_node_t pool[SEQ_LANE_CAPACITY][SEQ_PLOCK_POOL_CAP_PER_TRACK];
     uint16_t free_head[SEQ_LANE_CAPACITY];
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
-_Static_assert(sizeof(seq_runtime_project_data_t) == 127104U,
+_Static_assert(sizeof(seq_runtime_project_data_t) == 129664U,
                "sequencer project storage size changed");
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
@@ -62,24 +64,24 @@ static uint8_t seq_step_play_value_is_valid(seq_step_play_field_t field, int16_t
     }
 }
 
-void seq_step_play_init(seq_step_play_t *play)
+void seq_play_snapshot_init(seq_play_snapshot_t *play)
 {
-    seq_step_play_clear(play);
+    seq_play_snapshot_clear(play);
 }
 
-uint8_t seq_step_play_get(const seq_step_play_t *play,
+uint8_t seq_play_snapshot_get(const seq_play_snapshot_t *play,
                           uint8_t voice,
                           seq_step_play_field_t field,
                           int16_t *out_value)
 {
     const uint8_t mask = seq_step_play_field_mask(field);
-    if ((play == NULL) || (out_value == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT)
-            || (mask == 0U) || ((play->voices[voice].present_mask & mask) == 0U))
+    if ((play == NULL) || (out_value == NULL) || (voice >= SEQ_PLAY_MAX_CAPACITY)
+            || (mask == 0U) || ((play->items[voice].present_mask & mask) == 0U))
     {
         return 0U;
     }
 
-    const seq_step_play_voice_t *const state = &play->voices[voice];
+    const seq_play_item_t *const state = &play->items[voice];
     switch (field)
     {
         case SEQ_STEP_PLAY_FIELD_NOTE:
@@ -100,19 +102,19 @@ uint8_t seq_step_play_get(const seq_step_play_t *play,
     return 1U;
 }
 
-uint8_t seq_step_play_set(seq_step_play_t *play,
+uint8_t seq_play_snapshot_set(seq_play_snapshot_t *play,
                           uint8_t voice,
                           seq_step_play_field_t field,
                           int16_t value)
 {
     const uint8_t mask = seq_step_play_field_mask(field);
-    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT) || (mask == 0U)
+    if ((play == NULL) || (voice >= SEQ_PLAY_MAX_CAPACITY) || (mask == 0U)
             || (seq_step_play_value_is_valid(field, value) == 0U))
     {
         return 0U;
     }
 
-    seq_step_play_voice_t *const state = &play->voices[voice];
+    seq_play_item_t *const state = &play->items[voice];
     switch (field)
     {
         case SEQ_STEP_PLAY_FIELD_NOTE:
@@ -134,32 +136,32 @@ uint8_t seq_step_play_set(seq_step_play_t *play,
     return 1U;
 }
 
-uint8_t seq_step_play_delete(seq_step_play_t *play,
+uint8_t seq_play_snapshot_delete(seq_play_snapshot_t *play,
                              uint8_t voice,
                              seq_step_play_field_t field)
 {
     const uint8_t mask = seq_step_play_field_mask(field);
-    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT) || (mask == 0U))
+    if ((play == NULL) || (voice >= SEQ_PLAY_MAX_CAPACITY) || (mask == 0U))
     {
         return 0U;
     }
 
-    seq_step_play_voice_t *const state = &play->voices[voice];
+    seq_play_item_t *const state = &play->items[voice];
     const uint8_t was_present = ((state->present_mask & mask) != 0U) ? 1U : 0U;
     state->present_mask = (uint8_t)(state->present_mask & (uint8_t)~mask);
     return was_present;
 }
 
-void seq_step_play_clear_voice(seq_step_play_t *play, uint8_t voice)
+void seq_play_snapshot_clear_item(seq_play_snapshot_t *play, uint8_t voice)
 {
-    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT))
+    if ((play == NULL) || (voice >= SEQ_PLAY_MAX_CAPACITY))
     {
         return;
     }
-    memset(&play->voices[voice], 0, sizeof(play->voices[voice]));
+    memset(&play->items[voice], 0, sizeof(play->items[voice]));
 }
 
-void seq_step_play_clear(seq_step_play_t *play)
+void seq_play_snapshot_clear(seq_play_snapshot_t *play)
 {
     if (play != NULL)
     {
@@ -167,24 +169,24 @@ void seq_step_play_clear(seq_step_play_t *play)
     }
 }
 
-uint8_t seq_step_play_voice_has_any(const seq_step_play_t *play, uint8_t voice)
+uint8_t seq_play_snapshot_item_has_any(const seq_play_snapshot_t *play, uint8_t voice)
 {
-    if ((play == NULL) || (voice >= SEQ_STEP_PLAY_VOICE_COUNT))
+    if ((play == NULL) || (voice >= SEQ_PLAY_MAX_CAPACITY))
     {
         return 0U;
     }
-    return ((play->voices[voice].present_mask & (uint8_t)SEQ_STEP_PLAY_PRESENT_ALL) != 0U) ? 1U : 0U;
+    return ((play->items[voice].present_mask & (uint8_t)SEQ_STEP_PLAY_PRESENT_ALL) != 0U) ? 1U : 0U;
 }
 
-uint8_t seq_step_play_has_any(const seq_step_play_t *play)
+uint8_t seq_play_snapshot_has_any(const seq_play_snapshot_t *play)
 {
     if (play == NULL)
     {
         return 0U;
     }
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
-        if (seq_step_play_voice_has_any(play, voice) != 0U)
+        if (seq_play_snapshot_item_has_any(play, voice) != 0U)
         {
             return 1U;
         }
@@ -209,9 +211,7 @@ static void seq_model_exit_critical(uint32_t primask)
 
 static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.active != 0U);
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static uint8_t seq_model_track_is_play(seq_track_id_t track)
@@ -221,9 +221,50 @@ static uint8_t seq_model_track_is_play(seq_track_id_t track)
 
 static uint8_t seq_model_track_can_emit_notes(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.can_emit_notes != 0U);
+    entity_topology_descriptor_t entity;
+    return (entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity_topology_can_emit_notes(&entity) != 0U);
+}
+
+uint8_t seq_model_play_capacity(seq_track_id_t track)
+{
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
+            || (entity.active == 0U))
+    {
+        return 0U;
+    }
+    return (entity.role == ENTITY_ROLE_GROUP_CHILD) ? 1U : SEQ_PLAY_MAX_CAPACITY;
+}
+
+static seq_play_item_t *seq_model_play_item_mut(seq_track_id_t track,
+                                                       seq_step_id_t step,
+                                                       uint8_t item)
+{
+    entity_topology_descriptor_t entity;
+    const uint8_t capacity = seq_model_play_capacity(track);
+    if ((capacity == 0U) || (step >= seq_model_get_editable_step_capacity())
+            || (item >= capacity)
+            || (entity_topology_get((brick_entity_id_t)track, &entity) == 0U))
+    {
+        return NULL;
+    }
+    if (entity.role != ENTITY_ROLE_GROUP_CHILD)
+    {
+        return &g_seq_project.top_level_play[track][step][item];
+    }
+    if (entity.member_index >= BRICK_ENTITY_GROUP_CHILD_COUNT)
+    {
+        return NULL;
+    }
+    return &g_seq_project.group_child_play[entity.member_index][step];
+}
+
+static const seq_play_item_t *seq_model_play_item_const(seq_track_id_t track,
+                                                               seq_step_id_t step,
+                                                               uint8_t item)
+{
+    return seq_model_play_item_mut(track, step, item);
 }
 
 static uint16_t seq_model_pool_capacity(seq_track_id_t track)
@@ -421,11 +462,13 @@ static uint8_t seq_model_compute_step_mask(seq_track_id_t track, const seq_step_
 }
 
 static void seq_model_step_scan_lock_sets(seq_track_id_t track,
+                                          seq_step_id_t step_id,
                                           const seq_step_t *step,
                                           uint8_t *out_has_play_data,
                                           uint8_t *out_has_non_play_plock)
 {
-    uint8_t has_play_data = ((step != NULL) && (seq_step_play_has_any(&step->play) != 0U)) ? 1U : 0U;
+    uint8_t has_play_data = ((step != NULL)
+            && (seq_model_play_has_any(track, step_id) != 0U)) ? 1U : 0U;
     uint8_t has_non_play_plock = 0U;
 
     if ((seq_model_track_is_valid(track) == 0U) || (step == 0))
@@ -709,7 +752,7 @@ seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_
     }
     uint8_t has_play_data = 0U;
     uint8_t has_non_play_plock = 0U;
-    seq_model_step_scan_lock_sets(track, s, &has_play_data, &has_non_play_plock);
+    seq_model_step_scan_lock_sets(track, step, s, &has_play_data, &has_non_play_plock);
 
     if ((has_play_data == 0U) && (has_non_play_plock == 0U))
     {
@@ -784,7 +827,7 @@ uint8_t seq_model_step_has_play_data(seq_track_id_t track, seq_step_id_t step)
     }
 
     uint8_t has_play_data = 0U;
-    seq_model_step_scan_lock_sets(track, s, &has_play_data, 0);
+    seq_model_step_scan_lock_sets(track, step, s, &has_play_data, 0);
     return has_play_data;
 }
 
@@ -797,7 +840,7 @@ uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t st
     }
 
     uint8_t has_non_play_plock = 0U;
-    seq_model_step_scan_lock_sets(track, s, 0, &has_non_play_plock);
+    seq_model_step_scan_lock_sets(track, step, s, 0, &has_non_play_plock);
     return has_non_play_plock;
 }
 
@@ -818,20 +861,31 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
 
 uint8_t seq_model_track_can_store_play(seq_track_id_t track)
 {
-    return seq_model_track_can_emit_notes(track);
+    return (seq_model_play_capacity(track) != 0U) ? 1U : 0U;
 }
 
-uint8_t seq_model_step_play_get(seq_track_id_t track,
+uint8_t seq_model_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,
                                 seq_step_play_field_t field,
                                 int16_t *out_value)
 {
-    const seq_step_t *const s = seq_model_get_step_const(track, step);
-    return (s != NULL) ? seq_step_play_get(&s->play, voice, field, out_value) : 0U;
+    const seq_play_item_t *const item = seq_model_play_item_const(track, step, voice);
+    const uint8_t mask = seq_step_play_field_mask(field);
+    if ((item == NULL) || (out_value == NULL) || (mask == 0U)
+            || ((item->present_mask & mask) == 0U)) return 0U;
+    switch (field)
+    {
+        case SEQ_STEP_PLAY_FIELD_NOTE: *out_value = item->note; break;
+        case SEQ_STEP_PLAY_FIELD_VELOCITY: *out_value = item->velocity; break;
+        case SEQ_STEP_PLAY_FIELD_LENGTH: *out_value = item->length; break;
+        case SEQ_STEP_PLAY_FIELD_MICROTIMING: *out_value = item->microtiming; break;
+        default: return 0U;
+    }
+    return 1U;
 }
 
-uint8_t seq_model_step_play_set(seq_track_id_t track,
+uint8_t seq_model_play_set(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t voice,
                                 seq_step_play_field_t field,
@@ -841,54 +895,85 @@ uint8_t seq_model_step_play_set(seq_track_id_t track,
     {
         return 0U;
     }
-    seq_step_t *const s = seq_model_get_step_mut(track, step);
-    return (s != NULL) ? seq_step_play_set(&s->play, voice, field, value) : 0U;
+    seq_play_item_t *const item = seq_model_play_item_mut(track, step, voice);
+    if ((item == NULL) || (seq_step_play_value_is_valid(field, value) == 0U)) return 0U;
+    const uint8_t mask = seq_step_play_field_mask(field);
+    switch (field)
+    {
+        case SEQ_STEP_PLAY_FIELD_NOTE: item->note = (uint8_t)value; break;
+        case SEQ_STEP_PLAY_FIELD_VELOCITY: item->velocity = (uint8_t)value; break;
+        case SEQ_STEP_PLAY_FIELD_LENGTH: item->length = (uint8_t)value; break;
+        case SEQ_STEP_PLAY_FIELD_MICROTIMING: item->microtiming = (int8_t)value; break;
+        default: return 0U;
+    }
+    item->present_mask = (uint8_t)(item->present_mask | mask);
+    return 1U;
 }
 
-uint8_t seq_model_step_play_delete(seq_track_id_t track,
+uint8_t seq_model_play_clear(seq_track_id_t track,
                                    seq_step_id_t step,
                                    uint8_t voice,
                                    seq_step_play_field_t field)
 {
-    seq_step_t *const s = seq_model_get_step_mut(track, step);
-    return (s != NULL) ? seq_step_play_delete(&s->play, voice, field) : 0U;
+    seq_play_item_t *const item = seq_model_play_item_mut(track, step, voice);
+    const uint8_t mask = seq_step_play_field_mask(field);
+    if ((item == NULL) || (mask == 0U)) return 0U;
+    const uint8_t present = ((item->present_mask & mask) != 0U) ? 1U : 0U;
+    item->present_mask = (uint8_t)(item->present_mask & (uint8_t)~mask);
+    return present;
 }
 
-void seq_model_step_play_clear_voice(seq_track_id_t track,
+void seq_model_play_clear_item(seq_track_id_t track,
                                      seq_step_id_t step,
                                      uint8_t voice)
 {
-    seq_step_t *const s = seq_model_get_step_mut(track, step);
-    if (s != NULL)
-    {
-        seq_step_play_clear_voice(&s->play, voice);
-    }
+    seq_play_item_t *const item = seq_model_play_item_mut(track, step, voice);
+    if (item != NULL) memset(item, 0, sizeof(*item));
 }
 
-void seq_model_step_play_clear(seq_track_id_t track, seq_step_id_t step)
+void seq_model_play_clear_step(seq_track_id_t track, seq_step_id_t step)
 {
-    seq_step_t *const s = seq_model_get_step_mut(track, step);
-    if (s != NULL)
-    {
-        seq_step_play_clear(&s->play);
-    }
+    const uint8_t capacity = seq_model_play_capacity(track);
+    for (uint8_t item = 0U; item < capacity; ++item)
+        seq_model_play_clear_item(track, step, item);
 }
 
-uint8_t seq_model_step_play_voice_has_any(seq_track_id_t track,
+uint8_t seq_model_play_item_has_any(seq_track_id_t track,
                                           seq_step_id_t step,
                                           uint8_t voice)
 {
-    const seq_step_t *const s = seq_model_get_step_const(track, step);
-    return (s != NULL) ? seq_step_play_voice_has_any(&s->play, voice) : 0U;
+    const seq_play_item_t *const item = seq_model_play_item_const(track, step, voice);
+    return (item != NULL)
+        ? (uint8_t)((item->present_mask & (uint8_t)SEQ_STEP_PLAY_PRESENT_ALL) != 0U) : 0U;
 }
 
-uint8_t seq_model_step_play_has_any(seq_track_id_t track, seq_step_id_t step)
+uint8_t seq_model_play_has_any(seq_track_id_t track, seq_step_id_t step)
 {
-    const seq_step_t *const s = seq_model_get_step_const(track, step);
-    return (s != NULL) ? seq_step_play_has_any(&s->play) : 0U;
+    const uint8_t capacity = seq_model_play_capacity(track);
+    for (uint8_t item = 0U; item < capacity; ++item)
+        if (seq_model_play_item_has_any(track, step, item) != 0U) return 1U;
+    return 0U;
 }
 
-uint8_t seq_model_step_play_resolve_param(param_id_t param,
+uint8_t seq_model_play_iterate(seq_track_id_t track,
+                               seq_step_id_t step,
+                               seq_model_play_iter_fn callback,
+                               void *context)
+{
+    const uint8_t capacity = seq_model_play_capacity(track);
+    if ((capacity == 0U) || (callback == NULL)
+            || (seq_model_is_step_editable_index(step) == 0U))
+    {
+        return 0U;
+    }
+    for (uint8_t item = 0U; item < capacity; ++item)
+    {
+        if (callback(track, step, item, context) == 0U) return 0U;
+    }
+    return 1U;
+}
+
+uint8_t seq_model_play_resolve_param(param_id_t param,
                                           uint8_t *out_voice,
                                           seq_step_play_field_t *out_field)
 {
@@ -897,7 +982,7 @@ uint8_t seq_model_step_play_resolve_param(param_id_t param,
         return 0U;
     }
 
-    static const param_id_t play_params[SEQ_STEP_PLAY_VOICE_COUNT][SEQ_STEP_PLAY_FIELD_COUNT] = {
+    static const param_id_t play_params[SEQ_PLAY_MAX_CAPACITY][SEQ_STEP_PLAY_FIELD_COUNT] = {
         { PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V1_VEL,
           PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V1_MICTIM },
         { PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V2_VEL,
@@ -905,10 +990,18 @@ uint8_t seq_model_step_play_resolve_param(param_id_t param,
         { PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V3_VEL,
           PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V3_MICTIM },
         { PARAM_SEQ_PLAY_V4_NOTE, PARAM_SEQ_PLAY_V4_VEL,
-          PARAM_SEQ_PLAY_V4_LEN, PARAM_SEQ_PLAY_V4_MICTIM }
+          PARAM_SEQ_PLAY_V4_LEN, PARAM_SEQ_PLAY_V4_MICTIM },
+        { PARAM_SEQ_PLAY_V5_NOTE, PARAM_SEQ_PLAY_V5_VEL,
+          PARAM_SEQ_PLAY_V5_LEN, PARAM_SEQ_PLAY_V5_MICTIM },
+        { PARAM_SEQ_PLAY_V6_NOTE, PARAM_SEQ_PLAY_V6_VEL,
+          PARAM_SEQ_PLAY_V6_LEN, PARAM_SEQ_PLAY_V6_MICTIM },
+        { PARAM_SEQ_PLAY_V7_NOTE, PARAM_SEQ_PLAY_V7_VEL,
+          PARAM_SEQ_PLAY_V7_LEN, PARAM_SEQ_PLAY_V7_MICTIM },
+        { PARAM_SEQ_PLAY_V8_NOTE, PARAM_SEQ_PLAY_V8_VEL,
+          PARAM_SEQ_PLAY_V8_LEN, PARAM_SEQ_PLAY_V8_MICTIM }
     };
 
-    for (uint8_t voice = 0U; voice < SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+    for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
@@ -923,38 +1016,38 @@ uint8_t seq_model_step_play_resolve_param(param_id_t param,
     return 0U;
 }
 
-uint8_t seq_model_step_play_param_get(seq_track_id_t track,
+uint8_t seq_model_play_param_get(seq_track_id_t track,
                                       seq_step_id_t step,
                                       param_id_t param,
                                       int16_t *out_value)
 {
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_step_play_get(track, step, voice, field, out_value)
+    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_play_get(track, step, voice, field, out_value)
         : 0U;
 }
 
-uint8_t seq_model_step_play_param_set(seq_track_id_t track,
+uint8_t seq_model_play_param_set(seq_track_id_t track,
                                       seq_step_id_t step,
                                       param_id_t param,
                                       int16_t value)
 {
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_step_play_set(track, step, voice, field, value)
+    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_play_set(track, step, voice, field, value)
         : 0U;
 }
 
-uint8_t seq_model_step_play_param_delete(seq_track_id_t track,
+uint8_t seq_model_play_param_delete(seq_track_id_t track,
                                          seq_step_id_t step,
                                          param_id_t param)
 {
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_step_play_delete(track, step, voice, field)
+    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
+        ? seq_model_play_clear(track, step, voice, field)
         : 0U;
 }
 

@@ -1,4 +1,5 @@
 #include "Mod/mod_lfo_v1.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Storage/memory_layout.h"
 
@@ -213,7 +214,7 @@ static const track_mod_lfo_state_t *mod_lfo_track_settings_const(uint8_t track, 
     return &state->mod_lfo[lfo_index];
 }
 
-static ui_track_family_t mod_lfo_ui_family_from_ctx(const track_runtime_ctx_t *ctx)
+static ui_track_family_t mod_lfo_ui_family_from_ctx(const track_audio_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
     {
@@ -239,7 +240,7 @@ static ui_track_family_t mod_lfo_ui_family_from_ctx(const track_runtime_ctx_t *c
     }
 }
 
-static ui_track_type_t mod_lfo_ui_type_from_ctx(const track_runtime_ctx_t *ctx)
+static ui_track_type_t mod_lfo_ui_type_from_ctx(const track_audio_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
     {
@@ -658,8 +659,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
         }
         g_mod_lfo_track_had_matrix_routes[track] = 1U;
 
-        track_runtime_refresh_track(track);
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
         const ui_track_family_t family = mod_lfo_ui_family_from_ctx(ctx);
         const ui_track_type_t type = mod_lfo_ui_type_from_ctx(ctx);
         float source_values[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
@@ -674,21 +674,24 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
             source_valid[MOD_MATRIX_SOURCE_ENV3] = 1U;
         }
         if ((ctx != NULL)
-                && (ctx->mix_track_id < MIXER_MAX_TRACKS)
+                && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
                 && (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_VCA, family, type, ctx) != 0U))
         {
-            source_values[MOD_MATRIX_SOURCE_ENV_VCA] = mixer_get_track_vca_env_value(ctx->mix_track_id);
+            source_values[MOD_MATRIX_SOURCE_ENV_VCA] = mixer_get_track_vca_env_value(ctx->audio_binding.mix_track_id);
             source_end[MOD_MATRIX_SOURCE_ENV_VCA] = source_values[MOD_MATRIX_SOURCE_ENV_VCA];
             source_valid[MOD_MATRIX_SOURCE_ENV_VCA] = 1U;
         }
         if (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_FLT, family, type, ctx) != 0U)
         {
-            uint8_t filter_track = 0U;
-            if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+            if ((ctx != NULL)
+                    && ((ctx->flags & 1U) != 0U)
+                    && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS))
             {
                 source_values[MOD_MATRIX_SOURCE_ENV_FLT] =
-                    mixer_prepare_track_filter_env_source(filter_track, elapsed_frames);
-                source_end[MOD_MATRIX_SOURCE_ENV_FLT] = source_values[MOD_MATRIX_SOURCE_ENV_FLT];
+                    mixer_prepare_track_filter_env_source(
+                        ctx->audio_binding.mix_track_id, elapsed_frames);
+                source_end[MOD_MATRIX_SOURCE_ENV_FLT] =
+                    source_values[MOD_MATRIX_SOURCE_ENV_FLT];
                 source_valid[MOD_MATRIX_SOURCE_ENV_FLT] = 1U;
             }
         }
@@ -981,7 +984,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
                                       lfo_index,
                                       old_trig,
                                       (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f)));
-            mod_matrix_rebuild_route_cache_track(track);
             return 1U;
         }
 
@@ -1064,7 +1066,6 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     }
 
     rt->temp_valid_mask |= mod_lfo_runtime_param_mask(param);
-    if (param == MOD_LFO_PARAM_TRIG) mod_matrix_rebuild_route_cache_track(track);
     return 1U;
 }
 
@@ -1086,7 +1087,6 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
         const mod_lfo_trig_mode_t new_trig = (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f));
         mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
     }
-    if (param == MOD_LFO_PARAM_TRIG) mod_matrix_rebuild_route_cache_track(track);
 }
 
 mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index)
@@ -1281,7 +1281,7 @@ void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot)
 
 void mod_lfo_v1_process_poly_voice(uint8_t track,
                                    uint8_t voice_slot,
-                                   const track_runtime_ctx_t *ctx,
+                                   const track_audio_runtime_ctx_t *ctx,
                                    uint32_t frames)
 {
     if ((track >= SEQ_TRACK_COUNT) || (voice_slot >= MOD_LFO_POLY_SLOT_COUNT)

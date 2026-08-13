@@ -2,7 +2,7 @@
 
 ## Invariants
 
-La topologie logique est un tableau homogène de huit pistes `0..7` sur Low-Cost et Premium. `track_topology` publie seulement cette cardinalité et les capacités communes; `track_state` porte la configuration canonique et `track_runtime` la projette vers les moteurs et ressources physiques. Aucun rôle, ordinal, remap ou slot Special n'entre dans l'identité.
+La topologie logique possède seize identités stables : huit entités top-level `0..7`, puis huit entités GROUP children `8..15` actives uniquement lorsque l'entité 7 est GROUP master. `entity_topology` est l'unique autorité de l'activité, du rôle et de la relation parent/membre. Ces propriétés et les capacités qui en découlent sont calculées, jamais stockées en parallèle. `track_state` porte la configuration canonique propre de chaque entité, y compris celle des children lorsqu'ils sont inactifs, et `track_runtime` la projette vers les moteurs et ressources physiques.
 
 Le Master est un état global du registre de paramètres et du mixer. Looper est un type de Sampler assignable. External est un moteur de piste dont l'entrée physique est arbitrée exclusivement par `track_input_ownership`. Les voies mixer, moteurs, entrées et capacités physiques sont des ressources; ce ne sont jamais des identités de piste.
 
@@ -15,6 +15,12 @@ Les remplacements en masse valident toutes les familles, types, capacités Loope
 ## Séquence
 
 `seq_model` contient huit modèles identiques de 64 steps et un pool de 1024 p-locks par piste. Chaque piste Play possède exactement trois slots MIDI FX (`S1..S3`) ; le scheduler, le live record, le mute, le stop et le panic sont bornés par les mêmes huit index. `undo_v2` conserve huit transactions maximum pour les mutations de séquence uniquement ; l'état de base MIDI FX est persistant et copiable, mais reste hors Undo/Redo.
+
+CONTROL possède le séquenceur, les Note FX, le routage musical et les sorties MIDI. AUDIO publie le sample clock, consomme les événements audio datés et reste l'unique autorité d'admission des notes internes, d'allocation et de stealing. Le MIDI ne traverse pas l'admission AUDIO.
+
+Les transitions destructives et le panic ferment les admissions internes par des commandes `CLOSE_ENTITY` / `CLOSE_ALL` datées dans le même flux CONTROL vers AUDIO.
+
+L'admission AUDIO conserve le binding exact associé à chaque occurrence. Une fermeture vise donc l'ancien moteur/instance même si CONTROL a déjà publié une nouvelle génération; aucun moteur, mixer ou allocator n'est appelé depuis le scheduler ou les Note FX.
 
 ## UI
 

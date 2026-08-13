@@ -56,7 +56,6 @@ _Static_assert(sizeof(note_fx_slot_runtime_t) == 928U,
                "NoteFx slot layout changed unexpectedly");
 
 static note_fx_slot_runtime_t g_slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
-static note_fx_diag_t g_diag[NOTE_FX_TRACK_COUNT];
 static uint32_t g_token;
 static uint64_t g_work_slot_mask;
 
@@ -87,57 +86,6 @@ static void refresh_slot_work(uint8_t track, uint8_t slot)
         g_work_slot_mask |= bit;
     else
         g_work_slot_mask &= ~bit;
-}
-
-static uint8_t slot_owned_count(const note_fx_slot_runtime_t *runtime)
-{
-    uint8_t count = 0U;
-    for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
-        count = (uint8_t)(count + (runtime->common.owned[i].active != 0U));
-    return count;
-}
-
-static void note_fx_diag_record_saturation(uint8_t track, uint8_t slot,
-                                           note_fx_diag_cause_t cause)
-{
-    if (track >= NOTE_FX_TRACK_COUNT)
-        return;
-    ++g_diag[track].saturations;
-    ++g_diag[track].dropped_note_ons;
-    if (slot >= NOTE_FX_SLOT_COUNT)
-        return;
-    ++g_diag[track].slot[slot].saturations;
-    ++g_diag[track].slot[slot].dropped_note_ons;
-    if (cause < NOTE_FX_DIAG_CAUSE_COUNT)
-        ++g_diag[track].slot[slot].cause_count[cause];
-}
-
-static void note_fx_diag_record_emit_reject(uint8_t track, uint8_t slot,
-                                            uint8_t is_note_on)
-{
-    if ((track >= NOTE_FX_TRACK_COUNT) || (slot >= NOTE_FX_SLOT_COUNT))
-        return;
-    ++g_diag[track].slot[slot].cause_count[NOTE_FX_DIAG_CAUSE_EMIT_REJECT];
-    if (is_note_on != 0U)
-    {
-        ++g_diag[track].saturations;
-        ++g_diag[track].dropped_note_ons;
-        ++g_diag[track].slot[slot].saturations;
-        ++g_diag[track].slot[slot].dropped_note_ons;
-    }
-}
-
-static void note_fx_diag_update_usage(uint8_t track, uint8_t slot,
-                                      const note_fx_slot_runtime_t *runtime)
-{
-    if ((track >= NOTE_FX_TRACK_COUNT) || (slot >= NOTE_FX_SLOT_COUNT))
-        return;
-    note_fx_slot_diag_t *const diag = &g_diag[track].slot[slot];
-    const uint8_t owned_count = slot_owned_count(runtime);
-    if (runtime->fx.euclid.source_count > diag->source_high_water)
-        diag->source_high_water = runtime->fx.euclid.source_count;
-    if (owned_count > diag->owned_high_water)
-        diag->owned_high_water = owned_count;
 }
 
 static uint32_t next_fx_token(void)
@@ -283,8 +231,6 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
             ? emit(&event, context) : NOTE_EVENT_RESULT_ACCEPTED;
         if (closure_is_settled(result) != 0U)
             owned->active = 0U;
-        else
-            note_fx_diag_record_emit_reject(track, slot, 0U);
     }
     note_fx_slot_reset_fx_state(runtime, track, slot, runtime->common.model);
     runtime->common.closing = 0U;
@@ -297,7 +243,6 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
 void note_fx_engine_init(void)
 {
     memset(g_slot, 0, sizeof(g_slot));
-    memset(g_diag, 0, sizeof(g_diag));
     g_token = 0U;
     g_work_slot_mask = 0U;
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
@@ -416,10 +361,7 @@ static note_fx_result_t euclid_emit_source_off(
         if (closure_is_settled(result) != 0U)
             owned->active = 0U;
         else
-        {
-            note_fx_diag_record_emit_reject(track, slot, 0U);
             close_result = result;
-        }
     }
     return close_result;
 }
@@ -475,8 +417,6 @@ static note_fx_result_t euclid_stage_source(
     }
     if (runtime->fx.euclid.source_count >= NOTE_FX_EUCLID_MAX_SOURCES)
     {
-        note_fx_diag_record_saturation(event->track, slot,
-                                        NOTE_FX_DIAG_CAUSE_SOURCE_CAPACITY);
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
 
@@ -497,7 +437,6 @@ static note_fx_result_t euclid_stage_source(
         runtime->fx.euclid.phase = 0U;
         runtime->common.next_sample = event->sample_abs;
     }
-    note_fx_diag_update_usage(event->track, slot, runtime);
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
@@ -546,10 +485,7 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
             if (closure_is_settled(result) != 0U)
                 owned->active = 0U;
             else
-            {
-                note_fx_diag_record_emit_reject(event->track, slot, 0U);
                 close_result = result;
-            }
         }
         if (close_result != NOTE_EVENT_RESULT_ACCEPTED)
         {
@@ -578,8 +514,6 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
     const uint8_t was_empty = runtime->fx.arp.arp.count == 0U;
     if (note_fx_arp_note_on(&runtime->fx.arp.arp, event->note, event->velocity,
                             event->source_token, event->generation) == 0U) {
-        note_fx_diag_record_saturation(event->track, slot,
-                                        NOTE_FX_DIAG_CAUSE_MODEL_CAPACITY);
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
     runtime->fx.arp.destination = event->destination_id;
@@ -636,8 +570,6 @@ static note_fx_result_t euclid_emit_owned_off(
         ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
     if (closure_is_settled(result) != 0U)
         owned->active = 0U;
-    else
-        note_fx_diag_record_emit_reject(track, slot, 0U);
     (void)runtime;
     return result;
 }
@@ -781,8 +713,6 @@ static void euclid_generate_at_deadline(
             }
             if (owned == 0)
             {
-                note_fx_diag_record_saturation(track, slot,
-                                                NOTE_FX_DIAG_CAUSE_OWNED_CAPACITY);
                 continue;
             }
 
@@ -798,7 +728,6 @@ static void euclid_generate_at_deadline(
                 .generation = runtime->common.generation,
                 .off_sample = sample + period
             };
-            note_fx_diag_update_usage(track, slot, runtime);
             const note_fx_event_t on = {
                 .sample_abs = sample,
                 .track = track,
@@ -817,7 +746,6 @@ static void euclid_generate_at_deadline(
                 ? emit(&on, context) : NOTE_EVENT_RESULT_ACCEPTED;
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
             {
-                note_fx_diag_record_emit_reject(track, slot, 1U);
                 owned->active = 0U;
             }
         }
@@ -885,8 +813,6 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                     ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
                 if (closure_is_settled(result) != 0U)
                     owned->active = 0U;
-                else
-                    note_fx_diag_record_emit_reject(track, slot, 0U);
             }
             if (runtime->fx.arp.pending_source_close != 0U) {
                 uint8_t pending_owned = 0U;
@@ -951,8 +877,6 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                 (note_fx_arp_style_t)runtime->fx.arp.style,
                 runtime->fx.arp.range,
                 &note, &velocity) == 0U) {
-                note_fx_diag_record_saturation(track, slot,
-                                                NOTE_FX_DIAG_CAUSE_MODEL_CAPACITY);
                 release_slot(track, slot, runtime->common.next_sample,
                              emit, context);
                 continue;
@@ -983,7 +907,6 @@ void note_fx_engine_process(uint64_t start, uint16_t frames, uint32_t step_q16,
                 ? emit(&on, context) : NOTE_EVENT_RESULT_ACCEPTED;
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
             {
-                note_fx_diag_record_emit_reject(track, slot, 1U);
                 owned->active = 0U;
             }
             runtime->common.next_sample += rate_period(
@@ -998,20 +921,6 @@ void note_fx_engine_cleanup(uint8_t track, uint64_t sample,
     if (track >= NOTE_FX_TRACK_COUNT) return;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
         release_slot(track, slot, sample, emit, context);
-}
-
-note_fx_diag_t note_fx_engine_diag(uint8_t track)
-{
-    const note_fx_diag_t zero = {0};
-    return track < NOTE_FX_TRACK_COUNT ? g_diag[track] : zero;
-}
-
-note_fx_slot_diag_t note_fx_engine_slot_diag(uint8_t track, uint8_t slot)
-{
-    const note_fx_slot_diag_t zero = {0};
-    if ((track >= NOTE_FX_TRACK_COUNT) || (slot >= NOTE_FX_SLOT_COUNT))
-        return zero;
-    return g_diag[track].slot[slot];
 }
 
 uint64_t note_fx_engine_next_deadline(void)

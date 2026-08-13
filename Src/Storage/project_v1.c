@@ -10,14 +10,10 @@
 #include "Storage/project_sd_bank.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
-#include "Audio/drum_synth.h"
-#include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_sampler_runtime.h"
-#include "Core/brick6_stack_runtime.h"
+#include "Audio/control_audio_queue.h"
+#include "Core/live_clock.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_tone_sound_state.h"
-#include "mixer.h"
 #include "Param/param_macro.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_pool.h"
@@ -64,7 +60,7 @@ static void project_v1_macro_clear_lock(project_v1_macro_lock_t *lock)
 
 static uint8_t project_v1_normalize_track_payloads(const ProjectSaveV1 *project)
 {
-    const uint8_t track_count = track_topology_get_logical_track_count();
+    const uint8_t track_count = entity_topology_get_top_level_count();
     if (project == 0)
     {
         return 0U;
@@ -499,7 +495,6 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
     {
         if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
         {
-            brick6_sampler_runtime_stop_multi_instrument(slot);
             (void)multi_sample_pool_clear_instrument(slot);
         }
     }
@@ -620,25 +615,22 @@ static void project_v1_multi_clear_assignments(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         g_project_multi_assign[track].gain = 1.0f;
-        brick6_sampler_runtime_set_multi_gain(track, 1.0f);
-        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
     }
 }
 
 static void project_v1_reset_blank_transient_runtime(void)
 {
     sd_preview_stop();
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    uint64_t due_sample = 0U;
+    if (live_clock_read_audio_sample(&due_sample))
     {
-        brick6_sampler_runtime_reset_track(track);
+        const control_audio_event_t close_all = {
+            .due_sample = due_sample,
+            .entity_id = 0U,
+            .kind = (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ALL
+        };
+        (void)control_audio_queue_publish(&close_all);
     }
-    brick6_sampler_runtime_service();
-    brick6_looper_runtime_init();
-    brick6_braids_runtime_init();
-    brick6_stack_runtime_init();
-    drum_synth_all_notes_off_all();
-    mixer_reset_runtime_state();
     track_sound_state_init();
     track_tone_sound_state_init();
 }
@@ -678,11 +670,8 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
             && (project_v1_text_equal(multi[prev].path,
                                       multi[track].path) != 0U))
         {
-            uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-            if (brick6_sampler_runtime_get_multi_instrument(prev, &instrument_id) != 0U)
-            {
-                return instrument_id;
-            }
+            return project_v1_multi_find_restored_instrument(
+                project, multi, prev);
         }
     }
 
@@ -713,19 +702,15 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
         {
             dst->gain = 4.0f;
         }
-        brick6_sampler_runtime_set_multi_gain(track, dst->gain);
-
         if (src->path[0] == '\0')
         {
             dst->path[0] = '\0';
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
             continue;
         }
 
         if (project_v1_copy_text(dst->path, sizeof(dst->path), src->path) == 0U)
         {
             dst->path[0] = '\0';
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
             g_project_multi_restore_diag.restore_missing_path = 1U;
             continue;
         }
@@ -733,12 +718,10 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
         const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, multi, track);
         if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
         {
-            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
             g_project_multi_restore_diag.restore_load_error = 1U;
             continue;
         }
 
-        brick6_sampler_runtime_set_multi_instrument(track, instrument_id);
         (void)project_v1_copy_text(g_project_multi_restore_diag.restored_multi_path,
                                    sizeof(g_project_multi_restore_diag.restored_multi_path),
                                    dst->path);
@@ -767,7 +750,6 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
             }
             else
             {
-                brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
                 g_project_multi_restore_diag.restore_load_error = 1U;
             }
         }
@@ -1062,7 +1044,6 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         out_project->multi[track] = g_project_multi_assign[track];
-        out_project->multi[track].gain = brick6_sampler_runtime_get_multi_gain(track);
     }
 
     if (pattern_live_capture_current(&out_project->live) == 0U)
@@ -1149,7 +1130,6 @@ uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path)
     if ((path == 0) || (path[0] == '\0'))
     {
         g_project_multi_assign[track].path[0] = '\0';
-        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
         project_v1_set_error(PROJECT_V1_ERR_NONE);
         return 1U;
     }
@@ -1445,7 +1425,6 @@ uint8_t project_v1_load_blank(void)
     {
         if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
         {
-            brick6_sampler_runtime_stop_multi_instrument(slot);
             (void)multi_sample_pool_clear_instrument(slot);
         }
     }

@@ -6,10 +6,10 @@
 #include "Core/track_sound_state.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Storage/memory_layout.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_types.h"
-#include "mixer.h"
+#include "Param/param_registry.h"
 
 SEQ_STATE_D2 static uint8_t g_track_mute_state[SEQ_LANE_CAPACITY];
 
@@ -92,10 +92,10 @@ uint8_t track_mute_is_effectively_muted(uint8_t track)
         return 1U;
     }
 
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) != 0U)
-            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-            && (track_mute_get((uint8_t)lane.parent_lane_id) != 0U))
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity.role == ENTITY_ROLE_GROUP_CHILD)
+            && (track_mute_get((uint8_t)entity.parent_entity_id) != 0U))
     {
         return 1U;
     }
@@ -149,19 +149,9 @@ uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state
         }
     }
 
-    seq_lane_descriptor_t lane;
-    const uint8_t is_group_child = (uint8_t)((seq_lane_get_descriptor(
-            (seq_lane_id_t)track, &lane) != 0U)
-            && (lane.role == SEQ_LANE_ROLE_GROUP_CHILD));
-    if ((kind != TRACK_MUTE_KIND_MIDI) && (is_group_child == 0U))
-    {
-        uint8_t mix_track = 0U;
-        if (track_mute_resolve_mix_target(track, &mix_track) == 0U)
-        {
-            return 0U;
-        }
-        mixer_set_track_mute(mix_track, muted);
-    }
+    if (kind != TRACK_MUTE_KIND_MIDI)
+        return param_registry_apply_track_value(
+            PARAM_MIX_MUTE, track, (float)muted);
     return 1U;
 }
 

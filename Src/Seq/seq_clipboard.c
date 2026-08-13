@@ -6,7 +6,7 @@
  * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
  */
 #include "Seq/seq_clipboard.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_step_snapshot.h"
 
 #include <string.h>
@@ -24,9 +24,7 @@ UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
 static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.active != 0U);
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t step_count, seq_step_id_t *out_min)
@@ -196,8 +194,10 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         return 0U;
     }
 
-    seq_step_snapshot_list_t paste_list;
-    memset(&paste_list, 0, sizeof(paste_list));
+    uint32_t replaced = 0U;
+    uint32_t incoming = 0U;
+    uint8_t paste_count = 0U;
+    seq_step_snapshot_t projected;
     for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
     {
         const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
@@ -209,21 +209,64 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
             continue;
         }
 
-        paste_list.entries[paste_list.count].step = target_step;
-        paste_list.entries[paste_list.count].snapshot = src->snapshot;
-        paste_list.count++;
+        projected = src->snapshot;
+        if (seq_step_snapshot_project_play_for_track(
+                target_track,
+                &projected) == 0U
+                || (seq_step_snapshot_validate_for_track(target_track,
+                                                         &projected) == 0U))
+        {
+            result.partial = 1U;
+            *out_result = result;
+            return 0U;
+        }
+        replaced += seq_model_step_param_plock_count(target_track, target_step);
+        incoming += projected.lock_count;
+        paste_count++;
     }
 
-    if ((paste_list.count == 0U)
-            || (seq_step_snapshot_apply_list(target_track, &paste_list) == 0U))
+    const uint32_t current = seq_model_get_track_plock_count(target_track);
+    if ((paste_count == 0U) || (current < replaced)
+            || ((current - replaced + incoming)
+                > seq_model_get_track_plock_capacity(target_track)))
     {
-        result.partial = (paste_list.count != 0U) ? 1U : 0U;
+        result.partial = (paste_count != 0U) ? 1U : 0U;
         *out_result = result;
         return 0U;
     }
-    result.pasted_steps = paste_list.count;
+
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
+    {
+        seq_step_id_t target_step = 0U;
+        if (seq_clipboard_resolve_target_step(&g_seq_clipboard.steps.entries[i],
+                                              dest_anchor,
+                                              &target_step) != 0U)
+        {
+            seq_model_step_plock_clear(target_track, target_step);
+            seq_model_play_clear_step(target_track, target_step);
+        }
+    }
+
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
+    {
+        const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
+        seq_step_id_t target_step = 0U;
+        if (seq_clipboard_resolve_target_step(src, dest_anchor, &target_step) == 0U)
+        {
+            continue;
+        }
+
+        projected = src->snapshot;
+        if ((seq_step_snapshot_project_play_for_track(target_track, &projected) == 0U)
+                || (seq_step_snapshot_apply(target_track, target_step, &projected) == 0U))
+        {
+            result.partial = 1U;
+            *out_result = result;
+            return 0U;
+        }
+        result.pasted_steps++;
+    }
 
     *out_result = result;
     return (result.pasted_steps > 0U) ? 1U : 0U;
 }
-

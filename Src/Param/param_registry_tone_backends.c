@@ -1,4 +1,5 @@
 #include "Param/param_registry_backends.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Param/param_registry_runtime_state.h"
 
 #include "Core/track_tone_sound_state.h"
@@ -18,14 +19,16 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
         return 0U;
     }
 
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+    if ((ctx == NULL) || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
     }
 
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (param_backend_track_supports_midi_tone_ctx(ctx) != 0U))
+            && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+                || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
+                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL))))
     {
         if (param_backend_is_midi_cc_id(id) != 0U)
         {
@@ -58,27 +61,27 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     {
         applied = param_backend_apply_tone_looper(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         applied = param_backend_apply_tone_sampler(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
     {
         applied = param_backend_apply_tone_prism(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
     {
         applied = param_backend_apply_tone_fm(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
     {
         applied = param_backend_apply_tone_stack(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
     {
         applied = param_backend_apply_tone_wave(track, id, effective_value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         applied = param_backend_apply_tone_drum(track, ctx, id, effective_value, update_base_state);
     }

@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #include "param_registry.h"
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_types.h"
 
 #ifdef __cplusplus
@@ -46,16 +46,10 @@ typedef enum
 
 typedef struct track_runtime_ctx_s
 {
-    uint8_t track_id;
-    uint8_t mix_track_id;
     uint8_t midi_channel_1_16;
     uint8_t midi_source;
     uint8_t family;
     uint8_t type;
-    uint8_t engine;
-    uint8_t instance_id;
-    track_runtime_bind_state_t bind_state;
-    track_runtime_bind_reason_t bind_reason;
     uint8_t flags;
 } track_runtime_ctx_t;
 
@@ -134,15 +128,6 @@ typedef struct
     track_runtime_param_status_t status;
 } track_runtime_param_rule_t;
 
-typedef struct
-{
-    uint8_t drum_tracks;
-    uint8_t prism_tracks;
-    uint8_t stack_tracks;
-    uint8_t wave_tracks;
-    uint8_t fm_tracks;
-} track_runtime_synth_usage_t;
-
 typedef enum
 {
     TRACK_RUNTIME_UI_ENSEMBLE_CFG = 0,
@@ -198,7 +183,6 @@ void track_runtime_invalidate_track(uint8_t track);
 uint8_t track_runtime_refresh_if_dirty(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
-void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage);
 /*
  * Revision guards:
  * - track_runtime_get_revision / track_runtime_get_track_revision are coherence markers only.
@@ -220,7 +204,6 @@ uint8_t track_runtime_is_audio_routable_ctx(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capability);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
-uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t *out_track);
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);
 uint8_t track_runtime_get_midi_channel_1_16(uint8_t track);
 uint8_t track_runtime_get_midi_channel_zero_based(uint8_t track);
@@ -238,8 +221,6 @@ uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
                                          param_id_t param,
                                          uint8_t *out_slot);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
-uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
-uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
 
 #ifdef __cplusplus

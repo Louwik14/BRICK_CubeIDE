@@ -26,9 +26,7 @@ typedef struct
 
 static uint8_t seq_boundary_engine_track_is_valid(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    return (seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) != 0U)
-            && (descriptor.active != 0U);
+    return entity_topology_is_active((brick_entity_id_t)track);
 }
 
 static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)

@@ -12,7 +12,7 @@
 #include "Core/engine_tasklet.h"
 #include "Storage/memory_layout.h"
 #include "Seq/seq_model.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_surface.h"
@@ -50,8 +50,8 @@ typedef struct
     uint8_t note_capture_step_count;
     seq_step_id_t note_capture_steps[SEQ_STEPS_PER_PAGE];
     uint8_t note_capture_note_count;
-    uint8_t note_capture_notes[SEQ_STEP_PLAY_VOICE_COUNT];
-    uint8_t note_capture_velocities[SEQ_STEP_PLAY_VOICE_COUNT];
+    uint8_t note_capture_notes[SEQ_PLAY_MAX_CAPACITY];
+    uint8_t note_capture_velocities[SEQ_PLAY_MAX_CAPACITY];
     uint8_t note_capture_undo_open;
     uint32_t press_tick[SEQ_STEPS_PER_PAGE];
     seq_step_id_t step_id[SEQ_STEPS_PER_PAGE];
@@ -113,7 +113,7 @@ uint8_t seq_edit_step_play_find(seq_track_id_t track,
 {
     int16_t value = 0;
     if ((out_value16 == NULL)
-            || (seq_model_step_play_param_get(track, step, param, &value) == 0U))
+            || (seq_model_play_param_get(track, step, param, &value) == 0U))
     {
         return 0U;
     }
@@ -131,10 +131,10 @@ seq_plock_op_status_t seq_edit_step_play_upsert(seq_track_id_t track,
         return SEQ_PLOCK_OP_INVALID;
     }
     int16_t previous = 0;
-    const uint8_t existed = seq_model_step_play_param_get(track, step, param, &previous);
+    const uint8_t existed = seq_model_play_param_get(track, step, param, &previous);
     const float decoded = seq_param_iface_decode_param_value(param, value16);
     const int16_t value = (int16_t)(decoded + ((decoded >= 0.0f) ? 0.5f : -0.5f));
-    if (seq_model_step_play_param_set(track, step, param, value) == 0U)
+    if (seq_model_play_param_set(track, step, param, value) == 0U)
     {
         return SEQ_PLOCK_OP_INVALID;
     }
@@ -151,7 +151,7 @@ void seq_edit_step_play_commit(seq_track_id_t track,
     }
     uint8_t voice = 0U;
     seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    if ((seq_model_step_play_resolve_param(param, &voice, &field) != 0U)
+    if ((seq_model_play_resolve_param(param, &voice, &field) != 0U)
             && (field == SEQ_STEP_PLAY_FIELD_NOTE))
     {
         seq_model_set_trig(track, step, 1U);
@@ -172,7 +172,7 @@ seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
     {
         return SEQ_PLOCK_OP_INVALID;
     }
-    return (seq_model_step_play_param_delete(track, step, param) != 0U)
+    return (seq_model_play_param_delete(track, step, param) != 0U)
         ? SEQ_PLOCK_OP_DELETED : SEQ_PLOCK_OP_NOT_FOUND;
 }
 
@@ -182,7 +182,7 @@ void seq_edit_step_play_clear_voice(seq_track_id_t track,
 {
     if (seq_edit_track_sequence_is_locked(track) == 0U)
     {
-        seq_model_step_play_clear_voice(track, step, voice);
+        seq_model_play_clear_item(track, step, voice);
     }
 }
 
@@ -190,15 +190,13 @@ void seq_edit_step_play_clear(seq_track_id_t track, seq_step_id_t step)
 {
     if (seq_edit_track_sequence_is_locked(track) == 0U)
     {
-        seq_model_step_play_clear(track, step);
+        seq_model_play_clear_step(track, step);
     }
 }
 
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
 {
-    seq_lane_descriptor_t descriptor;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &descriptor) == 0U)
-            || (descriptor.active == 0U))
+    if (entity_topology_is_active((brick_entity_id_t)track) == 0U)
     {
         return 1U;
     }
@@ -296,38 +294,50 @@ uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
 
 static param_id_t seq_edit_lowcost_length_param_for_voice(uint8_t voice)
 {
-    static const param_id_t k_len_params[4U] = {
+    static const param_id_t k_len_params[SEQ_PLAY_MAX_CAPACITY] = {
         PARAM_SEQ_PLAY_V1_LEN,
         PARAM_SEQ_PLAY_V2_LEN,
         PARAM_SEQ_PLAY_V3_LEN,
-        PARAM_SEQ_PLAY_V4_LEN
+        PARAM_SEQ_PLAY_V4_LEN,
+        PARAM_SEQ_PLAY_V5_LEN,
+        PARAM_SEQ_PLAY_V6_LEN,
+        PARAM_SEQ_PLAY_V7_LEN,
+        PARAM_SEQ_PLAY_V8_LEN
     };
 
-    return (voice < 4U) ? k_len_params[voice] : PARAM_SEQ_PLAY_V1_LEN;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_len_params[voice] : PARAM_SEQ_PLAY_V1_LEN;
 }
 
 static param_id_t seq_edit_lowcost_note_param_for_voice(uint8_t voice)
 {
-    static const param_id_t k_note_params[4U] = {
+    static const param_id_t k_note_params[SEQ_PLAY_MAX_CAPACITY] = {
         PARAM_SEQ_PLAY_V1_NOTE,
         PARAM_SEQ_PLAY_V2_NOTE,
         PARAM_SEQ_PLAY_V3_NOTE,
-        PARAM_SEQ_PLAY_V4_NOTE
+        PARAM_SEQ_PLAY_V4_NOTE,
+        PARAM_SEQ_PLAY_V5_NOTE,
+        PARAM_SEQ_PLAY_V6_NOTE,
+        PARAM_SEQ_PLAY_V7_NOTE,
+        PARAM_SEQ_PLAY_V8_NOTE
     };
 
-    return (voice < 4U) ? k_note_params[voice] : PARAM_SEQ_PLAY_V1_NOTE;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_note_params[voice] : PARAM_SEQ_PLAY_V1_NOTE;
 }
 
 static param_id_t seq_edit_lowcost_vel_param_for_voice(uint8_t voice)
 {
-    static const param_id_t k_vel_params[4U] = {
+    static const param_id_t k_vel_params[SEQ_PLAY_MAX_CAPACITY] = {
         PARAM_SEQ_PLAY_V1_VEL,
         PARAM_SEQ_PLAY_V2_VEL,
         PARAM_SEQ_PLAY_V3_VEL,
-        PARAM_SEQ_PLAY_V4_VEL
+        PARAM_SEQ_PLAY_V4_VEL,
+        PARAM_SEQ_PLAY_V5_VEL,
+        PARAM_SEQ_PLAY_V6_VEL,
+        PARAM_SEQ_PLAY_V7_VEL,
+        PARAM_SEQ_PLAY_V8_VEL
     };
 
-    return (voice < 4U) ? k_vel_params[voice] : PARAM_SEQ_PLAY_V1_VEL;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_vel_params[voice] : PARAM_SEQ_PLAY_V1_VEL;
 }
 
 static uint8_t seq_edit_lowcost_step_has_play_param(seq_track_id_t track,
@@ -480,7 +490,8 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
     }
 
     uint8_t applied = 0U;
-    for (uint8_t voice = 0U; voice < 4U; ++voice)
+    const uint8_t play_capacity = seq_model_play_capacity(track);
+    for (uint8_t voice = 0U; voice < play_capacity; ++voice)
     {
         if (seq_edit_lowcost_voice_is_present(track, start_step, voice) == 0U)
         {
@@ -847,7 +858,7 @@ static uint8_t seq_edit_replace_step_play_notes_impl(seq_track_id_t track,
 {
     if ((steps == 0) || (notes == 0) || (velocities == 0)
             || (step_count == 0U) || (step_count > (uint8_t)SEQ_MAX_STEPS)
-            || (note_count == 0U) || (note_count > (uint8_t)SEQ_STEP_PLAY_VOICE_COUNT)
+            || (note_count == 0U) || (note_count > seq_model_play_capacity(track))
             || (seq_edit_track_sequence_is_locked(track) != 0U)
             || (seq_model_track_can_store_play(track) == 0U))
     {
@@ -884,17 +895,18 @@ static uint8_t seq_edit_replace_step_play_notes_impl(seq_track_id_t track,
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];
-        for (uint8_t voice = 0U; voice < (uint8_t)SEQ_STEP_PLAY_VOICE_COUNT; ++voice)
+        const uint8_t play_capacity = seq_model_play_capacity(track);
+        for (uint8_t voice = 0U; voice < play_capacity; ++voice)
         {
-            (void)seq_model_step_play_delete(track,
+            (void)seq_model_play_clear(track,
                                               step,
                                               voice,
                                               SEQ_STEP_PLAY_FIELD_NOTE);
-            (void)seq_model_step_play_delete(track,
+            (void)seq_model_play_clear(track,
                                               step,
                                               voice,
                                               SEQ_STEP_PLAY_FIELD_VELOCITY);
-            (void)seq_model_step_play_delete(track,
+            (void)seq_model_play_clear(track,
                                               step,
                                               voice,
                                               SEQ_STEP_PLAY_FIELD_MICROTIMING);
@@ -902,17 +914,17 @@ static uint8_t seq_edit_replace_step_play_notes_impl(seq_track_id_t track,
 
         for (uint8_t voice = 0U; voice < note_count; ++voice)
         {
-            if ((seq_model_step_play_set(track,
+            if ((seq_model_play_set(track,
                                          step,
                                          voice,
                                          SEQ_STEP_PLAY_FIELD_NOTE,
                                          (int16_t)notes[voice]) == 0U)
-                    || (seq_model_step_play_set(track,
+                    || (seq_model_play_set(track,
                                                 step,
                                                 voice,
                                                 SEQ_STEP_PLAY_FIELD_VELOCITY,
                                                 (int16_t)velocities[voice]) == 0U)
-                    || (seq_model_step_play_set(track,
+                    || (seq_model_play_set(track,
                                                 step,
                                                 voice,
                                                 SEQ_STEP_PLAY_FIELD_MICROTIMING,
@@ -1002,7 +1014,9 @@ uint8_t seq_edit_capture_held_note_on(uint8_t note, uint8_t velocity)
 
     if (existing == 0U)
     {
-        if (g_seq_hold_state.note_capture_note_count >= SEQ_STEP_PLAY_VOICE_COUNT)
+        const uint8_t play_capacity = seq_model_play_capacity(
+            g_seq_hold_state.note_capture_track);
+        if (g_seq_hold_state.note_capture_note_count >= play_capacity)
         {
             if (g_seq_hold_state.captured_note_count[note] < 0xFFU)
             {
@@ -1129,9 +1143,7 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
     {
         return 0U;
     }
-    seq_lane_descriptor_t held_descriptor;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)held_track, &held_descriptor) == 0U)
-            || (held_descriptor.active == 0U))
+    if (entity_topology_is_active((brick_entity_id_t)held_track) == 0U)
     {
         return 0U;
     }
@@ -1407,7 +1419,7 @@ static void seq_edit_clear_steps_impl(seq_track_id_t track,
 
         seq_model_set_trig(track, step, 0U);
         seq_model_step_plock_clear(track, step);
-        seq_model_step_play_clear(track, step);
+        seq_model_play_clear_step(track, step);
     }
 }
 

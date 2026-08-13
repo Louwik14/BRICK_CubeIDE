@@ -1,11 +1,13 @@
 #include "Core/live_clock.h"
 
 #include "Board/board_audio_format.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "stm32h7xx_hal.h"
 
 typedef struct
 {
     live_clock_anchor_t value;
+    volatile uint32_t sequence;
     volatile uint8_t valid;
 } live_clock_state_t;
 
@@ -67,7 +69,8 @@ void live_clock_init(void)
         ? ((((uint64_t)BOARD_AUDIO_SAMPLE_RATE_HZ << 32)
             + ((uint64_t)tim5_hz / 2ULL)) / (uint64_t)tim5_hz)
         : 0ULL;
-    g_live_clock.value = (live_clock_anchor_t){0U, 0ULL};
+    g_live_clock.value = (live_clock_anchor_t){0};
+    g_live_clock.sequence = 0U;
     g_live_clock.valid = 0U;
 
     live_clock_exit_critical(primask);
@@ -76,14 +79,21 @@ void live_clock_init(void)
 void live_clock_audio_publish_anchor(uint64_t audio_sample)
 {
     const uint32_t tim5_tick = TIM5->CNT;
-    const uint32_t primask = live_clock_enter_critical();
-
+    ++g_live_clock.sequence;
+    __DMB();
     g_live_clock.value.tim5_tick = tim5_tick;
     g_live_clock.value.audio_sample = audio_sample;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < (brick_entity_id_t)BRICK_ENTITY_CAPACITY;
+         ++entity_id)
+    {
+        g_live_clock.value.binding_generation[entity_id] =
+            audio_note_engine_adapter_installed_generation(entity_id);
+    }
     __DMB();
     g_live_clock.valid = 1U;
-
-    live_clock_exit_critical(primask);
+    ++g_live_clock.sequence;
+    __DMB();
 }
 
 bool live_clock_read_anchor(live_clock_anchor_t *out_anchor)
@@ -93,14 +103,49 @@ bool live_clock_read_anchor(live_clock_anchor_t *out_anchor)
         return false;
     }
 
-    const uint32_t primask = live_clock_enter_critical();
-    const bool valid = (g_live_clock.valid != 0U);
-    if (valid)
+    for (;;)
     {
-        *out_anchor = g_live_clock.value;
+        const uint32_t before = g_live_clock.sequence;
+        __DMB();
+        if ((before & 1U) != 0U)
+            continue;
+        const bool valid = (g_live_clock.valid != 0U);
+        if (valid)
+            *out_anchor = g_live_clock.value;
+        __DMB();
+        if (before == g_live_clock.sequence)
+            return valid;
     }
-    live_clock_exit_critical(primask);
-    return valid;
+}
+
+bool live_clock_read_audio_sample(uint64_t *out_audio_sample)
+{
+    if (out_audio_sample == NULL)
+        return false;
+    live_clock_anchor_t anchor;
+    if (!live_clock_read_anchor(&anchor))
+        return false;
+    *out_audio_sample = anchor.audio_sample;
+    return true;
+}
+
+uint64_t live_clock_audio_sample(void)
+{
+    uint64_t sample = 0U;
+    (void)live_clock_read_audio_sample(&sample);
+    return sample;
+}
+
+bool live_clock_read_binding_generation(brick_entity_id_t entity_id,
+                                        uint32_t *out_generation)
+{
+    if ((out_generation == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
+        return false;
+    live_clock_anchor_t anchor;
+    if (!live_clock_read_anchor(&anchor))
+        return false;
+    *out_generation = anchor.binding_generation[entity_id];
+    return true;
 }
 
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,

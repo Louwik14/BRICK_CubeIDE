@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-struct track_runtime_ctx_s;
+struct track_audio_runtime_ctx_s;
 
 typedef enum
 {
@@ -76,7 +76,7 @@ void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot);
 void mod_lfo_v1_poly_voice_reset(uint8_t voice_slot);
 void mod_lfo_v1_process_poly_voice(uint8_t track,
                                    uint8_t voice_slot,
-                                   const struct track_runtime_ctx_s *ctx,
+                                   const struct track_audio_runtime_ctx_s *ctx,
                                    uint32_t frames);
 void mod_lfo_v1_note_release(uint8_t track);
 void mod_lfo_v1_all_notes_off(uint8_t track);

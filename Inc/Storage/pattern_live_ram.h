@@ -22,11 +22,11 @@ typedef struct __attribute__((packed))
     uint8_t lock_count;
     uint8_t roll;
     uint8_t reserved;
-    seq_step_play_t play;
+    seq_play_snapshot_t play;
     pattern_v1_plock_t locks[SEQ_STEP_MAX_LOCKS];
 } pattern_v1_step_t;
 
-_Static_assert(sizeof(pattern_v1_step_t) == 184U, "pattern step storage size changed");
+_Static_assert(sizeof(pattern_v1_step_t) == 204U, "pattern step storage size changed");
 
 typedef struct
 {
@@ -103,6 +103,5 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern);
 uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport);
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
 uint8_t pattern_live_is_apply_in_progress(void);
-uint8_t pattern_live_last_voice_limited(void);
 
 #endif

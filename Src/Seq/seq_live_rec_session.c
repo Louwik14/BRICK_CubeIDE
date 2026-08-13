@@ -49,34 +49,38 @@ static seq_live_rec_session_pending_note_t g_seq_live_rec_pending[64U];
 
 static param_id_t seq_live_rec_session_play_param_note(uint8_t voice)
 {
-    static const param_id_t k_note[4U] = {
-        PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
+    static const param_id_t k_note[SEQ_PLAY_MAX_CAPACITY] = {
+        PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE,
+        PARAM_SEQ_PLAY_V5_NOTE, PARAM_SEQ_PLAY_V6_NOTE, PARAM_SEQ_PLAY_V7_NOTE, PARAM_SEQ_PLAY_V8_NOTE
     };
-    return (voice < 4U) ? k_note[voice] : PARAM_SEQ_PLAY_V1_NOTE;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_note[voice] : PARAM_SEQ_PLAY_V1_NOTE;
 }
 
 static param_id_t seq_live_rec_session_play_param_vel(uint8_t voice)
 {
-    static const param_id_t k_vel[4U] = {
-        PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL
+    static const param_id_t k_vel[SEQ_PLAY_MAX_CAPACITY] = {
+        PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL,
+        PARAM_SEQ_PLAY_V5_VEL, PARAM_SEQ_PLAY_V6_VEL, PARAM_SEQ_PLAY_V7_VEL, PARAM_SEQ_PLAY_V8_VEL
     };
-    return (voice < 4U) ? k_vel[voice] : PARAM_SEQ_PLAY_V1_VEL;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_vel[voice] : PARAM_SEQ_PLAY_V1_VEL;
 }
 
 static param_id_t seq_live_rec_session_play_param_len(uint8_t voice)
 {
-    static const param_id_t k_len[4U] = {
-        PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN
+    static const param_id_t k_len[SEQ_PLAY_MAX_CAPACITY] = {
+        PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN,
+        PARAM_SEQ_PLAY_V5_LEN, PARAM_SEQ_PLAY_V6_LEN, PARAM_SEQ_PLAY_V7_LEN, PARAM_SEQ_PLAY_V8_LEN
     };
-    return (voice < 4U) ? k_len[voice] : PARAM_SEQ_PLAY_V1_LEN;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_len[voice] : PARAM_SEQ_PLAY_V1_LEN;
 }
 
 static param_id_t seq_live_rec_session_play_param_mictim(uint8_t voice)
 {
-    static const param_id_t k_mictim[4U] = {
-        PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
+    static const param_id_t k_mictim[SEQ_PLAY_MAX_CAPACITY] = {
+        PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM,
+        PARAM_SEQ_PLAY_V5_MICTIM, PARAM_SEQ_PLAY_V6_MICTIM, PARAM_SEQ_PLAY_V7_MICTIM, PARAM_SEQ_PLAY_V8_MICTIM
     };
-    return (voice < 4U) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
+    return (voice < SEQ_PLAY_MAX_CAPACITY) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
 }
 
 static uint8_t seq_live_rec_session_is_live_rec_active(void)
@@ -349,7 +353,8 @@ static void seq_live_rec_session_normalize_step_for_write(seq_track_id_t track, 
         return;
     }
 
-    for (uint8_t voice = 0U; voice < 4U; ++voice)
+    const uint8_t play_capacity = seq_model_play_capacity(track);
+    for (uint8_t voice = 0U; voice < play_capacity; ++voice)
     {
         seq_live_rec_session_clear_voice_play_params(track, step, voice);
     }
@@ -515,7 +520,8 @@ static int32_t seq_live_rec_session_find_voice_with_note_lock(seq_track_id_t tra
                                                               seq_step_id_t step,
                                                               uint8_t note)
 {
-    for (uint8_t voice = 0U; voice < 4U; ++voice)
+    const uint8_t play_capacity = seq_model_play_capacity(track);
+    for (uint8_t voice = 0U; voice < play_capacity; ++voice)
     {        const param_id_t note_id = seq_live_rec_session_play_param_note(voice);
 
         seq_value16_t value16;
@@ -538,7 +544,8 @@ static int32_t seq_live_rec_session_find_voice_with_note_lock(seq_track_id_t tra
 static int32_t seq_live_rec_session_find_free_voice(seq_track_id_t track,
                                                     seq_step_id_t step)
 {
-    for (uint8_t voice = 0U; voice < 4U; ++voice)
+    const uint8_t play_capacity = seq_model_play_capacity(track);
+    for (uint8_t voice = 0U; voice < play_capacity; ++voice)
     {
         if (seq_live_rec_session_voice_has_any_lock(track, step, voice) == 0U)
         {
@@ -565,7 +572,8 @@ static int32_t seq_live_rec_session_select_voice_deterministic(seq_track_id_t tr
         return voice;
     }
 
-    for (uint8_t v = 0U; v < 4U; ++v)
+    const uint8_t play_capacity = seq_model_play_capacity(track);
+    for (uint8_t v = 0U; v < play_capacity; ++v)
     {
         if (seq_live_rec_session_voice_is_owned(track, step, v) == 0U)
         {

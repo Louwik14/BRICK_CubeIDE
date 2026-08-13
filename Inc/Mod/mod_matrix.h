@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "Core/track_runtime.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_ramp.h"
 #include "Param/param_store.h"
 #include "Seq/seq_types.h"
@@ -72,13 +72,13 @@ uint8_t mod_matrix_source_has_active_route(uint8_t track,
                                            mod_matrix_source_t source,
                                            ui_track_family_t family,
                                            ui_track_type_t type,
-                                           const track_runtime_ctx_t *ctx);
+                                           const track_audio_runtime_ctx_t *ctx);
 void mod_matrix_process_track(uint8_t track,
-                              const track_runtime_ctx_t *ctx,
+                              const track_audio_runtime_ctx_t *ctx,
                               const float source_values[MOD_MATRIX_SOURCE_COUNT],
                               const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT]);
 void mod_matrix_process_track_ramped(uint8_t track,
-                                     const track_runtime_ctx_t *ctx,
+                                     const track_audio_runtime_ctx_t *ctx,
                                      const float source_start[MOD_MATRIX_SOURCE_COUNT],
                                      const float source_end[MOD_MATRIX_SOURCE_COUNT],
                                      const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
@@ -86,13 +86,13 @@ void mod_matrix_process_track_ramped(uint8_t track,
                                      uint32_t elapsed_frames);
 void mod_matrix_process_poly_voice_ramped(uint8_t track,
                                           uint8_t voice_slot,
-                                          const track_runtime_ctx_t *ctx,
+                                          const track_audio_runtime_ctx_t *ctx,
                                           const float source_start[MOD_MATRIX_SOURCE_COUNT],
                                           const float source_end[MOD_MATRIX_SOURCE_COUNT],
                                           const uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT]);
 void mod_matrix_reset_poly_voice(uint8_t track,
                                  uint8_t voice_slot,
-                                 const track_runtime_ctx_t *ctx);
+                                 const track_audio_runtime_ctx_t *ctx);
 void mod_matrix_process_operators(uint8_t track,
                                   float source_values[MOD_MATRIX_SOURCE_COUNT],
                                   uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT],
@@ -109,7 +109,7 @@ uint8_t mod_matrix_get_destination_ramp(uint8_t track,
 void mod_matrix_release_track(uint8_t track,
                               ui_track_family_t family,
                               ui_track_type_t type,
-                              const track_runtime_ctx_t *ctx);
+                              const track_audio_runtime_ctx_t *ctx);
 void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value);
 void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float value);
 void mod_matrix_clear_runtime_base_override(uint8_t track, param_id_t id, float base_value);

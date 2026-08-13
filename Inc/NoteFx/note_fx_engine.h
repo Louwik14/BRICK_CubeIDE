@@ -19,32 +19,8 @@ _Static_assert(NOTE_FX_EUCLID_MAX_SOURCES == 16U,
 _Static_assert(NOTE_FX_EUCLID_MAX_OWNED >= NOTE_FX_EUCLID_MAX_SOURCES,
                "EUCLID owned capacity must cover source fan-out");
 
-typedef enum
-{
-    NOTE_FX_DIAG_CAUSE_SOURCE_CAPACITY = 0,
-    NOTE_FX_DIAG_CAUSE_OWNED_CAPACITY,
-    NOTE_FX_DIAG_CAUSE_MODEL_CAPACITY,
-    NOTE_FX_DIAG_CAUSE_EMIT_REJECT,
-    NOTE_FX_DIAG_CAUSE_COUNT
-} note_fx_diag_cause_t;
-
-typedef struct
-{
-    uint32_t saturations;
-    uint32_t dropped_note_ons;
-    uint16_t source_high_water;
-    uint16_t owned_high_water;
-    uint32_t cause_count[NOTE_FX_DIAG_CAUSE_COUNT];
-} note_fx_slot_diag_t;
-
 typedef enum { NOTE_FX_EVENT_OFF = NOTE_EVENT_KIND_OFF, NOTE_FX_EVENT_ON = NOTE_EVENT_KIND_ON } note_fx_legacy_kind_t;
 typedef note_fx_result_t (*note_fx_emit_fn)(const note_fx_event_t *, void *);
-typedef struct
-{
-    uint32_t saturations;
-    uint32_t dropped_note_ons;
-    note_fx_slot_diag_t slot[NOTE_FX_SLOT_COUNT];
-} note_fx_diag_t;
 
 void note_fx_engine_init(void);
 void note_fx_engine_configure(uint8_t track, uint8_t slot, uint8_t model, uint8_t rate, uint8_t style, uint8_t range);
@@ -55,8 +31,6 @@ uint8_t note_fx_engine_is_generated_occurrence_current(
     uint8_t track, uint32_t occurrence_id, uint32_t generation);
 void note_fx_engine_process(uint64_t block_start, uint16_t frames, uint32_t samples_per_step_q16, note_fx_emit_fn emit, void *context);
 void note_fx_engine_cleanup(uint8_t track, uint64_t sample, note_fx_emit_fn emit, void *context);
-note_fx_diag_t note_fx_engine_diag(uint8_t track);
-note_fx_slot_diag_t note_fx_engine_slot_diag(uint8_t track, uint8_t slot);
 uint64_t note_fx_engine_next_deadline(void);
 
 #endif

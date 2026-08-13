@@ -2,10 +2,10 @@
 
 #include <string.h>
 
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 
 static uint8_t g_external_input[UI_TRACK_COUNT];
-static uint8_t g_external_owner[TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
 
 static uint8_t track_input_ownership_is_external(const ui_track_config_t *config)
 {
@@ -17,14 +17,14 @@ static uint8_t track_input_ownership_is_external(const ui_track_config_t *config
 static uint8_t track_input_ownership_build(
     const ui_track_config_t configs[UI_TRACK_COUNT],
     const uint8_t selected[UI_TRACK_COUNT],
-    uint8_t owners[TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT])
+    uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT])
 {
     if ((configs == NULL) || (selected == NULL) || (owners == NULL))
     {
         return 0U;
     }
 
-    memset(owners, TRACK_INPUT_OWNER_NONE, TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+    memset(owners, TRACK_INPUT_OWNER_NONE, ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         if (track_input_ownership_is_external(&configs[track]) == 0U)
@@ -33,7 +33,7 @@ static uint8_t track_input_ownership_build(
         }
 
         const uint8_t input = selected[track];
-        if ((input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if ((input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
                 || (owners[input] != TRACK_INPUT_OWNER_NONE))
         {
             return 0U;
@@ -47,7 +47,7 @@ void track_input_ownership_init(const ui_track_config_t configs[UI_TRACK_COUNT])
 {
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        g_external_input[track] = (uint8_t)(track % TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+        g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     }
     memset(g_external_owner, TRACK_INPUT_OWNER_NONE, sizeof(g_external_owner));
     (void)track_input_ownership_apply_configs(configs);
@@ -64,7 +64,7 @@ uint8_t track_input_ownership_apply_bulk(
     const uint8_t external_input[UI_TRACK_COUNT])
 {
     uint8_t next_selected[UI_TRACK_COUNT];
-    uint8_t next_owners[TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    uint8_t next_owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
@@ -73,7 +73,7 @@ uint8_t track_input_ownership_apply_bulk(
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const uint8_t input = external_input[track];
-        if (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
         {
             return 0U;
         }
@@ -93,14 +93,14 @@ uint8_t track_input_ownership_validate_bulk(
     const ui_track_config_t configs[UI_TRACK_COUNT],
     const uint8_t external_input[UI_TRACK_COUNT])
 {
-    uint8_t owners[TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
     }
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (external_input[track] >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if (external_input[track] >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
         {
             return 0U;
         }
@@ -111,7 +111,7 @@ uint8_t track_input_ownership_validate_bulk(
 uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
 {
     if ((track >= UI_TRACK_COUNT)
-            || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT))
+            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT))
     {
         return 0U;
     }
@@ -126,7 +126,7 @@ uint8_t track_input_ownership_set_external_input(
 {
     uint8_t selected[UI_TRACK_COUNT];
     if ((track >= UI_TRACK_COUNT)
-            || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             || (configs == NULL))
     {
         return 0U;
@@ -144,7 +144,7 @@ uint8_t track_input_ownership_get_external_input(uint8_t track)
 
 uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_track)
 {
-    if ((input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+    if ((input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             || (g_external_owner[input] == TRACK_INPUT_OWNER_NONE))
     {
         return 0U;

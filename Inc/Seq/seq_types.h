@@ -2,14 +2,14 @@
 #define SEQ_TYPES_H
 
 #include <stdint.h>
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 #include "Param/param_store.h"
 
-#define SEQ_TRACK_COUNT        TRACK_TOPOLOGY_TRACK_COUNT
-#define SEQ_MAIN_TRACK_COUNT   TRACK_TOPOLOGY_TRACK_COUNT
-#define SEQ_GROUP_SUBTRACK_COUNT 8U
-#define SEQ_LANE_CAPACITY      (SEQ_MAIN_TRACK_COUNT + SEQ_GROUP_SUBTRACK_COUNT)
-#define SEQ_GROUP_PARENT_MAIN_TRACK TRACK_TOPOLOGY_GROUP_PARENT_TRACK
+#define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT
+#define SEQ_MAIN_TRACK_COUNT   BRICK_ENTITY_TOP_LEVEL_COUNT
+#define SEQ_GROUP_SUBTRACK_COUNT BRICK_ENTITY_GROUP_CHILD_COUNT
+#define SEQ_LANE_CAPACITY      BRICK_ENTITY_CAPACITY
+#define SEQ_GROUP_PARENT_MAIN_TRACK BRICK_ENTITY_GROUP_MASTER_ID
 #define SEQ_GROUP_FIRST_CHILD_LANE SEQ_MAIN_TRACK_COUNT
 #define SEQ_GROUP_LAST_CHILD_LANE  (SEQ_LANE_CAPACITY - 1U)
 #define SEQ_STEPS_PER_PAGE    16U
@@ -46,10 +46,10 @@
 #define SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT \
     ((SEQ_PARAM_RUNTIME_FLAG_BIT_COUNT + 7U) / 8U)
 
-typedef uint8_t seq_track_id_t;
-/* Main-track and lane identities are kept distinct even while the legacy
- * track APIs still use seq_track_id_t. */
-typedef uint8_t seq_lane_id_t;
+/* Sequencer names preserve domain vocabulary without creating another
+ * logical identity or requiring conversion. */
+typedef brick_entity_id_t seq_track_id_t;
+typedef brick_entity_id_t seq_lane_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;
 typedef uint8_t seq_plock_key_t;
@@ -57,8 +57,12 @@ typedef uint16_t seq_value16_t;
 
 #ifdef __cplusplus
 static_assert(SEQ_LANE_CAPACITY <= UINT8_MAX, "sequence lane capacity exceeds lane id range");
+static_assert(BRICK_ENTITY_CAPACITY == SEQ_LANE_CAPACITY,
+              "sequencer capacity must match the canonical entity domain");
 #else
 _Static_assert(SEQ_LANE_CAPACITY <= UINT8_MAX, "sequence lane capacity exceeds lane id range");
+_Static_assert(BRICK_ENTITY_CAPACITY == SEQ_LANE_CAPACITY,
+               "sequencer capacity must match the canonical entity domain");
 #endif
 
 typedef enum

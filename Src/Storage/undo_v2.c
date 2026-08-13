@@ -9,7 +9,7 @@
 #include <string.h>
 
 #include "Core/engine_tasklet.h"
-#include "Core/track_topology.h"
+#include "Core/entity_topology.h"
 #include "Seq/seq_edit.h"
 #include "Storage/memory_layout.h"
 #include "main.h"
@@ -154,7 +154,7 @@ static uint8_t undo_v2_transaction_target_is_current(
 {
     if ((transaction == 0)
             || (transaction->used == 0U)
-            || (transaction->track >= SEQ_TRACK_COUNT)
+            || (transaction->track >= SEQ_LANE_CAPACITY)
             || (seq_edit_track_sequence_is_locked(transaction->track) != 0U))
     {
         return 0U;
@@ -260,7 +260,7 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
 {
     if ((g_undo_v2_runtime.tx_open != 0U)
             || (undo_v2_capture_allowed() == 0U)
-            || (track >= SEQ_TRACK_COUNT)
+            || (track >= SEQ_LANE_CAPACITY)
             || (steps == 0)
             || (step_count == 0U)
             || (step_count > (uint8_t)SEQ_STEP_SNAPSHOT_MAX_STEPS)

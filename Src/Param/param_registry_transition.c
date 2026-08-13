@@ -13,12 +13,11 @@
 #include "Seq/seq_runtime.h"
 #include "Storage/memory_layout.h"
 #include "UI/ui_track_catalog.h"
-#include "mixer.h"
 
 #define FILTER_RUNTIME_REBIND_NONE 0xFFU
 
 static volatile uint8_t g_param_registry_track_structure_transition_depth = 0U;
-static volatile uint8_t g_param_registry_track_structure_transition_track_depth[SEQ_TRACK_COUNT];
+static volatile uint8_t g_param_registry_track_structure_transition_track_depth[SEQ_LANE_CAPACITY];
 
 static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
                                                                  uint8_t track,
@@ -32,7 +31,7 @@ static uint8_t param_registry_audio_bulk_add(live_parameter_audio_bulk_t *bulk,
                                              uint8_t track,
                                              float value)
 {
-    if ((bulk == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT)
+    if ((bulk == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
             || (live_parameter_is_audio_owned(id) == 0U))
     {
         return 0U;
@@ -106,7 +105,7 @@ uint8_t param_registry_track_structure_transition_is_active(void)
         return 1U;
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         if (g_param_registry_track_structure_transition_track_depth[track] != 0U)
         {
@@ -124,7 +123,7 @@ uint8_t param_registry_track_structure_transition_is_global_active(void)
 
 uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -134,7 +133,7 @@ uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track)
 
 static void param_registry_track_structure_transition_begin_track(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -147,7 +146,7 @@ static void param_registry_track_structure_transition_begin_track(uint8_t track)
 
 static void param_registry_track_structure_transition_end_track(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -158,23 +157,6 @@ static void param_registry_track_structure_transition_end_track(uint8_t track)
     }
 }
 
-static uint8_t param_registry_capture_runtime_mix_target(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return FILTER_RUNTIME_REBIND_NONE;
-    }
-
-    uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
-    if ((track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-            || (mix_track >= MIXER_MAX_TRACKS))
-    {
-        return FILTER_RUNTIME_REBIND_NONE;
-    }
-
-    return mix_track;
-}
-
 static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
 {
     if (out_mix_tracks == NULL)
@@ -183,13 +165,13 @@ static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
     }
 
     track_runtime_refresh_all();
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         out_mix_tracks[track] = FILTER_RUNTIME_REBIND_NONE;
 
         uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
         if ((track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-                || (mix_track >= MIXER_MAX_TRACKS))
+                || (mix_track >= SEQ_LANE_CAPACITY))
         {
             continue;
         }
@@ -232,7 +214,7 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
         PARAM_ENV_RETRIG_VCA
     };
 
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -267,8 +249,9 @@ static uint8_t param_registry_reapply_tone_runtime_for_track(
     uint8_t track,
     live_parameter_audio_bulk_t *bulk)
 {
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    track_runtime_descriptor_t descriptor;
+    if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
+            || (descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 1U;
     }
@@ -278,7 +261,7 @@ static uint8_t param_registry_reapply_tone_runtime_for_track(
         param_id_t id = PARAM_COUNT;
         float value = 0.0f;
 
-        if (track_runtime_tone_slot_to_param((track_runtime_type_t)ctx->type, slot, &id) == 0U)
+        if (track_runtime_tone_slot_to_param(descriptor.type, slot, &id) == 0U)
         {
             break;
         }
@@ -297,23 +280,11 @@ static uint8_t param_registry_reapply_tone_runtime_for_track(
     return 1U;
 }
 
-static void param_registry_snap_reapplied_runtime_for_track(uint8_t track)
-{
-    uint8_t mix_track = 0U;
-
-    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-    {
-        return;
-    }
-
-    mixer_snap_track_runtime_state((uint32_t)mix_track);
-}
-
 static uint8_t param_registry_reapply_track_runtime_params(
     uint8_t track,
     live_parameter_audio_bulk_t *bulk)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
@@ -326,7 +297,6 @@ static uint8_t param_registry_reapply_track_runtime_params(
     {
         return 0U;
     }
-    param_registry_snap_reapplied_runtime_for_track(track);
     return 1U;
 }
 
@@ -340,7 +310,7 @@ static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
      * - fall back to runtime cache
      * - never seed defaults or mutate runtime state here
      */
-    if ((id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
+    if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY) || (out_value == NULL))
     {
         return 0U;
     }
@@ -368,19 +338,17 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(
     const uint8_t *previous_mix_tracks,
     live_parameter_audio_bulk_t *bulk)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint8_t previous_mix_track = FILTER_RUNTIME_REBIND_NONE;
         uint8_t current_mix_track = FILTER_RUNTIME_REBIND_NONE;
         uint8_t migrated_existing_lane = 0U;
 
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->mix_track_id < MIXER_MAX_TRACKS))
-        {
-            current_mix_track = ctx->mix_track_id;
-        }
+        uint8_t projected_mix_track = 0U;
+        if ((track_runtime_get_mix_target_track(
+                track, &projected_mix_track) != 0U)
+                && (projected_mix_track < SEQ_LANE_CAPACITY))
+            current_mix_track = projected_mix_track;
 
         if (previous_mix_tracks != NULL)
         {
@@ -391,8 +359,8 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(
                 continue;
             }
 
-            migrated_existing_lane = ((previous_mix_track < MIXER_MAX_TRACKS)
-                    && (current_mix_track < MIXER_MAX_TRACKS)) ? 1U : 0U;
+            migrated_existing_lane = ((previous_mix_track < SEQ_LANE_CAPACITY)
+                    && (current_mix_track < SEQ_LANE_CAPACITY)) ? 1U : 0U;
         }
 
         if (param_registry_reapply_lane_bound_runtime_for_track(
@@ -407,87 +375,6 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(
     return 1U;
 }
 
-static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_tracks)
-{
-    uint8_t next_mix_tracks[SEQ_TRACK_COUNT];
-
-    if (previous_mix_tracks == NULL)
-    {
-        return;
-    }
-
-    param_registry_capture_runtime_mix_targets(next_mix_tracks);
-    mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
-}
-
-static void param_registry_rebind_lane_runtime_track(uint8_t previous_mix_track,
-                                                     uint8_t next_mix_track)
-{
-    mixer_rebind_track_state(previous_mix_track, next_mix_track);
-}
-
-static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
-{
-    uint8_t filter_track = 0U;
-    uint8_t mix_track = 0U;
-
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    track_runtime_refresh_track(track);
-    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_is_audio_routable(track) == 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-    {
-        return;
-    }
-
-    mixer_set_track_filter_type((uint32_t)mix_track, MIXER_TRACK_FILTER_OFF);
-    mixer_track_filter_all_notes_off((uint32_t)mix_track);
-}
-
-static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
-{
-    uint8_t mix_track = 0U;
-
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx != NULL)
-            && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && (track_runtime_supports_vca_gate(ctx) != 0U))
-    {
-        return;
-    }
-
-    if (track_runtime_is_audio_routable(track) == 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-    {
-        return;
-    }
-
-    mixer_track_vca_all_notes_off((uint32_t)mix_track);
-    mixer_set_track_vca_enabled((uint32_t)mix_track, 0U);
-}
-
 static uint8_t param_registry_finalize_track_structure_change(
     const uint8_t *previous_mix_tracks)
 {
@@ -500,14 +387,6 @@ static uint8_t param_registry_finalize_track_structure_change(
     if (previous_mix_tracks == NULL)
     {
         return 0U;
-    }
-
-    param_registry_rebind_lane_runtime(previous_mix_tracks);
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        param_registry_neutralize_filter_runtime_if_invalid(track);
-        param_registry_neutralize_vca_runtime_if_invalid(track);
     }
 
     if (param_registry_reapply_lane_bound_runtime_for_changed_tracks(
@@ -527,9 +406,7 @@ static uint8_t param_registry_finalize_track_structure_change(
     return 1U;
 }
 
-static uint8_t param_registry_finalize_track_structure_change_track(
-    uint8_t track,
-    uint8_t previous_mix_track)
+static uint8_t param_registry_finalize_track_structure_change_track(uint8_t track)
 {
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
@@ -537,16 +414,12 @@ static uint8_t param_registry_finalize_track_structure_change_track(
         .count = 0U
     };
 
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
     track_runtime_refresh_track(track);
-    const uint8_t next_mix_track = param_registry_capture_runtime_mix_target(track);
-    param_registry_rebind_lane_runtime_track(previous_mix_track, next_mix_track);
-    param_registry_neutralize_filter_runtime_if_invalid(track);
-    param_registry_neutralize_vca_runtime_if_invalid(track);
     if (param_registry_reapply_track_runtime_params(track, &bulk) == 0U)
     {
         return 0U;
@@ -578,7 +451,7 @@ static uint8_t param_registry_apply_track_structure_transition_mutate(void *ctx)
 uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd)
 {
     /* Internal structural pipeline: no query semantics, only ordered mutation/reapply/sync callbacks. */
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
+    uint8_t previous_mix_tracks[SEQ_LANE_CAPACITY];
 
     if ((cmd == NULL) || (cmd->mutate_fn == NULL))
     {
@@ -640,14 +513,11 @@ uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_
 uint8_t param_registry_run_track_transition_pipeline_for_track(const param_registry_track_transition_pipeline_cmd_t *cmd,
                                                               uint8_t track)
 {
-    uint8_t previous_mix_track = FILTER_RUNTIME_REBIND_NONE;
-
-    if ((cmd == NULL) || (cmd->mutate_fn == NULL) || (track >= SEQ_TRACK_COUNT))
+    if ((cmd == NULL) || (cmd->mutate_fn == NULL) || (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }
 
-    previous_mix_track = param_registry_capture_runtime_mix_target(track);
     param_registry_track_structure_transition_begin_track(track);
 
     uint8_t ok = 1U;
@@ -663,9 +533,7 @@ uint8_t param_registry_run_track_transition_pipeline_for_track(const param_regis
 
     if (ok != 0U)
     {
-        if (param_registry_finalize_track_structure_change_track(
-                track,
-                previous_mix_track) == 0U)
+        if (param_registry_finalize_track_structure_change_track(track) == 0U)
         {
             ok = 0U;
         }

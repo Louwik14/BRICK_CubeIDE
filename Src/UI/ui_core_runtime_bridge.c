@@ -2,7 +2,8 @@
 #include "ui_page_manager.h"
 
 #include "App/Hall/hall_engine.h"
-#include "Core/brick6_looper_runtime.h"
+#include "Audio/control_audio_queue.h"
+#include "Core/live_clock.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -11,7 +12,6 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Seq/seq_runtime_exec.h"
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/memory_layout.h"
@@ -66,6 +66,21 @@ static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_transport_start_prearmed = 0U;
 
+static void ui_core_runtime_bridge_publish_audio_command(
+    control_audio_event_kind_t kind, uint8_t track, uint8_t arg0,
+    uint8_t arg1, uint32_t arg32, uint64_t due_sample)
+{
+    const control_audio_event_t command = {
+        .due_sample = due_sample,
+        .source_generation = arg32,
+        .entity_id = track,
+        .kind = (uint8_t)kind,
+        .note = arg0,
+        .velocity = arg1
+    };
+    (void)control_audio_queue_publish(&command);
+}
+
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
 static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
@@ -95,7 +110,7 @@ void ui_core_runtime_bridge_init(void)
 
 static uint8_t ui_core_runtime_bridge_track_is_sampler_looper(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= BRICK_ENTITY_CAPACITY)
     {
         return 0U;
     }
@@ -119,7 +134,9 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
     if ((seq_runtime_is_running() == 0U) && (seq_runtime_is_start_pending() == 0U))
     {
         (void)ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(feedback);
-        brick6_looper_runtime_on_transport_start();
+        ui_core_runtime_bridge_publish_audio_command(
+            CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START, 0U, 0U, 0U, 0U,
+            live_clock_audio_sample());
         g_looper_transport_was_running = 1U;
         g_looper_transport_start_prearmed = 1U;
     }
@@ -261,11 +278,6 @@ static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track)
 
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void)
 {
-    if(brick6_looper_runtime_record_is_active_or_armed() != 0U)
-    {
-        return 1U;
-    }
-
     return audio_recorder_client_is_active(
         AUDIO_RECORDER_CLIENT_LOOPER);
 }
@@ -301,16 +313,9 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
         return 0U;
     }
 
-    brick6_looper_runtime_arm_record_stop(seq_runtime_exec_get_audio_timeline_sample());
-    if (brick6_looper_runtime_record_is_active_or_armed() != 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("LOOP STOP");
-        }
-        return 1U;
-    }
-
+    ui_core_runtime_bridge_publish_audio_command(
+        CONTROL_AUDIO_EVENT_LOOPER_RECORD_STOP, 0U, 0U, 0U, 0U,
+        live_clock_audio_sample());
     if(audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
         if (feedback != 0)
@@ -465,7 +470,7 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     const uint8_t previous_take_track = g_looper_take_track;
 
     const uint32_t expected_frames = ui_core_runtime_bridge_looper_expected_record_frames(track);
-    const uint64_t rec_request_sample = seq_runtime_exec_get_audio_timeline_sample();
+    const uint64_t rec_request_sample = live_clock_audio_sample();
     char final_path[LOOPER_STORAGE_PATH_MAX];
     if(looper_storage_make_next_path(
             track, final_path, sizeof(final_path)) != LOOPER_STORAGE_PATH_OK)
@@ -494,22 +499,25 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
 
     if(previous_take_track < UI_TRACK_COUNT)
     {
-        brick6_looper_runtime_prepare_replace(previous_take_track);
+        ui_core_runtime_bridge_publish_audio_command(
+            CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE,
+            previous_take_track, 0U, 0U, 0U, rec_request_sample);
     }
     if(previous_take_track != track)
     {
-        brick6_looper_runtime_prepare_replace(track);
+        ui_core_runtime_bridge_publish_audio_command(
+            CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE,
+            track, 0U, 0U, 0U, rec_request_sample);
     }
     ui_core_runtime_bridge_looper_clear_take_metadata();
     g_active_looper_record_track = track;
     g_looper_take_track = track;
     g_looper_take_notified = 0U;
-    brick6_looper_runtime_arm_live_record_start(
-        track,
+    ui_core_runtime_bridge_publish_audio_command(
+        CONTROL_AUDIO_EVENT_LOOPER_RECORD_START, track,
         ui_core_runtime_bridge_looper_len_mode(track),
-        expected_frames,
         ui_core_runtime_bridge_looper_play_is_auto(track),
-        rec_request_sample);
+        expected_frames, rec_request_sample);
     (void)param_registry_apply_track_value(PARAM_LOOPER_ARM, track, 0.0f);
     if (feedback != 0)
     {
@@ -525,7 +533,9 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
     uint8_t keep_prearmed_running_mirror = 0U;
     if ((transport_running != 0U) && (g_looper_transport_was_running == 0U))
     {
-        brick6_looper_runtime_on_transport_start();
+        ui_core_runtime_bridge_publish_audio_command(
+            CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START, 0U, 0U, 0U, 0U,
+            live_clock_audio_sample());
     }
     else if ((transport_running == 0U) && (g_looper_transport_was_running != 0U))
     {
@@ -535,7 +545,9 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         }
         else
         {
-            brick6_looper_runtime_on_transport_stop();
+            ui_core_runtime_bridge_publish_audio_command(
+                CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_STOP, 0U, 0U, 0U, 0U,
+                live_clock_audio_sample());
             g_looper_transport_start_prearmed = 0U;
         }
     }
@@ -563,8 +575,6 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
                 &wav_path,
                 &recorded_frames) != 0U)
         {
-            brick6_looper_runtime_notify_live_take_finalized(
-                g_looper_take_track, wav_path, recorded_frames);
             (void)wav_loader_catalog_notify_file_created(wav_path);
             (void)waveform_cache_request_for_wav_known_duration(
                 wav_path,

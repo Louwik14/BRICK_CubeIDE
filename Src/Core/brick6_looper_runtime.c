@@ -1,4 +1,5 @@
 #include "Core/brick6_looper_runtime.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Core/brick_build_config.h"
 
 #include "Audio/audio_float.h"
@@ -924,7 +925,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
 
         if(state->scheduled_start_valid != 0U)
         {
-            const uint64_t now_sample = seq_runtime_exec_get_audio_timeline_sample();
+            const uint64_t now_sample = seq_runtime_exec_get_sample_timeline();
             if(now_sample < state->scheduled_start_sample)
             {
                 looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_READY);
@@ -1342,7 +1343,7 @@ void brick6_looper_runtime_arm_record_stop(uint64_t request_sample)
         g_looper_record_boundary.request_stop_sample = request_sample;
         if(seq_runtime_is_running() == 0U)
         {
-            looper_record_stop_at_boundary(seq_runtime_exec_get_audio_timeline_sample());
+            looper_record_stop_at_boundary(seq_runtime_exec_get_sample_timeline());
         }
     }
     else if(g_looper_record_boundary.start_armed != 0U)
@@ -1938,7 +1939,7 @@ static uint32_t looper_expected_frame_from_timeline(const brick6_looper_track_st
         return 0U;
     }
 
-    const uint64_t now_sample = seq_runtime_exec_get_audio_timeline_sample();
+    const uint64_t now_sample = seq_runtime_exec_get_sample_timeline();
     const uint64_t elapsed =
         (now_sample > state->playback_start_sample)
             ? (now_sample - state->playback_start_sample)
@@ -2070,7 +2071,7 @@ static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
     return produced;
 }
 
-void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
+void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
                                         float *out_l,
                                         float *out_r,
                                         uint32_t frames)
@@ -2078,7 +2079,7 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
     if((ctx == 0) || (out_l == 0) || (out_r == 0) || (frames == 0U))
         return;
 
-    const uint8_t track = ctx->track_id;
+    const uint8_t track = ctx->audio_binding.entity_id;
     if(looper_track_valid(track) == 0U)
         return;
 

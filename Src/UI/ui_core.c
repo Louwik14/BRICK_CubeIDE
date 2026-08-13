@@ -58,10 +58,9 @@
 #include "ui_param.h"
 #include "Core/encoder_control_dispatcher.h"
 #include "Core/track_runtime.h"
-#include "Core/synth_polyphony.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_surface.h"
-#include "Seq/seq_lane.h"
+#include "Core/entity_topology.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -190,7 +189,7 @@ static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t f
 
 static uint8_t ui_core_select_active_track(uint8_t track)
 {
-    if ((track_topology_is_active(track) == 0U) || (g_ui_track_state.active_track == track))
+    if ((entity_topology_is_active(track) == 0U) || (g_ui_track_state.active_track == track))
     {
         return 0U;
     }
@@ -202,15 +201,15 @@ static uint8_t ui_core_select_active_track(uint8_t track)
 
 static void ui_core_set_active_track(uint8_t track)
 {
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)track, &lane) == 0U)
-            || (lane.active == 0U))
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
+            || (entity.active == 0U))
     {
         return;
     }
 
-    const uint8_t main_track = (lane.role == SEQ_LANE_ROLE_GROUP_CHILD)
-        ? (uint8_t)lane.parent_lane_id : track;
+    const uint8_t main_track = (entity.role == ENTITY_ROLE_GROUP_CHILD)
+        ? (uint8_t)entity.parent_entity_id : track;
     const uint8_t changed = (uint8_t)((g_ui_track_state.active_track != main_track)
             || (g_ui_track_state.active_lane != track));
     if (changed == 0U)
@@ -236,7 +235,7 @@ void ui_restore_active_track(uint8_t track)
 
 uint8_t ui_get_track_midi_channel(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= BRICK_ENTITY_CAPACITY)
     {
         return 1U;
     }
@@ -246,7 +245,7 @@ uint8_t ui_get_track_midi_channel(uint8_t track)
 
 bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
 {
-    if ((track >= UI_TRACK_COUNT) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
     {
         return false;
     }
@@ -279,7 +278,7 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
 
 ui_track_midi_source_t ui_get_track_midi_source(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= BRICK_ENTITY_CAPACITY)
     {
         return UI_TRACK_MIDI_SRC_ALL;
     }
@@ -295,7 +294,7 @@ uint8_t ui_get_track_external_input(uint8_t track)
 bool ui_set_track_external_input(uint8_t track, uint8_t input)
 {
     if ((track >= UI_TRACK_COUNT)
-            || (input >= TRACK_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             || (ui_get_track_family(track) != UI_TRACK_FAMILY_EXTERNAL)
             || (ui_get_track_type(track) != UI_TRACK_TYPE_EXTERNAL))
     {
@@ -336,7 +335,7 @@ bool ui_set_track_external_input(uint8_t track, uint8_t input)
 
 bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
 {
-    if ((track >= UI_TRACK_COUNT) || ((uint8_t)source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
+    if ((track >= BRICK_ENTITY_CAPACITY) || ((uint8_t)source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
     {
         return false;
     }
@@ -404,14 +403,14 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
 
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16)
 {
-    if ((track >= UI_TRACK_COUNT) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
     {
         return 0U;
     }
 
-    for (uint8_t other = 0U; other < UI_TRACK_COUNT; ++other)
+    for (uint8_t other = 0U; other < BRICK_ENTITY_CAPACITY; ++other)
     {
-        if (other == track)
+        if ((other == track) || (entity_topology_is_active(other) == 0U))
         {
             continue;
         }
@@ -949,9 +948,8 @@ uint8_t ui_get_active_track(void)
 
 uint8_t ui_get_active_lane(void)
 {
-    seq_lane_descriptor_t lane;
-    if ((seq_lane_get_descriptor((seq_lane_id_t)g_ui_track_state.active_lane, &lane) != 0U)
-            && (lane.active != 0U))
+    if (entity_topology_is_active(
+            (brick_entity_id_t)g_ui_track_state.active_lane) != 0U)
     {
         return g_ui_track_state.active_lane;
     }
@@ -972,7 +970,7 @@ bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 
 ui_track_config_t ui_get_track_config(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= BRICK_ENTITY_CAPACITY)
     {
         return ui_core_get_default_track_config();
     }
@@ -992,24 +990,17 @@ ui_track_type_t ui_get_track_type(uint8_t track)
 
 bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 {
-    if ((track >= UI_TRACK_COUNT) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    if ((track >= BRICK_ENTITY_CAPACITY) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return false;
     }
 
-    if (track_topology_is_active(track) == 0U)
+    if (entity_topology_is_active(track) == 0U)
     {
         return false;
     }
 
     const ui_track_config_t config = track_state_get_config(track);
-    if ((family == UI_TRACK_FAMILY_SYNTH)
-            && (config.family != UI_TRACK_FAMILY_SYNTH)
-            && (synth_polyphony_get_available_for_track(track) == 0U))
-    {
-        if (track == g_ui_track_state.active_track) ui_core_set_feedback("FAMILY : MAX");
-        return false;
-    }
 
     if (!ui_core_track_family_is_available(track, family))
     {
@@ -1102,12 +1093,12 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
-    if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    if ((track >= BRICK_ENTITY_CAPACITY) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
         return false;
     }
 
-    if (track_topology_is_active(track) == 0U)
+    if (entity_topology_is_active(track) == 0U)
     {
         return false;
     }
