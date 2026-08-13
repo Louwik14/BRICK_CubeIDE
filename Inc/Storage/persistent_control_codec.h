@@ -48,6 +48,8 @@ typedef uint8_t (*persist_codec_write_fn)(void *context,
 typedef uint8_t (*persist_codec_read_fn)(void *context,
                                          uint8_t *data,
                                          uint32_t length);
+typedef uint8_t (*persist_codec_reset_fn)(void *context);
+typedef uint8_t (*persist_codec_size_fn)(void *context,uint32_t *out_size);
 
 typedef struct
 {
@@ -58,6 +60,8 @@ typedef struct
 typedef struct
 {
     persist_codec_read_fn read;
+    persist_codec_reset_fn reset;
+    persist_codec_size_fn size;
     void *context;
 } persist_codec_source_t;
 
@@ -78,21 +82,32 @@ typedef struct
 
 typedef struct
 {
-    /* put writes only to caller-owned transactional staging. commit publishes
-     * after full-document CRC/validation; abort discards staged records. */
+    /* The full document is prevalidated before this consumer is entered.
+     * put handles one locally validated record immediately; commit is the
+     * end-of-stream notification and abort does not imply global rollback. */
     persist_codec_pattern_put_fn put;
     persist_codec_pattern_finish_fn commit;
     persist_codec_pattern_abort_fn abort;
     void *context;
 } persist_codec_pattern_consumer_t;
 
-/* Caller-owned staging: one project header/working Pattern and one streamed
- * bank record. No codec-owned static buffer or dynamic allocation exists. */
 typedef struct
 {
-    persist_control_project_t project;
-    persist_control_pattern_record_t pattern_record;
-} persist_codec_project_staging_t;
+    union
+    {
+        persist_control_project_t project;
+        persist_control_pattern_record_t pattern_record;
+    } unit;
+    persist_control_asset_id_t asset_ids[PERSIST_CONTROL_ASSET_COUNT];
+} persist_codec_project_workspace_t;
+
+typedef uint8_t (*persist_codec_project_apply_fn)(void *context,
+                                                   const persist_control_project_t *project);
+typedef struct
+{
+    persist_codec_project_apply_fn apply_core;
+    void *context;
+} persist_codec_project_applier_t;
 
 typedef struct
 {
@@ -122,9 +137,13 @@ persist_codec_result_t persist_codec_encode_project(const persist_control_projec
                                                      const persist_codec_pattern_provider_t *patterns,
                                                      const persist_codec_sink_t *sink,
                                                      uint32_t *out_bytes);
-persist_codec_result_t persist_codec_decode_project(const persist_codec_source_t *source,
-                                                     persist_codec_project_staging_t *staging,
-                                                     const persist_codec_pattern_consumer_t *patterns);
+persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_source_t *source,
+                                                          uint32_t *out_total_bytes);
+persist_codec_result_t persist_codec_decode_project_progressive(
+    const persist_codec_source_t *source,
+    persist_codec_project_workspace_t *workspace,
+    const persist_codec_project_applier_t *project,
+    const persist_codec_pattern_consumer_t *patterns);
 
 #ifdef __cplusplus
 }

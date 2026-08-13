@@ -4,4 +4,6 @@
 persist_codec_result_t persistent_project_control_capture(persist_control_project_t*out);
 persist_codec_result_t persistent_project_control_validate(const persist_control_project_t*project);
 persist_codec_result_t persistent_project_control_apply(const persist_control_project_t*project,uint8_t resume_transport);
+typedef struct { uint8_t resume_transport; persist_codec_result_t result; } persistent_project_apply_context_t;
+uint8_t persistent_project_control_apply_progressive_core(void*context,const persist_control_project_t*project);
 #endif

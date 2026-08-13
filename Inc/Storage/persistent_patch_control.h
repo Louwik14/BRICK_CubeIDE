@@ -1,0 +1,7 @@
+#ifndef PERSISTENT_PATCH_CONTROL_H
+#define PERSISTENT_PATCH_CONTROL_H
+#include "Storage/persistent_control_codec.h"
+persist_codec_result_t persistent_patch_control_capture(uint8_t entity,const char*name,persist_control_patch_t*out);
+persist_codec_result_t persistent_patch_control_validate(const persist_control_patch_t*patch,uint8_t target_entity);
+persist_codec_result_t persistent_patch_control_apply(const persist_control_patch_t*patch,uint8_t target_entity);
+#endif
