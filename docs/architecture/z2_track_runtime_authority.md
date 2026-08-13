@@ -15,3 +15,11 @@ Looper est le moteur `Sampler / Looper`, avec état et stockage attachés au mê
 Les révisions et la configuration MIDI suivent les seize identités. Les formats bulk, snapshots et persistence restent volontairement top-level tant que leur migration GROUP complète n'est pas réalisée au chantier 5; ils préservent la configuration canonique déjà portée par les children.
 
 Le GROUP master est lié logiquement au bus post-somme AUDIO réservé, sans moteur ni capacité d'émission de notes. Sa politique de ressources expose CFG, SEQ, un TONE minimal de filtre, ENV3 comme source de modulation, MOD et MIX. PLAY reste stocké mais masqué dans l'UI; Keyboard et MIDI FX sont absents. Les paramètres d'enveloppe de filtre et de VCA sont refusés au master : il ne possède pas d'enveloppe de filtre dédiée et ses ENV ne pilotent pas directement l'amplitude.
+
+La valeur persistante `track_sound_state.mix_mute` est l'unique base CONTROL
+par entité. Le mute effectif d'un child est dérivé de sa base locale ou de la
+base de son parent GROUP; aucune propagation ne réécrit les bases child.
+Scheduler, keyboard et note admission consultent cette valeur effective.
+CONTROL projette la même valeur vers AUDIO : le master coupe le bus GROUP et
+chaque child est projeté pour couper également ses sends pré-somme. Retirer le
+mute parent restaure automatiquement les bases locales des children.

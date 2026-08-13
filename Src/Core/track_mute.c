@@ -1,17 +1,13 @@
 #include "Core/track_mute.h"
 
-#include <string.h>
-
 #include "Core/track_runtime.h"
 #include "Core/track_sound_state.h"
 #include "Keyboard/keyboard_engine.h"
-#include "Storage/memory_layout.h"
 #include "Core/entity_topology.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_types.h"
 #include "Param/param_registry.h"
-
-SEQ_STATE_D2 static uint8_t g_track_mute_state[SEQ_LANE_CAPACITY];
+#include "Param/param_registry_runtime_state.h"
 
 static uint8_t track_mute_resolve_mix_target(uint8_t track, uint8_t *out_mix_track)
 {
@@ -29,7 +25,6 @@ static uint8_t track_mute_resolve_mix_target(uint8_t track, uint8_t *out_mix_tra
 
 void track_mute_init(void)
 {
-    memset(g_track_mute_state, 0, sizeof(g_track_mute_state));
 }
 
 track_mute_kind_t track_mute_get_kind(uint8_t track)
@@ -77,7 +72,8 @@ uint8_t track_mute_is_available(uint8_t track)
 
 uint8_t track_mute_get(uint8_t track)
 {
-    return (track < SEQ_LANE_CAPACITY) ? g_track_mute_state[track] : 0U;
+    const track_sound_state_t *const sound = track_sound_state_get_const(track);
+    return ((sound != NULL) && (sound->mix_mute >= 0.5f)) ? 1U : 0U;
 }
 
 uint8_t track_mute_is_effectively_muted(uint8_t track)
@@ -111,47 +107,49 @@ static void track_mute_transition_lane(uint8_t track, uint8_t muted)
 
 uint8_t track_mute_set(uint8_t track, uint8_t muted)
 {
-    return track_mute_apply(track, muted, 1U);
-}
-
-uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state)
-{
     const track_mute_kind_t kind = track_mute_get_kind(track);
     if ((kind == TRACK_MUTE_KIND_NONE) || (track_mute_is_available(track) == 0U))
     {
         return 0U;
     }
 
+    uint8_t affected[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
+    uint8_t effective_before[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
+    uint8_t affected_count = 1U;
+    affected[0] = track;
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track, &topology) != 0U)
+            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
+    {
+        for (uint8_t member = 0U;
+             member < BRICK_ENTITY_GROUP_CHILD_COUNT; ++member)
+        {
+            brick_entity_id_t child = BRICK_ENTITY_INVALID_ID;
+            if (entity_topology_group_child(track, member, &child) != 0U)
+                affected[affected_count++] = child;
+        }
+    }
+    for (uint8_t i = 0U; i < affected_count; ++i)
+        effective_before[i] = track_mute_is_effectively_muted(affected[i]);
+
     muted = (muted != 0U) ? 1U : 0U;
-    g_track_mute_state[track] = muted;
     track_sound_state_t *const sound_state = track_sound_state_get(track);
-    if ((update_base_state != 0U) && (sound_state != NULL))
-    {
-        sound_state->mix_mute = (float)muted;
-    }
+    if (sound_state == NULL) return 0U;
+    sound_state->mix_mute = (float)muted;
+    param_registry_runtime_cache_set(track, PARAM_MIX_MUTE, (float)muted);
 
-    if ((kind == TRACK_MUTE_KIND_AUDIO)
-            || (kind == TRACK_MUTE_KIND_MIDI)
-            || (kind == TRACK_MUTE_KIND_EXTERNAL))
+    for (uint8_t i = 0U; i < affected_count; ++i)
     {
-        if (track == (uint8_t)SEQ_GROUP_PARENT_MAIN_TRACK)
-        {
-            for (uint8_t child = (uint8_t)SEQ_GROUP_FIRST_CHILD_LANE;
-                 child <= (uint8_t)SEQ_GROUP_LAST_CHILD_LANE;
-                 ++child)
-            {
-                track_mute_transition_lane(child, muted);
-            }
-        }
-        else
-        {
-            track_mute_transition_lane(track, muted);
-        }
+        const uint8_t effective_after =
+            track_mute_is_effectively_muted(affected[i]);
+        if ((effective_before[i] != effective_after)
+                && (affected[i] != track
+                    || kind == TRACK_MUTE_KIND_AUDIO
+                    || kind == TRACK_MUTE_KIND_MIDI
+                    || kind == TRACK_MUTE_KIND_EXTERNAL))
+            track_mute_transition_lane(affected[i], effective_after);
+        (void)param_registry_project_track_mute(affected[i], effective_after);
     }
-
-    if (kind != TRACK_MUTE_KIND_MIDI)
-        return param_registry_apply_track_value(
-            PARAM_MIX_MUTE, track, (float)muted);
     return 1U;
 }
 

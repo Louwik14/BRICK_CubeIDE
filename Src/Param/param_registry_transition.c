@@ -6,6 +6,7 @@
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/track_runtime.h"
+#include "Core/track_mute.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
@@ -232,6 +233,8 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
         {
             continue;
         }
+        if (k_lane_bound_params[i] == PARAM_MIX_MUTE)
+            value = (float)track_mute_is_effectively_muted(track);
 
         if (param_registry_reapply_track_value(k_lane_bound_params[i],
                                                track,

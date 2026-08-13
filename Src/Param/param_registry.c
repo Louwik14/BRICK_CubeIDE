@@ -32,6 +32,7 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_mute.h"
 #include "Core/track_tone_sound_state.h"
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
@@ -73,6 +74,13 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
         }}
     };
     return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
+}
+
+uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted)
+{
+    return param_registry_submit_audio_value(
+        PARAM_MIX_MUTE, track, (effective_muted != 0U) ? 1.0f : 0.0f,
+        LIVE_PARAMETER_EVENT_SCOPE_TRACK);
 }
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
 static float clamp_value(float v, float lo, float hi);
@@ -1679,6 +1687,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     }
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
+    if (id == PARAM_MIX_MUTE)
+        return track_mute_set(track, (clamped >= 0.5f) ? 1U : 0U);
 
     uint8_t note_fx_slot = 0U;
     uint8_t note_fx_param = 0U;

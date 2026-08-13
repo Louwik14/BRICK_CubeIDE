@@ -19,5 +19,4 @@ uint8_t track_mute_is_available(uint8_t track);
 uint8_t track_mute_get(uint8_t track);
 uint8_t track_mute_is_effectively_muted(uint8_t track);
 uint8_t track_mute_set(uint8_t track, uint8_t muted);
-uint8_t track_mute_apply(uint8_t track, uint8_t muted, uint8_t update_base_state);
 uint8_t track_mute_should_suppress_note_on(uint8_t track);

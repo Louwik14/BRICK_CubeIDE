@@ -138,6 +138,20 @@ uint8_t entity_topology_mod_owner(brick_entity_id_t entity_id,
     return 1U;
 }
 
+uint8_t entity_topology_group_child(brick_entity_id_t parent_entity_id,
+                                    uint8_t member_index,
+                                    brick_entity_id_t *out_child_id)
+{
+    if ((out_child_id == NULL)
+            || (parent_entity_id != BRICK_ENTITY_GROUP_MASTER_ID)
+            || (member_index >= BRICK_ENTITY_GROUP_CHILD_COUNT)
+            || (entity_topology_group_is_active() == 0U))
+        return 0U;
+    *out_child_id = (brick_entity_id_t)(
+        BRICK_ENTITY_FIRST_GROUP_CHILD_ID + member_index);
+    return 1U;
+}
+
 uint8_t entity_topology_get_top_level_count(void)
 {
     return BRICK_ENTITY_TOP_LEVEL_COUNT;

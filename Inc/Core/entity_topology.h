@@ -68,6 +68,9 @@ uint8_t entity_topology_has_capability(brick_entity_id_t entity_id,
                                        track_capability_t capability);
 uint8_t entity_topology_mod_owner(brick_entity_id_t entity_id,
                                   brick_entity_id_t *out_owner_id);
+uint8_t entity_topology_group_child(brick_entity_id_t parent_entity_id,
+                                    uint8_t member_index,
+                                    brick_entity_id_t *out_child_id);
 
 uint8_t entity_topology_get_top_level_count(void);
 uint8_t entity_topology_get_physical_input_count(void);
