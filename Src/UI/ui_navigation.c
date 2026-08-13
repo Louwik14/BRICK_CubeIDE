@@ -35,7 +35,7 @@ static uint8_t g_ui_last_subpage_by_subset[UI_PAGE_COUNT][UI_NAVIGATION_MAX_TEMP
 static void ui_navigation_refresh_active_track_runtime(void)
 {
     /* Consumer-edge refresh: navigation reads projection only after an explicit refresh. */
-    track_runtime_refresh_track(ui_get_active_track());
+    track_runtime_refresh_track(ui_get_active_lane());
 }
 
 static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
@@ -60,7 +60,7 @@ static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 
 static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
 
     switch (page_id)
     {
@@ -264,7 +264,7 @@ uint8_t ui_navigation_is_ensemble_button_available(button_id_t button)
             if (button == BTN_PARAM_6)
             {
                 return (uint8_t)((ui_navigation_is_page_available(UI_PAGE_TEMPLATE_ENV) != 0U)
-                        && (track_runtime_supports_vca_gate(track_runtime_get_ctx(ui_get_active_track())) != 0U));
+                        && (track_runtime_supports_vca_gate(track_runtime_get_ctx(ui_get_active_lane())) != 0U));
             }
             return ui_navigation_is_page_available(rule->target_page);
         }

@@ -254,7 +254,7 @@ static uint8_t ui_core_clipboard_collect_ensemble_params(ui_template_family_id_t
     }
 
     uint8_t count = 0U;
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const uint8_t scope_count = ui_template_family_get_effective_scope_count(family_id, active_track);
     if (scope_count == 0U)
     {
@@ -880,7 +880,12 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
         return 1U;
     }
 
-    const uint8_t track = ui_get_active_track();
+    uint8_t track = ui_get_active_lane();
+    if (ui_template_family_resolve_owner_track(family_id, track, &track) == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "ENS N/A");
+        return 1U;
+    }
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_param_scope(&g_ui_clipboard.ensemble,

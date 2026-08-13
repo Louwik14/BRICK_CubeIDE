@@ -130,6 +130,9 @@ const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t f
                                                        ui_track_family_t track_family,
                                                        ui_track_type_t track_type);
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id);
+uint8_t ui_template_family_resolve_owner_track(ui_template_family_id_t family_id,
+                                                uint8_t selected_track,
+                                                uint8_t *out_owner_track);
 const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_template_family_id_t family_id,
                                                                             uint8_t track,
                                                                             uint8_t scope_index);

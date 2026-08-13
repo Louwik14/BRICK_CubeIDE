@@ -64,7 +64,9 @@ static const ui_template_family_t *ui_page_template_mod_resolve_family(void)
         return &g_ui_template_mod_family_ops;
     }
 
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MOD);
+    return ui_template_family_resolve_effective_for_track(UI_TEMPLATE_FAMILY_MOD,
+                                                           ui_get_active_lane(),
+                                                           UI_TEMPLATE_EFFECTIVE_SCOPE_CURRENT);
 }
 
 static uint8_t ui_page_template_mod_is_lfo_param(param_id_t id, mod_lfo_param_t param)

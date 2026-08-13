@@ -1,4 +1,5 @@
 #include "ui_template_page.h"
+#include "Core/entity_topology.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -238,6 +239,25 @@ const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_
     return ui_template_family_resolve(family_id, active_track, config.family, config.type);
 }
 
+uint8_t ui_template_family_resolve_owner_track(ui_template_family_id_t family_id,
+                                                uint8_t selected_track,
+                                                uint8_t *out_owner_track)
+{
+    entity_topology_descriptor_t topology;
+    if ((out_owner_track == 0)
+            || ((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
+            || (entity_topology_get((brick_entity_id_t)selected_track, &topology) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_owner_track = (uint8_t)(((family_id == UI_TEMPLATE_FAMILY_MOD)
+            && (topology.role == ENTITY_ROLE_GROUP_CHILD))
+            ? topology.parent_entity_id
+            : topology.entity_id);
+    return 1U;
+}
+
 static uint8_t ui_template_family_to_runtime_ensemble(ui_template_family_id_t family_id,
                                                        track_runtime_ui_ensemble_t *out_ensemble)
 {
@@ -265,20 +285,27 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
                                                                             uint8_t track,
                                                                             uint8_t scope_index)
 {
+    uint8_t owner_track = 0U;
+    if (ui_template_family_resolve_owner_track(family_id, track, &owner_track) == 0U)
+    {
+        return 0;
+    }
+
     track_runtime_ui_ensemble_t ensemble = TRACK_RUNTIME_UI_ENSEMBLE_COUNT;
+    track_runtime_refresh_track(owner_track);
     if ((ui_template_family_to_runtime_ensemble(family_id, &ensemble) == 0U)
-            || (track_runtime_is_ui_ensemble_available(track, ensemble) == 0U))
+            || (track_runtime_is_ui_ensemble_available(owner_track, ensemble) == 0U))
     {
         return 0;
     }
 
     if (family_id == UI_TEMPLATE_FAMILY_TONE)
     {
-        return ui_page_template_tone_resolve_for_track(track, scope_index);
+        return ui_page_template_tone_resolve_for_track(owner_track, scope_index);
     }
 
-    const ui_track_config_t config = ui_get_track_config(track);
-    return ui_template_family_resolve(family_id, track, config.family, config.type);
+    const ui_track_config_t config = ui_get_track_config(owner_track);
+    return ui_template_family_resolve(family_id, owner_track, config.family, config.type);
 }
 
 const ui_template_family_t *ui_template_family_resolve_effective_active_track(ui_template_family_id_t family_id)

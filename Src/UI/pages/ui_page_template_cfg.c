@@ -154,7 +154,7 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 {
     if ((subpage == NULL)
             || (subpage->param_bank.params[0] != PARAM_CFG_TRACK)
-            || (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF))
+            || (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_OFF))
     {
         if ((subpage != NULL) && (subpage->param_bank.params[0] == PARAM_CFG_TRACK) && (slot == 0U) && (id == PARAM_CFG_TRACK))
         {
@@ -188,7 +188,7 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;

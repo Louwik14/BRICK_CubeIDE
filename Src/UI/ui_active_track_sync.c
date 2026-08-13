@@ -32,7 +32,7 @@ static float ui_active_track_sync_clock_source_to_ui_value(void)
 
 void ui_active_track_sync_mirror(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_track_config_t active_config = ui_get_track_config(active_track);
 
     /* Mirror surface: UI store is resynced from explicit runtime projection reads. */
@@ -49,12 +49,12 @@ void ui_active_track_sync_mirror(void)
 
 void ui_active_track_sync_mirror_cfg_midi_channel(void)
 {
-    param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)ui_get_track_midi_channel(ui_get_active_track()));
+    param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)ui_get_track_midi_channel(ui_get_active_lane()));
 }
 
 void ui_active_track_sync_mirror_cfg_midi_source(void)
 {
-    param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)ui_get_track_midi_source(ui_get_active_track()));
+    param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)ui_get_track_midi_source(ui_get_active_lane()));
 }
 
 void ui_active_track_sync_full_after_reconfigure(void)

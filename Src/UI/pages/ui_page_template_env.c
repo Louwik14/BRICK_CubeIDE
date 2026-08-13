@@ -57,11 +57,37 @@ static const ui_template_family_t g_ui_template_env_family_retrig = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_env_family_group = {
+    .family_title = "ENV",
+    .nav_labels = { "ENV 3", "-", "-", "-" },
+    .subpages = {
+        { .title = "ENV 3", .param_bank = { .params = { PARAM_ENV3_ATTACK, PARAM_ENV3_DECAY, PARAM_ENV3_SUSTAIN, PARAM_ENV3_RELEASE } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_env_family_group_retrig = {
+    .family_title = "ENV 2/2",
+    .nav_labels = { "MODE", "-", "-", "-" },
+    .subpages = {
+        { .title = "MODE", .param_bank = { .params = { PARAM_ENV_RETRIG_MOD, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_env_resolve_family(void)
 {
     if (g_ui_template_env_subset != 0U)
     {
-        return &g_ui_template_env_family_retrig;
+        return (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_GROUP)
+                ? &g_ui_template_env_family_group_retrig
+                : &g_ui_template_env_family_retrig;
     }
 
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ENV);
@@ -209,7 +235,12 @@ void ui_page_template_env_register_families(void)
                 continue;
             }
 
-            ui_template_family_register(UI_TEMPLATE_FAMILY_ENV, track_family, track_type, &g_ui_template_env_family_audio);
+            ui_template_family_register(UI_TEMPLATE_FAMILY_ENV,
+                                        track_family,
+                                        track_type,
+                                        (track_type == UI_TRACK_TYPE_GROUP)
+                                                ? &g_ui_template_env_family_group
+                                                : &g_ui_template_env_family_audio);
         }
     }
 }

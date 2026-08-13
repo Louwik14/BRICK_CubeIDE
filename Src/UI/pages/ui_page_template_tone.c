@@ -131,6 +131,18 @@ static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_group = {
+    .family_title = "TONE",
+    .nav_labels = { "FILTER", "-", "-", "-" },
+    .subpages = {
+        { .title = "FILTER", .param_bank = { .params = { PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_TYPE, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 
 static const ui_template_family_t g_ui_template_tone_family_clip = {
     .family_title = "TONE",
@@ -1625,7 +1637,11 @@ void ui_page_template_tone_register_families(void)
             }
 
             const ui_template_family_t *family_template = NULL;
-            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
+            if (track_type == UI_TRACK_TYPE_GROUP)
+            {
+                family_template = &g_ui_template_tone_family_group;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
             {
                 family_template = &g_ui_template_tone_family_prism;
             }
