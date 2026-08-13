@@ -1,0 +1,7 @@
+#ifndef PERSISTENT_PROJECT_CONTROL_H
+#define PERSISTENT_PROJECT_CONTROL_H
+#include "Storage/persistent_control_codec.h"
+persist_codec_result_t persistent_project_control_capture(persist_control_project_t*out);
+persist_codec_result_t persistent_project_control_validate(const persist_control_project_t*project);
+persist_codec_result_t persistent_project_control_apply(const persist_control_project_t*project,uint8_t resume_transport);
+#endif

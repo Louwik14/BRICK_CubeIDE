@@ -126,6 +126,12 @@ typedef enum
 
 typedef enum
 {
+    PERSIST_MACRO_HALL_SCENE  = 0x53434E45UL, /* SCNE */
+    PERSIST_MACRO_HALL_SWITCH = 0x53574954UL  /* SWIT */
+} persist_control_macro_hall_key_value_t;
+
+typedef enum
+{
     PERSIST_MIDI_SOURCE_INTERNAL = 0x494E5420UL, /* INT  */
     PERSIST_MIDI_SOURCE_EXTERNAL = 0x45585420UL, /* EXT  */
     PERSIST_MIDI_SOURCE_ALL      = 0x414C4C20UL  /* ALL  */

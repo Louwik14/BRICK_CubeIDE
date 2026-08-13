@@ -11,7 +11,7 @@
 #include "Param/param_registry.h"
 #include "Seq/seq_param_iface.h"
 #include "Storage/memory_layout.h"
-#include "Storage/project_v1.h"
+#include "Core/project_control.h"
 
 typedef struct
 {
@@ -20,7 +20,7 @@ typedef struct
     uint8_t active;
     uint32_t touch_seq;
     uint8_t last_count;
-    param_macro_resolution_t last_resolution[PROJECT_V1_MACRO_SCENE_LOCK_COUNT];
+    param_macro_resolution_t last_resolution[PERSIST_CONTROL_MACRO_LOCK_COUNT];
 } param_macro_source_state_t;
 
 typedef struct
@@ -29,15 +29,15 @@ typedef struct
     param_macro_resolution_t resolution;
 } param_macro_pending_resolution_t;
 
-#define PARAM_MACRO_POT_SOURCE_COUNT PROJECT_V1_MACRO_POT_COUNT
-#define PARAM_MACRO_HALL_SOURCE_COUNT PROJECT_V1_MACRO_SCENE_COUNT
+#define PARAM_MACRO_POT_SOURCE_COUNT PERSIST_CONTROL_MACRO_COUNT
+#define PARAM_MACRO_HALL_SOURCE_COUNT PERSIST_CONTROL_MACRO_SCENE_COUNT
 #define PARAM_MACRO_SOURCE_COUNT (PARAM_MACRO_POT_SOURCE_COUNT + PARAM_MACRO_HALL_SOURCE_COUNT)
 
 CONTROL_STATE_SDRAM static param_macro_source_state_t g_param_macro_sources[PARAM_MACRO_SOURCE_COUNT];
 static uint32_t g_param_macro_touch_seq;
 
 #define PARAM_MACRO_PENDING_RESOLUTION_CAPACITY \
-    (PARAM_MACRO_SOURCE_COUNT * PROJECT_V1_MACRO_SCENE_LOCK_COUNT)
+    (PARAM_MACRO_SOURCE_COUNT * PERSIST_CONTROL_MACRO_LOCK_COUNT)
 
 CONTROL_STATE_SDRAM static param_macro_pending_resolution_t
     g_param_macro_pending_resolutions[PARAM_MACRO_PENDING_RESOLUTION_CAPACITY];
@@ -162,12 +162,12 @@ void param_macro_init(void)
 {
     memset(g_param_macro_sources, 0, sizeof(g_param_macro_sources));
     g_param_macro_touch_seq = 0U;
-    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
+    for (uint8_t macro = 0U; macro < PERSIST_CONTROL_MACRO_COUNT; ++macro)
     {
-        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
+        g_param_macro_sources[macro].scene = project_control_get_macro_scene(macro);
     }
 
-    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
+    for (uint8_t scene = 0U; scene < PERSIST_CONTROL_MACRO_SCENE_COUNT; ++scene)
     {
         g_param_macro_sources[PARAM_MACRO_POT_SOURCE_COUNT + scene].scene = scene;
     }
@@ -301,7 +301,7 @@ static uint8_t param_macro_collect_source_resolutions(
     }
 
     uint8_t any_collected = 0U;
-    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    for (uint8_t lock = 0U; lock < PERSIST_CONTROL_MACRO_LOCK_COUNT; ++lock)
     {
         param_macro_resolution_t resolution;
         if (param_macro_resolve_lock(source->scene, lock, &resolution) == 0U)
@@ -401,7 +401,7 @@ static void param_macro_commit_pending_resolutions(
         const uint8_t source = pending[i].source_index;
         if ((source >= PARAM_MACRO_SOURCE_COUNT)
                 || (g_param_macro_sources[source].last_count
-                    >= PROJECT_V1_MACRO_SCENE_LOCK_COUNT))
+                    >= PERSIST_CONTROL_MACRO_LOCK_COUNT))
         {
             continue;
         }
@@ -506,7 +506,7 @@ static uint8_t param_macro_set_source_amount(uint8_t source_index, uint8_t scene
     const float clamped = param_macro_clamp_amount(amount);
     const uint8_t active = (clamped > 0.0f) ? 1U : 0U;
 
-    if ((source_index >= PARAM_MACRO_SOURCE_COUNT) || (scene >= PROJECT_V1_MACRO_SCENE_COUNT))
+    if ((source_index >= PARAM_MACRO_SOURCE_COUNT) || (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT))
     {
         return 0U;
     }
@@ -529,7 +529,7 @@ uint8_t param_macro_resolve_lock(uint8_t scene,
                                  uint8_t lock,
                                  param_macro_resolution_t *out_resolution)
 {
-    project_v1_macro_lock_t macro_lock;
+    project_control_macro_lock_t macro_lock;
     float base_value = 0.0f;
 
     if (out_resolution == NULL)
@@ -539,13 +539,13 @@ uint8_t param_macro_resolve_lock(uint8_t scene,
 
     memset(out_resolution, 0, sizeof(*out_resolution));
 
-    if (project_v1_macro_get_scene_lock(scene, lock, &macro_lock) == 0U)
+    if (project_control_get_scene_lock(scene, lock, &macro_lock) == 0U)
     {
         return 0U;
     }
 
-    if ((macro_lock.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
-            || (macro_lock.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)
+    if ((macro_lock.track == 0xFFU)
+            || (macro_lock.param == PARAM_COUNT)
             || (param_macro_lock_target_is_supported(macro_lock.track, macro_lock.param) == 0U))
     {
         return 0U;
@@ -606,9 +606,9 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
 
 void param_macro_sync_scene_sources(void)
 {
-    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
+    for (uint8_t macro = 0U; macro < PERSIST_CONTROL_MACRO_COUNT; ++macro)
     {
-        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
+        g_param_macro_sources[macro].scene = project_control_get_macro_scene(macro);
     }
     param_macro_recompute_sources();
 }
@@ -617,26 +617,26 @@ uint8_t param_macro_set_amount(uint8_t macro, float amount)
 {
     uint8_t held_scene = 0U;
 
-    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
+    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
     {
         return 0U;
     }
 
     if (param_macro_get_ui_held_scene(macro, &held_scene) != 0U)
     {
-        project_v1_macro_set_macro_scene_no_sync(macro, held_scene);
-        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
+        (void)project_control_set_macro_scene(macro, held_scene);
+        g_param_macro_sources[macro].scene = project_control_get_macro_scene(macro);
         return 1U;
     }
 
-    return param_macro_set_source_amount(macro, project_v1_macro_get_macro_scene(macro), amount);
+    return param_macro_set_source_amount(macro, project_control_get_macro_scene(macro), amount);
 }
 
 uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta)
 {
     float next_amount = 0.0f;
 
-    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
+    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
     {
         return 0U;
     }
@@ -647,7 +647,7 @@ uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta)
 
 float param_macro_get_amount(uint8_t macro)
 {
-    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
+    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
     {
         return 0.0f;
     }
@@ -657,7 +657,7 @@ float param_macro_get_amount(uint8_t macro)
 
 uint8_t param_macro_set_scene_source_amount(uint8_t scene, float amount)
 {
-    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    if (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
     {
         return 0U;
     }
@@ -667,7 +667,7 @@ uint8_t param_macro_set_scene_source_amount(uint8_t scene, float amount)
 
 void param_macro_release_scene_source(uint8_t scene)
 {
-    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    if (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
     {
         return;
     }

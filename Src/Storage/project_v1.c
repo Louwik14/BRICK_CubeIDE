@@ -14,6 +14,7 @@
 #include "Core/live_clock.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_tone_sound_state.h"
+#include "Core/project_control.h"
 #include "Param/param_macro.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_pool.h"
@@ -26,8 +27,6 @@
 #include "stm32h7xx_hal.h"
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
-UI_SDRAM static project_v1_macro_state_t g_project_macro_state;
-UI_SDRAM static project_v1_multi_track_t g_project_multi_assign[SEQ_TRACK_COUNT];
 UI_SDRAM static project_v1_multi_track_t g_project_normalized_multi[SEQ_TRACK_COUNT];
 UI_SDRAM static project_v1_macro_state_t g_project_normalized_macro;
 UI_SDRAM static project_v1_multi_restore_diag_t g_project_multi_restore_diag;
@@ -107,6 +106,24 @@ static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
             state->macro_scene[macro] = macro;
         }
     }
+}
+
+static void project_v1_macro_capture_legacy(project_v1_macro_state_t *out)
+{
+    memset(out,0,sizeof(*out));
+    out->hall_switch_mode=project_v1_macro_get_hall_switch_mode();
+    for(uint8_t macro=0U;macro<PROJECT_V1_MACRO_POT_COUNT;++macro)out->macro_scene[macro]=project_v1_macro_get_macro_scene(macro);
+    for(uint8_t scene=0U;scene<PROJECT_V1_MACRO_SCENE_COUNT;++scene)for(uint8_t lock=0U;lock<PROJECT_V1_MACRO_SCENE_LOCK_COUNT;++lock)(void)project_v1_macro_get_scene_lock(scene,lock,&out->scenes[scene].locks[lock]);
+}
+
+static uint8_t project_v1_macro_apply_legacy(const project_v1_macro_state_t *in)
+{
+    if(in==NULL)return 0U;
+    project_control_init();
+    (void)project_control_set_hall_mode((project_control_hall_mode_t)in->hall_switch_mode);
+    for(uint8_t macro=0U;macro<PROJECT_V1_MACRO_POT_COUNT;++macro)(void)project_control_set_macro_scene(macro,in->macro_scene[macro]);
+    for(uint8_t scene=0U;scene<PROJECT_V1_MACRO_SCENE_COUNT;++scene){uint8_t dst=0U;for(uint8_t lock=0U;lock<PROJECT_V1_MACRO_SCENE_LOCK_COUNT;++lock){const project_v1_macro_lock_t*x=&in->scenes[scene].locks[lock];if(x->track==PROJECT_V1_MACRO_LOCK_TRACK_NONE||x->param==PROJECT_V1_MACRO_LOCK_PARAM_NONE)continue;project_control_macro_lock_t value={x->track,x->param,x->scene_value};if(project_control_set_scene_lock(scene,dst++,&value)==0U)return 0U;}}
+    return 1U;
 }
 
 static void project_v1_set_error(project_v1_error_t err)
@@ -611,10 +628,9 @@ static void project_v1_wavetable_restore_autoload_slots(const ProjectSaveV1 *pro
 
 static void project_v1_multi_clear_assignments(void)
 {
-    memset(&g_project_multi_assign, 0, sizeof(g_project_multi_assign));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        g_project_multi_assign[track].gain = 1.0f;
+        (void)project_control_clear_entity_asset(track);
     }
 }
 
@@ -691,7 +707,8 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const project_v1_multi_track_t *const src = &multi[track];
-        project_v1_multi_track_t *const dst = &g_project_multi_assign[track];
+        project_v1_multi_track_t restored={0};
+        project_v1_multi_track_t *const dst = &restored;
 
         dst->gain = src->gain;
         if (dst->gain < 0.0f)
@@ -704,7 +721,7 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
         }
         if (src->path[0] == '\0')
         {
-            dst->path[0] = '\0';
+            (void)project_control_clear_entity_asset(track);
             continue;
         }
 
@@ -714,6 +731,7 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project,
             g_project_multi_restore_diag.restore_missing_path = 1U;
             continue;
         }
+        (void)project_control_set_entity_asset(track,PERSIST_ASSET_MULTI,dst->path);
 
         const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, multi, track);
         if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
@@ -786,24 +804,12 @@ static void project_boot_ctx_commit_current_state_if_valid(void)
 
 void project_v1_macro_init(void)
 {
-    g_project_macro_state.hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SCENE;
-    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
-    {
-        g_project_macro_state.macro_scene[macro] = macro;
-    }
-
-    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
-    {
-        for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
-        {
-            project_v1_macro_clear_lock(&g_project_macro_state.scenes[scene].locks[lock]);
-        }
-    }
+    project_control_init();
 }
 
 project_v1_macro_hall_switch_mode_t project_v1_macro_get_hall_switch_mode(void)
 {
-    return g_project_macro_state.hall_switch_mode;
+    return (project_v1_macro_hall_switch_mode_t)project_control_get_hall_mode();
 }
 
 void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t mode)
@@ -813,7 +819,7 @@ void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t m
         return;
     }
 
-    g_project_macro_state.hall_switch_mode = mode;
+    (void)project_control_set_hall_mode((project_control_hall_mode_t)mode);
 }
 
 uint8_t project_v1_macro_get_macro_scene(uint8_t macro)
@@ -823,12 +829,7 @@ uint8_t project_v1_macro_get_macro_scene(uint8_t macro)
         return 0U;
     }
 
-    if (g_project_macro_state.macro_scene[macro] >= PROJECT_V1_MACRO_SCENE_COUNT)
-    {
-        return macro;
-    }
-
-    return g_project_macro_state.macro_scene[macro];
+    return project_control_get_macro_scene(macro);
 }
 
 static void project_v1_macro_set_macro_scene_impl(uint8_t macro, uint8_t scene, uint8_t sync_runtime)
@@ -838,12 +839,12 @@ static void project_v1_macro_set_macro_scene_impl(uint8_t macro, uint8_t scene, 
         return;
     }
 
-    if (g_project_macro_state.macro_scene[macro] == scene)
+    if (project_control_get_macro_scene(macro) == scene)
     {
         return;
     }
 
-    g_project_macro_state.macro_scene[macro] = scene;
+    (void)project_control_set_macro_scene(macro, scene);
     if (sync_runtime != 0U)
     {
         param_macro_sync_scene_sources();
@@ -997,8 +998,9 @@ uint8_t project_v1_macro_get_scene_lock(uint8_t scene, uint8_t lock, project_v1_
         return 0U;
     }
 
-    *out_lock = g_project_macro_state.scenes[scene].locks[lock];
-    return 1U;
+    project_control_macro_lock_t value;
+    if (project_control_get_scene_lock(scene, lock, &value) == 0U) return 0U;
+    out_lock->track=value.track;out_lock->param=value.param;out_lock->scene_value=value.scene_value;return 1U;
 }
 
 uint8_t project_v1_macro_set_scene_lock(uint8_t scene, uint8_t lock, const project_v1_macro_lock_t *in_lock)
@@ -1008,9 +1010,8 @@ uint8_t project_v1_macro_set_scene_lock(uint8_t scene, uint8_t lock, const proje
         return 0U;
     }
 
-    g_project_macro_state.scenes[scene].locks[lock] = *in_lock;
-    param_macro_sync_scene_sources();
-    return 1U;
+    const project_control_macro_lock_t value={in_lock->track,in_lock->param,in_lock->scene_value};
+    return project_control_set_scene_lock(scene,lock,&value);
 }
 
 void project_v1_init(void)
@@ -1043,7 +1044,8 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
     project_v1_capture_sample_autoload(out_project);
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        out_project->multi[track] = g_project_multi_assign[track];
+        persist_control_asset_ref_t asset;
+        if(project_control_get_entity_asset(track,&asset)!=0U&&asset.kind==PERSIST_ASSET_MULTI){uint16_t n=asset.path_length;if(n>=sizeof(out_project->multi[track].path))n=(uint16_t)(sizeof(out_project->multi[track].path)-1U);memcpy(out_project->multi[track].path,asset.path,n);out_project->multi[track].path[n]='\0';}out_project->multi[track].gain=1.0f;
     }
 
     if (pattern_live_capture_current(&out_project->live) == 0U)
@@ -1060,7 +1062,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
                                   &out_project->state.queued_pattern_bank,
                                   &out_project->state.queued_pattern_slot);
 
-    out_project->macro = g_project_macro_state;
+    project_v1_macro_capture_legacy(&out_project->macro);
     out_project->state.active_project_slot_valid = g_project_active_slot_valid;
     out_project->state.active_project_slot = g_project_active_slot;
 
@@ -1110,9 +1112,8 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
     project_v1_multi_restore_from_snapshot(project, g_project_normalized_multi);
 
-    g_project_macro_state = g_project_normalized_macro;
-    project_v1_macro_sanitize_state(&g_project_macro_state);
-    param_macro_sync_scene_sources();
+    project_v1_macro_sanitize_state(&g_project_normalized_macro);
+    if(project_v1_macro_apply_legacy(&g_project_normalized_macro)==0U){project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);return 0U;}
     g_project_active_slot_valid = project->state.active_project_slot_valid;
     g_project_active_slot = project->state.active_project_slot;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
@@ -1129,15 +1130,12 @@ uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path)
 
     if ((path == 0) || (path[0] == '\0'))
     {
-        g_project_multi_assign[track].path[0] = '\0';
+        (void)project_control_clear_entity_asset(track);
         project_v1_set_error(PROJECT_V1_ERR_NONE);
         return 1U;
     }
 
-    if (project_v1_copy_text(g_project_multi_assign[track].path,
-                             sizeof(g_project_multi_assign[track].path),
-                             path)
-        == 0U)
+    if (project_control_set_entity_asset(track,PERSIST_ASSET_MULTI,path)==0U)
     {
         project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
         return 0U;
@@ -1155,8 +1153,9 @@ uint8_t project_v1_get_track_multi_path(uint8_t track, char *out_path, uint32_t 
         return 0U;
     }
 
-    const uint8_t ok =
-        project_v1_copy_text(out_path, out_size, g_project_multi_assign[track].path);
+    persist_control_asset_ref_t asset;const uint8_t found=project_control_get_entity_asset(track,&asset);
+    char path[PERSIST_CONTROL_ASSET_PATH_BYTES];uint16_t n=(found!=0U)?asset.path_length:0U;if(n>=sizeof(path))n=(uint16_t)(sizeof(path)-1U);if(n!=0U)memcpy(path,asset.path,n);path[n]='\0';
+    const uint8_t ok=project_v1_copy_text(out_path,out_size,path);
     project_v1_set_error((ok != 0U) ? PROJECT_V1_ERR_NONE : PROJECT_V1_ERR_INVALID_ARG);
     return ok;
 }
