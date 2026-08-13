@@ -1017,7 +1017,12 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
         return 0U;
     }
 
-    const uint8_t track = ui_get_active_track();
+    ui_template_edit_context_t edit_context;
+    if (ui_template_edit_context_resolve_active(&edit_context) == 0U)
+    {
+        return 0U;
+    }
+    const uint8_t track = edit_context.owner_entity;
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_param_scope(&g_ui_clipboard.page,
@@ -1099,7 +1104,7 @@ uint8_t ui_core_clipboard_handle_seq_track_event(const ui_event_t *ev,
         return 0U;
     }
 
-    seq_track_id_t track = (seq_track_id_t)ui_get_active_track();
+    seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
     seq_step_id_t steps[SEQ_MAX_STEPS];
     uint8_t step_count = 0U;
     ui_seq_clipboard_scope_t scope = UI_SEQ_CLIPBOARD_SCOPE_NONE;

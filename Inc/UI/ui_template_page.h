@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "Core/entity_topology.h"
 #include "ui_core.h"
 #include "ui_page.h"
 #include "ui_param.h"
@@ -35,6 +36,14 @@ typedef enum
     UI_TEMPLATE_FAMILY_PLAY,
     UI_TEMPLATE_FAMILY_COUNT
 } ui_template_family_id_t;
+
+typedef struct
+{
+    uint8_t selected_entity;
+    uint8_t owner_entity;
+    entity_role_t role;
+    ui_template_family_id_t family_id;
+} ui_template_edit_context_t;
 
 typedef enum
 {
@@ -130,6 +139,10 @@ const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t f
                                                        ui_track_family_t track_family,
                                                        ui_track_type_t track_type);
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id);
+uint8_t ui_template_edit_context_resolve(ui_template_family_id_t family_id,
+                                         uint8_t selected_entity,
+                                         ui_template_edit_context_t *out_context);
+uint8_t ui_template_edit_context_resolve_active(ui_template_edit_context_t *out_context);
 uint8_t ui_template_family_resolve_owner_track(ui_template_family_id_t family_id,
                                                 uint8_t selected_track,
                                                 uint8_t *out_owner_track);

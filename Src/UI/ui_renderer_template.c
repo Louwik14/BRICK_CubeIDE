@@ -277,6 +277,20 @@ void ui_format_param_127_00(float value, float min_value, float max_value, char 
     ui_renderer_template_format_fixed(normalized, 2U, "", out, out_len);
 }
 
+static uint8_t ui_renderer_template_get_edit_owner_track(void)
+{
+    ui_template_edit_context_t context;
+    return (ui_template_edit_context_resolve_active(&context) != 0U)
+        ? context.owner_entity : ui_get_active_lane();
+}
+
+static uint8_t ui_renderer_template_get_selected_entity(void)
+{
+    ui_template_edit_context_t context;
+    return (ui_template_edit_context_resolve_active(&context) != 0U)
+        ? context.selected_entity : ui_get_active_lane();
+}
+
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
     const param_desc_t *desc = &param_registry[id];
@@ -289,7 +303,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
 
     if (id == PARAM_CFG_TRACK_TYPE)
     {
-        const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+        const ui_track_family_t active_family = ui_get_track_family(ui_renderer_template_get_edit_owner_track());
         const ui_track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
         (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(active_family, active_type));
         return;
@@ -298,7 +312,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
     if (id == PARAM_CFG_MIDI_CH)
     {
         const uint8_t channel = (uint8_t)(value + 0.5f);
-        const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_get_active_track(), channel);
+        const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_renderer_template_get_edit_owner_track(), channel);
         (void)snprintf(out, out_len, "%u%s", (unsigned int)channel, (duplicate != 0U) ? "*" : "");
         return;
     }
@@ -323,7 +337,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
 
     if (id == PARAM_MOD_MATRIX_DEST)
     {
-        if (mod_lfo_v1_dest_label(ui_get_active_track(), (uint16_t)(value + 0.5f), out, out_len) != 0U)
+        if (mod_lfo_v1_dest_label(ui_renderer_template_get_edit_owner_track(), (uint16_t)(value + 0.5f), out, out_len) != 0U)
         {
             return;
         }
@@ -627,8 +641,9 @@ static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_templ
 
 static uint8_t ui_renderer_template_get_param_authority_track(param_id_t id)
 {
-    uint8_t track = ui_get_active_track();
-    (void)ui_page_template_play_resolve_param_track(id, ui_get_active_lane(), &track);
+    const uint8_t selected_entity = ui_renderer_template_get_selected_entity();
+    uint8_t track = ui_renderer_template_get_edit_owner_track();
+    (void)ui_page_template_play_resolve_param_track(id, selected_entity, &track);
     return track;
 }
 
@@ -873,7 +888,7 @@ static uint8_t ui_renderer_template_draw_lfo_dest_text(int x, int y, int w, int 
     }
 
     char label[20];
-    if (mod_lfo_v1_dest_short_label(ui_get_active_track(), (uint16_t)(value + 0.5f), label, (uint32_t)sizeof(label)) == 0U)
+    if (mod_lfo_v1_dest_short_label(ui_renderer_template_get_edit_owner_track(), (uint16_t)(value + 0.5f), label, (uint32_t)sizeof(label)) == 0U)
     {
         (void)snprintf(label, sizeof(label), "-");
     }
@@ -1210,7 +1225,7 @@ static uint8_t ui_renderer_template_draw_lfo_phase(int x, int y, int w, int h, p
     }
 
     const uint8_t lfo = (uint8_t)(id - PARAM_LFO1_PHASE) / (uint8_t)MOD_LFO_PARAM_COUNT;
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_renderer_template_get_edit_owner_track();
     float shape_value = 0.0f;
     (void)mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, &shape_value);
     const uint8_t shape = ui_renderer_template_lfo_shape_from_value(shape_value);
@@ -1623,7 +1638,7 @@ static uint8_t ui_renderer_template_draw_matrix_slot_widget(int x, int y, int w,
         selected = MOD_MATRIX_SLOT_COUNT - 1U;
     }
 
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_renderer_template_get_edit_owner_track();
     for (uint8_t row = 0U; row < 24U; ++row)
     {
         rows[row] = all_active_rows[row];
@@ -2185,7 +2200,7 @@ static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_
     float family_value = 0.0f;
     if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_TRACK, &family_value, 0) == 0U)
     {
-        return ui_get_track_family(ui_get_active_track());
+        return ui_get_track_family(ui_renderer_template_get_edit_owner_track());
     }
 
     int32_t family = (int32_t)(family_value + 0.5f);
@@ -2478,12 +2493,12 @@ static uint8_t ui_renderer_template_draw_custom_filter(const ui_param_seq_plock_
     }
 
     if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF)
-            && (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_CUTOFF) == 0U))
+            && (ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_CUTOFF) == 0U))
     {
         return 0U;
     }
     if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE)
-            && (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_RESONANCE) == 0U))
+            && (ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_RESONANCE) == 0U))
     {
         return 0U;
     }
@@ -2583,7 +2598,7 @@ static uint8_t ui_renderer_template_prepare_custom_adsr(const ui_param_seq_plock
         return 0U;
     }
 
-    if (ui_renderer_template_custom_adsr_supported(ui_get_active_track(), attack_param, decay_param, sustain_param, release_param) == 0U)
+    if (ui_renderer_template_custom_adsr_supported(ui_renderer_template_get_edit_owner_track(), attack_param, decay_param, sustain_param, release_param) == 0U)
     {
         return 0U;
     }
@@ -2859,8 +2874,8 @@ static uint8_t ui_renderer_template_filter_curve_group_is_active(const ui_templa
     {
         return 0U;
     }
-    if ((ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_CUTOFF) == 0U)
-            || (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_RESONANCE) == 0U))
+    if ((ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_CUTOFF) == 0U)
+            || (ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_RESONANCE) == 0U))
     {
         return 0U;
     }
@@ -3023,7 +3038,7 @@ static uint8_t ui_renderer_template_draw_lfo_shape_phase_group(const ui_param_se
 static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
                                                         const ui_template_family_t *family)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_renderer_template_get_edit_owner_track();
 
     if ((state == NULL) || (family == NULL) || (family->family_title == NULL))
     {
@@ -3106,8 +3121,8 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
 
 static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_subpage_t *subpage)
 {
-    if ((ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_WAVE)
+    if ((ui_get_track_family(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_TYPE_WAVE)
             || (subpage == NULL))
     {
         return 0U;
@@ -3654,7 +3669,7 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
 {
     audio_binding_snapshot_t snapshot;
     if ((audio_note_engine_adapter_snapshot_read(
-            ui_get_active_track(), &snapshot) == 0U)
+            ui_renderer_template_get_edit_owner_track(), &snapshot) == 0U)
         || (snapshot.sampler_playhead_active == 0U)
         || (snapshot.sampler_playhead_sample_id != global_slot)
         || (snapshot.sampler_playhead_frame_count == 0U))
@@ -3782,7 +3797,7 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
                                                  0U);
     audio_binding_snapshot_t snapshot;
     if ((audio_note_engine_adapter_snapshot_read(
-            ui_get_active_track(), &snapshot) == 0U)
+            ui_renderer_template_get_edit_owner_track(), &snapshot) == 0U)
             || (snapshot.sampler_slice_mode_active == 0U))
     {
         ui_renderer_template_draw_sampler_ram_marker(loop_value,
@@ -4442,7 +4457,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
     const char *family_title = ((family != NULL) && (family->family_title != NULL)) ? family->family_title : "TEMPLATE";
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_renderer_template_get_selected_entity();
     char track_label[8];
     char runtime_label[12];
     char cpu_avg_label[40];

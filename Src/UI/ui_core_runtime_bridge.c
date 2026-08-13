@@ -188,7 +188,7 @@ static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev
         return 1U;
     }
 
-    const uint8_t rec_target_track = ui_get_active_track();
+    const uint8_t rec_target_track = ui_get_active_lane();
     seq_runtime_set_pattern_rec_target_track(rec_target_track);
     seq_runtime_rec_toggle_arm();
     ui_core_runtime_bridge_service_looper_record_control(feedback);
@@ -334,7 +334,7 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
 
 static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_feedback_fn feedback)
 {
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_get_active_lane();
     if (ui_core_runtime_bridge_track_is_sampler_looper(track) == 0U)
     {
         return 0U;
@@ -733,7 +733,7 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     if ((param_registry_track_structure_transition_is_global_active() != 0U)
             || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
@@ -1222,7 +1222,7 @@ uint8_t ui_core_runtime_bridge_resolve_filter_target_track(uint8_t *out_track_id
 {
     track_runtime_resolved_track_t resolved;
     if ((out_track_id == 0)
-            || (track_runtime_resolve_track(ui_get_active_track(), &resolved) == 0U)
+            || (track_runtime_resolve_track(ui_get_active_lane(), &resolved) == 0U)
             || (resolved.has_filter_target == 0U))
     {
         return 0U;

@@ -35,6 +35,7 @@
 #include "Seq/seq_model.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/entity_topology.h"
 #include "Core/live_clock.h"
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_migration.h"
@@ -1070,6 +1071,14 @@ static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t a
     if (ui_param_resolve_play_context(param, active_track, &play_context) != 0U)
     {
         return play_context.target_track;
+    }
+    if (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+    {
+        brick_entity_id_t owner = active_track;
+        if (entity_topology_mod_owner(active_track, &owner) != 0U)
+        {
+            return owner;
+        }
     }
     return active_track;
 }

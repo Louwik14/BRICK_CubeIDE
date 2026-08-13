@@ -808,7 +808,7 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     ui_hall_input_service_handle_transpose(g_ui_track_state.shift_down,
                                            g_ui_track_state.track_select_armed,
                                            active_track);
@@ -971,7 +971,7 @@ uint8_t ui_get_active_lane(void)
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
     /* Consumer-edge refresh: filter routing uses a refreshed projection before the runtime resolver. */
-    track_runtime_refresh_track(ui_get_active_track());
+    track_runtime_refresh_track(ui_get_active_lane());
     if (ui_core_runtime_bridge_resolve_filter_target_track(out_track_id) == 0U)
     {
         return false;

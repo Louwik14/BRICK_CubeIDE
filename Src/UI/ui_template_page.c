@@ -239,22 +239,75 @@ const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_
     return ui_template_family_resolve(family_id, active_track, config.family, config.type);
 }
 
-uint8_t ui_template_family_resolve_owner_track(ui_template_family_id_t family_id,
-                                                uint8_t selected_track,
-                                                uint8_t *out_owner_track)
+static uint8_t ui_template_family_from_page(uint8_t page_id,
+                                             ui_template_family_id_t *out_family_id)
 {
-    entity_topology_descriptor_t topology;
-    if ((out_owner_track == 0)
-            || ((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
-            || (entity_topology_get((brick_entity_id_t)selected_track, &topology) == 0U))
+    if (out_family_id == 0)
     {
         return 0U;
     }
 
-    *out_owner_track = (uint8_t)(((family_id == UI_TEMPLATE_FAMILY_MOD)
+    switch (page_id)
+    {
+        case UI_PAGE_TEMPLATE_ENV: *out_family_id = UI_TEMPLATE_FAMILY_ENV; return 1U;
+        case UI_PAGE_TEMPLATE_CFG:
+        case UI_PAGE_TEMPLATE_REC_CFG: *out_family_id = UI_TEMPLATE_FAMILY_CFG; return 1U;
+        case UI_PAGE_TEMPLATE_TONE: *out_family_id = UI_TEMPLATE_FAMILY_TONE; return 1U;
+        case UI_PAGE_TEMPLATE_MOD: *out_family_id = UI_TEMPLATE_FAMILY_MOD; return 1U;
+        case UI_PAGE_TEMPLATE_KEYBOARD: *out_family_id = UI_TEMPLATE_FAMILY_KEYBOARD; return 1U;
+        case UI_PAGE_MIDI_FX: *out_family_id = UI_TEMPLATE_FAMILY_MIDI_FX; return 1U;
+        case UI_PAGE_TEMPLATE_SEQ: *out_family_id = UI_TEMPLATE_FAMILY_SEQ; return 1U;
+        case UI_PAGE_TEMPLATE_MIX: *out_family_id = UI_TEMPLATE_FAMILY_MIX; return 1U;
+        case UI_PAGE_TEMPLATE_PLAY: *out_family_id = UI_TEMPLATE_FAMILY_PLAY; return 1U;
+        default: return 0U;
+    }
+}
+
+uint8_t ui_template_edit_context_resolve(ui_template_family_id_t family_id,
+                                         uint8_t selected_entity,
+                                         ui_template_edit_context_t *out_context)
+{
+    entity_topology_descriptor_t topology;
+    if ((out_context == 0)
+            || ((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
+            || (entity_topology_get(selected_entity, &topology) == 0U)
+            || (topology.active == 0U))
+    {
+        return 0U;
+    }
+
+    out_context->selected_entity = topology.entity_id;
+    out_context->owner_entity = (uint8_t)(((family_id == UI_TEMPLATE_FAMILY_MOD)
             && (topology.role == ENTITY_ROLE_GROUP_CHILD))
-            ? topology.parent_entity_id
-            : topology.entity_id);
+            ? topology.parent_entity_id : topology.entity_id);
+    out_context->role = topology.role;
+    out_context->family_id = family_id;
+    return 1U;
+}
+
+uint8_t ui_template_edit_context_resolve_active(ui_template_edit_context_t *out_context)
+{
+    ui_template_family_id_t family_id = UI_TEMPLATE_FAMILY_COUNT;
+    return (uint8_t)((ui_template_family_from_page(ui_page_get_id(), &family_id) != 0U)
+            && (ui_template_edit_context_resolve(family_id,
+                                                 ui_get_active_lane(),
+                                                 out_context) != 0U));
+}
+
+uint8_t ui_template_family_resolve_owner_track(ui_template_family_id_t family_id,
+                                                uint8_t selected_track,
+                                                uint8_t *out_owner_track)
+{
+    ui_template_edit_context_t context;
+    if ((out_owner_track == 0)
+            || (ui_template_edit_context_resolve(family_id,
+                                                 selected_track,
+                                                 &context) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_owner_track = context.owner_entity;
     return 1U;
 }
 

@@ -111,7 +111,7 @@ uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
 
 const char *ui_get_hall_mode_short_label(void)
 {
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
     ui_macro_overlay_submode_t macro_overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
 
@@ -158,7 +158,7 @@ const char *ui_get_hall_mode_short_label(void)
 const char *ui_get_hall_mode_suffix_label(void)
 {
     static char label[6];
-    const uint8_t active_track = ui_get_active_track();
+    const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
 
     if (ui_macro_overlay_is_active() != 0U)
