@@ -1,4 +1,5 @@
 #include "Core/brick6_wave_runtime.h"
+#include "Core/project_control.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -629,7 +630,9 @@ void brick6_wave_runtime_set_osc_table_global(uint8_t instance_id, uint8_t osc, 
     brick6_wave_runtime_osc_t *const target = &instance->osc[osc];
     const uint16_t previous_slot = target->table_wavetable_slot;
     const uint32_t previous_generation = target->table_generation;
-    target->table_global_slot = global_slot;
+    uint16_t runtime_slot=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    (void)project_control_resolve_wavetable_runtime(global_slot,&runtime_slot);
+    target->table_global_slot = runtime_slot;
     wave_resolve_table(target);
     if ((target->table_wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
             && ((target->table_wavetable_slot != previous_slot)

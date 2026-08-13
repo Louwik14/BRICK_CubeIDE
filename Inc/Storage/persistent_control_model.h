@@ -121,9 +121,11 @@ typedef enum
 
 typedef enum
 {
-    PERSIST_ASSET_SAMPLE    = 0x53414D50UL, /* SAMP */
-    PERSIST_ASSET_MULTI     = 0x4D554C54UL, /* MULT */
-    PERSIST_ASSET_WAVETABLE = 0x57415645UL  /* WAVE */
+    PERSIST_ASSET_SAMPLE        = 0x53414D50UL, /* SAMP: legacy generic reference */
+    PERSIST_ASSET_SAMPLE_STREAM = 0x5354524DUL, /* STRM */
+    PERSIST_ASSET_SAMPLE_RAM    = 0x52414D20UL, /* RAM  */
+    PERSIST_ASSET_MULTI         = 0x4D554C54UL, /* MULT */
+    PERSIST_ASSET_WAVETABLE     = 0x57415645UL  /* WAVE */
 } persist_control_asset_kind_key_value_t;
 
 typedef enum

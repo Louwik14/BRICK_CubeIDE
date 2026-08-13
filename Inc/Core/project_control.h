@@ -25,4 +25,17 @@ uint8_t project_control_get_entity_asset(uint8_t entity,persist_control_asset_re
 uint16_t project_control_capture_assets(persist_control_asset_ref_t*out,uint16_t capacity);
 uint8_t project_control_apply_assets(const persist_control_asset_ref_t*assets,uint16_t count,const persist_control_pattern_t*pattern);
 
+/* Logical Project banks. Values stored in parameters and p-locks are these
+ * logical indices; runtime pool/global/instrument slots are deliberately not
+ * exposed as persistent identities. */
+uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
+uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
+uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
+void project_control_unregister_sample_runtime(uint16_t runtime_global);
+void project_control_unregister_wavetable_runtime(uint16_t runtime_global);
+void project_control_unregister_multi_runtime(uint16_t runtime_instrument);
+uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
+uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
+uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);
+
 #endif

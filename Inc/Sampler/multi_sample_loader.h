@@ -62,6 +62,7 @@ uint8_t multi_sample_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_load_has_pending(void);
 uint8_t multi_sample_load_is_active(void);
 uint8_t multi_sample_cancel_load(void);
+void multi_sample_cancel_all_loads(void);
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
 
 #ifdef __cplusplus

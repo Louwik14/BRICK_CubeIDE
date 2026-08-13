@@ -131,7 +131,7 @@ static uint8_t codec_type_valid(uint32_t key)
 }
 
 static uint8_t codec_asset_kind_valid(uint32_t key)
-{ return (uint8_t)((key==PERSIST_ASSET_SAMPLE)||(key==PERSIST_ASSET_MULTI)||(key==PERSIST_ASSET_WAVETABLE)); }
+{ return (uint8_t)((key==PERSIST_ASSET_SAMPLE)||(key==PERSIST_ASSET_SAMPLE_STREAM)||(key==PERSIST_ASSET_SAMPLE_RAM)||(key==PERSIST_ASSET_MULTI)||(key==PERSIST_ASSET_WAVETABLE)); }
 static uint8_t codec_midi_source_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_MIDI_SOURCE_INTERNAL)||(key==PERSIST_MIDI_SOURCE_EXTERNAL)||(key==PERSIST_MIDI_SOURCE_ALL)); }
 static uint8_t codec_clock_valid(uint32_t key)

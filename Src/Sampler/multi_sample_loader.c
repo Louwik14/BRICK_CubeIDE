@@ -939,6 +939,12 @@ uint8_t multi_sample_cancel_load(void)
     return 1U;
 }
 
+void multi_sample_cancel_all_loads(void)
+{
+    (void)multi_sample_cancel_load();
+    memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
+}
+
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag)
 {
     if (out_diag != 0)

@@ -7,6 +7,7 @@
 #include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/project_control.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_tone_sound_state.h"
@@ -103,34 +104,9 @@ static uint16_t param_backend_clip_grain_size_value(uint8_t index)
 
 static uint16_t param_backend_multi_instrument_from_selector(float value)
 {
-    if (value < 0.5f)
-    {
-        return MULTI_SAMPLE_POOL_INVALID_ID;
-    }
-
-    const uint8_t selector = (uint8_t)(param_backend_clamp_value(value,
-                                                                 0.0f,
-                                                                 (float)MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
-                                      + 0.5f);
-    uint8_t current = 1U;
-    uint16_t last_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-
-    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
-    {
-        if (multi_sample_pool_get_instrument(id) == NULL)
-        {
-            continue;
-        }
-
-        last_instrument_id = id;
-        if (current == selector)
-        {
-            return id;
-        }
-        current++;
-    }
-
-    return last_instrument_id;
+    const uint16_t logical=(uint16_t)(param_backend_clamp_value(value,0.0f,(float)(MULTI_SAMPLE_POOL_MAX_INSTRUMENTS-1U))+0.5f);
+    uint16_t runtime=MULTI_SAMPLE_POOL_INVALID_ID;
+    return (project_control_resolve_multi_runtime(logical,&runtime)!=0U)?runtime:MULTI_SAMPLE_POOL_INVALID_ID;
 }
 
 static uint8_t param_backend_stream_backend_from_global_selector(float value,
@@ -139,19 +115,23 @@ static uint8_t param_backend_stream_backend_from_global_selector(float value,
 {
     const uint16_t active_slots = sample_global_pool_get_active_slot_capacity();
     const float max_slot = (active_slots > 0U) ? (float)(active_slots - 1U) : 0.0f;
-    const uint16_t global_slot =
+    const uint16_t logical_slot =
         (uint16_t)(param_backend_clamp_value(value, 0.0f, max_slot) + 0.5f);
+    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
 
     if (out_global_slot != NULL)
     {
-        *out_global_slot = global_slot;
+        *out_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
     if (out_stream_slot != NULL)
     {
         *out_stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
+    uint32_t asset_kind=0U;
+    if ((project_control_resolve_sample_runtime(logical_slot,&global_slot,&asset_kind)==0U)
+        || (asset_kind!=PERSIST_ASSET_SAMPLE_STREAM)) return 0U;
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
     if ((slot == NULL)
         || (slot->kind != SAMPLE_GLOBAL_KIND_STREAM)
@@ -169,14 +149,17 @@ static uint8_t param_backend_stream_backend_from_global_selector(float value,
     {
         *out_stream_slot = stream_slot;
     }
+    if (out_global_slot != NULL) *out_global_slot=global_slot;
     return 1U;
 }
 
-static uint16_t param_backend_global_slot_from_selector(float value)
+static uint16_t param_backend_sample_runtime_from_logical(float value)
 {
     const uint16_t active_slots = sample_global_pool_get_active_slot_capacity();
     const float max_slot = (active_slots > 0U) ? (float)(active_slots - 1U) : 0.0f;
-    return (uint16_t)(param_backend_clamp_value(value, 0.0f, max_slot) + 0.5f);
+    const uint16_t logical=(uint16_t)(param_backend_clamp_value(value,0.0f,max_slot)+0.5f);
+    uint16_t runtime=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    return (project_control_resolve_sample_runtime(logical,&runtime,NULL)!=0U)?runtime:SAMPLE_GLOBAL_POOL_INVALID_INDEX;
 }
 
 static void param_backend_project_looper_stretch(uint8_t track,
@@ -827,12 +810,12 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
     {
         case 0U:
         {
-            const uint16_t global_slot = (uint16_t)(param_backend_clamp_value(value, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
+            const uint16_t logical_slot = (uint16_t)(param_backend_clamp_value(value, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->wave.table[osc] = (float)global_slot;
+                state->wave.table[osc] = (float)logical_slot;
             }
-            brick6_wave_runtime_set_osc_table_global(ctx->audio_binding.instance_id, osc, global_slot);
+            brick6_wave_runtime_set_osc_table_global(ctx->audio_binding.instance_id, osc, logical_slot);
             return 1U;
         }
         case 1U:
@@ -1018,17 +1001,19 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                 }
                 if ((update_base_state != 0U) && (state != NULL))
                 {
-                    state->sample = (float)global_slot;
+                    state->sample = value;
                 }
                 brick6_sampler_runtime_set_sample(track, stream_slot);
                 return 1U;
             }
 
-            global_slot = param_backend_global_slot_from_selector(value);
+            const uint16_t logical_slot=(uint16_t)(param_backend_clamp_value(value,0.0f,(float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS-1U))+0.5f);
+            global_slot = param_backend_sample_runtime_from_logical(value);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->sample = (float)global_slot;
+                state->sample = (float)logical_slot;
             }
+            if(global_slot==SAMPLE_GLOBAL_POOL_INVALID_INDEX){brick6_sampler_runtime_stop(track);return 0U;}
             brick6_sampler_runtime_set_sample(track, global_slot);
             return 1U;
         }

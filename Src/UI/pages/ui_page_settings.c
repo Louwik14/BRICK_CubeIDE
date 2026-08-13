@@ -15,6 +15,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/project_v1.h"
 #include "Core/brick_build_config.h"
+#include "Core/project_control.h"
 #if BRICK_TEST_BUILD
 #include "Core/audio_test_runner.h"
 #include "Core/audio_test2.h"
@@ -1593,6 +1594,8 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
                                                slot,
                                                &global_slot) != 0U)
         {
+            uint16_t logical=0U;
+            (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical);
             g_ui_settings.sample_slot_selected = global_slot;
         }
         ui_page_settings_status("LOAD OK");
@@ -1618,6 +1621,8 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
         sampler_ram_pool_load_wav(slot, path, &global_slot);
     if (result == SAMPLER_RAM_RESULT_OK)
     {
+        uint16_t logical=0U;
+        (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_RAM,path,global_slot,&logical);
         ui_page_settings_refresh_ram_slots();
         g_ui_settings.sample_slot_selected = global_slot;
         ui_page_settings_status("LOAD OK");
@@ -1646,6 +1651,8 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         wavetable_pool_load_wav(slot, path, &global_slot);
     if (result == WAVETABLE_RESULT_OK)
     {
+        uint16_t logical=0U;
+        (void)project_control_register_wavetable_runtime(path,global_slot,&logical);
         ui_page_settings_refresh_wavetable_slots();
         g_ui_settings.sample_slot_selected = global_slot;
         ui_page_settings_status("LOAD OK");
@@ -1853,6 +1860,9 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
     {
+        uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,g_ui_settings.confirm_slot,&runtime_global);
+        project_control_unregister_sample_runtime(runtime_global);
         sample_pool_clear(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -1914,6 +1924,7 @@ static void ui_page_settings_sample_confirm_accept(void)
     {
         ui_page_settings_publish_multi_command(
             CONTROL_AUDIO_EVENT_MULTI_STOP, 0U, g_ui_settings.confirm_slot);
+        project_control_unregister_multi_runtime(g_ui_settings.confirm_slot);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -2162,6 +2173,7 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT RAM");
         return;
     }
+    project_control_unregister_sample_runtime(g_ui_settings.sample_slot_selected);
     sampler_ram_pool_clear(backend_slot);
     ui_page_settings_refresh_ram_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2259,6 +2271,7 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT WAVE");
         return;
     }
+    project_control_unregister_wavetable_runtime(g_ui_settings.sample_slot_selected);
     wavetable_pool_clear(backend_slot);
     ui_page_settings_refresh_wavetable_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2643,7 +2656,10 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
         return 0U;
     }
 
-    if (project_v1_set_track_multi_path(track, index_path) == 0U)
+    uint16_t logical=0U;
+    if ((project_control_register_multi_runtime(index_path,instrument_id,&logical)==0U)
+        || (project_v1_set_track_multi_path(track, index_path) == 0U)
+        || (param_registry_apply_track_value(PARAM_SAMPLER_SAMPLE,track,(float)logical)==0U))
     {
         return 0U;
     }
@@ -2901,6 +2917,7 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
     {
         ui_page_settings_publish_multi_command(
             CONTROL_AUDIO_EVENT_MULTI_STOP, 0U, slot);
+        project_control_unregister_multi_runtime(slot);
         (void)multi_sample_pool_clear_instrument(slot);
     }
 
@@ -3784,6 +3801,9 @@ static void ui_page_settings_apply_action(void)
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+                uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,g_ui_settings.selected_slot,&runtime_global);
+                project_control_unregister_sample_runtime(runtime_global);
                 sample_pool_clear(g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
