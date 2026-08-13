@@ -326,6 +326,34 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
                                         const uint8_t midi_source[UI_TRACK_COUNT],
                                         const uint8_t external_input[UI_TRACK_COUNT])
 {
+    uint8_t entity_family[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_type[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_channel[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_source[BRICK_ENTITY_CAPACITY];
+    if ((family == NULL) || (type == NULL) || (midi_channel == NULL) || (midi_source == NULL))
+    {
+        return false;
+    }
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
+    {
+        const ui_track_config_t config = track_state_get_config(track);
+        entity_family[track] = (track < UI_TRACK_COUNT) ? family[track] : (uint8_t)config.family;
+        entity_type[track] = (track < UI_TRACK_COUNT) ? type[track] : (uint8_t)config.type;
+        entity_channel[track] = (track < UI_TRACK_COUNT) ? midi_channel[track] : track_state_get_midi_channel(track);
+        entity_source[track] = (track < UI_TRACK_COUNT) ? midi_source[track] : (uint8_t)track_state_get_midi_source(track);
+    }
+    return track_state_apply_entity_bulk_with_inputs(entity_family, entity_type,
+                                                       entity_channel, entity_source,
+                                                       external_input);
+}
+
+bool track_state_apply_entity_bulk_with_inputs(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[UI_TRACK_COUNT])
+{
     if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
             || (midi_source == NULL) || (external_input == NULL))
     {
@@ -343,7 +371,7 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
         next_sources[track] = track_state_get_midi_source(track);
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_CONFIG_CAPACITY; ++track)
     {
         const ui_track_family_t fam = (ui_track_family_t)family[track];
         ui_track_type_t typ = (ui_track_type_t)type[track];
@@ -417,7 +445,7 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
         return false;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_CONFIG_CAPACITY; ++track)
     {
         track_state_commit_entry(track, &next_configs[track], next_channels[track], next_sources[track]);
     }

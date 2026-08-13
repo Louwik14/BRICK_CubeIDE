@@ -389,6 +389,17 @@ bool ui_apply_track_config_bulk_mutation_with_inputs(
         family, type, midi_channel, midi_source, external_input);
 }
 
+bool ui_apply_entity_config_bulk_mutation_with_inputs(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[UI_TRACK_COUNT])
+{
+    return track_state_apply_entity_bulk_with_inputs(family, type, midi_channel,
+                                                      midi_source, external_input);
+}
+
 bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                   const uint8_t type[UI_TRACK_COUNT],
                                   const uint8_t midi_channel[UI_TRACK_COUNT],

@@ -44,14 +44,14 @@ typedef struct
 
 static uint8_t track_snapshot_track_is_valid(uint8_t track)
 {
-    return (track < UI_TRACK_COUNT) ? 1U : 0U;
+    return (track < BRICK_ENTITY_CAPACITY) ? 1U : 0U;
 }
 
 static void track_snapshot_add_restore_track(uint8_t track,
                                              seq_track_id_t *tracks,
                                              uint8_t *track_count)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (tracks == 0) || (track_count == 0))
+    if ((track >= SEQ_LANE_CAPACITY) || (tracks == 0) || (track_count == 0))
     {
         return;
     }
@@ -63,7 +63,7 @@ static void track_snapshot_add_restore_track(uint8_t track,
             return;
         }
     }
-    if (*track_count < SEQ_TRACK_COUNT)
+    if (*track_count < SEQ_LANE_CAPACITY)
     {
         tracks[*track_count] = (seq_track_id_t)track;
         (*track_count)++;
@@ -71,22 +71,20 @@ static void track_snapshot_add_restore_track(uint8_t track,
 }
 
 static void track_snapshot_collect_restore_tracks(uint8_t track,
-                                                  uint8_t include_preceding_group,
                                                   seq_track_id_t *tracks,
                                                   uint8_t *track_count)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
 
     track_snapshot_add_restore_track(track, tracks, track_count);
-    (void)include_preceding_group;
 }
 
 static void track_snapshot_runtime_quiesce_engine(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -99,7 +97,7 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
 
 static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (track >= SEQ_LANE_CAPACITY)
     {
         return;
     }
@@ -124,7 +122,7 @@ static uint8_t track_snapshot_apply_structure_mutation(void *ctx_ptr)
         return 0U;
     }
 
-    if (ui_apply_track_config_bulk_mutation_with_inputs(ctx->family,
+    if (ui_apply_entity_config_bulk_mutation_with_inputs(ctx->family,
                                                         ctx->type,
                                                         ctx->midi_channel,
                                                         ctx->midi_source,
@@ -139,7 +137,7 @@ static uint8_t track_snapshot_apply_structure_mutation(void *ctx_ptr)
 
 static uint8_t track_snapshot_capture_sequence(uint8_t track, track_snapshot_t *out_snapshot)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (out_snapshot == 0))
+    if ((track >= SEQ_LANE_CAPACITY) || (out_snapshot == 0))
     {
         return 0U;
     }
@@ -232,7 +230,7 @@ static uint8_t track_snapshot_validate_sequence(uint8_t track,
                                                 uint8_t can_store_params,
                                                 uint8_t runtime_type)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (snapshot == 0))
+    if ((track >= SEQ_LANE_CAPACITY) || (snapshot == 0))
     {
         return 0U;
     }
@@ -266,7 +264,7 @@ static uint8_t track_snapshot_validate_sequence(uint8_t track,
 
 static uint8_t track_snapshot_apply_sequence(uint8_t track, const track_snapshot_t *snapshot)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (snapshot == 0))
+    if ((track >= SEQ_LANE_CAPACITY) || (snapshot == 0))
     {
         return 0U;
     }
@@ -300,7 +298,7 @@ static uint8_t track_snapshot_apply_sequence(uint8_t track, const track_snapshot
 static uint8_t track_snapshot_reapply_track_params(uint8_t track,
                                                    const track_snapshot_t *snapshot)
 {
-    if ((snapshot == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((snapshot == 0) || (track >= SEQ_LANE_CAPACITY))
     {
         return 0U;
     }
@@ -523,25 +521,28 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         return 0U;
     }
 
-    uint8_t family[UI_TRACK_COUNT];
-    uint8_t type[UI_TRACK_COUNT];
+    uint8_t family[BRICK_ENTITY_CAPACITY];
+    uint8_t type[BRICK_ENTITY_CAPACITY];
     uint8_t external_input[UI_TRACK_COUNT];
-    uint8_t midi_channel[UI_TRACK_COUNT];
-    uint8_t midi_source[UI_TRACK_COUNT];
+    uint8_t midi_channel[BRICK_ENTITY_CAPACITY];
+    uint8_t midi_source[BRICK_ENTITY_CAPACITY];
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
         family[track] = (uint8_t)cfg.family;
         type[track] = (uint8_t)cfg.type;
-        external_input[track] = ui_get_track_external_input(track);
+        if (track < UI_TRACK_COUNT)
+        {
+            external_input[track] = ui_get_track_external_input(track);
+        }
         midi_channel[track] = ui_get_track_midi_channel(track);
         midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
     }
 
     if ((options != 0)
             && (options->clear_source_track != 0U)
-            && (options->source_track < UI_TRACK_COUNT)
+            && (options->source_track < BRICK_ENTITY_CAPACITY)
             && (options->source_track != target_track))
     {
         family[options->source_track] = (uint8_t)UI_TRACK_FAMILY_OFF;
@@ -581,7 +582,10 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
 
     family[target_track] = (uint8_t)target_family;
     type[target_track] = (uint8_t)snapshot->config.type;
-    external_input[target_track] = snapshot->external_input;
+    if (target_track < UI_TRACK_COUNT)
+    {
+        external_input[target_track] = snapshot->external_input;
+    }
     midi_channel[target_track] = snapshot->midi_channel;
     midi_source[target_track] = (uint8_t)snapshot->midi_source;
 
@@ -590,7 +594,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     {
         ownership_configs[track] = track_state_get_config(track);
     }
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         if ((family[track] >= (uint8_t)UI_TRACK_FAMILY_COUNT)
                 || (type[track] >= (uint8_t)UI_TRACK_TYPE_COUNT)
@@ -644,20 +648,18 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         return 0U;
     }
 
-    seq_track_id_t restore_tracks[SEQ_TRACK_COUNT];
+    seq_track_id_t restore_tracks[SEQ_LANE_CAPACITY];
     uint8_t restore_track_count = 0U;
     track_snapshot_collect_restore_tracks(
         target_track,
-        0U,
         restore_tracks,
         &restore_track_count);
     if ((options != 0)
             && (options->clear_source_track != 0U)
-            && (options->source_track < UI_TRACK_COUNT)
+            && (options->source_track < BRICK_ENTITY_CAPACITY)
             && (options->source_track != target_track))
     {
         track_snapshot_collect_restore_tracks(options->source_track,
-                                              0U,
                                               restore_tracks,
                                               &restore_track_count);
     }

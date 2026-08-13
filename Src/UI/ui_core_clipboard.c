@@ -49,7 +49,8 @@ typedef struct
 {
     uint8_t valid;
     uint8_t source_track;
-    track_snapshot_t snapshot;
+    uint8_t snapshot_count;
+    track_snapshot_t snapshot[1U + BRICK_ENTITY_GROUP_CHILD_COUNT];
 } ui_track_clipboard_t;
 
 typedef struct
@@ -469,9 +470,27 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
 
     cb->source_track = track;
     track_runtime_refresh_track(track);
-    if (track_snapshot_capture(track, &cb->snapshot) == 0U)
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track, &topology) == 0U)
+            || (track_snapshot_capture(track, &cb->snapshot[0]) == 0U))
     {
         return 0U;
+    }
+
+    cb->snapshot_count = 1U;
+    if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+    {
+        for (uint8_t member = 0U; member < BRICK_ENTITY_GROUP_CHILD_COUNT; ++member)
+        {
+            brick_entity_id_t child = BRICK_ENTITY_INVALID_ID;
+            if ((entity_topology_group_child(topology.entity_id, member, &child) == 0U)
+                    || (track_snapshot_capture(child, &cb->snapshot[1U + member]) == 0U))
+            {
+                memset(cb, 0, sizeof(*cb));
+                return 0U;
+            }
+        }
+        cb->snapshot_count = 1U + BRICK_ENTITY_GROUP_CHILD_COUNT;
     }
 
     cb->valid = 1U;
@@ -480,12 +499,33 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
 
 static uint8_t ui_core_clipboard_clear_track(uint8_t track)
 {
+    entity_topology_descriptor_t topology;
+    if (entity_topology_get(track, &topology) == 0U)
+    {
+        return 0U;
+    }
     track_snapshot_t snapshot;
     if (track_snapshot_make_default(track, &snapshot) == 0U)
     {
         return 0U;
     }
-    return track_snapshot_apply(track, &snapshot);
+    if (topology.role != ENTITY_ROLE_GROUP_MASTER)
+    {
+        return track_snapshot_apply(track, &snapshot);
+    }
+
+    for (uint8_t member = 0U; member < BRICK_ENTITY_GROUP_CHILD_COUNT; ++member)
+    {
+        brick_entity_id_t child = BRICK_ENTITY_INVALID_ID;
+        if ((entity_topology_group_child(topology.entity_id, member, &child) == 0U)
+                || (track_snapshot_make_default(child, &snapshot) == 0U)
+                || (track_snapshot_apply(child, &snapshot) == 0U))
+        {
+            return 0U;
+        }
+    }
+    return track_snapshot_make_default(track, &snapshot)
+            && track_snapshot_apply(track, &snapshot);
 }
 
 static uint8_t ui_core_clipboard_paste_track(uint8_t track)
@@ -500,13 +540,32 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 
     const track_snapshot_apply_options_t options = {
         .has_family_override = 0U,
-        .family_override = cb->snapshot.config.family,
+        .family_override = cb->snapshot[0].config.family,
         .clear_source_track = 0U,
         .source_track = source_track
     };
-    if (track_snapshot_apply_ex(track, &cb->snapshot, &options) == 0U)
+    if (track_snapshot_apply_ex(track, &cb->snapshot[0], &options) == 0U)
     {
         return 0U;
+    }
+
+    if (cb->snapshot_count > 1U)
+    {
+        entity_topology_descriptor_t topology;
+        if ((entity_topology_get(track, &topology) == 0U)
+                || (topology.role != ENTITY_ROLE_GROUP_MASTER))
+        {
+            return 0U;
+        }
+        for (uint8_t member = 0U; member < BRICK_ENTITY_GROUP_CHILD_COUNT; ++member)
+        {
+            brick_entity_id_t child = BRICK_ENTITY_INVALID_ID;
+            if ((entity_topology_group_child(topology.entity_id, member, &child) == 0U)
+                    || (track_snapshot_apply(child, &cb->snapshot[1U + member]) == 0U))
+            {
+                return 0U;
+            }
+        }
     }
 
     ui_edit_context_sync_active_track(0U);
@@ -814,7 +873,7 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
         return 0U;
     }
 
-    const uint8_t track = ui_get_active_track();
+    const uint8_t track = ui_get_active_lane();
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_track(track) != 0U)
