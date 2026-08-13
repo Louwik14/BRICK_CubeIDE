@@ -811,6 +811,7 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         case 0U:
         {
             const uint16_t logical_slot = (uint16_t)(param_backend_clamp_value(value, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
+            if(project_control_has_wavetable(logical_slot)==0U)return 0U;
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->wave.table[osc] = (float)logical_slot;
@@ -979,12 +980,15 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         case PARAM_SAMPLER_SAMPLE:
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {
+                const uint16_t logical=(uint16_t)(param_backend_clamp_value(value,0.0f,(float)(MULTI_SAMPLE_POOL_MAX_INSTRUMENTS-1U))+0.5f);
+                if(project_control_has_multi(logical)==0U)return 0U;
                 if ((update_base_state != 0U) && (state != NULL))
                 {
-                    state->sample = value;
+                    state->sample = (float)logical;
                 }
-                brick6_sampler_runtime_set_multi_instrument(track,
-                                                            param_backend_multi_instrument_from_selector(value));
+                const uint16_t runtime=param_backend_multi_instrument_from_selector(value);
+                if(runtime==MULTI_SAMPLE_POOL_INVALID_ID){brick6_sampler_runtime_set_multi_instrument(track,runtime);return 1U;}
+                brick6_sampler_runtime_set_multi_instrument(track,runtime);
                 return 1U;
             }
         {
@@ -992,12 +996,16 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
+                const uint16_t logical=(uint16_t)(param_backend_clamp_value(value,0.0f,(float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS-1U))+0.5f);
+                uint32_t kind=0U;
+                if(project_control_has_sample(logical,&kind)==0U||kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
                 if (param_backend_stream_backend_from_global_selector(value,
                                                                       &global_slot,
                                                                       &stream_slot) == 0U)
                 {
+                    if ((update_base_state != 0U) && (state != NULL))state->sample=(float)logical;
                     brick6_sampler_runtime_stop(track);
-                    return 0U;
+                    return 1U;
                 }
                 if ((update_base_state != 0U) && (state != NULL))
                 {
@@ -1008,12 +1016,15 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
 
             const uint16_t logical_slot=(uint16_t)(param_backend_clamp_value(value,0.0f,(float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS-1U))+0.5f);
+            uint32_t sample_kind=0U;
+            if(project_control_has_sample(logical_slot,&sample_kind)==0U)return 0U;
+            if((ctx!=NULL)&&(ctx->type==(uint8_t)TRACK_RUNTIME_TYPE_RAM)&&(sample_kind!=PERSIST_ASSET_SAMPLE_RAM))return 0U;
             global_slot = param_backend_sample_runtime_from_logical(value);
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->sample = (float)logical_slot;
             }
-            if(global_slot==SAMPLE_GLOBAL_POOL_INVALID_INDEX){brick6_sampler_runtime_stop(track);return 0U;}
+            if(global_slot==SAMPLE_GLOBAL_POOL_INVALID_INDEX){brick6_sampler_runtime_stop(track);return 1U;}
             brick6_sampler_runtime_set_sample(track, global_slot);
             return 1U;
         }

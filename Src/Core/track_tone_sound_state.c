@@ -1,4 +1,5 @@
 #include "Core/track_tone_sound_state.h"
+#include "Core/project_control.h"
 
 #include <stddef.h>
 
@@ -117,8 +118,9 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->stack.noise_level = param_registry[PARAM_STACK_NOISE_LEVEL].default_value;
     state->stack.osc_detune = param_registry[PARAM_STACK_OSC_DETUNE].default_value;
     state->stack.phase_reset = param_registry[PARAM_STACK_PHASE_RESET].default_value;
-    const uint16_t first_wavetable = sample_global_pool_find_first_ready(SAMPLE_GLOBAL_KIND_WAVETABLE);
-    const float default_table = (first_wavetable != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+    uint16_t first_wavetable=0U;
+    const uint16_t wavetable_count=project_control_list_wavetables(&first_wavetable,1U);
+    const float default_table = (wavetable_count != 0U)
         ? (float)first_wavetable
         : param_registry[PARAM_WAVE_OSC1_TABLE].default_value;
     state->wave.table[0] = default_table;

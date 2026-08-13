@@ -119,7 +119,7 @@ static void project_v1_macro_capture_legacy(project_v1_macro_state_t *out)
 static uint8_t project_v1_macro_apply_legacy(const project_v1_macro_state_t *in)
 {
     if(in==NULL)return 0U;
-    project_control_init();
+    project_control_reset_macros();
     (void)project_control_set_hall_mode((project_control_hall_mode_t)in->hall_switch_mode);
     for(uint8_t macro=0U;macro<PROJECT_V1_MACRO_POT_COUNT;++macro)(void)project_control_set_macro_scene(macro,in->macro_scene[macro]);
     for(uint8_t scene=0U;scene<PROJECT_V1_MACRO_SCENE_COUNT;++scene){uint8_t dst=0U;for(uint8_t lock=0U;lock<PROJECT_V1_MACRO_SCENE_LOCK_COUNT;++lock){const project_v1_macro_lock_t*x=&in->scenes[scene].locks[lock];if(x->track==PROJECT_V1_MACRO_LOCK_TRACK_NONE||x->param==PROJECT_V1_MACRO_LOCK_PARAM_NONE)continue;project_control_macro_lock_t value={x->track,x->param,x->scene_value};if(project_control_set_scene_lock(scene,dst++,&value)==0U)return 0U;}}
@@ -390,6 +390,8 @@ static void project_v1_restore_stream_global_slots(const ProjectSaveV1 *project)
                                                     slot->slot_index,
                                                     desc->path,
                                                     cost_bytes);
+        uint16_t logical=0U;
+        (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,desc->path,slot->global_index,&logical);
     }
 }
 
@@ -539,6 +541,10 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
 
         const multi_sample_load_result_t result =
             multi_sample_load_instrument(slot->path, slot->slot_index);
+        uint16_t logical=0U;
+        (void)project_control_register_multi_runtime(slot->path,
+                                                     ((result == MULTI_SAMPLE_LOAD_OK)||(result == MULTI_SAMPLE_LOAD_ALREADY_READY)||(result == MULTI_SAMPLE_LOAD_SD_BUSY))?slot->slot_index:0xFFFFU,
+                                                     &logical);
         if ((result == MULTI_SAMPLE_LOAD_OK)
             || (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
             || (result == MULTI_SAMPLE_LOAD_SD_BUSY))
@@ -589,9 +595,11 @@ static void project_v1_ram_restore_autoload_slots(const ProjectSaveV1 *project)
             continue;
         }
 
-        (void)sampler_ram_pool_load_wav_at(slot->slot_index,
-                                           (uint16_t)slot->global_index,
-                                           slot->path);
+        const sampler_ram_result_t result=sampler_ram_pool_load_wav_at(slot->slot_index,
+                                                                        (uint16_t)slot->global_index,
+                                                                        slot->path);
+        uint16_t logical=0U;
+        (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_RAM,slot->path,(result==SAMPLER_RAM_RESULT_OK)?slot->global_index:0xFFFFU,&logical);
     }
 }
 
@@ -620,9 +628,11 @@ static void project_v1_wavetable_restore_autoload_slots(const ProjectSaveV1 *pro
             continue;
         }
 
-        (void)wavetable_pool_load_file_at(slot->slot_index,
-                                          (uint16_t)slot->global_index,
-                                          slot->path);
+        const wavetable_result_t result=wavetable_pool_load_file_at(slot->slot_index,
+                                                                     (uint16_t)slot->global_index,
+                                                                     slot->path);
+        uint16_t logical=0U;
+        (void)project_control_register_wavetable_runtime(slot->path,(result==WAVETABLE_RESULT_OK)?slot->global_index:0xFFFFU,&logical);
     }
 }
 
@@ -804,7 +814,7 @@ static void project_boot_ctx_commit_current_state_if_valid(void)
 
 void project_v1_macro_init(void)
 {
-    project_control_init();
+    project_control_reset_macros();
 }
 
 project_v1_macro_hall_switch_mode_t project_v1_macro_get_hall_switch_mode(void)
@@ -1373,6 +1383,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     }
     project_v1_prepare_autoload_progress_units(&g_project_work);
     sample_global_pool_reset();
+    project_control_reset_asset_banks();
     sampler_ram_pool_reset();
     wavetable_pool_reset();
     sample_pool_restore_project_snapshot(&g_project_work.sample_pool);

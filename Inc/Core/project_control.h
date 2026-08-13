@@ -9,6 +9,8 @@ typedef enum { PROJECT_CONTROL_HALL_SCENE=0, PROJECT_CONTROL_HALL_SWITCH=1 } pro
 typedef struct { uint8_t track; param_id_t param; float scene_value; } project_control_macro_lock_t;
 
 void project_control_init(void);
+void project_control_reset_macros(void);
+void project_control_reset_asset_banks(void);
 project_control_hall_mode_t project_control_get_hall_mode(void);
 uint8_t project_control_set_hall_mode(project_control_hall_mode_t mode);
 uint8_t project_control_get_macro_scene(uint8_t macro);
@@ -31,9 +33,15 @@ uint8_t project_control_apply_assets(const persist_control_asset_ref_t*assets,ui
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
-void project_control_unregister_sample_runtime(uint16_t runtime_global);
-void project_control_unregister_wavetable_runtime(uint16_t runtime_global);
-void project_control_unregister_multi_runtime(uint16_t runtime_instrument);
+uint8_t project_control_remove_sample(uint16_t logical);
+uint8_t project_control_remove_wavetable(uint16_t logical);
+uint8_t project_control_remove_multi(uint16_t logical);
+uint8_t project_control_has_sample(uint16_t logical,uint32_t *out_kind);
+uint8_t project_control_has_wavetable(uint16_t logical);
+uint8_t project_control_has_multi(uint16_t logical);
+uint16_t project_control_list_samples(uint32_t kind,uint16_t *out,uint16_t capacity);
+uint16_t project_control_list_wavetables(uint16_t *out,uint16_t capacity);
+uint16_t project_control_list_multis(uint16_t *out,uint16_t capacity);
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);

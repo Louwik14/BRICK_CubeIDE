@@ -432,17 +432,15 @@ static void ui_page_settings_refresh_project_slots(void)
 static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind)
 {
     uint16_t count = 0U;
-    const uint16_t capacity = sample_global_pool_get_active_slot_capacity();
-    for (uint16_t i = 0U; i < capacity; ++i)
-    {
-        const sample_global_slot_t *const slot = sample_global_pool_get_slot(i);
-        if ((slot != 0)
-            && (slot->kind == kind)
-            && (count < SAMPLE_GLOBAL_POOL_FINAL_SLOTS))
-        {
-            g_ui_settings.sampler_slots[count++] = i;
-        }
-    }
+    const uint16_t capacity = SAMPLE_GLOBAL_POOL_FINAL_SLOTS;
+    if (kind == SAMPLE_GLOBAL_KIND_STREAM)
+        count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,g_ui_settings.sampler_slots,capacity);
+    else if (kind == SAMPLE_GLOBAL_KIND_RAM)
+        count = project_control_list_samples(PERSIST_ASSET_SAMPLE_RAM,g_ui_settings.sampler_slots,capacity);
+    else if (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
+        count = project_control_list_wavetables(g_ui_settings.sampler_slots,capacity);
+    else if (kind == SAMPLE_GLOBAL_KIND_MULTI)
+        count = project_control_list_multis(g_ui_settings.sampler_slots,capacity);
     g_ui_settings.sampler_slot_count = count;
     if (g_ui_settings.sample_slot_selected >= capacity)
     {
@@ -494,10 +492,13 @@ static uint8_t ui_page_settings_stream_backend_from_global(uint16_t global_slot,
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint32_t runtime_kind=0U;
+    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_STREAM)
-        || (sample_global_pool_resolve_backend(global_slot,
+        || (sample_global_pool_resolve_backend(runtime_global,
                                                SAMPLE_GLOBAL_KIND_STREAM,
                                                &backend_slot) == 0U)
         || (backend_slot >= SAMPLE_POOL_SIZE))
@@ -533,12 +534,7 @@ static uint8_t ui_page_settings_multi_backend_from_global(uint16_t global_slot,
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
-    if ((slot == 0)
-        || (slot->kind != SAMPLE_GLOBAL_KIND_MULTI)
-        || (sample_global_pool_resolve_backend(global_slot,
-                                               SAMPLE_GLOBAL_KIND_MULTI,
-                                               &backend_slot) == 0U)
+    if ((project_control_resolve_multi_runtime(global_slot,&backend_slot)==0U)
         || (backend_slot >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
         return 0U;
@@ -560,10 +556,13 @@ static uint8_t ui_page_settings_ram_backend_from_global(uint16_t global_slot,
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint32_t runtime_kind=0U;
+    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_RAM)return 0U;
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_RAM)
-        || (sample_global_pool_resolve_backend(global_slot,
+        || (sample_global_pool_resolve_backend(runtime_global,
                                                SAMPLE_GLOBAL_KIND_RAM,
                                                &backend_slot) == 0U)
         || (backend_slot >= SAMPLER_RAM_POOL_MAX_SLOTS))
@@ -587,10 +586,12 @@ static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_sl
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if(project_control_resolve_wavetable_runtime(global_slot,&runtime_global)==0U)return 0U;
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_WAVETABLE)
-        || (sample_global_pool_resolve_backend(global_slot,
+        || (sample_global_pool_resolve_backend(runtime_global,
                                                SAMPLE_GLOBAL_KIND_WAVETABLE,
                                                &backend_slot) == 0U)
         || (backend_slot >= WAVETABLE_POOL_MAX_SLOTS))
@@ -1596,7 +1597,7 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         {
             uint16_t logical=0U;
             (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical);
-            g_ui_settings.sample_slot_selected = global_slot;
+            g_ui_settings.sample_slot_selected = logical;
         }
         ui_page_settings_status("LOAD OK");
     }
@@ -1624,7 +1625,7 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
         uint16_t logical=0U;
         (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_RAM,path,global_slot,&logical);
         ui_page_settings_refresh_ram_slots();
-        g_ui_settings.sample_slot_selected = global_slot;
+        g_ui_settings.sample_slot_selected = logical;
         ui_page_settings_status("LOAD OK");
         return;
     }
@@ -1654,7 +1655,7 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         uint16_t logical=0U;
         (void)project_control_register_wavetable_runtime(path,global_slot,&logical);
         ui_page_settings_refresh_wavetable_slots();
-        g_ui_settings.sample_slot_selected = global_slot;
+        g_ui_settings.sample_slot_selected = logical;
         ui_page_settings_status("LOAD OK");
         return;
     }
@@ -1860,9 +1861,7 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
     {
-        uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,g_ui_settings.confirm_slot,&runtime_global);
-        project_control_unregister_sample_runtime(runtime_global);
+        (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
         sample_pool_clear(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -1924,7 +1923,7 @@ static void ui_page_settings_sample_confirm_accept(void)
     {
         ui_page_settings_publish_multi_command(
             CONTROL_AUDIO_EVENT_MULTI_STOP, 0U, g_ui_settings.confirm_slot);
-        project_control_unregister_multi_runtime(g_ui_settings.confirm_slot);
+        (void)project_control_remove_multi(g_ui_settings.sample_slot_selected);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -2173,7 +2172,7 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT RAM");
         return;
     }
-    project_control_unregister_sample_runtime(g_ui_settings.sample_slot_selected);
+    (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
     sampler_ram_pool_clear(backend_slot);
     ui_page_settings_refresh_ram_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2271,7 +2270,7 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT WAVE");
         return;
     }
-    project_control_unregister_wavetable_runtime(g_ui_settings.sample_slot_selected);
+    (void)project_control_remove_wavetable(g_ui_settings.sample_slot_selected);
     wavetable_pool_clear(backend_slot);
     ui_page_settings_refresh_wavetable_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2419,13 +2418,9 @@ static void ui_page_settings_multi_prepare_poll(void)
         g_ui_settings.multi_prepare_progress_done = 1U;
         g_ui_settings.multi_prepare_progress_total = 1U;
         ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
-        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        if (sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_MULTI,
-                                               g_ui_settings.confirm_slot,
-                                               &global_slot) != 0U)
-        {
-            g_ui_settings.sample_slot_selected = global_slot;
-        }
+        const multi_sample_instrument_t *instrument=multi_sample_pool_get_instrument(g_ui_settings.confirm_slot);
+        uint16_t logical=0U;
+        if(instrument!=NULL&&project_control_register_multi_runtime(instrument->index_path,g_ui_settings.confirm_slot,&logical)!=0U)g_ui_settings.sample_slot_selected=logical;
         (void)ui_page_settings_multi_browser_refresh();
         ui_page_settings_multi_prepare_finish("LOAD OK");
         return;
@@ -2663,6 +2658,7 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
     {
         return 0U;
     }
+    g_ui_settings.sample_slot_selected=logical;
 
     ui_page_settings_publish_multi_command(
         CONTROL_AUDIO_EVENT_MULTI_ASSIGN, track, instrument_id);
@@ -2917,7 +2913,7 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
     {
         ui_page_settings_publish_multi_command(
             CONTROL_AUDIO_EVENT_MULTI_STOP, 0U, slot);
-        project_control_unregister_multi_runtime(slot);
+        (void)project_control_remove_multi(g_ui_settings.sample_slot_selected);
         (void)multi_sample_pool_clear_instrument(slot);
     }
 
@@ -3801,9 +3797,7 @@ static void ui_page_settings_apply_action(void)
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-                uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-                (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,g_ui_settings.selected_slot,&runtime_global);
-                project_control_unregister_sample_runtime(runtime_global);
+                (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
                 sample_pool_clear(g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
