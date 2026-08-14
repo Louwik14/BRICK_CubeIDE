@@ -2,6 +2,7 @@
 #define PATTERN_LIVE_RAM_H
 
 #include <stdint.h>
+#include "Storage/persistent_control_model.h"
 
 #include "Seq/seq_model.h"
 #include "Param/param_store.h"
@@ -83,11 +84,13 @@ typedef struct
 
 void pattern_live_init(void);
 uint8_t pattern_live_capture_boot_snapshot(void);
+uint8_t pattern_live_get_control_boot(persist_control_pattern_t*out);
+persist_control_pattern_record_t*pattern_live_project_record_workspace(void);
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern);
 void pattern_load_service(uint32_t byte_budget);
 uint8_t pattern_load_is_pending(void);
 uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern);
-uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, PatternSaveV1 *out_snapshot);
+uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist_control_pattern_t *out_snapshot);
 void pattern_load_cancel(void);
 void pattern_live_service(void);
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);

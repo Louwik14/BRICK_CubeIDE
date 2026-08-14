@@ -23,6 +23,8 @@
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
 #include "Storage/pattern_sd_bank.h"
+#include "Storage/pattern_control_bank.h"
+#include "Storage/persistent_pattern_control.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -45,10 +47,9 @@ typedef enum
     PATTERN_LOAD_ERROR
 } pattern_load_state_t;
 
-UI_SDRAM static PatternSaveV1 g_current_pattern;
-UI_SDRAM static PatternSaveV1 g_next_pattern;
-UI_SDRAM static PatternSaveV1 g_boot_pattern;
-UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
+UI_SDRAM static persist_control_pattern_record_t g_next_record;
+#define g_next_pattern (g_next_record.content)
+UI_SDRAM static persist_control_pattern_t g_boot_control_pattern;
 UI_SDRAM static PatternSaveV1 g_pattern_apply_normalized;
 STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
@@ -85,7 +86,7 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(
     const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
-                                            const PatternSaveV1 *snapshot,
+                                            const persist_control_pattern_t *snapshot,
                                             uint8_t boundary_track,
                                             uint32_t boundary_generation);
 static uint8_t pattern_live_try_take_pending_ready(void);
@@ -501,7 +502,7 @@ static uint8_t pattern_live_seq_block_validate_plock_slots(
 
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
-                                            const PatternSaveV1 *snapshot,
+                                            const persist_control_pattern_t *snapshot,
                                             uint8_t boundary_track,
                                             uint32_t boundary_generation)
 {
@@ -943,32 +944,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         return 0U;
     }
 
-    memcpy(&g_current_pattern, pattern, sizeof(g_current_pattern));
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 0U;
-        g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_SPREAD] = 0U;
-        g_current_pattern.mix.track_valid[track][PARAM_CFG_POLY_VOICES] = 0U;
-        g_current_pattern.mix.track_valid[track][PARAM_CFG_POLY_SPREAD] = 0U;
-        const uint8_t is_synth = (uint8_t)((pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SYNTH)
-            || (pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_DRUM));
-        const uint8_t is_multi = (uint8_t)((pattern->track_cfg.family[track] == (uint8_t)UI_TRACK_FAMILY_SAMPLER)
-            && (pattern->track_cfg.type[track] == (uint8_t)UI_TRACK_TYPE_MULTI));
-        if ((is_synth != 0U) || (is_multi != 0U))
-        {
-            float value = 0.0f;
-            if ((param_registry_get_track_value(PARAM_CFG_POLY_VOICES, track, &value) != 0U))
-            {
-                g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_VOICES] = value;
-                g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_VOICES] = 1U;
-            }
-            if ((param_registry_get_track_value(PARAM_CFG_POLY_SPREAD, track, &value) != 0U))
-            {
-                g_current_pattern.sound.track_values[track][PARAM_CFG_POLY_SPREAD] = value;
-                g_current_pattern.sound.track_valid[track][PARAM_CFG_POLY_SPREAD] = 1U;
-            }
-        }
-    }
     g_apply_in_progress = 0U;
     undo_v2_invalidate_history();
     return 1U;
@@ -976,12 +951,12 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 {
-    if (pattern_live_apply_snapshot(&g_boot_pattern, resume_transport) == 0U)
+    if (persistent_pattern_control_apply(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
 
-    memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
+    if(persistent_pattern_control_capture(&g_next_pattern)!=PERSIST_CODEC_OK)return 0U;
     g_active_bank = 0U;
     g_active_pattern = 0U;
     g_queued_valid = 0U;
@@ -1029,13 +1004,13 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
     g_pattern_load_bank = bank;
     g_pattern_load_pattern = pattern;
     g_pattern_load_last_error = 0U;
-    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
+    memset(&g_next_pattern, 0, sizeof(g_next_pattern));
 
-    const uint8_t has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
+    const uint8_t has_snapshot = pattern_control_bank_present(bank, pattern);
     g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
     if (has_snapshot == 0U)
     {
-        memcpy(&g_pattern_load_ready, &g_boot_pattern, sizeof(g_pattern_load_ready));
+        g_next_pattern=g_boot_control_pattern;
         g_pattern_load_state = PATTERN_LOAD_READY;
         return 1U;
     }
@@ -1071,16 +1046,16 @@ void pattern_load_service(uint32_t byte_budget)
         sd_preview_stop();
     }
 
-    if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_ready) == 0U)
+    if (pattern_control_bank_load(g_pattern_load_bank, g_pattern_load_pattern, &g_next_pattern) == 0U)
     {
-        if (pattern_sd_bank_slot_has_data(g_pattern_load_bank, g_pattern_load_pattern) != 0U)
+        if (pattern_control_bank_present(g_pattern_load_bank, g_pattern_load_pattern) != 0U)
         {
             g_pattern_load_state = PATTERN_LOAD_ERROR;
             g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
             return;
         }
 
-        memcpy(&g_pattern_load_ready, &g_boot_pattern, sizeof(g_pattern_load_ready));
+        g_next_pattern=g_boot_control_pattern;
     }
 
     g_pattern_load_state = PATTERN_LOAD_READY;
@@ -1111,7 +1086,7 @@ uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)
     return 1U;
 }
 
-uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, PatternSaveV1 *out_snapshot)
+uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist_control_pattern_t *out_snapshot)
 {
     if ((out_snapshot == 0) || (g_pattern_load_state != PATTERN_LOAD_READY))
     {
@@ -1126,7 +1101,7 @@ uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, Pattern
     {
         *out_pattern = g_pattern_load_pattern;
     }
-    memcpy(out_snapshot, &g_pattern_load_ready, sizeof(*out_snapshot));
+    if(out_snapshot!=&g_next_pattern)memcpy(out_snapshot, &g_next_pattern, sizeof(*out_snapshot));
     g_pattern_load_state = PATTERN_LOAD_IDLE;
     g_pattern_load_last_error = 0U;
     return 1U;
@@ -1138,7 +1113,7 @@ void pattern_load_cancel(void)
     g_pattern_load_bank = 0U;
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
-    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
+    memset(&g_next_pattern, 0, sizeof(g_next_pattern));
 }
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
@@ -1148,7 +1123,8 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (pattern_live_capture_current(&g_current_pattern) == 0U)
+    persist_control_pattern_t captured;
+    if (persistent_pattern_control_capture(&captured) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
@@ -1159,7 +1135,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (pattern_sd_bank_store_slot(bank, pattern, &g_current_pattern) == 0U)
+    if (pattern_control_bank_store(bank, pattern, &captured) == 0U)
     {
         return 0U;
     }
@@ -1168,7 +1144,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 
     if ((bank == g_queued_bank) && (pattern == g_queued_pattern) && (g_queued_valid != 0U))
     {
-        memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
+        g_next_pattern=captured;
     }
 
     return 1U;
@@ -1212,7 +1188,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
             return 1U;
         }
 
-        if (pattern_live_apply_snapshot(&g_next_pattern, 0U) == 0U)
+        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -1251,13 +1227,16 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
 
 uint8_t pattern_live_capture_boot_snapshot(void)
 {
-    if (pattern_live_capture_current(&g_boot_pattern) == 0U)
+    if (persistent_pattern_control_capture(&g_boot_control_pattern) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
 
     return 1U;
 }
+
+uint8_t pattern_live_get_control_boot(persist_control_pattern_t*out){if(out==NULL)return 0U;*out=g_boot_control_pattern;return 1U;}
+persist_control_pattern_record_t*pattern_live_project_record_workspace(void){return(pattern_load_is_pending()==0U&&g_queued_valid==0U)?&g_next_record:NULL;}
 
 static uint8_t pattern_live_try_take_pending_ready(void)
 {
@@ -1285,7 +1264,7 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     if (seq_runtime_is_running() == 0U)
     {
-        if (pattern_live_apply_snapshot(&g_next_pattern, 0U) == 0U)
+        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -1334,7 +1313,7 @@ void pattern_live_service(void)
         return;
     }
 
-    if (pattern_live_apply_snapshot(&g_next_pattern, 1U) != 0U)
+    if (persistent_pattern_control_apply(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
     {
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
@@ -1353,10 +1332,8 @@ void pattern_live_service(void)
 
 void pattern_live_init(void)
 {
-    memset(&g_current_pattern, 0, sizeof(g_current_pattern));
-    memset(&g_next_pattern, 0, sizeof(g_next_pattern));
-    memset(&g_boot_pattern, 0, sizeof(g_boot_pattern));
-    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
+    memset(&g_next_record, 0, sizeof(g_next_record));
+    memset(&g_boot_control_pattern,0,sizeof(g_boot_control_pattern));
     memset(&g_pattern_slot_meta, 0, sizeof(g_pattern_slot_meta));
     g_active_bank = 0U;
     g_active_pattern = 0U;
@@ -1376,22 +1353,22 @@ void pattern_live_init(void)
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
 
-    if (pattern_live_capture_current(&g_boot_pattern) != 0U)
+    if (persistent_pattern_control_capture(&g_boot_control_pattern) == PERSIST_CODEC_OK)
     {
-        memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
-        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
-        pattern_sd_bank_init();
+        g_next_pattern=g_boot_control_pattern;
+        pattern_control_bank_init();
     }
     else
     {
-        pattern_sd_bank_init();
+        (void)persistent_pattern_control_capture(&g_boot_control_pattern);
+        pattern_control_bank_init();
     }
 
     for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)
     {
         for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
         {
-            g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
+            g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_control_bank_present(bank, pattern);
         }
     }
 }

@@ -1,7 +1,8 @@
 #include "ui_hall_mode_flow.h"
 
 #include "Board/board_product.h"
-#include "Storage/patch_v1.h"
+#include "Storage/patch_product.h"
+#include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_settings.h"
@@ -393,14 +394,14 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
             return;
         }
 
-        uint16_t saved_slot = PATCH_V1_INVALID_SLOT;
-        const patch_v1_result_t result =
-            patch_v1_save_track_direct(g_patch_pending.save_track, &saved_slot);
+        uint16_t saved_slot = PATCH_PRODUCT_INVALID_SLOT;
+        const patch_product_result_t result =
+            patch_product_save(g_patch_pending.save_track, &saved_slot);
         (void)saved_slot;
         const uint32_t done_ms = HAL_GetTick();
         ui_hall_patch_feedback_end(done_ms);
         g_patch_pending.save_pending = 0U;
-        ui_core_feedback_set(patch_v1_result_label(result), done_ms);
+        ui_core_feedback_set(patch_product_result_label(result), done_ms);
         return;
     }
 

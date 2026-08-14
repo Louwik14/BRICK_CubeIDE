@@ -29,7 +29,7 @@
 #include "drv_display.h"
 #include "encoders.h"
 #include "font.h"
-#include "Storage/project_v1.h"
+#include "Storage/project_product.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
@@ -56,7 +56,7 @@ typedef enum
 } ui_boot_loading_phase_t;
 
 static ui_boot_loading_phase_t g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
-static project_v1_autoload_progress_t g_ui_boot_loading_progress;
+static project_product_progress_t g_ui_boot_loading_progress;
 static uint8_t g_ui_boot_loading_anim_phase;
 static uint8_t g_ui_boot_loading_variant;
 static uint8_t g_ui_boot_loading_phrase_a;
@@ -545,7 +545,7 @@ void ui_boot_loading_service(void)
             return;
         }
 
-        if (project_v1_restore_boot_context() == 0U)
+        if (project_product_restore_boot() == 0U)
         {
             g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
             return;
@@ -555,7 +555,7 @@ void ui_boot_loading_service(void)
 
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_SAMPLES)
     {
-        if ((project_v1_get_autoload_progress(&g_ui_boot_loading_progress) != 0U)
+        if ((project_product_get_progress(&g_ui_boot_loading_progress) != 0U)
             && (g_ui_boot_loading_progress.complete != 0U))
         {
             g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;

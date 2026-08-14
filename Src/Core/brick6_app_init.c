@@ -41,10 +41,11 @@
 #include "Core/brick6_stream_service_task.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/track_mute.h"
+#include "Core/project_control.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
-#include "Storage/project_v1.h"
-#include "Storage/patch_v1.h"
+#include "Storage/project_product.h"
+#include "Storage/patch_product.h"
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
@@ -158,9 +159,10 @@ void brick6_app_init(void)
     seq_runtime_init();
     track_mute_init();
     ui_core_init();
+    project_control_init();
     pattern_live_init();
-    patch_v1_init();
-    project_v1_init();
+    patch_product_init();
+    project_product_init();
     ui_boot_loading_begin();
     undo_v2_init();
     hall_loop_init();

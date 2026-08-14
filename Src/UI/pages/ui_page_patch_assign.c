@@ -7,8 +7,7 @@
 #include "buttons.h"
 #include "drv_display.h"
 #include "font.h"
-#include "Storage/patch_sd_bank.h"
-#include "Storage/patch_v1.h"
+#include "Storage/patch_product.h"
 #include "pages/ui_page_name_edit.h"
 #include "ui_core.h"
 #include "ui_event.h"
@@ -339,7 +338,7 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
     }
 }
 
-static uint8_t ui_page_patch_assign_meta_matches_filter(const patch_v1_metadata_t *meta)
+static uint8_t ui_page_patch_assign_meta_matches_filter(const patch_product_metadata_t *meta)
 {
     if (meta == 0)
     {
@@ -355,13 +354,13 @@ static uint8_t ui_page_patch_assign_meta_matches_filter(const patch_v1_metadata_
 
 static uint8_t ui_page_patch_assign_slot_visible_in_phase(uint16_t slot, uint8_t phase)
 {
-    const patch_sd_slot_state_t state = patch_sd_bank_get_slot_state(slot);
-    patch_v1_metadata_t meta;
+    const patch_product_slot_state_t state = patch_product_slot_state(slot);
+    patch_product_metadata_t meta;
 
     if (phase == 0U)
     {
-        return ((state == PATCH_SD_SLOT_VALID)
-                && (patch_sd_bank_get_slot_metadata(slot, &meta) != 0U)
+        return ((state == PATCH_PRODUCT_SLOT_VALID)
+                && (patch_product_metadata(slot, &meta) != 0U)
                 && (ui_page_patch_assign_meta_matches_filter(&meta) != 0U))
             ? 1U
             : 0U;
@@ -371,7 +370,7 @@ static uint8_t ui_page_patch_assign_slot_visible_in_phase(uint16_t slot, uint8_t
             && (g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_ALL)
             && (g_patch_assign_type_filter == PATCH_ASSIGN_TYPE_ALL))
     {
-        return (state == PATCH_SD_SLOT_INVALID) ? 1U : 0U;
+        return (state == PATCH_PRODUCT_SLOT_INVALID) ? 1U : 0U;
     }
 
     return 0U;
@@ -394,7 +393,7 @@ static uint16_t ui_page_patch_assign_visible_count(void)
     uint16_t count = 0U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
-        for (uint16_t slot = 0U; slot < PATCH_V1_SLOT_COUNT; ++slot)
+        for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
         {
             if (ui_page_patch_assign_slot_visible_in_phase(slot, phase) != 0U)
             {
@@ -410,7 +409,7 @@ static uint16_t ui_page_patch_assign_slot_for_view_index(uint16_t index)
     uint16_t seen = 0U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
-        for (uint16_t slot = 0U; slot < PATCH_V1_SLOT_COUNT; ++slot)
+        for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
         {
             if (ui_page_patch_assign_slot_visible_in_phase(slot, phase) == 0U)
             {
@@ -423,7 +422,7 @@ static uint16_t ui_page_patch_assign_slot_for_view_index(uint16_t index)
             ++seen;
         }
     }
-    return PATCH_V1_INVALID_SLOT;
+    return PATCH_PRODUCT_INVALID_SLOT;
 }
 
 static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
@@ -431,7 +430,7 @@ static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
     uint16_t seen = 0U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
-        for (uint16_t slot = 0U; slot < PATCH_V1_SLOT_COUNT; ++slot)
+        for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
         {
             if (ui_page_patch_assign_slot_visible_in_phase(slot, phase) == 0U)
             {
@@ -444,22 +443,22 @@ static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
             ++seen;
         }
     }
-    return PATCH_V1_INVALID_SLOT;
+    return PATCH_PRODUCT_INVALID_SLOT;
 }
 
 static void ui_page_patch_assign_ensure_visible_selection(void)
 {
     if (ui_page_patch_assign_slot_visible(g_patch_assign.selected_slot) != 0U)
     {
-        patch_v1_set_current_slot(g_patch_assign.selected_slot);
+        patch_product_set_current(g_patch_assign.selected_slot);
         return;
     }
 
     const uint16_t first_slot = ui_page_patch_assign_slot_for_view_index(0U);
-    if (first_slot < PATCH_V1_SLOT_COUNT)
+    if (first_slot < PATCH_PRODUCT_SLOT_COUNT)
     {
         g_patch_assign.selected_slot = first_slot;
-        patch_v1_set_current_slot(g_patch_assign.selected_slot);
+        patch_product_set_current(g_patch_assign.selected_slot);
     }
 }
 
@@ -489,10 +488,10 @@ static void ui_page_patch_assign_step_selection(int16_t delta)
     }
 
     const uint16_t slot = ui_page_patch_assign_slot_for_view_index((uint16_t)next);
-    if (slot < PATCH_V1_SLOT_COUNT)
+    if (slot < PATCH_PRODUCT_SLOT_COUNT)
     {
         g_patch_assign.selected_slot = slot;
-        patch_v1_set_current_slot(g_patch_assign.selected_slot);
+        patch_product_set_current(g_patch_assign.selected_slot);
         ui_page_patch_assign_set_status(0);
     }
 }
@@ -536,7 +535,7 @@ static void ui_page_patch_assign_step_type_filter(int16_t delta)
 
 static uint8_t ui_page_patch_assign_slot_valid(uint16_t slot)
 {
-    return (patch_sd_bank_get_slot_state(slot) == PATCH_SD_SLOT_VALID) ? 1U : 0U;
+    return (patch_product_slot_state(slot) == PATCH_PRODUCT_SLOT_VALID) ? 1U : 0U;
 }
 
 static uint8_t ui_page_patch_assign_selection_is_visible(void)
@@ -555,7 +554,7 @@ static void ui_page_patch_assign_cancel_actions(void)
 static uint8_t ui_page_patch_assign_target_count(void)
 {
     uint8_t count = 0U;
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         if ((g_patch_assign.target_mask & (uint16_t)(1UL << track)) != 0U)
         {
@@ -600,7 +599,7 @@ static void ui_page_patch_assign_format_filter(char *out, uint32_t out_size)
 static void ui_page_patch_assign_apply_selected(void)
 {
     const uint8_t target_count = ui_page_patch_assign_target_count();
-    patch_v1_metadata_t meta;
+    patch_product_metadata_t meta;
 
     if (target_count == 0U)
     {
@@ -612,18 +611,17 @@ static void ui_page_patch_assign_apply_selected(void)
         ui_page_patch_assign_set_status("NO PATCH");
         return;
     }
-    if (patch_sd_bank_get_slot_metadata(g_patch_assign.selected_slot, &meta) == 0U)
+    if (patch_product_metadata(g_patch_assign.selected_slot, &meta) == 0U)
     {
         ui_page_patch_assign_set_status("BAD PATCH");
         return;
     }
-    patch_v1_set_current_slot(g_patch_assign.selected_slot);
+    patch_product_set_current(g_patch_assign.selected_slot);
     uint8_t applied = 0U;
     uint8_t requested = 0U;
-    patch_v1_result_t first_error = PATCH_V1_RESULT_OK;
-    uint8_t voice_limited = 0U;
+    patch_product_result_t first_error = PATCH_PRODUCT_OK;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         if ((g_patch_assign.target_mask & (uint16_t)(1UL << track)) == 0U)
         {
@@ -631,14 +629,13 @@ static void ui_page_patch_assign_apply_selected(void)
         }
 
         ++requested;
-        const patch_v1_result_t result =
-            patch_v1_apply_slot_to_track(g_patch_assign.selected_slot, track);
-        if ((result == PATCH_V1_RESULT_OK) || (result == PATCH_V1_RESULT_VOICE_LIMITED))
+        const patch_product_result_t result =
+            patch_product_apply(g_patch_assign.selected_slot, track);
+        if (result == PATCH_PRODUCT_OK)
         {
             ++applied;
-            if (result == PATCH_V1_RESULT_VOICE_LIMITED) voice_limited = 1U;
         }
-        else if (first_error == PATCH_V1_RESULT_OK)
+        else if (first_error == PATCH_PRODUCT_OK)
         {
             first_error = result;
         }
@@ -646,8 +643,7 @@ static void ui_page_patch_assign_apply_selected(void)
 
     if ((requested != 0U) && (applied == requested))
     {
-        ui_page_patch_assign_set_status((voice_limited != 0U)
-            ? "VOICE LIMITED" : ((applied > 1U) ? "PATCHES APPLIED" : "PATCH APPLIED"));
+        ui_page_patch_assign_set_status((applied > 1U) ? "PATCHES APPLIED" : "PATCH APPLIED");
     }
     else if (applied != 0U)
     {
@@ -657,19 +653,19 @@ static void ui_page_patch_assign_apply_selected(void)
                        "AP %u/%u %s",
                        (unsigned)applied,
                        (unsigned)requested,
-                       patch_v1_result_label(first_error));
+                       patch_product_result_label(first_error));
         ui_page_patch_assign_set_status(status);
     }
     else
     {
-        ui_page_patch_assign_set_status(patch_v1_result_label(first_error));
+        ui_page_patch_assign_set_status(patch_product_result_label(first_error));
     }
 }
 
 static void ui_page_patch_assign_begin_rename(void)
 {
-    patch_v1_metadata_t meta;
-    char name[PATCH_V1_NAME_MAX];
+    patch_product_metadata_t meta;
+    char name[33];
     if (ui_page_patch_assign_selection_is_visible() == 0U)
     {
         ui_page_patch_assign_set_status("NO PATCH");
@@ -678,12 +674,12 @@ static void ui_page_patch_assign_begin_rename(void)
     if (ui_page_patch_assign_slot_valid(g_patch_assign.selected_slot) == 0U)
     {
         ui_page_patch_assign_set_status(
-            (patch_sd_bank_get_slot_state(g_patch_assign.selected_slot) == PATCH_SD_SLOT_EMPTY)
+            (patch_product_slot_state(g_patch_assign.selected_slot) == PATCH_PRODUCT_SLOT_EMPTY)
             ? "EMPTY"
             : "BAD PATCH");
         return;
     }
-    if (patch_sd_bank_get_slot_metadata(g_patch_assign.selected_slot, &meta) == 0U)
+    if (patch_product_metadata(g_patch_assign.selected_slot, &meta) == 0U)
     {
         ui_page_patch_assign_set_status("BAD PATCH");
         return;
@@ -704,7 +700,7 @@ static void ui_page_patch_assign_begin_rename(void)
                                "PATCH",
                                "RENAME",
                                name,
-                               PATCH_V1_NAME_MAX,
+                               33U,
                                ui_page_patch_assign_name_done,
                                0) == 0U)
     {
@@ -723,12 +719,12 @@ static void ui_page_patch_assign_name_done(ui_page_name_edit_result_t result,
         return;
     }
 
-    const patch_v1_result_t rename_result =
-        patch_v1_rename_slot(g_patch_assign.selected_slot, name);
+    const patch_product_result_t rename_result =
+        patch_product_rename(g_patch_assign.selected_slot, name);
     ui_page_patch_assign_ensure_visible_selection();
-    ui_page_patch_assign_set_status((rename_result == PATCH_V1_RESULT_OK)
+    ui_page_patch_assign_set_status((rename_result == PATCH_PRODUCT_OK)
                                     ? "PATCH RENAMED"
-                                    : patch_v1_result_label(rename_result));
+                                    : patch_product_result_label(rename_result));
 }
 
 static void ui_page_patch_assign_delete_action(void)
@@ -743,7 +739,7 @@ static void ui_page_patch_assign_delete_action(void)
     if (ui_page_patch_assign_slot_valid(g_patch_assign.selected_slot) == 0U)
     {
         ui_page_patch_assign_set_status(
-            (patch_sd_bank_get_slot_state(g_patch_assign.selected_slot) == PATCH_SD_SLOT_EMPTY)
+            (patch_product_slot_state(g_patch_assign.selected_slot) == PATCH_PRODUCT_SLOT_EMPTY)
             ? "EMPTY"
             : "BAD PATCH");
         g_patch_assign.delete_confirm = 0U;
@@ -758,9 +754,9 @@ static void ui_page_patch_assign_delete_action(void)
     }
 
     uint16_t next_slot = g_patch_assign.selected_slot;
-    const patch_v1_result_t result =
-        patch_v1_delete_slot(g_patch_assign.selected_slot, &next_slot);
-    if (result == PATCH_V1_RESULT_OK)
+    const patch_product_result_t result =
+        patch_product_delete(g_patch_assign.selected_slot, &next_slot);
+    if (result == PATCH_PRODUCT_OK)
     {
         g_patch_assign.selected_slot = next_slot;
         ui_page_patch_assign_ensure_visible_selection();
@@ -768,14 +764,14 @@ static void ui_page_patch_assign_delete_action(void)
     }
     else
     {
-        ui_page_patch_assign_set_status(patch_v1_result_label(result));
+        ui_page_patch_assign_set_status(patch_product_result_label(result));
     }
     g_patch_assign.delete_confirm = 0U;
 }
 
 static void ui_page_patch_assign_enter(void)
 {
-    patch_v1_set_current_slot(g_patch_assign.selected_slot);
+    patch_product_set_current(g_patch_assign.selected_slot);
 }
 
 static void ui_page_patch_assign_leave(void)
@@ -812,16 +808,16 @@ void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hal
         ui_page_patch_assign_type_filter_from_track(ui_get_track_family(target_track),
                                                     ui_get_track_type(target_track));
 
-    const uint16_t current_slot = patch_v1_get_current_slot();
-    if (current_slot < PATCH_V1_SLOT_COUNT)
+    const uint16_t current_slot = patch_product_get_current();
+    if (current_slot < PATCH_PRODUCT_SLOT_COUNT)
     {
         g_patch_assign.selected_slot = current_slot;
     }
     else
     {
-        const uint16_t first_empty = patch_sd_bank_find_first_empty_slot();
+        const uint16_t first_empty = patch_product_first_empty();
         g_patch_assign.selected_slot =
-            (first_empty < PATCH_V1_SLOT_COUNT) ? first_empty : 0U;
+            (first_empty < PATCH_PRODUCT_SLOT_COUNT) ? first_empty : 0U;
     }
     ui_page_patch_assign_ensure_visible_selection();
 
@@ -939,10 +935,10 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
     char line[32];
     char fit[32];
     const uint8_t y = (uint8_t)(PATCH_ASSIGN_LIST_Y0 + (row * PATCH_ASSIGN_LIST_PITCH));
-    patch_v1_metadata_t meta;
-    const patch_sd_slot_state_t state = patch_sd_bank_get_slot_state(slot);
-    if ((state == PATCH_SD_SLOT_VALID)
-            && (patch_sd_bank_get_slot_metadata(slot, &meta) != 0U))
+    patch_product_metadata_t meta;
+    const patch_product_slot_state_t state = patch_product_slot_state(slot);
+    if ((state == PATCH_PRODUCT_SLOT_VALID)
+            && (patch_product_metadata(slot, &meta) != 0U))
     {
         const char *family =
             ui_get_track_family_short_name((ui_track_family_t)meta.family);
@@ -966,7 +962,7 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
                        family,
                        type);
     }
-    else if (state == PATCH_SD_SLOT_INVALID)
+    else if (state == PATCH_PRODUCT_SLOT_INVALID)
     {
         (void)snprintf(line, sizeof(line), "BAD PATCH");
     }
@@ -1131,7 +1127,7 @@ static void ui_page_patch_assign_render(void)
             }
 
             const uint16_t slot = ui_page_patch_assign_slot_for_view_index(view_index);
-            if (slot >= PATCH_V1_SLOT_COUNT)
+            if (slot >= PATCH_PRODUCT_SLOT_COUNT)
             {
                 break;
             }

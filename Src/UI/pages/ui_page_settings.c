@@ -13,7 +13,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/wav_convert.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/project_v1.h"
+#include "Storage/project_product.h"
 #include "Core/brick_build_config.h"
 #include "Core/project_control.h"
 #if BRICK_TEST_BUILD
@@ -242,7 +242,7 @@ typedef struct
     uint16_t sample_parent_id;
     uint16_t sampler_slots[SAMPLE_GLOBAL_POOL_FINAL_SLOTS];
     uint16_t sampler_slot_count;
-    uint8_t project_slots[PROJECT_V1_SLOT_COUNT];
+    uint8_t project_slots[PROJECT_PRODUCT_SLOT_COUNT];
     uint8_t project_slot_count;
     uint8_t return_page_id;
     uint8_t preview_was_active;
@@ -425,8 +425,8 @@ static const char *ui_page_settings_convert_error_label(wav_convert_error_t erro
 
 static void ui_page_settings_refresh_project_slots(void)
 {
-    project_v1_refresh_slots();
-    g_ui_settings.project_slot_count = project_v1_list_slots(g_ui_settings.project_slots, PROJECT_V1_SLOT_COUNT);
+    project_product_refresh_slots();
+    g_ui_settings.project_slot_count = project_product_list_slots(g_ui_settings.project_slots, PROJECT_PRODUCT_SLOT_COUNT);
 }
 
 static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind)
@@ -2653,7 +2653,6 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
 
     uint16_t logical=0U;
     if ((project_control_register_multi_runtime(index_path,instrument_id,&logical)==0U)
-        || (project_v1_set_track_multi_path(track, index_path) == 0U)
         || (param_registry_apply_track_value(PARAM_SAMPLER_SAMPLE,track,(float)logical)==0U))
     {
         return 0U;
@@ -3162,7 +3161,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
             return g_ui_settings.project_slot_count;
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            return PROJECT_V1_SLOT_COUNT;
+            return PROJECT_PRODUCT_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -3264,7 +3263,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index]);
             return out;
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (project_v1_slot_has_data(index) != 0U)
+            if (project_product_slot_present(index) != 0U)
             {
                 (void)snprintf(out, out_size, "PROJECT %02u *", (unsigned)index);
             }
@@ -3629,7 +3628,7 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             if (level->selected_index == 0U)
             {
-                if (project_v1_load_blank() != 0U)
+                if (project_product_blank() != 0U)
                 {
                     g_ui_settings.return_page_id = UI_PAGE_TEMPLATE_CFG;
                     ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -3640,7 +3639,7 @@ static void ui_page_settings_apply_action(void)
                 }
             }
             else if (((level->selected_index - 1U) < g_ui_settings.project_slot_count)
-                     && (project_v1_load_slot(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
+                     && (project_product_load(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
             {
                 ui_page_settings_status("LOAD OK");
             }
@@ -3651,7 +3650,7 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (project_v1_save_slot(level->selected_index) != 0U)
+            if (project_product_save(level->selected_index) != 0U)
             {                ui_page_settings_refresh_project_slots();
                 ui_page_settings_status("SAVE OK");
             }
@@ -3671,7 +3670,7 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
             {
-                if (project_v1_load_slot(g_ui_settings.selected_slot) != 0U)
+                if (project_product_load(g_ui_settings.selected_slot) != 0U)
                 {                    ui_page_settings_status("LOAD FROM OK");
                 }
                 else
@@ -3680,14 +3679,14 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
             {
-                if (project_v1_save_slot(g_ui_settings.selected_slot) != 0U)
+                if (project_product_save(g_ui_settings.selected_slot) != 0U)
                 {                    ui_page_settings_status("SAVE TO OK");
                 }
                 else
                 {                    ui_page_settings_status("SAVE TO FAIL");
                 }
             }
-            else if (project_v1_delete_slot(g_ui_settings.selected_slot) != 0U)
+            else if (project_product_delete(g_ui_settings.selected_slot) != 0U)
             {                ui_page_settings_refresh_project_slots();
                 ui_page_settings_back();
                 ui_page_settings_status("DELETE OK");

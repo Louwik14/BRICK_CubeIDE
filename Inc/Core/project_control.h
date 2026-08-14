@@ -26,6 +26,7 @@ uint8_t project_control_clear_entity_asset(uint8_t entity);
 uint8_t project_control_get_entity_asset(uint8_t entity,persist_control_asset_ref_t*out);
 uint16_t project_control_capture_assets(persist_control_asset_ref_t*out,uint16_t capacity);
 uint8_t project_control_apply_assets(const persist_control_asset_ref_t*assets,uint16_t count,const persist_control_pattern_t*pattern);
+uint8_t project_control_validate_assets(const persist_control_asset_ref_t*assets,uint16_t count);
 
 /* Logical Project banks. Values stored in parameters and p-locks are these
  * logical indices; runtime pool/global/instrument slots are deliberately not
@@ -42,6 +43,7 @@ uint8_t project_control_has_multi(uint16_t logical);
 uint16_t project_control_list_samples(uint32_t kind,uint16_t *out,uint16_t capacity);
 uint16_t project_control_list_wavetables(uint16_t *out,uint16_t capacity);
 uint16_t project_control_list_multis(uint16_t *out,uint16_t capacity);
+uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist_control_asset_ref_t*out);
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);
