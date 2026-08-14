@@ -120,18 +120,6 @@ typedef struct
     uint32_t multi_invalid_instrument_id;
 } brick6_sampler_runtime_health_snapshot_t;
 
-typedef struct
-{
-    uint8_t active;
-    uint8_t reverse;
-    uint16_t sample_id;
-    uint16_t ram_slot;
-    uint32_t ram_generation;
-    uint32_t frame;
-    uint32_t frame_count;
-    uint32_t trigger_order;
-} brick6_sampler_ram_playhead_snapshot_t;
-
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
 void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id);
@@ -231,10 +219,6 @@ void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapsh
 void brick6_sampler_runtime_get_health_snapshot(
     brick6_sampler_runtime_health_snapshot_t *out_snapshot);
 uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
-uint8_t brick6_sampler_runtime_get_ram_playhead(uint8_t track_id,
-                                                uint16_t sample_id,
-                                                brick6_sampler_ram_playhead_snapshot_t *out_snapshot);
-
 #ifdef __cplusplus
 }
 #endif

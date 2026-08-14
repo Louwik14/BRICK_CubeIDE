@@ -8,14 +8,12 @@
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
-#include "Core/project_control.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick_build_config.h"
 #include "Core/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
-#include "Param/param_registry_runtime_state.h"
 #include "Storage/memory_layout.h"
 
 static uint32_t g_audio_mono_occurrence[BRICK_ENTITY_CAPACITY];
@@ -31,16 +29,6 @@ static void audio_note_engine_adapter_publish_snapshots(void)
     for (brick_entity_id_t entity = 0U;
          entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        float sample_id_value = 0.0f;
-        brick6_sampler_ram_playhead_snapshot_t playhead = {0};
-        (void)param_registry_runtime_cache_get(
-            entity, PARAM_SAMPLER_SAMPLE, &sample_id_value);
-        uint16_t sample_runtime_id=UINT16_MAX;
-        (void)project_control_resolve_sample_runtime((uint16_t)sample_id_value,
-                                                    &sample_runtime_id,
-                                                    NULL);
-        (void)brick6_sampler_runtime_get_ram_playhead(
-            entity, sample_runtime_id, &playhead);
         const uint8_t is_multi = (uint8_t)(
             (g_audio_track_ctx[entity].audio_binding.engine
                 == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
@@ -58,12 +46,7 @@ static void audio_note_engine_adapter_publish_snapshots(void)
                 ? SAMPLER_MULTI_MAX_VOICES_PER_TRACK
                 : synth_polyphony_get_available_for_track(entity),
             .sampler_slice_mode_active =
-                brick6_sampler_runtime_ram_slice_mode_active(entity),
-            .sampler_playhead_active = playhead.active,
-            .sampler_playhead_reverse = playhead.reverse,
-            .sampler_playhead_sample_id = playhead.sample_id,
-            .sampler_playhead_frame = playhead.frame,
-            .sampler_playhead_frame_count = playhead.frame_count
+                brick6_sampler_runtime_ram_slice_mode_active(entity)
         };
     }
     __DMB();

@@ -19,6 +19,8 @@
 #include "Core/brick6_stack_waveform.h"
 #include "Core/project_control.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Core/live_clock.h"
+#include "UI/ui_sampler_playhead.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Seq/seq_runtime.h"
@@ -32,6 +34,7 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Audio/spectral_window.h"
+#include "Board/board_audio_format.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38
@@ -3667,23 +3670,39 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
                                                            int inner_w,
                                                            int inner_h)
 {
-    audio_binding_snapshot_t snapshot;
-    if ((audio_note_engine_adapter_snapshot_read(
-            ui_renderer_template_get_edit_owner_track(), &snapshot) == 0U)
-        || (snapshot.sampler_playhead_active == 0U)
-        || (snapshot.sampler_playhead_sample_id != global_slot)
-        || (snapshot.sampler_playhead_frame_count == 0U))
+    float start = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_START);
+    float end = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_END);
+    const float mode_value =
+        ui_renderer_template_get_param_display_value(PARAM_SAMPLER_MODE);
+    if (start < 0.0f) start = 0.0f;
+    if (end > 1.0f) end = 1.0f;
+    if (end <= start)
+        return;
+    uint32_t source_rate = BOARD_AUDIO_SAMPLE_RATE_HZ;
+    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    if (sample_global_pool_resolve_backend(global_slot, SAMPLE_GLOBAL_KIND_RAM,
+                                           &ram_slot) != 0U)
+    {
+        const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(ram_slot);
+        if ((ram != NULL) && (ram->sample_rate != 0U))
+            source_rate = ram->sample_rate;
+    }
+    const uint64_t region_frames =
+        (uint64_t)((end - start) * (float)frame_count);
+    const uint32_t duration = (uint32_t)(
+        (region_frames * BOARD_AUDIO_SAMPLE_RATE_HZ) / source_rate);
+    const ui_sampler_playhead_view_t view = ui_sampler_playhead_view(
+        ui_renderer_template_get_edit_owner_track(), live_clock_audio_sample(),
+        duration, (uint8_t)(mode_value + 0.5f));
+    if (view.active == 0U)
     {
         return;
     }
 
-    const uint32_t scale_frames = (frame_count != 0U)
-        ? frame_count : snapshot.sampler_playhead_frame_count;
+    const float normalized = start + ((end - start) * view.normalized_position);
+    const uint32_t frame = (uint32_t)(normalized * (float)frame_count);
     const int x = ui_renderer_template_sampler_ram_frame_to_x(
-        snapshot.sampler_playhead_frame,
-                                                              scale_frames,
-                                                              inner_x,
-                                                              inner_w);
+        frame, frame_count, inner_x, inner_w);
     if (x < 0)
     {
         return;

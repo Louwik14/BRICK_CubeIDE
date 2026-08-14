@@ -51,11 +51,6 @@ typedef struct
     uint8_t physical_voice_count;
     uint8_t physical_voice_capacity;
     uint8_t sampler_slice_mode_active;
-    uint8_t sampler_playhead_active;
-    uint8_t sampler_playhead_reverse;
-    uint16_t sampler_playhead_sample_id;
-    uint32_t sampler_playhead_frame;
-    uint32_t sampler_playhead_frame_count;
 } audio_binding_snapshot_t;
 
 void audio_note_engine_adapter_init(void);

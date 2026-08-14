@@ -3497,59 +3497,6 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
     g_sampler_voice[track_id].slice_count = brick6_sampler_runtime_resolve_grid_count(slice_count);
 }
 
-uint8_t brick6_sampler_runtime_get_ram_playhead(uint8_t track_id,
-                                                uint16_t sample_id,
-                                                brick6_sampler_ram_playhead_snapshot_t *out_snapshot)
-{
-    if (out_snapshot != NULL)
-    {
-        memset(out_snapshot, 0, sizeof(*out_snapshot));
-    }
-    if ((track_id >= SEQ_TRACK_COUNT) || (out_snapshot == NULL))
-    {
-        return 0U;
-    }
-
-    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    if ((voice->active == 0U)
-        || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
-        || (voice->sample_id != sample_id)
-        || (voice->ram_slot == SAMPLER_RAM_POOL_INVALID_SLOT))
-    {
-        return 0U;
-    }
-
-    const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(voice->ram_slot);
-    if ((ram == NULL)
-        || (ram->state != SAMPLER_RAM_SLOT_READY)
-        || (ram->global_slot != sample_id)
-        || (ram->generation != voice->ram_generation)
-        || (ram->frames == 0U))
-    {
-        return 0U;
-    }
-
-    uint32_t frame = 0U;
-    if (voice->position > 0.0f)
-    {
-        frame = (uint32_t)voice->position;
-    }
-    if (frame >= ram->frames)
-    {
-        frame = ram->frames - 1U;
-    }
-
-    out_snapshot->active = 1U;
-    out_snapshot->reverse = voice->reverse;
-    out_snapshot->sample_id = voice->sample_id;
-    out_snapshot->ram_slot = voice->ram_slot;
-    out_snapshot->ram_generation = voice->ram_generation;
-    out_snapshot->frame = frame;
-    out_snapshot->frame_count = ram->frames;
-    out_snapshot->trigger_order = voice->trigger_order;
-    return 1U;
-}
-
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm)
 {
     if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U))
