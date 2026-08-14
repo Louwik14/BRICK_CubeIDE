@@ -306,6 +306,10 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
 {
     uint8_t target = 0U;
     param_id_t destination = PARAM_COUNT;
+    entity_topology_descriptor_t topology;
+    const uint8_t is_group_master = (uint8_t)(
+        (entity_topology_get(track, &topology) != 0U)
+        && (topology.role == ENTITY_ROLE_GROUP_MASTER));
     if ((slot == NULL)
             || (slot->enabled == 0U)
             || (slot->source == (uint8_t)MOD_MATRIX_SOURCE_NONE)
@@ -330,7 +334,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
             break;
 
         case MOD_MATRIX_SOURCE_ENV_VCA:
-            if (track == BRICK_ENTITY_GROUP_MASTER_ID)
+            if (is_group_master != 0U)
             {
                 return 0U;
             }
@@ -343,7 +347,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
             break;
 
         case MOD_MATRIX_SOURCE_ENV_FLT:
-            if (track == BRICK_ENTITY_GROUP_MASTER_ID)
+            if (is_group_master != 0U)
             {
                 return 0U;
             }

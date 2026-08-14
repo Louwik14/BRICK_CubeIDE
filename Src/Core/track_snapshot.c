@@ -704,6 +704,11 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     {
         goto restore_done;
     }
+    if ((target_track < NOTE_FX_TRACK_COUNT)
+            && (note_fx_pipeline_sync_track(target_track) == 0U))
+    {
+        goto restore_done;
+    }
 
     track_runtime_invalidate_all();
     track_runtime_refresh_all();

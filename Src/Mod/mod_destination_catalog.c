@@ -1823,10 +1823,16 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     if ((entity_topology_get(track, &owner) != 0U)
             && (owner.role == ENTITY_ROLE_GROUP_MASTER))
     {
-        const int written = (target == BRICK_ENTITY_GROUP_MASTER_ID)
+        entity_topology_descriptor_t target_topology;
+        if ((entity_topology_get(target, &target_topology) == 0U)
+                || (target_topology.active == 0U))
+        {
+            return 0U;
+        }
+        const int written = (target_topology.role == ENTITY_ROLE_GROUP_MASTER)
             ? snprintf(out, out_len, "MASTER ")
             : snprintf(out, out_len, "SUB%u ",
-                (unsigned int)(target - BRICK_ENTITY_FIRST_GROUP_CHILD_ID + 1U));
+                (unsigned int)target_topology.member_index + 1U);
         if ((written < 0) || ((uint32_t)written >= out_len))
         {
             return 0U;
@@ -1970,8 +1976,14 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
             && (owner.role == ENTITY_ROLE_GROUP_MASTER)
             && (out_len >= 5U))
     {
-        out[0] = (target == BRICK_ENTITY_GROUP_MASTER_ID)
-            ? 'M' : (char)('1' + target - BRICK_ENTITY_FIRST_GROUP_CHILD_ID);
+        entity_topology_descriptor_t target_topology;
+        if ((entity_topology_get(target, &target_topology) == 0U)
+                || (target_topology.active == 0U))
+        {
+            return 0U;
+        }
+        out[0] = (target_topology.role == ENTITY_ROLE_GROUP_MASTER)
+            ? 'M' : (char)('1' + target_topology.member_index);
         out[1] = ':';
         out[2] = label[0];
         out[3] = (label[1] != '\0') ? label[1] : '\0';

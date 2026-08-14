@@ -767,7 +767,9 @@ void track_runtime_refresh_track(uint8_t track)
         return;
     }
 
-    if ((track == (uint8_t)BRICK_ENTITY_GROUP_MASTER_ID)
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
+            && (topology.role == ENTITY_ROLE_GROUP_MASTER)
             && (g_track_runtime_track_dirty[track] != 0U))
     {
         if (__get_IPSR() != 0U)

@@ -17,6 +17,7 @@
 #include "pages/ui_page_template_play.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_stack_waveform.h"
+#include "Core/project_control.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -3841,7 +3842,13 @@ static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_
         start_value = end_value;
         end_value = tmp;
     }
-    const uint16_t global_slot = (uint16_t)((table_value < 0.0f) ? 0.0f : (table_value + 0.5f));
+    const uint16_t logical_slot = (uint16_t)((table_value < 0.0f) ? 0.0f : (table_value + 0.5f));
+    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if (project_control_resolve_wavetable_runtime(
+            logical_slot, &global_slot) == 0U)
+    {
+        return;
+    }
     const wavetable_preview_t *const preview = wavetable_pool_get_preview_for_global(global_slot);
 
     if ((preview == 0)

@@ -358,7 +358,8 @@ static uint8_t audio_note_engine_adapter_mix_target_available(
     if (mix_track >= MIXER_MAX_TRACKS)
         return 0U;
     if ((mix_track == MIXER_GROUP_BUS_TRACK)
-            && (entity_id != BRICK_ENTITY_GROUP_MASTER_ID))
+            && ((g_audio_track_ctx[entity_id].flags
+                & AUDIO_RUNTIME_FLAG_GROUP_MASTER) == 0U))
         return 0U;
     for (brick_entity_id_t other = 0U;
          other < BRICK_ENTITY_CAPACITY; ++other)
@@ -458,7 +459,7 @@ void audio_note_engine_adapter_install_intent(
     if ((family == TRACK_RUNTIME_FAMILY_OFF)
             || (family == TRACK_RUNTIME_FAMILY_OTHER))
         installed.bind_reason = TRACK_RUNTIME_BIND_REASON_TRACK_OFF;
-    else if (type == TRACK_RUNTIME_TYPE_GROUP)
+    else if ((event->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U)
     {
         installed.mix_track_id = MIXER_GROUP_BUS_TRACK;
         installed.bind_state = TRACK_RUNTIME_BIND_BOUND;

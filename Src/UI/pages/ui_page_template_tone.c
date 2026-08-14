@@ -4,6 +4,7 @@
 
 #include "Audio/md_model.h"
 #include "Core/brick6_stack_runtime.h"
+#include "Core/project_control.h"
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
 #include "Core/stream_calibration.h"
 #endif
@@ -1273,12 +1274,18 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             {
                 if ((id == PARAM_WAVE_OSC1_TABLE) || (id == PARAM_WAVE_OSC2_TABLE))
                 {
-                    const uint16_t global_slot = (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
-                    const sample_global_slot_t *const asset = sample_global_pool_get_slot(global_slot);
+                    const uint16_t logical_slot = (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
+                    uint16_t runtime_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                    const sample_global_slot_t *asset = NULL;
+                    if (project_control_resolve_wavetable_runtime(
+                            logical_slot, &runtime_slot) != 0U)
+                    {
+                        asset = sample_global_pool_get_slot(runtime_slot);
+                    }
                     if ((asset != NULL) && (asset->kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
                             && (asset->state == SAMPLE_GLOBAL_STATE_READY))
                     {
-                        (void)snprintf(out_value, out_value_len, "WT%03u", (unsigned int)global_slot);
+                        (void)snprintf(out_value, out_value_len, "WT%03u", (unsigned int)logical_slot);
                     }
                     else
                     {
