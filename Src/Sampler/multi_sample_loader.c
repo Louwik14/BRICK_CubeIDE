@@ -107,7 +107,9 @@ static multi_sample_load_result_t multi_loader_enqueue(const char *index_path,
         if ((g_multi_load_queue[i].used != 0U)
             && (g_multi_load_queue[i].instrument_id == instrument_id))
         {
-            return MULTI_SAMPLE_LOAD_OK;
+            return (strcmp(g_multi_load_queue[i].path, index_path) == 0)
+                ? MULTI_SAMPLE_LOAD_OK
+                : MULTI_SAMPLE_LOAD_POOL_FAIL;
         }
     }
 
@@ -125,6 +127,9 @@ static multi_sample_load_result_t multi_loader_enqueue(const char *index_path,
 
             g_multi_load_queue[i].instrument_id = instrument_id;
             g_multi_load_queue[i].used = 1U;
+            (void)multi_sample_pool_set_index_path(instrument_id, index_path);
+            (void)multi_sample_pool_set_state(instrument_id,
+                                              MULTI_SAMPLE_INSTRUMENT_LOADING);
             return MULTI_SAMPLE_LOAD_OK;
         }
     }
@@ -678,6 +683,11 @@ static void multi_loader_start_next_queued(void)
             if (result != MULTI_SAMPLE_LOAD_SD_BUSY)
             {
                 g_multi_load_queue[i].used = 0U;
+                if ((result != MULTI_SAMPLE_LOAD_OK)
+                    && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
+                {
+                    (void)multi_sample_pool_clear_instrument(instrument_id);
+                }
             }
             return;
         }
@@ -942,6 +952,14 @@ uint8_t multi_sample_cancel_load(void)
 void multi_sample_cancel_all_loads(void)
 {
     (void)multi_sample_cancel_load();
+    for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
+    {
+        if (g_multi_load_queue[i].used != 0U)
+        {
+            (void)multi_sample_pool_clear_instrument(
+                g_multi_load_queue[i].instrument_id);
+        }
+    }
     memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
 }
 

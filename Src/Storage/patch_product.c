@@ -13,11 +13,41 @@ static uint8_t g_present[PATCH_PRODUCT_SLOT_COUNT],g_invalid[PATCH_PRODUCT_SLOT_
 static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
 static uint16_t g_current=PATCH_PRODUCT_INVALID_SLOT;
 STORAGE_STATE_SDRAM static persist_codec_patch_staging_t g_stage;
+#define PATCH_PRODUCT_SECTION_BODY 0x3001U
 static uint32_t crc32(uint32_t crc,const uint8_t*d,uint32_t n){for(uint32_t i=0;i<n;++i){crc^=d[i];for(uint8_t b=0;b<8U;++b)crc=(crc>>1U)^(0xEDB88320UL&((uint32_t)-(int32_t)(crc&1U)));}return crc;}
 static uint8_t path(char*out,uint32_t size,uint16_t slot){int n=snprintf(out,size,"0:/BRICK/PATCH/P%04u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATCH))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);return 0U;}return 1U;}
 static void meta_from_patch(uint16_t slot,const persist_control_patch_t*p){patch_product_metadata_t*m=&g_meta[slot];memset(m,0,sizeof(*m));uint16_t n=p->name_length;if(n>32U)n=32U;memcpy(m->name,p->name,n);ui_track_family_t f;ui_track_type_t t;if(persist_key_family_from_disk(p->family,&f))m->family=(uint8_t)f;if(persist_key_type_from_disk(p->type,&t))m->type=(uint8_t)t;m->summary_family=m->family;m->summary_type=m->type;}
-static uint8_t scan_meta(uint16_t slot){char x[48];FIL f;UINT n=0U;uint8_t h[34];if(!path(x,sizeof(x),slot)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;uint8_t ok=(f_read(&f,h,sizeof(h),&n)==FR_OK&&n==sizeof(h)&&h[0]=='B'&&h[1]=='6'&&h[2]=='P'&&h[3]=='C'&&h[4]==PERSIST_CODEC_VERSION&&h[6]==PERSIST_CODEC_DOCUMENT_PATCH&&h[8]==1U);uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U);uint32_t expected=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);if(ok&&total==(uint32_t)f_size(&f)){uint8_t chunk[256];uint32_t crc=0xFFFFFFFFUL,remaining=total-PERSIST_CODEC_HEADER_BYTES;(void)f_lseek(&f,PERSIST_CODEC_HEADER_BYTES);while(ok&&remaining){UINT want=(remaining>sizeof(chunk))?sizeof(chunk):remaining;ok=(f_read(&f,chunk,want,&n)==FR_OK&&n==want);if(ok){crc=crc32(crc,chunk,want);remaining-=want;}}ok=(ok&&~crc==expected);}uint16_t name_len=(uint16_t)h[32]|((uint16_t)h[33]<<8U);if(ok&&name_len<=PERSIST_CONTROL_PATCH_NAME_BYTES){uint8_t buf[PERSIST_CONTROL_PATCH_NAME_BYTES+8U];(void)f_lseek(&f,34U);ok=(f_read(&f,buf,name_len+8U,&n)==FR_OK&&n==name_len+8U);if(ok){persist_control_patch_t p;memset(&p,0,sizeof(p));p.name_length=name_len;memcpy(p.name,buf,name_len);p.family=(uint32_t)buf[name_len]|((uint32_t)buf[name_len+1U]<<8U)|((uint32_t)buf[name_len+2U]<<16U)|((uint32_t)buf[name_len+3U]<<24U);p.type=(uint32_t)buf[name_len+4U]|((uint32_t)buf[name_len+5U]<<8U)|((uint32_t)buf[name_len+6U]<<16U)|((uint32_t)buf[name_len+7U]<<24U);meta_from_patch(slot,&p);}}else ok=0U;(void)f_close(&f);g_present[slot]=1U;g_invalid[slot]=ok?0U:1U;return ok;}
+static uint16_t le16(const uint8_t*p){return(uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8U));}
+static uint32_t le32(const uint8_t*p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
+static uint8_t scan_meta(uint16_t slot)
+{
+    char x[48];FIL f;UINT n=0U;uint8_t h[PERSIST_CODEC_HEADER_BYTES];
+    if(!path(x,sizeof(x),slot)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;
+    uint8_t ok=(f_read(&f,h,sizeof(h),&n)==FR_OK&&n==sizeof(h));
+    const uint32_t total=ok?le32(&h[12]):0U;
+    const uint32_t header_crc=ok?le32(&h[20]):0U;
+    ok=(ok&&h[0]=='B'&&h[1]=='6'&&h[2]=='P'&&h[3]=='C'
+        &&h[4]==PERSIST_CODEC_VERSION&&h[5]==0U
+        &&h[6]==PERSIST_CODEC_DOCUMENT_PATCH&&h[7]==0U
+        &&le16(&h[8])==1U&&h[10]==0U&&h[11]==0U
+        &&total==(uint32_t)f_size(&f)
+        &&total<=PERSIST_CODEC_MAX_DOCUMENT_BYTES
+        &&total>=PERSIST_CODEC_HEADER_BYTES+PERSIST_CODEC_SECTION_HEADER_BYTES+10U
+        &&header_crc==~crc32(0xFFFFFFFFUL,h,20U));
+    uint8_t sh[PERSIST_CODEC_SECTION_HEADER_BYTES];
+    if(ok)ok=(f_read(&f,sh,sizeof(sh),&n)==FR_OK&&n==sizeof(sh));
+    const uint32_t section_length=ok?le32(&sh[4]):0U;
+    ok=(ok&&le16(sh)==PATCH_PRODUCT_SECTION_BODY&&le16(&sh[2])==1U
+        &&section_length==total-PERSIST_CODEC_HEADER_BYTES-PERSIST_CODEC_SECTION_HEADER_BYTES
+        &&section_length>=10U);
+    uint8_t nl[2];if(ok)ok=(f_read(&f,nl,sizeof(nl),&n)==FR_OK&&n==sizeof(nl));
+    const uint16_t name_len=ok?le16(nl):0U;
+    ok=(ok&&name_len<=PERSIST_CONTROL_PATCH_NAME_BYTES
+        &&section_length>=(uint32_t)name_len+10U);
+    if(ok){uint8_t buf[PERSIST_CONTROL_PATCH_NAME_BYTES+8U];ok=(f_read(&f,buf,name_len+8U,&n)==FR_OK&&n==name_len+8U);if(ok){persist_control_patch_t p;memset(&p,0,sizeof(p));p.name_length=name_len;memcpy(p.name,buf,name_len);p.family=le32(&buf[name_len]);p.type=le32(&buf[name_len+4U]);ui_track_family_t family;ui_track_type_t type;ok=(persist_key_family_from_disk(p.family,&family)&&persist_key_type_from_disk(p.type,&type));if(ok)meta_from_patch(slot,&p);}}
+    (void)f_close(&f);g_present[slot]=1U;g_invalid[slot]=ok?0U:1U;return ok;
+}
 static uint8_t load(uint16_t slot,persist_control_patch_t*out){if(slot>=PATCH_PRODUCT_SLOT_COUNT||out==NULL||!g_present[slot]||!acquire())return 0U;char x[48];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot)&&persistent_fatfs_open_read(&f,x);if(ok){persist_codec_source_t s=persistent_fatfs_source(&f);ok=(persist_codec_decode_patch(&s,&g_stage)==PERSIST_CODEC_OK);persistent_fatfs_close(&f);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(ok){*out=g_stage.patch;meta_from_patch(slot,out);g_invalid[slot]=0U;}else g_invalid[slot]=1U;return ok;}
 static uint8_t store(uint16_t slot,const persist_control_patch_t*p){if(slot>=PATCH_PRODUCT_SLOT_COUNT||p==NULL||!acquire())return 0U;char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot);if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t s=persistent_fatfs_sink(&f);ok=(persist_codec_encode_patch(p,&s,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);persistent_fatfs_close(&f);}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(ok){g_present[slot]=1U;g_invalid[slot]=0U;meta_from_patch(slot,p);}return ok;}
 void patch_product_init(void){memset(g_present,0,sizeof(g_present));memset(g_invalid,0,sizeof(g_invalid));memset(g_meta,0,sizeof(g_meta));g_current=PATCH_PRODUCT_INVALID_SLOT;if(!acquire())return;(void)f_mkdir("0:/BRICK");(void)f_mkdir("0:/BRICK/PATCH");for(uint16_t s=0;s<PATCH_PRODUCT_SLOT_COUNT;++s){char x[48];FILINFO i;if(path(x,sizeof(x),s)&&f_stat(x,&i)==FR_OK)(void)scan_meta(s);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);}
