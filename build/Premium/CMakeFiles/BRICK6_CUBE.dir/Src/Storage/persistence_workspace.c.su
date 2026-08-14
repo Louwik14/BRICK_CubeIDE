@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:14:36:persistence_workspace_acquire_project	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:25:28:persistence_workspace_acquire_pattern_save	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:36:6:persistence_workspace_release	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:45:31:persistence_workspace_owner	4	static

@@ -175,6 +175,21 @@ uint16_t multi_sample_pool_get_sample_capacity_used(void)
     return g_multi_sample_count;
 }
 
+uint16_t multi_sample_pool_get_slot_capacity_used(void)
+{
+    uint32_t slots = 0U;
+    for (uint16_t i = 0U; i < g_multi_sample_count; ++i)
+    {
+        const multi_sample_desc_t *const sample = &g_multi_samples[i];
+        if ((sample->instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            && (g_multi_instruments[sample->instrument_id].used != 0U))
+        {
+            slots += sample_audio_format_multi_start_slot_cost(sample->format);
+        }
+    }
+    return (slots > UINT16_MAX) ? UINT16_MAX : (uint16_t)slots;
+}
+
 uint16_t multi_sample_pool_get_zone_capacity_used(void)
 {
     return g_multi_zone_count;

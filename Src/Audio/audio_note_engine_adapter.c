@@ -308,12 +308,17 @@ uint8_t audio_note_engine_adapter_apply(
     {
         if (is_multi_sampler != 0U)
         {
+            uint8_t sampler_result;
             if (is_note_on != 0U)
-                return brick6_sampler_runtime_trigger_multi_track_note_velocity_token(
+                sampler_result = brick6_sampler_runtime_trigger_multi_track_note_velocity_token(
                     entity_id, note, velocity, occurrence_token);
-            brick6_sampler_runtime_note_off_multi_track_note_token(
-                entity_id, note, occurrence_token);
-            return 1U;
+            else
+            {
+                brick6_sampler_runtime_note_off_multi_track_note_token(
+                    entity_id, note, occurrence_token);
+                sampler_result = 1U;
+            }
+            return sampler_result;
         }
         if (is_note_on != 0U)
             brick6_sampler_runtime_trigger_note_velocity(entity_id, note,

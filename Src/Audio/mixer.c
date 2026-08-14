@@ -22,6 +22,7 @@
 #include "mixer.h"
 #include "Audio/audio_float.h"
 #include "Audio/audio_track_diag.h"
+#include "Audio/mixer_path_diag.h"
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
@@ -2427,6 +2428,9 @@ void mixer_reset_runtime_state(void)
 
 void mixer_init(void)
 {
+#if defined(BRICK6_MIXER_PATH_DIAG)
+    mixer_path_diag_reset();
+#endif
     mixer_track_filter_init_time_lut();
     mixer_reset_runtime_state();
 }
@@ -3846,6 +3850,9 @@ void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
  */
 ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
+#if defined(BRICK6_MIXER_PATH_DIAG)
+    mixer_path_diag_block_begin(frames);
+#endif
     AUDIO_HOT ALIGN32 static float mono_pan_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
@@ -4073,6 +4080,76 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO))
                 mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames, diag_lane);
         }
+
+#if defined(BRICK6_MIXER_PATH_DIAG)
+        uint8_t mixer_path_snapshot = MIXER_PATH_DIAG_NO_SLOT;
+        if ((mixer_path_diag_enabled != 0U)
+                && (source_entity < BRICK_ENTITY_TOP_LEVEL_COUNT)
+                && ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+                    || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+                    || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
+        {
+            uint8_t track_flags = 1U;
+            if (mt->mute != 0U) track_flags |= 2U;
+            if (mt->route_master != 0U) track_flags |= 4U;
+            if (group_child != 0U) track_flags |= 8U;
+            if (multi_prefiltered == 0U) track_flags |= 16U;
+            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+            {
+                if (mt->insert_slot[insert] >= 0)
+                {
+                    track_flags |= 32U;
+                    break;
+                }
+            }
+            const uint8_t source_flags = (uint8_t)(
+                ((uint8_t)lane_plan.source_kind & 7U)
+                | ((lane_plan.ext_format & 7U) << 3U)
+                | ((lane_plan.hw_enabled != 0U) ? 64U : 0U)
+                | ((lane_plan.ext_enabled != 0U) ? 128U : 0U));
+            mixer_path_snapshot = mixer_path_diag_begin(
+                source_entity, (uint8_t)t, source_flags, track_flags,
+                (is_mono_native_lane != 0U) ? mono : L,
+                (is_mono_native_lane != 0U) ? NULL : R, frames);
+            if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
+            {
+                const float last_fraction = (frames > 1U)
+                    ? ((float)(frames - 1U) / (float)frames) : 0.0f;
+                const float gain_last = mt->gain_current
+                    + ((mt->gain - mt->gain_current) * last_fraction);
+                const float pan_last = mt->pan_current
+                    + ((mt->pan - mt->pan_current) * last_fraction);
+                const float mute_target = (mt->mute != 0U) ? 0.0f : 1.0f;
+                float mute_last = mt->mute_gain_current;
+                const float mute_delta = ((float)(frames - 1U)) / 240.0f;
+                if (mute_last < mute_target)
+                {
+                    mute_last += mute_delta;
+                    if (mute_last > mute_target) mute_last = mute_target;
+                }
+                else if (mute_last > mute_target)
+                {
+                    mute_last -= mute_delta;
+                    if (mute_last < mute_target) mute_last = mute_target;
+                }
+                const float pan_for_mix_first = -mt->pan_current;
+                const float pan_l_first = (pan_for_mix_first <= 0.0f)
+                    ? 1.0f : (1.0f - pan_for_mix_first);
+                const float pan_r_first = (pan_for_mix_first >= 0.0f)
+                    ? 1.0f : (1.0f + pan_for_mix_first);
+                const float pan_for_mix_last = -pan_last;
+                const float pan_l_last = (pan_for_mix_last <= 0.0f)
+                    ? 1.0f : (1.0f - pan_for_mix_last);
+                const float pan_r_last = (pan_for_mix_last >= 0.0f)
+                    ? 1.0f : (1.0f + pan_for_mix_last);
+                mixer_path_diag_set_coefficients(
+                    mixer_path_snapshot,
+                    mt->gain_current, gain_last,
+                    pan_l_first, pan_l_last, pan_r_first, pan_r_last,
+                    1.0f, 1.0f, mt->mute_gain_current, mute_last);
+            }
+        }
+#endif
 
         /*
          * Common mono-native fan-out. Keep the historical L/R path when
@@ -4308,6 +4385,10 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
+                            mixer_path_snapshot,
+                            L[i] * gain_l, R[i] * gain_r,
+                            left_trimmed, right_trimmed);
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         if (coefficient_plan.stable == 0U)
@@ -4332,6 +4413,10 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
+                            mixer_path_snapshot,
+                            L[i] * gain_l, R[i] * gain_r,
+                            left_trimmed, right_trimmed);
                         send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         dry_bus_l[i] += left_trimmed;
@@ -4359,6 +4444,10 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
+                            mixer_path_snapshot,
+                            L[i] * gain_l, R[i] * gain_r,
+                            left_trimmed, right_trimmed);
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         dry_bus_l[i] += left_trimmed;
@@ -4386,6 +4475,10 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
+                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
+                            mixer_path_snapshot,
+                            L[i] * gain_l, R[i] * gain_r,
+                            left_trimmed, right_trimmed);
                         send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
@@ -4406,6 +4499,15 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 default:
                     break;
             }
+
+#if defined(BRICK6_MIXER_PATH_DIAG)
+            if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
+            {
+                mixer_path_diag_capture_d(mixer_path_snapshot,
+                                          dry_bus_l, dry_bus_r, frames);
+                mixer_path_diag_commit(mixer_path_snapshot);
+            }
+#endif
 
             mt->gain_current = mt->gain;
             mt->pan_current = mt->pan;
@@ -4574,6 +4676,14 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 fx_chain_process_slot_for_track(t, (uint32_t)slot, L, R, frames);
             }
         }
+#if defined(BRICK6_MIXER_PATH_DIAG)
+        if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
+        {
+            mixer_path_diag_capture_bc(
+                mixer_path_snapshot, L, R, frames,
+                (mt->route_master != 0U) ? MIXER_TRACK_NOMINAL_TRIM : 0.0f);
+        }
+#endif
         if(diag_lane != 0U)
         {
             for(uint32_t i = 0U; i < frames; ++i)
@@ -4682,6 +4792,14 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 dry_bus_r[i] += r_nom;
             }
         }
+#if defined(BRICK6_MIXER_PATH_DIAG)
+        if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
+        {
+            mixer_path_diag_capture_d(mixer_path_snapshot,
+                                      dry_bus_l, dry_bus_r, frames);
+            mixer_path_diag_commit(mixer_path_snapshot);
+        }
+#endif
     }
 
     const track_audio_runtime_ctx_t *const group_master_ctx =

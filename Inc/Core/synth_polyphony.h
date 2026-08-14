@@ -33,6 +33,14 @@ typedef struct
     uint8_t note;
 } synth_poly_release_t;
 
+typedef struct
+{
+    uint8_t note;
+    uint8_t state;
+    uint8_t source;
+    uint32_t occurrence_id;
+} synth_poly_voice_snapshot_t;
+
 void synth_polyphony_init(void);
 uint8_t synth_polyphony_note_on(uint8_t track, uint8_t note);
 uint8_t synth_polyphony_note_off(uint8_t track, uint8_t note);
@@ -67,6 +75,8 @@ void synth_polyphony_panic(void);
 uint8_t synth_polyphony_get_voice_count(uint8_t track);
 uint8_t synth_polyphony_get_render_voice_count(uint8_t track);
 uint8_t synth_polyphony_get_renderable_voice_mask(uint8_t track);
+uint8_t synth_polyphony_get_voice_snapshot(uint8_t track, uint8_t voice,
+                                           synth_poly_voice_snapshot_t *out);
 void synth_polyphony_set_spread(uint8_t track, float spread);
 float synth_polyphony_get_spread(uint8_t track);
 float synth_polyphony_get_voice_pan(uint8_t track, uint8_t voice);

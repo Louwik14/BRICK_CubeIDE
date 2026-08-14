@@ -166,6 +166,9 @@ uint8_t seq_model_is_step_editable_index(seq_step_id_t step);
 uint8_t seq_model_get_track_playback_length(seq_track_id_t track);
 uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step);
+/* Canonical musical-step predicate: an active trig on a note-emitting track
+ * produces PLAY, using explicit fields when present and PLAY base values otherwise. */
+uint8_t seq_model_step_produces_note(seq_track_id_t track, seq_step_id_t step);
 seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step);
 seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t step);
 seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t step);

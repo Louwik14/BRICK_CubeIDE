@@ -426,6 +426,24 @@ uint8_t synth_polyphony_get_renderable_voice_mask(uint8_t track)
     return g_synth_poly[track].renderable_voice_mask;
 }
 
+uint8_t synth_polyphony_get_voice_snapshot(uint8_t track, uint8_t voice,
+                                           synth_poly_voice_snapshot_t *out)
+{
+    if ((out == NULL) || (synth_poly_valid_track(track) == 0U)
+            || (voice >= g_synth_poly[track].voice_count))
+        return 0U;
+    const uint8_t slot = synth_polyphony_find_slot(track, voice);
+    if (slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+        return 0U;
+    *out = (synth_poly_voice_snapshot_t){
+        .note = g_synth_voice[slot].note,
+        .state = g_synth_voice[slot].state,
+        .source = g_synth_voice[slot].source,
+        .occurrence_id = g_synth_voice[slot].occurrence_id
+    };
+    return 1U;
+}
+
 uint8_t synth_polyphony_get_voice_count(uint8_t track)
 {
     return (synth_poly_valid_track(track) != 0U)

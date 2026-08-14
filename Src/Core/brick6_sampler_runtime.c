@@ -4925,11 +4925,8 @@ void brick6_sampler_runtime_note_off(uint8_t track_id)
 
     if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
     {
-        if (g_sampler_clip_runtime[track_id].play_mode != 0U)
-        {
-            return;
-        }
-
+        /* Source launch mode does not own note amplitude. Every Note-Off lets
+         * the mixer VCA finish its release before this source is reclaimed. */
         if ((g_sampler_voice[track_id].active != 0U)
                 && (g_sampler_voice[track_id].source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
         {

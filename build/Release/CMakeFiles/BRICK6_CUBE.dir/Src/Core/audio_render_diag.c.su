@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:23:13:audio_render_diag_measure_sample	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:76:16:audio_render_diag_engine_is_supported	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:48:6:audio_render_diag_reset	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:63:6:audio_render_diag_block_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:85:9:audio_render_diag_begin_snapshot	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:118:6:audio_render_diag_capture_voice	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:151:6:audio_render_diag_capture_output	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_render_diag.c:172:6:audio_render_diag_end_snapshot	16	static

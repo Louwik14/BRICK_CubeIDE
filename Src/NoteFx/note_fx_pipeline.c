@@ -49,6 +49,7 @@ typedef enum
     NOTE_FX_COMMAND_APPLY_PARAM,
     NOTE_FX_COMMAND_RELEASE_PARAM,
     NOTE_FX_COMMAND_SYNC_TRACK,
+    NOTE_FX_COMMAND_SYNC_ALL,
     NOTE_FX_COMMAND_TRANSITION_TRACK,
     NOTE_FX_COMMAND_TRANSITION_ALL,
     NOTE_FX_COMMAND_RESET_TRACK
@@ -920,13 +921,16 @@ static void note_fx_pipeline_cleanup_track_owner(uint8_t track)
                            note_fx_pipeline_stage_emit, 0);
 }
 
-static void note_fx_pipeline_transition_track_owner(uint8_t track,
-                                                     note_fx_transition_policy_t policy)
+static void note_fx_pipeline_transition_track_owner(
+    const note_fx_command_t *command)
 {
-    if (track >= NOTE_FX_TRACK_COUNT)
+    if ((command == NULL) || (command->track >= NOTE_FX_TRACK_COUNT))
     {
         return;
     }
+
+    const uint8_t track = command->track;
+    const note_fx_transition_policy_t policy = command->policy;
 
     if (policy == NOTE_FX_TRANSITION_MUTE_TRIGS)
     {
@@ -934,6 +938,13 @@ static void note_fx_pipeline_transition_track_owner(uint8_t track,
         return;
     }
     note_fx_pipeline_cleanup_track_owner(track);
+    if ((policy == NOTE_FX_TRANSITION_STOP_CLOSE)
+            && (command->track_state_valid != 0U))
+    {
+        memset(g_note_fx_override_valid[track], 0,
+               sizeof(g_note_fx_override_valid[track]));
+        note_fx_pipeline_sync_track_owner(track, &command->track_state);
+    }
 }
 
 static void note_fx_pipeline_apply_runtime_param_owner(
@@ -1219,12 +1230,26 @@ static void note_fx_pipeline_apply_pending_commands(void)
                     note_fx_pipeline_sync_track_owner(command.track,
                                                        &command.track_state);
                 break;
+            case NOTE_FX_COMMAND_SYNC_ALL:
+                for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+                {
+                    note_fx_track_state_t state;
+                    if (note_fx_state_capture_track(track, &state) != 0U)
+                        note_fx_pipeline_sync_track_owner(track, &state);
+                }
+                break;
             case NOTE_FX_COMMAND_TRANSITION_TRACK:
-                note_fx_pipeline_transition_track_owner(command.track, command.policy);
+                note_fx_pipeline_transition_track_owner(&command);
                 break;
             case NOTE_FX_COMMAND_TRANSITION_ALL:
                 for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
-                    note_fx_pipeline_transition_track_owner(track, command.policy);
+                {
+                    note_fx_command_t track_command = command;
+                    track_command.track = track;
+                    track_command.track_state_valid = note_fx_state_capture_track(
+                        track, &track_command.track_state);
+                    note_fx_pipeline_transition_track_owner(&track_command);
+                }
                 break;
             case NOTE_FX_COMMAND_RESET_TRACK:
                 note_fx_pipeline_reset_runtime_overrides_owner(&command);
@@ -1341,11 +1366,16 @@ uint8_t note_fx_pipeline_transition_track(uint8_t track,
     {
         return 0U;
     }
-    const note_fx_command_t command = {
+    note_fx_command_t command = {
         .kind = NOTE_FX_COMMAND_TRANSITION_TRACK,
         .track = track,
         .policy = policy
     };
+    command.track_state_valid = note_fx_state_capture_track(
+        track, &command.track_state);
+    if ((policy == NOTE_FX_TRANSITION_STOP_CLOSE)
+            && (command.track_state_valid == 0U))
+        return 0U;
     return note_fx_pipeline_enqueue(&command);
 }
 
@@ -1376,6 +1406,14 @@ uint8_t note_fx_pipeline_sync_track(uint8_t track)
         track, &command.track_state);
     if (command.track_state_valid == 0U)
         return 0U;
+    return note_fx_pipeline_enqueue(&command);
+}
+
+uint8_t note_fx_pipeline_sync_all_tracks(void)
+{
+    const note_fx_command_t command = {
+        .kind = NOTE_FX_COMMAND_SYNC_ALL
+    };
     return note_fx_pipeline_enqueue(&command);
 }
 

@@ -94,6 +94,8 @@ void multi_sample_pool_init(void);
 void multi_sample_pool_reset(void);
 uint16_t multi_sample_pool_get_instrument_count(void);
 uint16_t multi_sample_pool_get_sample_capacity_used(void);
+/* Canonical Multi admission/display unit: mono sample=1, stereo sample=2. */
+uint16_t multi_sample_pool_get_slot_capacity_used(void);
 uint16_t multi_sample_pool_get_zone_capacity_used(void);
 const multi_sample_instrument_t *multi_sample_pool_get_instrument(uint16_t instrument_id);
 const multi_sample_desc_t *multi_sample_pool_get_sample(uint16_t multi_sample_id);

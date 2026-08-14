@@ -461,6 +461,24 @@ static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind
     }
 }
 
+static void ui_page_settings_select_neighbor_before_delete(void)
+{
+    for (uint16_t i = 0U; i < g_ui_settings.sampler_slot_count; ++i)
+    {
+        if (g_ui_settings.sampler_slots[i] == g_ui_settings.sample_slot_selected)
+        {
+            if (i + 1U < g_ui_settings.sampler_slot_count)
+                g_ui_settings.sample_slot_selected = g_ui_settings.sampler_slots[i + 1U];
+            else if (i != 0U)
+                g_ui_settings.sample_slot_selected = g_ui_settings.sampler_slots[i - 1U];
+            else
+                g_ui_settings.sample_slot_selected = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            return;
+        }
+    }
+    g_ui_settings.sample_slot_selected = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+}
+
 static void ui_page_settings_refresh_sampler_slots(void)
 {
     ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_STREAM);
@@ -1156,13 +1174,7 @@ static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entr
     entry->prepared = 0U;
     entry->sample_count = 0U;
     entry->zone_count = 0U;
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-    entry->slot_cost = (entry->wav_count > (UINT16_MAX / 2U))
-        ? UINT16_MAX
-        : (uint16_t)(entry->wav_count * 2U);
-#else
     entry->slot_cost = entry->wav_count;
-#endif
     if (entry->index_path[0] == '\0')
     {
         return;
@@ -1586,20 +1598,37 @@ static void ui_page_settings_sample_confirm_convert(uint16_t slot, const char *p
 
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path)
 {
+    uint16_t existing_logical = 0U;
+    uint16_t existing_runtime = 0U;
+    uint32_t existing_kind = 0U;
+    if ((project_control_find_asset(PERSIST_ASSET_SAMPLE_STREAM,path,&existing_logical) != 0U)
+        && (project_control_resolve_sample_runtime(existing_logical,&existing_runtime,&existing_kind) != 0U)
+        && (existing_kind == PERSIST_ASSET_SAMPLE_STREAM))
+    {
+        g_ui_settings.sample_slot_selected = existing_logical;
+        ui_page_settings_status("ALREADY LOADED");
+        return;
+    }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     if (sample_pool_load(slot, path) != 0U)
     {
-        ui_page_settings_refresh_sampler_slots();
         uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
         if (sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,
                                                slot,
                                                &global_slot) != 0U)
         {
             uint16_t logical=0U;
-            (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical);
-            g_ui_settings.sample_slot_selected = logical;
+            if(project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical)!=0U)
+            {
+                ui_page_settings_refresh_sampler_slots();
+                g_ui_settings.sample_slot_selected = logical;
+                ui_page_settings_status("LOAD OK");
+                return;
+            }
         }
-        ui_page_settings_status("LOAD OK");
+        sample_pool_clear(slot);
+        ui_page_settings_refresh_sampler_slots();
+        ui_page_settings_status("BANK FAIL");
     }
     else
     {
@@ -1617,6 +1646,16 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
 static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 {
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint16_t existing_logical = 0U;
+    uint32_t existing_kind = 0U;
+    if ((project_control_find_asset(PERSIST_ASSET_SAMPLE_RAM,path,&existing_logical) != 0U)
+        && (project_control_resolve_sample_runtime(existing_logical,&global_slot,&existing_kind) != 0U)
+        && (existing_kind == PERSIST_ASSET_SAMPLE_RAM))
+    {
+        g_ui_settings.sample_slot_selected = existing_logical;
+        ui_page_settings_status("ALREADY LOADED");
+        return;
+    }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     const sampler_ram_result_t result =
         sampler_ram_pool_load_wav(slot, path, &global_slot);
@@ -1648,6 +1687,14 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path)
 {
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint16_t existing_logical = 0U;
+    if ((project_control_find_asset(PERSIST_ASSET_WAVETABLE,path,&existing_logical) != 0U)
+        && (project_control_resolve_wavetable_runtime(existing_logical,&global_slot) != 0U))
+    {
+        g_ui_settings.sample_slot_selected = existing_logical;
+        ui_page_settings_status("ALREADY LOADED");
+        return;
+    }
     const wavetable_result_t result =
         wavetable_pool_load_wav(slot, path, &global_slot);
     if (result == WAVETABLE_RESULT_OK)
@@ -1861,7 +1908,9 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
     {
-        (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
+        const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
+        ui_page_settings_select_neighbor_before_delete();
+        (void)project_control_remove_sample(deleted_logical);
         sample_pool_clear(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -1921,9 +1970,11 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD)
     {
+        const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
         ui_page_settings_publish_multi_command(
             CONTROL_AUDIO_EVENT_MULTI_STOP, 0U, g_ui_settings.confirm_slot);
-        (void)project_control_remove_multi(g_ui_settings.sample_slot_selected);
+        ui_page_settings_select_neighbor_before_delete();
+        (void)project_control_remove_multi(deleted_logical);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -1932,6 +1983,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         {
             ui_page_settings_status("UNLOAD FAIL");
         }
+        ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         return;
     }
@@ -2172,7 +2224,9 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT RAM");
         return;
     }
-    (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
+    const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
+    ui_page_settings_select_neighbor_before_delete();
+    (void)project_control_remove_sample(deleted_logical);
     sampler_ram_pool_clear(backend_slot);
     ui_page_settings_refresh_ram_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2270,7 +2324,9 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         ui_page_settings_status("SELECT WAVE");
         return;
     }
-    (void)project_control_remove_wavetable(g_ui_settings.sample_slot_selected);
+    const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
+    ui_page_settings_select_neighbor_before_delete();
+    (void)project_control_remove_wavetable(deleted_logical);
     wavetable_pool_clear(backend_slot);
     ui_page_settings_refresh_wavetable_slots();
     ui_page_settings_status("CLEAR OK");
@@ -2440,26 +2496,14 @@ static uint32_t ui_page_settings_multi_sample_prep_bytes(
         return 0U;
     }
 
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     const sample_audio_format_t format = sample_audio_format_from_channels(sample->channels);
     return sample_audio_format_multi_start_slot_cost(format)
            * SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
-#else
-    const uint32_t prep_frames = (sample->total_frames < SAMPLE_PREP_MIN_READY_FRAMES)
-        ? sample->total_frames
-        : SAMPLE_PREP_MIN_READY_FRAMES;
-    const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
-    return pages * SAMPLE_PAGE_BYTES;
-#endif
 }
 
 static uint32_t ui_page_settings_multi_slot_bytes(void)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     return SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
-#else
-    return SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
-#endif
 }
 
 static uint32_t ui_page_settings_global_memory_used_bytes(void)
@@ -2483,18 +2527,14 @@ static void ui_page_settings_draw_global_sample_header(const char *title)
 
 static void ui_page_settings_draw_multi_sample_header(void)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     const uint32_t slot_bytes = ui_page_settings_multi_slot_bytes();
     const uint16_t total_slots = (uint16_t)(SAMPLE_GLOBAL_POOL_BUDGET_BYTES / slot_bytes);
-    const uint16_t free_slots = (uint16_t)(sample_global_pool_get_free_bytes() / slot_bytes);
-    ui_page_settings_draw_sample_header("M FREE",
-                                        free_slots,
+    const uint16_t used_slots = multi_sample_pool_get_slot_capacity_used();
+    ui_page_settings_draw_sample_header("MULTI",
+                                        used_slots,
                                         total_slots,
                                         ui_page_settings_global_memory_used_bytes(),
                                         SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
-#else
-    ui_page_settings_draw_global_sample_header("MULTI");
-#endif
 }
 
 static void ui_page_settings_format_mb(char *out, uint32_t out_size, uint32_t bytes)
@@ -2638,27 +2678,24 @@ static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path)
     return -1;
 }
 
-static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id, const char *index_path)
+static uint8_t ui_page_settings_multi_register_global(uint16_t instrument_id,
+                                                      const char *index_path,
+                                                      uint16_t *out_logical)
 {
-    const uint8_t track = ui_get_active_track();
-
     if ((index_path == 0)
         || (index_path[0] == '\0')
         || ((instrument_id != MULTI_SAMPLE_POOL_INVALID_ID)
             && (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
-        || (ui_get_track_family(track) != UI_TRACK_FAMILY_SAMPLER)
-        || (ui_get_track_type(track) != UI_TRACK_TYPE_MULTI))
+        || (out_logical == 0))
     {
         return 0U;
     }
 
-    uint16_t logical=0U;
-    if ((project_control_register_multi_runtime(index_path,instrument_id,&logical)==0U)
-        || (param_registry_apply_track_value(PARAM_SAMPLER_SAMPLE,track,(float)logical)==0U))
+    if (project_control_register_multi_runtime(index_path, instrument_id, out_logical) == 0U)
     {
         return 0U;
     }
-    g_ui_settings.sample_slot_selected=logical;
+    g_ui_settings.sample_slot_selected = *out_logical;
 
     return 1U;
 }
@@ -2723,6 +2760,14 @@ static const char *ui_page_settings_multi_load_error_label(multi_sample_load_res
             return "STOP AUDIO";
         case MULTI_SAMPLE_LOAD_CANCELLED:
             return "CANCEL";
+        case MULTI_SAMPLE_LOAD_INVALID_ARG:
+            return "INVALID LOAD";
+        case MULTI_SAMPLE_LOAD_INDEX_LIMIT:
+            return "INDEX LIMIT";
+        case MULTI_SAMPLE_LOAD_FORMAT_MISMATCH:
+            return "FORMAT FAIL";
+        case MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED:
+            return "PREP FULL";
         default:
             return "LOAD FAIL";
     }
@@ -2850,6 +2895,16 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         return;
     }
 
+    uint16_t registered_logical = 0U;
+    uint16_t registered_runtime = 0U;
+    if ((project_control_find_asset(PERSIST_ASSET_MULTI,entry->index_path,&registered_logical) != 0U)
+        && (project_control_resolve_multi_runtime(registered_logical,&registered_runtime) != 0U))
+    {
+        g_ui_settings.sample_slot_selected = registered_logical;
+        ui_page_settings_status("ALREADY LOADED");
+        return;
+    }
+
     const int16_t existing = ui_page_settings_multi_find_loaded_path(entry->index_path);
     if (existing >= 0)
     {
@@ -2860,7 +2915,10 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         {
             g_ui_settings.sample_slot_selected = global_slot;
         }
-        (void)ui_page_settings_multi_assign_active_track((uint16_t)existing, entry->index_path);
+        uint16_t logical = 0U;
+        (void)ui_page_settings_multi_register_global((uint16_t)existing,
+                                                     entry->index_path,
+                                                     &logical);
         ui_page_settings_status("REUSED");
         return;
     }
@@ -2915,14 +2973,14 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         (void)multi_sample_pool_clear_instrument(slot);
     }
 
-    if (ui_page_settings_multi_assign_active_track(MULTI_SAMPLE_POOL_INVALID_ID,
-                                                   entry->index_path)==0U)
+    uint16_t logical = 0U;
+    if (ui_page_settings_multi_register_global(MULTI_SAMPLE_POOL_INVALID_ID,
+                                               entry->index_path,
+                                               &logical) == 0U)
     {
-        ui_page_settings_multi_prepare_finish("LOAD FAIL");
+        ui_page_settings_multi_prepare_finish("BANK FAIL");
         return;
     }
-    const uint16_t logical=g_ui_settings.sample_slot_selected;
-
     const multi_sample_load_result_t result =
         multi_sample_load_instrument(logical,entry->index_path,slot);
     if ((result == MULTI_SAMPLE_LOAD_OK) || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
@@ -3037,7 +3095,10 @@ static void ui_page_settings_multi_copy_left(uint8_t shift_down)
         {
             g_ui_settings.sample_slot_selected = global_slot;
         }
-        (void)ui_page_settings_multi_assign_active_track((uint16_t)existing, entry->index_path);
+        uint16_t logical = 0U;
+        (void)ui_page_settings_multi_register_global((uint16_t)existing,
+                                                     entry->index_path,
+                                                     &logical);
         ui_page_settings_status("REUSED");
         return;
     }

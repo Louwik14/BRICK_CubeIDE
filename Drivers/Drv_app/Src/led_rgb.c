@@ -42,6 +42,7 @@
 #include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
 #include "UI/ui_step_led_ownership.h"
+#include "UI/ui_track_led_projection.h"
 #include "UI/pages/ui_page_patch_assign.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
@@ -66,6 +67,12 @@
 #define LED_FIXED_VIOLET_R        LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_VIOLET_G        0U
 #define LED_FIXED_VIOLET_B        LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_LIGHT_VIOLET_R  LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_LIGHT_VIOLET_G  48U
+#define LED_FIXED_LIGHT_VIOLET_B  LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_DARK_VIOLET_R   64U
+#define LED_FIXED_DARK_VIOLET_G   0U
+#define LED_FIXED_DARK_VIOLET_B   88U
 #define LED_FIXED_BLUE_R          0U
 #define LED_FIXED_BLUE_G          0U
 #define LED_FIXED_BLUE_B          LED_FIXED_HALF_BRIGHTNESS
@@ -542,28 +549,45 @@ static void led_apply_macro_switch_hall_scene(uint8_t hall)
 static void led_apply_track_select_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    uint8_t r = 0U;
-    uint8_t g = 0U;
-    uint8_t b = 0U;
+    ui_track_led_projection_t projection = { 0 };
+    led_rgb_color_t color = { 0U, 0U, 0U };
 
-    if (hall < UI_ACTIVE_TRACK_COUNT)
+    if ((ui_track_led_project_hall(hall, &projection) != 0U)
+            && (projection.visible != 0U))
     {
-        if (ui_get_track_family(hall) != UI_TRACK_FAMILY_OFF)
+        switch (projection.color)
         {
-            r = LED_FIXED_DARK_BLUE_R;
-            g = LED_FIXED_DARK_BLUE_G;
-            b = LED_FIXED_DARK_BLUE_B;
-
-            if (hall == ui_get_active_track())
-            {
-                r = LED_FIXED_WHITE_R;
-                g = LED_FIXED_WHITE_G;
-                b = LED_FIXED_WHITE_B;
-            }
+            case UI_TRACK_LED_COLOR_TOP_LEVEL_OFF:
+                color = (led_rgb_color_t){ LED_FIXED_LIGHT_BLUE_R,
+                                           LED_FIXED_LIGHT_BLUE_G,
+                                           LED_FIXED_LIGHT_BLUE_B };
+                break;
+            case UI_TRACK_LED_COLOR_TOP_LEVEL_ACTIVE:
+                color = (led_rgb_color_t){ LED_FIXED_DARK_BLUE_R,
+                                           LED_FIXED_DARK_BLUE_G,
+                                           LED_FIXED_DARK_BLUE_B };
+                break;
+            case UI_TRACK_LED_COLOR_GROUP_CHILD_INACTIVE:
+                color = (led_rgb_color_t){ LED_FIXED_LIGHT_VIOLET_R,
+                                           LED_FIXED_LIGHT_VIOLET_G,
+                                           LED_FIXED_LIGHT_VIOLET_B };
+                break;
+            case UI_TRACK_LED_COLOR_GROUP_CHILD_ACTIVE:
+                color = (led_rgb_color_t){ LED_FIXED_DARK_VIOLET_R,
+                                           LED_FIXED_DARK_VIOLET_G,
+                                           LED_FIXED_DARK_VIOLET_B };
+                break;
+            case UI_TRACK_LED_COLOR_FOCUS:
+                color = (led_rgb_color_t){ LED_FIXED_WHITE_R,
+                                           LED_FIXED_WHITE_G,
+                                           LED_FIXED_WHITE_B };
+                break;
+            default:
+                break;
         }
     }
 
-    led_layer_set(LED_LAYER_UI, led, r, g, b);
+    led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
 }
 
 static uint8_t led_apply_mute_hall_scene(uint8_t hall)

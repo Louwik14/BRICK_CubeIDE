@@ -423,18 +423,9 @@ static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
         const multi_sample_index_sample_t *const sample = &index->samples[i];
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
         const sample_audio_format_t format = sample_audio_format_from_channels(sample->channels);
         const uint16_t pages = (uint16_t)(sample_audio_format_multi_start_slot_cost(format)
                                           * SAMPLE_PREP_MULTI_START_SLOT_PAGES);
-#else
-        const uint16_t pages = (uint16_t)multi_loader_sample_boundary_pages(
-            sample->total_frames,
-            sample->channels,
-            sample->has_loop,
-            sample->loop_begin,
-            sample->loop_end).unique_pages;
-#endif
         if (pages == 0U)
         {
             if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)

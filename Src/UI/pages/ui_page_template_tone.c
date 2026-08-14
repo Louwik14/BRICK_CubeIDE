@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/md_model.h"
@@ -11,7 +12,6 @@
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Sampler/sample_global_pool.h"
-#include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
 #include "ui_page_manager.h"
@@ -21,30 +21,48 @@
 static uint8_t g_ui_template_tone_subset = 0U;
 static uint8_t g_ui_template_tone_global_master = 0U;
 
-static uint16_t ui_template_tone_multi_instrument_from_selector(float value)
+static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
+                                                    char *out,
+                                                    uint32_t out_len)
 {
-    if (value < 0.5f)
+    persist_control_asset_ref_t asset;
+    if ((out == NULL) || (out_len == 0U)
+        || (project_control_get_logical_asset(PERSIST_ASSET_MULTI, logical, &asset) == 0U)
+        || (asset.path_length == 0U))
     {
-        return MULTI_SAMPLE_POOL_INVALID_ID;
+        return 0U;
     }
 
-    const uint8_t selector = (uint8_t)(value + 0.5f);
-    uint8_t current = 1U;
-    uint16_t last_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    uint16_t begin = 0U;
+    uint16_t end = asset.path_length;
+    for (uint16_t i = 0U; i < asset.path_length; ++i)
     {
-        if (multi_sample_pool_get_instrument(id) == NULL)
+        if ((asset.path[i] == '/') || (asset.path[i] == '\\') || (asset.path[i] == ':'))
         {
-            continue;
+            begin = (uint16_t)(i + 1U);
         }
-        last_id = id;
-        if (current == selector)
-        {
-            return id;
-        }
-        current++;
     }
-    return last_id;
+    for (uint16_t i = begin; i < asset.path_length; ++i)
+    {
+        if (asset.path[i] == '.')
+        {
+            end = i;
+            break;
+        }
+    }
+
+    if (end <= begin)
+    {
+        return 0U;
+    }
+    uint32_t copy_len = (uint32_t)(end - begin);
+    if (copy_len >= out_len)
+    {
+        copy_len = out_len - 1U;
+    }
+    memcpy(out, &asset.path[begin], copy_len);
+    out[copy_len] = '\0';
+    return 1U;
 }
 
 
@@ -1399,8 +1417,6 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 #endif
         if (id == PARAM_SAMPLER_SAMPLE)
         {
-            uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-            const multi_sample_instrument_t *instrument = NULL;
             float selector = 0.0f;
 
             if ((out_name != NULL) && (out_name_len > 0U))
@@ -1408,41 +1424,17 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 (void)snprintf(out_name, out_name_len, "INST");
             }
 
-            if (param_registry_get_track_value(PARAM_SAMPLER_SAMPLE,
-                                               active_track,
-                                               &selector) != 0U)
-            {
-                instrument_id = ui_template_tone_multi_instrument_from_selector(selector);
-            }
-            if (instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
-            {
-                instrument = multi_sample_pool_get_instrument(instrument_id);
-            }
-
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
+                const uint8_t has_selection =
+                    (param_registry_get_track_value(PARAM_SAMPLER_SAMPLE,
+                                                    active_track,
+                                                    &selector) != 0U)
+                    && (ui_template_tone_multi_logical_label(
+                            (uint16_t)(selector + 0.5f), out_value, out_value_len) != 0U);
+                if (has_selection == 0U)
                 {
                     (void)snprintf(out_value, out_value_len, "NONE");
-                }
-                else if (instrument == NULL)
-                {
-                    (void)snprintf(out_value, out_value_len, "LOAD");
-                }
-                else if (instrument->state == MULTI_SAMPLE_INSTRUMENT_ERROR)
-                {
-                    (void)snprintf(out_value, out_value_len, "ERR");
-                }
-                else if (instrument->state == MULTI_SAMPLE_INSTRUMENT_READY)
-                {
-                    (void)snprintf(out_value,
-                                   out_value_len,
-                                   "%s",
-                                   (instrument->name[0] != '\0') ? instrument->name : "READY");
-                }
-                else
-                {
-                    (void)snprintf(out_value, out_value_len, "LOAD");
                 }
             }
 

@@ -1064,7 +1064,9 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                            feedback_shift(voice->feedback_amount),
                            (int)frames);
 
-        constexpr float kOutputScale = 0.125f / (float)kQ24;
+        /* The MSFA carrier bus is signed Q24.  Convert it once to BRICK's
+         * native float scale; mixer track summing owns the common 1/8 trim. */
+        constexpr float kOutputScale = 1.0f / (float)kQ24;
         for (uint32_t i = 0U; i < frames; ++i)
             out_mono[i] = (float)block[i] * kOutputScale;
     }

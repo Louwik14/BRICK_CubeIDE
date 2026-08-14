@@ -162,6 +162,12 @@ static uint8_t ui_core_runtime_bridge_transport_pattern_shortcut(const ui_event_
         return 0U;
     }
 
+    /* In Pattern mode the same shortcut is the Pattern authority's cancel. */
+    if (ui_get_hall_mode() == UI_HALL_MODE_PATTERN)
+    {
+        return 0U;
+    }
+
     if (pattern_enter == 0)
     {
         return 1U;
@@ -708,27 +714,10 @@ static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtim
 
 static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 {
-#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > UI_AUDIO_INPUT_RESOURCE_COUNT
-#error "UI proto wired input count cannot exceed product input resource count"
-#endif
-
-    uint8_t line_owner = TRACK_INPUT_OWNER_NONE;
-    const uint8_t line_owned = (uint8_t)((UI_AUDIO_INPUT_PROTO_WIRED_COUNT > 0U)
-        && (track_input_ownership_get_external_owner(0U, &line_owner) != 0U));
-
     /*
-     * Physical LINE is published directly to its owner's runtime mixer lane.
-     * Lane 0 remains enabled only as the legacy voice-manager transport.
+     * Physical inputs and internal engines publish exclusively through mixer
+     * external lanes. StereoTrack buffers are MAIN/output storage only.
      */
-    track_enable(0U, line_owned);
-    track_enable(1U, 0U);
-    track_enable(2U, 0U);
-    /*
-     * Internal engines publish directly into mixer external lanes.  Physical
-     * track 3 has no input source, so enabling it only creates a second,
-     * silent mixer lane and an unnecessary block clear.
-     */
-    track_enable(3U, 0U);
 }
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)

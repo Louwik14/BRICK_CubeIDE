@@ -68,6 +68,7 @@ void note_fx_pipeline_end_control_window(void);
 uint16_t note_fx_pipeline_frames_until_deadline(uint64_t block_start,
                                                 uint16_t max_frames);
 uint8_t note_fx_pipeline_sync_track(uint8_t track);
+uint8_t note_fx_pipeline_sync_all_tracks(void);
 void note_fx_pipeline_reset_runtime_overrides(uint8_t track);
 void note_fx_pipeline_reset_all_runtime_overrides(void);
 uint8_t note_fx_pipeline_transition_track(uint8_t track,

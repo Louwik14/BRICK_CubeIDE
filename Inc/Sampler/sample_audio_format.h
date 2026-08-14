@@ -162,13 +162,7 @@ static inline uint32_t sample_audio_format_multi_presocle_pages(sample_audio_for
 static inline uint32_t sample_audio_format_multi_start_slot_cost(
     sample_audio_format_t format)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED) ? 2U : 1U;
-#else
-    const uint32_t pages = sample_audio_format_multi_presocle_pages(format);
-    return (pages + SAMPLE_AUDIO_FORMAT_MULTI_START_SLOT_PAGES - 1U)
-           / SAMPLE_AUDIO_FORMAT_MULTI_START_SLOT_PAGES;
-#endif
 }
 
 static inline uint32_t sample_audio_format_multi_mobile_pages(

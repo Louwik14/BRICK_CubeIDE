@@ -3,19 +3,18 @@
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/pattern_control_bank.h"
+#include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_live_ram.h"
 #include "Core/project_control.h"
 #include "Sampler/multi_sample_loader.h"
 #include "ff.h"
-#include "Storage/memory_layout.h"
 #include <stdio.h>
 #include <string.h>
 
 static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT],g_active_valid,g_active;
 static project_product_progress_t g_progress;
-STORAGE_STATE_SDRAM static persist_codec_project_workspace_t g_workspace;
 
 static uint8_t path(char*out,uint32_t size,uint8_t slot){int n=snprintf(out,size,"0:/BRICK/PROJECT/P%02u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return 0U;}return 1U;}
@@ -31,18 +30,22 @@ static const persist_control_asset_ref_t*asset_get(void*ctx,uint16_t ordinal){pe
 
 uint8_t project_product_save(uint8_t slot)
 {
-    if(slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;
+    if(slot>=PROJECT_PRODUCT_SLOT_COUNT)return 0U;
+    persist_codec_project_workspace_t *const workspace = persistence_workspace_acquire_project();
+    if(workspace==NULL)return 0U;
+    if(!acquire()){persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return 0U;}
     persist_codec_project_source_t source;memset(&source,0,sizeof(source));
     persistent_project_control_capture_metadata(&source.metadata);
     source.metadata.pattern_count=pattern_control_bank_count();
     source.metadata.asset_count=project_control_asset_count();
     source.working_pattern=(persist_codec_working_pattern_provider_t){working_get,NULL};
-    source.assets=(persist_codec_asset_provider_t){source.metadata.asset_count,asset_get,&g_workspace};
+    source.assets=(persist_codec_asset_provider_t){source.metadata.asset_count,asset_get,workspace};
     source.macros=project_control_macros_view();
     source.patterns=(persist_codec_pattern_provider_t){pattern_get,NULL};
     char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot);
     if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t sink=persistent_fatfs_sink(&f);ok=(persist_codec_encode_project(&source,&sink,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);persistent_fatfs_close(&f);}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);
     if(ok){g_present[slot]=1U;g_active=slot;g_active_valid=1U;(void)boot_context_flash_commit(slot);}return ok;
 }
 
@@ -56,14 +59,17 @@ static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){(v
 
 uint8_t project_product_load(uint8_t slot)
 {
-    if(slot>=PROJECT_PRODUCT_SLOT_COUNT||!g_present[slot]||!acquire())return 0U;
+    if(slot>=PROJECT_PRODUCT_SLOT_COUNT||!g_present[slot])return 0U;
+    persist_codec_project_workspace_t *const workspace = persistence_workspace_acquire_project();
+    if(workspace==NULL)return 0U;
+    if(!acquire()){persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return 0U;}
     char x[48];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot)&&persistent_fatfs_open_read(&f,x);g_progress=(project_product_progress_t){1U,0U,0U,1U};persist_codec_source_t source={0};if(ok)source=persistent_fatfs_source(&f);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     persist_codec_result_t r=PERSIST_CODEC_IO_ERROR;
-    if(ok){persist_codec_project_consumer_t project={begin_assets,validate_asset,put_asset,apply_working,apply_macros,NULL};persist_codec_pattern_consumer_t patterns={begin_patterns,put_pattern,pattern_control_bank_commit,pattern_control_bank_abort,NULL};r=persist_codec_decode_project_progressive(&source,&g_workspace,&project,&patterns);}
-    ok=(ok&&r==PERSIST_CODEC_OK);if(source.context!=NULL)persistent_fatfs_close(&f);g_progress.done=1U;g_progress.complete=(ok&&multi_sample_load_has_pending()!=0U)?0U:1U;g_progress.active=(ok&&g_progress.complete==0U)?1U:0U;if(ok){g_active=slot;g_active_valid=1U;(void)boot_context_flash_commit(slot);}return ok;
+    if(ok){persist_codec_project_consumer_t project={begin_assets,validate_asset,put_asset,apply_working,apply_macros,NULL};persist_codec_pattern_consumer_t patterns={begin_patterns,put_pattern,pattern_control_bank_commit,pattern_control_bank_abort,NULL};r=persist_codec_decode_project_progressive(&source,workspace,&project,&patterns);}
+    ok=(ok&&r==PERSIST_CODEC_OK);if(source.context!=NULL)persistent_fatfs_close(&f);persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);g_progress.done=1U;g_progress.complete=(ok&&multi_sample_load_has_pending()!=0U)?0U:1U;g_progress.active=(ok&&g_progress.complete==0U)?1U:0U;if(ok){g_active=slot;g_active_valid=1U;(void)boot_context_flash_commit(slot);}return ok;
 }
 
 uint8_t project_product_delete(uint8_t slot){if(slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot)g_active_valid=0U;}return ok;}
-uint8_t project_product_blank(void){persist_control_pattern_t*p=&g_workspace.unit.pattern_record.content;if(!pattern_live_get_control_boot(p)||!project_control_begin_asset_restore())return 0U;project_control_reset_macros();if(!pattern_control_bank_clear())return 0U;g_active_valid=0U;if(persistent_pattern_control_apply(p,0U)!=PERSIST_CODEC_OK)return 0U;pattern_live_set_active_state(0U,0U,0U,0U,0U);boot_context_flash_clear();return 1U;}
+uint8_t project_product_blank(void){persist_codec_project_workspace_t*w=persistence_workspace_acquire_project();if(w==NULL)return 0U;persist_control_pattern_t*p=&w->unit.pattern_record.content;uint8_t ok=(pattern_live_get_control_boot(p)&&project_control_begin_asset_restore())?1U:0U;if(ok){project_control_reset_macros();ok=pattern_control_bank_clear();}if(ok){g_active_valid=0U;ok=(persistent_pattern_control_apply(p,0U)==PERSIST_CODEC_OK)?1U:0U;}if(ok){pattern_live_set_active_state(0U,0U,0U,0U,0U);boot_context_flash_clear();}persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return ok;}
 uint8_t project_product_restore_boot(void){boot_context_flash_data_t c;if(!boot_context_flash_load(&c)||c.active_project_slot>=PROJECT_PRODUCT_SLOT_COUNT)return 0U;return project_product_load(c.active_project_slot);}
 uint8_t project_product_get_progress(project_product_progress_t*out){if(out==NULL)return 0U;if(g_progress.active&&multi_sample_load_has_pending()==0U){g_progress.active=0U;g_progress.complete=1U;}*out=g_progress;return 1U;}

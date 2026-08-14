@@ -252,9 +252,8 @@ static uint8_t param_registry_reapply_tone_runtime_for_track(
     uint8_t track,
     live_parameter_audio_bulk_t *bulk)
 {
-    track_runtime_descriptor_t descriptor;
-    if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
-            || (descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND))
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (ctx == NULL)
     {
         return 1U;
     }
@@ -264,7 +263,8 @@ static uint8_t param_registry_reapply_tone_runtime_for_track(
         param_id_t id = PARAM_COUNT;
         float value = 0.0f;
 
-        if (track_runtime_tone_slot_to_param(descriptor.type, slot, &id) == 0U)
+        if (track_runtime_tone_slot_to_param(
+                (track_runtime_type_t)ctx->type, slot, &id) == 0U)
         {
             break;
         }

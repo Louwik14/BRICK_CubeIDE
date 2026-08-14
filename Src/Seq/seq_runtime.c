@@ -328,6 +328,14 @@ void seq_runtime_start(void)
         return;
     }
 
+    /* Project the canonical NoteFx configuration before new occurrences can
+     * enter the freshly reset temporal runtime. */
+    if (note_fx_pipeline_sync_all_tracks() == 0U)
+    {
+        seq_runtime_exit_critical(primask);
+        return;
+    }
+
     /* Orchestration seam: runtime asks clock policy to prepare cadence, then asks transport FSM for START. */
     seq_runtime_exec_prepare_start_lifecycle(&g_seq_runtime,
                                              &g_seq_clock_bridge,

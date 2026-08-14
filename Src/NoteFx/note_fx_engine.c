@@ -203,6 +203,31 @@ static void note_fx_slot_reset_fx_state(note_fx_slot_runtime_t *runtime,
     }
 }
 
+/* Reset only source ownership and timing.  The rate/style/range (or Euclid
+ * tuple) are the current projection of note_fx_state and must survive a
+ * transport cleanup. */
+static void note_fx_slot_reset_temporal_state(note_fx_slot_runtime_t *runtime,
+                                               uint8_t track, uint8_t slot)
+{
+    if (runtime->common.model == NOTE_FX_MODEL_ARP)
+    {
+        note_fx_arp_init(&runtime->fx.arp.arp,
+                         0x9E3779B9U ^ ((uint32_t)track << 8) ^ slot);
+        runtime->fx.arp.pending_close_token = 0U;
+        runtime->fx.arp.pending_close_generation = 0U;
+        runtime->fx.arp.destination = 0U;
+        runtime->fx.arp.pending_source_close = 0U;
+    }
+    else if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
+    {
+        memset(runtime->fx.euclid.source, 0,
+               sizeof(runtime->fx.euclid.source));
+        runtime->fx.euclid.phase = 0U;
+        runtime->fx.euclid.source_count = 0U;
+        runtime->fx.euclid.reconfigure_pending = 0U;
+    }
+}
+
 static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
                          note_fx_emit_fn emit, void *context)
 {
@@ -232,7 +257,7 @@ static void release_slot(uint8_t track, uint8_t slot, uint64_t sample,
         if (closure_is_settled(result) != 0U)
             owned->active = 0U;
     }
-    note_fx_slot_reset_fx_state(runtime, track, slot, runtime->common.model);
+    note_fx_slot_reset_temporal_state(runtime, track, slot);
     runtime->common.closing = 0U;
     for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
         runtime->common.closing |= runtime->common.owned[i].active;

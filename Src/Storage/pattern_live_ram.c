@@ -10,6 +10,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Storage/pattern_control_bank.h"
+#include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 
 #define PATTERN_BANK_COUNT 16U
@@ -271,20 +272,28 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    persist_control_pattern_t captured;
-    if (persistent_pattern_control_capture(&captured) != PERSIST_CODEC_OK)
+    persist_control_pattern_t *const captured = persistence_workspace_acquire_pattern_save();
+    if (captured == 0)
     {
+        return 0U;
+    }
+
+    if (persistent_pattern_control_capture(captured) != PERSIST_CODEC_OK)
+    {
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_SAVE);
         return 0U;
     }
 
     if (audio_recorder_is_active() != 0U)
     {
         /* TODO pending budgeted pattern save: defer the SD store instead of blocking record drain. */
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_SAVE);
         return 0U;
     }
 
-    if (pattern_control_bank_store(bank, pattern, &captured) == 0U)
+    if (pattern_control_bank_store(bank, pattern, captured) == 0U)
     {
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_SAVE);
         return 0U;
     }
 
@@ -292,9 +301,10 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 
     if ((bank == g_queued_bank) && (pattern == g_queued_pattern) && (g_queued_valid != 0U))
     {
-        g_next_pattern=captured;
+        g_next_pattern = *captured;
     }
 
+    persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_SAVE);
     return 1U;
 }
 

@@ -32,6 +32,7 @@ uint8_t project_control_begin_asset_restore(void);
 uint8_t project_control_validate_asset(const persist_control_asset_ref_t*asset);
 uint8_t project_control_put_asset(const persist_control_asset_ref_t*asset);
 uint8_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
+uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical);
 
 /* Logical Project banks. Values stored in parameters and p-locks are these
  * logical indices; runtime pool/global/instrument slots are deliberately not
@@ -45,6 +46,11 @@ uint8_t project_control_remove_sample(uint16_t logical);
 uint8_t project_control_remove_wavetable(uint16_t logical);
 uint8_t project_control_remove_multi(uint16_t logical);
 uint8_t project_control_has_sample(uint16_t logical,uint32_t *out_kind);
+/* Ordered, kind-filtered projections expose UI ordinals without changing the
+ * logical IDs stored by parameters and persistence. */
+uint16_t project_control_sample_projection_count(uint32_t kind);
+uint8_t project_control_sample_logical_at_ordinal(uint32_t kind,uint16_t ordinal,uint16_t*out_logical);
+uint8_t project_control_sample_ordinal_for_logical(uint32_t kind,uint16_t logical,uint16_t*out_ordinal);
 uint8_t project_control_has_wavetable(uint16_t logical);
 uint8_t project_control_has_multi(uint16_t logical);
 uint16_t project_control_list_samples(uint32_t kind,uint16_t *out,uint16_t capacity);

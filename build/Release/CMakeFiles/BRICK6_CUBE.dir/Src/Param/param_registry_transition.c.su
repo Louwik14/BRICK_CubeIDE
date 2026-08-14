@@ -3,7 +3,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_t
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:72:16:param_registry_reapply_track_value	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:184:16:param_registry_reapply_lane_bound_runtime_for_track	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:381:16:param_registry_finalize_track_structure_change	808	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:412:16:param_registry_finalize_track_structure_change_track	824	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:412:16:param_registry_finalize_track_structure_change_track	808	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:102:9:param_registry_track_structure_transition_is_active	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:120:9:param_registry_track_structure_transition_is_global_active	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_transition.c:125:9:param_registry_track_structure_transition_is_track_active	0	static

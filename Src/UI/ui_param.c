@@ -1670,6 +1670,7 @@ static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t 
 }
 
 static float ui_param_apply_delta_value(param_id_t param,
+                                        uint8_t track,
                                         float current_value,
                                         int16_t delta,
                                         float edit_step,
@@ -1677,6 +1678,38 @@ static float ui_param_apply_delta_value(param_id_t param,
                                         float max_value,
                                         uint8_t shift_down)
 {
+    if ((param == PARAM_SAMPLER_SAMPLE)
+        && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
+        && ((ui_get_track_type(track) == UI_TRACK_TYPE_STREAM)
+            || (ui_get_track_type(track) == UI_TRACK_TYPE_RAM)))
+    {
+        const uint32_t kind = (ui_get_track_type(track) == UI_TRACK_TYPE_STREAM)
+            ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
+        const uint16_t count = project_control_sample_projection_count(kind);
+        if ((delta == 0) || (count == 0U))
+        {
+            return current_value;
+        }
+
+        const uint16_t current_logical = (uint16_t)((current_value < 0.0f)
+            ? 0.0f : (current_value + 0.5f));
+        uint16_t ordinal = 0U;
+        if (project_control_sample_ordinal_for_logical(kind, current_logical, &ordinal) == 0U)
+        {
+            ordinal = (delta > 0) ? 0U : (uint16_t)(count - 1U);
+        }
+        else
+        {
+            int32_t next = (int32_t)ordinal + (int32_t)delta;
+            if (next < 0) next = 0;
+            if (next >= (int32_t)count) next = (int32_t)count - 1;
+            ordinal = (uint16_t)next;
+        }
+
+        uint16_t logical = current_logical;
+        return (project_control_sample_logical_at_ordinal(kind, ordinal, &logical) != 0U)
+            ? (float)logical : current_value;
+    }
     if ((param == PARAM_WAVE_OSC1_TABLE) || (param == PARAM_WAVE_OSC2_TABLE))
     {
         if (delta == 0)
@@ -1718,7 +1751,6 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
         return 0U;
     }
 
-    const float requested_delta = (float)delta * edit_step;
     uint8_t applied = 0U;
 
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
@@ -1742,9 +1774,9 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
             continue;
         }
 
-        float next_value = (ui_param_is_lfo_rate(param) != 0U)
-            ? ui_param_apply_delta_value(param, current_value, delta, edit_step, min_value, max_value, 0U)
-            : ui_param_clamp(current_value + requested_delta, min_value, max_value);
+        float next_value = ui_param_apply_delta_value(param, track, current_value,
+                                                      delta, edit_step,
+                                                      min_value, max_value, 0U);
         if (ui_param_value_is_same(next_value, current_value) != 0U)
         {
             continue;
@@ -1814,7 +1846,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
         }
 
-        const float next_value = ui_param_apply_delta_value(param, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
+        const float next_value = ui_param_apply_delta_value(param, param_track, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
         target_values[i] = seq_param_iface_encode_param_value(param, next_value);
     }
 
@@ -1918,6 +1950,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
     }
 
     float next_value = ui_param_apply_delta_value(param,
+                                                  live_rec_ctx.track,
                                                   source_value,
                                                   delta,
                                                   edit_step,
@@ -2110,6 +2143,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     const float source_current_value = value;
     {
         value = ui_param_apply_delta_value(param,
+                                           edit_track,
                                            source_current_value,
                                            delta,
                                            edit_step,
@@ -2169,6 +2203,7 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
     }
 
     const float value = ui_param_apply_delta_value(param,
+                                                   edit_track,
                                                    current_value,
                                                    direction,
                                                    edit_step,
@@ -2227,6 +2262,7 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
     out_target->track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0xFFU;
     out_target->slot = slot;
     out_target->value = ui_param_apply_delta_value(param,
+                                                   binding_context.active_track,
                                                    current_value,
                                                    direction,
                                                    edit_step,

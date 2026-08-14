@@ -407,7 +407,7 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
                 || (seq_edit_lowcost_source_is_held_or_pending(hall) == 0U)
                 || (hall_surface_is_pressed(hall) == 0U)
                 || (g_seq_hold_state.track_id[hall] != track)
-                || (seq_model_step_is_empty(track, g_seq_hold_state.step_id[hall]) != 0U)
+                || (seq_model_step_produces_note(track, g_seq_hold_state.step_id[hall]) == 0U)
                 || (g_seq_hold_state.step_id[hall] >= end_step))
         {
             continue;

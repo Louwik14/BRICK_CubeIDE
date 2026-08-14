@@ -14,6 +14,12 @@
 # EXTERNAL cache entries
 ########################
 
+//Capture bounded audio admission/polyphony records for GDB
+BRICK6_AUDIO_POLY_DIAG:BOOL=ON
+
+//Capture bounded poly render/sum snapshots for GDB
+BRICK6_AUDIO_RENDER_DIAG:BOOL=ON
+
 //Value Computed by CMake
 BRICK6_CUBE_BINARY_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release
 
@@ -25,6 +31,9 @@ BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 
 //Place the 32 KiB I-cache audit candidate set in ITCM
 BRICK6_ITCM_AUDIT_32:BOOL=ON
+
+//Capture bounded mixer path snapshots for GDB
+BRICK6_MIXER_PATH_DIAG:BOOL=ON
 
 //Capture bounded Multi pitched voice trace for GDB
 BRICK6_MULTI_PITCH_TRACE:BOOL=OFF
