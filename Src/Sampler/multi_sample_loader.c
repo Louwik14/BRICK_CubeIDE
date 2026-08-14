@@ -9,6 +9,7 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Sampler/sample_cache.h"
+#include "Core/project_control.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -240,6 +241,14 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_diag.last_error = error;
     g_multi_load_diag.last_failed_sample = failed_sample;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
+    const multi_sample_instrument_t *const failed_instrument =
+        multi_sample_pool_get_instrument(g_multi_load_diag.instrument_id);
+    if (failed_instrument != 0)
+    {
+        project_control_complete_multi_runtime(failed_instrument->index_path,
+                                               g_multi_load_diag.instrument_id,
+                                               0U);
+    }
     (void)multi_sample_pool_clear_instrument(g_multi_load_diag.instrument_id);
     g_multi_load_active = 0U;
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
@@ -686,6 +695,7 @@ static void multi_loader_start_next_queued(void)
                 if ((result != MULTI_SAMPLE_LOAD_OK)
                     && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
                 {
+                    project_control_complete_multi_runtime(path, instrument_id, 0U);
                     (void)multi_sample_pool_clear_instrument(instrument_id);
                 }
             }
@@ -840,6 +850,9 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
     g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;
     (void)multi_sample_pool_set_state(g_multi_load_diag.instrument_id,
                                       MULTI_SAMPLE_INSTRUMENT_READY);
+    project_control_complete_multi_runtime(instrument->index_path,
+                                           g_multi_load_diag.instrument_id,
+                                           1U);
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
     multi_loader_start_next_queued();
     return 1U;
@@ -956,6 +969,9 @@ void multi_sample_cancel_all_loads(void)
     {
         if (g_multi_load_queue[i].used != 0U)
         {
+            project_control_complete_multi_runtime(g_multi_load_queue[i].path,
+                                                   g_multi_load_queue[i].instrument_id,
+                                                   0U);
             (void)multi_sample_pool_clear_instrument(
                 g_multi_load_queue[i].instrument_id);
         }
