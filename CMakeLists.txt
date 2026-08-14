@@ -304,8 +304,6 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_sd_bank.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_v1.c"
 )
 
 file(GLOB SRC_UI_SRC

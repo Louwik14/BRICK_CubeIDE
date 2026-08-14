@@ -9,7 +9,7 @@
 #include "Core/track_runtime.h"
 #include "Param/param_macro.h"
 #include "Param/param_registry.h"
-#include "Storage/project_v1.h"
+#include "Core/project_control.h"
 #include "ui_core.h"
 #include "ui_param.h"
 
@@ -47,7 +47,6 @@ static float ui_macro_interaction_clampf(float value, float min_value, float max
 
     return value;
 }
-
 static uint16_t hall_pressure_delta(uint8_t hall)
 {
     const uint16_t min_value = hall_engine_get_min(hall);
@@ -189,7 +188,7 @@ static uint8_t ui_macro_interaction_get_held_scene_and_track(uint8_t *out_scene,
             || (out_track == NULL)
             || (g_ui_macro_interaction.armed == 0U)
             || (ui_macro_interaction_is_scene_mode() == 0U)
-            || (g_ui_macro_interaction.hall >= PROJECT_V1_MACRO_SCENE_COUNT)
+            || (g_ui_macro_interaction.hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
             || (g_ui_macro_interaction.capture_track >= UI_TRACK_COUNT))
     {
         return 0U;
@@ -201,7 +200,7 @@ static uint8_t ui_macro_interaction_get_held_scene_and_track(uint8_t *out_scene,
 }
 
 static uint8_t ui_macro_interaction_get_scene_lock_for_param(param_id_t param,
-                                                            project_v1_macro_lock_t *out_lock)
+                                                            project_control_macro_lock_t *out_lock)
 {
     uint8_t scene = 0U;
     uint8_t track = 0U;
@@ -223,7 +222,7 @@ static uint8_t ui_macro_interaction_get_scene_lock_for_param(param_id_t param,
         return 1U;
     }
 
-    return project_v1_macro_get_scene_lock_for_param(scene, track, param, out_lock);
+    return project_control_get_scene_lock_for_param(scene, track, param, out_lock);
 }
 
 static uint8_t ui_macro_interaction_commit_pending_lock(void)
@@ -239,7 +238,7 @@ static uint8_t ui_macro_interaction_commit_pending_lock(void)
         return 0U;
     }
 
-    return project_v1_macro_assign_scene_lock(scene,
+    return project_control_assign_scene_lock(scene,
                                               track,
                                               g_ui_macro_interaction.param,
                                               g_ui_macro_interaction.scene_value);
@@ -247,7 +246,7 @@ static uint8_t ui_macro_interaction_commit_pending_lock(void)
 
 static uint8_t ui_macro_interaction_resolve_lock_param(param_id_t *out_param)
 {
-    project_v1_macro_lock_t lock_entry;
+    project_control_macro_lock_t lock_entry;
     const uint8_t hall = g_ui_macro_interaction.hall;
     const uint8_t scene = hall;
 
@@ -273,15 +272,15 @@ static uint8_t ui_macro_interaction_resolve_lock_param(param_id_t *out_param)
         return 1U;
     }
 
-    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    for (uint8_t lock = 0U; lock < PERSIST_CONTROL_MACRO_LOCK_COUNT; ++lock)
     {
-        if (project_v1_macro_get_scene_lock(scene, lock, &lock_entry) == 0U)
+        if (project_control_get_scene_lock(scene, lock, &lock_entry) == 0U)
         {
             continue;
         }
 
-        if ((lock_entry.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
-                || (lock_entry.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE))
+        if ((lock_entry.track == 0xFFU)
+                || (lock_entry.param == PARAM_COUNT))
         {
             continue;
         }
@@ -302,7 +301,7 @@ static uint8_t ui_macro_interaction_resolve_lock_value(uint8_t *out_track,
                                                        param_id_t *out_param,
                                                        float *out_scene_value)
 {
-    project_v1_macro_lock_t lock_entry;
+    project_control_macro_lock_t lock_entry;
     const uint8_t hall = g_ui_macro_interaction.hall;
     const uint8_t scene = hall;
 
@@ -311,7 +310,7 @@ static uint8_t ui_macro_interaction_resolve_lock_value(uint8_t *out_track,
         return 0U;
     }
 
-    *out_track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    *out_track = 0xFFU;
     *out_param = PARAM_COUNT;
     *out_scene_value = 0.0f;
 
@@ -333,15 +332,15 @@ static uint8_t ui_macro_interaction_resolve_lock_value(uint8_t *out_track,
         return 1U;
     }
 
-    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    for (uint8_t lock = 0U; lock < PERSIST_CONTROL_MACRO_LOCK_COUNT; ++lock)
     {
-        if (project_v1_macro_get_scene_lock(scene, lock, &lock_entry) == 0U)
+        if (project_control_get_scene_lock(scene, lock, &lock_entry) == 0U)
         {
             continue;
         }
 
-        if ((lock_entry.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
-                || (lock_entry.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)
+        if ((lock_entry.track == 0xFFU)
+                || (lock_entry.param == PARAM_COUNT)
                 || (param_macro_lock_target_is_supported(lock_entry.track, lock_entry.param) == 0U))
         {
             continue;
@@ -377,7 +376,7 @@ void ui_macro_interaction_init(void)
 
 void ui_macro_interaction_reset(void)
 {
-    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
+    for (uint8_t scene = 0U; scene < PERSIST_CONTROL_MACRO_SCENE_COUNT; ++scene)
     {
         param_macro_release_scene_source(scene);
     }
@@ -390,7 +389,7 @@ void ui_macro_interaction_reset(void)
     g_ui_macro_interaction.armed = 0U;
     g_ui_macro_interaction.hall = 0U;
     g_ui_macro_interaction.encoder = 0U;
-    g_ui_macro_interaction.capture_track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    g_ui_macro_interaction.capture_track = 0xFFU;
     g_ui_macro_interaction.has_param = 0U;
     g_ui_macro_interaction.has_scene_value = 0U;
     g_ui_macro_interaction.param = PARAM_COUNT;
@@ -469,7 +468,7 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
 
         if (ui_macro_interaction_get_held_scene_and_track(&scene, &track) != 0U)
         {
-            (void)project_v1_macro_clear_scene_lock(scene, track, param);
+            (void)project_control_clear_scene_lock(scene, track, param);
         }
 
         g_ui_macro_interaction.encoder = encoder;
@@ -488,7 +487,7 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
 
     if (g_ui_macro_interaction.has_param == 0U)
     {
-        project_v1_macro_lock_t existing_lock;
+        project_control_macro_lock_t existing_lock;
         if (ui_macro_interaction_get_scene_lock_for_param(param, &existing_lock) != 0U)
         {
             current_value = existing_lock.scene_value;
@@ -505,7 +504,7 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
     }
     else if (g_ui_macro_interaction.param != param)
     {
-        project_v1_macro_lock_t existing_lock;
+        project_control_macro_lock_t existing_lock;
         if (ui_macro_interaction_get_scene_lock_for_param(param, &existing_lock) != 0U)
         {
             current_value = existing_lock.scene_value;
@@ -625,7 +624,7 @@ uint8_t ui_macro_interaction_get_held_scene(uint8_t *out_scene)
     if ((out_scene == NULL)
             || (g_ui_macro_interaction.armed == 0U)
             || (ui_macro_interaction_is_scene_mode() == 0U)
-            || (g_ui_macro_interaction.hall >= PROJECT_V1_MACRO_SCENE_COUNT))
+            || (g_ui_macro_interaction.hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT))
     {
         return 0U;
     }
@@ -636,7 +635,7 @@ uint8_t ui_macro_interaction_get_held_scene(uint8_t *out_scene)
 
 uint8_t ui_macro_interaction_param_is_locked(param_id_t param)
 {
-    project_v1_macro_lock_t lock_entry;
+    project_control_macro_lock_t lock_entry;
     return ui_macro_interaction_get_scene_lock_for_param(param, &lock_entry);
 }
 
@@ -644,14 +643,14 @@ uint8_t ui_macro_interaction_get_param_lock_value(param_id_t param,
                                                   uint8_t *out_track,
                                                   float *out_scene_value)
 {
-    project_v1_macro_lock_t lock_entry;
+    project_control_macro_lock_t lock_entry;
 
     if ((out_track == NULL) || (out_scene_value == NULL))
     {
         return 0U;
     }
 
-    *out_track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    *out_track = 0xFFU;
     *out_scene_value = 0.0f;
 
     if (ui_macro_interaction_get_scene_lock_for_param(param, &lock_entry) == 0U)

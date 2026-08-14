@@ -1,7 +1,7 @@
 # Autorités Project CONTROL
 
-`project_control` possède désormais l'intention utilisateur des macros/scènes et des références d'assets par entity. Les destinations de macros sont conservées dans l'autorité sous forme de clés paramètre stables. Une référence d'asset contient uniquement un identifiant logique dérivé de l'entity, un kind stable et un chemin; aucun slot de pool, index global, état de chargement ou handle runtime n'y figure.
+`project_control` possède l'intention utilisateur des macros/scènes et les banks logiques d'assets Sample Stream/RAM, Wavetable et Multi. Les paramètres et p-locks ne conservent que les indices logiques; les correspondances vers les slots runtime sont publiées après chargement réussi et ne sont jamais persistées.
 
-`persistent_project_control` capture, valide et applique le working Pattern canonique, la sélection Pattern active, les macros et le manifeste logique d'assets. La banque reste streamable et n'est pas dupliquée en RAM. `pattern_live_ram` reste l'autorité CONTROL de la sélection Pattern active.
+`persistent_project_control` capture, valide et applique le Pattern de travail canonique, la sélection Pattern active, les macros et le manifeste logique d'assets. `project_product` est l'unique façade produit Save/Load/Blank/boot.
 
-`project_v1` conserve le format et l'orchestration disque historiques. Ses blocs macros, autoload, diagnostics, queue et `bank_has_data` restent des représentations V1 de transfert ou des états runtime; ils ne sont pas repris comme autorités du Project canonique. La résolution chemin logique vers pool/slot demeure dans le chemin runtime V1 et une référence absente reste conservée dans `project_control`.
+Les UI macros/scènes, le presse-papiers et les LEDs interrogent directement `project_control`. Aucun wrapper Project V1 ni orchestration disque historique ne subsiste dans le code actif.

@@ -21,6 +21,7 @@
 #include "Storage/audio_test_csv.h"
 #include "Storage/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/persistent_pattern_control.h"
 #include "UI/ui_core.h"
 #include "UI/ui_hall_mode_state.h"
 #include "stm32h7xx_hal.h"
@@ -186,7 +187,7 @@ typedef struct
     uint8_t summary_index;
 } audio_test_runner_t;
 
-STORAGE_STATE_SDRAM static PatternSaveV1 g_saved_project_state;
+STORAGE_STATE_SDRAM static persist_control_pattern_t g_saved_project_state;
 STORAGE_STATE_SDRAM static audio_test_cal_model_stats_t
     g_cal_stats[AUDIO_TEST_CAL_MODEL_COUNT];
 STORAGE_STATE_SDRAM static float
@@ -1206,7 +1207,7 @@ static uint8_t restore_saved_state(void)
     {
         return (g_runner.cancel_requested != 0U) ? 1U : 0U;
     }
-    if (pattern_live_apply_snapshot(&g_saved_project_state, 0U) == 0U)
+    if (persistent_pattern_control_apply(&g_saved_project_state, 0U) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
@@ -1295,7 +1296,7 @@ void audio_test_runner_tick(void)
     switch (g_runner.state)
     {
         case AUDIO_TEST_RUNNER_PREPARE:
-            if (pattern_live_capture_current(&g_saved_project_state) == 0U)
+            if (persistent_pattern_control_capture(&g_saved_project_state) != PERSIST_CODEC_OK)
             {
                 set_state(AUDIO_TEST_RUNNER_ERROR);
                 break;

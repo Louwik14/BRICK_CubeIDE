@@ -4,88 +4,10 @@
 #include <stdint.h>
 #include "Storage/persistent_control_model.h"
 
-#include "Seq/seq_model.h"
-#include "Param/param_store.h"
-#include "NoteFx/note_fx_state.h"
-
-typedef struct __attribute__((packed))
-{
-    uint8_t set_id;
-    /* Current-format compact slot; legacy slot numbers are not accepted. */
-    seq_param_slot_t param_slot;
-    seq_value16_t value16;
-    uint8_t flags;
-} pattern_v1_plock_t;
-
-typedef struct __attribute__((packed))
-{
-    uint8_t trig;
-    uint8_t lock_count;
-    uint8_t roll;
-    uint8_t reserved;
-    seq_play_snapshot_t play;
-    pattern_v1_plock_t locks[SEQ_STEP_MAX_LOCKS];
-} pattern_v1_step_t;
-
-_Static_assert(sizeof(pattern_v1_step_t) == 204U, "pattern step storage size changed");
-
-typedef struct
-{
-    uint8_t length_steps;
-    uint8_t ui_page;
-    uint8_t reserved[2];
-    pattern_v1_step_t steps[SEQ_MAX_STEPS];
-} pattern_v1_track_seq_t;
-
-typedef struct
-{
-    uint8_t family[SEQ_TRACK_COUNT];
-    uint8_t type[SEQ_TRACK_COUNT];
-    uint8_t external_input[SEQ_TRACK_COUNT];
-    uint8_t midi_channel[SEQ_TRACK_COUNT];
-    uint8_t midi_source[SEQ_TRACK_COUNT];
-    uint8_t looper_route_enabled[SEQ_TRACK_COUNT][SEQ_TRACK_COUNT];
-} pattern_v1_track_cfg_block_t;
-
-typedef struct
-{
-    pattern_v1_track_seq_t tracks[SEQ_LANE_CAPACITY];
-} pattern_v1_seq_block_t;
-
-typedef struct
-{
-    float track_values[SEQ_LANE_CAPACITY][PARAM_PERSIST_COUNT];
-    uint8_t track_valid[SEQ_LANE_CAPACITY][PARAM_PERSIST_COUNT];
-} pattern_v1_track_param_block_t;
-
-typedef struct
-{
-    float global_values[PARAM_PERSIST_COUNT];
-    uint8_t global_valid[PARAM_PERSIST_COUNT];
-    uint32_t tempo_bpm_milli;
-    uint8_t clock_src;
-    uint8_t rec_start_mode;
-    uint8_t rec_len_mode;
-    uint8_t reserved;
-    uint8_t track_div[SEQ_LANE_CAPACITY];
-    uint8_t track_quant[SEQ_LANE_CAPACITY];
-    uint8_t track_swing[SEQ_LANE_CAPACITY];
-} pattern_v1_globals_block_t;
-
-typedef struct
-{
-    pattern_v1_seq_block_t seq;
-    pattern_v1_track_cfg_block_t track_cfg;
-    pattern_v1_track_param_block_t sound;
-    pattern_v1_track_param_block_t mix;
-    pattern_v1_globals_block_t globals;
-    note_fx_track_state_t note_fx[NOTE_FX_TRACK_COUNT];
-} PatternSaveV1;
-
 void pattern_live_init(void);
 uint8_t pattern_live_capture_boot_snapshot(void);
-uint8_t pattern_live_get_control_boot(persist_control_pattern_t*out);
-persist_control_pattern_record_t*pattern_live_project_record_workspace(void);
+uint8_t pattern_live_get_control_boot(persist_control_pattern_t *out);
+persist_control_pattern_record_t *pattern_live_project_record_workspace(void);
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern);
 void pattern_load_service(uint32_t byte_budget);
 uint8_t pattern_load_is_pending(void);
@@ -102,9 +24,6 @@ void pattern_live_set_active_state(uint8_t active_bank,
                                    uint8_t queued_valid,
                                    uint8_t queued_bank,
                                    uint8_t queued_pattern);
-uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern);
-uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport);
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
-uint8_t pattern_live_is_apply_in_progress(void);
 
 #endif

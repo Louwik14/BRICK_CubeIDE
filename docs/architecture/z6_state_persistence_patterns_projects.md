@@ -1,11 +1,11 @@
 # Z6 — État et persistance
 
-Les formats courants sont stricts: Pattern v12, Project v12 et Patch v6. Les banques rejettent toute version, taille d'en-tête ou taille de payload différente; aucune migration d'un ancien format n'est tentée.
+Project, Pattern et Patch utilisent exclusivement le modèle CONTROL canonique et les codecs explicites de `persistent_control_codec`. Aucune famille V1, aucun dump de structure et aucune migration d'ancien format ne participent aux parcours produit.
 
-Pattern stocke les configurations, paramètres, routes, Note FX et huit séquences homogènes indexées `0..7`. Project embarque ce Pattern et ses états globaux, multi et macro indexés par slot. Patch représente une seule piste assignable et ne porte ni rôle ni ordinal.
+Pattern persiste les configurations, paramètres, routes, Note FX et séquences par entité logique. `pattern_live_ram` orchestre la sélection active, la queue différée et le Blank; capture, validation et application passent par `persistent_pattern_control`, et le stockage passe par `pattern_control_bank`.
 
-Le Master global n'est pas un slot de Pattern ou de Patch et ne possède aucun état de piste. Looper et External sont persistés comme moteur et configuration du slot correspondant, avec l'entrée External exacte.
+Patch est mono-entité et passe uniquement par `patch_product`, `persistent_patch_control` et le codec canonique. Project passe uniquement par `project_product`, `persistent_project_control`, les banks logiques d'assets et les commits transactionnels de Pattern.
 
-La capture et l'application séparent état persistant et runtime transitoire. Toute validation précède la mutation. Un Pattern ou Project appliqué avec succès invalide Undo/Redo; un rejet laisse l'état courant intact.
+Les identités persistées sont logiques. Les slots de pool, indices globaux AUDIO, handles et états de chargement runtime sont reconstruits après lecture et ne figurent dans aucun payload persistant.
 
-Track snapshot, Pattern snapshot et duplicate Pattern suivent le même contrat transactionnel : préflight complet de structure, type, configuration, PLAY, slots p-lock et budget global, puis mutation seulement après succès. Toute erreur déterministe de validation laisse la destination intacte, sans conversion, restauration partielle ni consommation du pool.
+Toute prévalidation précède la mutation. Un rejet laisse l'état CONTROL courant intact; une application réussie reconstruit ensuite le runtime et l'AUDIO.

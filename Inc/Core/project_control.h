@@ -18,6 +18,10 @@ uint8_t project_control_set_macro_scene(uint8_t macro,uint8_t scene);
 uint8_t project_control_get_scene_lock(uint8_t scene,uint8_t lock,project_control_macro_lock_t*out);
 uint8_t project_control_set_scene_lock(uint8_t scene,uint8_t lock,const project_control_macro_lock_t*in);
 uint8_t project_control_scene_lock_is_empty(uint8_t scene,uint8_t lock);
+uint8_t project_control_scene_has_locks(uint8_t scene);
+uint8_t project_control_get_scene_lock_for_param(uint8_t scene,uint8_t track,param_id_t param,project_control_macro_lock_t*out);
+uint8_t project_control_assign_scene_lock(uint8_t scene,uint8_t track,param_id_t param,float value);
+uint8_t project_control_clear_scene_lock(uint8_t scene,uint8_t track,param_id_t param);
 uint8_t project_control_capture_macros(persist_control_macros_t*out);
 uint8_t project_control_apply_macros(const persist_control_macros_t*in);
 

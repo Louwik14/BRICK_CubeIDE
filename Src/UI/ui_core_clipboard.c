@@ -10,7 +10,7 @@
 #include "ui_template_page.h"
 #include "ui_edit_context_sync.h"
 #include "ui_macro_interaction.h"
-#include "Storage/project_v1.h"
+#include "Core/project_control.h"
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
 #include "Core/track_snapshot.h"
@@ -56,7 +56,7 @@ typedef struct
 typedef struct
 {
     uint8_t valid;
-    project_v1_macro_lock_t lock;
+    project_control_macro_lock_t lock;
 } ui_macro_lock_clipboard_t;
 
 typedef struct
@@ -81,7 +81,6 @@ static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_
     *out_param = param;
     return 1U;
 }
-
 static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, const char *message)
 {
     if (feedback != 0)
@@ -90,15 +89,15 @@ static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, c
     }
 }
 
-static uint8_t ui_core_clipboard_macro_make_empty_lock(project_v1_macro_lock_t *out_lock)
+static uint8_t ui_core_clipboard_macro_make_empty_lock(project_control_macro_lock_t *out_lock)
 {
     if (out_lock == 0)
     {
         return 0U;
     }
 
-    out_lock->track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
-    out_lock->param = PROJECT_V1_MACRO_LOCK_PARAM_NONE;
+    out_lock->track = 0xFFU;
+    out_lock->param = PARAM_COUNT;
     out_lock->scene_value = 0.0f;
     return 1U;
 }
@@ -111,9 +110,9 @@ static uint8_t ui_core_clipboard_resolve_active_macro_lock_target(uint8_t *out_s
 
 static uint8_t ui_core_clipboard_copy_macro_lock(uint8_t scene, uint8_t lock)
 {
-    project_v1_macro_lock_t current;
+    project_control_macro_lock_t current;
 
-    if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
+    if (project_control_get_scene_lock(scene, lock, &current) == 0U)
     {
         return 0U;
     }
@@ -130,18 +129,18 @@ static uint8_t ui_core_clipboard_paste_macro_lock(uint8_t scene, uint8_t lock)
         return 0U;
     }
 
-    return project_v1_macro_set_scene_lock(scene, lock, &g_ui_clipboard.macro_lock.lock);
+    return project_control_set_scene_lock(scene, lock, &g_ui_clipboard.macro_lock.lock);
 }
 
 static uint8_t ui_core_clipboard_clear_macro_lock(uint8_t scene, uint8_t lock)
 {
-    project_v1_macro_lock_t empty_lock;
+    project_control_macro_lock_t empty_lock;
     if (ui_core_clipboard_macro_make_empty_lock(&empty_lock) == 0U)
     {
         return 0U;
     }
 
-    return project_v1_macro_set_scene_lock(scene, lock, &empty_lock);
+    return project_control_set_scene_lock(scene, lock, &empty_lock);
 }
 
 static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_subpage_t *subpage,

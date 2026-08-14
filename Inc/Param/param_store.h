@@ -499,7 +499,7 @@ PARAM_STORE_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 293, "Persistent parameter 
 #undef PARAM_STORE_STATIC_ASSERT
 
 /* Generic dense payloads stop before MIDI FX; three MIDI FX bases persist in
- * PatternSaveV1.note_fx and are not duplicated in these PARAM_COUNT-indexed blocks. */
+ * the canonical Pattern note-FX block and are not duplicated in these PARAM_COUNT-indexed blocks. */
 #define PARAM_PERSIST_COUNT PARAM_MIDI_FX_S1_PARAM1
 
 

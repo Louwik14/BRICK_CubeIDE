@@ -9,7 +9,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Storage/memory_layout.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/project_v1.h"
+#include "Storage/persistent_project_control.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
@@ -30,7 +30,7 @@ typedef struct
 } monkey_test_safety_runtime_t;
 
 static monkey_test_safety_runtime_t g_monkey_test_safety;
-STORAGE_STATE_SDRAM static ProjectSaveV1 g_monkey_test_saved_project;
+STORAGE_STATE_SDRAM static persist_control_project_t g_monkey_test_saved_project;
 
 static void monkey_test_safety_silence(void)
 {
@@ -70,7 +70,7 @@ uint8_t monkey_test_safety_prepare(void)
             track, &g_monkey_test_safety.saved_playhead[track]);
     }
 
-    if (project_v1_capture_current(&g_monkey_test_saved_project) == 0U)
+    if (persistent_project_control_capture(&g_monkey_test_saved_project) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
@@ -83,7 +83,7 @@ uint8_t monkey_test_safety_prepare(void)
     {
         sd_access_gate_set_diagnostic_read_only(0U);
         undo_v2_set_capture_suspended(0U);
-        (void)project_v1_apply_snapshot(&g_monkey_test_saved_project, 0U);
+        (void)persistent_project_control_apply(&g_monkey_test_saved_project, 0U);
         g_monkey_test_safety.snapshot_valid = 0U;
         return 0U;
     }
@@ -109,7 +109,7 @@ uint8_t monkey_test_safety_restore(void)
 
     uint8_t ok = 1U;
     if ((g_monkey_test_safety.snapshot_valid == 0U)
-        || (project_v1_apply_snapshot(&g_monkey_test_saved_project, 0U) == 0U))
+        || (persistent_project_control_apply(&g_monkey_test_saved_project, 0U) != PERSIST_CODEC_OK))
     {
         ok = 0U;
     }

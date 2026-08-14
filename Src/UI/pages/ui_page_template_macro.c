@@ -4,7 +4,7 @@
 
 #include "ui_template_page.h"
 #include "ui_macro_interaction.h"
-#include "Storage/project_v1.h"
+#include "Core/project_control.h"
 
 static const ui_template_family_t g_ui_template_macro_family = {
     .family_title = "MACRO CFG",
@@ -29,7 +29,6 @@ static const ui_template_family_t g_ui_template_macro_family = {
     },
     .default_subpage = 0U,
 };
-
 static uint8_t ui_page_template_macro_virtual_slot_text(uint8_t slot,
                                                         char *out_name,
                                                         uint32_t out_name_len,
@@ -47,7 +46,7 @@ static uint8_t ui_page_template_macro_virtual_slot_text(uint8_t slot,
     }
 
     const char *const value =
-        (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_SWITCH) ? "Switch" : "Scene";
+        (project_control_get_hall_mode() == PROJECT_CONTROL_HALL_SWITCH) ? "Switch" : "Scene";
     (void)snprintf(out_name, out_name_len, "Mode");
     (void)snprintf(out_value, out_value_len, "%s", value);
     return 1U;
@@ -84,12 +83,12 @@ void ui_page_template_macro_handle_encoder(uint8_t encoder, int16_t delta)
 
     if (delta > 0)
     {
-        project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_SWITCH);
+        project_control_set_hall_mode(PROJECT_CONTROL_HALL_SWITCH);
         ui_macro_interaction_reset();
         return;
     }
 
-    project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_SCENE);
+    project_control_set_hall_mode(PROJECT_CONTROL_HALL_SCENE);
     ui_macro_interaction_reset();
 }
 

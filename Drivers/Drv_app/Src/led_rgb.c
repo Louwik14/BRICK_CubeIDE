@@ -33,7 +33,7 @@
 #include "led_remap.h"
 #include "led_anim.h"
 #include "led_layer.h"
-#include "Storage/project_v1.h"
+#include "Core/project_control.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_runtime_bridge.h"
@@ -141,7 +141,7 @@ static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
     { 80U, 0U, 128U },
 };
 
-static const led_rgb_color_t g_led_macro_scene_colors[PROJECT_V1_MACRO_SCENE_COUNT] = {
+static const led_rgb_color_t g_led_macro_scene_colors[PERSIST_CONTROL_MACRO_SCENE_COUNT] = {
     { 128U, 48U, 0U },
     { 128U, 88U, 0U },
     { 112U, 128U, 0U },
@@ -160,11 +160,11 @@ static const led_rgb_color_t g_led_macro_scene_colors[PROJECT_V1_MACRO_SCENE_COU
     { 48U, 96U, 128U }
 };
 
-static uint8_t g_led_macro_pressure_scale[PROJECT_V1_MACRO_SCENE_COUNT];
+static uint8_t g_led_macro_pressure_scale[PERSIST_CONTROL_MACRO_SCENE_COUNT];
 
 static led_rgb_color_t led_macro_scene_color(uint8_t scene)
 {
-    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    if (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
     {
         return g_led_macro_scene_colors[0U];
     }
@@ -192,7 +192,7 @@ static uint8_t led_macro_pressure_depth_scale(uint8_t hall, uint8_t base_scale)
     uint8_t target_scale = base_scale;
     uint8_t current_scale = 0U;
 
-    if (hall >= PROJECT_V1_MACRO_SCENE_COUNT)
+    if (hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
     {
         return base_scale;
     }
@@ -516,8 +516,8 @@ static void led_apply_macro_scene_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
     led_rgb_color_t color = led_macro_scene_color(hall);
-    uint8_t held_scene = PROJECT_V1_MACRO_SCENE_COUNT;
-    uint8_t scale = (project_v1_macro_scene_has_locks(hall) != 0U) ? 180U : 45U;
+    uint8_t held_scene = PERSIST_CONTROL_MACRO_SCENE_COUNT;
+    uint8_t scale = (project_control_scene_has_locks(hall) != 0U) ? 180U : 45U;
 
     if ((ui_macro_interaction_get_held_scene(&held_scene) != 0U) && (held_scene == hall))
     {
@@ -532,7 +532,7 @@ static void led_apply_macro_switch_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
     led_rgb_color_t color = led_macro_scene_color(hall);
-    uint8_t scale = (project_v1_macro_scene_has_locks(hall) != 0U) ? 170U : 45U;
+    uint8_t scale = (project_control_scene_has_locks(hall) != 0U) ? 170U : 45U;
     scale = led_macro_pressure_depth_scale(hall, scale);
 
     color = led_scale_color(color, scale);
