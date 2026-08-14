@@ -61,8 +61,8 @@ uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset
 
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime,uint16_t*out_logical){if((kind!=PERSIST_ASSET_SAMPLE_STREAM&&kind!=PERSIST_ASSET_SAMPLE_RAM)||(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))return 0U;return bank_register(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,kind,path,runtime,out_logical);}
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)return 0U;return bank_register(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,PERSIST_ASSET_WAVETABLE,path,runtime,out_logical);}
-uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return 0U;uint16_t published=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i!=NULL&&multi_sample_pool_get_state(runtime)==MULTI_SAMPLE_INSTRUMENT_READY&&strcmp(i->index_path,path)==0)published=runtime;}uint8_t ok=bank_register(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,published,out_logical);if(ok&&runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&published==PROJECT_CONTROL_INVALID_RUNTIME)project_control_begin_multi_runtime(path,runtime);return ok;}
-void project_control_begin_multi_runtime(const char*path,uint16_t runtime){if(path==NULL||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return;for(uint16_t i=0U;i<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++i)if(g_multi_bank[i].used!=0U&&g_multi_bank[i].kind==PERSIST_ASSET_MULTI&&strcmp(g_multi_bank[i].path,path)==0){g_multi_bank[i].runtime=PROJECT_CONTROL_INVALID_RUNTIME;g_multi_bank[i].pending_runtime=runtime;}}
+uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return 0U;uint16_t published=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i!=NULL&&multi_sample_pool_get_state(runtime)==MULTI_SAMPLE_INSTRUMENT_READY&&strcmp(i->index_path,path)==0)published=runtime;}return bank_register(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,published,out_logical);}
+uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime){if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||g_multi_bank[logical].used==0U||g_multi_bank[logical].kind!=PERSIST_ASSET_MULTI||strcmp(g_multi_bank[logical].path,path)!=0)return 0U;g_multi_bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;g_multi_bank[logical].pending_runtime=runtime;return 1U;}
 static void reapply_multi_logical(uint16_t logical)
 {
     for(uint8_t track=0U;track<UI_TRACK_COUNT;++track)
@@ -77,24 +77,12 @@ static void reapply_multi_logical(uint16_t logical)
         }
     }
 }
-void project_control_complete_multi_runtime(const char*path,uint16_t runtime,uint8_t success)
+void project_control_complete_multi_runtime(uint16_t logical,const char*path,uint16_t runtime,uint8_t success)
 {
-    uint16_t logical=PROJECT_CONTROL_INVALID_RUNTIME;
-    if(path==NULL||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return;
-    for(uint16_t i=0U;i<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++i)
-    {
-        if(g_multi_bank[i].used!=0U
-            &&g_multi_bank[i].kind==PERSIST_ASSET_MULTI
-            &&g_multi_bank[i].pending_runtime==runtime
-            &&strcmp(g_multi_bank[i].path,path)==0)
-        {
-            g_multi_bank[i].runtime=(success!=0U)?runtime:PROJECT_CONTROL_INVALID_RUNTIME;
-            g_multi_bank[i].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
-            logical=i;
-            break;
-        }
-    }
-    if(logical!=PROJECT_CONTROL_INVALID_RUNTIME)reapply_multi_logical(logical);
+    if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||g_multi_bank[logical].used==0U||g_multi_bank[logical].kind!=PERSIST_ASSET_MULTI||g_multi_bank[logical].pending_runtime!=runtime||strcmp(g_multi_bank[logical].path,path)!=0)return;
+    g_multi_bank[logical].runtime=(success!=0U)?runtime:PROJECT_CONTROL_INVALID_RUNTIME;
+    g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
+    reapply_multi_logical(logical);
 }
 uint8_t project_control_remove_sample(uint16_t logical){return bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
 uint8_t project_control_remove_wavetable(uint16_t logical){return bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
@@ -116,7 +104,7 @@ static void apply_bank_asset(uint32_t kind,uint16_t logical,const char*path)
     if(kind==PERSIST_ASSET_SAMPLE_STREAM){for(uint16_t slot=0U;slot<SAMPLE_POOL_SIZE;++slot)if(sample_pool_get_state(slot)==SAMPLE_POOL_SLOT_EMPTY&&sample_pool_load(slot,path)){if(sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,slot,&runtime)!=0U)break;} (void)bank_set(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,kind,path,runtime);}
     else if(kind==PERSIST_ASSET_SAMPLE_RAM){uint16_t backend=sampler_ram_pool_find_free_slot();if(backend<SAMPLER_RAM_POOL_MAX_SLOTS)(void)sampler_ram_pool_load_wav(backend,path,&runtime);(void)bank_set(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,kind,path,runtime);}
     else if(kind==PERSIST_ASSET_WAVETABLE){uint16_t backend=wavetable_pool_find_free_slot();if(backend<WAVETABLE_POOL_MAX_SLOTS)(void)wavetable_pool_load_file(backend,path,&runtime);(void)bank_set(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,kind,path,runtime);}
-    else if(kind==PERSIST_ASSET_MULTI){(void)bank_set(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,kind,path,runtime);for(uint16_t backend=0U;backend<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++backend)if(multi_sample_pool_get_state(backend)==MULTI_SAMPLE_INSTRUMENT_EMPTY){multi_sample_load_result_t r=multi_sample_load_instrument(path,backend);if(r==MULTI_SAMPLE_LOAD_OK)project_control_begin_multi_runtime(path,backend);else if(r==MULTI_SAMPLE_LOAD_ALREADY_READY){project_control_begin_multi_runtime(path,backend);project_control_complete_multi_runtime(path,backend,1U);}break;}}
+    else if(kind==PERSIST_ASSET_MULTI){(void)bank_set(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,kind,path,runtime);for(uint16_t backend=0U;backend<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++backend)if(multi_sample_pool_get_state(backend)==MULTI_SAMPLE_INSTRUMENT_EMPTY){(void)multi_sample_load_instrument(logical,path,backend);break;}}
 }
 
 uint8_t project_control_begin_asset_restore(void)

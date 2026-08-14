@@ -39,8 +39,8 @@ uint8_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
-void project_control_begin_multi_runtime(const char*path,uint16_t runtime_instrument);
-void project_control_complete_multi_runtime(const char*path,uint16_t runtime_instrument,uint8_t success);
+uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument);
+void project_control_complete_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument,uint8_t success);
 uint8_t project_control_remove_sample(uint16_t logical);
 uint8_t project_control_remove_wavetable(uint16_t logical);
 uint8_t project_control_remove_multi(uint16_t logical);

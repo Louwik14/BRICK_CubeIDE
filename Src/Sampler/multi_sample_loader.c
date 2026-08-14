@@ -31,6 +31,7 @@ _Static_assert(MULTI_SAMPLE_BULK_MAX_BATCH_PAGES >= SAMPLE_AUDIO_FORMAT_STEREO_P
 typedef struct
 {
     uint8_t used;
+    uint16_t logical_id;
     uint16_t instrument_id;
     char path[MULTI_SAMPLE_LOADER_PATH_MAX];
 } multi_sample_load_request_t;
@@ -46,6 +47,7 @@ typedef struct
 static multi_sample_load_diag_t g_multi_load_diag;
 static uint8_t g_multi_load_active;
 static uint16_t g_multi_load_first_sample_id;
+static multi_sample_load_request_t g_multi_load_request;
 SDRAM_MULTI_LOAD static multi_sample_load_request_t
     g_multi_load_queue[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 
@@ -94,7 +96,8 @@ static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *
     return (src[i] == '\0') ? 1U : 0U;
 }
 
-static multi_sample_load_result_t multi_loader_enqueue(const char *index_path,
+static multi_sample_load_result_t multi_loader_enqueue(uint16_t logical_id,
+                                                       const char *index_path,
                                                        uint16_t instrument_id)
 {
     if ((index_path == 0) || (index_path[0] == '\0')
@@ -108,7 +111,8 @@ static multi_sample_load_result_t multi_loader_enqueue(const char *index_path,
         if ((g_multi_load_queue[i].used != 0U)
             && (g_multi_load_queue[i].instrument_id == instrument_id))
         {
-            return (strcmp(g_multi_load_queue[i].path, index_path) == 0)
+            return ((g_multi_load_queue[i].logical_id == logical_id)
+                    && (strcmp(g_multi_load_queue[i].path, index_path) == 0))
                 ? MULTI_SAMPLE_LOAD_OK
                 : MULTI_SAMPLE_LOAD_POOL_FAIL;
         }
@@ -126,6 +130,7 @@ static multi_sample_load_result_t multi_loader_enqueue(const char *index_path,
                 return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
             }
 
+            g_multi_load_queue[i].logical_id = logical_id;
             g_multi_load_queue[i].instrument_id = instrument_id;
             g_multi_load_queue[i].used = 1U;
             (void)multi_sample_pool_set_index_path(instrument_id, index_path);
@@ -241,16 +246,16 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_diag.last_error = error;
     g_multi_load_diag.last_failed_sample = failed_sample;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
-    const multi_sample_instrument_t *const failed_instrument =
-        multi_sample_pool_get_instrument(g_multi_load_diag.instrument_id);
-    if (failed_instrument != 0)
+    if (g_multi_load_request.used != 0U)
     {
-        project_control_complete_multi_runtime(failed_instrument->index_path,
+        project_control_complete_multi_runtime(g_multi_load_request.logical_id,
+                                               g_multi_load_request.path,
                                                g_multi_load_diag.instrument_id,
                                                0U);
     }
     (void)multi_sample_pool_clear_instrument(g_multi_load_diag.instrument_id);
     g_multi_load_active = 0U;
+    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
 }
 
@@ -655,21 +660,52 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     return MULTI_SAMPLE_LOAD_OK;
 }
 
-multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,
+multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
+                                                        const char *index_path,
                                                         uint16_t instrument_id)
 {
+    if (project_control_begin_multi_runtime(logical_id,index_path,instrument_id) == 0U)
+    {
+        return MULTI_SAMPLE_LOAD_INVALID_ARG;
+    }
     if (g_multi_load_active != 0U)
     {
-        return multi_loader_enqueue(index_path, instrument_id);
+        const multi_sample_load_result_t queued =
+            multi_loader_enqueue(logical_id, index_path, instrument_id);
+        if (queued != MULTI_SAMPLE_LOAD_OK)
+            project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
+        return queued;
     }
 
+    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+    g_multi_load_request.used = 1U;
+    g_multi_load_request.logical_id = logical_id;
+    g_multi_load_request.instrument_id = instrument_id;
+    if (multi_loader_copy_text(g_multi_load_request.path,
+                               sizeof(g_multi_load_request.path),
+                               index_path) == 0U)
+    {
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
+        return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
+    }
     const multi_sample_load_result_t result =
         multi_loader_start_instrument(index_path, instrument_id);
     if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
     {
-        return multi_loader_enqueue(index_path, instrument_id);
+        const multi_sample_load_result_t queued =
+            multi_loader_enqueue(logical_id, index_path, instrument_id);
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+        if (queued != MULTI_SAMPLE_LOAD_OK)
+            project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
+        return queued;
     }
-
+    if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,1U);
+    else if (result != MULTI_SAMPLE_LOAD_OK)
+        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
+    if (result != MULTI_SAMPLE_LOAD_OK)
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     return result;
 }
 
@@ -685,8 +721,10 @@ static void multi_loader_start_next_queued(void)
         if (g_multi_load_queue[i].used != 0U)
         {
             char path[MULTI_SAMPLE_LOADER_PATH_MAX];
+            const uint16_t logical_id = g_multi_load_queue[i].logical_id;
             const uint16_t instrument_id = g_multi_load_queue[i].instrument_id;
             (void)multi_loader_copy_text(path, sizeof(path), g_multi_load_queue[i].path);
+            g_multi_load_request = g_multi_load_queue[i];
             const multi_sample_load_result_t result =
                 multi_loader_start_instrument(path, instrument_id);
             if (result != MULTI_SAMPLE_LOAD_SD_BUSY)
@@ -695,10 +733,16 @@ static void multi_loader_start_next_queued(void)
                 if ((result != MULTI_SAMPLE_LOAD_OK)
                     && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
                 {
-                    project_control_complete_multi_runtime(path, instrument_id, 0U);
+                    project_control_complete_multi_runtime(logical_id,path,instrument_id,0U);
                     (void)multi_sample_pool_clear_instrument(instrument_id);
                 }
+                else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+                    project_control_complete_multi_runtime(logical_id,path,instrument_id,1U);
+                if (result != MULTI_SAMPLE_LOAD_OK)
+                    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
             }
+            else
+                memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
             return;
         }
     }
@@ -850,9 +894,11 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
     g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;
     (void)multi_sample_pool_set_state(g_multi_load_diag.instrument_id,
                                       MULTI_SAMPLE_INSTRUMENT_READY);
-    project_control_complete_multi_runtime(instrument->index_path,
+    project_control_complete_multi_runtime(g_multi_load_request.logical_id,
+                                           g_multi_load_request.path,
                                            g_multi_load_diag.instrument_id,
                                            1U);
+    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
     multi_loader_start_next_queued();
     return 1U;
@@ -969,7 +1015,8 @@ void multi_sample_cancel_all_loads(void)
     {
         if (g_multi_load_queue[i].used != 0U)
         {
-            project_control_complete_multi_runtime(g_multi_load_queue[i].path,
+            project_control_complete_multi_runtime(g_multi_load_queue[i].logical_id,
+                                                   g_multi_load_queue[i].path,
                                                    g_multi_load_queue[i].instrument_id,
                                                    0U);
             (void)multi_sample_pool_clear_instrument(

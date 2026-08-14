@@ -2644,7 +2644,8 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
 
     if ((index_path == 0)
         || (index_path[0] == '\0')
-        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || ((instrument_id != MULTI_SAMPLE_POOL_INVALID_ID)
+            && (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
         || (ui_get_track_family(track) != UI_TRACK_FAMILY_SAMPLER)
         || (ui_get_track_type(track) != UI_TRACK_TYPE_MULTI))
     {
@@ -2914,11 +2915,19 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         (void)multi_sample_pool_clear_instrument(slot);
     }
 
-    const multi_sample_load_result_t result = multi_sample_load_instrument(entry->index_path, slot);
+    if (ui_page_settings_multi_assign_active_track(MULTI_SAMPLE_POOL_INVALID_ID,
+                                                   entry->index_path)==0U)
+    {
+        ui_page_settings_multi_prepare_finish("LOAD FAIL");
+        return;
+    }
+    const uint16_t logical=g_ui_settings.sample_slot_selected;
+
+    const multi_sample_load_result_t result =
+        multi_sample_load_instrument(logical,entry->index_path,slot);
     if ((result == MULTI_SAMPLE_LOAD_OK) || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
     {
         (void)multi_sample_pool_set_index_path(slot, entry->index_path);
-        (void)ui_page_settings_multi_assign_active_track(slot, entry->index_path);
         g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
         g_ui_settings.multi_prepare_progress_done = 0U;
         g_ui_settings.multi_prepare_progress_total = 1U;

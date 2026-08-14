@@ -55,7 +55,8 @@ typedef struct
     uint32_t saved_page_checks;
 } multi_sample_load_diag_t;
 
-multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,
+multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
+                                                        const char *index_path,
                                                         uint16_t instrument_id);
 void multi_sample_service_load(uint32_t byte_budget);
 uint8_t multi_sample_is_ready(uint16_t instrument_id);
