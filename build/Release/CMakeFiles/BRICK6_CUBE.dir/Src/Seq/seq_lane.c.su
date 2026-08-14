@@ -1,2 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:6:9:seq_lane_group_is_active	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:12:9:seq_lane_get_descriptor	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:5:16:seq_lane_project	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:33:9:seq_lane_resolve	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:44:9:seq_lane_group_is_active	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c:49:9:seq_lane_get_descriptor	16	static

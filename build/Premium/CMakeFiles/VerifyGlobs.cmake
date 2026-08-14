@@ -8,8 +8,11 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_engine_adapter.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_track_diag.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/dsp_engine.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr_peaks.c"
@@ -57,7 +60,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Premium/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:432 (file)
+# SRC_NOTE_FX_SRC at CMakeLists.txt:430 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_arp.c"
@@ -71,7 +74,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Premium/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:432 (file)
+# SRC_NOTE_FX_SRC at CMakeLists.txt:430 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.cpp")
 set(OLD_GLOB
   )
@@ -111,7 +114,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_underrun_trace.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
@@ -136,7 +138,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_division_catalog.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_edit.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_lane.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_led.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_param_target.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_live_rec_session.c"
@@ -175,12 +176,16 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/monkey_test_log.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_sd_bank.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_v1.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/patch_product.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/pattern_control_bank.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/pattern_live_ram.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/pattern_sd_bank.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_v1.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_control_codec.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_key_catalog.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_pattern_control.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_project_control.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c"
