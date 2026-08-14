@@ -3,7 +3,7 @@
  * @brief Sampler bootstrap API.
  *
  * Rôle du module:
- * - Exposer le chargement sample pool et l'init des voix bootstrap.
+ * - Exposer le chargement du sample pool.
  *
  * Frontière:
  * - Ne gère pas le runtime sampler complet.
@@ -17,7 +17,6 @@ extern "C" {
 #endif
 
 void brick6_sampler_bootstrap_load_pool(void);
-void brick6_sampler_bootstrap_init_voices(void);
 
 #ifdef __cplusplus
 }

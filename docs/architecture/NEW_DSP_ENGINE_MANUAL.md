@@ -58,7 +58,6 @@ Le chemin observé dans le code est structuré en couches, même s’il reste di
 - moteurs actuels :
   - `Src/Core/brick6_sampler_runtime.c`
   - `Src/Audio/drum_synth.cpp`
-  - `Src/Sampler/voice_manager.c`
 
 6. Sequencer / notes / p-locks :
 - `Src/Seq/seq_runtime.c`
@@ -399,9 +398,6 @@ Sampler :
 - `brick6_sampler_runtime_render_track()`
 - `mixer_begin_external_mono_native()` / `mixer_commit_external_mono_native()`
 
-Autres sources :
-- `voice_manager_process()` écrit directement dans `tracks[0]`
-
 ### 6.3 Point d’insertion probable d’un nouveau moteur
 
 Le seam principal est :
@@ -414,10 +410,6 @@ Deux options cohérentes avec l’existant :
 - boucler sur les tracks runtime bindées au nouveau `TRACK_RUNTIME_ENGINE_*`
 - rendre dans un buffer mono/stéréo temporaire
 - injecter via `mixer_submit_external_mono_native()` ou l'API stéréo si nécessaire
-
-2. Moteur intégré à une infrastructure de voix déjà existante :
-- seulement si l’autorité runtime est déjà `voice_manager`
-- à confirmer dans le code avant patch
 
 En l’état du repo, l’analogie la plus directe pour un nouveau moteur dédié est le modèle Drum/Sampler :
 - runtime moteur dédié
@@ -613,7 +605,6 @@ Question pratique :
 
 Initialisation observée dans `Src/Core/brick6_app_init.c` :
 - `drum_synth_init(48000.0f)`
-- `brick6_sampler_bootstrap_init_voices()`
 - `brick6_sampler_runtime_init()`
 - `brick6_audio_runtime_init()`
 - `audio_init()`
@@ -768,9 +759,6 @@ Risque UI :
 - créer une page TONE non gatee par `track_runtime_is_ui_ensemble_available()`
 
 ### Ambiguïtés observées
-
-`voice_manager_process()` reste dans `brick6_audio_runtime_dsp()` mais n’utilise pas le même seam que Drum/Sampler.
-Vérification à refaire si un futur moteur devait partager une infrastructure de voix existante.
 
 `TRACK_RUNTIME_VOICE_MODE_POLY` existe mais aucun moteur in-tree ne l’active.
 Si un futur moteur requiert une vraie polyphonie runtime, il faudra revérifier `track_runtime_get_voice_mode()` et tous les consumers reliés.

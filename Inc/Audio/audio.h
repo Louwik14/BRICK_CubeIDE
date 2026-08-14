@@ -48,18 +48,3 @@ void audio_init(void);
 uint8_t audio_start(void);
 audio_init_state_t audio_get_init_state(void);
 board_audio_boot_error_t audio_get_boot_error(void);
-
-/* User DSP callback (héritage API historique, non utilisé par audio.c actuel). */
-typedef void (*audio_process_fn)(int32_t *rx,
-                                 int32_t *tx,
-                                 uint32_t frames);
-
-/**
- * @brief Enregistre un callback de traitement bas niveau (API conservée).
- *
- * @param cb Callback utilisateur recevant RX/TX int32 et taille bloc (frames).
- *
- * @note API conservée pour compatibilité. Le chemin actif passe par
- *       audio_process_block_int32() côté audio_float.c.
- */
-void audio_set_process_callback(audio_process_fn cb);

@@ -717,7 +717,6 @@ set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
 set(SAMPLE_RENDER_HOT_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/voice_manager.c"
 )
 set_source_files_properties(${SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"

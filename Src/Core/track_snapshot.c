@@ -631,7 +631,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         return 0U;
     }
 
-    const uint8_t group_active = (uint8_t)(type[SEQ_GROUP_PARENT_MAIN_TRACK]
+    const uint8_t group_active = (uint8_t)(type[BRICK_ENTITY_GROUP_MASTER_ID]
         == (uint8_t)UI_TRACK_TYPE_GROUP);
     entity_topology_descriptor_t target_entity;
     if ((entity_topology_resolve(group_active,

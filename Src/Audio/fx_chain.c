@@ -4,10 +4,10 @@
  *
  * Rôle du module:
  * - Appliquer un slot FX donné sur un buffer stéréo.
- * - Fournir des helpers de chaînage (track0 complet ou slot unique).
+ * - Fournir les helpers de traitement par slot.
  *
  * Architecture:
- * - Appelé par: mixer.c, audio_float.c (compat historique).
+ * - Appelé par: mixer.c.
  * - Appelle: fx_pool_get_slot, processeurs FX (EQ/SAT/COMP).
  *
  * Contraintes temps réel:
@@ -77,37 +77,6 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
 
         default:
             break;
-    }
-}
-
-/**
- * @brief Applique la chaîne historique de track0 (slots 0..2).
- *
- * @param L Buffer canal gauche (in-place).
- * @param R Buffer canal droit (in-place).
- * @param frames Taille bloc en frames.
- *
- * Contexte d'appel:
- * - IRQ audio.
- */
-/**
- * @brief Point d'entrée fx_chain_process_track0.
- *
- * Rôle:
- * - Exécuter le traitement associé à fx_chain_process_track0.
- *
- * @param L Paramètre d'entrée de l'API.
- * @param R Paramètre d'entrée de l'API.
- * @param frames Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void fx_chain_process_track0(float* L, float* R, uint32_t frames)
-{
-    for (uint32_t i = 0; i < 3; i++)
-    {
-        fx_chain_process_fx_slot(fx_pool_get_slot(i), L, R, frames);
     }
 }
 

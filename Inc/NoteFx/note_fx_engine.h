@@ -19,7 +19,6 @@ _Static_assert(NOTE_FX_EUCLID_MAX_SOURCES == 16U,
 _Static_assert(NOTE_FX_EUCLID_MAX_OWNED >= NOTE_FX_EUCLID_MAX_SOURCES,
                "EUCLID owned capacity must cover source fan-out");
 
-typedef enum { NOTE_FX_EVENT_OFF = NOTE_EVENT_KIND_OFF, NOTE_FX_EVENT_ON = NOTE_EVENT_KIND_ON } note_fx_legacy_kind_t;
 typedef note_fx_result_t (*note_fx_emit_fn)(const note_fx_event_t *, void *);
 
 void note_fx_engine_init(void);

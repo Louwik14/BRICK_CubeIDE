@@ -1408,7 +1408,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                     || (ctx->audio_routable == 0U)
-                    || (ctx->mix_track_id >= SEQ_MAIN_TRACK_COUNT))
+                    || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

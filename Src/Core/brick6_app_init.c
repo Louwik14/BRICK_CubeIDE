@@ -21,7 +21,6 @@
 #include "ui_page_manager.h"
 #include "lowcost_button_test_config.h"
 
-#include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/multi_sample_loader.h"
@@ -140,7 +139,6 @@ void brick6_app_init(void)
     drum_synth_init(48000.0f);
     hall_keyboard_bridge_init();
 
-    brick6_sampler_bootstrap_init_voices();
     brick6_sampler_runtime_init();
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
@@ -256,8 +254,6 @@ void brick6_app_process(void)
     {
         brick6_process_hall_ui_keyboard_chain();
     }
-
-    voice_manager_service();
 
     midi_poll();
 }

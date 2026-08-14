@@ -1098,17 +1098,6 @@ uint8_t hall_engine_consume_note_off(uint8_t key)
     return hall_consume_flag(&hall_note_off_pending[key]);
 }
 
-uint8_t hall_engine_consume_edge(uint8_t key, uint8_t *pressed,
-                                 uint8_t *velocity)
-{
-    (void)key;
-    (void)pressed;
-    (void)velocity;
-    /* Kept as an ABI-compatible stub. Musical edges are now consumed from
-     * the common live-event queue so they retain global ingress order. */
-    return 0U;
-}
-
 void hall_engine_acknowledge_edge(uint8_t key, uint8_t pressed)
 {
     if (key >= HALL_KEY_COUNT)

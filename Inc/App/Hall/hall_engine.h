@@ -118,8 +118,6 @@ uint16_t hall_engine_get_velocity_position(uint8_t key);
 uint32_t hall_engine_get_sample_count(uint8_t key);
 uint8_t hall_engine_consume_note_on(uint8_t key);
 uint8_t hall_engine_consume_note_off(uint8_t key);
-uint8_t hall_engine_consume_edge(uint8_t key, uint8_t *pressed,
-                                 uint8_t *velocity);
 void hall_engine_acknowledge_edge(uint8_t key, uint8_t pressed);
 uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture);
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);

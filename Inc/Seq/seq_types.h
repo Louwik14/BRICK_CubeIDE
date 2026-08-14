@@ -6,12 +6,7 @@
 #include "Param/param_store.h"
 
 #define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT
-#define SEQ_MAIN_TRACK_COUNT   BRICK_ENTITY_TOP_LEVEL_COUNT
-#define SEQ_GROUP_SUBTRACK_COUNT BRICK_ENTITY_GROUP_CHILD_COUNT
 #define SEQ_LANE_CAPACITY      BRICK_ENTITY_CAPACITY
-#define SEQ_GROUP_PARENT_MAIN_TRACK BRICK_ENTITY_GROUP_MASTER_ID
-#define SEQ_GROUP_FIRST_CHILD_LANE SEQ_MAIN_TRACK_COUNT
-#define SEQ_GROUP_LAST_CHILD_LANE  (SEQ_LANE_CAPACITY - 1U)
 #define SEQ_STEPS_PER_PAGE    16U
 #define SEQ_PAGE_COUNT         4U
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)
@@ -49,7 +44,6 @@
 /* Sequencer names preserve domain vocabulary without creating another
  * logical identity or requiring conversion. */
 typedef brick_entity_id_t seq_track_id_t;
-typedef brick_entity_id_t seq_lane_id_t;
 typedef uint8_t seq_step_id_t;
 typedef uint8_t seq_param_slot_t;
 typedef uint8_t seq_plock_key_t;

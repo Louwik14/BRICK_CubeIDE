@@ -29,7 +29,6 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
-#include "Sampler/voice_manager.h"
 #include "Sampler/multi_pitch_trace.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
@@ -800,13 +799,6 @@ ITCM_AUDIT_32_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t fm_tracks = 0U;
         brick6_render_fm_tracks(frames, &fm_tracks);
         (void)fm_tracks;
-    }
-
-    if((track_count > 0U) && (tracks[0].enabled != 0U))
-    {
-        memset(tracks[0].L, 0, frames * sizeof(float));
-        memset(tracks[0].R, 0, frames * sizeof(float));
-        voice_manager_process(tracks[0].L, tracks[0].R, frames);
     }
 
     mixer_process(tracks, track_count, frames);

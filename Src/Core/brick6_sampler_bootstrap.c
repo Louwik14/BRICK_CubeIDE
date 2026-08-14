@@ -1,9 +1,9 @@
 /**
  * @file brick6_sampler_bootstrap.c
- * @brief Bootstrap sampler (pool + voix de démarrage).
+ * @brief Bootstrap du sample pool.
  *
  * Rôle du module:
- * - Isoler l'initialisation deterministe du sample pool et l'init voix bootstrap.
+ * - Isoler l'initialisation deterministe du sample pool.
  *
  * Frontière:
  * - Ne contient pas le moteur sampler runtime.
@@ -13,16 +13,9 @@
 #include "brick6_sampler_bootstrap.h"
 
 #include "Sampler/sample_pool.h"
-#include "Sampler/voice_manager.h"
 
 void brick6_sampler_bootstrap_load_pool(void)
 {
     /* Toujours remettre le sample pool dans un état déterministe au boot. */
     sample_pool_init();
-}
-
-void brick6_sampler_bootstrap_init_voices(void)
-{
-    /* Toujours remettre les voix dans un état neutre au boot. */
-    voice_manager_init();
 }

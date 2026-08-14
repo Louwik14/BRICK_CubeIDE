@@ -267,7 +267,7 @@ Z0 appelle principalement:
 - Boot produit via `brick6_app_init()`:
   - init audio runtime, synths, sampler, sequencer, storage, undo, controls, hall, MIDI.
 - Runtime via `brick6_app_process()`:
-  - tasklets/services metier (`engine_tasklet_poll`, `seq_runtime_time_adapter_process`, `pattern_live_service`, `hall_loop_process`, `voice_manager_service`, etc.).
+  - tasklets/services metier (`engine_tasklet_poll`, `seq_runtime_time_adapter_process`, `pattern_live_service`, `hall_loop_process`, etc.).
 - Boucle `main()` appelle en plus:
   - `MX_USB_HOST_Process`, `midi_host_poll_bounded(8)`,
   - `ui_tasklet_poll` conditionne par `engine_tick_count`,
@@ -378,7 +378,6 @@ Z0 appelle principalement:
 - pendant le boot loading, le budget `multi_sample_service_load` est reduit pour privilegier des passages UI/OLED plus reguliers; hors loading le budget normal est conserve.
 - si boot loading actif: `hall_loop_process()` seulement, sans navigation UI normale; sur Low-Cost l'acquisition et l'automate Hall continuent neanmoins dans l'IRQ.
 - sinon: `hall_loop_process()`, `ui_core_service_track_selection_inputs()`, `hall_keyboard_bridge_process()`; sur Low-Cost le premier appel ne depile plus de samples, tandis que le bridge consomme les transitions produites en IRQ.
-- `voice_manager_service()`
 - `midi_poll()`
 
 7. Points critiques periodiques hors superloop direct:
