@@ -152,11 +152,6 @@ static void audio_apply_control_events_at_sample(uint64_t sample_time)
                 event.entity_id, event.note, event.source_generation,
                 event.velocity, event.due_sample);
         }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MULTI_ASSIGN)
-        {
-            brick6_sampler_runtime_set_multi_instrument(event.entity_id,
-                                                        event.param_id);
-        }
         else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MULTI_STOP)
         {
             brick6_sampler_runtime_stop_multi_instrument(event.param_id);

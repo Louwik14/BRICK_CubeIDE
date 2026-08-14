@@ -2659,8 +2659,6 @@ static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id
     }
     g_ui_settings.sample_slot_selected=logical;
 
-    ui_page_settings_publish_multi_command(
-        CONTROL_AUDIO_EVENT_MULTI_ASSIGN, track, instrument_id);
     return 1U;
 }
 
