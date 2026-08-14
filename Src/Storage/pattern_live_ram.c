@@ -373,16 +373,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
     return 1U;
 }
 
-uint8_t pattern_live_capture_boot_snapshot(void)
-{
-    if (persistent_pattern_control_capture(&g_boot_control_pattern) != PERSIST_CODEC_OK)
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
 uint8_t pattern_live_get_control_boot(persist_control_pattern_t*out){if(out==NULL)return 0U;*out=g_boot_control_pattern;return 1U;}
 persist_control_pattern_record_t*pattern_live_project_record_workspace(void){return(pattern_load_is_pending()==0U&&g_queued_valid==0U)?&g_next_record:NULL;}
 

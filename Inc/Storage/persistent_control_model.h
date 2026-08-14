@@ -121,7 +121,6 @@ typedef enum
 
 typedef enum
 {
-    PERSIST_ASSET_SAMPLE        = 0x53414D50UL, /* SAMP: legacy generic reference */
     PERSIST_ASSET_SAMPLE_STREAM = 0x5354524DUL, /* STRM */
     PERSIST_ASSET_SAMPLE_RAM    = 0x52414D20UL, /* RAM  */
     PERSIST_ASSET_MULTI         = 0x4D554C54UL, /* MULT */
@@ -396,20 +395,6 @@ typedef struct
     uint8_t present;
     persist_control_pattern_t content;
 } persist_control_pattern_record_t;
-
-/* Pattern records are deliberately streamable. The project DTO owns their
- * logical catalog; capture/storage may transfer one record at a time rather
- * than allocating the maximum bank image in static memory. */
-typedef struct
-{
-    persist_control_pattern_t working_pattern;
-    uint8_t active_pattern_bank;
-    uint8_t active_pattern;
-    uint16_t pattern_count;
-    persist_control_asset_ref_t assets[PERSIST_CONTROL_ASSET_COUNT];
-    uint16_t asset_count;
-    persist_control_macros_t macros;
-} persist_control_project_t;
 
 typedef struct
 {

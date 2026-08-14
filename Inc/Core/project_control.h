@@ -23,14 +23,15 @@ uint8_t project_control_get_scene_lock_for_param(uint8_t scene,uint8_t track,par
 uint8_t project_control_assign_scene_lock(uint8_t scene,uint8_t track,param_id_t param,float value);
 uint8_t project_control_clear_scene_lock(uint8_t scene,uint8_t track,param_id_t param);
 uint8_t project_control_capture_macros(persist_control_macros_t*out);
+const persist_control_macros_t*project_control_macros_view(void);
 uint8_t project_control_apply_macros(const persist_control_macros_t*in);
 
-uint8_t project_control_set_entity_asset(uint8_t entity,uint32_t kind,const char*path);
-uint8_t project_control_clear_entity_asset(uint8_t entity);
-uint8_t project_control_get_entity_asset(uint8_t entity,persist_control_asset_ref_t*out);
-uint16_t project_control_capture_assets(persist_control_asset_ref_t*out,uint16_t capacity);
-uint8_t project_control_apply_assets(const persist_control_asset_ref_t*assets,uint16_t count,const persist_control_pattern_t*pattern);
-uint8_t project_control_validate_assets(const persist_control_asset_ref_t*assets,uint16_t count);
+uint16_t project_control_asset_count(void);
+uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out);
+uint8_t project_control_begin_asset_restore(void);
+uint8_t project_control_validate_asset(const persist_control_asset_ref_t*asset);
+uint8_t project_control_put_asset(const persist_control_asset_ref_t*asset);
+uint8_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
 
 /* Logical Project banks. Values stored in parameters and p-locks are these
  * logical indices; runtime pool/global/instrument slots are deliberately not

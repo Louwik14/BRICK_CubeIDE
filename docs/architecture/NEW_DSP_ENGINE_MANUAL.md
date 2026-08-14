@@ -277,10 +277,9 @@ Seams probables pour un nouveau moteur :
 - `Src/Seq/seq_param_iface.c` : seulement pour exclusions/règles du seam, pas pour recréer un mapping global TONE
 
 Point de vigilance persistence :
-- `PatternSaveV1` stocke `track_values[SEQ_TRACK_COUNT][PARAM_COUNT]`
-- `ProjectSaveV1` embedde `PatternSaveV1`
-- toute extension de `PARAM_COUNT` change la taille des payloads pattern/project
-- il faut donc revérifier `PATTERN_VERSION` et `PROJECT_V1_FILE_VERSION` au moment du patch
+- `persistent_control_model` décrit le modèle CONTROL canonique
+- `persistent_control_codec` encode chaque champ explicitement, sans dépendre du layout RAM
+- l'ajout d'une clé persistante exige la mise à jour du catalogue et du schéma; la version du codec ne change que si le contrat disque change
 
 ## 5. Runtime parameter apply path
 
@@ -585,13 +584,13 @@ Conclusion :
 ### 9.2 Project
 
 Projet :
-- `ProjectSaveV1` embedde `PatternSaveV1`
-- `project_v1_capture_current()`
-- `project_v1_apply_snapshot()`
+- `project_product` orchestre le codec Project progressif
+- `persistent_project_control` capture/applique les metadata et le Pattern de travail
+- assets, macros et Patterns de bank sont fournis/consommés séparément
 
 Fichiers SD :
-- `pattern_sd_bank.c` valide `sizeof(PatternSaveV1)`
-- `project_sd_bank.c` valide `sizeof(ProjectSaveV1)` et `sizeof(PatternSaveV1)`
+- `pattern_control_bank.c` maintient un namespace transactionnel validé par `COMMIT.BIN`
+- `persistent_control_codec.c` valide versions, sections, longueurs, clés et CRC indépendamment des `sizeof` RAM
 
 ### 9.3 Impact d’un nouveau moteur
 
@@ -601,11 +600,10 @@ Si le moteur ajoute seulement :
 - des nouveaux `PARAM_*`
 
 alors il faudra vérifier :
-- compat layout RAM/SD de `PatternSaveV1`
-- compat layout RAM/SD de `ProjectSaveV1`
-- versionnement :
-  - `PATTERN_VERSION` dans `pattern_sd_bank.c`
-  - `PROJECT_V1_FILE_VERSION` dans `project_v1.h`
+- exposition dans `persistent_control_model`
+- clés stables dans `persistent_key_catalog`
+- capture/application dans les adapters CONTROL
+- version de `PERSIST_CODEC_VERSION` uniquement si le contrat disque évolue
 
 Question pratique :
 - l’ajout de `PARAM_*` change `PARAM_COUNT`, donc change les arrays `track_values[][PARAM_COUNT]` et `global_values[PARAM_COUNT]`
@@ -799,5 +797,5 @@ Pour `TONE`, cette décision doit être portée par le mapping runtime effectif 
   - p-lockables
   - modulables LFO
   - exclus du RT fast
-- L’ajout des paramètres impose-t-il un bump explicite de `PATTERN_VERSION` et `PROJECT_V1_FILE_VERSION` ?
+- L’ajout des paramètres modifie-t-il le contrat disque et impose-t-il un bump explicite de `PERSIST_CODEC_VERSION` ?
 - Le moteur nécessite-t-il des tables, buffers ou précomputations à initialiser hors IRQ ?

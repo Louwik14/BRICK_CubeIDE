@@ -1,35 +1,25 @@
-# Format persistant CONTROL canonique — version 1
+# Format persistant CONTROL canonique — version 3
 
 ## Statut
 
-Cette couche est disponible pour la future migration, sans être branchée sur les chemins produit. `PatternSaveV1`, `ProjectSaveV1` et `PatchSaveV1` restent les formats actifs.
+Project, Pattern et Patch utilisent ce format sur les parcours produit. Aucun dump de structure C et aucune lecture d'un ancien format ne sont admis.
 
 ## Enveloppe commune
 
 Tous les entiers sont little-endian et chaque champ est encodé explicitement. Aucun layout, padding, enum C ou pointeur n'est une ABI disque.
 
-Le header fixe de 24 octets contient :
+Le header fixe contient le magic `B6CP`, la version 3, le type de document, le nombre de sections, la longueur totale et les CRC32 du payload et du header. Chaque section possède son type, sa version et sa longueur. Pattern possède `PATTERN_BODY`; Patch possède `PATCH_BODY`; Project possède, dans l'ordre, `PROJECT_CORE`, `PROJECT_ASSETS`, `PROJECT_MACROS` et `PROJECT_BANK`.
 
-- magic `B6CP` (4 octets) ;
-- version de format `1` (u16) ;
-- type de document Project, Pattern ou Patch (u8) et un octet réservé ;
-- nombre de sections (u16) et deux octets réservés ;
-- longueur totale bornée (u32) ;
-- CRC32 IEEE du payload (u32) ;
-- CRC32 IEEE des 20 premiers octets du header (u32).
+Les clés famille, type, paramètre, source MIDI, horloge, Note FX et asset sont stables. Les valeurs CONTROL flottantes conservent leurs bits IEEE-754 binary32. Une référence d'asset portée par un Pattern ou un Patch est un N logique; seul le manifeste Project associe ce N à un type et un chemin.
 
-Chaque section commence par type u16, version u16 et longueur u32. Pattern possède `PATTERN_BODY`; Patch possède `PATCH_BODY`; Project possède, dans l'ordre, `PROJECT_CORE`, `PROJECT_ASSETS`, `PROJECT_MACROS` et `PROJECT_BANK`.
+## Codec Project progressif
 
-Les clés famille, type, paramètre, source MIDI, horloge, Note FX et asset sont les clés disque stables définies par le modèle canonique. Les valeurs CONTROL flottantes conservent leurs bits IEEE-754 binary32. Les assets ne contiennent que l'ID logique, le type et le chemin.
+L'encodage reçoit des providers distincts pour les metadata/globales, le Pattern de travail, les assets, les macros/scènes et les records de bank Pattern. Le décodage effectue d'abord une passe structurelle et une passe sémantique complètes sans mutation, puis diffuse ces mêmes unités vers des consumers explicites.
 
-## Staging et validation
+La bank Pattern est ouverte avant toute mutation Project. Ses records sont écrits un par un dans le namespace inactif et le commit n'est publié qu'après application complète; toute erreur appelle `abort`.
 
-Le lecteur est séquentiel. Pattern et Patch sont entièrement décodés dans un staging fourni par l'appelant. Project conserve son cœur et son working Pattern dans le staging appelant, puis diffuse les Patterns de banque un par un vers un consommateur transactionnel. `put` ne doit écrire que dans le staging transactionnel du consommateur; `commit` n'est appelé qu'après contrôle de toutes les sections, du CRC et du Project complet; toute erreur appelle `abort`.
+Le codec n'alloue aucune mémoire dynamique. Le workspace Project global mesure 512 904 octets sur l'ABI ARM cible, contre 697 128 octets auparavant. Il contient au maximum un record Pattern de transit, réutilisé en union avec les macros, un asset de transit et la table bornée des IDs d'assets. Sa taille ne dépend donc plus de la taille cumulée du Pattern de travail, des assets et des macros. Aucun DTO Project complet n'est matérialisé.
 
-Les contrôles couvrent magic/version/type, longueurs et sections, CRC, capacités de chaque collection, clés obligatoires, doublons, IDs d'entity, PLAY 8/8/1, budgets de p-locks, routes et destinations MOD, GROUP master/children, Note FX children sans Note FX master et références d'assets logiques.
+## Frontière
 
-Le codec n'alloue aucune mémoire dynamique et ajoute 0 octet de staging statique. Les tailles maximales des objets de staging, mesurées avec l'ABI ARM de la cible, sont : Project 1 193 732 octets, Pattern 504 664 octets, Patch 4 060 octets. Ces objets sont donc explicitement fournis et placés par l'intégrateur; ils ne doivent jamais être alloués sur une pile de tâche. Le Project comprend un seul record Pattern de transit, quelle que soit la taille de la banque.
-
-## Frontière de la passe
-
-Le codec ne contient aucune application runtime, AUDIO, UI ou mixer. La conversion DTO vers l'état produit et le remplacement des V1 appartiennent à la passe de migration suivante.
+Le codec ne contient aucune application runtime, AUDIO, UI ou mixer. Les adapters produit capturent et appliquent les autorités CONTROL à la granularité des providers et consumers.

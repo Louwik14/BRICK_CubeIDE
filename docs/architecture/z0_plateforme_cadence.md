@@ -85,7 +85,7 @@
 
 ## Addendum 2026-07-30 - MT-05 session jetable
 
-- Le lancement Monkey capture un `ProjectSaveV1` en SDRAM diagnostic, le focus UI, le hall mode, le transport, les playheads et le gain master, puis applique le snapshot de boot comme etat live jetable.
+- Le lancement Monkey capture le Pattern CONTROL, les macros et les metadata Project en SDRAM diagnostic, ainsi que le focus UI, le hall mode, le transport, les playheads et le gain master, puis applique le snapshot de boot comme état live jetable.
 - L'undo est suspendu pendant la session. L'arret coupe transport et notes, restaure le snapshot RAM et les autorites UI, puis reprend le transport seulement s'il etait actif avant le test.
 - Le demarrage est refuse si la SD ou un writer/converter est deja actif. Le gain master est borne a `0.25` pendant la session laissee sans surveillance.
 - Le snapshot ajoute `0x53F0C` octets (environ 336 KiB) de SDRAM uniquement dans `Debug`/`Test`; il n'ajoute aucune RAM aux firmwares normaux.
@@ -374,7 +374,7 @@ Z0 appelle principalement:
 - `pattern_live_service()`
 - `sd_preview_process()`
 - `brick6_master_control_process()`
-- `ui_boot_loading_service()` apres la premiere frame loading: restore du boot context puis attente de `project_v1_get_autoload_progress()`.
+- `ui_boot_loading_service()` après la première frame loading : restore du boot context puis attente de `project_product_get_progress()`.
 - pendant le boot loading, le budget `multi_sample_service_load` est reduit pour privilegier des passages UI/OLED plus reguliers; hors loading le budget normal est conserve.
 - si boot loading actif: `hall_loop_process()` seulement, sans navigation UI normale; sur Low-Cost l'acquisition et l'automate Hall continuent neanmoins dans l'IRQ.
 - sinon: `hall_loop_process()`, `ui_core_service_track_selection_inputs()`, `hall_keyboard_bridge_process()`; sur Low-Cost le premier appel ne depile plus de samples, tandis que le bridge consomme les transitions produites en IRQ.

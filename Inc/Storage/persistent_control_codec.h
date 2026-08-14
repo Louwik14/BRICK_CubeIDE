@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 2U
+#define PERSIST_CODEC_VERSION 3U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
@@ -71,6 +71,7 @@ typedef const persist_control_pattern_record_t *(*persist_codec_pattern_get_fn)(
                                                                                  uint16_t ordinal);
 typedef uint8_t (*persist_codec_pattern_put_fn)(void *context,
                                                 const persist_control_pattern_record_t *record);
+typedef uint8_t (*persist_codec_pattern_begin_fn)(void *context);
 typedef uint8_t (*persist_codec_pattern_finish_fn)(void *context);
 typedef void (*persist_codec_pattern_abort_fn)(void *context);
 
@@ -85,6 +86,7 @@ typedef struct
     /* The full document is prevalidated before this consumer is entered.
      * put handles one locally validated record immediately; commit is the
      * end-of-stream notification and abort does not imply global rollback. */
+    persist_codec_pattern_begin_fn begin;
     persist_codec_pattern_put_fn put;
     persist_codec_pattern_finish_fn commit;
     persist_codec_pattern_abort_fn abort;
@@ -93,21 +95,46 @@ typedef struct
 
 typedef struct
 {
-    union
-    {
-        persist_control_project_t project;
-        persist_control_pattern_record_t pattern_record;
-    } unit;
-    persist_control_asset_id_t asset_ids[PERSIST_CONTROL_ASSET_COUNT];
-} persist_codec_project_workspace_t;
+    uint8_t active_pattern_bank;
+    uint8_t active_pattern;
+    uint16_t pattern_count;
+    uint16_t asset_count;
+} persist_codec_project_metadata_t;
 
-typedef uint8_t (*persist_codec_project_apply_fn)(void *context,
-                                                   const persist_control_project_t *project);
+typedef const persist_control_asset_ref_t *(*persist_codec_asset_get_fn)(void *context,uint16_t ordinal);
+typedef const persist_control_pattern_t *(*persist_codec_working_pattern_get_fn)(void *context);
+typedef struct { uint16_t count; persist_codec_asset_get_fn get; void *context; } persist_codec_asset_provider_t;
+typedef struct { persist_codec_working_pattern_get_fn get; void *context; } persist_codec_working_pattern_provider_t;
 typedef struct
 {
-    persist_codec_project_apply_fn apply_core;
+    persist_codec_project_metadata_t metadata;
+    persist_codec_working_pattern_provider_t working_pattern;
+    persist_codec_asset_provider_t assets;
+    const persist_control_macros_t *macros;
+    persist_codec_pattern_provider_t patterns;
+} persist_codec_project_source_t;
+
+typedef uint8_t (*persist_codec_project_begin_assets_fn)(void *context);
+typedef uint8_t (*persist_codec_project_put_asset_fn)(void *context,const persist_control_asset_ref_t *asset);
+typedef uint8_t (*persist_codec_project_validate_asset_fn)(void *context,const persist_control_asset_ref_t *asset);
+typedef uint8_t (*persist_codec_project_apply_working_fn)(void *context,const persist_codec_project_metadata_t *metadata,const persist_control_pattern_t *pattern);
+typedef uint8_t (*persist_codec_project_apply_macros_fn)(void *context,const persist_control_macros_t *macros);
+typedef struct
+{
+    persist_codec_project_begin_assets_fn begin_assets;
+    persist_codec_project_validate_asset_fn validate_asset;
+    persist_codec_project_put_asset_fn put_asset;
+    persist_codec_project_apply_working_fn apply_working;
+    persist_codec_project_apply_macros_fn apply_macros;
     void *context;
-} persist_codec_project_applier_t;
+} persist_codec_project_consumer_t;
+
+typedef struct
+{
+    union { persist_control_pattern_record_t pattern_record; persist_control_macros_t macros; } unit;
+    persist_control_asset_ref_t asset;
+    persist_control_asset_id_t asset_ids[PERSIST_CONTROL_ASSET_COUNT];
+} persist_codec_project_workspace_t;
 
 typedef struct
 {
@@ -120,7 +147,6 @@ typedef struct
 } persist_codec_patch_staging_t;
 
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *pattern);
-persist_codec_result_t persist_codec_validate_project(const persist_control_project_t *project);
 persist_codec_result_t persist_codec_validate_patch(const persist_control_patch_t *patch);
 
 persist_codec_result_t persist_codec_encode_pattern(const persist_control_pattern_t *pattern,
@@ -133,8 +159,7 @@ persist_codec_result_t persist_codec_encode_patch(const persist_control_patch_t 
                                                    uint32_t *out_bytes);
 persist_codec_result_t persist_codec_decode_patch(const persist_codec_source_t *source,
                                                    persist_codec_patch_staging_t *staging);
-persist_codec_result_t persist_codec_encode_project(const persist_control_project_t *project,
-                                                     const persist_codec_pattern_provider_t *patterns,
+persist_codec_result_t persist_codec_encode_project(const persist_codec_project_source_t *project,
                                                      const persist_codec_sink_t *sink,
                                                      uint32_t *out_bytes);
 persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_source_t *source,
@@ -142,7 +167,7 @@ persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_sou
 persist_codec_result_t persist_codec_decode_project_progressive(
     const persist_codec_source_t *source,
     persist_codec_project_workspace_t *workspace,
-    const persist_codec_project_applier_t *project,
+    const persist_codec_project_consumer_t *project,
     const persist_codec_pattern_consumer_t *patterns);
 
 #ifdef __cplusplus

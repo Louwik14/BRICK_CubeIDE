@@ -10,6 +10,8 @@
 #include "Storage/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/persistent_project_control.h"
+#include "Storage/persistent_pattern_control.h"
+#include "Core/project_control.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
@@ -30,7 +32,11 @@ typedef struct
 } monkey_test_safety_runtime_t;
 
 static monkey_test_safety_runtime_t g_monkey_test_safety;
-STORAGE_STATE_SDRAM static persist_control_project_t g_monkey_test_saved_project;
+typedef struct{persist_control_pattern_t pattern;persist_control_macros_t macros;persist_codec_project_metadata_t metadata;} monkey_test_project_snapshot_t;
+STORAGE_STATE_SDRAM static monkey_test_project_snapshot_t g_monkey_test_saved_project;
+
+static uint8_t monkey_test_capture_project(void){persistent_project_control_capture_metadata(&g_monkey_test_saved_project.metadata);return(persistent_pattern_control_capture(&g_monkey_test_saved_project.pattern)==PERSIST_CODEC_OK&&project_control_capture_macros(&g_monkey_test_saved_project.macros))?1U:0U;}
+static uint8_t monkey_test_apply_project(void){return(project_control_apply_macros(&g_monkey_test_saved_project.macros)&&persistent_project_control_apply_working(&g_monkey_test_saved_project.metadata,&g_monkey_test_saved_project.pattern,0U)==PERSIST_CODEC_OK)?1U:0U;}
 
 static void monkey_test_safety_silence(void)
 {
@@ -70,7 +76,7 @@ uint8_t monkey_test_safety_prepare(void)
             track, &g_monkey_test_safety.saved_playhead[track]);
     }
 
-    if (persistent_project_control_capture(&g_monkey_test_saved_project) != PERSIST_CODEC_OK)
+    if (monkey_test_capture_project() == 0U)
     {
         return 0U;
     }
@@ -83,7 +89,7 @@ uint8_t monkey_test_safety_prepare(void)
     {
         sd_access_gate_set_diagnostic_read_only(0U);
         undo_v2_set_capture_suspended(0U);
-        (void)persistent_project_control_apply(&g_monkey_test_saved_project, 0U);
+        (void)monkey_test_apply_project();
         g_monkey_test_safety.snapshot_valid = 0U;
         return 0U;
     }
@@ -109,7 +115,7 @@ uint8_t monkey_test_safety_restore(void)
 
     uint8_t ok = 1U;
     if ((g_monkey_test_safety.snapshot_valid == 0U)
-        || (persistent_project_control_apply(&g_monkey_test_saved_project, 0U) != PERSIST_CODEC_OK))
+        || (monkey_test_apply_project() == 0U))
     {
         ok = 0U;
     }
