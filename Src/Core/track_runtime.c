@@ -316,7 +316,16 @@ static const param_id_t g_track_runtime_tone_slots_fm[] = {
     PARAM_FM_PLAY_KEY,
     PARAM_FM_PLAY_PITCH_ENV,
     PARAM_FM_PLAY_PITCH_TIME,
-    PARAM_FM_OPERATOR_SELECT
+    PARAM_FM_OPERATOR_SELECT,
+    PARAM_FM_TRANSPOSE,
+    PARAM_FM_PITCH_R1,
+    PARAM_FM_PITCH_R2,
+    PARAM_FM_PITCH_R3,
+    PARAM_FM_PITCH_R4,
+    PARAM_FM_PITCH_L1,
+    PARAM_FM_PITCH_L2,
+    PARAM_FM_PITCH_L3,
+    PARAM_FM_PITCH_L4
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -1133,6 +1142,20 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         return rule;
     }
 
+    if ((param >= PARAM_FM_DX7_HIDDEN_FIRST) && (param <= PARAM_FM_DX7_HIDDEN_LAST))
+    {
+        rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
+        rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+        return rule;
+    }
+
+    if ((param >= PARAM_FM_UI_FIRST) && (param <= PARAM_FM_UI_LAST))
+    {
+        rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
+        rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+        return rule;
+    }
+
     switch (param)
     {
         case PARAM_FILTER_TYPE:
@@ -1633,6 +1656,13 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
         {
+            if (((param >= PARAM_FM_DX7_HIDDEN_FIRST) && (param <= PARAM_FM_DX7_HIDDEN_LAST))
+                    || ((param >= PARAM_FM_UI_FIRST) && (param <= PARAM_FM_UI_LAST)))
+            {
+                return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_FM)
+                    ? TRACK_RUNTIME_PARAM_ALLOWED
+                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             uint8_t play_index = 0U;
             seq_step_play_field_t play_field = SEQ_STEP_PLAY_FIELD_NOTE;
             if (seq_model_play_resolve_param(param,

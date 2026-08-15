@@ -4,6 +4,7 @@
 
 #include "drv_display.h"
 #include "font.h"
+#include "UI/ui_algo_icons.h"
 
 #define UIW_SWITCH_W              18
 #define UIW_SWITCH_H              8
@@ -13,6 +14,20 @@
 #define UIW_JACK_RING_OFFSET_Y    4
 #define UIW_KEYBOARD_H            12
 #define UIW_SHAPE_H               16
+
+static const uint32_t *const g_ui_algo_icons[32] = {
+    UI_ICON_ALGO1, UI_ICON_ALGO2, UI_ICON_ALGO3, UI_ICON_ALGO4,
+    UI_ICON_ALGO5, UI_ICON_ALGO6, UI_ICON_ALGO7, UI_ICON_ALGO8,
+    UI_ICON_ALGO9, UI_ICON_ALGO10, UI_ICON_ALGO11, UI_ICON_ALGO12,
+    UI_ICON_ALGO13, UI_ICON_ALGO14, UI_ICON_ALGO15, UI_ICON_ALGO16,
+    UI_ICON_ALGO17, UI_ICON_ALGO18, UI_ICON_ALGO19, UI_ICON_ALGO20,
+    UI_ICON_ALGO21, UI_ICON_ALGO22, UI_ICON_ALGO23, UI_ICON_ALGO24,
+    UI_ICON_ALGO25, UI_ICON_ALGO26, UI_ICON_ALGO27, UI_ICON_ALGO28,
+    UI_ICON_ALGO29, UI_ICON_ALGO30, UI_ICON_ALGO31, UI_ICON_ALGO32
+};
+
+_Static_assert((sizeof(g_ui_algo_icons) / sizeof(g_ui_algo_icons[0])) == 32U,
+               "FM algorithm icon mapping must contain 32 entries");
 
 static int uiw_center_x(int x, int w, const char *txt)
 {
@@ -217,6 +232,30 @@ void uiw_draw_filter_icon(int x, int y, int w, int h, const char *label)
     {
         drv_display_draw_line(lx, top, rx - 5, bot);
         drv_display_draw_line(rx - 5, bot, rx, bot);
+    }
+}
+
+void uiw_draw_algo_icon(int x, int y, int w, int h, uint8_t algorithm)
+{
+    if (algorithm >= 32U)
+    {
+        algorithm = 31U;
+    }
+
+    const int icon_x = x + ((w - (int)UI_ALGO_ICON_WIDTH) / 2);
+    const int icon_y = y + ((h - (int)UI_ALGO_ICON_HEIGHT) / 2);
+    const uint32_t *const bitmap = g_ui_algo_icons[algorithm];
+    for (uint8_t row = 0U; row < UI_ALGO_ICON_HEIGHT; ++row)
+    {
+        for (uint8_t col = 0U; col < UI_ALGO_ICON_WIDTH; ++col)
+        {
+            if ((bitmap[row] & (1UL << (UI_ALGO_ICON_WIDTH - 1U - col))) != 0UL)
+            {
+                drv_display_draw_pixel((uint8_t)(icon_x + col),
+                                        (uint8_t)(icon_y + row),
+                                        true);
+            }
+        }
     }
 }
 

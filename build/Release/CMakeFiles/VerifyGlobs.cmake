@@ -214,3 +214,92 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
+
+# SRC_UI_SRC at CMakeLists.txt:319 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/display_flush_service.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_active_track_sync.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_algo_icons.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_bootstrap.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_feedback.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_mute.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_seq_transport.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_shortcuts.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_edit_context_sync.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_event.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_input_service.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_contract.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_state.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_page_manager.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_oled.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_roll_popup.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_sampler_playhead.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_step_led_ownership.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_system_sync_internal.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_tasklet.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_track_catalog.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_track_led_projection.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_UI_SRC at CMakeLists.txt:319 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_UI_SRC at CMakeLists.txt:319 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_debug_hall.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_lowcost_button_test.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_midi_fx.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_name_edit.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_patch_assign.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_cfg.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_env.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_macro.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mod.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_seq.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_UI_SRC at CMakeLists.txt:319 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()

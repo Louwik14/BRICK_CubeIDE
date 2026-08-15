@@ -374,6 +374,15 @@ static uint8_t seq_param_iface_is_excluded_from_plock(param_id_t param_id)
         case PARAM_MOD_SLEW_2_SOURCE:
         case PARAM_MOD_SLEW_2_AMOUNT:
         case PARAM_FM_OPERATOR_SELECT:
+        case PARAM_FM_TRANSPOSE:
+        case PARAM_FM_PITCH_R1:
+        case PARAM_FM_PITCH_R2:
+        case PARAM_FM_PITCH_R3:
+        case PARAM_FM_PITCH_R4:
+        case PARAM_FM_PITCH_L1:
+        case PARAM_FM_PITCH_L2:
+        case PARAM_FM_PITCH_L3:
+        case PARAM_FM_PITCH_L4:
             return 1U;
         default:
             return 0U;
@@ -390,6 +399,11 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
     if ((param_id >= PARAM_FM_OPERATOR_FIRST) && (param_id <= PARAM_FM_OPERATOR_LAST))
     {
         return 1U;
+    }
+
+    if ((param_id >= PARAM_FM_DX7_HIDDEN_FIRST) && (param_id <= PARAM_FM_DX7_HIDDEN_LAST))
+    {
+        return 0U;
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);

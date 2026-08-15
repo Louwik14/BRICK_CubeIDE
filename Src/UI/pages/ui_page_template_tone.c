@@ -4,6 +4,7 @@
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/md_model.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/project_control.h"
 #if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
@@ -257,14 +258,14 @@ static const ui_template_family_t g_ui_template_tone_family_stack_global = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_fm = {
+static ui_template_family_t g_ui_template_tone_family_fm = {
     .family_title = "TONE 1/2",
-    .nav_labels = { "CORE", "COLOR", "ENV", "PLAY" },
+    .nav_labels = { "GLOBAL", "OP QUICK", "PITCH R", "PITCH L" },
     .subpages = {
-        { .title = "CORE", .param_bank = { .params = { PARAM_FM_RATIO, PARAM_FM_ALGORITHM, PARAM_FM_FEEDBACK, PARAM_FM_SYNC } } },
-        { .title = "COLOR", .param_bank = { .params = { PARAM_FM_BRIGHT, PARAM_FM_BODY, PARAM_FM_DETAIL, PARAM_FM_METAL } } },
-        { .title = "ENV", .param_bank = { .params = { PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_ENV_SUSTAIN, PARAM_FM_ENV_RELEASE } } },
-        { .title = "PLAY", .param_bank = { .params = { PARAM_FM_PLAY_VEL, PARAM_FM_PLAY_KEY, PARAM_FM_PLAY_PITCH_ENV, PARAM_FM_PLAY_PITCH_TIME } } },
+        { .title = "GLOBAL", .param_bank = { .params = { PARAM_FM_ALGORITHM, PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_TRANSPOSE } } },
+        { .title = "OP QUICK", .param_bank = { .params = { PARAM_FM_OPERATOR_SELECT, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_DETUNE } } },
+        { .title = "PITCH R", .param_bank = { .params = { PARAM_FM_PITCH_R1, PARAM_FM_PITCH_R2, PARAM_FM_PITCH_R3, PARAM_FM_PITCH_R4 } } },
+        { .title = "PITCH L", .param_bank = { .params = { PARAM_FM_PITCH_L1, PARAM_FM_PITCH_L2, PARAM_FM_PITCH_L3, PARAM_FM_PITCH_L4 } } },
     },
     .default_subpage = 0U,
 };
@@ -345,6 +346,25 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
             && (g_ui_template_tone_subset != 0U))
     {
         return &g_ui_template_tone_family_stack_global;
+    }
+    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
+            && (g_ui_template_tone_subset == 0U))
+    {
+        const uint8_t active_track = ui_get_active_lane();
+        float selected_value = 0.0f;
+        (void)param_registry_get_track_value(PARAM_FM_OPERATOR_SELECT, active_track, &selected_value);
+        uint8_t selected = (uint8_t)(selected_value + 0.5f);
+        if (selected >= PARAM_FM_OPERATOR_COUNT)
+        {
+            selected = (uint8_t)(PARAM_FM_OPERATOR_COUNT - 1U);
+        }
+        const param_id_t first = (param_id_t)(PARAM_FM_OPERATOR_FIRST
+                                              + (selected * PARAM_FM_OPERATOR_PARAM_COUNT));
+        g_ui_template_tone_family_fm.subpages[1].param_bank.params[1] = (param_id_t)(first + BRICK6_FM_OPERATOR_FREQ);
+        g_ui_template_tone_family_fm.subpages[1].param_bank.params[2] = (param_id_t)(first + BRICK6_FM_OPERATOR_LEVEL);
+        g_ui_template_tone_family_fm.subpages[1].param_bank.params[3] = (param_id_t)(first + BRICK6_FM_OPERATOR_DETUNE);
+        return &g_ui_template_tone_family_fm;
     }
     if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
@@ -1129,6 +1149,14 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     (void)slot;
 
+    if ((g_ui_template_tone_subset == 0U)
+            && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_FM)
+            && (id == PARAM_FM_ALGORITHM))
+    {
+        return UIW_WIDGET_ALGO_ICON;
+    }
+
     if ((id == PARAM_MIX_DELAY_SPECTRAL_POSITION)
             || (id == PARAM_MIX_DELAY_SPECTRAL_WIDTH))
     {
@@ -1185,6 +1213,23 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
 {
     (void)slot;
 
+    if ((g_ui_template_tone_subset == 0U)
+            && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_FM)
+            && (subpage != NULL)
+            && (((subpage->param_bank.params[0] == PARAM_FM_PITCH_R1)
+                    && (subpage->param_bank.params[1] == PARAM_FM_PITCH_R2)
+                    && (subpage->param_bank.params[2] == PARAM_FM_PITCH_R3)
+                    && (subpage->param_bank.params[3] == PARAM_FM_PITCH_R4))
+                || ((subpage->param_bank.params[0] == PARAM_FM_PITCH_L1)
+                    && (subpage->param_bank.params[1] == PARAM_FM_PITCH_L2)
+                    && (subpage->param_bank.params[2] == PARAM_FM_PITCH_L3)
+                    && (subpage->param_bank.params[3] == PARAM_FM_PITCH_L4))))
+    {
+        (void)id;
+        return UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
+    }
+
     if ((ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_WAVE)
             && (subpage != NULL)
@@ -1232,6 +1277,48 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_lane();
+    if ((g_ui_template_tone_subset == 0U)
+            && (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_FM))
+    {
+        const char *name = NULL;
+        switch (id)
+        {
+            case PARAM_FM_ALGORITHM: name = "ALGO"; break;
+            case PARAM_FM_ENV_ATTACK: name = "ATK"; break;
+            case PARAM_FM_ENV_DECAY: name = "DECAY"; break;
+            case PARAM_FM_TRANSPOSE: name = "TRANSPOSE"; break;
+            case PARAM_FM_OPERATOR_SELECT: name = "OP"; break;
+            case PARAM_FM_PITCH_R1: name = "R1"; break;
+            case PARAM_FM_PITCH_R2: name = "R2"; break;
+            case PARAM_FM_PITCH_R3: name = "R3"; break;
+            case PARAM_FM_PITCH_R4: name = "R4"; break;
+            case PARAM_FM_PITCH_L1: name = "L1"; break;
+            case PARAM_FM_PITCH_L2: name = "L2"; break;
+            case PARAM_FM_PITCH_L3: name = "L3"; break;
+            case PARAM_FM_PITCH_L4: name = "L4"; break;
+            default: break;
+        }
+        if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST)
+                && ((((uint16_t)id - (uint16_t)PARAM_FM_OPERATOR_FIRST)
+                     % PARAM_FM_OPERATOR_PARAM_COUNT) == BRICK6_FM_OPERATOR_FREQ))
+        {
+            name = "RATIO";
+        }
+        if (name != NULL)
+        {
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "%s", name);
+            }
+            (void)value;
+            (void)out_value;
+            (void)out_value_len;
+            (void)slot;
+            return 1U;
+        }
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE))
     {

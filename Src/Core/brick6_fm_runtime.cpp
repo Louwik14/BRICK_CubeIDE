@@ -41,12 +41,23 @@ struct fm_voice_t
     int32_t operator_output_level_offset[kOperatorCount];
     uint8_t operator_level[kOperatorCount];
     float operator_frequency[kOperatorCount];
+    uint8_t operator_coarse[kOperatorCount];
+    uint8_t operator_fine[kOperatorCount];
     int8_t operator_detune[kOperatorCount];
-    uint8_t operator_env[kOperatorCount][4];
+    uint8_t operator_rates[kOperatorCount][4];
+    uint8_t operator_levels[kOperatorCount][4];
+    uint8_t operator_breakpoint[kOperatorCount];
+    uint8_t operator_left_depth[kOperatorCount];
+    uint8_t operator_right_depth[kOperatorCount];
+    uint8_t operator_left_curve[kOperatorCount];
+    uint8_t operator_right_curve[kOperatorCount];
+    uint8_t operator_rate_scaling[kOperatorCount];
     uint8_t operator_on[kOperatorCount];
     uint8_t operator_mode[kOperatorCount];
     uint8_t operator_velocity[kOperatorCount];
-    uint8_t operator_key[kOperatorCount];
+    uint8_t pitch_rates[4];
+    uint8_t pitch_levels[4];
+    uint8_t transpose;
     float ratio;
     uint8_t algorithm;
     uint8_t feedback_amount;
@@ -63,6 +74,7 @@ struct fm_voice_t
     float play_key;
     float pitch_env_amount;
     float pitch_env_time;
+    uint8_t key_note;
     uint8_t note;
     uint8_t velocity;
     uint8_t active;
@@ -278,8 +290,8 @@ static void fixed_to_dx_frequency(float brick_frequency, int *coarse, int *fine)
 
 static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int op)
 {
-    int coarse = 0;
-    int fine = 0;
+    int coarse = voice->operator_coarse[op];
+    int fine = voice->operator_fine[op];
     const int mode = voice->operator_mode[op];
     float frequency = voice->operator_frequency[op];
     if (operator_is_carrier(voice->algorithm, op) == 0U)
@@ -289,8 +301,11 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
         if (step != 0) frequency *= (bipolar < 0.0f) ? (1.0f / (float)(step + 1))
                                                      : (float)(step + 1);
     }
-    if (mode == 0) ratio_to_dx_frequency(frequency, &coarse, &fine);
-    else fixed_to_dx_frequency(frequency, &coarse, &fine);
+    if (voice->ratio != 0.5f && operator_is_carrier(voice->algorithm, op) == 0U)
+    {
+        if (mode == 0) ratio_to_dx_frequency(frequency, &coarse, &fine);
+        else fixed_to_dx_frequency(frequency, &coarse, &fine);
+    }
 
     const int detune = (int)voice->operator_detune[op] + 7;
     int32_t log_frequency;
@@ -353,18 +368,35 @@ static int scale_curve(int group, int depth, int curve)
     return (curve < 2) ? -scale : scale;
 }
 
-static int scale_level(int note, int depth)
+static int scale_level_side(int group, int depth, int curve)
 {
-    const int offset = note - 60;
-    if (offset >= 0) return scale_curve((offset + 1) / 3, depth, 3);
-    return scale_curve(-(offset - 1) / 3, depth, 0);
+    return scale_curve(group, depth, curve);
+}
+
+static int operator_keyboard_scale(const fm_voice_t *voice, int op)
+{
+    const int offset = (int)voice->note - (int)voice->operator_breakpoint[op] - 17;
+    if (offset < 0)
+        return scale_level_side(-(offset - 1) / 3,
+                                voice->operator_left_depth[op],
+                                voice->operator_left_curve[op]);
+    return scale_level_side((offset + 1) / 3,
+                            voice->operator_right_depth[op],
+                            voice->operator_right_curve[op]);
+}
+
+static int operator_rate_scale(const fm_voice_t *voice, int op)
+{
+    int x = (int)voice->note / 3 - 7;
+    if (x < 0) x = 0;
+    if (x > 31) x = 31;
+    return ((int)voice->operator_rate_scaling[op] * x) >> 3;
 }
 
 static int operator_output_level(const fm_voice_t *voice, int op)
 {
     int level = Env::scaleoutlevel(voice->operator_level[op]);
-    level += scale_level(voice->note,
-                         (int)((float)voice->operator_key[op] * voice->play_key + 0.5f));
+    level += (int)((float)operator_keyboard_scale(voice, op) * (1.0f + voice->play_key) + 0.5f);
     if (level > 127) level = 127;
     level <<= 5;
     level += scale_velocity(voice->velocity,
@@ -477,12 +509,23 @@ static void reset_voice(fm_voice_t *voice)
            sizeof(voice->operator_output_level_offset));
     memset(voice->operator_level, 0, sizeof(voice->operator_level));
     memset(voice->operator_frequency, 0, sizeof(voice->operator_frequency));
+    memset(voice->operator_coarse, 0, sizeof(voice->operator_coarse));
+    memset(voice->operator_fine, 0, sizeof(voice->operator_fine));
     memset(voice->operator_detune, 0, sizeof(voice->operator_detune));
-    memset(voice->operator_env, 0, sizeof(voice->operator_env));
+    memset(voice->operator_rates, 0, sizeof(voice->operator_rates));
+    memset(voice->operator_levels, 0, sizeof(voice->operator_levels));
     memset(voice->operator_on, 1, sizeof(voice->operator_on));
     memset(voice->operator_mode, 0, sizeof(voice->operator_mode));
     memset(voice->operator_velocity, 7, sizeof(voice->operator_velocity));
-    memset(voice->operator_key, 0, sizeof(voice->operator_key));
+    memset(voice->operator_breakpoint, 39, sizeof(voice->operator_breakpoint));
+    memset(voice->operator_left_depth, 0, sizeof(voice->operator_left_depth));
+    memset(voice->operator_right_depth, 0, sizeof(voice->operator_right_depth));
+    memset(voice->operator_left_curve, 0, sizeof(voice->operator_left_curve));
+    memset(voice->operator_right_curve, 3, sizeof(voice->operator_right_curve));
+    memset(voice->operator_rate_scaling, 0, sizeof(voice->operator_rate_scaling));
+    memset(voice->pitch_rates, 0, sizeof(voice->pitch_rates));
+    memset(voice->pitch_levels, 49, sizeof(voice->pitch_levels));
+    voice->transpose = 24U;
     voice->ratio = 0.5f;
     voice->algorithm = (uint8_t)kDefaultAlgorithm;
     voice->feedback_amount = kDefaultFeedback;
@@ -500,6 +543,7 @@ static void reset_voice(fm_voice_t *voice)
     voice->pitch_env_amount = 0.0f;
     voice->pitch_env_time = 0.5f;
     voice->note = 0U;
+    voice->key_note = 0U;
     voice->velocity = 0U;
     voice->active = 0U;
     voice->parameter_generation = 1U;
@@ -512,12 +556,15 @@ static void reset_voice(fm_voice_t *voice)
         const uint8_t op = brick_operator_to_msfa_index(brick_op);
         voice->operator_level[op] = (uint8_t)kOperatorLevels[brick_op];
         voice->operator_frequency[op] = (float)kOperatorRatios[brick_op];
-        voice->operator_env[op][0] = (uint8_t)kEnvelopeRates[0];
-        voice->operator_env[op][1] = (uint8_t)kEnvelopeRates[1];
-        voice->operator_env[op][2] = (uint8_t)kEnvelopeLevels[2];
-        voice->operator_env[op][3] = (uint8_t)kEnvelopeRates[3];
+        voice->operator_coarse[op] = kOperatorRatios[brick_op];
+        for (int stage = 0; stage < 4; ++stage)
+        {
+            voice->operator_rates[op][stage] = (uint8_t)kEnvelopeRates[stage];
+            voice->operator_levels[op][stage] = (uint8_t)kEnvelopeLevels[stage];
+        }
         voice->env[op].init(kEnvelopeRates, kEnvelopeLevels,
-                            kEnvelopeReferenceOutlevel, 0);
+                            kEnvelopeReferenceOutlevel,
+                            operator_rate_scale(voice, op));
         refresh_operator_output_level(voice, op);
     }
     voice->pitch_env.set(kPitchEnvelopeRates, kPitchEnvelopeLevels);
@@ -527,14 +574,14 @@ static void reset_voice(fm_voice_t *voice)
 static void operator_envelope_values(const fm_voice_t *voice, int op,
                                      int rates[4], int levels[4])
 {
-    rates[0] = (int)voice->operator_env[op][0] + macro_delta(voice->env_attack, 18);
-    rates[1] = (int)voice->operator_env[op][1] + macro_delta(voice->env_decay, 18);
-    rates[2] = kEnvelopeRates[2];
-    rates[3] = (int)voice->operator_env[op][3] + macro_delta(voice->env_release, 18);
-    levels[0] = 99;
-    levels[1] = 92;
-    levels[2] = (int)voice->operator_env[op][2] + macro_delta(voice->env_sustain, 38);
-    levels[3] = 0;
+    rates[0] = (int)voice->operator_rates[op][0] + macro_delta(voice->env_attack, 18);
+    rates[1] = (int)voice->operator_rates[op][1] + macro_delta(voice->env_decay, 18);
+    rates[2] = voice->operator_rates[op][2];
+    rates[3] = (int)voice->operator_rates[op][3] + macro_delta(voice->env_release, 18);
+    levels[0] = voice->operator_levels[op][0];
+    levels[1] = voice->operator_levels[op][1];
+    levels[2] = (int)voice->operator_levels[op][2] + macro_delta(voice->env_sustain, 38);
+    levels[3] = voice->operator_levels[op][3];
     for (int stage = 0; stage < 4; ++stage)
     {
         if (rates[stage] < 0) rates[stage] = 0;
@@ -550,7 +597,8 @@ static void refresh_operator_envelope(fm_voice_t *voice, int op)
     int rates[4];
     int levels[4];
     operator_envelope_values(voice, op, rates, levels);
-    voice->env[op].update(rates, levels, kEnvelopeReferenceOutlevel, 0);
+    voice->env[op].update(rates, levels, kEnvelopeReferenceOutlevel,
+                          operator_rate_scale(voice, op));
 }
 
 static void refresh_all_envelopes(fm_voice_t *voice)
@@ -561,15 +609,26 @@ static void refresh_all_envelopes(fm_voice_t *voice)
 static void pitch_envelope_values(const fm_voice_t *voice, int rates[4], int levels[4])
 {
     const int depth = (int)(voice->pitch_env_amount * 49.0f);
-    const int rate = (int)(voice->pitch_env_time * 99.0f);
-    for (int stage = 0; stage < 4; ++stage) rates[stage] = rate;
-    levels[0] = 49 + depth;
-    levels[1] = levels[2] = levels[3] = 49;
+    const int rate_delta = macro_delta(voice->pitch_env_time, 40);
+    for (int stage = 0; stage < 4; ++stage)
+    {
+        rates[stage] = (int)voice->pitch_rates[stage] + rate_delta;
+        levels[stage] = voice->pitch_levels[stage];
+        if (rates[stage] < 0) rates[stage] = 0;
+        if (rates[stage] > 99) rates[stage] = 99;
+    }
+    levels[0] += depth;
+    if (levels[0] < 0) levels[0] = 0;
+    if (levels[0] > 99) levels[0] = 99;
 }
 
 static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
 {
-    voice->note = note;
+    voice->key_note = note;
+    int transposed_note = (int)note + (int)voice->transpose - 24;
+    if (transposed_note < 0) transposed_note = 0;
+    if (transposed_note > 127) transposed_note = 127;
+    voice->note = (uint8_t)transposed_note;
     voice->velocity = velocity;
     voice->active = 1U;
     if (voice->sync != 0U)
@@ -583,9 +642,10 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity)
         int rates[4];
         int levels[4];
         operator_envelope_values(voice, op, rates, levels);
-        voice->env[op].init(rates, levels, kEnvelopeReferenceOutlevel, 0);
+        voice->env[op].init(rates, levels, kEnvelopeReferenceOutlevel,
+                            operator_rate_scale(voice, op));
         refresh_operator_output_level(voice, op);
-        voice->base_log_frequency[op] = operator_log_frequency(voice, note, op);
+        voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
         voice->operators[op].gain_out = 0;
         voice->env[op].keydown(true);
@@ -644,7 +704,7 @@ void brick6_fm_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t veloci
 
 void brick6_fm_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
-    if ((valid_instance(instance_id) == 0U) || (g_fm_voice[instance_id].note != note))
+    if ((valid_instance(instance_id) == 0U) || (g_fm_voice[instance_id].key_note != note))
         return;
     brick6_fm_runtime_all_notes_off(instance_id);
 }
@@ -834,6 +894,14 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
                 : ((value > 16.0f) ? 16.0f : value);
             if (voice->operator_frequency[op] == next) return;
             voice->operator_frequency[op] = next;
+            int coarse = 0;
+            int fine = 0;
+            if (voice->operator_mode[op] == 0U)
+                ratio_to_dx_frequency(next, &coarse, &fine);
+            else
+                fixed_to_dx_frequency(next, &coarse, &fine);
+            voice->operator_coarse[op] = (uint8_t)coarse;
+            voice->operator_fine[op] = (uint8_t)fine;
             break;
         }
         case BRICK6_FM_OPERATOR_DETUNE:
@@ -852,8 +920,13 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
         {
             const uint8_t stage = (uint8_t)param - BRICK6_FM_OPERATOR_ENV_ATTACK;
             const uint8_t next = (uint8_t)((value < 0.0f) ? 0.0f : ((value > 99.0f) ? 99.0f : value + 0.5f));
-            if (voice->operator_env[op][stage] == next) return;
-            voice->operator_env[op][stage] = next;
+            uint8_t *target = nullptr;
+            if (stage == 0U) target = &voice->operator_rates[op][0];
+            else if (stage == 1U) target = &voice->operator_rates[op][1];
+            else if (stage == 2U) target = &voice->operator_levels[op][2];
+            else target = &voice->operator_rates[op][3];
+            if (*target == next) return;
+            *target = next;
             break;
         }
         case BRICK6_FM_OPERATOR_ON:
@@ -880,8 +953,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
         case BRICK6_FM_OPERATOR_KEY:
         {
             const uint8_t next = (uint8_t)(clamp_macro(value) * 99.0f + 0.5f);
-            if (voice->operator_key[op] == next) return;
-            voice->operator_key[op] = next;
+            if ((voice->operator_left_depth[op] == next)
+                    && (voice->operator_right_depth[op] == next)) return;
+            voice->operator_left_depth[op] = next;
+            voice->operator_right_depth[op] = next;
             break;
         }
         default:
@@ -898,6 +973,66 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             || (param == BRICK6_FM_OPERATOR_VEL)
             || (param == BRICK6_FM_OPERATOR_KEY))
         refresh_operator_output_level(voice, op);
+    mark_parameters_changed(voice);
+}
+
+void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
+                                      const track_tone_fm_base_voice_t *base)
+{
+    if ((valid_instance(instance_id) == 0U) || (base == nullptr))
+        return;
+    fm_voice_t *const voice = &g_fm_voice[instance_id];
+    voice->algorithm = clamp_algorithm(base->algorithm);
+    voice->feedback_amount = (base->feedback > 7U) ? 7U : base->feedback;
+    voice->sync = (base->key_sync != 0U) ? 1U : 0U;
+    voice->transpose = (base->transpose > 48U) ? 48U : base->transpose;
+    memcpy(voice->pitch_rates, base->pitch_rates, sizeof(voice->pitch_rates));
+    memcpy(voice->pitch_levels, base->pitch_levels, sizeof(voice->pitch_levels));
+    for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
+    {
+        const int op = (int)brick_operator_to_msfa_index(brick_op);
+        const track_tone_fm_operator_base_t *const source = &base->operators[brick_op];
+        memcpy(voice->operator_rates[op], source->rates, 4U);
+        memcpy(voice->operator_levels[op], source->levels, 4U);
+        voice->operator_breakpoint[op] = (source->breakpoint > 99U) ? 99U : source->breakpoint;
+        voice->operator_left_depth[op] = (source->left_depth > 99U) ? 99U : source->left_depth;
+        voice->operator_right_depth[op] = (source->right_depth > 99U) ? 99U : source->right_depth;
+        voice->operator_left_curve[op] = source->left_curve & 3U;
+        voice->operator_right_curve[op] = source->right_curve & 3U;
+        voice->operator_rate_scaling[op] = (source->rate_scaling > 7U) ? 7U : source->rate_scaling;
+        voice->operator_level[op] = (source->output_level > 99U) ? 99U : source->output_level;
+        voice->operator_mode[op] = (source->mode != 0U) ? 1U : 0U;
+        voice->operator_coarse[op] = (voice->operator_mode[op] == 0U)
+            ? (uint8_t)(source->coarse & 31U) : (uint8_t)(source->coarse & 3U);
+        voice->operator_fine[op] = (source->fine > 99U) ? 99U : source->fine;
+        voice->operator_detune[op] = (source->detune < -7) ? -7
+            : ((source->detune > 7) ? 7 : source->detune);
+        voice->operator_velocity[op] = (source->velocity_sensitivity > 7U)
+            ? 7U : source->velocity_sensitivity;
+        voice->operator_on[op] = (source->enabled != 0U) ? 1U : 0U;
+        if (voice->operator_mode[op] == 0U)
+        {
+            const float coarse = (voice->operator_coarse[op] == 0U)
+                ? 0.5f : (float)voice->operator_coarse[op];
+            voice->operator_frequency[op] = coarse * (1.0f + 0.01f * voice->operator_fine[op]);
+        }
+        else
+        {
+            const int code = (int)voice->operator_coarse[op] * 100 + voice->operator_fine[op];
+            voice->operator_frequency[op] = powf(10.0f, (float)code / 100.0f) / 440.0f;
+        }
+        refresh_operator_frequency(voice, op);
+        refresh_operator_envelope(voice, op);
+        refresh_operator_output_level(voice, op);
+    }
+    refresh_voice_patch(voice);
+    if (voice->active != 0U)
+    {
+        int rates[4];
+        int levels[4];
+        pitch_envelope_values(voice, rates, levels);
+        voice->pitch_env.update(rates, levels);
+    }
     mark_parameters_changed(voice);
 }
 
@@ -928,14 +1063,22 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     for (int op = 0; op < kOperatorCount; ++op)
     {
         refresh_frequency[op] = (destination->operator_frequency[op] != source->operator_frequency[op])
+            || (destination->operator_coarse[op] != source->operator_coarse[op])
+            || (destination->operator_fine[op] != source->operator_fine[op])
             || (destination->operator_detune[op] != source->operator_detune[op])
             || (destination->operator_mode[op] != source->operator_mode[op]);
         refresh_envelope[op] =
-            memcmp(destination->operator_env[op], source->operator_env[op], 4U) != 0;
+            (memcmp(destination->operator_rates[op], source->operator_rates[op], 4U) != 0)
+            || (memcmp(destination->operator_levels[op], source->operator_levels[op], 4U) != 0)
+            || (destination->operator_rate_scaling[op] != source->operator_rate_scaling[op]);
         refresh_output_level[op] =
             (destination->operator_level[op] != source->operator_level[op])
             || (destination->operator_velocity[op] != source->operator_velocity[op])
-            || (destination->operator_key[op] != source->operator_key[op]);
+            || (destination->operator_breakpoint[op] != source->operator_breakpoint[op])
+            || (destination->operator_left_depth[op] != source->operator_left_depth[op])
+            || (destination->operator_right_depth[op] != source->operator_right_depth[op])
+            || (destination->operator_left_curve[op] != source->operator_left_curve[op])
+            || (destination->operator_right_curve[op] != source->operator_right_curve[op]);
     }
     destination->ratio = source->ratio;
     destination->algorithm = source->algorithm;
@@ -953,14 +1096,25 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     destination->play_key = source->play_key;
     destination->pitch_env_amount = source->pitch_env_amount;
     destination->pitch_env_time = source->pitch_env_time;
+    destination->transpose = source->transpose;
+    memcpy(destination->pitch_rates, source->pitch_rates, sizeof(destination->pitch_rates));
+    memcpy(destination->pitch_levels, source->pitch_levels, sizeof(destination->pitch_levels));
     memcpy(destination->operator_level, source->operator_level, sizeof(destination->operator_level));
     memcpy(destination->operator_frequency, source->operator_frequency, sizeof(destination->operator_frequency));
+    memcpy(destination->operator_coarse, source->operator_coarse, sizeof(destination->operator_coarse));
+    memcpy(destination->operator_fine, source->operator_fine, sizeof(destination->operator_fine));
     memcpy(destination->operator_detune, source->operator_detune, sizeof(destination->operator_detune));
-    memcpy(destination->operator_env, source->operator_env, sizeof(destination->operator_env));
+    memcpy(destination->operator_rates, source->operator_rates, sizeof(destination->operator_rates));
+    memcpy(destination->operator_levels, source->operator_levels, sizeof(destination->operator_levels));
+    memcpy(destination->operator_breakpoint, source->operator_breakpoint, sizeof(destination->operator_breakpoint));
+    memcpy(destination->operator_left_depth, source->operator_left_depth, sizeof(destination->operator_left_depth));
+    memcpy(destination->operator_right_depth, source->operator_right_depth, sizeof(destination->operator_right_depth));
+    memcpy(destination->operator_left_curve, source->operator_left_curve, sizeof(destination->operator_left_curve));
+    memcpy(destination->operator_right_curve, source->operator_right_curve, sizeof(destination->operator_right_curve));
+    memcpy(destination->operator_rate_scaling, source->operator_rate_scaling, sizeof(destination->operator_rate_scaling));
     memcpy(destination->operator_on, source->operator_on, sizeof(destination->operator_on));
     memcpy(destination->operator_mode, source->operator_mode, sizeof(destination->operator_mode));
     memcpy(destination->operator_velocity, source->operator_velocity, sizeof(destination->operator_velocity));
-    memcpy(destination->operator_key, source->operator_key, sizeof(destination->operator_key));
     if (refresh_patch)
         refresh_voice_patch(destination);
     else

@@ -30,6 +30,8 @@ STEP 1 à 8 sélectionnent les pistes. STEP 9 à 16 sont contextuels; `SHIFT + S
 
 Pattern v12, Project v12 et Patch v6 sont des formats stricts sans conversion d'anciens payloads. Pattern/Project embarquent trois slots MIDI FX par piste ; les p-locks MIDI FX courants occupent 12 positions. Les collections de pistes sont indexées directement `0..7`; Patch représente un slot unique. Un Pattern ou Project appliqué avec succès invalide Undo/Redo.
 
+FM conserve une base voice DX7 compacte comme autorité unique, complétée par les macros BRICK non destructives. `TONE 1/2` expose les projections GLOBAL, OP QUICK et Pitch EG; les champs UI Pitch/Transpose restent persistés par les packs DX7 canoniques, sans asset, LFO DX7, destination MOD ni travail audio supplémentaire.
+
 ## Cartographie
 
 - [z1_audio_hard_rt_mix.md](z1_audio_hard_rt_mix.md) : audio, moteurs et mixer.

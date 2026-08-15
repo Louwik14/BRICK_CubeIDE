@@ -316,7 +316,7 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
 )
 
-file(GLOB SRC_UI_SRC
+file(GLOB SRC_UI_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/*.c"

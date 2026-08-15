@@ -15,6 +15,7 @@ typedef enum
     UIW_WIDGET_ENUM_TEXT,
     UIW_WIDGET_WAVE_ICON,
     UIW_WIDGET_FILTER_ICON,
+    UIW_WIDGET_ALGO_ICON,
     UIW_WIDGET_JACK,
     UIW_WIDGET_KEYBOARD,
 } uiw_widget_type_t;
@@ -24,6 +25,7 @@ void uiw_draw_bipolar_bar(int x, int y, int w, int h, float value, float vmin, f
 void uiw_draw_switch(int x, int y, int w, int h, uint8_t on);
 void uiw_draw_wave_icon(int x, int y, int w, int h, const char *label);
 void uiw_draw_filter_icon(int x, int y, int w, int h, const char *label);
+void uiw_draw_algo_icon(int x, int y, int w, int h, uint8_t algorithm);
 void uiw_draw_enum_text(int x, int y, int w, int h, const char *label);
 void uiw_draw_jack_icon(int x, int y, int w, int h);
 void uiw_draw_keyboard_icon(int x, int y, int w, int h);

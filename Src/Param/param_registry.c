@@ -48,6 +48,209 @@
 #include "Keyboard/keyboard_engine.h"
 #include <stddef.h>
 #include <string.h>
+#include <math.h>
+
+static float clamp_value(float v, float lo, float hi);
+
+static float param_registry_fm_native_frequency(const track_tone_fm_operator_base_t *op)
+{
+    if (op->mode == 0U)
+    {
+        const float coarse = (op->coarse == 0U) ? 0.5f : (float)op->coarse;
+        return coarse * (1.0f + 0.01f * (float)op->fine);
+    }
+    return powf(10.0f, (float)((uint16_t)op->coarse * 100U + op->fine) / 100.0f) / 440.0f;
+}
+
+static float param_registry_fm_operator_value(const track_tone_fm_operator_base_t *op,
+                                               uint8_t field)
+{
+    switch (field)
+    {
+        case 0U: return (float)op->output_level;
+        case 1U: return param_registry_fm_native_frequency(op);
+        case 2U: return (float)op->detune;
+        case 3U: return (float)op->rates[0];
+        case 4U: return (float)op->rates[1];
+        case 5U: return (float)op->levels[2];
+        case 6U: return (float)op->rates[3];
+        case 7U: return (float)op->enabled;
+        case 8U: return (float)op->mode;
+        case 9U: return (float)op->velocity_sensitivity / 7.0f;
+        case 10U: return (float)((uint16_t)op->left_depth + op->right_depth) / 198.0f;
+        default: return 0.0f;
+    }
+}
+
+static void param_registry_fm_set_native_frequency(track_tone_fm_operator_base_t *op,
+                                                   float value)
+{
+    if (op->mode == 0U)
+    {
+        float best_error = 1.0e30f;
+        for (uint8_t coarse = 0U; coarse < 32U; ++coarse)
+        {
+            const float base = (coarse == 0U) ? 0.5f : (float)coarse;
+            int fine = (int)(((value / base) - 1.0f) * 100.0f + 0.5f);
+            if (fine < 0) fine = 0;
+            if (fine > 99) fine = 99;
+            const float represented = base * (1.0f + 0.01f * (float)fine);
+            const float error = fabsf(represented - value);
+            if (error < best_error)
+            {
+                best_error = error;
+                op->coarse = coarse;
+                op->fine = (uint8_t)fine;
+            }
+        }
+        return;
+    }
+    float hz = 440.0f * value;
+    if (hz < 1.0f) hz = 1.0f;
+    int code = (int)(log10f(hz) * 100.0f + 0.5f);
+    if (code < 0) code = 0;
+    if (code > 399) code = 399;
+    op->coarse = (uint8_t)(code / 100);
+    op->fine = (uint8_t)(code % 100);
+}
+
+static void param_registry_fm_set_operator_value(track_tone_fm_operator_base_t *op,
+                                                 uint8_t field,
+                                                 float value)
+{
+    switch (field)
+    {
+        case 0U: op->output_level = (uint8_t)clamp_value(value, 0.0f, 99.0f); break;
+        case 1U: param_registry_fm_set_native_frequency(op, value); break;
+        case 2U: op->detune = (int8_t)clamp_value(value, -7.0f, 7.0f); break;
+        case 3U: op->rates[0] = (uint8_t)clamp_value(value, 0.0f, 99.0f); break;
+        case 4U: op->rates[1] = (uint8_t)clamp_value(value, 0.0f, 99.0f); break;
+        case 5U: op->levels[2] = (uint8_t)clamp_value(value, 0.0f, 99.0f); break;
+        case 6U: op->rates[3] = (uint8_t)clamp_value(value, 0.0f, 99.0f); break;
+        case 7U: op->enabled = (value >= 0.5f) ? 1U : 0U; break;
+        case 8U: op->mode = (value >= 0.5f) ? 1U : 0U; break;
+        case 9U: op->velocity_sensitivity = (uint8_t)(clamp_value(value, 0.0f, 1.0f) * 7.0f + 0.5f); break;
+        case 10U:
+        {
+            const uint8_t depth = (uint8_t)(clamp_value(value, 0.0f, 1.0f) * 99.0f + 0.5f);
+            op->left_depth = depth;
+            op->right_depth = depth;
+            break;
+        }
+        default: break;
+    }
+}
+
+static float param_registry_fm_pack3(uint8_t a, uint8_t b, uint8_t c)
+{
+    return (float)((uint32_t)a | ((uint32_t)b << 8U) | ((uint32_t)c << 16U));
+}
+
+static void param_registry_fm_unpack3(float value, uint8_t *a, uint8_t *b, uint8_t *c)
+{
+    const uint32_t packed = (uint32_t)clamp_value(value, 0.0f, 16777215.0f);
+    *a = (uint8_t)packed;
+    *b = (uint8_t)(packed >> 8U);
+    *c = (uint8_t)(packed >> 16U);
+}
+
+static uint8_t param_registry_fm_hidden_get(const track_tone_fm_base_voice_t *base,
+                                            param_id_t id,
+                                            float *out_value)
+{
+    const uint16_t index = (uint16_t)(id - PARAM_FM_DX7_HIDDEN_FIRST);
+    if (index < 24U)
+    {
+        const track_tone_fm_operator_base_t *const op = &base->operators[index / 4U];
+        switch (index % 4U)
+        {
+            case 0U: *out_value = param_registry_fm_pack3(op->rates[2], op->levels[0], op->levels[1]); break;
+            case 1U: *out_value = param_registry_fm_pack3(op->levels[3], op->breakpoint, op->left_depth); break;
+            case 2U: *out_value = param_registry_fm_pack3(op->right_depth, op->left_curve, op->right_curve); break;
+            default: *out_value = param_registry_fm_pack3(op->rate_scaling, op->coarse, op->fine); break;
+        }
+        return 1U;
+    }
+    if (index == 24U) *out_value = param_registry_fm_pack3(base->pitch_rates[0], base->pitch_rates[1], base->pitch_rates[2]);
+    else if (index == 25U) *out_value = param_registry_fm_pack3(base->pitch_rates[3], base->pitch_levels[0], base->pitch_levels[1]);
+    else if (index == 26U) *out_value = param_registry_fm_pack3(base->pitch_levels[2], base->pitch_levels[3], base->transpose);
+    else return 0U;
+    return 1U;
+}
+
+static uint8_t param_registry_fm_hidden_set(track_tone_fm_base_voice_t *base,
+                                            param_id_t id,
+                                            float value)
+{
+    const uint16_t index = (uint16_t)(id - PARAM_FM_DX7_HIDDEN_FIRST);
+    if (index < 24U)
+    {
+        track_tone_fm_operator_base_t *const op = &base->operators[index / 4U];
+        switch (index % 4U)
+        {
+            case 0U: param_registry_fm_unpack3(value, &op->rates[2], &op->levels[0], &op->levels[1]); break;
+            case 1U: param_registry_fm_unpack3(value, &op->levels[3], &op->breakpoint, &op->left_depth); break;
+            case 2U: param_registry_fm_unpack3(value, &op->right_depth, &op->left_curve, &op->right_curve); break;
+            default: param_registry_fm_unpack3(value, &op->rate_scaling, &op->coarse, &op->fine); break;
+        }
+        return 1U;
+    }
+    if (index == 24U) param_registry_fm_unpack3(value, &base->pitch_rates[0], &base->pitch_rates[1], &base->pitch_rates[2]);
+    else if (index == 25U) param_registry_fm_unpack3(value, &base->pitch_rates[3], &base->pitch_levels[0], &base->pitch_levels[1]);
+    else if (index == 26U) param_registry_fm_unpack3(value, &base->pitch_levels[2], &base->pitch_levels[3], &base->transpose);
+    else return 0U;
+    return 1U;
+}
+
+static float clamp_value(float v, float lo, float hi);
+
+static uint8_t param_registry_fm_ui_get(const track_tone_fm_base_voice_t *base,
+                                        param_id_t id,
+                                        float *out_value)
+{
+    if ((base == NULL) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_FM_TRANSPOSE: *out_value = (float)base->transpose - 24.0f; return 1U;
+        case PARAM_FM_PITCH_R1: *out_value = base->pitch_rates[0]; return 1U;
+        case PARAM_FM_PITCH_R2: *out_value = base->pitch_rates[1]; return 1U;
+        case PARAM_FM_PITCH_R3: *out_value = base->pitch_rates[2]; return 1U;
+        case PARAM_FM_PITCH_R4: *out_value = base->pitch_rates[3]; return 1U;
+        case PARAM_FM_PITCH_L1: *out_value = base->pitch_levels[0]; return 1U;
+        case PARAM_FM_PITCH_L2: *out_value = base->pitch_levels[1]; return 1U;
+        case PARAM_FM_PITCH_L3: *out_value = base->pitch_levels[2]; return 1U;
+        case PARAM_FM_PITCH_L4: *out_value = base->pitch_levels[3]; return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_registry_fm_ui_set(track_tone_fm_base_voice_t *base,
+                                        param_id_t id,
+                                        float value)
+{
+    if (base == NULL)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_FM_TRANSPOSE: base->transpose = (uint8_t)clamp_value(value + 24.0f, 0.0f, 48.0f); return 1U;
+        case PARAM_FM_PITCH_R1: base->pitch_rates[0] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_R2: base->pitch_rates[1] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_R3: base->pitch_rates[2] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_R4: base->pitch_rates[3] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L1: base->pitch_levels[0] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L2: base->pitch_levels[1] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L3: base->pitch_levels[2] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L4: base->pitch_levels[3] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        default: return 0U;
+    }
+}
 
 static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
@@ -457,21 +660,32 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         return 0U;
     }
 
+    if ((id >= PARAM_FM_DX7_HIDDEN_FIRST) && (id <= PARAM_FM_DX7_HIDDEN_LAST))
+    {
+        return param_registry_fm_hidden_get(&state->fm.base, id, out_value);
+    }
+
+    if ((id >= PARAM_FM_UI_FIRST) && (id <= PARAM_FM_UI_LAST))
+    {
+        return param_registry_fm_ui_get(&state->fm.base, id, out_value);
+    }
+
     if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
     {
         const uint16_t offset = (uint16_t)(id - PARAM_FM_OPERATOR_FIRST);
-        *out_value = state->fm.operator_params[offset / PARAM_FM_OPERATOR_PARAM_COUNT]
-                                            [offset % PARAM_FM_OPERATOR_PARAM_COUNT];
+        *out_value = param_registry_fm_operator_value(
+            &state->fm.base.operators[offset / PARAM_FM_OPERATOR_PARAM_COUNT],
+            (uint8_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT));
         return 1U;
     }
     if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_OPERATOR_SELECT))
     {
         switch (id)
         {
-            case PARAM_FM_PLAY_VEL: *out_value = state->fm.play_vel; return 1U;
-            case PARAM_FM_PLAY_KEY: *out_value = state->fm.play_key; return 1U;
-            case PARAM_FM_PLAY_PITCH_ENV: *out_value = state->fm.pitch_env; return 1U;
-            case PARAM_FM_PLAY_PITCH_TIME: *out_value = state->fm.pitch_time; return 1U;
+            case PARAM_FM_PLAY_VEL: *out_value = state->fm.macros.play_vel; return 1U;
+            case PARAM_FM_PLAY_KEY: *out_value = state->fm.macros.play_key; return 1U;
+            case PARAM_FM_PLAY_PITCH_ENV: *out_value = state->fm.macros.pitch_env; return 1U;
+            case PARAM_FM_PLAY_PITCH_TIME: *out_value = state->fm.macros.pitch_time; return 1U;
             case PARAM_FM_OPERATOR_SELECT: *out_value = state->fm.operator_select; return 1U;
             default: break;
         }
@@ -593,18 +807,18 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
                 default: return 0U;
             }
         }
-        case PARAM_FM_RATIO: *out_value = state->fm.ratio; return 1U;
-        case PARAM_FM_ALGORITHM: *out_value = state->fm.algorithm; return 1U;
-        case PARAM_FM_FEEDBACK: *out_value = state->fm.feedback; return 1U;
-        case PARAM_FM_SYNC: *out_value = state->fm.sync; return 1U;
-        case PARAM_FM_BRIGHT: *out_value = state->fm.bright; return 1U;
-        case PARAM_FM_BODY: *out_value = state->fm.body; return 1U;
-        case PARAM_FM_DETAIL: *out_value = state->fm.detail; return 1U;
-        case PARAM_FM_METAL: *out_value = state->fm.metal; return 1U;
-        case PARAM_FM_ENV_ATTACK: *out_value = state->fm.env_attack; return 1U;
-        case PARAM_FM_ENV_DECAY: *out_value = state->fm.env_decay; return 1U;
-        case PARAM_FM_ENV_SUSTAIN: *out_value = state->fm.env_sustain; return 1U;
-        case PARAM_FM_ENV_RELEASE: *out_value = state->fm.env_release; return 1U;
+        case PARAM_FM_RATIO: *out_value = state->fm.macros.ratio; return 1U;
+        case PARAM_FM_ALGORITHM: *out_value = (float)state->fm.base.algorithm; return 1U;
+        case PARAM_FM_FEEDBACK: *out_value = (float)state->fm.base.feedback; return 1U;
+        case PARAM_FM_SYNC: *out_value = (float)state->fm.base.key_sync; return 1U;
+        case PARAM_FM_BRIGHT: *out_value = state->fm.macros.bright; return 1U;
+        case PARAM_FM_BODY: *out_value = state->fm.macros.body; return 1U;
+        case PARAM_FM_DETAIL: *out_value = state->fm.macros.detail; return 1U;
+        case PARAM_FM_METAL: *out_value = state->fm.macros.metal; return 1U;
+        case PARAM_FM_ENV_ATTACK: *out_value = state->fm.macros.env_attack; return 1U;
+        case PARAM_FM_ENV_DECAY: *out_value = state->fm.macros.env_decay; return 1U;
+        case PARAM_FM_ENV_SUSTAIN: *out_value = state->fm.macros.env_sustain; return 1U;
+        case PARAM_FM_ENV_RELEASE: *out_value = state->fm.macros.env_release; return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -765,21 +979,32 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         return 0U;
     }
 
+    if ((id >= PARAM_FM_DX7_HIDDEN_FIRST) && (id <= PARAM_FM_DX7_HIDDEN_LAST))
+    {
+        return param_registry_fm_hidden_set(&state->fm.base, id, value);
+    }
+
+    if ((id >= PARAM_FM_UI_FIRST) && (id <= PARAM_FM_UI_LAST))
+    {
+        return param_registry_fm_ui_set(&state->fm.base, id, value);
+    }
+
     if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
     {
         const uint16_t offset = (uint16_t)(id - PARAM_FM_OPERATOR_FIRST);
-        state->fm.operator_params[offset / PARAM_FM_OPERATOR_PARAM_COUNT]
-                                  [offset % PARAM_FM_OPERATOR_PARAM_COUNT] = value;
+        param_registry_fm_set_operator_value(
+            &state->fm.base.operators[offset / PARAM_FM_OPERATOR_PARAM_COUNT],
+            (uint8_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT), value);
         return 1U;
     }
     if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_OPERATOR_SELECT))
     {
         switch (id)
         {
-            case PARAM_FM_PLAY_VEL: state->fm.play_vel = clamp_value(value, 0.0f, 1.0f); return 1U;
-            case PARAM_FM_PLAY_KEY: state->fm.play_key = clamp_value(value, 0.0f, 1.0f); return 1U;
-            case PARAM_FM_PLAY_PITCH_ENV: state->fm.pitch_env = clamp_value(value, -1.0f, 1.0f); return 1U;
-            case PARAM_FM_PLAY_PITCH_TIME: state->fm.pitch_time = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_VEL: state->fm.macros.play_vel = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_KEY: state->fm.macros.play_key = clamp_value(value, 0.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_PITCH_ENV: state->fm.macros.pitch_env = clamp_value(value, -1.0f, 1.0f); return 1U;
+            case PARAM_FM_PLAY_PITCH_TIME: state->fm.macros.pitch_time = clamp_value(value, 0.0f, 1.0f); return 1U;
             case PARAM_FM_OPERATOR_SELECT: state->fm.operator_select = clamp_value(value, 0.0f, 5.0f); return 1U;
             default: break;
         }
@@ -902,29 +1127,29 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             }
         }
         case PARAM_FM_RATIO:
-            state->fm.ratio = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.ratio = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_ALGORITHM:
-            state->fm.algorithm = clamp_value(value, 0.0f, 31.0f); return 1U;
+            state->fm.base.algorithm = (uint8_t)clamp_value(value, 0.0f, 31.0f); return 1U;
         case PARAM_FM_FEEDBACK:
-            state->fm.feedback = clamp_value(value, 0.0f, 7.0f); return 1U;
+            state->fm.base.feedback = (uint8_t)clamp_value(value, 0.0f, 7.0f); return 1U;
         case PARAM_FM_SYNC:
-            state->fm.sync = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
+            state->fm.base.key_sync = (value >= 0.5f) ? 1U : 0U; return 1U;
         case PARAM_FM_BRIGHT:
-            state->fm.bright = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.bright = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_BODY:
-            state->fm.body = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.body = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_DETAIL:
-            state->fm.detail = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.detail = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_METAL:
-            state->fm.metal = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.metal = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_ENV_ATTACK:
-            state->fm.env_attack = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.env_attack = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_ENV_DECAY:
-            state->fm.env_decay = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.env_decay = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_ENV_SUSTAIN:
-            state->fm.env_sustain = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.env_sustain = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_FM_ENV_RELEASE:
-            state->fm.env_release = clamp_value(value, -1.0f, 1.0f); return 1U;
+            state->fm.macros.env_release = clamp_value(value, -1.0f, 1.0f); return 1U;
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:

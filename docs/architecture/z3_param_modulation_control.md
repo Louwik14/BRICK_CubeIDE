@@ -48,3 +48,12 @@ Le réarmement réinitialise phase, HOLD, ONE et l'état RNG/S&H selon le mode
 courant. Une restauration bornée des destinations POLY vers leur base est faite
 une seule fois lors de la transition; les fenêtres suivantes en attente restent
 sur un chemin court.
+## Base voice FM DX7
+
+L'autorité FM distingue une base voice compacte et les macros BRICK. La base conserve les huit points d'enveloppe de chaque opérateur, le keyboard/rate scaling, les codes natifs coarse/fine, le pitch EG complet et le transpose. Les macros TONE produisent une projection runtime non destructive au-dessus de cette base.
+
+Les 27 paramètres `PARAM_FM_DX7_*_PACK_*` sont des adaptateurs persistants UI-hidden de trois octets exactement représentables en `float`. Les projections UI `PARAM_FM_TRANSPOSE`, `PARAM_FM_PITCH_R1..R4` et `PARAM_FM_PITCH_L1..L4` lisent et écrivent directement cette base; elles sont non persistantes individuellement et sont donc restaurées par les packs canoniques. Elles ne figurent pas dans le catalogue des destinations MOD. Les huit slots Matrix restent exclusivement sous contrôle utilisateur. Aucun état LFO DX7 ne fait partie de cette base.
+
+La page FM `TONE 1/2` expose quatre pages `GLOBAL`, `OP QUICK`, `PITCH R` et `PITCH L`. `OP QUICK` réutilise `PARAM_FM_OPERATOR_SELECT` et projette les trois paramètres canoniques de l'opérateur choisi. `PITCH R` et `PITCH L` partagent une seule projection graphique de l'enveloppe Pitch EG complète. `TONE 2/2` conserve sa structure existante.
+
+Le renderer FM conserve six appels `Env::getsample`, un appel `PitchEnv::getsample` et six opérateurs par bloc. Le scaling, le transpose et les projections de macros sont préparés au Note-On ou lors d'un changement de paramètre.

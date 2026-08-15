@@ -1,0 +1,42 @@
+#ifndef UI_ALGO_ICONS_H
+#define UI_ALGO_ICONS_H
+
+#include <stdint.h>
+
+#define UI_ALGO_ICON_WIDTH  24U
+#define UI_ALGO_ICON_HEIGHT 24U
+
+extern const uint32_t UI_ICON_ALGO1[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO2[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO3[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO4[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO5[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO6[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO7[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO8[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO9[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO10[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO11[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO12[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO13[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO14[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO15[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO16[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO17[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO18[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO19[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO20[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO21[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO22[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO23[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO24[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO25[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO26[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO27[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO28[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO29[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO30[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO31[UI_ALGO_ICON_HEIGHT];
+extern const uint32_t UI_ICON_ALGO32[UI_ALGO_ICON_HEIGHT];
+
+#endif /* UI_ALGO_ICONS_H */

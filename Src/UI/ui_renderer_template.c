@@ -3038,6 +3038,82 @@ static uint8_t ui_renderer_template_draw_lfo_shape_phase_group(const ui_param_se
                                                              h);
 }
 
+static uint8_t ui_renderer_template_fm_pitch_eg_group_is_active(const ui_template_page_state_t *state,
+                                                                  const ui_template_subpage_t *subpage)
+{
+    if ((state == NULL) || (subpage == NULL))
+    {
+        return 0U;
+    }
+
+    const param_id_t *const params = subpage->param_bank.params;
+    const uint8_t rates = (uint8_t)((params[0] == PARAM_FM_PITCH_R1)
+            && (params[1] == PARAM_FM_PITCH_R2)
+            && (params[2] == PARAM_FM_PITCH_R3)
+            && (params[3] == PARAM_FM_PITCH_R4));
+    const uint8_t levels = (uint8_t)((params[0] == PARAM_FM_PITCH_L1)
+            && (params[1] == PARAM_FM_PITCH_L2)
+            && (params[2] == PARAM_FM_PITCH_L3)
+            && (params[3] == PARAM_FM_PITCH_L4));
+    if ((rates == 0U) && (levels == 0U))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(ui_renderer_template_resolve_custom_widget(
+                         state,
+                         subpage,
+                         0U,
+                         params[0]) == UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP);
+}
+
+static uint8_t ui_renderer_template_draw_fm_pitch_eg_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    static const param_id_t rate_ids[4] = {
+        PARAM_FM_PITCH_R1, PARAM_FM_PITCH_R2, PARAM_FM_PITCH_R3, PARAM_FM_PITCH_R4
+    };
+    static const param_id_t level_ids[4] = {
+        PARAM_FM_PITCH_L1, PARAM_FM_PITCH_L2, PARAM_FM_PITCH_L3, PARAM_FM_PITCH_L4
+    };
+    float rates[4];
+    float levels[4];
+    float total_time = 0.0f;
+    float time[4];
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        rates[i] = 0.0f;
+        levels[i] = 49.0f;
+        (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, rate_ids[i], &rates[i], 0);
+        (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, level_ids[i], &levels[i], 0);
+        if (rates[i] < 0.0f) rates[i] = 0.0f;
+        if (rates[i] > 99.0f) rates[i] = 99.0f;
+        if (levels[i] < 0.0f) levels[i] = 0.0f;
+        if (levels[i] > 99.0f) levels[i] = 99.0f;
+        time[i] = 100.0f - rates[i] + 1.0f;
+        total_time += time[i];
+    }
+
+    const int x = UI_TEMPLATE_GROUP_WIDGET_X;
+    const int y = UI_TEMPLATE_GROUP_WIDGET_Y;
+    const int w = UI_TEMPLATE_GROUP_WIDGET_W;
+    const int h = UI_TEMPLATE_GROUP_WIDGET_H;
+    int previous_x = x;
+    int previous_y = y + h - 2 - (int)((49.0f * (float)(h - 4)) / 99.0f + 0.5f);
+    float accumulated = 0.0f;
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        accumulated += time[i];
+        int next_x = x + (int)(((accumulated / total_time) * (float)(w - 1)) + 0.5f);
+        if (next_x > (x + w - 1)) next_x = x + w - 1;
+        const int next_y = y + h - 2 - (int)((levels[i] * (float)(h - 4)) / 99.0f + 0.5f);
+        drv_display_draw_line(previous_x, previous_y, next_x, next_y);
+        previous_x = next_x;
+        previous_y = next_y;
+    }
+    return 1U;
+}
+
 static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
                                                         const ui_template_family_t *family)
 {
@@ -4399,6 +4475,22 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             }
             break;
 
+        case UIW_WIDGET_ALGO_ICON:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
+            uiw_draw_algo_icon(widget_x,
+                               widget_y,
+                               UI_TEMPLATE_CARD_WIDGET_W,
+                               UI_TEMPLATE_CARD_WIDGET_H,
+                               (uint8_t)(value + 0.5f));
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
+            break;
+
         case UIW_WIDGET_BAR:
             if (slot_locked != 0U)
             {
@@ -4779,6 +4871,11 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
                 grouped_widget_drawn = 1U;
             }
+            if (ui_renderer_template_fm_pitch_eg_group_is_active(state, subpage) != 0U)
+            {
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
+                grouped_widget_drawn = 1U;
+            }
             for (uint8_t i = 0U; i < 4U; i++)
             {
                 ui_renderer_template_draw_param_slot(state,
@@ -4809,6 +4906,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                                                                      grouped_filter_first_slot,
                                                                      grouped_filter_position,
                                                                      grouped_filter_width);
+                }
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP)
+                {
+                    (void)ui_renderer_template_draw_fm_pitch_eg_group(&plock_frame_ctx);
                 }
                 else
                 {

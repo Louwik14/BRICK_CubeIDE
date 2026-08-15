@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Core/track_tone_sound_state.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,6 +53,8 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
                                     uint8_t operator_id,
                                     brick6_fm_operator_param_t param,
                                     float value);
+void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
+                                      const track_tone_fm_base_voice_t *base);
 void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id);
 void brick6_fm_runtime_sync_voice_if_needed(uint8_t source_instance_id,
                                             uint8_t destination_instance_id);

@@ -71,7 +71,8 @@ typedef enum
     UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE,
     UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE,
     UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM,
-    UI_TEMPLATE_CUSTOM_WIDGET_WAVE_WAVETABLE
+    UI_TEMPLATE_CUSTOM_WIDGET_WAVE_WAVETABLE,
+    UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP
 } ui_template_custom_widget_kind_t;
 
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);

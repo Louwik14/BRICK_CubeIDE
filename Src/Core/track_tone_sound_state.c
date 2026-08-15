@@ -41,13 +41,8 @@ SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_LANE_C
 #define TRACK_TONE_FM_DEFAULT_PITCH_TIME           0.5f
 #define TRACK_TONE_FM_DEFAULT_OPERATOR_SELECT      0.0f
 
-static const float g_track_tone_fm_operator_defaults[PARAM_FM_OPERATOR_COUNT][PARAM_FM_OPERATOR_PARAM_COUNT] = {
-    { 99.0f, 1.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
-    { 82.0f, 2.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
-    { 76.0f, 3.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
-    { 70.0f, 4.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
-    { 64.0f, 5.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f },
-    { 58.0f, 6.0f, 0.0f, 99.0f, 92.0f, 80.0f, 72.0f, 1.0f, 0.0f, 1.0f, 0.0f }
+static const uint8_t g_track_tone_fm_operator_levels[TRACK_TONE_FM_OPERATOR_COUNT] = {
+    99U, 82U, 76U, 70U, 64U, 58U
 };
 
 void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
@@ -139,29 +134,56 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
     state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;
     state->wave.pos_smooth = param_registry[PARAM_WAVE_POS_SMOOTH].default_value;
-    state->fm.ratio = TRACK_TONE_FM_DEFAULT_RATIO;
-    state->fm.algorithm = TRACK_TONE_FM_DEFAULT_ALGORITHM;
-    state->fm.feedback = TRACK_TONE_FM_DEFAULT_FEEDBACK;
-    state->fm.sync = TRACK_TONE_FM_DEFAULT_SYNC;
-    state->fm.bright = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.body = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.detail = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.metal = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.env_attack = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.env_decay = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.env_sustain = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.env_release = TRACK_TONE_FM_DEFAULT_MACRO;
-    state->fm.play_vel = TRACK_TONE_FM_DEFAULT_PLAY_VEL;
-    state->fm.play_key = TRACK_TONE_FM_DEFAULT_PLAY_KEY;
-    state->fm.pitch_env = TRACK_TONE_FM_DEFAULT_PITCH_ENV;
-    state->fm.pitch_time = TRACK_TONE_FM_DEFAULT_PITCH_TIME;
+    state->fm.base.algorithm = (uint8_t)TRACK_TONE_FM_DEFAULT_ALGORITHM;
+    state->fm.base.feedback = (uint8_t)TRACK_TONE_FM_DEFAULT_FEEDBACK;
+    state->fm.base.key_sync = (uint8_t)TRACK_TONE_FM_DEFAULT_SYNC;
+    state->fm.base.pitch_rates[0] = 0U;
+    state->fm.base.pitch_rates[1] = 0U;
+    state->fm.base.pitch_rates[2] = 0U;
+    state->fm.base.pitch_rates[3] = 0U;
+    state->fm.base.pitch_levels[0] = 49U;
+    state->fm.base.pitch_levels[1] = 49U;
+    state->fm.base.pitch_levels[2] = 49U;
+    state->fm.base.pitch_levels[3] = 49U;
+    state->fm.base.transpose = 24U;
+    state->fm.macros.ratio = TRACK_TONE_FM_DEFAULT_RATIO;
+    state->fm.macros.bright = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.body = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.detail = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.metal = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.env_attack = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.env_decay = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.env_sustain = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.env_release = TRACK_TONE_FM_DEFAULT_MACRO;
+    state->fm.macros.play_vel = TRACK_TONE_FM_DEFAULT_PLAY_VEL;
+    state->fm.macros.play_key = TRACK_TONE_FM_DEFAULT_PLAY_KEY;
+    state->fm.macros.pitch_env = TRACK_TONE_FM_DEFAULT_PITCH_ENV;
+    state->fm.macros.pitch_time = TRACK_TONE_FM_DEFAULT_PITCH_TIME;
     state->fm.operator_select = TRACK_TONE_FM_DEFAULT_OPERATOR_SELECT;
     for (uint8_t op = 0U; op < PARAM_FM_OPERATOR_COUNT; ++op)
     {
-        for (uint8_t field = 0U; field < PARAM_FM_OPERATOR_PARAM_COUNT; ++field)
-        {
-            state->fm.operator_params[op][field] = g_track_tone_fm_operator_defaults[op][field];
-        }
+        track_tone_fm_operator_base_t *const base = &state->fm.base.operators[op];
+        base->rates[0] = 99U;
+        base->rates[1] = 92U;
+        base->rates[2] = 80U;
+        base->rates[3] = 72U;
+        base->levels[0] = 99U;
+        base->levels[1] = 92U;
+        base->levels[2] = 80U;
+        base->levels[3] = 0U;
+        base->breakpoint = 39U;
+        base->left_depth = 0U;
+        base->right_depth = 0U;
+        base->left_curve = 0U;
+        base->right_curve = 3U;
+        base->rate_scaling = 0U;
+        base->output_level = g_track_tone_fm_operator_levels[op];
+        base->mode = 0U;
+        base->coarse = (uint8_t)(op + 1U);
+        base->fine = 0U;
+        base->detune = 0;
+        base->velocity_sensitivity = 7U;
+        base->enabled = 1U;
     }
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;

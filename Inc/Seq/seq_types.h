@@ -22,7 +22,7 @@
  * used by the runtime and the current Pattern format; no legacy slot range
  * is part of the contract. */
 #define SEQ_PARAM_ENV_SLOT_COUNT       25U
-#define SEQ_PARAM_TONE_SLOT_COUNT      21U
+#define SEQ_PARAM_TONE_SLOT_COUNT      26U
 #define SEQ_PARAM_MOD_SLOT_COUNT       12U
 #define SEQ_PARAM_MIDI_FX_SLOT_COUNT   12U
 #define SEQ_PARAM_MIX_SLOT_COUNT        4U
