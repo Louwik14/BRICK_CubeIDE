@@ -6,15 +6,15 @@
 
 static const ui_template_family_t g_ui_template_mix_family = {
     .family_title = "MIX",
-    .nav_labels = { "MIX", "-", "-", "-" },
+    .nav_labels = { "MIX", "SEND3", "-", "-" },
     .subpages = {
         {
             .title = "MIX",
             .param_bank = { .params = {
                 PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1, PARAM_MIX_SEND2 } },
         },
-        { .title = "-", .param_bank = { .params = {
-            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "SEND3", .param_bank = { .params = {
+            PARAM_MIX_SEND3, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = {
             PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = {
@@ -54,7 +54,7 @@ static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 
 static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
 {
-    return (subpage_index == 0U) ? 1U : 0U;
+    return (subpage_index <= 1U) ? 1U : 0U;
 }
 
 static ui_template_page_state_t g_ui_template_mix_state = {

@@ -63,18 +63,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME recorder_file_reservation COMMAND recorder_file_reservation_test)
 endif()
 
-add_executable(stream_calibration_csv_test
-    stream_calibration_csv_test.c
-    ../Src/Core/stream_calibration_csv.c
-)
-target_include_directories(stream_calibration_csv_test PRIVATE ../Inc)
-if(CMAKE_CROSSCOMPILING)
-    target_link_options(stream_calibration_csv_test PRIVATE --specs=nosys.specs)
-endif()
-if(NOT CMAKE_CROSSCOMPILING)
-    add_test(NAME stream_calibration_csv COMMAND stream_calibration_csv_test)
-endif()
-
 add_executable(encoder_detent_test
     encoder_detent_test.c
     ../Drivers/Drv_app/Src/encoders_hw.c
@@ -148,7 +136,6 @@ endif()
 add_executable(sample_stream_needs_test
     sample_stream_needs_test.c
     sample_stream_snapshot_admission_stub.c
-    sample_stream_event_trace_stub.c
     ../Src/Sampler/sample_stream_needs.c
     ../Src/Sampler/sample_stream_sequence.c
     ../Src/Sampler/sample_stream_snapshot.c

@@ -8,7 +8,9 @@
  *
  * Architecture:
  * - Appelé par: my_dsp() (brick6_app_init.c via dsp_engine).
- * - Appelle: fx_chain_process_slot(), audio_float_set_master_gain().
+ * - Appelle: fx_chain_process_track_inserts_pre_fader(),
+ *   fx_chain_process_audio_fx_post_fader(),
+ *   fx_chain_process_global_slot(), audio_float_set_master_gain().
  *
  * Contraintes temps réel:
  * - IRQ: oui (mixer_process est dans le chemin DSP audio).
@@ -21,15 +23,16 @@
 
 #include "mixer.h"
 #include "Audio/audio_float.h"
-#include "Audio/audio_track_diag.h"
-#include "Audio/mixer_path_diag.h"
+#include "Audio/audio_waveform_capture.h"
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
 #include "vca_env.h"
 #include "fx_biquad_filter.h"
+#include "fx_deluge_filter.h"
 #include "fx_delay_dual.h"
 #include "fx_delay_stereo.h"
+#include "Audio/fx_modfx_global.h"
 #include "fx_reverb.h"
 #include "Audio/spectral_window.h"
 #include "Core/brick6_looper_runtime.h"
@@ -50,7 +53,7 @@
 #include "fx_pool.h"
 #include "memory_layout.h"
 
-typedef struct {
+typedef struct __attribute__((aligned(32))) {
     float gain;
     float pan;
     float gain_current;
@@ -73,11 +76,9 @@ typedef enum
 
 typedef enum
 {
-    MIXER_CONT_CUTOFF = 0,
+    MIXER_CONT_MORPH = 0,
+    MIXER_CONT_CUTOFF,
     MIXER_CONT_RESONANCE,
-    MIXER_CONT_EQ_LOW,
-    MIXER_CONT_EQ_MID,
-    MIXER_CONT_EQ_HIGH,
     MIXER_CONT_EG_AMOUNT,
     MIXER_CONT_FILTER_ATTACK,
     MIXER_CONT_FILTER_DECAY,
@@ -90,14 +91,11 @@ typedef enum
     MIXER_CONT_COUNT
 } mixer_continuous_param_t;
 
-typedef struct {
+typedef struct __attribute__((aligned(32))) {
     union {
         fx_biquad_filter_t biquad;
         fx_biquad_filter_mono_t biquad_mono;
-    };
-    union {
-        fx_dj_eq3_t eq3;
-        fx_dj_eq3_mono_t eq3_mono;
+        fx_deluge_filter_t deluge;
     };
     env_adsr_t filter_env;
     env_adsr_t vca_env;
@@ -113,12 +111,9 @@ typedef struct {
     float keytrack;
     float keytrack_ratio;
     float keytrack_ratio_target;
-    float eq_low_db;
-    float eq_low_target_db;
-    float eq_mid_db;
-    float eq_mid_target_db;
-    float eq_high_db;
-    float eq_high_target_db;
+    float morph;
+    float morph_target;
+    float morph_step;
     float vca_env_value;
     float filter_env_value;
     uint32_t config_version;
@@ -136,10 +131,10 @@ typedef struct {
     uint8_t vca_gate;
     uint8_t filter_retrigger_hard;
     uint8_t vca_retrigger_hard;
-    uint8_t synth_vca_type;
+    uint8_t filter_mode;
+    uint8_t morph_ramp_remaining;
     uint8_t filter_env_prepared_count;
     uint8_t filter_env_prepared_consumed;
-    uint8_t type;
     uint8_t dsp_format;
 } mixer_track_filter_t;
 
@@ -147,6 +142,8 @@ _Static_assert(_Alignof(mixer_track_filter_t) >= 32U,
                "mixer track filter DSP storage must stay 32-byte aligned");
 _Static_assert((sizeof(mixer_track_filter_t) % 32U) == 0U,
                "mixer track filter array stride must preserve DSP alignment");
+_Static_assert(sizeof(mixer_track_filter_t) == 416U,
+               "mixer track filter size changed; remeasure before accepting it");
 
 typedef enum
 {
@@ -242,6 +239,28 @@ static void mixer_track_filter_touch_continuous(mixer_track_filter_t *filter,
     }
 }
 
+static void mixer_track_filter_advance_morph(mixer_track_filter_t *filter, uint32_t frames)
+{
+    if ((filter == NULL) || (filter->morph_ramp_remaining == 0U)) return;
+    if (frames >= filter->morph_ramp_remaining)
+    {
+        filter->morph = filter->morph_target;
+        filter->morph_ramp_remaining = 0U;
+    }
+    else
+    {
+        filter->morph += filter->morph_step * (float)frames;
+        filter->morph_ramp_remaining = (uint8_t)(filter->morph_ramp_remaining - frames);
+    }
+    if (filter->filter_mode == 1U)
+    {
+        if (filter->dsp_format == MIXER_FILTER_DSP_MONO)
+            fx_biquad_filter_mono_set_morph(&filter->biquad_mono, filter->morph);
+        else
+            fx_biquad_filter_set_morph(&filter->biquad, filter->morph);
+    }
+}
+
 enum
 {
     MIXER_EXTERNAL_FORMAT_NONE = 0U,
@@ -277,17 +296,22 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
         return;
     }
     const uint8_t full = (dst->config_version != src->config_version) ? 1U : 0U;
-    const uint8_t type_changed = (uint8_t)((full != 0U) && (dst->type != src->type));
     if (full != 0U)
     {
         dst->sample_rate = src->sample_rate;
         dst->keytrack = src->keytrack;
-        dst->type = src->type;
+        dst->morph_target = src->morph_target;
+        if (dst->morph != dst->morph_target) {
+            dst->morph_step = (dst->morph_target - dst->morph) * (1.0f / 64.0f);
+            dst->morph_ramp_remaining = 64U;
+        }
         dst->filter_retrigger_hard = src->filter_retrigger_hard;
         dst->vca_retrigger_hard = src->vca_retrigger_hard;
-        dst->synth_vca_type = src->synth_vca_type;
-        vca_env_set_type(&dst->synth_vca_env,
-                         (vca_env_type_t)dst->synth_vca_type);
+        if(dst->filter_mode != src->filter_mode)
+        {
+            dst->filter_mode = src->filter_mode;
+            fx_deluge_filter_init(&dst->deluge, dst->sample_rate);
+        }
         dst->config_version = src->config_version;
     }
     /*
@@ -304,29 +328,19 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
         dst->cutoff_mod_target_hz = src->cutoff_mod_target_hz;
         dst->continuous_version[MIXER_CONT_CUTOFF] = src->continuous_version[MIXER_CONT_CUTOFF];
     }
+    if ((full != 0U) || (dst->continuous_version[MIXER_CONT_MORPH]
+            != src->continuous_version[MIXER_CONT_MORPH]))
+    {
+        dst->morph_target = src->morph_target;
+        dst->morph_step = (dst->morph_target - dst->morph) * (1.0f / 64.0f);
+        dst->morph_ramp_remaining = (dst->morph == dst->morph_target) ? 0U : 64U;
+        dst->continuous_version[MIXER_CONT_MORPH] = src->continuous_version[MIXER_CONT_MORPH];
+    }
     if ((full != 0U) || (dst->continuous_version[MIXER_CONT_RESONANCE]
             != src->continuous_version[MIXER_CONT_RESONANCE]))
     {
         dst->resonance_target = src->resonance_target;
         dst->continuous_version[MIXER_CONT_RESONANCE] = src->continuous_version[MIXER_CONT_RESONANCE];
-    }
-    if ((full != 0U) || (dst->continuous_version[MIXER_CONT_EQ_LOW]
-            != src->continuous_version[MIXER_CONT_EQ_LOW]))
-    {
-        dst->eq_low_target_db = src->eq_low_target_db;
-        dst->continuous_version[MIXER_CONT_EQ_LOW] = src->continuous_version[MIXER_CONT_EQ_LOW];
-    }
-    if ((full != 0U) || (dst->continuous_version[MIXER_CONT_EQ_MID]
-            != src->continuous_version[MIXER_CONT_EQ_MID]))
-    {
-        dst->eq_mid_target_db = src->eq_mid_target_db;
-        dst->continuous_version[MIXER_CONT_EQ_MID] = src->continuous_version[MIXER_CONT_EQ_MID];
-    }
-    if ((full != 0U) || (dst->continuous_version[MIXER_CONT_EQ_HIGH]
-            != src->continuous_version[MIXER_CONT_EQ_HIGH]))
-    {
-        dst->eq_high_target_db = src->eq_high_target_db;
-        dst->continuous_version[MIXER_CONT_EQ_HIGH] = src->continuous_version[MIXER_CONT_EQ_HIGH];
     }
     if ((full != 0U) || (dst->continuous_version[MIXER_CONT_EG_AMOUNT]
             != src->continuous_version[MIXER_CONT_EG_AMOUNT]))
@@ -382,11 +396,7 @@ static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
         vca_env_set_release(&dst->synth_vca_env, src->synth_vca_env.release_time);
         dst->continuous_version[MIXER_CONT_VCA_RELEASE] = src->continuous_version[MIXER_CONT_VCA_RELEASE];
     }
-    if (type_changed != 0U)
-    {
-        dst->filter_env_prepared_consumed = 1U;
-        mixer_track_filter_apply_core_params(dst);
-    }
+    if(full != 0U) mixer_track_filter_apply_core_params(dst);
     dst->continuous_epoch = src->continuous_epoch;
 }
 
@@ -418,7 +428,6 @@ static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 static float g_delay_diag_volume;
 static float g_delay_diag_reverb_send;
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
-#define MIXER_EQ3_NUM_STAGES 3U
 typedef struct
 {
     float wet;
@@ -634,29 +643,6 @@ static uint16_t mixer_track_filter_time_lut_lookup(float time_s)
     return (uint16_t)(a + ((b - a) * frac) + 0.5f);
 }
 
-static uint8_t mixer_track_filter_type_is_biquad(mixer_track_filter_type_t type)
-{
-    return ((type == MIXER_TRACK_FILTER_LP_BI)
-         || (type == MIXER_TRACK_FILTER_HP_BI)
-         || (type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
-}
-
-static fx_biquad_filter_mode_t mixer_track_filter_type_to_biquad_mode(mixer_track_filter_type_t type)
-{
-    switch(type)
-    {
-        case MIXER_TRACK_FILTER_HP_BI:
-            return FX_BIQUAD_FILTER_MODE_HP;
-
-        case MIXER_TRACK_FILTER_BP_BI:
-            return FX_BIQUAD_FILTER_MODE_BP;
-
-        case MIXER_TRACK_FILTER_LP_BI:
-        default:
-            return FX_BIQUAD_FILTER_MODE_LP;
-    }
-}
-
 static float mixer_track_filter_resonance_to_biquad_q(float resonance)
 {
     const float r = clampf_local(resonance, 0.0f, 1.0f);
@@ -773,23 +759,7 @@ static float mixer_track_filter_static_env_value(mixer_track_filter_t *filter,
 
 static void mixer_track_filter_rebind_dsp_storage(mixer_track_filter_t *filter)
 {
-    if(filter == NULL)
-        return;
-
-    if (filter->dsp_format == (uint8_t)MIXER_FILTER_DSP_MONO)
-    {
-        filter->eq3_mono.inst.numStages = MIXER_EQ3_NUM_STAGES;
-        filter->eq3_mono.inst.pCoeffs = filter->eq3_mono.coeffs;
-        filter->eq3_mono.inst.pState = filter->eq3_mono.state;
-        return;
-    }
-
-    filter->eq3.inst_l.numStages = MIXER_EQ3_NUM_STAGES;
-    filter->eq3.inst_l.pCoeffs = filter->eq3.coeffs;
-    filter->eq3.inst_l.pState = filter->eq3.state_l;
-    filter->eq3.inst_r.numStages = MIXER_EQ3_NUM_STAGES;
-    filter->eq3.inst_r.pCoeffs = filter->eq3.coeffs;
-    filter->eq3.inst_r.pState = filter->eq3.state_r;
+    (void)filter;
 }
 
 static void mixer_track_filter_convert_biquad_to_mono(mixer_track_filter_t *filter)
@@ -802,14 +772,14 @@ static void mixer_track_filter_convert_biquad_to_mono(mixer_track_filter_t *filt
     mono.current = stereo->current;
     mono.ic1eq = stereo->ic1eq_l;
     mono.ic2eq = stereo->ic2eq_l;
-    mono.mode_xfade_remaining = stereo->mode_xfade_remaining;
     mono.bypass_xfade_remaining = stereo->bypass_xfade_remaining;
     mono.bypass_mix = stereo->bypass_mix;
-    mono.mode = stereo->mode;
-    mono.previous_mode = stereo->previous_mode;
+    mono.morph = stereo->morph;
+    mono.morph_a = stereo->morph_a;
+    mono.morph_b = stereo->morph_b;
+    mono.morph_plan = stereo->morph_plan;
     mono.bypass = stereo->bypass;
     mono.reset_after_bypass = stereo->reset_after_bypass;
-    mono.mode_via_dry = stereo->mode_via_dry;
     filter->biquad_mono = mono;
 }
 
@@ -825,56 +795,15 @@ static void mixer_track_filter_convert_biquad_to_stereo(mixer_track_filter_t *fi
     stereo.ic2eq_l = mono->ic2eq;
     stereo.ic1eq_r = mono->ic1eq;
     stereo.ic2eq_r = mono->ic2eq;
-    stereo.mode_xfade_remaining = mono->mode_xfade_remaining;
     stereo.bypass_xfade_remaining = mono->bypass_xfade_remaining;
     stereo.bypass_mix = mono->bypass_mix;
-    stereo.mode = mono->mode;
-    stereo.previous_mode = mono->previous_mode;
+    stereo.morph = mono->morph;
+    stereo.morph_a = mono->morph_a;
+    stereo.morph_b = mono->morph_b;
+    stereo.morph_plan = mono->morph_plan;
     stereo.bypass = mono->bypass;
     stereo.reset_after_bypass = mono->reset_after_bypass;
-    stereo.mode_via_dry = mono->mode_via_dry;
     filter->biquad = stereo;
-}
-
-static void mixer_track_filter_convert_eq3_to_mono(mixer_track_filter_t *filter)
-{
-    const fx_dj_eq3_t *const stereo = &filter->eq3;
-    fx_dj_eq3_mono_t mono = {0};
-    memcpy(mono.coeffs, stereo->coeffs, sizeof(mono.coeffs));
-    memcpy(mono.coeffs_pending, stereo->coeffs_pending, sizeof(mono.coeffs_pending));
-    memcpy(mono.state, stereo->state_l, sizeof(mono.state));
-    mono.sample_rate = stereo->sample_rate;
-    mono.low_freq = stereo->low_freq;
-    mono.mid_freq = stereo->mid_freq;
-    mono.high_freq = stereo->high_freq;
-    mono.mid_q = stereo->mid_q;
-    mono.low_db = stereo->low_db;
-    mono.mid_db = stereo->mid_db;
-    mono.high_db = stereo->high_db;
-    mono.bypass = stereo->bypass;
-    mono.coeffs_pending_update = stereo->coeffs_pending_update;
-    filter->eq3_mono = mono;
-}
-
-static void mixer_track_filter_convert_eq3_to_stereo(mixer_track_filter_t *filter)
-{
-    const fx_dj_eq3_mono_t *const mono = &filter->eq3_mono;
-    fx_dj_eq3_t stereo = {0};
-    memcpy(stereo.coeffs, mono->coeffs, sizeof(stereo.coeffs));
-    memcpy(stereo.coeffs_pending, mono->coeffs_pending, sizeof(stereo.coeffs_pending));
-    memcpy(stereo.state_l, mono->state, sizeof(mono->state));
-    memcpy(stereo.state_r, mono->state, sizeof(mono->state));
-    stereo.sample_rate = mono->sample_rate;
-    stereo.low_freq = mono->low_freq;
-    stereo.mid_freq = mono->mid_freq;
-    stereo.high_freq = mono->high_freq;
-    stereo.mid_q = mono->mid_q;
-    stereo.low_db = mono->low_db;
-    stereo.mid_db = mono->mid_db;
-    stereo.high_db = mono->high_db;
-    stereo.bypass = mono->bypass;
-    stereo.coeffs_pending_update = mono->coeffs_pending_update;
-    filter->eq3 = stereo;
 }
 
 static void mixer_track_filter_set_dsp_format(mixer_track_filter_t *filter,
@@ -886,12 +815,10 @@ static void mixer_track_filter_set_dsp_format(mixer_track_filter_t *filter,
     if (format == MIXER_FILTER_DSP_MONO)
     {
         mixer_track_filter_convert_biquad_to_mono(filter);
-        mixer_track_filter_convert_eq3_to_mono(filter);
     }
     else
     {
         mixer_track_filter_convert_biquad_to_stereo(filter);
-        mixer_track_filter_convert_eq3_to_stereo(filter);
     }
     filter->dsp_format = (uint8_t)format;
     mixer_track_filter_rebind_dsp_storage(filter);
@@ -902,10 +829,14 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     if(filter == NULL)
         return;
 
-    const uint8_t is_biquad =
-        mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type);
-    const uint8_t is_eq3 =
-        (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
+    if (filter->filter_mode == 2U)
+    {
+        fx_deluge_filter_configure(&filter->deluge, filter->morph,
+                                   filter->cutoff_hz, filter->resonance);
+        return;
+    }
+
+    const uint8_t enabled = (filter->filter_mode != 0U) ? 1U : 0U;
     if (filter->dsp_format == (uint8_t)MIXER_FILTER_DSP_MONO)
     {
         fx_biquad_filter_mono_set_sample_rate(&filter->biquad_mono, filter->sample_rate);
@@ -913,21 +844,9 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
         fx_biquad_filter_mono_set_q(
             &filter->biquad_mono,
             mixer_track_filter_resonance_to_biquad_q(filter->resonance));
-        if(is_biquad != 0U)
-        {
-            fx_biquad_filter_mono_set_mode(
-                &filter->biquad_mono,
-                mixer_track_filter_type_to_biquad_mode(
-                    (mixer_track_filter_type_t)filter->type));
-        }
+        fx_biquad_filter_mono_set_morph(&filter->biquad_mono, filter->morph);
         fx_biquad_filter_mono_set_bypass(&filter->biquad_mono,
-                                         (is_biquad != 0U) ? 0U : 1U);
-        fx_dj_eq3_mono_set_gains_db(&filter->eq3_mono,
-                                    filter->eq_low_db,
-                                    filter->eq_mid_db,
-                                    filter->eq_high_db);
-        fx_dj_eq3_mono_set_bypass(&filter->eq3_mono,
-                                  (is_eq3 != 0U) ? 0U : 1U);
+                                         (enabled != 0U) ? 0U : 1U);
         return;
     }
 
@@ -935,21 +854,9 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     fx_biquad_filter_set_q(
         &filter->biquad,
         mixer_track_filter_resonance_to_biquad_q(filter->resonance));
-    if(is_biquad != 0U)
-    {
-        fx_biquad_filter_set_mode(
-            &filter->biquad,
-            mixer_track_filter_type_to_biquad_mode(
-                (mixer_track_filter_type_t)filter->type));
-    }
+    fx_biquad_filter_set_morph(&filter->biquad, filter->morph);
     fx_biquad_filter_set_bypass(&filter->biquad,
-                                (is_biquad != 0U) ? 0U : 1U);
-
-    fx_dj_eq3_set_gains_db(&filter->eq3,
-                           filter->eq_low_db,
-                           filter->eq_mid_db,
-                           filter->eq_high_db);
-    fx_dj_eq3_set_bypass(&filter->eq3, (is_eq3 != 0U) ? 0U : 1U);
+                                (enabled != 0U) ? 0U : 1U);
 }
 
 static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
@@ -959,10 +866,7 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
 
     filter->dsp_format = (uint8_t)MIXER_FILTER_DSP_STEREO;
     fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
-    fx_dj_eq3_init(&filter->eq3, filter->sample_rate,
-                   300.0f, 1000.0f, 0.8f, 4000.0f);
     fx_biquad_filter_reset(&filter->biquad);
-    mixer_track_filter_rebind_dsp_storage(filter);
     mixer_track_filter_apply_core_params(filter);
 }
 
@@ -983,13 +887,8 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->keytrack_ratio = 1.0f;
     filter->keytrack_ratio_target = 1.0f;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
-    filter->eq_low_db = 0.0f;
-    filter->eq_low_target_db = 0.0f;
-    filter->eq_mid_db = 0.0f;
-    filter->eq_mid_target_db = 0.0f;
-    filter->eq_high_db = 0.0f;
-    filter->eq_high_target_db = 0.0f;
-    filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
+    filter->morph = 0.0f;
+    filter->morph_target = 0.0f;
     filter->note_active = 0U;
     filter->vca_enabled = 0U;
     filter->vca_note_active = 0U;
@@ -1021,7 +920,8 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     vca_env_set_decay(&filter->synth_vca_env, 0.001f);
     vca_env_set_sustain(&filter->synth_vca_env, 1.0f);
     vca_env_set_release(&filter->synth_vca_env, 0.001f);
-    filter->synth_vca_type = (uint8_t)VCA_ENV_TYPE_DAISY;
+    filter->filter_mode = 0U;
+    fx_deluge_filter_init(&filter->deluge, filter->sample_rate);
 
     mixer_track_filter_reset_dsp(filter);
 }
@@ -1181,9 +1081,6 @@ void mixer_snap_track_runtime_state(uint32_t track_id)
     filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = filter->resonance_target;
     filter->keytrack_ratio = filter->keytrack_ratio_target;
-    filter->eq_low_db = filter->eq_low_target_db;
-    filter->eq_mid_db = filter->eq_mid_target_db;
-    filter->eq_high_db = filter->eq_high_target_db;
     mixer_track_filter_apply_core_params(filter);
 }
 
@@ -1195,10 +1092,10 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
     if((filter == NULL) || (left == NULL) || (right == NULL))
         return;
 
-    mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_STEREO);
+    if(filter->filter_mode != 2U)
+        mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_STEREO);
 
-    if((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
-            && (filter->biquad.bypass_xfade_remaining == 0U))
+    if(filter->filter_mode == 0U)
     {
         filter->filter_env_prepared_consumed = 1U;
         return;
@@ -1208,44 +1105,15 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
     const float cutoff_mod_start_hz = filter->cutoff_mod_hz;
     const float resonance_start = filter->resonance;
     const float keytrack_ratio_start = filter->keytrack_ratio;
-    const float eq_low_start_db = filter->eq_low_db;
-    const float eq_mid_start_db = filter->eq_mid_db;
-    const float eq_high_start_db = filter->eq_high_db;
     filter->cutoff_hz = mixer_smooth_block(cutoff_start_hz,
                                            filter->cutoff_target_hz,
                                            MIXER_FILTER_BLOCK_SMOOTH);
     filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = mixer_smooth_block(resonance_start, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
     filter->keytrack_ratio = filter->keytrack_ratio_target;
-    filter->eq_low_db = mixer_smooth_block(eq_low_start_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->eq_mid_db = mixer_smooth_block(eq_mid_start_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->eq_high_db = mixer_smooth_block(eq_high_start_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-
-    switch((mixer_track_filter_type_t)filter->type)
-    {
-        case MIXER_TRACK_FILTER_EQ3:
-            fx_dj_eq3_set_gains_db(&filter->eq3,
-                                   filter->eq_low_db,
-                                   filter->eq_mid_db,
-                                   filter->eq_high_db);
-            fx_dj_eq3_process_block(&filter->eq3, left, right, frames);
-            filter->filter_env_prepared_consumed = 1U;
-            break;
-
-        case MIXER_TRACK_FILTER_LP_BI:
-        case MIXER_TRACK_FILTER_HP_BI:
-        case MIXER_TRACK_FILTER_BP_BI:
-        case MIXER_TRACK_FILTER_OFF:
-            mixer_track_filter_process_biquad_stereo_block(filter, left, right, frames,
-                                                           cutoff_start_hz,
-                                                           cutoff_mod_start_hz,
-                                                           resonance_start,
-                                                           keytrack_ratio_start);
-            break;
-
-        default:
-            break;
-    }
+    mixer_track_filter_process_biquad_stereo_block(filter, left, right, frames,
+                                                   cutoff_start_hz, cutoff_mod_start_hz,
+                                                   resonance_start, keytrack_ratio_start);
 }
 
 static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
@@ -1259,22 +1127,28 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
 {
     uint32_t i = 0U;
     const uint8_t filter_env_modulated = (filter->eg_amount != 0.0f) ? 1U : 0U;
-    if ((mixer_track_filter_env_control_is_static(filter, frames) != 0U)
-            && (filter->biquad.mode_xfade_remaining == 0U)
-            && (filter->biquad.bypass_xfade_remaining == 0U))
+    if ((filter->morph_ramp_remaining == 0U)
+            && (mixer_track_filter_env_control_is_static(filter, frames) != 0U)
+            && ((filter->filter_mode == 2U) || (filter->biquad.bypass_xfade_remaining == 0U)))
     {
         const float env = mixer_track_filter_static_env_value(filter, frames);
         const float modulation_hz = filter->cutoff_mod_hz
             - filter->cutoff_target_hz;
-        fx_biquad_filter_set_params(
-            &filter->biquad,
-            mixer_track_filter_compute_modulated_cutoff(filter,
-                                                         filter->cutoff_hz,
-                                                         modulation_hz,
-                                                         filter->keytrack_ratio,
-                                                         env),
-            mixer_track_filter_resonance_to_biquad_q(filter->resonance));
-        fx_biquad_filter_process_block(&filter->biquad, left, right, frames);
+        const float cutoff = mixer_track_filter_compute_modulated_cutoff(filter,
+            filter->cutoff_hz, modulation_hz, filter->keytrack_ratio, env);
+        if(filter->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&filter->deluge,
+                filter->morph,
+                cutoff, filter->resonance);
+            fx_deluge_filter_process(&filter->deluge, left, right, frames);
+        }
+        else
+        {
+            fx_biquad_filter_set_params(&filter->biquad, cutoff,
+                mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+            fx_biquad_filter_process_block(&filter->biquad, left, right, frames);
+        }
         return;
     }
     while(i < frames)
@@ -1324,14 +1198,23 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
         {
             filter->filter_env_value = (float)terminal_value * (1.0f / 32767.0f);
         }
-        fx_biquad_filter_set_params(
-                &filter->biquad,
-                mixer_track_filter_compute_modulated_cutoff(filter, base_hz,
-                                                            modulation_hz,
-                                                            keytrack_ratio, env),
+        const float cutoff = mixer_track_filter_compute_modulated_cutoff(filter, base_hz,
+                                                                          modulation_hz,
+                                                                          keytrack_ratio, env);
+        mixer_track_filter_advance_morph(filter, chunk);
+        if(filter->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&filter->deluge,
+                filter->morph,
+                cutoff, resonance);
+            fx_deluge_filter_process(&filter->deluge, &left[i], &right[i], chunk);
+        }
+        else
+        {
+            fx_biquad_filter_set_params(&filter->biquad, cutoff,
                 mixer_track_filter_resonance_to_biquad_q(resonance));
-
-        fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
+            fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
+        }
         i += chunk;
     }
     filter->filter_env_prepared_consumed = 1U;
@@ -1352,9 +1235,8 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
     const float poly_cutoff_hz = (poly_cutoff_valid != 0U)
         ? poly_cutoff->effective_hz : 0.0f;
     const uint8_t control_static = mixer_track_filter_env_control_is_static(filter, frames);
-    if ((control_static != 0U)
-            && (filter->biquad_mono.mode_xfade_remaining == 0U)
-            && (filter->biquad_mono.bypass_xfade_remaining == 0U))
+    if ((filter->morph_ramp_remaining == 0U) && (control_static != 0U)
+            && ((filter->filter_mode == 2U) || (filter->biquad_mono.bypass_xfade_remaining == 0U)))
     {
         const float env = mixer_track_filter_static_env_value(filter, frames);
         const float base_hz = (poly_cutoff_valid != 0U)
@@ -1363,9 +1245,19 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
             ? 0.0f : (filter->cutoff_mod_hz - filter->cutoff_target_hz);
         const float cutoff_arg = mixer_track_filter_compute_modulated_cutoff(filter,
             base_hz, modulation_hz, filter->keytrack_ratio, env);
-        const float q_arg = mixer_track_filter_resonance_to_biquad_q(filter->resonance);
-        fx_biquad_filter_mono_set_params(&filter->biquad_mono, cutoff_arg, q_arg);
-        fx_biquad_filter_mono_process_block(&filter->biquad_mono, mono, frames);
+        if(filter->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&filter->deluge,
+                filter->morph,
+                cutoff_arg, filter->resonance);
+            fx_deluge_filter_process_mono(&filter->deluge, mono, frames);
+        }
+        else
+        {
+            const float q_arg = mixer_track_filter_resonance_to_biquad_q(filter->resonance);
+            fx_biquad_filter_mono_set_params(&filter->biquad_mono, cutoff_arg, q_arg);
+            fx_biquad_filter_mono_process_block(&filter->biquad_mono, mono, frames);
+        }
         return;
     }
     while(i < frames)
@@ -1419,10 +1311,20 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
         }
         const float cutoff_arg = mixer_track_filter_compute_modulated_cutoff(
             filter, base_hz, modulation_hz, keytrack_ratio, env);
-        const float q_arg = mixer_track_filter_resonance_to_biquad_q(resonance);
-        fx_biquad_filter_mono_set_params(&filter->biquad_mono, cutoff_arg, q_arg);
-
-        fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
+        mixer_track_filter_advance_morph(filter, chunk);
+        if(filter->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&filter->deluge,
+                filter->morph,
+                cutoff_arg, resonance);
+            fx_deluge_filter_process_mono(&filter->deluge, &mono[i], chunk);
+        }
+        else
+        {
+            const float q_arg = mixer_track_filter_resonance_to_biquad_q(resonance);
+            fx_biquad_filter_mono_set_params(&filter->biquad_mono, cutoff_arg, q_arg);
+            fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
+        }
         i += chunk;
     }
     filter->filter_env_prepared_consumed = 1U;
@@ -1589,8 +1491,7 @@ static void mixer_lane_accumulate_external_source(uint32_t track_id,
 static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
                                                             const mixer_track_t *track,
                                                             mixer_track_filter_t *filter,
-                                                            uint32_t frames,
-                                                            uint8_t diag_lane)
+                                                            uint32_t frames)
 {
     mixer_lane_buffers_t buffers = {0};
 
@@ -1599,21 +1500,7 @@ static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
         return buffers;
     }
 
-    if (diag_lane != 0U)
-    {
-        audio_track_diag_measure_mono(AUDIO_TRACK_DIAG_FILTER_IN,
-                                      g_external_track_mono[track_id],
-                                      frames);
-        audio_track_diag_filter_scope(filter->type != (uint8_t)MIXER_TRACK_FILTER_OFF);
-    }
     (void)mixer_track_filter_process_block_mono(filter, g_external_track_mono[track_id], frames, NULL);
-    if (diag_lane != 0U)
-    {
-        audio_track_diag_filter_scope(0U);
-        audio_track_diag_measure_mono(AUDIO_TRACK_DIAG_FILTER_OUT,
-                                      g_external_track_mono[track_id],
-                                      frames);
-    }
 
     buffers.mono = g_external_track_mono[track_id];
     return buffers;
@@ -1624,25 +1511,14 @@ static void mixer_lane_run_stereo_path(uint32_t track_id,
                                        mixer_track_filter_t *filter,
                                        float *left,
                                        float *right,
-                                       uint32_t frames,
-                                       uint8_t diag_lane)
+                                       uint32_t frames)
 {
     if ((track == NULL) || (filter == NULL) || (left == NULL) || (right == NULL))
     {
         return;
     }
 
-    if (diag_lane != 0U)
-    {
-        audio_track_diag_measure_stereo(AUDIO_TRACK_DIAG_FILTER_IN, left, right, frames);
-        audio_track_diag_filter_scope(filter->type != (uint8_t)MIXER_TRACK_FILTER_OFF);
-    }
     mixer_track_filter_process_block(filter, left, right, frames);
-    if (diag_lane != 0U)
-    {
-        audio_track_diag_filter_scope(0U);
-        audio_track_diag_measure_stereo(AUDIO_TRACK_DIAG_FILTER_OUT, left, right, frames);
-    }
 }
 
 static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
@@ -1655,33 +1531,11 @@ static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_tr
         return 0U;
     }
 
-    mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_MONO);
+    if(filter->filter_mode != 2U)
+        mixer_track_filter_set_dsp_format(filter, MIXER_FILTER_DSP_MONO);
 
-    if((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
-            && (filter->biquad_mono.bypass_xfade_remaining == 0U))
+    if(filter->filter_mode == 0U)
     {
-        filter->filter_env_prepared_consumed = 1U;
-        return 1U;
-    }
-
-    if (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3)
-    {
-        const float eq_low_start_db = filter->eq_low_db;
-        const float eq_mid_start_db = filter->eq_mid_db;
-        const float eq_high_start_db = filter->eq_high_db;
-        filter->cutoff_hz = mixer_smooth_block(filter->cutoff_hz,
-                                               filter->cutoff_target_hz,
-                                               MIXER_FILTER_BLOCK_SMOOTH);
-        filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
-        filter->resonance = mixer_smooth_block(filter->resonance, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
-        filter->eq_low_db = mixer_smooth_block(eq_low_start_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-        filter->eq_mid_db = mixer_smooth_block(eq_mid_start_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-        filter->eq_high_db = mixer_smooth_block(eq_high_start_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-        fx_dj_eq3_mono_set_gains_db(&filter->eq3_mono,
-                                    filter->eq_low_db,
-                                    filter->eq_mid_db,
-                                    filter->eq_high_db);
-        fx_dj_eq3_mono_process_block(&filter->eq3_mono, mono, frames);
         filter->filter_env_prepared_consumed = 1U;
         return 1U;
     }
@@ -1696,9 +1550,6 @@ static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_tr
     filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
     filter->resonance = mixer_smooth_block(resonance_start, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
     filter->keytrack_ratio = filter->keytrack_ratio_target;
-    filter->eq_low_db = mixer_smooth_block(filter->eq_low_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
-    filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
     mixer_track_filter_process_biquad_mono_block(filter, mono, frames,
                                                  cutoff_start_hz,
                                                  cutoff_mod_start_hz,
@@ -1716,26 +1567,23 @@ static void mixer_multi_filter_apply_core_params(multi_voice_dsp_slot_t *slot)
         return;
     }
 
-    const uint8_t is_biquad = mixer_track_filter_type_is_biquad(slot->filter_type);
-    const uint8_t is_eq3 = (slot->filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
+    if (slot->filter_mode == 2U)
+    {
+        fx_deluge_filter_configure(&slot->deluge, slot->morph,
+                                   slot->cutoff_hz, slot->resonance);
+        return;
+    }
+
+    const uint8_t enabled = (slot->filter_mode != 0U) ? 1U : 0U;
     if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
     {
         fx_biquad_filter_set_sample_rate(&slot->filter.stereo.biquad, slot->sample_rate);
         fx_biquad_filter_set_cutoff(&slot->filter.stereo.biquad, slot->cutoff_hz);
         fx_biquad_filter_set_q(&slot->filter.stereo.biquad,
                                mixer_track_filter_resonance_to_biquad_q(slot->resonance));
-        if (is_biquad != 0U)
-        {
-            fx_biquad_filter_set_mode(&slot->filter.stereo.biquad,
-                                      mixer_track_filter_type_to_biquad_mode(slot->filter_type));
-        }
+        fx_biquad_filter_set_morph(&slot->filter.stereo.biquad, slot->morph);
         fx_biquad_filter_set_bypass(&slot->filter.stereo.biquad,
-                                    (is_biquad != 0U) ? 0U : 1U);
-        fx_dj_eq3_set_gains_db(&slot->filter.stereo.eq3,
-                               slot->eq_low_db,
-                               slot->eq_mid_db,
-                               slot->eq_high_db);
-        fx_dj_eq3_set_bypass(&slot->filter.stereo.eq3, (is_eq3 == 0U) ? 1U : 0U);
+                                    (enabled != 0U) ? 0U : 1U);
     }
     else
     {
@@ -1744,18 +1592,9 @@ static void mixer_multi_filter_apply_core_params(multi_voice_dsp_slot_t *slot)
         fx_biquad_filter_mono_set_cutoff(&slot->filter.mono.biquad, slot->cutoff_hz);
         fx_biquad_filter_mono_set_q(&slot->filter.mono.biquad,
                                     mixer_track_filter_resonance_to_biquad_q(slot->resonance));
-        if (is_biquad != 0U)
-        {
-            fx_biquad_filter_mono_set_mode(&slot->filter.mono.biquad,
-                                           mixer_track_filter_type_to_biquad_mode(slot->filter_type));
-        }
+        fx_biquad_filter_mono_set_morph(&slot->filter.mono.biquad, slot->morph);
         fx_biquad_filter_mono_set_bypass(&slot->filter.mono.biquad,
-                                         (is_biquad != 0U) ? 0U : 1U);
-        fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
-                                    slot->eq_low_db,
-                                    slot->eq_mid_db,
-                                    slot->eq_high_db);
-        fx_dj_eq3_mono_set_bypass(&slot->filter.mono.eq3, (is_eq3 == 0U) ? 1U : 0U);
+                                         (enabled != 0U) ? 0U : 1U);
     }
 }
 
@@ -1768,16 +1607,18 @@ static void mixer_multi_filter_sync_config(uint32_t track_id,
     }
 
     const mixer_track_filter_t *const source = &g_track_filters[track_id];
-    const mixer_track_filter_type_t previous_type = slot->filter_type;
+    const uint8_t previous_mode = slot->filter_mode;
     slot->cutoff_target_hz = source->cutoff_target_hz;
     slot->cutoff_mod_target_hz = source->cutoff_mod_target_hz;
     slot->resonance_target = source->resonance_target;
     slot->eg_amount = source->eg_amount;
     slot->keytrack = source->keytrack;
-    slot->eq_low_target_db = source->eq_low_target_db;
-    slot->eq_mid_target_db = source->eq_mid_target_db;
-    slot->eq_high_target_db = source->eq_high_target_db;
-    slot->filter_type = source->type;
+    if (slot->morph_target != source->morph_target) {
+        slot->morph_target = source->morph_target;
+        slot->morph_step = (slot->morph_target - slot->morph) * (1.0f / 64.0f);
+        slot->morph_ramp_remaining = 64U;
+    }
+    slot->filter_mode = source->filter_mode;
     slot->filter_retrigger_hard = source->filter_retrigger_hard;
     if (slot->filter_env.attack != source->filter_env.attack)
         env_adsr_set_attack(&slot->filter_env, source->filter_env.attack);
@@ -1797,7 +1638,9 @@ static void mixer_multi_filter_sync_config(uint32_t track_id,
         env_adsr_set_release(&slot->vca_env, source->vca_env.release);
     slot->vca_retrigger_hard = source->vca_retrigger_hard;
     slot->filter_config_version = source->config_version;
-    if (previous_type != slot->filter_type)
+    if(previous_mode != slot->filter_mode)
+        fx_deluge_filter_init(&slot->deluge, slot->sample_rate);
+    if((previous_mode != slot->filter_mode) && (slot->filter_mode == 1U))
     {
         mixer_multi_filter_apply_core_params(slot);
     }
@@ -1834,6 +1677,24 @@ static float mixer_multi_filter_compute_modulated_cutoff(
                         MIXER_FILTER_CUTOFF_MAX_HZ);
 }
 
+static void mixer_multi_filter_advance_morph(multi_voice_dsp_slot_t *slot, uint32_t frames)
+{
+    if ((slot == NULL) || (slot->morph_ramp_remaining == 0U)) return;
+    if (frames >= slot->morph_ramp_remaining) {
+        slot->morph = slot->morph_target;
+        slot->morph_ramp_remaining = 0U;
+    } else {
+        slot->morph += slot->morph_step * (float)frames;
+        slot->morph_ramp_remaining = (uint8_t)(slot->morph_ramp_remaining - frames);
+    }
+    if (slot->filter_mode == 1U) {
+        if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
+            fx_biquad_filter_set_morph(&slot->filter.stereo.biquad, slot->morph);
+        else
+            fx_biquad_filter_mono_set_morph(&slot->filter.mono.biquad, slot->morph);
+    }
+}
+
 static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
                                                float *left,
                                                float *right,
@@ -1848,13 +1709,8 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
     const uint8_t env_static = (uint8_t)((filter_env_modulated == 0U)
         || (env_stage == ENV_ADSR_PEAKS_STAGE_IDLE)
         || (env_stage == ENV_ADSR_PEAKS_STAGE_SUSTAIN));
-    const uint8_t transition_active =
-        (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
-        ? (uint8_t)((slot->filter.stereo.biquad.mode_xfade_remaining != 0U)
-            || (slot->filter.stereo.biquad.bypass_xfade_remaining != 0U))
-        : (uint8_t)((slot->filter.mono.biquad.mode_xfade_remaining != 0U)
-            || (slot->filter.mono.biquad.bypass_xfade_remaining != 0U));
-    if ((env_static != 0U) && (transition_active == 0U))
+    const uint8_t transition_active = 0U;
+    if ((slot->morph_ramp_remaining == 0U) && (env_static != 0U) && (transition_active == 0U))
     {
         int16_t first_value = 0;
         const int16_t terminal_value =
@@ -1867,8 +1723,18 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
             slot->cutoff_mod_hz - slot->cutoff_target_hz,
             slot->keytrack_ratio,
             env);
-        const float q = mixer_track_filter_resonance_to_biquad_q(slot->resonance);
         (void)terminal_value;
+        if(slot->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&slot->deluge,
+                slot->morph, cutoff, slot->resonance);
+            if(slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
+                fx_deluge_filter_process(&slot->deluge, left, right, frames);
+            else
+                fx_deluge_filter_process_mono(&slot->deluge, left, frames);
+            return;
+        }
+        const float q = mixer_track_filter_resonance_to_biquad_q(slot->resonance);
         if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
         {
             fx_biquad_filter_set_params(&slot->filter.stereo.biquad, cutoff, q);
@@ -1920,6 +1786,18 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
             modulation_hz,
             keytrack_ratio,
             env);
+        mixer_multi_filter_advance_morph(slot, chunk);
+        if(slot->filter_mode == 2U)
+        {
+            fx_deluge_filter_configure(&slot->deluge,
+                slot->morph, cutoff, resonance);
+            if(slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
+                fx_deluge_filter_process(&slot->deluge, &left[offset], &right[offset], chunk);
+            else
+                fx_deluge_filter_process_mono(&slot->deluge, &left[offset], chunk);
+            offset += chunk;
+            continue;
+        }
         const float q = mixer_track_filter_resonance_to_biquad_q(resonance);
         if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
         {
@@ -1997,15 +1875,6 @@ static void mixer_multi_filter_prepare_block(uint32_t track_id,
     slot->keytrack_ratio = mixer_smooth_block(slot->keytrack_ratio,
                                               slot->keytrack_ratio_target,
                                               MIXER_FILTER_BLOCK_SMOOTH);
-    slot->eq_low_db = mixer_smooth_block(slot->eq_low_db,
-                                         slot->eq_low_target_db,
-                                         MIXER_FILTER_BLOCK_SMOOTH);
-    slot->eq_mid_db = mixer_smooth_block(slot->eq_mid_db,
-                                         slot->eq_mid_target_db,
-                                         MIXER_FILTER_BLOCK_SMOOTH);
-    slot->eq_high_db = mixer_smooth_block(slot->eq_high_db,
-                                          slot->eq_high_target_db,
-                                          MIXER_FILTER_BLOCK_SMOOTH);
 }
 
 void mixer_multi_filter_prepare_voice_block(uint32_t track_id,
@@ -2108,45 +1977,8 @@ void mixer_multi_filter_process_prepared(uint32_t track_id,
 
     (void)track_id;
 
-    const uint8_t filter_is_off =
-        (slot->filter_type == MIXER_TRACK_FILTER_OFF) ? 1U : 0U;
-    const uint8_t filter_bypass_complete =
-        ((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
-         && (slot->filter.stereo.biquad.bypass_xfade_remaining == 0U))
-        || ((slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO)
-            && (slot->filter.mono.biquad.bypass_xfade_remaining == 0U));
-    if ((filter_is_off == 0U) || (filter_bypass_complete == 0U))
-    {
-        if (slot->filter_type == MIXER_TRACK_FILTER_EQ3)
-        {
-            if (slot->format == (uint8_t)MULTI_VOICE_DSP_FORMAT_STEREO)
-            {
-                fx_dj_eq3_set_gains_db(&slot->filter.stereo.eq3,
-                                       slot->eq_low_db,
-                                       slot->eq_mid_db,
-                                       slot->eq_high_db);
-                fx_dj_eq3_process_block(&slot->filter.stereo.eq3,
-                                        left,
-                                        right,
-                                        frames);
-            }
-            else
-            {
-                fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
-                                            slot->eq_low_db,
-                                            slot->eq_mid_db,
-                                            slot->eq_high_db);
-                fx_dj_eq3_mono_process_block(&slot->filter.mono.eq3,
-                                             left,
-                                             frames);
-            }
-        }
-        else if ((mixer_track_filter_type_is_biquad(slot->filter_type) != 0U)
-                 || (slot->filter_type == MIXER_TRACK_FILTER_OFF))
-        {
-            mixer_multi_filter_process_biquad(slot, left, right, frames);
-        }
-    }
+    if(slot->filter_mode != 0U)
+        mixer_multi_filter_process_biquad(slot, left, right, frames);
 
 }
 
@@ -2176,28 +2008,8 @@ void mixer_multi_filter_process_mono_prepared(uint32_t track_id,
     }
 
     (void)track_id;
-    const uint8_t filter_is_off =
-        (slot->filter_type == MIXER_TRACK_FILTER_OFF) ? 1U : 0U;
-    const uint8_t filter_bypass_complete =
-        (slot->filter.mono.biquad.bypass_xfade_remaining == 0U) ? 1U : 0U;
-    if ((filter_is_off == 0U) || (filter_bypass_complete == 0U))
-    {
-        if (slot->filter_type == MIXER_TRACK_FILTER_EQ3)
-        {
-            fx_dj_eq3_mono_set_gains_db(&slot->filter.mono.eq3,
-                                        slot->eq_low_db,
-                                        slot->eq_mid_db,
-                                        slot->eq_high_db);
-            fx_dj_eq3_mono_process_block(&slot->filter.mono.eq3,
-                                         mono,
-                                         frames);
-        }
-        else if ((mixer_track_filter_type_is_biquad(slot->filter_type) != 0U)
-                 || (slot->filter_type == MIXER_TRACK_FILTER_OFF))
-        {
-            mixer_multi_filter_process_biquad(slot, mono, NULL, frames);
-        }
-    }
+    if(slot->filter_mode != 0U)
+        mixer_multi_filter_process_biquad(slot, mono, NULL, frames);
 
 }
 
@@ -2428,10 +2240,8 @@ void mixer_reset_runtime_state(void)
 
 void mixer_init(void)
 {
-#if defined(BRICK6_MIXER_PATH_DIAG)
-    mixer_path_diag_reset();
-#endif
     mixer_track_filter_init_time_lut();
+    fx_modfx_global_init();
     mixer_reset_runtime_state();
 }
 
@@ -2808,24 +2618,19 @@ void mixer_get_global_diag_state(mixer_global_diag_state_t *out)
     out->delay_reverb_send = g_delay_diag_reverb_send;
 }
 
-void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type)
+void mixer_set_track_filter_morph(uint32_t track_id, float morph)
 {
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    if(type > MIXER_TRACK_FILTER_BP_BI)
-        type = MIXER_TRACK_FILTER_BP_BI;
-
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if(filter->type == (uint8_t)type)
-    {
-        return;
-    }
-
-    filter->type = (uint8_t)type;
+    const float next = clampf_local(morph, 0.0f, 127.0f);
+    if(filter->morph_target == next) return;
+    filter->morph_target = next;
+    filter->morph_step = (next - filter->morph) * (1.0f / 64.0f);
+    filter->morph_ramp_remaining = 64U;
     filter->filter_env_prepared_consumed = 1U;
-    mixer_track_filter_apply_core_params(filter);
-    mixer_track_filter_touch_config(filter);
+    mixer_track_filter_touch_continuous(filter, MIXER_CONT_MORPH);
 }
 
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
@@ -2971,39 +2776,6 @@ void mixer_set_track_filter_retrigger_hard(uint32_t track_id, uint8_t hard)
     mixer_track_filter_touch_config(filter);
 }
 
-void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db)
-{
-    if(track_id >= MIXER_MAX_TRACKS)
-        return;
-
-    mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if (filter->eq_low_target_db == gain_db) return;
-    filter->eq_low_target_db = gain_db;
-    mixer_track_filter_touch_continuous(filter, MIXER_CONT_EQ_LOW);
-}
-
-void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db)
-{
-    if(track_id >= MIXER_MAX_TRACKS)
-        return;
-
-    mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if (filter->eq_mid_target_db == gain_db) return;
-    filter->eq_mid_target_db = gain_db;
-    mixer_track_filter_touch_continuous(filter, MIXER_CONT_EQ_MID);
-}
-
-void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db)
-{
-    if(track_id >= MIXER_MAX_TRACKS)
-        return;
-
-    mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if (filter->eq_high_target_db == gain_db) return;
-    filter->eq_high_target_db = gain_db;
-    mixer_track_filter_touch_continuous(filter, MIXER_CONT_EQ_HIGH);
-}
-
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
 {
     (void)velocity;
@@ -3087,19 +2859,18 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
     mixer_track_filter_touch_continuous(filter, MIXER_CONT_VCA_RELEASE);
 }
 
-void mixer_set_track_vca_env_type(uint32_t track_id, uint8_t type)
+void mixer_set_track_filter_mode(uint32_t track_id, uint8_t mode)
 {
     if (track_id >= MIXER_MAX_TRACKS)
         return;
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
-    const uint8_t next = (type == (uint8_t)VCA_ENV_TYPE_LINEAR)
-                       ? (uint8_t)VCA_ENV_TYPE_LINEAR
-                       : (uint8_t)VCA_ENV_TYPE_DAISY;
-    if (filter->synth_vca_type == next)
+    const uint8_t next = (mode > 2U) ? 2U : mode;
+    if (filter->filter_mode == next)
         return;
-    filter->synth_vca_type = next;
-    vca_env_set_type(&filter->synth_vca_env, (vca_env_type_t)next);
+    filter->filter_mode = next;
+    if(next == 2U) fx_deluge_filter_init(&filter->deluge, filter->sample_rate);
+    else mixer_track_filter_reset_dsp(filter);
     mixer_track_filter_touch_config(filter);
 }
 
@@ -3730,8 +3501,6 @@ void mixer_track_poly_note_on(uint32_t poly_track_id,
     filter->vca_note_count = 1U;
     filter->vca_note_active = 1U;
     filter->vca_gate = 1U;
-    vca_env_set_type(&filter->synth_vca_env,
-                     (vca_env_type_t)filter->synth_vca_type);
     vca_env_retrigger(&filter->synth_vca_env,
                       filter->vca_retrigger_hard != 0U);
 }
@@ -3850,9 +3619,6 @@ void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
  */
 ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
-#if defined(BRICK6_MIXER_PATH_DIAG)
-    mixer_path_diag_block_begin(frames);
-#endif
     AUDIO_HOT ALIGN32 static float mono_pan_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
@@ -3861,8 +3627,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     AUDIO_HOT ALIGN32 static float bus_group_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float reverb_return_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float reverb_return_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_return_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_return_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_l[AUDIO_BLOCK_SIZE];
@@ -3880,11 +3644,9 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    const uint8_t diag_enabled = audio_track_diag_is_enabled();
-    if (diag_enabled != 0U)
-    {
-        audio_track_diag_set_lane_active(0U);
-    }
+    const brick_entity_id_t waveform_entity = audio_waveform_capture_get_entity();
+    audio_waveform_capture_begin_block(waveform_entity);
+
 
     uint8_t send_fx_active = 0U;
     for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
@@ -3903,7 +3665,9 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     const uint8_t delay_active = (g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
             ? fx_delay_dual_global_is_active()
             : fx_delay_stereo_global_is_active();
-    const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U) || (delay_active != 0U)) ? 1U : 0U;
+    const uint8_t modfx_active = fx_modfx_global_is_active();
+    const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U)
+            || (delay_active != 0U) || (modfx_active != 0U)) ? 1U : 0U;
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
@@ -3970,7 +3734,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     looper_playback_mix_active =
         ((looper_playback_active != 0U) && (looper_xfade_apply_active != 0U)) ? 1U : 0U;
     uint8_t looper_record_track = 0U;
-    uint8_t diag_active_tracks = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
     const uint8_t sample_capture_active = sample_capture_audio_hook_is_enabled();
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
@@ -4004,6 +3767,12 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             (mixer_entity_for_lane((uint8_t)t, &source_entity) != 0U)
             && ((source_ctx = audio_note_engine_adapter_audio_ctx(source_entity)) != NULL)
             && ((source_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U));
+        const brick_entity_id_t audio_fx_entity =
+            (source_entity < BRICK_ENTITY_CAPACITY)
+                ? (brick_entity_id_t)source_entity
+                : BRICK_ENTITY_INVALID_ID;
+        const uint8_t audio_fx_pre_filter =
+            fx_chain_audio_fx_is_pre_filter(audio_fx_entity);
         float *const dry_bus_l = (group_child != 0U) ? bus_group_l : bus_main_l;
         float *const dry_bus_r = (group_child != 0U) ? bus_group_r : bus_main_r;
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
@@ -4017,45 +3786,47 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                                   frames);
         if (lane_plan.active == 0U)
             continue;
-        if (diag_enabled != 0U)
-        {
-            diag_active_tracks++;
-        }
-
         float *L = NULL;
         float *R = NULL;
         float *mono = NULL;
-        const uint8_t diag_lane = ((diag_enabled != 0U)
-            && (audio_track_diag_is_selected_mix_track((uint8_t)t) != 0U)) ? 1U : 0U;
         const uint8_t is_mono_native_lane = (lane_plan.exec_kind == MIXER_LANE_EXEC_MONO_NATIVE) ? 1U : 0U;
+        const uint8_t waveform_capture_lane =
+            ((waveform_entity != BRICK_ENTITY_INVALID_ID)
+             && (source_entity == waveform_entity)) ? 1U : 0U;
         const uint8_t multi_prefiltered =
             ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)
              || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_STEREO)) ? 1U : 0U;
 
         if (is_mono_native_lane != 0U)
         {
-            if (diag_lane != 0U)
-            {
-                audio_track_diag_set_lane_active(1U);
-                audio_track_diag_set_filter_active(
-                    (multi_prefiltered == 0U)
-                        && (g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF));
-                audio_track_diag_measure_mono(AUDIO_TRACK_DIAG_ENG,
-                                              g_external_track_mono[t],
-                                              frames);
-            }
             mixer_lane_buffers_t buffers = {0};
+            if (waveform_capture_lane != 0U)
+            {
+                audio_waveform_capture_tap_reference_mono_block(
+                    g_external_track_mono[t], frames);
+            }
             if (multi_prefiltered != 0U)
             {
                 buffers.mono = g_external_track_mono[t];
             }
             else
             {
+                if (audio_fx_pre_filter != 0U)
+                {
+                    fx_chain_process_audio_fx_pre_filter_mono(
+                        audio_fx_entity,
+                        g_external_track_mono[t],
+                        frames);
+                }
                 buffers = mixer_lane_run_mono_native_path(t,
                                                            mt,
                                                            &g_track_filters[t],
-                                                           frames,
-                                                           diag_lane);
+                                                           frames);
+            }
+            if ((multi_prefiltered != 0U) && (audio_fx_pre_filter != 0U))
+            {
+                fx_chain_process_audio_fx_pre_filter_mono(
+                    audio_fx_entity, buffers.mono, frames);
             }
             mono = buffers.mono;
         }
@@ -4067,89 +3838,24 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             L = buffers.left;
             R = buffers.right;
             mixer_lane_accumulate_external_source(t, &lane_plan, L, R);
-            if (diag_lane != 0U)
+            if (waveform_capture_lane != 0U)
             {
-                audio_track_diag_set_lane_active(1U);
-                audio_track_diag_set_filter_active(
-                    (multi_prefiltered == 0U)
-                        && (g_track_filters[t].type != (uint8_t)MIXER_TRACK_FILTER_OFF));
-                audio_track_diag_measure_stereo(AUDIO_TRACK_DIAG_ENG, L, R, frames);
+                audio_waveform_capture_tap_reference_stereo_block(L, R, frames);
+            }
+            if (audio_fx_pre_filter != 0U)
+            {
+                fx_chain_process_audio_fx_pre_filter_stereo(
+                    audio_fx_entity, L, R, frames);
             }
             if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                 && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO))
-                mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames, diag_lane);
+                mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames);
         }
+        const uint8_t waveform_capture_samples = (uint8_t)(
+            (waveform_capture_lane != 0U)
+            && (audio_waveform_capture_needs_final_samples() != 0U));
 
-#if defined(BRICK6_MIXER_PATH_DIAG)
-        uint8_t mixer_path_snapshot = MIXER_PATH_DIAG_NO_SLOT;
-        if ((mixer_path_diag_enabled != 0U)
-                && (source_entity < BRICK_ENTITY_TOP_LEVEL_COUNT)
-                && ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                    || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
-                    || (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
-        {
-            uint8_t track_flags = 1U;
-            if (mt->mute != 0U) track_flags |= 2U;
-            if (mt->route_master != 0U) track_flags |= 4U;
-            if (group_child != 0U) track_flags |= 8U;
-            if (multi_prefiltered == 0U) track_flags |= 16U;
-            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
-            {
-                if (mt->insert_slot[insert] >= 0)
-                {
-                    track_flags |= 32U;
-                    break;
-                }
-            }
-            const uint8_t source_flags = (uint8_t)(
-                ((uint8_t)lane_plan.source_kind & 7U)
-                | ((lane_plan.ext_format & 7U) << 3U)
-                | ((lane_plan.hw_enabled != 0U) ? 64U : 0U)
-                | ((lane_plan.ext_enabled != 0U) ? 128U : 0U));
-            mixer_path_snapshot = mixer_path_diag_begin(
-                source_entity, (uint8_t)t, source_flags, track_flags,
-                (is_mono_native_lane != 0U) ? mono : L,
-                (is_mono_native_lane != 0U) ? NULL : R, frames);
-            if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
-            {
-                const float last_fraction = (frames > 1U)
-                    ? ((float)(frames - 1U) / (float)frames) : 0.0f;
-                const float gain_last = mt->gain_current
-                    + ((mt->gain - mt->gain_current) * last_fraction);
-                const float pan_last = mt->pan_current
-                    + ((mt->pan - mt->pan_current) * last_fraction);
-                const float mute_target = (mt->mute != 0U) ? 0.0f : 1.0f;
-                float mute_last = mt->mute_gain_current;
-                const float mute_delta = ((float)(frames - 1U)) / 240.0f;
-                if (mute_last < mute_target)
-                {
-                    mute_last += mute_delta;
-                    if (mute_last > mute_target) mute_last = mute_target;
-                }
-                else if (mute_last > mute_target)
-                {
-                    mute_last -= mute_delta;
-                    if (mute_last < mute_target) mute_last = mute_target;
-                }
-                const float pan_for_mix_first = -mt->pan_current;
-                const float pan_l_first = (pan_for_mix_first <= 0.0f)
-                    ? 1.0f : (1.0f - pan_for_mix_first);
-                const float pan_r_first = (pan_for_mix_first >= 0.0f)
-                    ? 1.0f : (1.0f + pan_for_mix_first);
-                const float pan_for_mix_last = -pan_last;
-                const float pan_l_last = (pan_for_mix_last <= 0.0f)
-                    ? 1.0f : (1.0f - pan_for_mix_last);
-                const float pan_r_last = (pan_for_mix_last >= 0.0f)
-                    ? 1.0f : (1.0f + pan_for_mix_last);
-                mixer_path_diag_set_coefficients(
-                    mixer_path_snapshot,
-                    mt->gain_current, gain_last,
-                    pan_l_first, pan_l_last, pan_r_first, pan_r_last,
-                    1.0f, 1.0f, mt->mute_gain_current, mute_last);
-            }
-        }
-#endif
 
         /*
          * Common mono-native fan-out. Keep the historical L/R path when
@@ -4165,21 +3871,15 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 : 0U;
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                && (diag_lane == 0U)
                 && (sample_capture_active == 0U)
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
-            uint8_t has_track_insert = 0U;
-            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
-            {
-                if (mt->insert_slot[insert] >= 0)
-                {
-                    has_track_insert = 1U;
-                    break;
-                }
-            }
-            direct_mono_fanout = (has_track_insert == 0U) ? 1U : 0U;
+            direct_mono_fanout = (fx_chain_track_inserts_require_stereo(
+                (source_entity < BRICK_ENTITY_CAPACITY)
+                    ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
+                mt->insert_slot,
+                MIXER_INSERTS_PER_TRACK) == 0U) ? 1U : 0U;
         }
 
         if (direct_mono_fanout != 0U)
@@ -4226,7 +3926,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                     send_enabled[s] = (((s != MIXER_DELAY_SEND_INDEX)
                                         && (g_send_fx_slot[s] >= 0))
                         || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
+                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
                 }
             }
 
@@ -4250,10 +3951,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                     g_track_filters[t].vca_env_value = vca_gain;
                 }
 
-                const float sample_processed =
-                    mono[i] * (mono_gain * vca_gain);
-                const float left = sample_processed * pan_l;
-                const float right = sample_processed * pan_r;
+                float sample_pre_fader = mono[i] * vca_gain;
+                sample_pre_fader = fx_chain_process_audio_fx_comp_mono_sample(
+                    audio_fx_entity, sample_pre_fader);
+                const float sample_processed = sample_pre_fader * mono_gain;
+                float left = sample_processed * pan_l;
+                float right = sample_processed * pan_r;
+                fx_chain_process_audio_fx_post_fader_stereo_sample(
+                    audio_fx_entity, &left, &right);
+                if (waveform_capture_samples != 0U)
+                {
+                    audio_waveform_capture_tap_stereo_sample(left, right);
+                }
                 const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                 const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
                 if (send_bus_active != 0U)
@@ -4305,27 +4014,29 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
          */
         uint8_t poly_stereo_fanout = 0U;
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                && (diag_lane == 0U)
                 && (sample_capture_active == 0U)
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U)
                 && (mt->route_master != 0U)
+                && (modfx_active == 0U)
                 )
         {
-            uint8_t has_track_insert = 0U;
-            for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
-            {
-                if (mt->insert_slot[insert] >= 0)
-                {
-                    has_track_insert = 1U;
-                    break;
-                }
-            }
-            poly_stereo_fanout = (has_track_insert == 0U) ? 1U : 0U;
+            poly_stereo_fanout = (fx_chain_track_inserts_require_stereo(
+                (source_entity < BRICK_ENTITY_CAPACITY)
+                    ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
+                mt->insert_slot,
+                MIXER_INSERTS_PER_TRACK) == 0U) ? 1U : 0U;
         }
 
         if (poly_stereo_fanout != 0U)
         {
+            /* No legacy insert is active in this fast path, but the
+             * mono-compatible entity Audio FX must run after the per-frame
+             * gain/pan coefficients, just like the regular insert path. */
+            const brick_entity_id_t audio_fx_entity =
+                (source_entity < BRICK_ENTITY_CAPACITY)
+                    ? (brick_entity_id_t)source_entity
+                    : BRICK_ENTITY_INVALID_ID;
             enum
             {
                 POLY_FANOUT_MAIN = 1U,
@@ -4358,7 +4069,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                     const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX)
                                                     && (g_send_fx_slot[s] >= 0))
                         || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
+                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
                     send_cur[s] = mt->send_level_current[s];
                     send_step[s] = (mt->send_level[s] - send_cur[s]) * inv_frames;
                     if ((send_enabled != 0U)
@@ -4383,12 +4095,20 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     mute_gain_cur,
                                                     &gain_l,
                                                     &gain_r);
-                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
-                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
-                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
-                            mixer_path_snapshot,
-                            L[i] * gain_l, R[i] * gain_r,
-                            left_trimmed, right_trimmed);
+                        float left = L[i];
+                        float right = R[i];
+                        fx_chain_process_audio_fx_comp_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        left *= gain_l;
+                        right *= gain_r;
+                        fx_chain_process_audio_fx_post_fader_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        if (waveform_capture_samples != 0U)
+                        {
+                            audio_waveform_capture_tap_stereo_sample(left, right);
+                        }
+                        const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         if (coefficient_plan.stable == 0U)
@@ -4411,12 +4131,20 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     mute_gain_cur,
                                                     &gain_l,
                                                     &gain_r);
-                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
-                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
-                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
-                            mixer_path_snapshot,
-                            L[i] * gain_l, R[i] * gain_r,
-                            left_trimmed, right_trimmed);
+                        float left = L[i];
+                        float right = R[i];
+                        fx_chain_process_audio_fx_comp_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        left *= gain_l;
+                        right *= gain_r;
+                        fx_chain_process_audio_fx_post_fader_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        if (waveform_capture_samples != 0U)
+                        {
+                            audio_waveform_capture_tap_stereo_sample(left, right);
+                        }
+                        const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
                         send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         dry_bus_l[i] += left_trimmed;
@@ -4442,12 +4170,20 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     mute_gain_cur,
                                                     &gain_l,
                                                     &gain_r);
-                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
-                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
-                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
-                            mixer_path_snapshot,
-                            L[i] * gain_l, R[i] * gain_r,
-                            left_trimmed, right_trimmed);
+                        float left = L[i];
+                        float right = R[i];
+                        fx_chain_process_audio_fx_comp_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        left *= gain_l;
+                        right *= gain_r;
+                        fx_chain_process_audio_fx_post_fader_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        if (waveform_capture_samples != 0U)
+                        {
+                            audio_waveform_capture_tap_stereo_sample(left, right);
+                        }
+                        const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
                         dry_bus_l[i] += left_trimmed;
@@ -4473,12 +4209,20 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     mute_gain_cur,
                                                     &gain_l,
                                                     &gain_r);
-                        const float left_trimmed = L[i] * gain_l * MIXER_TRACK_NOMINAL_TRIM;
-                        const float right_trimmed = R[i] * gain_r * MIXER_TRACK_NOMINAL_TRIM;
-                        MIXER_PATH_DIAG_CAPTURE_BC_SAMPLE(
-                            mixer_path_snapshot,
-                            L[i] * gain_l, R[i] * gain_r,
-                            left_trimmed, right_trimmed);
+                        float left = L[i];
+                        float right = R[i];
+                        fx_chain_process_audio_fx_comp_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        left *= gain_l;
+                        right *= gain_r;
+                        fx_chain_process_audio_fx_post_fader_stereo_sample(
+                            audio_fx_entity, &left, &right);
+                        if (waveform_capture_samples != 0U)
+                        {
+                            audio_waveform_capture_tap_stereo_sample(left, right);
+                        }
+                        const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
+                        const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
                         send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
                         send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
@@ -4500,14 +4244,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                     break;
             }
 
-#if defined(BRICK6_MIXER_PATH_DIAG)
-            if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
-            {
-                mixer_path_diag_capture_d(mixer_path_snapshot,
-                                          dry_bus_l, dry_bus_r, frames);
-                mixer_path_diag_commit(mixer_path_snapshot);
-            }
-#endif
 
             mt->gain_current = mt->gain;
             mt->pan_current = mt->pan;
@@ -4556,99 +4292,82 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 }
             }
 
-            if (diag_lane != 0U)
+            for (uint32_t i = 0U; i < frames; ++i)
             {
-                for(uint32_t i = 0; i < frames; i++)
+                float vca_gain = 1.0f;
+                if (track_vca_enabled != 0U)
                 {
-                    float pan_l = coefficient_plan.pan_l;
-                    float pan_r = coefficient_plan.pan_r;
-                    float gain_l = coefficient_plan.gain_l;
-                    float gain_r = coefficient_plan.gain_r;
-                    float mono_gain = coefficient_plan.mono_gain;
-                    if (coefficient_plan.stable == 0U)
-                    {
-                        const float pan_for_mix = -pan_cur;
-                        pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
-                        pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-                        gain_l = gain_cur * pan_l * mute_gain_cur;
-                        gain_r = gain_cur * pan_r * mute_gain_cur;
-                        mono_gain = gain_cur * mute_gain_cur;
-                    }
-                    float vca_gain = 1.0f;
-                    if (track_vca_enabled != 0U)
-                    {
-                        vca_gain = vca_segment_gain[i];
-                        g_track_filters[t].vca_env_value = vca_gain;
-                    }
-                    if (is_mono_native_lane != 0U)
-                    {
-                        audio_track_diag_measure_sample(AUDIO_TRACK_DIAG_DSP,
-                                                       mono[i] * vca_gain,
-                                                       mono[i] * vca_gain);
-                        mono[i] *= (mono_gain * vca_gain);
-                        mono_pan_l[i] = mono[i] * pan_l;
-                        mono_pan_r[i] = mono[i] * pan_r;
-                    }
-                    else
-                    {
-                        audio_track_diag_measure_sample(AUDIO_TRACK_DIAG_DSP,
-                                                       L[i] * vca_gain,
-                                                       R[i] * vca_gain);
-                        L[i] *= (gain_l * vca_gain);
-                        R[i] *= (gain_r * vca_gain);
-                    }
-
-                    if (coefficient_plan.stable == 0U)
-                    {
-                        mixer_advance_track_ramps(&gain_cur, gain_step,
-                                                  &pan_cur, pan_step,
-                                                  &mute_gain_cur, mute_target, mute_step);
-                    }
+                    vca_gain = vca_segment_gain[i];
+                    g_track_filters[t].vca_env_value = vca_gain;
+                }
+                if (is_mono_native_lane != 0U)
+                {
+                    const float vca_sample = mono[i] * vca_gain;
+                    mono[i] = vca_sample;
+                    mono_pan_l[i] = vca_sample;
+                    mono_pan_r[i] = vca_sample;
+                }
+                else
+                {
+                    L[i] *= vca_gain;
+                    R[i] *= vca_gain;
                 }
             }
-            else
+
+            const brick_entity_id_t audio_fx_entity =
+                (source_entity < BRICK_ENTITY_CAPACITY)
+                    ? (brick_entity_id_t)source_entity
+                    : BRICK_ENTITY_INVALID_ID;
+            if (is_mono_native_lane != 0U)
             {
-                for(uint32_t i = 0; i < frames; i++)
+                L = mono_pan_l;
+                R = mono_pan_r;
+            }
+            fx_chain_process_track_inserts_pre_fader(
+                audio_fx_entity,
+                t,
+                mt->insert_slot,
+                MIXER_INSERTS_PER_TRACK,
+                L,
+                R,
+                frames);
+
+            gain_cur = mt->gain_current;
+            pan_cur = mt->pan_current;
+            mute_gain_cur = mt->mute_gain_current;
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                /* Standard user convention: pan<0 => left, pan>0 => right.
+                 * Runtime output stage wiring is mirrored, so mixer pan is compensated here. */
+                float pan_l = coefficient_plan.pan_l;
+                float pan_r = coefficient_plan.pan_r;
+                float gain_l = coefficient_plan.gain_l;
+                float gain_r = coefficient_plan.gain_r;
+                float mono_gain = coefficient_plan.mono_gain;
+                if (coefficient_plan.stable == 0U)
                 {
-                    /* Standard user convention: pan<0 => left, pan>0 => right.
-                     * Runtime output stage wiring is mirrored, so mixer pan is compensated here. */
-                    float pan_l = coefficient_plan.pan_l;
-                    float pan_r = coefficient_plan.pan_r;
-                    float gain_l = coefficient_plan.gain_l;
-                    float gain_r = coefficient_plan.gain_r;
-                    float mono_gain = coefficient_plan.mono_gain;
-                    if (coefficient_plan.stable == 0U)
-                    {
-                        const float pan_for_mix = -pan_cur;
-                        pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
-                        pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
-                        gain_l = gain_cur * pan_l * mute_gain_cur;
-                        gain_r = gain_cur * pan_r * mute_gain_cur;
-                        mono_gain = gain_cur * mute_gain_cur;
-                    }
-                    float vca_gain = 1.0f;
-                    if (track_vca_enabled != 0U)
-                    {
-                        vca_gain = vca_segment_gain[i];
-                        g_track_filters[t].vca_env_value = vca_gain;
-                    }
-                    if (is_mono_native_lane != 0U)
-                    {
-                        mono[i] *= (mono_gain * vca_gain);
-                        mono_pan_l[i] = mono[i] * pan_l;
-                        mono_pan_r[i] = mono[i] * pan_r;
-                    }
-                    else
-                    {
-                        L[i] *= (gain_l * vca_gain);
-                        R[i] *= (gain_r * vca_gain);
-                    }
-                    if (coefficient_plan.stable == 0U)
-                    {
-                        mixer_advance_track_ramps(&gain_cur, gain_step,
-                                                  &pan_cur, pan_step,
-                                                  &mute_gain_cur, mute_target, mute_step);
-                    }
+                    const float pan_for_mix = -pan_cur;
+                    pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                    pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                    gain_l = gain_cur * pan_l * mute_gain_cur;
+                    gain_r = gain_cur * pan_r * mute_gain_cur;
+                    mono_gain = gain_cur * mute_gain_cur;
+                }
+                if (is_mono_native_lane != 0U)
+                {
+                    mono_pan_l[i] = L[i] * (mono_gain * pan_l);
+                    mono_pan_r[i] = R[i] * (mono_gain * pan_r);
+                }
+                else
+                {
+                    L[i] *= gain_l;
+                    R[i] *= gain_r;
+                }
+                if (coefficient_plan.stable == 0U)
+                {
+                    mixer_advance_track_ramps(&gain_cur, gain_step,
+                                              &pan_cur, pan_step,
+                                              &mute_gain_cur, mute_target, mute_step);
                 }
             }
 
@@ -4663,37 +4382,17 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             R = mono_pan_r;
         }
 
-        /*
-         * One functional order for every lane:
-         * engine -> filter -> VCA/track volume/pan -> track inserts -> sends/bus.
-         * Mono-native lanes use the same stereo insert contract after panning.
-         */
-        for(uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+        /* engine -> filter -> VCA -> legacy inserts/COMP -> track fader/mute
+         * -> pan -> remaining Audio FX -> sends/bus. */
+        fx_chain_process_audio_fx_post_fader(
+            (source_entity < BRICK_ENTITY_CAPACITY)
+                ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
+            L,
+            R,
+            frames);
+        if (waveform_capture_samples != 0U)
         {
-            const int8_t slot = mt->insert_slot[insert];
-            if(slot >= 0)
-            {
-                fx_chain_process_slot_for_track(t, (uint32_t)slot, L, R, frames);
-            }
-        }
-#if defined(BRICK6_MIXER_PATH_DIAG)
-        if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
-        {
-            mixer_path_diag_capture_bc(
-                mixer_path_snapshot, L, R, frames,
-                (mt->route_master != 0U) ? MIXER_TRACK_NOMINAL_TRIM : 0.0f);
-        }
-#endif
-        if(diag_lane != 0U)
-        {
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                audio_track_diag_measure_sample(AUDIO_TRACK_DIAG_BUS,
-                    (mt->route_master != 0U)
-                        ? L[i] * MIXER_TRACK_NOMINAL_TRIM : 0.0f,
-                    (mt->route_master != 0U)
-                        ? R[i] * MIXER_TRACK_NOMINAL_TRIM : 0.0f);
-            }
+            audio_waveform_capture_tap_stereo_block(L, R, frames);
         }
 
         {
@@ -4762,7 +4461,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             {
                 const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
                         || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
+                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
                 if(send_enabled != 0U)
                 {
                     if((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f))
@@ -4792,14 +4492,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 dry_bus_r[i] += r_nom;
             }
         }
-#if defined(BRICK6_MIXER_PATH_DIAG)
-        if (mixer_path_snapshot != MIXER_PATH_DIAG_NO_SLOT)
-        {
-            mixer_path_diag_capture_d(mixer_path_snapshot,
-                                      dry_bus_l, dry_bus_r, frames);
-            mixer_path_diag_commit(mixer_path_snapshot);
-        }
-#endif
     }
 
     const track_audio_runtime_ctx_t *const group_master_ctx =
@@ -4813,13 +4505,35 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
          * child sends have already left pre-sum; child dry is summed here,
          * then master filter -> master MIX -> inserts -> master sends/dry.
          */
+        if (waveform_entity == BRICK_ENTITY_GROUP_MASTER_ID)
+        {
+            audio_waveform_capture_tap_reference_stereo_block(bus_group_l,
+                                                               bus_group_r,
+                                                               frames);
+        }
+        if (fx_chain_audio_fx_is_pre_filter(BRICK_ENTITY_GROUP_MASTER_ID) != 0U)
+        {
+            fx_chain_process_audio_fx_pre_filter_stereo(
+                BRICK_ENTITY_GROUP_MASTER_ID,
+                bus_group_l,
+                bus_group_r,
+                frames);
+        }
         mixer_lane_run_stereo_path(MIXER_GROUP_BUS_TRACK,
                                    group,
                                    &g_track_filters[MIXER_GROUP_BUS_TRACK],
                                    bus_group_l,
                                    bus_group_r,
-                                   frames,
-                                   0U);
+                                   frames);
+
+        fx_chain_process_track_inserts_pre_fader(
+            BRICK_ENTITY_GROUP_MASTER_ID,
+            MIXER_GROUP_BUS_TRACK,
+            group->insert_slot,
+            MIXER_INSERTS_PER_TRACK,
+            bus_group_l,
+            bus_group_r,
+            frames);
 
         float gain_cur = group->gain_current;
         float pan_cur = group->pan_current;
@@ -4857,15 +4571,16 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         group->pan_current = group->pan;
         group->mute_gain_current = mute_gain_cur;
 
-        for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+        fx_chain_process_audio_fx_post_fader(BRICK_ENTITY_GROUP_MASTER_ID,
+                                             bus_group_l,
+                                             bus_group_r,
+                                             frames);
+        if ((waveform_entity == BRICK_ENTITY_GROUP_MASTER_ID)
+                && (audio_waveform_capture_needs_final_samples() != 0U))
         {
-            const int8_t slot = group->insert_slot[insert];
-            if (slot >= 0)
-                fx_chain_process_slot_for_track(MIXER_GROUP_BUS_TRACK,
-                                                (uint32_t)slot,
-                                                bus_group_l,
-                                                bus_group_r,
-                                                frames);
+            audio_waveform_capture_tap_stereo_block(bus_group_l,
+                                                   bus_group_r,
+                                                   frames);
         }
 
         if (send_bus_active != 0U)
@@ -4878,7 +4593,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 const uint8_t send_enabled = (uint8_t)(
                     (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
                      || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                     || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))));
+                     || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
+                     || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))));
                 if ((send_enabled != 0U)
                         && !((send_cur <= 0.0f) && (group->send_level[s] <= 0.0f)))
                 {
@@ -4901,33 +4617,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 bus_main_r[i] += bus_group_r[i];
             }
         }
-    }
-
-    if (diag_enabled != 0U)
-    {
-        audio_global_diag_set_active_tracks(diag_active_tracks);
-        if(send_bus_active != 0U)
-        {
-            audio_global_diag_measure_three(AUDIO_GLOBAL_DIAG_DRY_SUM,
-                                            bus_main_l, bus_main_r,
-                                            AUDIO_GLOBAL_DIAG_SEND1,
-                                            send_l[MIXER_REVERB_SEND_INDEX],
-                                            send_r[MIXER_REVERB_SEND_INDEX],
-                                            AUDIO_GLOBAL_DIAG_SEND2,
-                                            send_l[MIXER_DELAY_SEND_INDEX],
-                                            send_r[MIXER_DELAY_SEND_INDEX],
-                                            frames);
-        }
-        else
-        {
-            audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_DRY_SUM,
-                                             bus_main_l, bus_main_r, frames);
-            audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_SEND1,
-                                              AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-            audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_SEND2,
-                                              AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-        }
-        audio_track_diag_end_block(frames);
     }
 
     if(looper_record_active != 0U)
@@ -4969,13 +4658,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                      delay_reverb_r,
                                                      frames);
             }
-            if(diag_enabled != 0U)
-            {
-                audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_DELAY_RETURN,
-                                                 delay_return_l,
-                                                 delay_return_r,
-                                                 frames);
-            }
             for(uint32_t i = 0; i < frames; i++)
             {
                 bus_main_l[i] += delay_return_l[i];
@@ -4984,61 +4666,41 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 send_r[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_r[i];
             }
         }
-        else if(diag_enabled != 0U)
-        {
-            audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_DELAY_RETURN,
-                                              AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-        }
 
         if(reverb_active != 0U)
         {
-            if(diag_enabled == 0U)
-            {
-                fx_reverb_global_process_block_add(
-                    send_l[MIXER_REVERB_SEND_INDEX],
-                    send_r[MIXER_REVERB_SEND_INDEX],
-                    bus_main_l,
-                    bus_main_r,
-                    frames);
-            }
-            else
-            {
-                fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
-                                               send_r[MIXER_REVERB_SEND_INDEX],
-                                               reverb_return_l,
-                                               reverb_return_r,
-                                               frames);
-                if(diag_enabled != 0U)
-                {
-                    audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_REVERB_RETURN,
-                                                     reverb_return_l,
-                                                     reverb_return_r,
-                                                     frames);
-                }
-
-                for(uint32_t i = 0; i < frames; i++)
-                {
-                    bus_main_l[i] += reverb_return_l[i];
-                    bus_main_r[i] += reverb_return_r[i];
-                }
-            }
+            fx_reverb_global_process_block_add(
+                send_l[MIXER_REVERB_SEND_INDEX],
+                send_r[MIXER_REVERB_SEND_INDEX],
+                bus_main_l,
+                bus_main_r,
+                frames);
         }
-        else if(diag_enabled != 0U)
+
+        if (modfx_active != 0U)
         {
-            audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_REVERB_RETURN,
-                                              AUDIO_GLOBAL_DIAG_STATE_BYPASS);
+            fx_modfx_global_process_block(send_l[MIXER_MODFX_SEND_INDEX],
+                                          send_r[MIXER_MODFX_SEND_INDEX], frames);
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                bus_main_l[i] += send_l[MIXER_MODFX_SEND_INDEX][i];
+                bus_main_r[i] += send_r[MIXER_MODFX_SEND_INDEX][i];
+            }
         }
 
         for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
         {
-            if(s == MIXER_DELAY_SEND_INDEX)
+            if((s == MIXER_DELAY_SEND_INDEX) || (s == MIXER_MODFX_SEND_INDEX))
             {
                 continue;
             }
             const int8_t slot = g_send_fx_slot[s];
             if(slot >= 0)
             {
-                fx_chain_process_slot((uint32_t)slot, send_l[s], send_r[s], frames);
+                fx_chain_process_global_slot((uint32_t)slot,
+                                              send_l[s],
+                                              send_r[s],
+                                              frames);
                 for(uint32_t i = 0; i < frames; i++)
                 {
                     bus_main_l[i] += send_l[s][i];
@@ -5046,13 +4708,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 }
             }
         }
-    }
-    else if(diag_enabled != 0U)
-    {
-        audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_DELAY_RETURN,
-                                          AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-        audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_REVERB_RETURN,
-                                          AUDIO_GLOBAL_DIAG_STATE_BYPASS);
     }
 
     if(looper_xfade_apply_active != 0U)
@@ -5130,7 +4785,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     }
 
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
-    fx_chain_process_slot(2U, bus_main_l, bus_main_r, frames);
+    fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
 
     if(sample_capture_active != 0U)
     {
@@ -5145,11 +4800,6 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
     if(track_count > 0U)
     {
-        if(diag_enabled != 0U)
-        {
-            audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_POST_RETURNS,
-                                             bus_main_l, bus_main_r, frames);
-        }
         memcpy(tracks[0].L, bus_main_l, sizeof(float) * frames);
         memcpy(tracks[0].R, bus_main_r, sizeof(float) * frames);
     }

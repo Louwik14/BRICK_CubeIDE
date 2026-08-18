@@ -5,20 +5,13 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_multi_stream_diag.h"
 #include "Sampler/sample_stream_admission.h"
-#include "Sampler/sample_stream_benchmark.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
-#include "Sampler/sample_stream_underrun_trace.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-#include "Core/stream_calibration.h"
-#include "SD/sd_diskio.h"
-#endif
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
@@ -29,7 +22,6 @@ _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY
 _Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
 #endif
-static uint32_t g_sample_stream_service_fatfs_ops;
 static uint8_t g_sample_stream_manager_initialized;
 typedef struct
 {
@@ -37,50 +29,19 @@ typedef struct
     sample_page_load_target_t target;
     sample_stream_io_command_t command;
     uint32_t transport_sequence;
-    uint32_t io_begin_sequence;
-    uint32_t io_begin_cycle;
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    sd_diskio_read_metrics_t sd_before;
-#endif
     uint8_t active;
 } sample_stream_manager_pending_io_t;
 SDRAM_STREAM_SERVICE static sample_stream_manager_pending_io_t
     g_sample_stream_manager_pending_io[2];
 static uint8_t g_sample_stream_manager_pending_count;
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-static uint8_t g_calibration_voice_id = UINT8_MAX;
-static uint32_t g_calibration_voice_generation;
-
-void sample_stream_manager_calibration_set_voice_context(uint8_t voice_id,
-                                                         uint32_t generation)
-{
-    g_calibration_voice_id = voice_id;
-    g_calibration_voice_generation = generation;
-}
-
-void sample_stream_manager_calibration_clear_voice_context(void)
-{
-    g_calibration_voice_id = UINT8_MAX;
-    g_calibration_voice_generation = 0U;
-}
-#endif
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
     uint32_t *out_loadable_needs,
     uint32_t *out_loading_needs);
-static uint8_t sample_stream_manager_candidate_source(
-    const sample_stream_scheduler_candidate_t *candidate);
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-SDRAM_STREAM_SERVICE volatile sample_multi_stream_diag_snapshot_t g_sample_multi_stream_diag;
-volatile uint32_t g_sample_multi_stream_diag_frozen;
-static volatile uint32_t g_sample_multi_stream_diag_breakpoint_seen;
-#endif
-
-
 static void sample_stream_manager_init_storage_once(void)
 {
     if (g_sample_stream_manager_initialized != 0U)
@@ -108,31 +69,9 @@ void sample_stream_manager_reset(void)
            sizeof(g_sample_stream_manager_pending_io));
     g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
-    sample_stream_event_trace_reset();
-    brick6_stream_underrun_trace_reset();
     sample_stream_admission_init(0);
     sample_stream_needs_registry_reset();
     sample_stream_snapshot_registry_reset();
-#if BRICK6_STREAM_BENCH
-    sample_stream_benchmark_reset();
-#endif
-}
-
-void sample_stream_manager_trace_consume_miss(sample_audio_key_t key,
-                                              uint32_t page_index,
-                                              uint32_t reader_position,
-                                              uint32_t frames_remaining)
-{
-    (void)sample_stream_event_trace_record_miss(key,
-                                                page_index,
-                                                reader_position,
-                                                frames_remaining);
-    brick6_stream_underrun_trace_consume_miss(
-        key, page_index, reader_position, frames_remaining);
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    brick6_stream_calibration_note_underrun(
-        key, page_index, g_calibration_voice_id, g_calibration_voice_generation);
-#endif
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -150,16 +89,6 @@ void sample_stream_manager_release_key(sample_audio_key_t key)
     (void)sample_page_cache_cancel_reserved_key(key, SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY);
 }
 
-static uint8_t sample_stream_manager_candidate_source(
-    const sample_stream_scheduler_candidate_t *candidate)
-{
-    if (candidate == 0)
-    {
-        return UINT8_MAX;
-    }
-    return candidate->source;
-}
-
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result)
@@ -168,88 +97,15 @@ static uint8_t sample_stream_manager_finish_io(
     {
         return 0U;
     }
-    brick6_stream_underrun_trace_io_end(
-        &pending->candidate, &pending->command, io_result, 0U);
-#if BRICK6_STREAM_BENCH
-    sample_stream_benchmark_note_io(
-        pending->target.key,
-        io_result,
-        DWT->CYCCNT - pending->io_begin_cycle,
-        0U,
-        sample_stream_needs_registry_count_active(),
-        (sample_stream_time_now() > pending->candidate.diagnostic_deadline_audio_frame)
-            ? 1U : 0U);
-#endif
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    sd_diskio_read_metrics_t sd_after;
-    sd_diskio_read_metrics_get(&sd_after);
-    brick6_stream_calibration_note_io(
-        io_result,
-        DWT->CYCCNT - pending->io_begin_cycle,
-        sd_after.read_transactions - pending->sd_before.read_transactions,
-        sd_after.read_bytes - pending->sd_before.read_bytes);
-#endif
-    g_sample_stream_service_fatfs_ops += io_result->fatfs_ops;
     if (io_result->load_result != SAMPLE_PAGE_LOAD_OK)
     {
-        brick6_stream_underrun_trace_load_end(
-            &pending->candidate, io_result, BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
-        (void)sample_stream_event_trace_record(
-            SAMPLE_STREAM_EVENT_LOAD_ERROR,
-            pending->target.key,
-            pending->target.page_index,
-            sample_stream_manager_candidate_source(&pending->candidate),
-            pending->candidate.voice_id,
-            pending->candidate.voice_generation,
-            pending->io_begin_sequence,
-            io_result->backend,
-            io_result->read_bytes,
-            (uint8_t)io_result->load_result);
         (void)sample_stream_publish_result(io_result);
         return 0U;
     }
     if (sample_stream_publish_result(io_result) == 0U)
     {
-        (void)sample_stream_event_trace_record(
-            SAMPLE_STREAM_EVENT_LOAD_ERROR,
-            pending->target.key,
-            pending->target.page_index,
-            sample_stream_manager_candidate_source(&pending->candidate),
-            pending->candidate.voice_id,
-            pending->candidate.voice_generation,
-            pending->io_begin_sequence,
-            io_result->backend,
-            io_result->read_bytes,
-            (uint8_t)SAMPLE_PAGE_LOAD_DECODE_FAILED);
-        brick6_stream_underrun_trace_load_end(
-            &pending->candidate, io_result, BRICK6_STREAM_TRACE_REASON_PUBLISH_ERROR);
         return 0U;
     }
-    brick6_stream_underrun_trace_load_end(
-        &pending->candidate, io_result, BRICK6_STREAM_TRACE_REASON_NONE);
-    brick6_stream_underrun_trace_ready(&pending->candidate, &pending->target, io_result);
-    (void)sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_LOAD_END,
-        pending->target.key,
-        pending->target.page_index,
-        sample_stream_manager_candidate_source(&pending->candidate),
-        pending->candidate.voice_id,
-        pending->candidate.voice_generation,
-        pending->io_begin_sequence,
-        io_result->backend,
-        io_result->read_bytes,
-        (uint8_t)io_result->load_result);
-    (void)sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_READY,
-        pending->target.key,
-        pending->target.page_index,
-        sample_stream_manager_candidate_source(&pending->candidate),
-        pending->candidate.voice_id,
-        pending->candidate.voice_generation,
-        pending->io_begin_sequence,
-        pending->target.page_generation,
-        io_result->read_bytes,
-        0U);
     return 1U;
 }
 
@@ -348,8 +204,6 @@ static uint32_t sample_stream_manager_collect_candidates(
                         ? voice_id
                         : (uint8_t)(SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY + voice_id);
                 candidate->active = 1U;
-                brick6_stream_underrun_trace_need_selectable(
-                    candidate, state, count + 1U);
                 break;
             }
         }
@@ -362,36 +216,6 @@ static uint32_t sample_stream_manager_collect_candidates(
     return count;
 }
 
-static void sample_stream_manager_trace_voice_states(void)
-{
-#if BRICK6_STREAM_UNDERRUN_TRACE
-    for (uint8_t source = (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC;
-         source <= (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI;
-         ++source)
-    {
-        const uint8_t capacity = (source == (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC)
-                                     ? SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
-                                     : SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY;
-        for (uint8_t voice_id = 0U; voice_id < capacity; ++voice_id)
-        {
-            sample_stream_snapshot_t snapshot;
-            sample_stream_target_voice_registry_entry_t entry;
-            if ((sample_stream_snapshot_read(
-                     (sample_stream_snapshot_source_t)source, voice_id, &snapshot) != 0U)
-                && (sample_stream_needs_registry_read(
-                        (sample_stream_snapshot_source_t)source, voice_id, &entry) != 0U))
-            {
-                brick6_stream_underrun_trace_voice_state(
-                    (sample_stream_snapshot_source_t)source,
-                    voice_id,
-                    &snapshot,
-                    &entry);
-            }
-        }
-    }
-#endif
-}
-
 static uint8_t sample_stream_manager_pick_next(
     sample_page_load_target_t *out_target,
     sample_stream_scheduler_candidate_t *out_candidate)
@@ -402,34 +226,19 @@ static uint8_t sample_stream_manager_pick_next(
     }
 
     sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    uint32_t loadable_needs = 0U;
-    uint32_t loading_needs = 0U;
     const uint32_t candidate_count = sample_stream_manager_collect_candidates(
         candidates,
         SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
-        &loadable_needs,
-        &loading_needs);
+        0,
+        0);
     if (candidate_count == 0U)
     {
-        sample_stream_scheduler_decision_t empty_decision;
-        (void)sample_stream_scheduler_pick(0, 0U, &empty_decision);
-        const uint8_t reason = (loadable_needs == 0U)
-                                   ? ((loading_needs != 0U)
-                                          ? BRICK6_STREAM_TRACE_REASON_ALL_LOADING
-                                          : BRICK6_STREAM_TRACE_REASON_ALL_READY)
-                                   : BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
-        (void)reason;
-        brick6_stream_underrun_trace_scheduler(
-            0, 0, 0U, loadable_needs, reason);
         return 0U;
     }
 
     sample_stream_scheduler_decision_t decision;
     if (sample_stream_scheduler_pick(candidates, candidate_count, &decision) == 0U)
     {
-        brick6_stream_underrun_trace_scheduler(
-            0, 0, candidate_count, loadable_needs,
-            BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE);
         return 0U;
     }
     sample_stream_scheduler_candidate_t *const candidate =
@@ -444,9 +253,6 @@ static uint8_t sample_stream_manager_pick_next(
                 candidate->page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
-            brick6_stream_underrun_trace_scheduler(
-                candidate, 0, candidate_count, loadable_needs,
-                BRICK6_STREAM_TRACE_REASON_RESERVE_FAILED);
             return 0U;
         }
         reserved_here = 1U;
@@ -464,9 +270,6 @@ static uint8_t sample_stream_manager_pick_next(
                 candidate->page_index,
                 SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
         }
-        brick6_stream_underrun_trace_scheduler(
-            candidate, 0, candidate_count, loadable_needs,
-            BRICK6_STREAM_TRACE_REASON_TARGET_FAILED);
         return 0U;
     }
     if ((candidate->registration_epoch != 0U)
@@ -476,14 +279,8 @@ static uint8_t sample_stream_manager_pick_next(
             candidate->key,
             candidate->page_index,
             SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
-        brick6_stream_underrun_trace_scheduler(
-            candidate, 0, candidate_count, loadable_needs,
-            BRICK6_STREAM_TRACE_REASON_EPOCH_MISMATCH);
         return 0U;
     }
-    brick6_stream_underrun_trace_scheduler(
-        candidate, &decision, candidate_count, loadable_needs,
-        BRICK6_STREAM_TRACE_REASON_NONE);
     *out_candidate = *candidate;
     *out_target = target;
     return 1U;
@@ -493,29 +290,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
 {
     if (byte_budget == 0U)
     {
-        brick6_stream_underrun_trace_manager_end(
-            0U, 0U, BRICK6_STREAM_TRACE_REASON_ZERO_BUDGET);
         return;
     }
 
-#if BRICK6_STREAM_BENCH
-    const uint32_t benchmark_service_begin_cycle = DWT->CYCCNT;
-#endif
     uint32_t pages_this_call = 0U;
-    g_sample_stream_service_fatfs_ops = 0U;
-    uint8_t service_exit_reason = BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
-    sample_stream_manager_trace_voice_states();
-    const uint32_t service_sequence = sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_SERVICE_BEGIN,
-        (sample_audio_key_t){ 0U, 0U },
-        UINT32_MAX,
-        0U,
-        UINT8_MAX,
-        0U,
-        0U,
-        byte_budget,
-        sample_stream_needs_registry_count_active(),
-        0U);
 
     if (g_sample_stream_manager_pending_count != 0U)
     {
@@ -537,17 +315,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
                    0, sizeof(g_sample_stream_manager_pending_io[0]));
             --g_sample_stream_manager_pending_count;
             pages_this_call = (finished != 0U) ? 1U : 0U;
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                (finished != 0U) ? BRICK6_STREAM_TRACE_REASON_NONE
-                                 : BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
             return;
         }
         if (g_sample_stream_manager_pending_count >= 2U)
         {
-            brick6_stream_underrun_trace_manager_end(
-                0U, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_NONE);
             return;
         }
     }
@@ -561,7 +332,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
         sample_stream_scheduler_candidate_t candidate;
         if (sample_stream_manager_pick_next(&target, &candidate) == 0U)
         {
-            service_exit_reason = BRICK6_STREAM_TRACE_REASON_NO_CANDIDATE;
             break;
         }
 
@@ -570,9 +340,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
             (void)sample_page_cache_set_page_state_key(target.key,
                                                    target.page_index,
                                                    SAMPLE_PAGE_FAILED);
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
             return;
         }
 
@@ -586,9 +353,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
             (void)sample_page_cache_set_page_state_key(target.key,
                                                        target.page_index,
                                                        SAMPLE_PAGE_FAILED);
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_EPOCH_MISMATCH);
             return;
         }
 
@@ -602,36 +366,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
         const uint32_t remaining_frames = (remaining_64 > UINT32_MAX)
                                               ? UINT32_MAX
                                               : (uint32_t)remaining_64;
-        const uint32_t selected_sequence = sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_SELECT,
-            target.key,
-            target.page_index,
-            sample_stream_manager_candidate_source(&candidate),
-            candidate.voice_id,
-            candidate.voice_generation,
-            service_sequence,
-            candidate.need_index,
-            remaining_frames,
-            0U);
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-        brick6_stream_calibration_note_select(&candidate);
-#endif
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
         {
             continue;
         }
-        brick6_stream_underrun_trace_load_begin(&candidate, &target, &load_token);
-        const uint32_t io_begin_sequence = sample_stream_event_trace_record(
-            SAMPLE_STREAM_EVENT_LOAD_BEGIN,
-            target.key,
-            target.page_index,
-            sample_stream_manager_candidate_source(&candidate),
-            candidate.voice_id,
-            candidate.voice_generation,
-            selected_sequence,
-            target.frame_count,
-            target.page_generation,
-            0U);
         sample_stream_io_command_t io_command;
         if (sample_stream_io_command_init(&io_command,
                                           &load_token,
@@ -645,18 +383,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
         io_command.deadline_margin_us = (remaining_frames >= 206159U)
             ? UINT32_MAX
             : (uint32_t)(((uint64_t)remaining_frames * 1000000ULL) / 48000ULL);
-        brick6_stream_underrun_trace_io_begin(&candidate, &io_command);
         sample_stream_manager_pending_io_t *pending =
             &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
         memset(pending, 0, sizeof(*pending));
         pending->candidate = candidate;
         pending->target = target;
         pending->command = io_command;
-        pending->io_begin_sequence = io_begin_sequence;
-        pending->io_begin_cycle = DWT->CYCCNT;
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-        sd_diskio_read_metrics_get(&pending->sd_before);
-#endif
         sample_stream_io_result_t io_result;
         memset(&io_result, 0, sizeof(io_result));
         io_result.token = load_token;
@@ -665,9 +397,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 &pending->command, &pending->transport_sequence) == 0U)
         {
             (void)sample_stream_manager_finish_io(pending, &io_result);
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
             return;
         }
         pending->active = 1U;
@@ -677,9 +406,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 g_sample_stream_manager_pending_io[0].transport_sequence,
                 &io_result) == 0U)
         {
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_NONE);
             return;
         }
         sample_stream_manager_pending_io_t completed_pending =
@@ -700,58 +426,17 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
         if (sample_stream_manager_finish_io(pending, &io_result) == 0U)
         {
-            brick6_stream_underrun_trace_manager_end(
-                pages_this_call, g_sample_stream_service_fatfs_ops,
-                BRICK6_STREAM_TRACE_REASON_LOAD_ERROR);
             return;
         }
         ++pages_this_call;
 
         if (consumed >= byte_budget)
         {
-            service_exit_reason = BRICK6_STREAM_TRACE_REASON_SERVICE_BYTE_BUDGET;
             break;
         }
         byte_budget -= consumed;
 
     }
-    brick6_stream_underrun_trace_manager_end(
-        pages_this_call, g_sample_stream_service_fatfs_ops, service_exit_reason);
-    (void)service_exit_reason;
-    (void)sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_SERVICE_END,
-        (sample_audio_key_t){ 0U, 0U },
-        UINT32_MAX,
-        0U,
-        UINT8_MAX,
-        0U,
-        service_sequence,
-        pages_this_call,
-        g_sample_stream_service_fatfs_ops,
-        0U);
-#if BRICK6_STREAM_BENCH
-    sample_stream_benchmark_note_service(
-        pages_this_call, DWT->CYCCNT - benchmark_service_begin_cycle);
-#endif
-}
-
-void sample_stream_manager_note_blocked_poll(uint8_t multi_blocked,
-                                             uint8_t bulk_blocked,
-                                             uint32_t elapsed_frames)
-{
-    const uint32_t blocked = ((multi_blocked != 0U) ? 1U : 0U)
-                             | ((bulk_blocked != 0U) ? 2U : 0U);
-    (void)sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_SERVICE_BLOCKED,
-        (sample_audio_key_t){ 0U, 0U },
-        UINT32_MAX,
-        0U,
-        UINT8_MAX,
-        0U,
-        0U,
-        blocked,
-        elapsed_frames,
-        1U);
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
@@ -767,203 +452,3 @@ uint8_t sample_stream_manager_io_in_flight(void)
 {
     return (g_sample_stream_manager_pending_count != 0U) ? 1U : 0U;
 }
-
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-void sample_stream_manager_get_debug_stats(uint32_t *out_active_needs,
-                                           uint32_t *out_readers_active)
-{
-    if (out_active_needs != 0)
-    {
-        *out_active_needs = sample_stream_needs_registry_count_active();
-    }
-    if (out_readers_active != 0)
-    {
-        *out_readers_active = sample_stream_io_active_reader_count();
-    }
-}
-
-static void sample_multi_stream_diag_fill_pages(
-    volatile sample_multi_stream_diag_page_t *out_pages,
-    sample_audio_key_t key,
-    uint32_t first_page,
-    uint32_t page_count,
-    uint32_t *out_acquired)
-{
-    uint32_t acquired = 0U;
-    for (uint32_t i = 0U; i < SAMPLE_MULTI_STREAM_DIAG_MAX_WINDOW_PAGES; ++i)
-    {
-        memset((void *)&out_pages[i], 0, sizeof(out_pages[i]));
-        out_pages[i].page_index = UINT32_MAX;
-        if (i >= page_count)
-        {
-            continue;
-        }
-
-        sample_page_window_debug_t page;
-        if (sample_page_cache_get_window_page_debug(key,
-                                                    first_page + i,
-                                                    &page) == 0U)
-        {
-            out_pages[i].page_index = first_page + i;
-            continue;
-        }
-        out_pages[i].page_index = page.page_index;
-        out_pages[i].generation = page.generation;
-        out_pages[i].slot_index = page.slot_index;
-        out_pages[i].frame_count = page.frame_count;
-        out_pages[i].use_count = page.use_count;
-        out_pages[i].state = (uint8_t)page.state;
-        if (page.state != SAMPLE_PAGE_FREE)
-        {
-            acquired++;
-        }
-    }
-    if (out_acquired != 0)
-    {
-        *out_acquired = acquired;
-    }
-}
-
-__attribute__((noinline, used, externally_visible))
-void sample_multi_stream_diag_capture_failure(
-    sample_audio_key_t key,
-    uint16_t sample_id,
-    uint8_t voice_index,
-    uint8_t voice_active,
-    uint8_t reader_active,
-    uint8_t source_kind,
-    uint32_t voice_generation,
-    sample_audio_format_t format,
-    uint32_t position_frame,
-    uint32_t current_frame,
-    uint32_t loop_frame,
-    uint32_t failure_result,
-    sample_multi_stream_diag_code_t code)
-{
-    if (g_sample_multi_stream_diag_frozen != 0U)
-    {
-        return;
-    }
-
-    memset((void *)&g_sample_multi_stream_diag, 0, sizeof(g_sample_multi_stream_diag));
-    g_sample_multi_stream_diag.magic = SAMPLE_MULTI_STREAM_DIAG_MAGIC;
-    g_sample_multi_stream_diag.code = (uint32_t)code;
-    g_sample_multi_stream_diag.failure_result = failure_result;
-    g_sample_multi_stream_diag.sample_id = sample_id;
-    g_sample_multi_stream_diag.key_domain = key.domain;
-    g_sample_multi_stream_diag.key_object_id = key.object_id;
-    g_sample_multi_stream_diag.voice_index = voice_index;
-    g_sample_multi_stream_diag.voice_active = voice_active;
-    g_sample_multi_stream_diag.reader_active = reader_active;
-    g_sample_multi_stream_diag.source_kind = source_kind;
-    g_sample_multi_stream_diag.voice_generation = voice_generation;
-    g_sample_multi_stream_diag.format = (uint32_t)sample_audio_format_or_stereo(format);
-    g_sample_multi_stream_diag.position_frame = position_frame;
-    g_sample_multi_stream_diag.current_page = UINT32_MAX;
-    g_sample_multi_stream_diag.loop_page = UINT32_MAX;
-
-    const sample_audio_format_t safe_format = sample_audio_format_or_stereo(format);
-    const uint32_t window_pages = sample_audio_format_window_pages(safe_format);
-    uint32_t acquired = 0U;
-    if (current_frame != UINT32_MAX)
-    {
-        g_sample_multi_stream_diag.current_page =
-            sample_audio_format_page_index_from_frame(safe_format, current_frame);
-        g_sample_multi_stream_diag.current_expected_pages = window_pages;
-        sample_multi_stream_diag_fill_pages(g_sample_multi_stream_diag.current_pages,
-                                             key,
-                                             g_sample_multi_stream_diag.current_page,
-                                             window_pages,
-                                             &acquired);
-        g_sample_multi_stream_diag.current_acquired_pages = acquired;
-    }
-    if (loop_frame != UINT32_MAX)
-    {
-        g_sample_multi_stream_diag.loop_page =
-            sample_audio_format_page_index_from_frame(safe_format, loop_frame);
-        g_sample_multi_stream_diag.loop_expected_pages = window_pages;
-        sample_multi_stream_diag_fill_pages(g_sample_multi_stream_diag.loop_pages,
-                                             key,
-                                             g_sample_multi_stream_diag.loop_page,
-                                             window_pages,
-                                             &acquired);
-        g_sample_multi_stream_diag.loop_acquired_pages = acquired;
-    }
-
-    uint32_t active_needs = 0U;
-    uint32_t readers_active = 0U;
-    sample_stream_manager_get_debug_stats(&active_needs,
-                                           &readers_active);
-    g_sample_multi_stream_diag.readers_active = readers_active;
-    g_sample_multi_stream_diag.active_needs = active_needs;
-    g_sample_multi_stream_diag.pages_free = sample_page_cache_debug_count_free_pages();
-    g_sample_multi_stream_diag.pc = (uint32_t)(uintptr_t)__builtin_return_address(0);
-    uintptr_t link_register = 0U;
-    __asm volatile("mov %0, lr" : "=r"(link_register));
-    g_sample_multi_stream_diag.lr = (uint32_t)link_register;
-    g_sample_multi_stream_diag.frozen = 1U;
-    __DMB();
-    g_sample_multi_stream_diag_frozen = 1U;
-}
-
-__attribute__((noinline, used, externally_visible))
-void sample_multi_stream_diag_capture_fault(const uint32_t *stack_pointer,
-                                            uint32_t exc_return,
-                                            uint32_t fault_type)
-{
-    const uint32_t extended_words = ((exc_return & (1UL << 4U)) == 0U) ? 18U : 0U;
-    const uintptr_t begin = (uintptr_t)stack_pointer;
-    const uintptr_t end = begin + ((uintptr_t)(extended_words + 8U) * sizeof(uint32_t));
-
-    g_sample_multi_stream_diag.fault_type = fault_type;
-    g_sample_multi_stream_diag.exc_return = exc_return;
-    g_sample_multi_stream_diag.cfsr = SCB->CFSR;
-    g_sample_multi_stream_diag.hfsr = SCB->HFSR;
-    g_sample_multi_stream_diag.bfar = SCB->BFAR;
-    g_sample_multi_stream_diag.mmfar = SCB->MMFAR;
-    if ((stack_pointer != 0)
-        && (end >= begin)
-        && (((begin >= 0x20000000UL) && (end <= 0x20020000UL))
-            || ((begin >= 0x24000000UL) && (end <= 0x24080000UL))
-            || ((begin >= 0x30000000UL) && (end <= 0x30048000UL))
-            || ((begin >= 0x38000000UL) && (end <= 0x38010000UL))))
-    {
-        const uint32_t *const frame = stack_pointer + extended_words;
-        g_sample_multi_stream_diag.stacked_r0 = frame[0];
-        g_sample_multi_stream_diag.stacked_r1 = frame[1];
-        g_sample_multi_stream_diag.stacked_r2 = frame[2];
-        g_sample_multi_stream_diag.stacked_r3 = frame[3];
-        g_sample_multi_stream_diag.stacked_r12 = frame[4];
-        g_sample_multi_stream_diag.stacked_lr = frame[5];
-        g_sample_multi_stream_diag.stacked_pc = frame[6];
-        g_sample_multi_stream_diag.stacked_xpsr = frame[7];
-        g_sample_multi_stream_diag.pc = frame[6];
-        g_sample_multi_stream_diag.lr = frame[5];
-    }
-
-    if (g_sample_multi_stream_diag_frozen == 0U)
-    {
-        g_sample_multi_stream_diag.magic = SAMPLE_MULTI_STREAM_DIAG_MAGIC;
-        g_sample_multi_stream_diag.code = (uint32_t)SAMPLE_MULTI_STREAM_DIAG_FAULT;
-        g_sample_multi_stream_diag.failure_result = fault_type;
-        g_sample_multi_stream_diag.frozen = 1U;
-        __DMB();
-        g_sample_multi_stream_diag_frozen = 1U;
-    }
-}
-
-uint8_t sample_multi_stream_diag_breakpoint_pending(void)
-{
-    return ((g_sample_multi_stream_diag_frozen != 0U)
-            && (g_sample_multi_stream_diag_breakpoint_seen == 0U)) ? 1U : 0U;
-}
-
-__attribute__((noinline, used, externally_visible))
-void sample_multi_stream_diag_breakpoint(void)
-{
-    if (g_sample_multi_stream_diag_frozen != 0U)
-    {
-        g_sample_multi_stream_diag_breakpoint_seen = 1U;
-    }
-}
-#endif

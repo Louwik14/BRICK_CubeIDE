@@ -76,16 +76,6 @@ typedef struct
     uint32_t slot_index;
 } sample_page_ref_t;
 
-typedef struct
-{
-    uint32_t page_index;
-    uint32_t generation;
-    uint16_t slot_index;
-    uint16_t frame_count;
-    uint16_t use_count;
-    sample_page_state_t state;
-} sample_page_window_debug_t;
-
 typedef enum
 {
     SAMPLE_PAGE_BLOCK_OK = 0,
@@ -282,13 +272,6 @@ uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
 uint8_t sample_page_cache_set_page_state_key(sample_audio_key_t key,
                                              uint32_t page_index,
                                              sample_page_state_t state);
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-uint8_t sample_page_cache_get_window_page_debug(sample_audio_key_t key,
-                                                uint32_t page_index,
-                                                sample_page_window_debug_t *out_debug);
-uint32_t sample_page_cache_debug_count_free_pages(void);
-#endif
-
 /*
  * Physical reservation API: records explicit cache storage intent only.
  * These calls never create or mutate a logical voice need.

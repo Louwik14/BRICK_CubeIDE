@@ -25,7 +25,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "encoders_hw.h"
-#include "Core/rec_live_debug.h"
 #include "usbh_conf.h"
 #include "usb_role_manager.h"
 /* USER CODE END Includes */
@@ -102,7 +101,7 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
+#if BRICK_TEST_BUILD
 __attribute__((naked)) void HardFault_Handler(void)
 {
   __asm volatile(
@@ -133,7 +132,7 @@ __attribute__((naked)) void HardFault_Handler(void)
 /**
   * @brief This function handles Memory management fault.
   */
-#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
+#if BRICK_TEST_BUILD
 __attribute__((naked)) void MemManage_Handler(void)
 {
   __asm volatile(
@@ -164,7 +163,7 @@ __attribute__((naked)) void MemManage_Handler(void)
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
+#if BRICK_TEST_BUILD
 __attribute__((naked)) void BusFault_Handler(void)
 {
   __asm volatile(
@@ -195,7 +194,7 @@ __attribute__((naked)) void BusFault_Handler(void)
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-#if BRICK_TEST_BUILD || defined(BRICK6_MULTI_STREAM_DIAG)
+#if BRICK_TEST_BUILD
 __attribute__((naked)) void UsageFault_Handler(void)
 {
   __asm volatile(
@@ -495,7 +494,6 @@ void OTG_FS_IRQHandler(void)
 void hardfault_c(uint32_t *sp)
 {
   __disable_irq();
-  rec_live_debug_hardfault(sp);
   __DSB();
   NVIC_SystemReset();
 }

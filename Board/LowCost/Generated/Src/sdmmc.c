@@ -21,7 +21,6 @@
 #include "sdmmc.h"
 
 /* USER CODE BEGIN 0 */
-#include "SD/sd_init_diag.h"
 
 /* USER CODE END 0 */
 
@@ -45,15 +44,10 @@ void MX_SDMMC1_SD_Init(void)
   hsd1.Init.BusWide = SDMMC_BUS_WIDE_4B;
   hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
   hsd1.Init.ClockDiv = 5;
-  sd_init_diag_reset(&hsd1);
-  sd_init_diag_stage(SD_INIT_DIAG_STAGE_HAL_SD_INIT, &hsd1);
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_HAL_SD_INIT, HAL_ERROR, &hsd1);
-    sd_init_diag_stage(SD_INIT_DIAG_STAGE_ERROR_HANDLER, &hsd1);
     Error_Handler();
   }
-  sd_init_diag_hal_result(SD_INIT_DIAG_STAGE_TRANSFER_READY_WAIT, HAL_OK, &hsd1);
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
   /* USER CODE END SDMMC1_Init 2 */

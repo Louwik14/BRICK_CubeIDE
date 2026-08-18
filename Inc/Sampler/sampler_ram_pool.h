@@ -123,11 +123,6 @@ sampler_ram_result_t sampler_ram_pool_load_wav_at(uint16_t ram_slot,
 sampler_ram_result_t sampler_ram_pool_load_wav_auto(const char *path,
                                                     uint16_t *out_ram_slot,
                                                     uint16_t *out_global_slot);
-#if BRICK_TEST_BUILD
-sampler_ram_result_t sampler_ram_pool_create_audio_test_calibration(
-    uint16_t *out_ram_slot,
-    uint16_t *out_global_slot);
-#endif
 void sampler_ram_pool_clear(uint16_t ram_slot);
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);

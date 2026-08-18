@@ -42,23 +42,11 @@ static void multi_voice_dsp_init_filter(multi_voice_dsp_slot_t *slot,
     if (format == MULTI_VOICE_DSP_FORMAT_STEREO)
     {
         fx_biquad_filter_init(&slot->filter.stereo.biquad, sample_rate);
-        fx_dj_eq3_init(&slot->filter.stereo.eq3,
-                       sample_rate,
-                       300.0f,
-                       1000.0f,
-                       0.8f,
-                       4000.0f);
     }
     else
     {
         slot->format = (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO;
         fx_biquad_filter_mono_init(&slot->filter.mono.biquad, sample_rate);
-        fx_dj_eq3_mono_init(&slot->filter.mono.eq3,
-                            sample_rate,
-                            300.0f,
-                            1000.0f,
-                            0.8f,
-                            4000.0f);
     }
 }
 
@@ -73,7 +61,9 @@ static void multi_voice_dsp_reset_slot(multi_voice_dsp_slot_t *slot)
     slot->owner_voice_index = BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID;
     slot->state = (uint8_t)BRICK6_SAMPLER_MULTI_VOICE_FREE;
     slot->format = (uint8_t)MULTI_VOICE_DSP_FORMAT_MONO;
-    slot->filter_type = MIXER_TRACK_FILTER_OFF;
+    slot->morph = 0.0f;
+    slot->morph_target = 0.0f;
+    slot->filter_mode = 0U;
     slot->sample_rate = MULTI_VOICE_DSP_DEFAULT_SAMPLE_RATE;
     slot->cutoff_hz = 16000.0f;
     slot->cutoff_target_hz = 16000.0f;

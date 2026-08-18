@@ -38,7 +38,6 @@
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "fx_comp_lab.h"
-#include "Core/audio_test2.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -572,13 +571,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
-
-    /*
-     * Diagnostic builds only: Audio Test 2 owns the final pre-PCM24 source
-     * and bypasses every production engine/mixer/effect while it is playing.
-     */
-    if(audio_test2_process_irq(tx, frames) != 0U)
-        return;
 
     const float out_gain_start = output_adjust * master_gain_smoothed;
     master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.25f;

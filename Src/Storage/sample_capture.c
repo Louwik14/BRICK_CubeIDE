@@ -1,6 +1,5 @@
 #include "Storage/sample_capture.h"
 
-#include "Core/rec_live_debug.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_pool.h"
@@ -352,29 +351,6 @@ static uint8_t sample_capture_path_is_temp(const char *path)
         return 1U;
     }
     return 0U;
-}
-
-static uint32_t sample_capture_debug_state_word(void)
-{
-    return ((uint32_t)g_sample_capture.state.phase & 0xFFU)
-        | (((uint32_t)g_sample_capture.state.view & 0xFFU) << 8)
-        | (((uint32_t)g_sample_capture.state.recording & 0x01U) << 16)
-        | (((uint32_t)g_sample_capture.state.armed_pending & 0x01U) << 17)
-        | (((uint32_t)g_sample_capture.state.take_valid & 0x01U) << 18);
-}
-
-static void sample_capture_debug_mark(rec_live_debug_code_t code,
-                                      const audio_recorder_status_t *status,
-                                      const char *path,
-                                      uint32_t recorded_frames)
-{
-    rec_live_debug_mark((uint32_t)code,
-                        recorded_frames,
-                        rec_live_debug_path_hash(path),
-                        (status != 0) ? (uint32_t)status->state : 0U,
-                        sample_capture_debug_state_word(),
-                        (status != 0) ? (uint32_t)status->error
-                                      : (uint32_t)g_sample_capture.state.error);
 }
 
 static uint8_t sample_capture_has_route(void)
@@ -2712,7 +2688,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     {
         return;
     }
-    sample_capture_debug_mark(REC_LIVE_DEBUG_TAKE_READY_ENTER, status, path, frames);
     if(frames == 0U)
     {
         sample_capture_set_audio_hook_enabled(0U);
@@ -2736,7 +2711,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_EDIT_ENTER_REQUEST path=%s\r\n", path);
 #endif
-    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_ENTER_REQUEST, status, path, frames);
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = frames;
     g_sample_capture.state.edit_start_frame = 0U;
@@ -2752,7 +2726,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
     sample_capture_detail_reset();
     sample_capture_global_overview_request();
-    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_MODEL_INIT, status, path, frames);
     uint8_t cache_queued = 0U;
     if(sample_capture_path_is_temp(path) == 0U)
     {
@@ -2786,7 +2759,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_EDIT_ENTER_OK\r\n");
 #endif
-    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_ENTER_OK, status, path, frames);
     g_sample_capture.last_take_notified = 1U;
     (void)status;
 }
@@ -2815,10 +2787,6 @@ uint8_t sample_capture_request_stop(void)
     audio_recorder_status_t status;
     if(sample_capture_get_status(&status) != 0U)
     {
-        sample_capture_debug_mark(REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
-                                  &status,
-                                  g_sample_capture.state.temp_path,
-                                  status.frames_received);
     }
     return audio_recorder_request_stop();
 }
@@ -3445,16 +3413,6 @@ void sample_capture_model_note_rec_edit_first_render(void)
     }
     g_sample_capture.rec_edit_first_render_pending = 0U;
 
-    audio_recorder_status_t status;
-    const audio_recorder_status_t *status_ptr = 0;
-    if(sample_capture_get_status(&status) != 0U)
-    {
-        status_ptr = &status;
-    }
-    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_FIRST_RENDER,
-                              status_ptr,
-                              g_sample_capture.state.temp_path,
-                              g_sample_capture.state.recorded_frames);
 }
 
 void sample_capture_model_request_line_waveform(uint32_t start_frame,

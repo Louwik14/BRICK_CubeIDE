@@ -65,6 +65,8 @@ uint8_t ui_param_get_slot_value_flash(uint8_t slot,
                                       uint8_t track,
                                       float *out_value,
                                       ui_param_value_flash_kind_t *out_kind);
+void ui_param_note_user_tweak(uint8_t slot, param_id_t param);
+uint8_t ui_param_is_user_tweak_active(uint8_t slot, param_id_t param);
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param);
 uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *ctx,
                                              uint8_t encoder,

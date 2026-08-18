@@ -10,7 +10,6 @@
 
 #include "Core/brick6_stack_waveform.h"
 #include "Audio/deluge_oscillator.h"
-#include "Audio/audio_track_diag.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -978,26 +977,10 @@ static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
     }
 
     const uint16_t output_gain_q15 = brick6_stack_runtime_energy_gain_q15(level_energy_q30);
-    const uint8_t diag_stack = audio_track_diag_is_selected_logical_track(instance_id);
-    if (diag_stack != 0U)
+    for (uint8_t i = 0U; i < frames; ++i)
     {
-        uint32_t soft_clip_activations = 0U;
-        for (uint8_t i = 0U; i < frames; ++i)
-        {
-            const int32_t post_gain = (acc[i] * (int32_t)output_gain_q15) >> 15;
-            uint8_t activated = 0U;
-            instance->pending_mono[i] = brick6_stack_soft_clip_q15(post_gain, &activated);
-            soft_clip_activations += activated;
-        }
-        audio_track_diag_report_stack_soft_clips(instance_id, soft_clip_activations);
-    }
-    else
-    {
-        for (uint8_t i = 0U; i < frames; ++i)
-        {
-            const int32_t post_gain = (acc[i] * (int32_t)output_gain_q15) >> 15;
-            instance->pending_mono[i] = brick6_stack_soft_clip_q15(post_gain, NULL);
-        }
+        const int32_t post_gain = (acc[i] * (int32_t)output_gain_q15) >> 15;
+        instance->pending_mono[i] = brick6_stack_soft_clip_q15(post_gain, NULL);
     }
     instance->pending_offset = 0U;
     instance->pending_count = frames;

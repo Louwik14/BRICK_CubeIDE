@@ -18,19 +18,11 @@ typedef enum
     SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED
 } sample_audio_format_t;
 
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-#ifndef BRICK6_STREAM_CALIBRATION_PAGE_KIB
-#define BRICK6_STREAM_CALIBRATION_PAGE_KIB (32U)
-#endif
-#define SAMPLE_AUDIO_FORMAT_PAGE_BYTES \
-    (BRICK6_STREAM_CALIBRATION_PAGE_KIB * 1024U)
-#else
 #ifndef BRICK6_STREAM_PRODUCT_PAGE_KIB
 #define BRICK6_STREAM_PRODUCT_PAGE_KIB (32U)
 #endif
 #define SAMPLE_AUDIO_FORMAT_PAGE_BYTES \
     (BRICK6_STREAM_PRODUCT_PAGE_KIB * 1024U)
-#endif
 #define SAMPLE_AUDIO_FORMAT_FLOAT_BYTES             (4U)
 #define SAMPLE_AUDIO_FORMAT_MONO_STRIDE_FLOATS      (1U)
 #define SAMPLE_AUDIO_FORMAT_STEREO_STRIDE_FLOATS   (2U)
@@ -48,10 +40,6 @@ typedef enum
 #define SAMPLE_AUDIO_FORMAT_MONO_WINDOW_PAGES       SAMPLE_AUDIO_FORMAT_MONO_PRESOCLE_PAGES
 #define SAMPLE_AUDIO_FORMAT_STEREO_WINDOW_PAGES     SAMPLE_AUDIO_FORMAT_STEREO_PRESOCLE_PAGES
 #define SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES   SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES
-
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-uint32_t sample_audio_format_calibration_presocle_pages(void);
-#endif
 
 #ifndef BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES
 #define BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES (2U)
@@ -143,10 +131,6 @@ static inline uint32_t sample_audio_format_presocle_pages(sample_audio_format_t 
 
 static inline uint32_t sample_audio_format_multi_presocle_pages(sample_audio_format_t format)
 {
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    (void)format;
-    return sample_audio_format_calibration_presocle_pages();
-#else
 #if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
                ? (2U * BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES)
@@ -155,7 +139,6 @@ static inline uint32_t sample_audio_format_multi_presocle_pages(sample_audio_for
     return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
                ? BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES
                : sample_audio_format_presocle_pages(format);
-#endif
 #endif
 }
 

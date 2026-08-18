@@ -1,7 +1,6 @@
 #include "Param/param_registry_catalog.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_stack_runtime.h"
-#include "Audio/vca_env.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_apply_bindings.h"
 #include "Mod/mod_lfo_v1.h"
@@ -10,6 +9,10 @@
 #include "Seq/seq_division_catalog.h"
 #include "ui_core.h"
 #include <stddef.h>
+static const char *const g_modfx_model_labels[] = {
+    "Off", "Q.M", "F.M", "Q.S", "F.S",
+    "Daisy", "Dimension", "Teensy", "Junologue", NULL
+};
 #define PARAM_DESC_EX(_id, _name, _type, _min, _max, _step, _default, _display, _unit, _labels, _apply) \
     [(_id)] = {                                                                  \
         .id = (_id),                                                             \
@@ -45,7 +48,6 @@ static const char *const g_comp_model_labels[] = {"OFF", "DELUGE", "BRICK", NULL
 static const char *const g_comp_detect_labels[] = {"PEAK", "RMS", NULL};
 static const char *const g_stack_reset_labels[] = {"FREE", "RESET", NULL};
 static const char *const g_wave_pos_update_labels[] = {"FULL", "8", "16", "32", NULL};
-static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1D", "1 bar", NULL};
 static const char *const g_delay_type_labels[] = {"CLASSIC", "DUAL", NULL};
 static const char *const g_delay_mode_labels[] = {"Normal", "PingPong", "Tap", "ClassicPP", NULL};
@@ -78,7 +80,9 @@ static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", 
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
 static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
-static const char *const g_vca_env_type_labels[] = {"DAISY", "LINEAR", NULL};
+/* ID 4 is intentionally a retired hole: persisted COMP values resolve OFF. */
+static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", NULL};
+static const char *const g_filter_mode_labels[] = {"OFF", "LOW", "HIGH", NULL};
 static const char *const g_fm_operator_mode_labels[] = {"RATIO", "FIXED", NULL};
 static const char *const g_fm_algorithm_labels[] = {
     "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
@@ -99,20 +103,20 @@ static const char *const g_mod_matrix_source_labels[] = {"Off", "LFO 1", "LFO 2"
     PARAM_DESC_EX((_phase), "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, (_apply_phase))
 
 const param_desc_t param_registry[PARAM_COUNT] = {
-    PARAM_DESC_EX(PARAM_RESERVED_000, "Reserved 000", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_001, "Reserved 001", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_002, "Reserved 002", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_003, "Reserved 003", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_004, "Reserved 004", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_005, "Reserved 005", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DELUGE_MONO_AB, "ModFX DM AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8197.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DELUGE_MONO_CD, "ModFX DM CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8217.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DELUGE_STEREO_AB, "ModFX DS AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8197.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DELUGE_STEREO_CD, "ModFX DS CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8217.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DAISY_AB, "ModFX DA AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 15805.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DAISY_CD, "ModFX DA CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 12185.0f, "", NULL),
 
-    PARAM_DESC_EX(PARAM_RESERVED_006, "Reserved 006", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_007, "Reserved 007", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_008, "Reserved 008", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_009, "Reserved 009", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DIMENSION_AB, "ModFX DI AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8197.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_DIMENSION_CD, "ModFX DI CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8217.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_TEENSY_AB, "ModFX TE AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 2304.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_TEENSY_CD, "ModFX TE CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 0.0f, "", NULL),
 
-    PARAM_DESC_EX(PARAM_RESERVED_010, "Reserved 010", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_RESERVED_011, "Reserved 011", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_JUNOLOGUE_AB, "ModFX JU AB", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 0.0f, "", NULL),
+    PARAM_DESC(PARAM_MODFX_BANK_JUNOLOGUE_CD, "ModFX JU CD", PARAM_TYPE_INT, 0.0f, 16383.0f, 1.0f, 8192.0f, "", NULL),
     PARAM_DESC_EX(PARAM_RESERVED_012, "Reserved 012", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_RESERVED_013, "Reserved 013", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
@@ -150,6 +154,12 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC(PARAM_MIX_PAN, "Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_SEND1, "Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_SEND2, "Send2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
+    PARAM_DESC(PARAM_MIX_SEND3, "Send3", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
+    PARAM_DESC_EX(PARAM_MODFX_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_modfx_model_labels, apply_modfx_model),
+    PARAM_DESC(PARAM_MODFX_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_modfx_rate),
+    PARAM_DESC(PARAM_MODFX_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_modfx_depth),
+    PARAM_DESC(PARAM_MODFX_FEEDBACK, "Feedback", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_modfx_feedback),
+    PARAM_DESC(PARAM_MODFX_OFFSET, "Offset", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_modfx_offset),
 
     PARAM_DESC_EX(PARAM_BUS_COMP_THRESHOLD_DB, "THRESH", PARAM_TYPE_FLOAT, -48.0f, 0.0f, 0.5f, -18.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_bus_comp_threshold),
     PARAM_DESC_EX(PARAM_BUS_COMP_RATIO, "RATIO", PARAM_TYPE_FLOAT, 1.0f, 20.0f, 0.1f, 2.0f, PARAM_DISPLAY_RATIO, "", NULL, apply_bus_comp_ratio),
@@ -169,7 +179,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAT_DRIVE, "Sat Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_drive),
     PARAM_DESC_EX(PARAM_SAT_MIX, "Sat Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_mix),
 
-    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
+    PARAM_DESC_EX(PARAM_FILTER_MORPH, "MORPH", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_filter_morph),
     PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
     PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
     PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
@@ -180,9 +190,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_KEYTRK, "KeyTrk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_keytrack),
     PARAM_DESC_EX(PARAM_FILTER_ENVRST, "EnvRst", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_filter_env_reset),
     PARAM_DESC_EX(PARAM_FILTER_ENVDLY, "EnvDly", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_env_delay),
-    PARAM_DESC_EX(PARAM_FILTER_EQ_LOW, "Low", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_low),
-    PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
-    PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
+    PARAM_DESC_EX(PARAM_RESERVED_FILTER_SLOT_1, "Reserved", PARAM_TYPE_INT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_RESERVED_FILTER_SLOT_2, "Reserved", PARAM_TYPE_INT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_RESERVED_FILTER_SLOT_3, "Reserved", PARAM_TYPE_INT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FILTER_DRIVE, "Drive", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_drive),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_BITS, "Bits", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_bits),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_rate),
@@ -322,7 +332,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_GRAIN, "Grain", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_grain_labels, apply_sampler_clip_grain),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_HOP, "Hop", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 3.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_hop_labels, apply_sampler_clip_hop),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
-    PARAM_DESC_EX(PARAM_VCA_ENV_TYPE, "TYPE", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, (float)VCA_ENV_TYPE_DAISY, PARAM_DISPLAY_ENUM, "", g_vca_env_type_labels, NULL),
+    PARAM_DESC_EX(PARAM_FILTER_MODE, "F MODE", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_mode_labels, NULL),
     PARAM_DESC_EX(PARAM_FM_RATIO, "RATIO", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_ALGORITHM, "ALGO", PARAM_TYPE_ENUM, 0.0f, 31.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_fm_algorithm_labels, NULL),
     PARAM_DESC_EX(PARAM_FM_FEEDBACK, "FDBK", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
@@ -427,9 +437,6 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_MIDI_FX_SLOT(PARAM_MIDI_FX_S2_PARAM1, PARAM_MIDI_FX_S2_PARAM2, PARAM_MIDI_FX_S2_PARAM3, PARAM_MIDI_FX_S2_MODEL),
     PARAM_DESC_MIDI_FX_SLOT(PARAM_MIDI_FX_S3_PARAM1, PARAM_MIDI_FX_S3_PARAM2, PARAM_MIDI_FX_S3_PARAM3, PARAM_MIDI_FX_S3_MODEL),
 #undef PARAM_DESC_MIDI_FX_SLOT
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    PARAM_DESC_EX(PARAM_STREAM_CAL_CASE, "STREAM CAL", PARAM_TYPE_INT, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_stream_cal_case),
-#endif
     PARAM_DESC_EX(PARAM_FM_PLAY_VEL, "VEL", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PLAY_KEY, "KEY", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PLAY_PITCH_ENV, "P ENV", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
@@ -490,8 +497,13 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FM_PITCH_R2, "R2", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PITCH_R3, "R3", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_FM_PITCH_R4, "R4", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_PITCH_L1, "L1", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 49.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_PITCH_L2, "L2", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 49.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_PITCH_L3, "L3", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 49.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_FM_PITCH_L4, "L4", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 49.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_PITCH_L1, "L1", PARAM_TYPE_BIPOLAR, -49.0f, 50.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_PITCH_L2, "L2", PARAM_TYPE_BIPOLAR, -49.0f, 50.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_PITCH_L3, "L3", PARAM_TYPE_BIPOLAR, -49.0f, 50.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_FM_PITCH_L4, "L4", PARAM_TYPE_BIPOLAR, -49.0f, 50.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_AUDIO_FX_P1, "P1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_AUDIO_FX_P2, "P2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    /* Shared BRICK control: model-specific interpretation stays downstream. */
+    PARAM_DESC_EX(PARAM_AUDIO_FX_P3, "P3", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_AUDIO_FX_MODEL, "MODEL", PARAM_TYPE_ENUM, 0.0f, 11.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_audio_fx_model_labels, NULL),
 };

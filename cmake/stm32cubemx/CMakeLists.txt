@@ -5,8 +5,7 @@ enable_language(C ASM)
 set(MX_Defines_Syms 
 	USE_PWR_LDO_SUPPLY 
 	USE_HAL_DRIVER 
-	STM32H743xx
-    $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:DEBUG>
+    STM32H743xx
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")

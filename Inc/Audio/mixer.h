@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include "audio_float.h"
 #include "Seq/seq_types.h"
-#include "fx_dj_eq3_cmsis.h"
 
 /**
  * @file mixer.h
@@ -29,7 +28,8 @@
 /* 16 source lanes plus one post-sum GROUP bus. */
 #define MIXER_MAX_TRACKS (SEQ_LANE_CAPACITY + 1U)
 #define MIXER_GROUP_BUS_TRACK SEQ_LANE_CAPACITY
-#define MIXER_NUM_SENDS 2U
+#define MIXER_NUM_SENDS 3U
+#define MIXER_MODFX_SEND_INDEX 2U
 #define MIXER_INSERTS_PER_TRACK 2U
 /* Nominal per-track trim for dry bus summing headroom. */
 #define MIXER_TRACK_NOMINAL_TRIM 0.125f
@@ -44,15 +44,6 @@ typedef struct
     float delay_volume;
     float delay_reverb_send;
 } mixer_global_diag_state_t;
-
-typedef enum
-{
-    MIXER_TRACK_FILTER_OFF = 0,
-    MIXER_TRACK_FILTER_EQ3,
-    MIXER_TRACK_FILTER_LP_BI,
-    MIXER_TRACK_FILTER_HP_BI,
-    MIXER_TRACK_FILTER_BP_BI
-} mixer_track_filter_type_t;
 
 struct multi_voice_dsp_slot_t;
 
@@ -99,7 +90,8 @@ void mixer_set_delay_mod_depth(float depth);
 void mixer_set_delay_mod_rate(float rate_hz);
 void mixer_set_delay_reverb_send(float reverb_send);
 void mixer_set_delay_volume(float volume);
-void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type);
+void mixer_set_track_filter_morph(uint32_t track_id, float morph);
+void mixer_set_track_filter_mode(uint32_t track_id, uint8_t mode);
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz);
 void mixer_set_track_filter_cutoff_modulated(uint32_t track_id, float cutoff_hz);
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance);
@@ -112,14 +104,10 @@ void mixer_set_track_filter_keytrack(uint32_t track_id, float amount);
 void mixer_set_track_filter_env_reset(uint32_t track_id, uint8_t enabled);
 void mixer_set_track_filter_env_delay(uint32_t track_id, float delay_s);
 void mixer_set_track_filter_retrigger_hard(uint32_t track_id, uint8_t hard);
-void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db);
-void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db);
-void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db);
 void mixer_set_track_vca_attack(uint32_t track_id, float attack_s);
 void mixer_set_track_vca_decay(uint32_t track_id, float decay_s);
 void mixer_set_track_vca_sustain(uint32_t track_id, float sustain);
 void mixer_set_track_vca_release(uint32_t track_id, float release_s);
-void mixer_set_track_vca_env_type(uint32_t track_id, uint8_t type);
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled);
 void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard);
 /*

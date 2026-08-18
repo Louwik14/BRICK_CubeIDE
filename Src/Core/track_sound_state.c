@@ -25,8 +25,9 @@ void track_sound_state_make_default(track_sound_state_t *state)
     state->mix_pan = param_registry[PARAM_MIX_PAN].default_value;
     state->mix_send1 = param_registry[PARAM_MIX_SEND1].default_value;
     state->mix_send2 = param_registry[PARAM_MIX_SEND2].default_value;
+    state->mix_send3 = param_registry[PARAM_MIX_SEND3].default_value;
     state->mix_mute = param_registry[PARAM_MIX_MUTE].default_value;
-    state->type = param_registry[PARAM_FILTER_TYPE].default_value;
+    state->morph = param_registry[PARAM_FILTER_MORPH].default_value;
     state->cutoff = param_registry[PARAM_FILTER_CUTOFF].default_value;
     state->resonance = param_registry[PARAM_FILTER_RESONANCE].default_value;
     state->eg_amount = param_registry[PARAM_FILTER_EG_AMT].default_value;
@@ -37,14 +38,11 @@ void track_sound_state_make_default(track_sound_state_t *state)
     state->keytrack = param_registry[PARAM_FILTER_KEYTRK].default_value;
     state->env_reset = param_registry[PARAM_FILTER_ENVRST].default_value;
     state->env_delay = param_registry[PARAM_FILTER_ENVDLY].default_value;
-    state->eq_low = param_registry[PARAM_FILTER_EQ_LOW].default_value;
-    state->eq_mid = param_registry[PARAM_FILTER_EQ_MID].default_value;
-    state->eq_high = param_registry[PARAM_FILTER_EQ_HIGH].default_value;
     state->vca_attack = param_registry[PARAM_VCA_ATTACK].default_value;
     state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
     state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;
     state->vca_release = param_registry[PARAM_VCA_RELEASE].default_value;
-    state->vca_env_type = param_registry[PARAM_VCA_ENV_TYPE].default_value;
+    state->filter_mode = param_registry[PARAM_FILTER_MODE].default_value;
     state->env_retrig_filter = param_registry[PARAM_ENV_RETRIG_FILTER].default_value;
     state->env_retrig_vca = param_registry[PARAM_ENV_RETRIG_VCA].default_value;
     state->env_retrig_mod = param_registry[PARAM_ENV_RETRIG_MOD].default_value;
@@ -68,6 +66,10 @@ void track_sound_state_make_default(track_sound_state_t *state)
     state->mod_env3.sustain = 127.0f;
     state->mod_env3.release = 32.0f;
     mod_matrix_set_defaults(state->mod_matrix, &state->mod_matrix_selected_slot);
+    state->audio_fx_model = (uint8_t)param_registry[PARAM_AUDIO_FX_MODEL].default_value;
+    state->audio_fx_p1 = param_registry[PARAM_AUDIO_FX_P1].default_value;
+    state->audio_fx_p2 = param_registry[PARAM_AUDIO_FX_P2].default_value;
+    state->audio_fx_p3 = param_registry[PARAM_AUDIO_FX_P3].default_value;
 }
 
 void track_sound_state_init(void)

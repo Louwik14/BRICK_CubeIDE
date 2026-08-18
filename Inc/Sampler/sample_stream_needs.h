@@ -53,9 +53,6 @@ uint8_t sample_stream_needs_registry_contains_any(sample_audio_key_t key,
 uint8_t sample_stream_needs_registry_contains_key(sample_audio_key_t key);
 uint8_t sample_stream_needs_registry_has_active(void);
 uint32_t sample_stream_needs_registry_count_active(void);
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-void sample_stream_needs_calibration_set_depth(uint8_t pages);
-#endif
 
 #ifdef __cplusplus
 }

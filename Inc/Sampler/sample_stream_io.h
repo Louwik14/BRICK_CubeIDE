@@ -4,10 +4,6 @@
 
 #include "Sampler/sample_page_cache.h"
 
-#ifndef BRICK6_STREAM_BENCH
-#define BRICK6_STREAM_BENCH (0)
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif

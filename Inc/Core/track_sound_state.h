@@ -44,8 +44,9 @@ typedef struct
     float mix_pan;
     float mix_send1;
     float mix_send2;
+    float mix_send3;
     float mix_mute;
-    float type;
+    float morph;
     float cutoff;
     float resonance;
     float eg_amount;
@@ -56,14 +57,11 @@ typedef struct
     float keytrack;
     float env_reset;
     float env_delay;
-    float eq_low;
-    float eq_mid;
-    float eq_high;
     float vca_attack;
     float vca_decay;
     float vca_sustain;
     float vca_release;
-    float vca_env_type;
+    float filter_mode;
     float env_retrig_filter;
     float env_retrig_vca;
     float env_retrig_mod;
@@ -73,6 +71,10 @@ typedef struct
     track_mod_env3_state_t mod_env3;
     track_mod_matrix_slot_t mod_matrix[MOD_MATRIX_SLOT_COUNT];
     uint8_t mod_matrix_selected_slot;
+    uint8_t audio_fx_model;
+    float audio_fx_p1;
+    float audio_fx_p2;
+    float audio_fx_p3;
 } track_sound_state_t;
 
 void track_sound_state_init(void);

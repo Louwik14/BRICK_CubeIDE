@@ -81,6 +81,25 @@ static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_
     *out_param = param;
     return 1U;
 }
+
+static uint8_t ui_core_clipboard_param_phase(param_id_t id)
+{
+    for (uint8_t order = 0U; order < 4U; ++order)
+    {
+        if (param_registry_get_audio_fx_param(order) == id)
+        {
+            return order;
+        }
+    }
+
+    uint8_t note_fx_param = 0U;
+    if ((ui_core_clipboard_note_fx_param_kind(id, &note_fx_param) != 0U)
+            && (note_fx_param == 3U))
+    {
+        return 5U;
+    }
+    return 4U;
+}
 static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, const char *message)
 {
     if (feedback != 0)
@@ -412,16 +431,12 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
     };
     uint8_t direct_applied = 0U;
     param_registry_batch_begin();
-    for (uint8_t pass = 0U; pass < 2U; ++pass)
+    for (uint8_t pass = 0U; pass < 6U; ++pass)
     {
         for (uint8_t i = 0U; i < count; ++i)
         {
             const param_id_t id = params[i];
-            uint8_t note_fx_param = 0U;
-            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(id, &note_fx_param);
-            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
-            if (((pass == 0U) && (is_note_fx_model == 0U))
-                    || ((pass == 1U) && (is_note_fx_model != 0U)))
+            if (ui_core_clipboard_param_phase(id) != pass)
             {
                 continue;
             }
@@ -637,16 +652,12 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     /* MODEL is applied before the three model-dependent values so the target
      * slot is normalized once, then receives the copied values. */
-    for (uint8_t pass = 0U; pass < 2U; ++pass)
+    for (uint8_t pass = 0U; pass < 6U; ++pass)
     {
         for (uint8_t i = 0U; i < target_count; ++i)
         {
             const param_id_t target = target_params[i];
-            uint8_t note_fx_param = 0U;
-            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(target, &note_fx_param);
-            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
-            if (((pass == 0U) && (is_note_fx_model == 0U))
-                    || ((pass == 1U) && (is_note_fx_model != 0U)))
+            if (ui_core_clipboard_param_phase(target) != pass)
             {
                 continue;
             }
@@ -690,7 +701,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     /* Structural/non-audio values keep their existing transition contract and
      * are deliberately applied outside the continuous audio transaction. */
     param_registry_batch_begin();
-    for (uint8_t pass = 0U; pass < 2U; ++pass)
+    for (uint8_t pass = 0U; pass < 6U; ++pass)
     {
         for (uint8_t i = 0U; i < target_count; ++i)
         {
@@ -708,11 +719,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
             }
             if ((found == 0U) || (live_parameter_is_audio_owned(target) != 0U))
                 continue;
-            uint8_t note_fx_param = 0U;
-            const uint8_t is_note_fx = ui_core_clipboard_note_fx_param_kind(target, &note_fx_param);
-            const uint8_t is_note_fx_model = (uint8_t)(is_note_fx != 0U && note_fx_param == 3U);
-            if (((pass == 0U) && (is_note_fx_model == 0U))
-                    || ((pass == 1U) && (is_note_fx_model != 0U)))
+            if (ui_core_clipboard_param_phase(target) != pass)
                 continue;
             const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
             if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
@@ -922,7 +929,7 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
     button_id_t held_button = BTN_COUNT;
     if (ui_core_clipboard_midi_fx_shortcut_is_held() != 0U)
     {
-        family_id = UI_TEMPLATE_FAMILY_MIDI_FX;
+        family_id = UI_TEMPLATE_FAMILY_FX;
     }
     else if ((ui_core_clipboard_get_held_param_button(&held_button) == 0U)
             || (ui_core_clipboard_resolve_template_family_from_button(held_button, &family_id) == 0U))

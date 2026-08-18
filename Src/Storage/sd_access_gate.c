@@ -18,9 +18,6 @@ static uint8_t g_sd_fs_mounted;
 static volatile uint32_t g_sd_media_epoch;
 static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
-#if BRICK_TEST_BUILD
-static volatile uint8_t g_sd_access_diagnostic_read_only;
-#endif
 
 void sd_access_gate_init(void)
 {
@@ -45,9 +42,6 @@ void sd_access_gate_init(void)
         g_sd_media_epoch = 1U;
     }
     g_sd_access_owner_acquire_cycle = 0U;
-#if BRICK_TEST_BUILD
-    g_sd_access_diagnostic_read_only = 0U;
-#endif
 }
 
 uint8_t sd_access_fs_mount_if_needed(void)
@@ -57,9 +51,7 @@ uint8_t sd_access_fs_mount_if_needed(void)
         return 1U;
     }
 
-    sd_access_trace_begin("shared_f_mount");
     const FRESULT fr = f_mount(&g_sd_fs, "0:", 1U);
-    sd_access_trace_end("shared_f_mount", (int)fr, 0U);
     if (fr != FR_OK)
     {
         return 0U;
@@ -121,25 +113,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
 
     __disable_irq();
-#if BRICK_TEST_BUILD
-    if (g_sd_access_diagnostic_read_only != 0U)
-    {
-        const uint8_t allowed =
-            ((client == SD_ACCESS_CLIENT_SAMPLE_BOOT)
-             || (client == SD_ACCESS_CLIENT_SAMPLE_CACHE)
-             || (client == SD_ACCESS_CLIENT_PREVIEW)
-             || (client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-             || (client == SD_ACCESS_CLIENT_DIAGNOSTIC_LOG))
-                ? 1U
-                : 0U;
-        if (allowed == 0U)
-        {
-            g_sd_access_acquire_fail_count[(uint8_t)client]++;
-            __enable_irq();
-            return 0U;
-        }
-    }
-#endif
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
@@ -203,23 +176,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     return 1U;
 }
 
-#if BRICK_TEST_BUILD
-void sd_access_gate_set_diagnostic_read_only(uint8_t active)
-{
-    __disable_irq();
-    g_sd_access_diagnostic_read_only = (active != 0U) ? 1U : 0U;
-    __enable_irq();
-}
-
-uint8_t sd_access_gate_diagnostic_read_only_active(void)
-{
-    uint8_t active;
-    __disable_irq();
-    active = g_sd_access_diagnostic_read_only;
-    __enable_irq();
-    return active;
-}
-#endif
 
 void sd_access_gate_release(sd_access_client_t client)
 {
@@ -350,12 +306,6 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "PATCH";
         case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
             return "SREC";
-#if BRICK_TEST_BUILD
-        case SD_ACCESS_CLIENT_AUDIO_TEST:
-            return "ATEST";
-        case SD_ACCESS_CLIENT_DIAGNOSTIC_LOG:
-            return "DLOG";
-#endif
         default:
             return "NONE";
     }
@@ -376,22 +326,4 @@ const char *sd_access_gate_busy_label(void)
 
     /* last_owner is diagnostic history, never evidence of current activity. */
     return sd_access_gate_client_label(SD_ACCESS_CLIENT_NONE);
-}
-
-void sd_access_trace_begin(const char *op)
-{
-    (void)op;
-}
-
-void sd_access_trace_end(const char *op, int result, uint32_t elapsed_ms)
-{
-    (void)op;
-    (void)result;
-    (void)elapsed_ms;
-}
-
-void sd_access_trace_timeout(const char *stage, uint32_t elapsed_ms)
-{
-    (void)stage;
-    (void)elapsed_ms;
 }

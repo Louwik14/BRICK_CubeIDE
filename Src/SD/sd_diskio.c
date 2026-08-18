@@ -272,12 +272,10 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
-  uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret = MSD_ERROR;
   #endif
 
-  sd_access_trace_begin("diskio_read");
 
   /*
   * ensure the SDCard is ready for a new operation
@@ -285,8 +283,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
-    sd_access_trace_timeout("diskio_read_wait_card_ready_before_dma", HAL_GetTick() - op_start);
-    sd_access_trace_end("diskio_read", (int)res, HAL_GetTick() - op_start);
     return res;
   }
 
@@ -321,7 +317,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
       if (ReadStatus == 0)
       {
         res = RES_ERROR;
-        sd_access_trace_timeout("diskio_read_wait_dma_callback", HAL_GetTick() - timeout);
       }
       else
       {
@@ -341,7 +336,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
         }
         if (res != RES_OK)
         {
-          sd_access_trace_timeout("diskio_read_wait_card_state_after_dma", HAL_GetTick() - timeout);
         }
       }
     }
@@ -385,7 +379,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           if (ReadStatus == 0)
           {
             res = RES_ERROR;
-            sd_access_trace_timeout("diskio_read_wait_dma_callback_scratch", HAL_GetTick() - timeout);
             break;
           }
           ReadStatus = 0;
@@ -411,7 +404,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           if ((HAL_GetTick() - timeout) >= SD_TIMEOUT)
           {
             res = RES_ERROR;
-            sd_access_trace_timeout("diskio_read_wait_card_state_after_dma_scratch", HAL_GetTick() - timeout);
             break;
           }
         }
@@ -426,7 +418,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     }
 #endif
 
-  sd_access_trace_end("diskio_read", (int)res, HAL_GetTick() - op_start);
   return res;
 }
 
@@ -463,7 +454,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
-  uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret = MSD_ERROR;
     int i;
@@ -471,12 +461,9 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
    WriteStatus = 0;
 
-  sd_access_trace_begin("diskio_write");
 
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
-    sd_access_trace_timeout("diskio_write_wait_card_ready_before_dma", HAL_GetTick() - op_start);
-    sd_access_trace_end("diskio_write", (int)res, HAL_GetTick() - op_start);
     return res;
   }
 
@@ -507,7 +494,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
       if (WriteStatus == 0)
       {
         res = RES_ERROR;
-        sd_access_trace_timeout("diskio_write_wait_dma_callback", HAL_GetTick() - timeout);
       }
       else
       {
@@ -524,7 +510,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         }
         if (res != RES_OK)
         {
-          sd_access_trace_timeout("diskio_write_wait_card_state_after_dma", HAL_GetTick() - timeout);
         }
       }
     }
@@ -556,7 +541,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
           }
           if (WriteStatus == 0)
           {
-            sd_access_trace_timeout("diskio_write_wait_dma_callback_scratch", HAL_GetTick() - timeout);
             break;
           }
 
@@ -571,7 +555,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
           }
           if ((HAL_GetTick() - timeout) >= SD_TIMEOUT)
           {
-            sd_access_trace_timeout("diskio_write_wait_card_state_after_dma_scratch", HAL_GetTick() - timeout);
             break;
           }
 
@@ -585,7 +568,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         res = RES_OK;
     }
 #endif
-  sd_access_trace_end("diskio_write", (int)res, HAL_GetTick() - op_start);
   return res;
 }
 #endif /* _USE_WRITE == 1 */

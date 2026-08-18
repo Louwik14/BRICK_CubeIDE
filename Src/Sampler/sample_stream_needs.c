@@ -4,9 +4,6 @@
 
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/sample_stream_sequence.h"
-#include "Sampler/sample_stream_trace.h"
-#include "Sampler/sample_stream_underrun_trace.h"
-
 #define SAMPLE_STREAM_NEEDS_CLASSIC_CAPACITY SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
 #define SAMPLE_STREAM_NEEDS_MULTI_CAPACITY   SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY
 #define SAMPLE_STREAM_NEEDS_CAPACITY \
@@ -19,10 +16,6 @@ typedef struct
 } sample_stream_needs_slot_t;
 
 static sample_stream_needs_slot_t g_sample_stream_needs_slots[SAMPLE_STREAM_NEEDS_CAPACITY];
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-static uint8_t g_sample_stream_needs_calibration_depth =
-    SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
-#endif
 
 static uint8_t sample_stream_needs_slot_index(sample_stream_snapshot_source_t source,
                                               uint8_t voice_id,
@@ -197,12 +190,8 @@ uint8_t sample_stream_needs_build(
     uint32_t pages[SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE] = { 0U };
     uint8_t page_count = 0U;
     const uint8_t mobile_capacity =
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-        g_sample_stream_needs_calibration_depth;
-#else
         (uint8_t)sample_audio_format_multi_mobile_pages(
             sample_audio_format_or_stereo(snapshot->format));
-#endif
     if (sample_stream_sequence_build(&sequence_input,
                                     pages,
                                     mobile_capacity,
@@ -300,7 +289,6 @@ uint8_t sample_stream_needs_registry_update(
     }
     entry.voice_index = voice_id;
     sample_stream_needs_slot_t *const slot = &g_sample_stream_needs_slots[index];
-    const sample_stream_target_voice_registry_entry_t previous = slot->value;
     uint32_t sequence = slot->sequence;
     if ((sequence & 1U) != 0U)
     {
@@ -309,40 +297,6 @@ uint8_t sample_stream_needs_registry_update(
     slot->sequence = sequence + 1U;
     slot->value = entry;
     slot->sequence = sequence + 2U;
-    for (uint8_t need_index = 0U; need_index < entry.need_count; ++need_index)
-    {
-        const sample_stream_target_voice_need_t *const need = &entry.needs[need_index];
-        const uint8_t was_present =
-            ((previous.active != 0U) && (previous.generation == entry.generation))
-                ? sample_stream_needs_contains(&previous,
-                                               &need->key,
-                                               need->page_index,
-                                               need->registration_epoch)
-                : 0U;
-        if (was_present == 0U)
-        {
-            const uint64_t now = now_audio_frame;
-            const uint32_t frames_ahead =
-                (need->consume_deadline_audio_frame > now)
-                    ? (uint32_t)((need->consume_deadline_audio_frame - now) > UINT32_MAX
-                                     ? UINT32_MAX
-                                     : (need->consume_deadline_audio_frame - now))
-                    : 0U;
-            brick6_stream_underrun_trace_need_created(
-                source, voice_id, entry.generation, need, frames_ahead);
-        }
-    }
-    (void)sample_stream_event_trace_record(
-        SAMPLE_STREAM_EVENT_NEED_ADD,
-        snapshot->key,
-        (entry.need_count != 0U) ? entry.needs[0].page_index : UINT32_MAX,
-        (uint8_t)source,
-        voice_id,
-        entry.generation,
-        0U,
-        entry.need_count,
-        snapshot->current_frame,
-        0U);
     return 1U;
 }
 
@@ -398,18 +352,6 @@ void sample_stream_needs_registry_drop(sample_stream_snapshot_source_t source,
     slot->sequence = sequence + 2U;
     if (dropped.active != 0U)
     {
-        (void)sample_stream_event_trace_record(
-            SAMPLE_STREAM_EVENT_NEED_DROP,
-            (dropped.need_count != 0U) ? dropped.needs[0].key
-                                      : (sample_audio_key_t){ 0U, 0U },
-            (dropped.need_count != 0U) ? dropped.needs[0].page_index : UINT32_MAX,
-            (uint8_t)source,
-            voice_id,
-            dropped.generation,
-            0U,
-            dropped.need_count,
-            0U,
-            0U);
     }
 }
 
@@ -558,18 +500,3 @@ uint32_t sample_stream_needs_registry_count_active(void)
     }
     return count;
 }
-
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-void sample_stream_needs_calibration_set_depth(uint8_t pages)
-{
-    if (pages == 0U)
-    {
-        pages = 1U;
-    }
-    if (pages > SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE)
-    {
-        pages = SAMPLE_STREAM_TARGET_MOBILE_NEEDS_PER_VOICE;
-    }
-    g_sample_stream_needs_calibration_depth = pages;
-}
-#endif

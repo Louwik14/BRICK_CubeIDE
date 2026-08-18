@@ -1,6 +1,5 @@
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
-#include "Audio/audio_track_diag.h"
 
 #include "sai.h"
 #include "tlv320aic3204.h"
@@ -272,7 +271,6 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
                              uint32_t frames)
 {
     int32_t *AUDIO_RESTRICT ptx = tx;
-    const uint8_t diag_enabled = audio_track_diag_is_enabled();
     for (uint32_t n = 0; n < frames; n++)
     {
 #if defined(USE_F2S24_SSAT)
@@ -282,18 +280,6 @@ void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
         ptx[0] = f2s24_fast(main_l[n]);
         ptx[1] = f2s24_fast(main_r[n]);
 #endif
-        if (diag_enabled != 0U)
-        {
-            const float clipped_l = (main_l[n] < -1.0f) ? -1.0f
-                : ((main_l[n] > 0.9999998807907104f) ? 0.9999998807907104f : main_l[n]);
-            const float clipped_r = (main_r[n] < -1.0f) ? -1.0f
-                : ((main_r[n] > 0.9999998807907104f) ? 0.9999998807907104f : main_r[n]);
-            audio_global_diag_report_final_pcm24(main_l[n], clipped_l);
-            audio_global_diag_report_final_pcm24(main_r[n], clipped_r);
-            audio_global_diag_measure_sample(AUDIO_GLOBAL_DIAG_DMA_MAIN,
-                (float)s24_sign_extend(ptx[0]) * (1.0f / 8388607.0f),
-                (float)s24_sign_extend(ptx[1]) * (1.0f / 8388607.0f));
-        }
         ptx += BOARD_AUDIO_TDM_SLOTS;
     }
 }

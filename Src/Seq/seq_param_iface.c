@@ -41,7 +41,7 @@ typedef struct
 } seq_param_compact_map_t;
 
 static const param_id_t g_seq_param_env_slot_to_id[SEQ_PARAM_ENV_SLOT_COUNT] = {
-    PARAM_FILTER_TYPE,
+    PARAM_FILTER_MORPH,
     PARAM_FILTER_CUTOFF,
     PARAM_FILTER_RESONANCE,
     PARAM_FILTER_EG_AMT,
@@ -52,9 +52,9 @@ static const param_id_t g_seq_param_env_slot_to_id[SEQ_PARAM_ENV_SLOT_COUNT] = {
     PARAM_FILTER_KEYTRK,
     PARAM_FILTER_ENVRST,
     PARAM_FILTER_ENVDLY,
-    PARAM_FILTER_EQ_LOW,
-    PARAM_FILTER_EQ_MID,
-    PARAM_FILTER_EQ_HIGH,
+    PARAM_RESERVED_FILTER_SLOT_1,
+    PARAM_RESERVED_FILTER_SLOT_2,
+    PARAM_RESERVED_FILTER_SLOT_3,
     PARAM_VCA_ATTACK,
     PARAM_VCA_DECAY,
     PARAM_VCA_SUSTAIN,
@@ -103,11 +103,12 @@ static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
     PARAM_MIX_PAN,
     PARAM_MIX_SEND1,
     PARAM_MIX_SEND2
+    ,PARAM_MIX_SEND3
 };
 
 static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [0 ... (PARAM_COUNT - 1U)] = { (uint8_t)SEQ_PLOCK_SET_COUNT, SEQ_PARAM_SLOT_UNMAPPED },
-    [PARAM_FILTER_TYPE] = { (uint8_t)SEQ_PLOCK_SET_ENV, 0U },
+    [PARAM_FILTER_MORPH] = { (uint8_t)SEQ_PLOCK_SET_ENV, 0U },
     [PARAM_FILTER_CUTOFF] = { (uint8_t)SEQ_PLOCK_SET_ENV, 1U },
     [PARAM_FILTER_RESONANCE] = { (uint8_t)SEQ_PLOCK_SET_ENV, 2U },
     [PARAM_FILTER_EG_AMT] = { (uint8_t)SEQ_PLOCK_SET_ENV, 3U },
@@ -118,9 +119,9 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_FILTER_KEYTRK] = { (uint8_t)SEQ_PLOCK_SET_ENV, 8U },
     [PARAM_FILTER_ENVRST] = { (uint8_t)SEQ_PLOCK_SET_ENV, 9U },
     [PARAM_FILTER_ENVDLY] = { (uint8_t)SEQ_PLOCK_SET_ENV, 10U },
-    [PARAM_FILTER_EQ_LOW] = { (uint8_t)SEQ_PLOCK_SET_ENV, 11U },
-    [PARAM_FILTER_EQ_MID] = { (uint8_t)SEQ_PLOCK_SET_ENV, 12U },
-    [PARAM_FILTER_EQ_HIGH] = { (uint8_t)SEQ_PLOCK_SET_ENV, 13U },
+    [PARAM_RESERVED_FILTER_SLOT_1] = { (uint8_t)SEQ_PLOCK_SET_ENV, 11U },
+    [PARAM_RESERVED_FILTER_SLOT_2] = { (uint8_t)SEQ_PLOCK_SET_ENV, 12U },
+    [PARAM_RESERVED_FILTER_SLOT_3] = { (uint8_t)SEQ_PLOCK_SET_ENV, 13U },
     [PARAM_VCA_ATTACK] = { (uint8_t)SEQ_PLOCK_SET_ENV, 14U },
     [PARAM_VCA_DECAY] = { (uint8_t)SEQ_PLOCK_SET_ENV, 15U },
     [PARAM_VCA_SUSTAIN] = { (uint8_t)SEQ_PLOCK_SET_ENV, 16U },
@@ -148,6 +149,7 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_MIX_PAN] = { (uint8_t)SEQ_PLOCK_SET_MIX, 1U },
     [PARAM_MIX_SEND1] = { (uint8_t)SEQ_PLOCK_SET_MIX, 2U },
     [PARAM_MIX_SEND2] = { (uint8_t)SEQ_PLOCK_SET_MIX, 3U },
+    [PARAM_MIX_SEND3] = { (uint8_t)SEQ_PLOCK_SET_MIX, 4U },
     [PARAM_MIDI_FX_S1_PARAM1] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 0U },
     [PARAM_MIDI_FX_S1_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 1U },
     [PARAM_MIDI_FX_S1_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 2U },
@@ -321,6 +323,7 @@ static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND3:
             return 1U;
         default:
             return 0U;

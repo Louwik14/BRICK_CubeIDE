@@ -20,6 +20,7 @@
  */
 
 #include "param_registry.h"
+#include "param_store.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_pipeline.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
@@ -40,6 +41,7 @@
 #include "Core/live_parameter_migration.h"
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_clock.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -51,6 +53,35 @@
 #include <math.h>
 
 static float clamp_value(float v, float lo, float hi);
+static float param_registry_audio_fx_clamp_p3(float value)
+{
+    return clamp_value(value, 0.0f, 127.0f);
+}
+static void param_registry_audio_fx_set_control(uint8_t track,
+                                                param_id_t id,
+                                                float value);
+
+static const param_id_t g_audio_fx_param_order[] = {
+    PARAM_AUDIO_FX_MODEL,
+    PARAM_AUDIO_FX_P1,
+    PARAM_AUDIO_FX_P2,
+    PARAM_AUDIO_FX_P3
+};
+
+uint8_t param_registry_is_audio_fx_param(param_id_t id)
+{
+    return (uint8_t)((id == PARAM_AUDIO_FX_P1)
+                     || (id == PARAM_AUDIO_FX_P2)
+                     || (id == PARAM_AUDIO_FX_P3)
+                     || (id == PARAM_AUDIO_FX_MODEL));
+}
+
+param_id_t param_registry_get_audio_fx_param(uint8_t order)
+{
+    return (order < (uint8_t)(sizeof(g_audio_fx_param_order)
+                              / sizeof(g_audio_fx_param_order[0])))
+        ? g_audio_fx_param_order[order] : PARAM_COUNT;
+}
 
 static float param_registry_fm_native_frequency(const track_tone_fm_operator_base_t *op)
 {
@@ -220,10 +251,10 @@ static uint8_t param_registry_fm_ui_get(const track_tone_fm_base_voice_t *base,
         case PARAM_FM_PITCH_R2: *out_value = base->pitch_rates[1]; return 1U;
         case PARAM_FM_PITCH_R3: *out_value = base->pitch_rates[2]; return 1U;
         case PARAM_FM_PITCH_R4: *out_value = base->pitch_rates[3]; return 1U;
-        case PARAM_FM_PITCH_L1: *out_value = base->pitch_levels[0]; return 1U;
-        case PARAM_FM_PITCH_L2: *out_value = base->pitch_levels[1]; return 1U;
-        case PARAM_FM_PITCH_L3: *out_value = base->pitch_levels[2]; return 1U;
-        case PARAM_FM_PITCH_L4: *out_value = base->pitch_levels[3]; return 1U;
+        case PARAM_FM_PITCH_L1: *out_value = base->pitch_levels[0] - 49.0f; return 1U;
+        case PARAM_FM_PITCH_L2: *out_value = base->pitch_levels[1] - 49.0f; return 1U;
+        case PARAM_FM_PITCH_L3: *out_value = base->pitch_levels[2] - 49.0f; return 1U;
+        case PARAM_FM_PITCH_L4: *out_value = base->pitch_levels[3] - 49.0f; return 1U;
         default: return 0U;
     }
 }
@@ -244,10 +275,10 @@ static uint8_t param_registry_fm_ui_set(track_tone_fm_base_voice_t *base,
         case PARAM_FM_PITCH_R2: base->pitch_rates[1] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
         case PARAM_FM_PITCH_R3: base->pitch_rates[2] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
         case PARAM_FM_PITCH_R4: base->pitch_rates[3] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
-        case PARAM_FM_PITCH_L1: base->pitch_levels[0] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
-        case PARAM_FM_PITCH_L2: base->pitch_levels[1] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
-        case PARAM_FM_PITCH_L3: base->pitch_levels[2] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
-        case PARAM_FM_PITCH_L4: base->pitch_levels[3] = (uint8_t)clamp_value(value, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L1: base->pitch_levels[0] = (uint8_t)clamp_value(value + 49.0f, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L2: base->pitch_levels[1] = (uint8_t)clamp_value(value + 49.0f, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L3: base->pitch_levels[2] = (uint8_t)clamp_value(value + 49.0f, 0.0f, 99.0f); return 1U;
+        case PARAM_FM_PITCH_L4: base->pitch_levels[3] = (uint8_t)clamp_value(value + 49.0f, 0.0f, 99.0f); return 1U;
         default: return 0U;
     }
 }
@@ -277,6 +308,84 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
         }}
     };
     return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
+}
+
+static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
+                                                      uint8_t track,
+                                                      float value)
+{
+    if ((param_registry_is_audio_fx_param(id) == 0U)
+            || (track >= BRICK_ENTITY_CAPACITY)
+            || (track_runtime_get_effective_param_status(track, id)
+                != TRACK_RUNTIME_PARAM_ALLOWED))
+    {
+        return 0U;
+    }
+
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if (state == NULL)
+    {
+        return 0U;
+    }
+    const track_sound_state_t previous = *state;
+    if (id == PARAM_AUDIO_FX_P3)
+        value = param_registry_audio_fx_clamp_p3(value);
+    param_registry_audio_fx_set_control(track, id, value);
+
+    if (id != PARAM_AUDIO_FX_MODEL)
+    {
+        if (param_registry_submit_audio_value(
+                id, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
+        {
+            *state = previous;
+            return 0U;
+        }
+        param_registry_runtime_cache_set(track, id, value);
+        return 1U;
+    }
+
+    /* The existing bulk seam gives MODEL and all dependent values one
+     * effective sample time and a contractual order.  Future model-specific
+     * default resets belong above this projection, not in the audio queue. */
+    live_parameter_audio_bulk_t bulk = {0};
+    bulk.capture_tick = live_clock_capture_tick();
+    bulk.source = LIVE_PARAMETER_EVENT_SOURCE_BULK;
+    bulk.count = 4U;
+    for (uint8_t i = 0U; i < bulk.count; ++i)
+    {
+        const param_id_t ordered_id = param_registry_get_audio_fx_param(i);
+        float projection = 0.0f;
+        switch (ordered_id)
+        {
+            case PARAM_AUDIO_FX_MODEL: projection = (float)state->audio_fx_model; break;
+            case PARAM_AUDIO_FX_P1: projection = state->audio_fx_p1; break;
+            case PARAM_AUDIO_FX_P2: projection = state->audio_fx_p2; break;
+            case PARAM_AUDIO_FX_P3: projection = state->audio_fx_p3; break;
+            default: break;
+        }
+        bulk.item[i] = (live_parameter_audio_bulk_item_t){
+            .parameter_id = (uint16_t)ordered_id,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .value = live_parameter_event_encode_float(projection)
+        };
+    }
+    if (live_parameter_audio_queue_submit_bulk(&bulk) == false)
+    {
+        *state = previous;
+        return 0U;
+    }
+    for (uint8_t i = 0U; i < bulk.count; ++i)
+    {
+        param_registry_runtime_cache_set(
+            track,
+            (param_id_t)bulk.item[i].parameter_id,
+            live_parameter_event_decode_float(bulk.item[i].value));
+    }
+    return 1U;
 }
 
 uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted)
@@ -619,6 +728,9 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
         case PARAM_MIX_SEND2:
             *out_value = state->mix_send2;
             return 1U;
+        case PARAM_MIX_SEND3:
+            *out_value = state->mix_send3;
+            return 1U;
         case PARAM_MIX_MUTE:
             *out_value = state->mix_mute;
             return 1U;
@@ -634,8 +746,8 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
         case PARAM_VCA_RELEASE:
             *out_value = state->vca_release;
             return 1U;
-        case PARAM_VCA_ENV_TYPE:
-            *out_value = state->vca_env_type;
+        case PARAM_FILTER_MODE:
+            *out_value = state->filter_mode;
             return 1U;
         case PARAM_ENV_RETRIG_FILTER:
             *out_value = state->env_retrig_filter;
@@ -645,6 +757,18 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
             return 1U;
         case PARAM_ENV_RETRIG_MOD:
             *out_value = state->env_retrig_mod;
+            return 1U;
+        case PARAM_AUDIO_FX_P1:
+            *out_value = state->audio_fx_p1;
+            return 1U;
+        case PARAM_AUDIO_FX_P2:
+            *out_value = state->audio_fx_p2;
+            return 1U;
+        case PARAM_AUDIO_FX_P3:
+            *out_value = state->audio_fx_p3;
+            return 1U;
+        case PARAM_AUDIO_FX_MODEL:
+            *out_value = (float)state->audio_fx_model;
             return 1U;
         default:
             return 0U;
@@ -1561,6 +1685,18 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 0U;
     }
 
+    /* Audio FX uses the same target-cache projection as the other audio-owned
+     * parameters, with CONTROL state as the boot/default fallback. */
+    if ((param_registry_is_audio_fx_param(id) != 0U)
+            && (track < BRICK_ENTITY_CAPACITY))
+    {
+        if (param_registry_runtime_cache_get(track, id, out_value) != 0U)
+        {
+            return 1U;
+        }
+        return param_registry_get_track_sound_value(id, track, out_value);
+    }
+
     /* Audio-owned parameters expose only their authoritative target cache.
      * This keeps UI and control queries away from private voice/backend state. */
     if (live_parameter_is_audio_owned(id) != 0U)
@@ -1734,6 +1870,26 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
+    if (param_registry_is_audio_fx_param(id) != 0U)
+    {
+        const float audio_value = (id == PARAM_AUDIO_FX_P3)
+            ? param_registry_audio_fx_clamp_p3(clamped) : clamped;
+        if (track_runtime_is_audio_routable(track) == 0U)
+        {
+            return 0U;
+        }
+        if (audio_fx_runtime_apply_param((brick_entity_id_t)track,
+                                         id,
+                                         audio_value) == 0U)
+        {
+            return 0U;
+        }
+
+        param_registry_audio_fx_set_control(track, id, audio_value);
+        param_registry_runtime_commit_authoritative_write(track, id, audio_value, 0U);
+        return 1U;
+    }
+
     if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
         return 0U;
 
@@ -1830,6 +1986,55 @@ uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t tra
     return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
 }
 
+static void param_registry_audio_fx_set_control(uint8_t track,
+                                                param_id_t id,
+                                                float value)
+{
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if (state == NULL)
+    {
+        return;
+    }
+
+    switch (id)
+    {
+        case PARAM_AUDIO_FX_P1: state->audio_fx_p1 = value; break;
+        case PARAM_AUDIO_FX_P2: state->audio_fx_p2 = value; break;
+        case PARAM_AUDIO_FX_P3:
+            state->audio_fx_p3 = param_registry_audio_fx_clamp_p3(value);
+            break;
+        case PARAM_AUDIO_FX_MODEL:
+        {
+            const uint8_t previous_model = state->audio_fx_model;
+            const uint8_t requested_model = (uint8_t)(value + 0.5f);
+            state->audio_fx_model = ((requested_model == AUDIO_FX_MODEL_LOFI)
+                    || (requested_model == AUDIO_FX_MODEL_FOLD)
+                    || (requested_model == AUDIO_FX_MODEL_DRIVE)
+                    || (requested_model == AUDIO_FX_MODEL_POINT)
+                    || (requested_model == AUDIO_FX_MODEL_SUB)
+                    || (requested_model == AUDIO_FX_MODEL_SUB_LIGHT)
+                    || (requested_model == AUDIO_FX_MODEL_RING))
+                ? requested_model : AUDIO_FX_MODEL_OFF;
+            if ((state->audio_fx_model == AUDIO_FX_MODEL_DRIVE)
+                    && (previous_model != AUDIO_FX_MODEL_DRIVE))
+            {
+                state->audio_fx_p2 = 0.5f;
+                state->audio_fx_p3 = 64.0f;
+            }
+            else if ((state->audio_fx_model != AUDIO_FX_MODEL_LOFI)
+                    && (previous_model == AUDIO_FX_MODEL_OFF)
+                    && (state->audio_fx_p3 <= 0.0f))
+            {
+                state->audio_fx_p3 = 127.0f;
+            }
+            state->audio_fx_p3 = param_registry_audio_fx_clamp_p3(
+                state->audio_fx_p3);
+            break;
+        }
+        default: break;
+    }
+}
+
 uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value)
 {
     if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
@@ -1914,6 +2119,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     const float clamped = clamp_value(value, desc->min, desc->max);
     if (id == PARAM_MIX_MUTE)
         return track_mute_set(track, (clamped >= 0.5f) ? 1U : 0U);
+
+    if (param_registry_is_audio_fx_param(id) != 0U)
+    {
+        return param_registry_apply_audio_fx_control(id, track, clamped);
+    }
 
     uint8_t note_fx_slot = 0U;
     uint8_t note_fx_param = 0U;
@@ -2141,6 +2351,36 @@ float param_get(param_id_t id)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+static uint8_t modfx_bank_pair_ids(uint8_t model,param_id_t*ab,param_id_t*cd)
+{
+    switch(model){case 1U:case 2U:*ab=PARAM_MODFX_BANK_DELUGE_MONO_AB;*cd=PARAM_MODFX_BANK_DELUGE_MONO_CD;return 1U;case 3U:case 4U:*ab=PARAM_MODFX_BANK_DELUGE_STEREO_AB;*cd=PARAM_MODFX_BANK_DELUGE_STEREO_CD;return 1U;case 5U:*ab=PARAM_MODFX_BANK_DAISY_AB;*cd=PARAM_MODFX_BANK_DAISY_CD;return 1U;case 6U:*ab=PARAM_MODFX_BANK_DIMENSION_AB;*cd=PARAM_MODFX_BANK_DIMENSION_CD;return 1U;case 7U:*ab=PARAM_MODFX_BANK_TEENSY_AB;*cd=PARAM_MODFX_BANK_TEENSY_CD;return 1U;case 8U:*ab=PARAM_MODFX_BANK_JUNOLOGUE_AB;*cd=PARAM_MODFX_BANK_JUNOLOGUE_CD;return 1U;default:return 0U;}
+}
+
+static void modfx_bank_store_control(param_id_t id, float value)
+{
+    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
+    const uint8_t slot=(uint8_t)((uint16_t)id-(uint16_t)PARAM_MODFX_RATE);
+    uint8_t control=(uint8_t)clamp_value(value,0.0f,127.0f);
+    param_id_t ab,cd;if(modfx_bank_pair_ids(model,&ab,&cd)==0U)return;
+    const param_id_t packed_id=(slot<2U)?ab:cd;const uint8_t shift=(uint8_t)((slot&1U)*7U);
+    uint16_t packed=(uint16_t)(param_get(packed_id)+0.5f);
+    packed=(uint16_t)((packed&~((uint16_t)127U<<shift))|((uint16_t)control<<shift));
+    param_store_set_active(packed_id,(float)packed);
+}
+
+static void modfx_bank_project_model(uint8_t model)
+{
+    const param_id_t ids[4]={PARAM_MODFX_RATE,PARAM_MODFX_DEPTH,PARAM_MODFX_FEEDBACK,PARAM_MODFX_OFFSET};
+    param_id_t ab,cd;uint16_t packed[2]={0U,0U};if(modfx_bank_pair_ids(model,&ab,&cd)){packed[0]=(uint16_t)(param_get(ab)+0.5f);packed[1]=(uint16_t)(param_get(cd)+0.5f);}
+    for(uint8_t slot=0U;slot<4U;++slot)
+    {
+        const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
+        param_store_set_active(ids[slot],value);
+        param_registry_runtime_cache_set(0U,ids[slot],value);
+        (void)param_registry_submit_audio_value(ids[slot],0U,value,LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+    }
+}
+
 /* Command surface: global canonical write. */
 void param_set(param_id_t id, float value)
 {
@@ -2151,6 +2391,11 @@ void param_set(param_id_t id, float value)
     const float clamped = clamp_value(value, desc->min, desc->max);
 
     param_store_set_active(id, clamped);
+
+    if((id>=PARAM_MODFX_RATE)&&(id<=PARAM_MODFX_OFFSET))
+    {
+        modfx_bank_store_control(id,clamped);
+    }
 
     {
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -2170,6 +2415,10 @@ void param_set(param_id_t id, float value)
         param_registry_runtime_cache_set(0U, id, clamped);
         (void)param_registry_submit_audio_value(
             id, 0U, clamped, LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+        if(id==PARAM_MODFX_MODEL)
+        {
+            modfx_bank_project_model((uint8_t)(clamped+0.5f));
+        }
         return;
     }
 

@@ -1,7 +1,6 @@
 #include "fx_delay_dual.h"
 
 #include "Audio/fx_delay_shared_pool.h"
-#include "Audio/audio_track_diag.h"
 #include "Storage/memory_layout.h"
 
 #include <math.h>
@@ -23,7 +22,6 @@ constexpr float kInvSqrt2 = 0.70710678118f;
 
 AUDIO_HOT ALIGN32 static float g_haas_l[kHaasBufferSize];
 AUDIO_HOT ALIGN32 static float g_haas_r[kHaasBufferSize];
-static uint8_t g_delay_diag_enabled;
 
 static inline float clampf_local(float v, float lo, float hi)
 {
@@ -51,8 +49,6 @@ static inline float sanitize_output_sample(float v)
     if(is_finite_sample(v) == 0U)
         return 0.0f;
     const float clipped = clampf_local(v, -4.0f, 4.0f);
-    if(g_delay_diag_enabled != 0U)
-        audio_global_diag_report_delay_clamp(v, clipped);
     return clipped;
 }
 
@@ -713,7 +709,6 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
                                                    float *rev_r,
                                                    uint32_t frames)
 {
-    g_delay_diag_enabled = audio_track_diag_is_enabled();
     if((in_l == 0) || (in_r == 0) || (out_l == 0) || (out_r == 0))
         return;
 

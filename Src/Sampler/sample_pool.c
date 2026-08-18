@@ -442,9 +442,7 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     if(g_sample_pool_fs_mounted == 0U)
     {
-        sd_access_trace_begin("sample_pool_f_mount");
         const FRESULT mount_fr = f_mount(&g_sample_pool_fs, "0:", 1U);
-        sd_access_trace_end("sample_pool_f_mount", (int)mount_fr, 0U);
         if(mount_fr != FR_OK)
         {            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, mount_fr);
             sample_pool_release_gate_on_error();
@@ -455,9 +453,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     }
 
     FIL fp;
-    sd_access_trace_begin("sample_pool_f_open");
     const FRESULT open_fr = f_open(&fp, trimmed_path, FA_READ);
-    sd_access_trace_end("sample_pool_f_open", (int)open_fr, 0U);
     if(open_fr != FR_OK)
     {        if (open_fr == FR_NO_FILE)
         {

@@ -25,9 +25,7 @@
                 "CMAKE_C_FLAGS_DEBUG": "-g3",
                 "CMAKE_CXX_FLAGS_DEBUG": "-g3",
                 "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "OFF",
-                "BRICK6_MULTI_STREAM_DIAG": "ON",
-                "BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN": "ON"
+                "BRICK_TEST_BUILD": "OFF"
             }
         },
         {
@@ -73,8 +71,6 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "BRICK6_VARIANT": "lowcost",
                 "BRICK_TEST_BUILD": "OFF",
-                "BRICK6_STREAM_CALIBRATION": "ON",
-                "BRICK6_STREAM_CALIBRATION_PAGE_KIB": "32",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "16"
             }
         },
@@ -85,8 +81,6 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "BRICK6_VARIANT": "lowcost",
                 "BRICK_TEST_BUILD": "OFF",
-                "BRICK6_STREAM_CALIBRATION": "ON",
-                "BRICK6_STREAM_CALIBRATION_PAGE_KIB": "32",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "32"
             }
         }

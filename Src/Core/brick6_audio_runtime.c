@@ -2,12 +2,12 @@
  * @file brick6_audio_runtime.c
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
- * Rôle du module:
+ * RÃ´le du module:
  * - Regrouper le traitement audio bloc (synth, sampler, looper, mixer, master FX).
  *
- * Frontière:
+ * FrontiÃ¨re:
  * - Ne fait pas l'init applicative globale.
- * - Ne gère pas la policy de boot.
+ * - Ne gÃ¨re pas la policy de boot.
  */
 
 #include "brick6_audio_runtime.h"
@@ -19,7 +19,6 @@
 
 #include "Audio/drum_synth.h"
 #include "Audio/audio_io.h"
-#include "Audio/audio_track_diag.h"
 #include "Audio/metronome_runtime.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
@@ -29,7 +28,6 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
-#include "Sampler/multi_pitch_trace.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
@@ -702,20 +700,6 @@ ITCM_AUDIT_32_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    const void *trace_scratch0 = tracks;
-    const void *trace_scratch1 = NULL;
-    const void *trace_scratch2 = NULL;
-    if ((tracks != NULL) && (track_count > 0U))
-    {
-        trace_scratch1 = tracks[0].L;
-        trace_scratch2 = tracks[0].R;
-    }
-    brick6_multi_pitch_trace_block_begin(frames,
-                                         trace_scratch0,
-                                         trace_scratch1,
-                                         trace_scratch2,
-                                         NULL);
-
     brick6_publish_owned_physical_line(frames);
     uint16_t active_engine_mask = 0U;
     for (brick_entity_id_t entity = 0U;
@@ -805,20 +789,7 @@ ITCM_AUDIT_32_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     if (track_count > 0U)
     {
-        const uint8_t diag_enabled = audio_track_diag_is_enabled();
-        const uint8_t preview_active = sd_preview_is_active();
         (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
-        if (diag_enabled != 0U)
-        {
-            audio_global_diag_measure_stereo(AUDIO_GLOBAL_DIAG_POST_PREVIEW,
-                                             tracks[0].L, tracks[0].R, frames);
-            if (preview_active == 0U)
-            {
-                audio_global_diag_set_stage_state(AUDIO_GLOBAL_DIAG_POST_PREVIEW,
-                                                  AUDIO_GLOBAL_DIAG_STATE_BYPASS);
-            }
-        }
     }
 
-    brick6_multi_pitch_trace_block_end();
 }

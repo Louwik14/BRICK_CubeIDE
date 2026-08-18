@@ -6,10 +6,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_benchmark.h"
-#include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_time.h"
-#include "Sampler/sample_stream_underrun_trace.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "stm32h7xx.h"
@@ -17,7 +14,6 @@
 static volatile uint32_t g_brick6_stream_audio_wake_sequence;
 static uint32_t g_brick6_stream_serviced_wake_sequence;
 static sample_stream_audio_frame_t g_brick6_stream_last_service_frame;
-static sample_stream_audio_frame_t g_brick6_stream_last_poll_frame;
 static brick6_stream_service_task_stats_t g_brick6_stream_service_stats;
 
 static void brick6_stream_service_task_update_gate(void)
@@ -37,7 +33,6 @@ void brick6_stream_service_task_init(void)
     g_brick6_stream_audio_wake_sequence = 0U;
     g_brick6_stream_serviced_wake_sequence = 0U;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
-    g_brick6_stream_last_poll_frame = g_brick6_stream_last_service_frame;
     memset(&g_brick6_stream_service_stats, 0, sizeof(g_brick6_stream_service_stats));
     brick6_stream_service_task_update_gate();
 }
@@ -62,10 +57,6 @@ void brick6_stream_service_task_poll(void)
     }
 
     const sample_stream_audio_frame_t now = sample_stream_time_now();
-    const uint64_t poll_delay_64 = now - g_brick6_stream_last_poll_frame;
-    const uint32_t poll_delay_frames = (poll_delay_64 > UINT32_MAX)
-                                           ? UINT32_MAX : (uint32_t)poll_delay_64;
-    g_brick6_stream_last_poll_frame = now;
     const uint64_t delay_64 = now - g_brick6_stream_last_service_frame;
     const uint32_t delay_frames = (delay_64 > UINT32_MAX) ? UINT32_MAX : (uint32_t)delay_64;
     if (delay_frames > g_brick6_stream_service_stats.max_dispatch_delay_frames)
@@ -77,33 +68,11 @@ void brick6_stream_service_task_poll(void)
         g_brick6_stream_service_stats.cadence_miss_count++;
     }
 
-    brick6_stream_underrun_trace_service_begin(
-        BRICK6_STREAM_SERVICE_BYTE_BUDGET,
-        sample_stream_needs_registry_count_active(),
-        requested_sequence,
-        delay_frames,
-        (uint8_t)sd_access_gate_current_owner());
-
     g_brick6_stream_service_stats.poll_count++;
     if ((sample_stream_manager_io_in_flight() == 0U)
         && (multi_sample_load_is_active() != 0U))
     {
-        sample_stream_manager_note_blocked_poll(
-            multi_sample_load_is_active(),
-            0U,
-            poll_delay_frames);
-        brick6_stream_underrun_trace_service_blocked(
-            BRICK6_STREAM_TRACE_REASON_MULTI_LOAD_BLOCKED,
-            (uint8_t)sd_access_gate_current_owner(),
-            poll_delay_frames);
-        brick6_stream_underrun_trace_service_end(
-            BRICK6_STREAM_TRACE_REASON_MULTI_LOAD_BLOCKED,
-            pending,
-            g_brick6_stream_service_stats.streaming_active);
         g_brick6_stream_service_stats.busy_poll_count++;
-#if BRICK6_STREAM_BENCH
-        sample_stream_benchmark_note_blocked_poll();
-#endif
         return;
     }
 
@@ -111,10 +80,6 @@ void brick6_stream_service_task_poll(void)
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
     sd_scheduler_runtime_service();
     brick6_stream_service_task_update_gate();
-    brick6_stream_underrun_trace_service_end(
-        BRICK6_STREAM_TRACE_REASON_NONE,
-        sample_stream_manager_has_pending_sd_work(),
-        g_brick6_stream_service_stats.streaming_active);
     g_brick6_stream_serviced_wake_sequence = requested_sequence;
     g_brick6_stream_last_service_frame = sample_stream_time_now();
     g_brick6_stream_service_stats.audio_wake_sequence = requested_sequence;

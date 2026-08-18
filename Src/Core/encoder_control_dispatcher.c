@@ -163,6 +163,7 @@ uint8_t encoder_control_dispatcher_service(void)
 
         if (live_parameter_event_submit(&event))
         {
+            ui_param_note_user_tweak(detent.encoder_id, target.parameter_id);
             current->parameter_id = target.parameter_id;
             current->scope = target.scope;
             current->track = (target.scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)

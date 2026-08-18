@@ -26,27 +26,14 @@ BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 //Place the 32 KiB I-cache audit candidate set in ITCM
 BRICK6_ITCM_AUDIT_32:BOOL=OFF
 
-//Capture bounded mixer path snapshots for GDB
-BRICK6_MIXER_PATH_DIAG:BOOL=OFF
+//LOFI engine: FLOAT canonical or Q31 explicit comparison reference
+BRICK6_LOFI_ENGINE:STRING=FLOAT
 
 //Capture bounded Multi pitched voice trace for GDB
 BRICK6_MULTI_PITCH_TRACE:BOOL=OFF
 
-//Capture the first Multi stream failure for GDB
-BRICK6_MULTI_STREAM_DIAG:BOOL=OFF
-
-//Use Release code generation for the Debug Multi stream diagnostic
-// build
-BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN:BOOL=OFF
-
 //Capture SD initialization diagnostics
 BRICK6_SD_INIT_DIAG:BOOL=OFF
-
-//Enable manual streamer calibration cases in Multi TONE
-BRICK6_STREAM_CALIBRATION:BOOL=OFF
-
-//Streamer calibration page size (16 or 32 KiB)
-BRICK6_STREAM_CALIBRATION_PAGE_KIB:STRING=16
 
 //Streamer application read quantum in KiB
 BRICK6_STREAM_READ_CHUNK_KIB:STRING=16
@@ -275,6 +262,8 @@ FM_KERNEL_BENCH:STRING=1
 # INTERNAL cache entries
 ########################
 
+//STRINGS property for variable: BRICK6_LOFI_ENGINE
+BRICK6_LOFI_ENGINE-STRINGS:INTERNAL=Q31;FLOAT
 //STRINGS property for variable: BRICK6_VARIANT
 BRICK6_VARIANT-STRINGS:INTERNAL=premium;lowcost
 //ADVANCED property for variable: CMAKE_ADDR2LINE

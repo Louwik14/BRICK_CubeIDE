@@ -224,7 +224,7 @@ static uint8_t track_runtime_param_is_vca(param_id_t param)
                      || (param == PARAM_VCA_DECAY)
                      || (param == PARAM_VCA_SUSTAIN)
                      || (param == PARAM_VCA_RELEASE)
-                     || (param == PARAM_VCA_ENV_TYPE)
+                     || (param == PARAM_FILTER_MODE)
                      || (param == PARAM_ENV_RETRIG_VCA));
 }
 
@@ -391,13 +391,10 @@ static const param_id_t g_track_runtime_tone_slots_drum_md[] = {
 
 /* Deliberately minimal until the GROUP TONE product surface is completed. */
 static const param_id_t g_track_runtime_tone_slots_group[] = {
-    PARAM_FILTER_TYPE,
+    PARAM_FILTER_MORPH,
     PARAM_FILTER_CUTOFF,
     PARAM_FILTER_RESONANCE,
-    PARAM_FILTER_KEYTRK,
-    PARAM_FILTER_EQ_LOW,
-    PARAM_FILTER_EQ_MID,
-    PARAM_FILTER_EQ_HIGH
+    PARAM_FILTER_KEYTRK
 };
 
 _Static_assert((sizeof(g_track_runtime_tone_slots_prism) / sizeof(g_track_runtime_tone_slots_prism[0]))
@@ -552,6 +549,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(
             mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ENV);
             mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
             mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
+            mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_FX);
         }
         return mask;
     }
@@ -594,6 +592,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(
     if (track_runtime_is_audio_routable(entity_id) != 0U)
     {
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_FX);
     }
 
     return mask;
@@ -1158,7 +1157,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
 
     switch (param)
     {
-        case PARAM_FILTER_TYPE:
+        case PARAM_FILTER_MORPH:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
         case PARAM_FILTER_EG_AMT:
@@ -1169,9 +1168,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_KEYTRK:
         case PARAM_FILTER_ENVRST:
         case PARAM_FILTER_ENVDLY:
-        case PARAM_FILTER_EQ_LOW:
-        case PARAM_FILTER_EQ_MID:
-        case PARAM_FILTER_EQ_HIGH:
         case PARAM_ENV_RETRIG_FILTER:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
@@ -1180,7 +1176,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
         case PARAM_VCA_RELEASE:
-        case PARAM_VCA_ENV_TYPE:
+        case PARAM_FILTER_MODE:
         case PARAM_ENV_RETRIG_VCA:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
@@ -1326,6 +1322,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND3:
         case PARAM_MIX_MUTE:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
@@ -1417,7 +1414,20 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_MIDI_FX;
             return rule;
 
+        case PARAM_AUDIO_FX_P1:
+        case PARAM_AUDIO_FX_P2:
+        case PARAM_AUDIO_FX_P3:
+        case PARAM_AUDIO_FX_MODEL:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX;
+            rule.resource = TRACK_RUNTIME_RESOURCE_AUDIO_FX;
+            return rule;
+
         case PARAM_MIX_REVERB_WET:
+        case PARAM_MODFX_MODEL:
+        case PARAM_MODFX_RATE:
+        case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_FEEDBACK:
+        case PARAM_MODFX_OFFSET:
         case PARAM_MIX_REVERB_ROOM_SIZE:
         case PARAM_MIX_REVERB_DAMPING:
         case PARAM_MIX_REVERB_WIDTH:
@@ -1577,19 +1587,17 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         }
         if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
         {
             return TRACK_RUNTIME_PARAM_ALLOWED;
         }
         switch (param)
         {
-            case PARAM_FILTER_TYPE:
+            case PARAM_FILTER_MORPH:
             case PARAM_FILTER_CUTOFF:
             case PARAM_FILTER_RESONANCE:
             case PARAM_FILTER_KEYTRK:
-            case PARAM_FILTER_EQ_LOW:
-            case PARAM_FILTER_EQ_MID:
-            case PARAM_FILTER_EQ_HIGH:
             case PARAM_ENV3_ATTACK:
             case PARAM_ENV3_DECAY:
             case PARAM_ENV3_SUSTAIN:
@@ -1739,6 +1747,15 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                                                             TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) != 0U)
                 ? TRACK_RUNTIME_PARAM_ALLOWED
                 : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+
+        case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
+            if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return (track_runtime_is_audio_routable(track) != 0U)
+                    ? TRACK_RUNTIME_PARAM_ALLOWED
+                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

@@ -48,7 +48,7 @@ typedef struct
     uint8_t family;
     uint8_t type;
     uint8_t flags;
-    uint8_t physical_voice_count;
+    uint8_t configured_voice_count;
     uint8_t physical_voice_capacity;
     uint8_t sampler_slice_mode_active;
 } audio_binding_snapshot_t;

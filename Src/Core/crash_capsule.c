@@ -1,8 +1,5 @@
 #include "Core/crash_capsule.h"
 
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-#include "Sampler/sample_multi_stream_diag.h"
-#endif
 
 #include <stddef.h>
 #include <string.h>
@@ -482,9 +479,6 @@ void crash_capsule_fault_capture_and_reset(
 {
     __disable_irq();
 
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-    sample_multi_stream_diag_capture_fault(stack_pointer, exc_return, (uint32_t)fault_type);
-#endif
 
     if ((g_crash_capsule_ready != 0U)
         && (g_crash_capsule_working.session_state

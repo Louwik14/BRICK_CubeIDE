@@ -15,7 +15,7 @@ static ui_template_family_t g_ui_template_env_family_audio = {
     .subpages = {
         {
             .title = "FILTER",
-            .param_bank = { .params = { PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT, PARAM_FILTER_TYPE } },
+            .param_bank = { .params = { PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT, PARAM_FILTER_MORPH } },
         },
         {
             .title = "ADSR",
@@ -39,7 +39,7 @@ static const ui_template_family_t g_ui_template_env_family_retrig = {
     .subpages = {
         {
             .title = "MODE",
-            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_VCA_ENV_TYPE } },
+            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_FILTER_MODE } },
         },
         {
             .title = "-",
@@ -110,16 +110,13 @@ static ui_template_custom_widget_kind_t ui_page_template_env_pick_custom_widget(
                                                                                    const ui_template_subpage_t *subpage,
                                                                                    param_id_t id)
 {
-    if ((subpage != 0)
-            && (subpage->param_bank.params[3] == PARAM_FILTER_TYPE)
-            && (slot == 3U)
-            && (id == PARAM_FILTER_TYPE))
+    if (id == PARAM_FILTER_MODE)
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE;
     }
 
     if ((subpage != 0)
-            && (subpage->param_bank.params[3] == PARAM_FILTER_TYPE)
+            && (subpage->param_bank.params[3] == PARAM_FILTER_MORPH)
             && (slot == 0U)
             && (id == PARAM_FILTER_CUTOFF))
     {
@@ -127,12 +124,16 @@ static ui_template_custom_widget_kind_t ui_page_template_env_pick_custom_widget(
     }
 
     if ((subpage != 0)
-            && (subpage->param_bank.params[3] == PARAM_FILTER_TYPE)
+            && (subpage->param_bank.params[3] == PARAM_FILTER_MORPH)
             && (slot == 1U)
             && (id == PARAM_FILTER_RESONANCE))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
     }
+
+    if ((subpage != 0) && (subpage->param_bank.params[3] == PARAM_FILTER_MORPH)
+            && (slot == 3U) && (id == PARAM_FILTER_MORPH))
+        return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
 
     if (((id == PARAM_FILTER_ATTACK)
             || (id == PARAM_FILTER_DECAY)
@@ -212,7 +213,7 @@ typedef struct
     uint8_t active_track;
     uint8_t family;
     uint8_t type;
-    uint8_t filter_type_ui;
+    uint8_t filter_morph_ui;
     uint32_t runtime_track_revision;
 } ui_page_template_env_sync_cache_t;
 
@@ -257,13 +258,13 @@ static uint8_t ui_page_template_env_sync_should_recompute(uint8_t active_track,
     /* Consumer-edge refresh: revision checks use a refreshed projection; the revision is a coherence guard only. */
     track_runtime_refresh_track(active_track);
     const uint32_t runtime_track_revision = track_runtime_get_track_revision(active_track);
-    const uint8_t filter_type_ui = (uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f);
+    const uint8_t filter_morph_ui = (uint8_t)(param_store_get_active(PARAM_FILTER_MORPH) + 0.5f);
 
     if ((g_ui_template_env_sync_cache.valid != 0U)
             && (g_ui_template_env_sync_cache.active_track == active_track)
             && (g_ui_template_env_sync_cache.family == (uint8_t)active_family)
             && (g_ui_template_env_sync_cache.type == (uint8_t)active_type)
-            && (g_ui_template_env_sync_cache.filter_type_ui == filter_type_ui)
+            && (g_ui_template_env_sync_cache.filter_morph_ui == filter_morph_ui)
             && (g_ui_template_env_sync_cache.runtime_track_revision == runtime_track_revision))
     {
         return 0U;
@@ -273,7 +274,7 @@ static uint8_t ui_page_template_env_sync_should_recompute(uint8_t active_track,
     g_ui_template_env_sync_cache.active_track = active_track;
     g_ui_template_env_sync_cache.family = (uint8_t)active_family;
     g_ui_template_env_sync_cache.type = (uint8_t)active_type;
-    g_ui_template_env_sync_cache.filter_type_ui = filter_type_ui;
+    g_ui_template_env_sync_cache.filter_morph_ui = filter_morph_ui;
     g_ui_template_env_sync_cache.runtime_track_revision = runtime_track_revision;
     return 1U;
 }
@@ -333,29 +334,24 @@ static void ui_page_template_env_sync_family(void)
         return;
     }
 
-    const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
-    const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
-    const uint8_t has_adsr_page = ((filter_type == MIXER_TRACK_FILTER_LP_BI)
-                                || (filter_type == MIXER_TRACK_FILTER_HP_BI)
-                                || (filter_type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
     const uint8_t has_vca_page = track_runtime_supports_vca_gate(track_runtime_get_ctx(active_track));
 
     family->nav_labels[0] = "FILTER";
-    family->nav_labels[1] = (has_adsr_page != 0U) ? "ADSR" : "-";
+    family->nav_labels[1] = "ADSR";
     family->nav_labels[2] = (has_vca_page != 0U) ? "VCA" : "-";
     family->nav_labels[3] = "ENV 3";
 
     family->subpages[0].title = "FILTER";
-    family->subpages[0].param_bank.params[0] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_LOW : PARAM_FILTER_CUTOFF;
-    family->subpages[0].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
-    family->subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : ((has_adsr_page != 0U) ? PARAM_FILTER_EG_AMT : PARAM_COUNT);
-    family->subpages[0].param_bank.params[3] = PARAM_FILTER_TYPE;
+    family->subpages[0].param_bank.params[0] = PARAM_FILTER_CUTOFF;
+    family->subpages[0].param_bank.params[1] = PARAM_FILTER_RESONANCE;
+    family->subpages[0].param_bank.params[2] = PARAM_FILTER_EG_AMT;
+    family->subpages[0].param_bank.params[3] = PARAM_FILTER_MORPH;
 
-    family->subpages[1].title = (has_adsr_page != 0U) ? "ADSR" : "-";
-    family->subpages[1].param_bank.params[0] = (has_adsr_page != 0U) ? PARAM_FILTER_ATTACK : PARAM_COUNT;
-    family->subpages[1].param_bank.params[1] = (has_adsr_page != 0U) ? PARAM_FILTER_DECAY : PARAM_COUNT;
-    family->subpages[1].param_bank.params[2] = (has_adsr_page != 0U) ? PARAM_FILTER_SUSTAIN : PARAM_COUNT;
-    family->subpages[1].param_bank.params[3] = (has_adsr_page != 0U) ? PARAM_FILTER_RELEASE : PARAM_COUNT;
+    family->subpages[1].title = "ADSR";
+    family->subpages[1].param_bank.params[0] = PARAM_FILTER_ATTACK;
+    family->subpages[1].param_bank.params[1] = PARAM_FILTER_DECAY;
+    family->subpages[1].param_bank.params[2] = PARAM_FILTER_SUSTAIN;
+    family->subpages[1].param_bank.params[3] = PARAM_FILTER_RELEASE;
 
     family->subpages[2].title = (has_vca_page != 0U) ? "VCA" : "-";
     family->subpages[2].param_bank.params[0] = (has_vca_page != 0U) ? PARAM_VCA_ATTACK : PARAM_COUNT;

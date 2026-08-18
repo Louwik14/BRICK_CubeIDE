@@ -17,5 +17,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_b
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1099:9:param_backend_apply_tone_sampler	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1379:9:param_backend_apply_tone_looper	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1451:9:param_backend_apply_tone_drum	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1529:9:param_backend_apply_mix_track	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1697:9:param_backend_apply_env_track	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1529:9:param_backend_apply_mix_track	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:1705:9:param_backend_apply_env_track	8	static

@@ -109,6 +109,7 @@ static uint8_t mod_destination_is_simple_mix(param_id_t dest)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND3:
             return 1U;
         default:
             return 0U;
@@ -126,9 +127,6 @@ static uint8_t mod_destination_is_direct_filter(param_id_t dest)
         case PARAM_FILTER_DECAY:
         case PARAM_FILTER_SUSTAIN:
         case PARAM_FILTER_RELEASE:
-        case PARAM_FILTER_EQ_LOW:
-        case PARAM_FILTER_EQ_MID:
-        case PARAM_FILTER_EQ_HIGH:
             return 1U;
         default:
             return 0U;
@@ -418,6 +416,9 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
         case PARAM_MIX_SEND2:
             mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
+        case PARAM_MIX_SEND3:
+            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 2U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
         default:
             return 0U;
     }
@@ -466,15 +467,6 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
             return 1U;
         case PARAM_FILTER_KEYTRK:
             mixer_set_track_filter_keytrack(ctx->audio_binding.mix_track_id, param_filter_ui127_to_keytrack(value));
-            return 1U;
-        case PARAM_FILTER_EQ_LOW:
-            mixer_set_track_filter_eq_low(ctx->audio_binding.mix_track_id, param_filter_eq_ui127_to_db(value));
-            return 1U;
-        case PARAM_FILTER_EQ_MID:
-            mixer_set_track_filter_eq_mid(ctx->audio_binding.mix_track_id, param_filter_eq_ui127_to_db(value));
-            return 1U;
-        case PARAM_FILTER_EQ_HIGH:
-            mixer_set_track_filter_eq_high(ctx->audio_binding.mix_track_id, param_filter_eq_ui127_to_db(value));
             return 1U;
         default:
             return 0U;
@@ -1157,6 +1149,7 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND3:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
         case PARAM_SAMPLER_GAIN:
@@ -1333,7 +1326,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         {
             return 0U;
         }
-        if ((dest == PARAM_FILTER_TYPE)
+        if ((dest == PARAM_FILTER_MORPH)
                 || (dest == PARAM_FILTER_ENVRST)
                 || (dest == PARAM_FILTER_ENVDLY)
                 || (dest == PARAM_FILTER_KEYTRK))
@@ -1348,8 +1341,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 : 0U;
         }
 
-        return (((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_ENVDLY))
-                || ((dest >= PARAM_FILTER_EQ_LOW) && (dest <= PARAM_FILTER_EQ_HIGH))
+        return (((dest >= PARAM_FILTER_MORPH) && (dest <= PARAM_FILTER_ENVDLY))
                 || ((dest >= PARAM_ENV3_ATTACK) && (dest <= PARAM_ENV3_RELEASE))) ? 1U : 0U;
     }
 
@@ -1363,7 +1355,8 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         return ((dest == PARAM_MIX_LEVEL)
                 || (dest == PARAM_MIX_PAN)
                 || (dest == PARAM_MIX_SEND1)
-                || (dest == PARAM_MIX_SEND2)) ? 1U : 0U;
+                || (dest == PARAM_MIX_SEND2)
+                || (dest == PARAM_MIX_SEND3)) ? 1U : 0U;
     }
 
     return 0U;
@@ -1864,6 +1857,7 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_MIX_LEVEL: return "Lvl";
         case PARAM_MIX_SEND1: return "Snd1";
         case PARAM_MIX_SEND2: return "Snd2";
+        case PARAM_MIX_SEND3: return "Snd3";
         case PARAM_FILTER_CUTOFF: return "Cutf";
         case PARAM_FILTER_EG_AMT: return "EG";
         case PARAM_SAMPLER_START: return "Strt";

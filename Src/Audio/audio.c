@@ -29,6 +29,8 @@
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
 #include "Audio/control_audio_queue.h"
+#include "Audio/audio_fx_runtime.h"
+#include "Audio/audio_waveform_capture.h"
 #include "Audio/audio_note_admission.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
@@ -287,6 +289,8 @@ void audio_init(void)
     control_audio_queue_init();
     audio_note_admission_init();
     audio_note_engine_adapter_init();
+    audio_fx_runtime_init();
+    audio_waveform_capture_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     g_audio_sample_clock = 0U;

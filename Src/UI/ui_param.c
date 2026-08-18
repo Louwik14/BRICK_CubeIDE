@@ -43,6 +43,7 @@
 #include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
 #include "Core/brick6_fm_runtime.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
@@ -82,6 +83,9 @@ static ui_param_state_t g_ui_param = {
     .valid = 0U,
 };
 static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
+static param_id_t g_ui_param_tweak_param = PARAM_COUNT;
+static uint8_t g_ui_param_tweak_slot = 0xFFU;
+static uint32_t g_ui_param_tweak_until_ms;
 static uint8_t g_ui_param_bank_track = 0xFFU;
 static int16_t g_ui_param_stepped_encoder_accum[4];
 static uint32_t g_ui_param_stepped_encoder_key[4];
@@ -99,6 +103,7 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
 static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param);
 static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track);
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value);
+static float ui_param_get_active_track_value(param_id_t param, uint8_t active_track);
 static uint8_t ui_param_resolve_seq_slot(uint8_t track,
                                          param_id_t param,
                                          uint8_t *out_set_id,
@@ -368,6 +373,27 @@ void ui_param_clear_value_flash(void)
         g_ui_param_value_flash[i].kind = (uint8_t)UI_PARAM_VALUE_FLASH_DIRECT;
         g_ui_param_value_flash[i].until_ms = 0U;
     }
+    g_ui_param_tweak_param = PARAM_COUNT;
+    g_ui_param_tweak_slot = 0xFFU;
+    g_ui_param_tweak_until_ms = 0U;
+}
+
+void ui_param_note_user_tweak(uint8_t slot, param_id_t param)
+{
+    if ((slot >= 4U) || (param >= PARAM_COUNT)) return;
+    g_ui_param_tweak_slot = slot;
+    g_ui_param_tweak_param = param;
+    g_ui_param_tweak_until_ms = HAL_GetTick() + UI_PARAM_VALUE_FLASH_DURATION_MS;
+}
+
+uint8_t ui_param_is_user_tweak_active(uint8_t slot, param_id_t param)
+{
+    if ((slot != g_ui_param_tweak_slot) || (param != g_ui_param_tweak_param)
+            || ((int32_t)(g_ui_param_tweak_until_ms - HAL_GetTick()) <= 0))
+    {
+        return 0U;
+    }
+    return 1U;
 }
 
 void ui_param_note_user_value_flash(uint8_t slot,
@@ -403,10 +429,13 @@ uint8_t ui_param_get_slot_value_flash(uint8_t slot,
     ui_param_value_flash_slot_t *const flash = &g_ui_param_value_flash[slot];
     if ((flash->active == 0U)
             || (flash->param != param)
-            || (flash->track != track)
             || ((int32_t)(flash->until_ms - HAL_GetTick()) <= 0))
     {
         flash->active = 0U;
+        return 0U;
+    }
+    if (flash->track != track)
+    {
         return 0U;
     }
 
@@ -417,6 +446,7 @@ uint8_t ui_param_get_slot_value_flash(uint8_t slot,
     }
     return 1U;
 }
+
 
 /**
  * @brief Point d'entrée ui_param_clamp.
@@ -766,7 +796,7 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
             continue;
         }
 
-        if ((id >= PARAM_FILTER_TYPE) && (id <= PARAM_FILTER_DECIMATOR_RATE2))
+        if ((id >= PARAM_FILTER_MORPH) && (id <= PARAM_FILTER_DECIMATOR_RATE2))
         {
             continue;
         }
@@ -975,6 +1005,15 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     const param_desc_t *desc = &param_registry[param];
     *out_min = desc->min;
     *out_max = desc->max;
+    if ((param == PARAM_AUDIO_FX_P3)
+            && ((uint8_t)(ui_param_get_active_track_value(
+                    PARAM_AUDIO_FX_MODEL, track) + 0.5f)
+                == AUDIO_FX_MODEL_DRIVE))
+    {
+        *out_min = 0.0f;
+        *out_max = 127.0f;
+        return 1U;
+    }
     if ((param == PARAM_WAVE_OSC1_TABLE) || (param == PARAM_WAVE_OSC2_TABLE))
     {
         uint16_t logical[SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS];
@@ -1678,6 +1717,14 @@ static float ui_param_apply_delta_value(param_id_t param,
                                         float max_value,
                                         uint8_t shift_down)
 {
+    if(param==PARAM_AUDIO_FX_MODEL)
+    {
+        static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,11U,10U};
+        uint8_t pos=0U;const uint8_t current=(uint8_t)(current_value+0.5f);
+        while(pos<8U&&valid[pos]!=current)++pos;
+        if(pos>=8U)pos=(delta>0)?0U:7U;else{int32_t next=(int32_t)pos+delta;if(next<0)next=0;if(next>7)next=7;pos=(uint8_t)next;}
+        return (float)valid[pos];
+    }
     if ((param == PARAM_SAMPLER_SAMPLE)
         && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
         && ((ui_get_track_type(track) == UI_TRACK_TYPE_STREAM)

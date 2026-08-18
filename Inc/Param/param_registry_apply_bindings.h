@@ -99,6 +99,11 @@ void apply_mix_delay_vol(float v);
 void apply_mix_delay_width(float v);
 void apply_mix_send0_fx(float v);
 void apply_mix_send1_fx(float v);
+void apply_modfx_model(float v);
+void apply_modfx_rate(float v);
+void apply_modfx_depth(float v);
+void apply_modfx_feedback(float v);
+void apply_modfx_offset(float v);
 void apply_output_comp(float v);
 void apply_post_gain(float v);
 void apply_sampler_end(float v);
@@ -119,9 +124,6 @@ void apply_sampler_slice_count(float v);
 void apply_sampler_start(float v);
 void apply_sampler_tune(float v);
 void apply_sampler_multi_loop(float v);
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-void apply_stream_cal_case(float v);
-#endif
 void apply_sat_bias(float v);
 void apply_sat_drive(float v);
 void apply_sat_mix(float v);

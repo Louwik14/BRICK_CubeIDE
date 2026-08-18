@@ -12,7 +12,7 @@
 
 #include "Audio/env_adsr.h"
 #include "Audio/fx_biquad_filter.h"
-#include "Audio/fx_dj_eq3_cmsis.h"
+#include "Audio/fx_deluge_filter.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_sampler_multi_contract.h"
 
@@ -23,7 +23,7 @@ extern "C" {
 #define MULTI_VOICE_DSP_SLOT_COUNT BRICK6_SAMPLER_MULTI_MAX_VOICES
 #define MULTI_VOICE_DSP_SLOT_INDEX_INVALID UINT8_MAX
 #define MULTI_VOICE_DSP_DEFAULT_SAMPLE_RATE (48000.0f)
-#define MULTI_VOICE_DSP_SLOT_SIZE_BYTES (608U)
+#define MULTI_VOICE_DSP_SLOT_SIZE_BYTES (288U)
 
 typedef enum
 {
@@ -36,18 +36,20 @@ typedef union
     struct
     {
         fx_biquad_filter_t biquad;
-        fx_dj_eq3_t eq3;
     } stereo;
     struct
     {
         fx_biquad_filter_mono_t biquad;
-        fx_dj_eq3_mono_t eq3;
     } mono;
 } multi_voice_dsp_filter_state_t;
 
-typedef struct multi_voice_dsp_slot_t
+typedef struct __attribute__((aligned(32))) multi_voice_dsp_slot_t
 {
-    multi_voice_dsp_filter_state_t filter;
+    union
+    {
+        multi_voice_dsp_filter_state_t filter;
+        fx_deluge_filter_t deluge;
+    };
     env_adsr_t filter_env;
     env_adsr_t vca_env;
     uint32_t owner_generation;
@@ -62,14 +64,10 @@ typedef struct multi_voice_dsp_slot_t
     float keytrack;
     float keytrack_ratio;
     float keytrack_ratio_target;
-    float eq_low_db;
-    float eq_low_target_db;
-    float eq_mid_db;
-    float eq_mid_target_db;
-    float eq_high_db;
-    float eq_high_target_db;
+    float morph;
+    float morph_target;
+    float morph_step;
     uint32_t filter_config_version;
-    mixer_track_filter_type_t filter_type;
     uint8_t owner_voice_index;
     uint8_t state;
     uint8_t format;
@@ -78,6 +76,8 @@ typedef struct multi_voice_dsp_slot_t
     uint8_t filter_retrigger_hard;
     uint8_t vca_retrigger_hard;
     uint8_t current_note;
+    uint8_t filter_mode;
+    uint8_t morph_ramp_remaining;
 } multi_voice_dsp_slot_t;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)

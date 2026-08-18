@@ -26,6 +26,12 @@ BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRI
 //Place the 32 KiB I-cache audit candidate set in ITCM
 BRICK6_ITCM_AUDIT_32:BOOL=OFF
 
+//LOFI prototype engine: Q31 reference or FLOAT native
+BRICK6_LOFI_ENGINE:STRING=Q31
+
+//Capture bounded mixer path snapshots for GDB
+BRICK6_MIXER_PATH_DIAG:BOOL=OFF
+
 //Capture bounded Multi pitched voice trace for GDB
 BRICK6_MULTI_PITCH_TRACE:BOOL=OFF
 
@@ -272,6 +278,8 @@ FM_KERNEL_BENCH:STRING=1
 # INTERNAL cache entries
 ########################
 
+//STRINGS property for variable: BRICK6_LOFI_ENGINE
+BRICK6_LOFI_ENGINE-STRINGS:INTERNAL=Q31;FLOAT
 //STRINGS property for variable: BRICK6_VARIANT
 BRICK6_VARIANT-STRINGS:INTERNAL=premium;lowcost
 //ADVANCED property for variable: CMAKE_ADDR2LINE

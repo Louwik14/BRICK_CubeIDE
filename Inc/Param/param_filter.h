@@ -26,7 +26,7 @@ float param_filter_ui127_to_eg_amount(float v);
 float param_filter_ui127_to_keytrack(float v);
 float param_filter_eq_ui127_to_db(float v);
 
-void apply_filter_type(float v);
+void apply_filter_morph(float v);
 void apply_filter_cutoff(float v);
 void apply_filter_resonance(float v);
 void apply_filter_eg_amount(float v);
@@ -37,9 +37,6 @@ void apply_filter_release(float v);
 void apply_filter_keytrack(float v);
 void apply_filter_env_reset(float v);
 void apply_filter_env_delay(float v);
-void apply_filter_eq_low(float v);
-void apply_filter_eq_mid(float v);
-void apply_filter_eq_high(float v);
 void apply_filter_drive(float v);
 void apply_filter_decimator_bits(float v);
 void apply_filter_decimator_rate(float v);

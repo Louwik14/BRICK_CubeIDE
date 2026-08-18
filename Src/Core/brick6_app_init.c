@@ -53,15 +53,9 @@
 #include "Storage/wav_loader.h"
 #include "Core/brick_build_config.h"
 #if BRICK_TEST_BUILD
-#include "Storage/audio_test_csv.h"
-#include "Storage/monkey_test_log.h"
-#include "Core/audio_test_runner.h"
-#include "Core/audio_test2.h"
 #include "Core/crash_capsule.h"
-#include "Core/monkey_test.h"
 #endif
 #include "Core/brick6_sd_config.h"
-#include "Core/stream_calibration.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -117,11 +111,6 @@ void brick6_app_init(void)
 
     sd_access_gate_init();
 #if BRICK_TEST_BUILD
-    audio_test_csv_init();
-    monkey_test_log_init();
-    audio_test_runner_init();
-    audio_test2_init();
-    monkey_test_init();
 #endif
     waveform_cache_init();
     (void)waveform_cache_ensure_dirs();
@@ -176,9 +165,6 @@ void brick6_app_init(void)
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
 #endif
     brick6_stream_service_task_init();
-#if BRICK6_STREAM_CALIBRATION
-    brick6_stream_calibration_init();
-#endif
     (void)audio_start();
 
     cpu_load_reset_peak();
@@ -209,11 +195,6 @@ static void brick6_app_service_storage(void)
     else
     {
 #if BRICK_TEST_BUILD
-        audio_test_csv_service();
-        monkey_test_log_service();
-        audio_test_runner_tick();
-        audio_test2_service();
-        monkey_test_tick();
 #endif
         brick6_sampler_runtime_service();
         sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
@@ -238,9 +219,6 @@ void brick6_app_process(void)
      */
     seq_runtime_time_adapter_process();
     brick6_app_service_storage();
-#if BRICK6_STREAM_CALIBRATION
-    brick6_stream_calibration_process();
-#endif
     pattern_live_service();
     brick6_master_control_process();
 

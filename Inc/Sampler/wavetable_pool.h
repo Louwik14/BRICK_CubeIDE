@@ -113,11 +113,6 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
 wavetable_result_t wavetable_pool_load_file_auto(const char *path,
                                                  uint16_t *out_wavetable_slot,
                                                  uint16_t *out_global_slot);
-#if BRICK_TEST_BUILD
-wavetable_result_t wavetable_pool_create_audio_test_calibration(
-    uint16_t *out_wavetable_slot,
-    uint16_t *out_global_slot);
-#endif
 void wavetable_pool_clear(uint16_t wavetable_slot);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);

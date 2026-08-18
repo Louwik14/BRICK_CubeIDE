@@ -1,0 +1,10 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:10:14:clampf_local	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:23:14:prepare_monotonic_strength_limit	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:40:14:process_detector	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:49:14:compute_gain	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:106:14:process_one	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:17:14:prepare_coeff	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:62:6:fx_audio_comp_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:76:6:fx_audio_comp_prepare	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:117:7:fx_audio_comp_process_mono_sample	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_audio_comp.c:124:6:fx_audio_comp_process_stereo_sample	16	static

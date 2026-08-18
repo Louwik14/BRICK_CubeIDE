@@ -1637,65 +1637,6 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
     return result;
 }
 
-#if BRICK_TEST_BUILD
-wavetable_result_t wavetable_pool_create_audio_test_calibration(
-    uint16_t *out_wavetable_slot,
-    uint16_t *out_global_slot)
-{
-    const uint16_t wavetable_slot = wavetable_pool_find_free_slot();
-    wavetable_slot_t *const candidate = &g_wavetable_candidate;
-    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (out_wavetable_slot != 0)
-    {
-        *out_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    }
-    if (out_global_slot != 0)
-    {
-        *out_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    }
-    if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_POOL_FULL);
-        return WAVETABLE_RESULT_POOL_FULL;
-    }
-
-    wavetable_pool_candidate_init(candidate);
-    wavetable_result_t result = wavetable_pool_candidate_allocate(
-        wavetable_slot, "@AUDIO_TEST", 1U, candidate);
-    if (result != WAVETABLE_RESULT_OK)
-    {
-        wavetable_pool_set_last(result);
-        return result;
-    }
-    for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
-    {
-        candidate->data[i] = (int16_t)lrintf(
-            sinf((2.0f * 3.14159265358979323846f * (float)i)
-                 / (float)WAVETABLE_FRAME_SAMPLE_COUNT) * 26214.0f);
-    }
-    wavetable_pool_candidate_prepare_mipmap(candidate);
-    result = wavetable_pool_commit_candidate(
-        wavetable_slot, SAMPLE_GLOBAL_POOL_INVALID_INDEX,
-        candidate, &global_slot);
-    if (result != WAVETABLE_RESULT_OK)
-    {
-        wavetable_pool_candidate_release(candidate);
-        wavetable_pool_set_last(result);
-        return result;
-    }
-    wavetable_pool_set_last(WAVETABLE_RESULT_OK);
-    if (out_wavetable_slot != 0)
-    {
-        *out_wavetable_slot = wavetable_slot;
-    }
-    if (out_global_slot != 0)
-    {
-        *out_global_slot = global_slot;
-    }
-    return WAVETABLE_RESULT_OK;
-}
-#endif
-
 void wavetable_pool_clear(uint16_t wavetable_slot)
 {
     if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)

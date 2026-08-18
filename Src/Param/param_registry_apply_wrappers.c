@@ -7,6 +7,7 @@
 #include "fx_comp_lab.h"
 #include "fx_pool.h"
 #include "mixer.h"
+#include "Audio/fx_modfx_global.h"
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -17,9 +18,7 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "UI/ui_track_catalog.h"
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-#include "Core/stream_calibration.h"
-#endif
+#include <math.h>
 
 static float clamp_value(float v, float lo, float hi)
 {
@@ -97,6 +96,35 @@ volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 
 void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
+void apply_modfx_model(float v) { fx_modfx_global_set_model((uint8_t)(clamp_value(v, 0.0f, 8.0f) + 0.5f)); }
+static float modfx_control_unit(float v) { return clamp_value(v,0.0f,127.0f)*(1.0f/127.0f); }
+static float modfx_daisy_rate(float v){v=clamp_value(v,0.0f,127.0f);return(v<=61.0f)?(.01f*powf(30.0f,v/61.0f)):(.3f*powf(40.0f,(v-61.0f)/66.0f));}
+static float modfx_daisy_depth(float v){v=clamp_value(v,0.0f,127.0f);return(v<=123.0f)?(.9f*v/123.0f):(.9f+.03f*(v-123.0f)/4.0f);}
+static float modfx_daisy_feedback(float v){v=clamp_value(v,0.0f,127.0f);return(v<=25.0f)?(.2f*v/25.0f):(.2f+.8f*(v-25.0f)/102.0f);}
+static float modfx_daisy_delay(float v){v=clamp_value(v,0.0f,127.0f);return(v<=95.0f)?(.75f*v/95.0f):(.75f+.25f*(v-95.0f)/32.0f);}
+void apply_modfx_rate(float v)
+{
+    const float u=modfx_control_unit(v);
+    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
+    /* Daisy has no host UI range upstream. Keep BRICK's proven musical
+     * endpoints but use a logarithmic Hz law so its 0.3 Hz Init default is
+     * represented accurately and the native frequency setter receives Hz. */
+    const float hz=(model==5U)?modfx_daisy_rate(v):(.01f+11.99f*u);
+    fx_modfx_global_set_rate(hz);
+}
+void apply_modfx_depth(float v)
+{
+    const float u=modfx_control_unit(v);
+    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
+    if(model==7U)
+    {
+        const unsigned voices=1U+(unsigned)(u*7.0f+0.5f);
+        fx_modfx_global_set_depth((float)(voices-1U)*(1.0f/7.0f));
+    }
+    else fx_modfx_global_set_depth((model==5U)?modfx_daisy_depth(v):u);
+}
+void apply_modfx_feedback(float v) { fx_modfx_global_set_feedback(((uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f)==5U)?modfx_daisy_feedback(v):modfx_control_unit(v)); }
+void apply_modfx_offset(float v) { fx_modfx_global_set_offset(((uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f)==5U)?modfx_daisy_delay(v):modfx_control_unit(v)); }
 
 void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_room_size(float v) { mixer_set_reverb_room_size(clamp_value(v, 0.0f, 1.0f)); }
@@ -139,12 +167,6 @@ void apply_sampler_loop_start(float v) { apply_tone_live_track(PARAM_SAMPLER_LOO
 void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }
 void apply_sampler_slice_count(float v) { apply_tone_live_track(PARAM_SAMPLER_SLICE_COUNT, v); }
 void apply_sampler_multi_loop(float v) { apply_tone_live_track(PARAM_SAMPLER_MULTI_LOOP, v); }
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-void apply_stream_cal_case(float v)
-{
-    brick6_stream_calibration_select_case((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f));
-}
-#endif
 void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
 void apply_midi_cc1_2(float v) { apply_tone_live_track(PARAM_MIDI_CC1_2, v); }
 void apply_midi_cc1_3(float v) { apply_tone_live_track(PARAM_MIDI_CC1_3, v); }

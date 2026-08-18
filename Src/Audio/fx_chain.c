@@ -24,6 +24,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
 #include "fx_comp_lab.h"
+#include "Audio/audio_fx_runtime.h"
 
 /**
  * @brief Traite un bloc stéréo avec un slot FX donné.
@@ -92,10 +93,10 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
  * - IRQ audio.
  */
 /**
- * @brief Point d'entrée fx_chain_process_slot.
+ * @brief Point d'entrée fx_chain_process_global_slot.
  *
  * Rôle:
- * - Exécuter le traitement associé à fx_chain_process_slot.
+ * - Exécuter le traitement associé à fx_chain_process_global_slot.
  *
  * @param slot Paramètre d'entrée de l'API.
  * @param L Paramètre d'entrée de l'API.
@@ -105,12 +106,16 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_chain_process_slot(uint32_t slot, float* L, float* R, uint32_t frames)
+void fx_chain_process_global_slot(uint32_t slot, float* L, float* R, uint32_t frames)
 {
     fx_chain_process_fx_slot(fx_pool_get_slot(slot), L, R, frames);
 }
 
-void fx_chain_process_slot_for_track(uint32_t track, uint32_t slot, float* L, float* R, uint32_t frames)
+static void fx_chain_process_legacy_track_slot(uint32_t track,
+                                               uint32_t slot,
+                                               float* L,
+                                               float* R,
+                                               uint32_t frames)
 {
     fx_slot_t* s = fx_pool_get_slot(slot);
     if (!s || !s->active)
@@ -123,4 +128,133 @@ void fx_chain_process_slot_for_track(uint32_t track, uint32_t slot, float* L, fl
     }
 
     fx_chain_process_fx_slot(s, L, R, frames);
+}
+
+static void fx_chain_process_legacy_track_inserts(uint32_t legacy_track,
+                                                   const int8_t *legacy_slots,
+                                                   size_t legacy_slot_count,
+                                                   float* L,
+                                                   float* R,
+                                                   uint32_t frames)
+{
+    if ((L == NULL) || (R == NULL))
+    {
+        return;
+    }
+
+    for (size_t insert = 0U;
+         (legacy_slots != NULL) && (insert < legacy_slot_count);
+         ++insert)
+    {
+        const int8_t slot = legacy_slots[insert];
+        if (slot >= 0)
+        {
+            fx_chain_process_legacy_track_slot(legacy_track,
+                                                (uint32_t)slot,
+                                                L,
+                                                R,
+                                                frames);
+        }
+    }
+
+}
+
+void fx_chain_process_track_inserts_pre_fader(brick_entity_id_t entity_id,
+                                              uint32_t legacy_track,
+                                              const int8_t *legacy_slots,
+                                              size_t legacy_slot_count,
+                                              float* L,
+                                              float* R,
+                                              uint32_t frames)
+{
+    fx_chain_process_legacy_track_inserts(legacy_track,
+                                          legacy_slots,
+                                          legacy_slot_count,
+                                          L,
+                                          R,
+                                          frames);
+    if (audio_fx_runtime_is_comp(entity_id) != 0U)
+    {
+        audio_fx_runtime_process(entity_id, L, R, frames);
+    }
+}
+
+void fx_chain_process_audio_fx_post_fader(brick_entity_id_t entity_id,
+                                          float* L,
+                                          float* R,
+                                          uint32_t frames)
+{
+    if ((audio_fx_runtime_is_comp(entity_id) == 0U)
+            && (audio_fx_runtime_get_placement(entity_id)
+                == AUDIO_FX_PLACEMENT_POST_FILTER))
+    {
+        audio_fx_runtime_process(entity_id, L, R, frames);
+    }
+}
+
+uint8_t fx_chain_track_inserts_require_stereo(brick_entity_id_t entity_id,
+                                              const int8_t *legacy_slots,
+                                              size_t legacy_slot_count)
+{
+    if (legacy_slots != NULL)
+    {
+        for (size_t insert = 0U; insert < legacy_slot_count; ++insert)
+        {
+            if (legacy_slots[insert] >= 0)
+            {
+                return 1U;
+            }
+        }
+    }
+
+    return audio_fx_runtime_requires_stereo(entity_id);
+}
+
+uint8_t fx_chain_audio_fx_is_pre_filter(brick_entity_id_t entity_id)
+{
+    return (uint8_t)(audio_fx_runtime_get_placement(entity_id)
+                     == AUDIO_FX_PLACEMENT_PRE_FILTER);
+}
+
+void fx_chain_process_audio_fx_pre_filter_mono(brick_entity_id_t entity_id,
+                                               float *buffer,
+                                               uint32_t frames)
+{
+    audio_fx_runtime_process_mono(entity_id, buffer, frames);
+}
+
+void fx_chain_process_audio_fx_pre_filter_stereo(brick_entity_id_t entity_id,
+                                                 float *left,
+                                                 float *right,
+                                                 uint32_t frames)
+{
+    audio_fx_runtime_process_stereo(entity_id, left, right, frames);
+}
+
+float fx_chain_process_audio_fx_comp_mono_sample(brick_entity_id_t entity_id,
+                                                 float sample)
+{
+    return (audio_fx_runtime_is_comp(entity_id) != 0U)
+        ? audio_fx_runtime_process_mono_sample(entity_id, sample) : sample;
+}
+
+void fx_chain_process_audio_fx_comp_stereo_sample(brick_entity_id_t entity_id,
+                                                  float *left,
+                                                  float *right)
+{
+    if (audio_fx_runtime_is_comp(entity_id) != 0U)
+        audio_fx_runtime_process_stereo_sample(entity_id, left, right);
+}
+
+void fx_chain_process_audio_fx_post_fader_stereo_sample(
+    brick_entity_id_t entity_id,
+    float *left,
+    float *right)
+{
+    if ((audio_fx_runtime_is_comp(entity_id) == 0U)
+            && (audio_fx_runtime_get_placement(entity_id)
+                == AUDIO_FX_PLACEMENT_POST_FILTER))
+    {
+        audio_fx_runtime_process_stereo_sample(entity_id, left, right);
+    }
 }

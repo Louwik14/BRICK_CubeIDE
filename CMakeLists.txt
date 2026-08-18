@@ -21,16 +21,6 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
 
-option(BRICK6_MIXER_PATH_DIAG
-       "Capture bounded mixer path snapshots for GDB"
-       OFF)
-if(BRICK6_MIXER_PATH_DIAG
-   AND (NOT BRICK6_VARIANT STREQUAL "lowcost"
-        OR NOT CMAKE_BUILD_TYPE STREQUAL "Release"))
-    message(FATAL_ERROR
-        "BRICK6_MIXER_PATH_DIAG requires the Release Low-Cost configuration")
-endif()
-
 option(BRICK6_ITCM_AUDIT_32
        "Place the 32 KiB I-cache audit candidate set in ITCM"
        OFF)
@@ -43,23 +33,9 @@ if(NOT FM_KERNEL_BENCH MATCHES "^[01]$")
 endif()
 message("FM kernel bench: ${FM_KERNEL_BENCH}")
 
-option(BRICK6_MULTI_STREAM_DIAG "Capture the first Multi stream failure for GDB" OFF)
-option(BRICK6_MULTI_PITCH_TRACE "Capture bounded Multi pitched voice trace for GDB" OFF)
-option(BRICK6_SD_INIT_DIAG "Capture SD initialization diagnostics" OFF)
-option(BRICK6_STREAM_UNDERRUN_TRACE
-       "Capture bounded causal streaming underrun trace for GDB"
-       OFF)
-option(BRICK6_STREAM_CALIBRATION "Enable manual streamer calibration cases in Multi TONE" OFF)
-set(BRICK6_STREAM_CALIBRATION_PAGE_KIB "32" CACHE STRING
-    "Streamer calibration page size (32 KiB)")
 set(BRICK6_STREAM_READ_CHUNK_KIB "32" CACHE STRING
     "Streamer application read quantum in KiB")
-if(BRICK6_STREAM_CALIBRATION
-   AND NOT BRICK6_STREAM_CALIBRATION_PAGE_KIB STREQUAL "32")
-    message(FATAL_ERROR "Manual stream calibration requires 32 KiB pages")
-endif()
-if(BRICK6_STREAM_CALIBRATION
-   AND NOT BRICK6_STREAM_READ_CHUNK_KIB MATCHES "^(4|8|16|32)$")
+if(NOT BRICK6_STREAM_READ_CHUNK_KIB MATCHES "^(4|8|16|32)$")
     message(FATAL_ERROR "BRICK6_STREAM_READ_CHUNK_KIB must be 4, 8, 16 or 32")
 endif()
 
@@ -70,17 +46,9 @@ set(BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES 2)
 set(BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES 3)
 set(BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES 2)
 set(BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST 1)
-if(BRICK6_STREAM_CALIBRATION)
-    set(BRICK6_STREAM_EFFECTIVE_READ_CHUNK_KIB ${BRICK6_STREAM_READ_CHUNK_KIB})
-else()
-    set(BRICK6_STREAM_EFFECTIVE_READ_CHUNK_KIB ${BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB})
-endif()
-option(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN
-       "Use Release code generation for the Debug Multi stream diagnostic build"
-       OFF)
+set(BRICK6_STREAM_EFFECTIVE_READ_CHUNK_KIB ${BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB})
 
-set(BRICK6_RELEASE_LIKE_CONFIG
-    "$<OR:$<CONFIG:Release>,$<AND:$<CONFIG:Debug>,$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>")
+set(BRICK6_RELEASE_LIKE_CONFIG "$<CONFIG:Release>")
 
 # --------------------------------------------------------------------------
 # Standards
@@ -99,12 +67,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 # Default build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
-endif()
-
-if(BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    # The diagnostic image keeps DWARF but removes the toolchain Debug -Og.
-    set(CMAKE_C_FLAGS_DEBUG "-g3")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g3")
 endif()
 
 # --------------------------------------------------------------------------
@@ -256,7 +218,6 @@ list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/rec_live_debug.c"
 )
 
 file(GLOB SRC_KEYBOARD_SRC
@@ -314,6 +275,9 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
+)
+list(APPEND SRC_AUDIO_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/ctag-tbd/components/mutable/eurorack/warps/resources.cc"
 )
 
 file(GLOB SRC_UI_SRC CONFIGURE_DEPENDS
@@ -443,28 +407,12 @@ file(GLOB SRC_NOTE_FX_SRC CONFIGURE_DEPENDS
 )
 
 set(BRICK_TEST_ONLY_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_track_diag.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_test_runner.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_test2.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/crash_capsule.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/diagnostic_input.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/diagnostic_watchdog.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_action.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_monitor.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_replay.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/monkey_test_safety.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_test_csv.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/monkey_test_log.c"
 )
 
 if(NOT BRICK_TEST_BUILD)
     list(APPEND EXCLUDED_SOURCES ${BRICK_TEST_ONLY_SOURCES})
-    if(BRICK6_MULTI_STREAM_DIAG)
-        list(REMOVE_ITEM EXCLUDED_SOURCES
-            "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/crash_capsule.c"
-        )
-    endif()
 endif()
 
 set(ALL_USER_SOURCES
@@ -542,6 +490,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/ctag-tbd/components/mutable/eurorack
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
 )
 
@@ -553,14 +502,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     USE_HAL_DRIVER
     STM32H743xx
     BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
-    $<$<BOOL:${BRICK6_MULTI_STREAM_DIAG}>:BRICK6_MULTI_STREAM_DIAG>
-    $<$<BOOL:${BRICK6_MULTI_PITCH_TRACE}>:BRICK6_MULTI_PITCH_TRACE=1>
-    $<$<BOOL:${BRICK6_SD_INIT_DIAG}>:BRICK6_SD_INIT_DIAG=1>
-    $<$<BOOL:${BRICK6_STREAM_UNDERRUN_TRACE}>:BRICK6_STREAM_UNDERRUN_TRACE=1>
-    $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_CALIBRATION=1>
-    $<$<BOOL:${BRICK6_MIXER_PATH_DIAG}>:BRICK6_MIXER_PATH_DIAG=1>
-    $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_BENCH=1>
-    $<$<BOOL:${BRICK6_STREAM_CALIBRATION}>:BRICK6_STREAM_CALIBRATION_PAGE_KIB=${BRICK6_STREAM_CALIBRATION_PAGE_KIB}>
     BRICK6_STREAM_PRODUCT_PAGE_KIB=${BRICK6_STREAM_PRODUCT_PAGE_KIB}
     BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES=${BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES}
     BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES=${BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES}
@@ -570,8 +511,12 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<BOOL:${BRICK6_ITCM_AUDIT_32}>:BRICK6_ITCM_AUDIT_32=1>
 )
 
+# Keep the runtime-engine marker in the ELF even with LTO and section GC.
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    "-Wl,--undefined=g_fx_audio_lofi_engine_build_id")
+
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:DEBUG>
+    $<$<CONFIG:Debug>:DEBUG>
     FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
 )
 
@@ -597,7 +542,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wall
     --specs=nano.specs
 
-    $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>>:-Og>
+    $<$<CONFIG:Debug>:-Og>
     $<$<CONFIG:Debug>:-g3>
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>
 
@@ -711,13 +656,6 @@ set_source_files_properties(
 # GCC 13.3 LTO can emit a corrupted .init_array relocation for the sole
 # non-trivial global C++ initializer in the diagnostic image. Keep this TU at
 # Release optimization while making its constructor relocation ordinary.
-if(BRICK6_MULTI_STREAM_DIAG AND BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN)
-    set_source_files_properties(
-        "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
-        PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;-fno-lto"
-    )
-endif()
-
 set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
     COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
 )
@@ -774,7 +712,6 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>
-    $<$<AND:$<CONFIG:Debug>,$<BOOL:${BRICK6_MULTI_STREAM_DIAG_RELEASE_CODEGEN}>>:-g3>
 )
 
 # C++ linker because project contains cpp files

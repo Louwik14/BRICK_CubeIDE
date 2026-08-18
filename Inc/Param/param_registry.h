@@ -86,6 +86,8 @@ void param_registry_init(void);
 /* Query surface: pure reads only. */
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value);
 float param_get(param_id_t id);
+uint8_t param_registry_is_audio_fx_param(param_id_t id);
+param_id_t param_registry_get_audio_fx_param(uint8_t order);
 
 /* Command / apply / transition / post-commit surface. */
 void param_registry_sync_filter_ui_for_active_track(void);

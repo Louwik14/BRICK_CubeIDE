@@ -120,10 +120,10 @@ static uint8_t param_backend_fm_store_ui(track_tone_fm_base_voice_t *base,
         case PARAM_FM_PITCH_R2: base->pitch_rates[1] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
         case PARAM_FM_PITCH_R3: base->pitch_rates[2] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
         case PARAM_FM_PITCH_R4: base->pitch_rates[3] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
-        case PARAM_FM_PITCH_L1: base->pitch_levels[0] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
-        case PARAM_FM_PITCH_L2: base->pitch_levels[1] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
-        case PARAM_FM_PITCH_L3: base->pitch_levels[2] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
-        case PARAM_FM_PITCH_L4: base->pitch_levels[3] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
+        case PARAM_FM_PITCH_L1: base->pitch_levels[0] = (uint8_t)(param_backend_clamp_value(value + 49.0f, 0.0f, 99.0f) + 0.5f); return 1U;
+        case PARAM_FM_PITCH_L2: base->pitch_levels[1] = (uint8_t)(param_backend_clamp_value(value + 49.0f, 0.0f, 99.0f) + 0.5f); return 1U;
+        case PARAM_FM_PITCH_L3: base->pitch_levels[2] = (uint8_t)(param_backend_clamp_value(value + 49.0f, 0.0f, 99.0f) + 0.5f); return 1U;
+        case PARAM_FM_PITCH_L4: base->pitch_levels[3] = (uint8_t)(param_backend_clamp_value(value + 49.0f, 0.0f, 99.0f) + 0.5f); return 1U;
         default: return 0U;
     }
 }
@@ -139,7 +139,7 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
                      || (id == PARAM_VCA_DECAY)
                      || (id == PARAM_VCA_SUSTAIN)
                      || (id == PARAM_VCA_RELEASE)
-                     || (id == PARAM_VCA_ENV_TYPE)
+                     || (id == PARAM_FILTER_MODE)
                      || (id == PARAM_ENV_RETRIG_VCA));
 }
 
@@ -1589,6 +1589,16 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
             return 1U;
         }
 
+        case PARAM_MIX_SEND3:
+        {
+            track_sound_state_t *state = track_sound_state_get(track);
+            if ((update_base_state != 0U) && (state != NULL))
+                state->mix_send3 = param_backend_clamp_value(value, 0.0f, 1.0f);
+            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 2U,
+                                       param_backend_clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        }
+
         case PARAM_MIX_MUTE:
             return audio_note_engine_adapter_set_mute(
                 track, (value >= 0.5f) ? 1U : 0U);
@@ -1623,17 +1633,15 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
             return 1U;
         }
 
-        case PARAM_VCA_ENV_TYPE:
+        case PARAM_FILTER_MODE:
         {
-            const uint8_t type = (value >= 0.5f)
-                               ? (uint8_t)VCA_ENV_TYPE_LINEAR
-                               : (uint8_t)VCA_ENV_TYPE_DAISY;
+            const uint8_t mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
             track_sound_state_t *state = track_sound_state_get(track);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->vca_env_type = (float)type;
+                state->filter_mode = (float)mode;
             }
-            mixer_set_track_vca_env_type(ctx->audio_binding.mix_track_id, type);
+            mixer_set_track_filter_mode(ctx->audio_binding.mix_track_id, mode);
             return 1U;
         }
 

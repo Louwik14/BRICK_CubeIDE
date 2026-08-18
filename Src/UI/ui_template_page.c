@@ -255,7 +255,7 @@ static uint8_t ui_template_family_from_page(uint8_t page_id,
         case UI_PAGE_TEMPLATE_TONE: *out_family_id = UI_TEMPLATE_FAMILY_TONE; return 1U;
         case UI_PAGE_TEMPLATE_MOD: *out_family_id = UI_TEMPLATE_FAMILY_MOD; return 1U;
         case UI_PAGE_TEMPLATE_KEYBOARD: *out_family_id = UI_TEMPLATE_FAMILY_KEYBOARD; return 1U;
-        case UI_PAGE_MIDI_FX: *out_family_id = UI_TEMPLATE_FAMILY_MIDI_FX; return 1U;
+        case UI_PAGE_MIDI_FX: *out_family_id = UI_TEMPLATE_FAMILY_FX; return 1U;
         case UI_PAGE_TEMPLATE_SEQ: *out_family_id = UI_TEMPLATE_FAMILY_SEQ; return 1U;
         case UI_PAGE_TEMPLATE_MIX: *out_family_id = UI_TEMPLATE_FAMILY_MIX; return 1U;
         case UI_PAGE_TEMPLATE_PLAY: *out_family_id = UI_TEMPLATE_FAMILY_PLAY; return 1U;
@@ -326,7 +326,7 @@ static uint8_t ui_template_family_to_runtime_ensemble(ui_template_family_id_t fa
         case UI_TEMPLATE_FAMILY_TONE: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_TONE; return 1U;
         case UI_TEMPLATE_FAMILY_MOD: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MOD; return 1U;
         case UI_TEMPLATE_FAMILY_KEYBOARD: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD; return 1U;
-        case UI_TEMPLATE_FAMILY_MIDI_FX: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX; return 1U;
+        case UI_TEMPLATE_FAMILY_FX: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_FX; return 1U;
         case UI_TEMPLATE_FAMILY_SEQ: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_SEQ; return 1U;
         case UI_TEMPLATE_FAMILY_MIX: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_MIX; return 1U;
         case UI_TEMPLATE_FAMILY_PLAY: *out_ensemble = TRACK_RUNTIME_UI_ENSEMBLE_PLAY; return 1U;

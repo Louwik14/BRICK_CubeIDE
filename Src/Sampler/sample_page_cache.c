@@ -7,7 +7,6 @@
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_needs.h"
-#include "Sampler/sample_stream_underrun_trace.h"
 #include "Sampler/sample_stream_manager.h"
 #include "stm32h7xx.h"
 
@@ -337,7 +336,6 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         return;
     }
 
-    const sample_page_state_t old_state = page->state;
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->state != state))
     {
@@ -356,7 +354,6 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         __DMB();
     }
     page->state = state;
-    brick6_stream_underrun_trace_page_state(page, old_state, state);
 }
 
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
@@ -1034,12 +1031,6 @@ uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
     if ((page == 0) || (page->state != SAMPLE_PAGE_READY) || (page->data == 0))
     {
         sample_page_cache_unlock(primask);
-        const sample_audio_format_t format = sample_page_cache_format_key(key);
-        sample_stream_manager_trace_consume_miss(
-            key,
-            page_index,
-            sample_audio_format_page_start_frame(format, page_index),
-            0U);
         return 0U;
     }
 
@@ -1733,56 +1724,6 @@ uint8_t sample_page_cache_set_page_state_key(sample_audio_key_t key,
     sample_page_cache_set_state(page, state);
     return 1U;
 }
-
-
-#if defined(BRICK6_MULTI_STREAM_DIAG)
-uint8_t sample_page_cache_get_window_page_debug(sample_audio_key_t key,
-                                                uint32_t page_index,
-                                                sample_page_window_debug_t *out_debug)
-{
-    if (out_debug == 0)
-    {
-        return 0U;
-    }
-
-    memset(out_debug, 0, sizeof(*out_debug));
-    out_debug->page_index = page_index;
-    out_debug->slot_index = UINT16_MAX;
-    out_debug->state = SAMPLE_PAGE_FREE;
-
-    const uint32_t primask = sample_page_cache_lock();
-    const sample_page_desc_t *const page = sample_page_cache_find_page_key(key, page_index);
-    if (page == 0)
-    {
-        sample_page_cache_unlock(primask);
-        return 0U;
-    }
-
-    out_debug->generation = page->generation;
-    out_debug->slot_index = (uint16_t)(page - g_sample_page_desc);
-    out_debug->frame_count = (page->frame_count > UINT16_MAX)
-                                 ? UINT16_MAX
-                                 : (uint16_t)page->frame_count;
-    out_debug->use_count = page->use_count;
-    out_debug->state = page->state;
-    sample_page_cache_unlock(primask);
-    return 1U;
-}
-
-uint32_t sample_page_cache_debug_count_free_pages(void)
-{
-    uint32_t count = 0U;
-    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
-    {
-        if (g_sample_page_desc[i].state == SAMPLE_PAGE_FREE)
-        {
-            count++;
-        }
-    }
-    return count;
-}
-#endif
-
 uint8_t sample_page_cache_reserve_page(uint16_t sample_id, uint32_t page_index)
 {
     return sample_page_cache_reserve_page_key(sample_audio_key_classic(sample_id), page_index);

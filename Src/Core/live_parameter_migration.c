@@ -8,15 +8,20 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
         case PARAM_VCA_RELEASE:
-        case PARAM_VCA_ENV_TYPE:
+        case PARAM_FILTER_MODE:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
         case PARAM_MIX_LEVEL:
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_SEND3:
         case PARAM_MIX_SEND0_FX:
         case PARAM_MIX_SEND1_FX:
+        case PARAM_AUDIO_FX_P1:
+        case PARAM_AUDIO_FX_P2:
+        case PARAM_AUDIO_FX_P3:
+        case PARAM_AUDIO_FX_MODEL:
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
         case PARAM_PRISM_FINE:
@@ -48,6 +53,11 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_STACK_OSC3_COLOR:
         case PARAM_STACK_OSC_DETUNE:
         case PARAM_MIX_REVERB_WET:
+        case PARAM_MODFX_MODEL:
+        case PARAM_MODFX_RATE:
+        case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_FEEDBACK:
+        case PARAM_MODFX_OFFSET:
         case PARAM_MIX_REVERB_ROOM_SIZE:
         case PARAM_MIX_REVERB_DAMPING:
         case PARAM_MIX_REVERB_WIDTH:

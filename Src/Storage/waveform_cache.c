@@ -1,6 +1,5 @@
 #include "Storage/waveform_cache.h"
 
-#include "Core/rec_live_debug.h"
 #include "Sampler/sample_cache.h"
 #include "Storage/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -301,64 +300,6 @@ static uint64_t waveform_cache_hash_path(const char *path)
     return hash;
 }
 
-static void waveform_cache_debug_mark(rec_live_debug_code_t code,
-                                      const char *path,
-                                      uint32_t result)
-{
-    audio_recorder_status_t status;
-    uint32_t writer_state = 0U;
-    uint32_t frames = 0U;
-    uint32_t last_error = result;
-    if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC, &status) != 0U)
-    {
-        writer_state = (uint32_t)status.state;
-        frames = (status.frames_committed != 0U) ? status.frames_committed : status.frames_received;
-        if(result == 0U)
-        {
-            last_error = (uint32_t)status.error;
-        }
-    }
-
-    rec_live_debug_mark((uint32_t)code,
-                        frames,
-                        rec_live_debug_path_hash(path),
-                        writer_state,
-                        0U,
-                        last_error);
-}
-
-static uint8_t waveform_cache_has_tile_work(void)
-{
-    for(uint8_t i = 0U; i < WAVEFORM_CACHE_TILE_QUEUE_CAPACITY; ++i)
-    {
-        if(g_waveform_cache.tile_queue[i].pending != 0U)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
-static uint8_t waveform_cache_has_queued_work(void)
-{
-    for(uint8_t i = 0U; i < WAVEFORM_CACHE_QUEUE_CAPACITY; ++i)
-    {
-        if(g_waveform_cache.queue[i].state != WAVEFORM_CACHE_JOB_EMPTY)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
-static uint8_t waveform_cache_has_service_work(void)
-{
-    return (uint8_t)((g_waveform_cache.service_defer_passes != 0U)
-        || (g_waveform_cache.active.state != WAVEFORM_CACHE_JOB_EMPTY)
-        || (waveform_cache_has_queued_work() != 0U)
-        || (waveform_cache_has_tile_work() != 0U));
-}
-
 static uint8_t waveform_cache_finish_request(const char *path,
                                              waveform_cache_reason_t reason,
                                              uint8_t result)
@@ -368,7 +309,6 @@ static uint8_t waveform_cache_finish_request(const char *path,
     {
         g_waveform_cache.service_defer_passes = 2U;
     }
-    waveform_cache_debug_mark(REC_LIVE_DEBUG_WAVECACHE_REQUEST_EXIT, path, result);
     return result;
 }
 
@@ -1046,7 +986,6 @@ uint8_t waveform_cache_ensure_dirs(void)
 
 uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t reason)
 {
-    waveform_cache_debug_mark(REC_LIVE_DEBUG_WAVECACHE_REQUEST_ENTER, path, (uint32_t)reason);
     if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
     {
         return waveform_cache_finish_request(path, reason, 1U);
@@ -1452,22 +1391,9 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
 
 void waveform_cache_service(uint32_t byte_budget)
 {
-    const uint8_t trace_service = waveform_cache_has_service_work();
-    if(trace_service != 0U)
-    {
-        waveform_cache_debug_mark(REC_LIVE_DEBUG_WAVECACHE_SERVICE_ENTER,
-                                  g_waveform_cache.active.wav_path,
-                                  (uint32_t)g_waveform_cache.diag.status);
-    }
     if(g_waveform_cache.service_defer_passes != 0U)
     {
         g_waveform_cache.service_defer_passes--;
-        if(trace_service != 0U)
-        {
-            waveform_cache_debug_mark(REC_LIVE_DEBUG_WAVECACHE_SERVICE_EXIT,
-                                      g_waveform_cache.active.wav_path,
-                                      (uint32_t)g_waveform_cache.diag.status);
-        }
         return;
     }
     waveform_cache_service_tile_request(byte_budget);
@@ -1482,12 +1408,6 @@ void waveform_cache_service(uint32_t byte_budget)
     else if(g_waveform_cache.active.state == WAVEFORM_CACHE_JOB_BUILDING)
     {
         waveform_cache_service_build(byte_budget);
-    }
-    if(trace_service != 0U)
-    {
-        waveform_cache_debug_mark(REC_LIVE_DEBUG_WAVECACHE_SERVICE_EXIT,
-                                  g_waveform_cache.active.wav_path,
-                                  (uint32_t)g_waveform_cache.diag.status);
     }
 }
 

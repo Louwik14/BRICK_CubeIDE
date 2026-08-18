@@ -55,12 +55,9 @@ extern SD_HandleTypeDef hsd1;
 __weak uint8_t BSP_SD_Init(void)
 {
   uint8_t sd_state = MSD_OK;
-  const uint32_t t0 = HAL_GetTick();
-  sd_access_trace_begin("bsp_sd_init");
   /* Check if the SD card is plugged in the slot */
   if (BSP_SD_IsDetected() != SD_PRESENT)
   {
-    sd_access_trace_end("bsp_sd_init", (int)MSD_ERROR_SD_NOT_PRESENT, HAL_GetTick() - t0);
     return MSD_ERROR_SD_NOT_PRESENT;
   }
   /* HAL SD initialization */
@@ -75,7 +72,6 @@ __weak uint8_t BSP_SD_Init(void)
     }
   }
 
-  sd_access_trace_end("bsp_sd_init", (int)sd_state, HAL_GetTick() - t0);
   return sd_state;
 }
 /* USER CODE BEGIN AfterInitSection */
@@ -214,8 +210,6 @@ __weak uint8_t BSP_SD_WriteBlocks(uint32_t *pData, uint32_t WriteAddr, uint32_t 
 __weak uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBlocks)
 {
   uint8_t sd_state = MSD_OK;
-  const uint32_t t0 = HAL_GetTick();
-  sd_access_trace_begin("bsp_sd_read_dma");
 
   /* Read block(s) in DMA transfer mode */
   if (HAL_SD_ReadBlocks_DMA(&hsd1, (uint8_t *)pData, ReadAddr, NumOfBlocks) != HAL_OK)
@@ -223,7 +217,6 @@ __weak uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_
     sd_state = MSD_ERROR;
   }
 
-  sd_access_trace_end("bsp_sd_read_dma", (int)sd_state, HAL_GetTick() - t0);
   return sd_state;
 }
 
@@ -255,8 +248,6 @@ __weak uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_
 __weak uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBlocks)
 {
   uint8_t sd_state = MSD_OK;
-  const uint32_t t0 = HAL_GetTick();
-  sd_access_trace_begin("bsp_sd_write_dma");
 
   /* Write block(s) in DMA transfer mode */
   if (HAL_SD_WriteBlocks_DMA(&hsd1, (uint8_t *)pData, WriteAddr, NumOfBlocks) != HAL_OK)
@@ -264,7 +255,6 @@ __weak uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *pData, uint32_t WriteAddr, uint3
     sd_state = MSD_ERROR;
   }
 
-  sd_access_trace_end("bsp_sd_write_dma", (int)sd_state, HAL_GetTick() - t0);
   return sd_state;
 }
 

@@ -81,7 +81,7 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
             return (ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_KEYBOARD) != 0) ? 1U : 0U;
 
         case UI_PAGE_MIDI_FX:
-            return (uint8_t)((track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) != 0U)
+            return (uint8_t)((track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_FX) != 0U)
                 || (ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode()) != UI_HALL_ROUT_CONTEXT_NONE));
 
         case UI_PAGE_TEMPLATE_SEQ:

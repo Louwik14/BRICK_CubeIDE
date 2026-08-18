@@ -29,6 +29,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:49
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:504:6:track_set_gain	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:511:6:audio_float_set_master_gain	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:523:7:audio_float_get_master_gain	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:566:6:audio_process_block_int32	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:566:6:audio_process_block_int32	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:609:10:audio_get_frame_counter	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_float.c:625:6:audio_debug_get_stats	0	static

@@ -39,7 +39,7 @@ static void audio_note_engine_adapter_publish_snapshots(void)
             .family = g_audio_track_ctx[entity].family,
             .type = g_audio_track_ctx[entity].type,
             .flags = g_audio_track_ctx[entity].flags,
-            .physical_voice_count = (is_multi != 0U)
+            .configured_voice_count = (is_multi != 0U)
                 ? brick6_sampler_runtime_get_multi_voice_count(entity)
                 : synth_polyphony_get_voice_count(entity),
             .physical_voice_capacity = (is_multi != 0U)

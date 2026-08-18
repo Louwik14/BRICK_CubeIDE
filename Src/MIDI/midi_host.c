@@ -89,9 +89,6 @@ void midi_host_poll_bounded(uint32_t max_msgs)
 {
   uint32_t n = 0U;
 
-#if BRICK6_ENABLE_DIAGNOSTICS
-  brick6_midi_host_poll_count++;
-#endif
 
   if (!USBH_MIDI_IsReady(&hUsbHostHS))
   {
@@ -122,12 +119,6 @@ void midi_host_poll_bounded(uint32_t max_msgs)
     midi_send_raw(MIDI_DEST_USB, &midi_host_rx_packet[1], length);
   }
 
-#if BRICK6_ENABLE_DIAGNOSTICS
-  if ((max_msgs > 0U) && (n >= max_msgs))
-  {
-    midi_budget_hit_count++;
-  }
-#endif
 }
 
 /**

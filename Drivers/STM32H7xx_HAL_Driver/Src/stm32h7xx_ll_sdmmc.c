@@ -152,7 +152,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
-#include "SD/sd_init_diag.h"
 
 /** @addtogroup STM32H7xx_HAL_Driver
   * @{
@@ -362,7 +361,6 @@ HAL_StatusTypeDef SDMMC_SendCommand(SDMMC_TypeDef *SDMMCx, const SDMMC_CmdInitTy
 
   /* Set the SDMMC Argument value */
   SDMMCx->ARG = Command->Argument;
-  sd_init_diag_command_sent(Command->CmdIndex, Command->Argument, SDMMCx);
 
   /* Set SDMMC command parameters */
   tmpreg |= (uint32_t)(Command->CmdIndex         | \
@@ -853,7 +851,6 @@ uint32_t SDMMC_CmdGoIdleState(SDMMC_TypeDef *SDMMCx)
 
   /* Check for error conditions */
   errorstate = SDMMC_GetCmdError(SDMMCx);
-  sd_init_diag_command_result(SDMMC_CMD_GO_IDLE_STATE, errorstate, SDMMCx);
 
   return errorstate;
 }
@@ -882,7 +879,6 @@ uint32_t SDMMC_CmdOperCond(SDMMC_TypeDef *SDMMCx)
 
   /* Check for error conditions */
   errorstate = SDMMC_GetCmdResp7(SDMMCx);
-  sd_init_diag_command_result(SDMMC_CMD_HS_SEND_EXT_CSD, errorstate, SDMMCx);
 
   return errorstate;
 }
@@ -912,7 +908,6 @@ uint32_t SDMMC_CmdAppCommand(SDMMC_TypeDef *SDMMCx, uint32_t Argument)
   it is a SD card: SD card 2.0 (voltage range mismatch)
      or SD card 1.x */
   errorstate = SDMMC_GetCmdResp1(SDMMCx, SDMMC_CMD_APP_CMD, SDMMC_CMDTIMEOUT);
-  sd_init_diag_command_result(SDMMC_CMD_APP_CMD, errorstate, SDMMCx);
 
   return errorstate;
 }
@@ -938,7 +933,6 @@ uint32_t SDMMC_CmdAppOperCommand(SDMMC_TypeDef *SDMMCx, uint32_t Argument)
 
   /* Check for error conditions */
   errorstate = SDMMC_GetCmdResp3(SDMMCx);
-  sd_init_diag_command_result(SDMMC_CMD_SD_APP_OP_COND, errorstate, SDMMCx);
 
   return errorstate;
 }

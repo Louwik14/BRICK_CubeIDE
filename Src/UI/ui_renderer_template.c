@@ -34,6 +34,7 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Audio/spectral_window.h"
+#include "Audio/audio_waveform_capture.h"
 #include "Board/board_audio_format.h"
 
 #define UI_TEMPLATE_FRAME_W          32
@@ -645,6 +646,12 @@ static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_templ
 static uint8_t ui_renderer_template_get_param_authority_track(param_id_t id)
 {
     const uint8_t selected_entity = ui_renderer_template_get_selected_entity();
+    if ((id == PARAM_AUDIO_FX_P1) || (id == PARAM_AUDIO_FX_P2)
+            || (id == PARAM_AUDIO_FX_P3) || (id == PARAM_AUDIO_FX_MODEL))
+    {
+        /* Encoder flash is authored against the selected Audio-FX entity. */
+        return selected_entity;
+    }
     uint8_t track = ui_renderer_template_get_edit_owner_track();
     (void)ui_page_template_play_resolve_param_track(id, selected_entity, &track);
     return track;
@@ -770,12 +777,15 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
 
     float flash_value = 0.0f;
     ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
-    const uint8_t flash_active =
-        ui_param_get_slot_value_flash(slot,
-                                      id,
-                                      ui_renderer_template_get_param_authority_track(id),
-                                      &flash_value,
-                                      &flash_kind);
+    const uint8_t audio_fx_param = (uint8_t)((id == PARAM_AUDIO_FX_P1)
+        || (id == PARAM_AUDIO_FX_P2) || (id == PARAM_AUDIO_FX_P3));
+    const uint8_t flash_active = (audio_fx_param != 0U)
+        ? ui_param_is_user_tweak_active(slot, id)
+        : ui_param_get_slot_value_flash(slot,
+                                        id,
+                                        ui_renderer_template_get_param_authority_track(id),
+                                        &flash_value,
+                                        &flash_kind);
     if (out_flash_active != NULL)
     {
         *out_flash_active = flash_active;
@@ -784,6 +794,7 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
     {
         char flash_name[24];
         (void)flash_kind;
+        if (audio_fx_param != 0U) flash_value = *out_value;
         ui_renderer_template_build_param_text(state,
                                               slot,
                                               id,
@@ -828,22 +839,31 @@ static uint8_t ui_renderer_template_value_to_u7(float value)
     return (uint8_t)v;
 }
 
-static uint8_t ui_renderer_template_filter_type_visible(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
-                                                        mixer_track_filter_type_t *out_type)
+typedef struct
 {
-    float value = 0.0f;
-    if ((out_type == 0)
-            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_TYPE, &value, 0) == 0U))
+    uint8_t mode;
+    float cutoff;
+    float resonance;
+    float morph;
+} ui_renderer_template_filter_snapshot_t;
+
+static uint8_t ui_renderer_template_filter_snapshot_capture(
+    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+    ui_renderer_template_filter_snapshot_t *out)
+{
+    float mode = 0.0f;
+    if ((out == NULL)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_MODE, &mode, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_CUTOFF, &out->cutoff, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_RESONANCE, &out->resonance, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_MORPH, &out->morph, 0) == 0U))
     {
         return 0U;
     }
-
-    uint8_t type = (uint8_t)(value + 0.5f);
-    if (type > (uint8_t)MIXER_TRACK_FILTER_BP_BI)
-    {
-        type = (uint8_t)MIXER_TRACK_FILTER_BP_BI;
-    }
-    *out_type = (mixer_track_filter_type_t)type;
+    out->mode = (mode < 0.5f) ? 0U : ((mode < 1.5f) ? 1U : 2U);
+    out->cutoff = (out->cutoff < 0.0f) ? 0.0f : ((out->cutoff > 127.0f) ? 127.0f : out->cutoff);
+    out->resonance = (out->resonance < 0.0f) ? 0.0f : ((out->resonance > 127.0f) ? 127.0f : out->resonance);
+    out->morph = (out->morph < 0.0f) ? 0.0f : ((out->morph > 127.0f) ? 127.0f : out->morph);
     return 1U;
 }
 
@@ -2356,20 +2376,16 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
     return 0U;
 }
 
-static const char *ui_renderer_template_filter_type_short_label(mixer_track_filter_type_t filter_type)
+static const char *ui_renderer_template_filter_mode_short_label(uint8_t filter_mode)
 {
-    switch (filter_type)
+    switch (filter_mode)
     {
-        case MIXER_TRACK_FILTER_OFF:
+        case 0U:
             return "OFF";
-        case MIXER_TRACK_FILTER_EQ3:
-            return "DJ";
-        case MIXER_TRACK_FILTER_LP_BI:
-            return "LP";
-        case MIXER_TRACK_FILTER_HP_BI:
-            return "HP";
-        case MIXER_TRACK_FILTER_BP_BI:
-            return "BP";
+        case 1U:
+            return "LOW";
+        case 2U:
+            return "HIGH";
         default:
             return NULL;
     }
@@ -2384,15 +2400,11 @@ static void ui_renderer_template_draw_filter_curve_segment(int x0, int y0, int x
     {
         return;
     }
-    if ((dy == 0) && (dx <= 1) && (y0 >= (baseline_y - 2)))
-    {
-        return;
-    }
-
+    (void)baseline_y;
     drv_display_draw_line(x0, y0, x1, y1);
 }
 
-static uint8_t ui_renderer_template_draw_filter_group_curve(mixer_track_filter_type_t filter_type,
+static uint8_t ui_renderer_template_draw_filter_group_curve(float morph,
                                                             float cutoff_value,
                                                             float resonance_value,
                                                             int x,
@@ -2414,60 +2426,39 @@ static uint8_t ui_renderer_template_draw_filter_group_curve(mixer_track_filter_t
     const int floor = bottom - 3;
     const int high = top + 5;
     const int lp_hp_high = high + 3;
-    const int x_mid = left + ((right - left) / 2);
     const int cutoff_x = ui_renderer_template_clamp_i32(left + 6 + (((right - left - 12) * (int)cutoff) / 127), left + 6, right - 6);
     const int lp_hp_peak = ui_renderer_template_clamp_i32(lp_hp_high - (((lp_hp_high - top - 1) * (int)resonance) / 127), top + 1, lp_hp_high);
 
     drv_display_draw_line(left, bottom, right, bottom);
 
-    switch (filter_type)
+    const float t = (morph <= 64.0f) ? (morph / 64.0f) : ((morph - 64.0f) / 63.0f);
+    const uint8_t upper = (morph > 64.0f) ? 1U : 0U;
+    const int bp_half_width = 16 - (((int)resonance * 8) / 127);
+    const int bp_peak = ui_renderer_template_clamp_i32(floor - 3 - (((floor - top - 5) * (int)resonance) / 127), top + 2, floor - 3);
+    int previous_x = left;
+    int previous_y = floor;
+    const int point_count = right - left;
+    for (int point = 0; point <= point_count; ++point)
     {
-        case MIXER_TRACK_FILTER_EQ3:
+        const int px = left + point;
+        const int distance = (px >= cutoff_x) ? (px - cutoff_x) : (cutoff_x - px);
+        const int slope = ui_renderer_template_clamp_i32(distance, 0, 8);
+        const int lp_y = (px <= cutoff_x)
+            ? (lp_hp_high + (((lp_hp_peak - lp_hp_high) * (8 - slope)) / 8))
+            : (lp_hp_peak + (((floor - lp_hp_peak) * slope) / 8));
+        const int hp_y = (px >= cutoff_x)
+            ? (lp_hp_high + (((lp_hp_peak - lp_hp_high) * (8 - slope)) / 8))
+            : (lp_hp_peak + (((floor - lp_hp_peak) * slope) / 8));
+        const int bp_y = (distance >= bp_half_width)
+            ? floor : (floor - (((floor - bp_peak) * (bp_half_width - distance)) / bp_half_width));
+        const int py = upper ? (int)((1.0f - t) * (float)bp_y + t * (float)hp_y + 0.5f)
+                             : (int)((1.0f - t) * (float)lp_y + t * (float)bp_y + 0.5f);
+        if (point != 0)
         {
-            const int band_w = (right - left) / 3;
-            const int x1 = left + band_w;
-            const int x2 = right - band_w;
-            const int y_left = high + (((floor - high) * (int)cutoff) / 127);
-            const int y_right = high + (((floor - high) * (127 - (int)cutoff)) / 127);
-            const int y_mid = ui_renderer_template_clamp_i32(floor - 2 - (((floor - top - 4) * (int)resonance) / 127),
-                                                             top + 2,
-                                                             floor - 2);
-            ui_renderer_template_draw_filter_curve_segment(left, y_left, x1, y_left, bottom);
-            ui_renderer_template_draw_filter_curve_segment(x1, y_left, x_mid, y_mid, bottom);
-            ui_renderer_template_draw_filter_curve_segment(x_mid, y_mid, x2, y_right, bottom);
-            ui_renderer_template_draw_filter_curve_segment(x2, y_right, right, y_right, bottom);
-            break;
+            ui_renderer_template_draw_filter_curve_segment(previous_x, previous_y, px, py, bottom);
         }
-
-        case MIXER_TRACK_FILTER_HP_BI:
-            ui_renderer_template_draw_filter_curve_segment(left, floor, cutoff_x - 5, floor, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x - 5, floor, cutoff_x, lp_hp_peak, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x, lp_hp_peak, cutoff_x + 5, lp_hp_high, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x + 5, lp_hp_high, right, lp_hp_high, bottom);
-            break;
-
-        case MIXER_TRACK_FILTER_BP_BI:
-        {
-            const int half_w = 16 - (((int)resonance * 8) / 127);
-            const int band_left = ui_renderer_template_clamp_i32(cutoff_x - half_w, left, right);
-            const int band_right = ui_renderer_template_clamp_i32(cutoff_x + half_w, left, right);
-            const int peak = ui_renderer_template_clamp_i32(floor - 3 - (((floor - top - 5) * (int)resonance) / 127),
-                                                            top + 2,
-                                                            floor - 3);
-            ui_renderer_template_draw_filter_curve_segment(left, floor, band_left, floor, bottom);
-            ui_renderer_template_draw_filter_curve_segment(band_left, floor, cutoff_x, peak, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x, peak, band_right, floor, bottom);
-            ui_renderer_template_draw_filter_curve_segment(band_right, floor, right, floor, bottom);
-            break;
-        }
-
-        case MIXER_TRACK_FILTER_LP_BI:
-        default:
-            ui_renderer_template_draw_filter_curve_segment(left, lp_hp_high, cutoff_x - 5, lp_hp_high, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x - 5, lp_hp_high, cutoff_x, lp_hp_peak, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x, lp_hp_peak, cutoff_x + 6, floor, bottom);
-            ui_renderer_template_draw_filter_curve_segment(cutoff_x + 6, floor, right, floor, bottom);
-            break;
+        previous_x = px;
+        previous_y = py;
     }
 
     return 1U;
@@ -2482,16 +2473,16 @@ static uint8_t ui_renderer_template_draw_custom_filter(const ui_param_seq_plock_
                                                        float value,
                                                        uint8_t allow_group_curve)
 {
-    mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
-    if (ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) == 0U)
+    ui_renderer_template_filter_snapshot_t snapshot;
+    if (ui_renderer_template_filter_snapshot_capture(plock_frame_ctx, &snapshot) == 0U)
     {
         return 0U;
     }
 
     if (kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE)
     {
-        const char *label = ui_renderer_template_filter_type_short_label(filter_type);
-        const font_t *font = (filter_type == MIXER_TRACK_FILTER_OFF) ? &FONT_OFF_COMPACT : &FONT_HELVB14;
+        const char *label = ui_renderer_template_filter_mode_short_label(snapshot.mode);
+        const font_t *font = (snapshot.mode == 0U) ? &FONT_OFF_COMPACT : &FONT_HELVB14;
         return (label != NULL) ? ui_renderer_template_draw_filter_big_text(x, y, w, h, label, font) : 0U;
     }
 
@@ -2506,21 +2497,23 @@ static uint8_t ui_renderer_template_draw_custom_filter(const ui_param_seq_plock_
         return 0U;
     }
 
-    if (filter_type == MIXER_TRACK_FILTER_OFF)
+    if ((snapshot.mode == 0U) && (kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
+    {
+        const int baseline = y + (h / 2);
+        drv_display_draw_line(x + 2, baseline, x + w - 3, baseline);
+        return 1U;
+    }
+    if (snapshot.mode == 0U)
     {
         return ui_renderer_template_draw_filter_text(x, y, w, h, "-", &FONT_4X6, 0);
     }
 
     if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP) && (allow_group_curve != 0U))
     {
-        float cutoff_value = 64.0f;
-        float resonance_value = 0.0f;
-        if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_CUTOFF, &cutoff_value, 0) == 0U)
-                || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_RESONANCE, &resonance_value, 0) == 0U))
-        {
-            return 0U;
-        }
-        return ui_renderer_template_draw_filter_group_curve(filter_type, cutoff_value, resonance_value, x, y, w, h);
+        return ui_renderer_template_draw_filter_group_curve(snapshot.morph,
+                                                             snapshot.cutoff,
+                                                             snapshot.resonance,
+                                                             x, y, w, h);
     }
 
     (void)value;
@@ -2838,6 +2831,20 @@ static ui_template_custom_widget_kind_t ui_renderer_template_resolve_grouped_cus
         return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
     }
 
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+    {
+        return (ui_renderer_template_resolve_custom_widget(
+                    state, subpage, 1U, subpage->param_bank.params[1])
+                == kind)
+            && (ui_renderer_template_resolve_custom_widget(
+                    state, subpage, 2U, subpage->param_bank.params[2])
+                == kind)
+            && (ui_renderer_template_resolve_custom_widget(
+                    state, subpage, 3U, subpage->param_bank.params[3])
+                == UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+            ? kind : UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
     for (uint8_t slot = 1U; slot < 4U; ++slot)
     {
         if (ui_renderer_template_resolve_custom_widget(state, subpage, slot, subpage->param_bank.params[slot]) != kind)
@@ -2868,15 +2875,12 @@ static uint8_t ui_renderer_template_filter_curve_group_is_active(const ui_templa
         return 0U;
     }
 
-    mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
-    if (ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) == 0U)
+    ui_renderer_template_filter_snapshot_t snapshot;
+    if (ui_renderer_template_filter_snapshot_capture(plock_frame_ctx, &snapshot) == 0U)
     {
         return 0U;
     }
-    if (filter_type == MIXER_TRACK_FILTER_OFF)
-    {
-        return 0U;
-    }
+    (void)snapshot;
     if ((ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_CUTOFF) == 0U)
             || (ui_renderer_template_filter_param_supported(ui_renderer_template_get_edit_owner_track(), PARAM_FILTER_RESONANCE) == 0U))
     {
@@ -3088,6 +3092,7 @@ static uint8_t ui_renderer_template_draw_fm_pitch_eg_group(const ui_param_seq_pl
         (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, level_ids[i], &levels[i], 0);
         if (rates[i] < 0.0f) rates[i] = 0.0f;
         if (rates[i] > 99.0f) rates[i] = 99.0f;
+        levels[i] += 49.0f;
         if (levels[i] < 0.0f) levels[i] = 0.0f;
         if (levels[i] > 99.0f) levels[i] = 99.0f;
         time[i] = 100.0f - rates[i] + 1.0f;
@@ -3098,8 +3103,10 @@ static uint8_t ui_renderer_template_draw_fm_pitch_eg_group(const ui_param_seq_pl
     const int y = UI_TEMPLATE_GROUP_WIDGET_Y;
     const int w = UI_TEMPLATE_GROUP_WIDGET_W;
     const int h = UI_TEMPLATE_GROUP_WIDGET_H;
+    const int neutral_y = y + h - 2 - (int)((49.0f * (float)(h - 4)) / 99.0f + 0.5f);
+    drv_display_draw_line(x, neutral_y, x + w - 1, neutral_y);
     int previous_x = x;
-    int previous_y = y + h - 2 - (int)((49.0f * (float)(h - 4)) / 99.0f + 0.5f);
+    int previous_y = neutral_y;
     float accumulated = 0.0f;
     for (uint8_t i = 0U; i < 4U; ++i)
     {
@@ -3431,7 +3438,7 @@ static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_s
 
     ui_renderer_template_wavetable_cache_t *const cache =
         &g_ui_renderer_template_wavetable_cache;
-    const int top = UI_TEMPLATE_WAVE_WT_Y + 1;
+    const int top = UI_TEMPLATE_WAVE_WT_Y + 4;
     const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
     const float peak = (float)preview->global_peak;
 
@@ -4139,15 +4146,21 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     const int y = UI_TEMPLATE_FRAME_Y;
     const int widget_x = x + UI_TEMPLATE_CARD_WIDGET_X_PAD;
     const int widget_y = y + UI_TEMPLATE_CARD_WIDGET_Y;
+    const uint8_t audio_fx_shared_slot = (uint8_t)(
+        (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+        && (slot < 3U));
     const uint8_t slot_locked = ui_macro_interaction_param_is_locked(id);
 
-    if (slot_locked != 0U)
+    if ((slot_locked != 0U) && (audio_fx_shared_slot == 0U))
     {
         drv_display_fill_rect(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
         drv_display_set_draw_color(0U);
     }
 
-    ui_renderer_template_draw_param_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+    if (audio_fx_shared_slot == 0U)
+    {
+        ui_renderer_template_draw_param_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+    }
 
     if ((state != NULL) && (state->virtual_slot_text != NULL))
     {
@@ -4232,6 +4245,13 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         return;
     }
 
+    if (audio_fx_shared_slot != 0U)
+    {
+        drv_display_set_font(&FONT_4X6);
+        ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+        goto draw_bottom_label;
+    }
+
     if ((desc->display_type == PARAM_DISPLAY_ENUM) && (desc->labels != NULL))
     {
         const int32_t index = (int32_t)(value + 0.5f);
@@ -4247,9 +4267,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         ui_renderer_template_resolve_custom_widget(state, subpage, slot, id);
     if ((flash_active == 0U) && (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
     {
-        mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
-        if ((ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) != 0U)
-                && (filter_type == MIXER_TRACK_FILTER_OFF))
+        ui_renderer_template_filter_snapshot_t snapshot;
+        if ((ui_renderer_template_filter_snapshot_capture(plock_frame_ctx, &snapshot) != 0U)
+                && (snapshot.mode == 0U))
         {
             bottom_txt[0] = '\0';
         }
@@ -4542,7 +4562,8 @@ draw_bottom_label:
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt),
                           (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                           bottom_txt);
-    if (draw_name_inverted != 0U)
+    if ((draw_name_inverted != 0U)
+            || ((audio_fx_shared_slot != 0U) && (slot_locked != 0U)))
     {
         const uint8_t text_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt);
         const uint8_t text_w = drv_display_text_width(bottom_txt);
@@ -4810,6 +4831,163 @@ static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_
     }
 }
 
+static uint8_t ui_renderer_template_draw_audio_fx_group(
+    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    (void)plock_frame_ctx;
+    const int x = (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_X;
+    const int top = UI_TEMPLATE_WAVE_WT_Y + 4;
+    const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
+    const int w = (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_WIDTH;
+    const int center = top + ((bottom - top) / 2);
+    const int positive_height = center - top;
+    const int negative_height = bottom - center;
+    typedef struct
+    {
+        brick_entity_id_t entity_id;
+        uint32_t generation;
+        uint8_t valid;
+        uint8_t triggered;
+        int8_t y_top[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
+        int8_t y_bottom[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
+    } ui_audio_scope_cache_t;
+    static audio_waveform_capture_snapshot_t snapshot;
+    static ui_audio_scope_cache_t cache;
+    static brick_entity_id_t scale_entity = BRICK_ENTITY_INVALID_ID;
+    static uint8_t display_peak = 32U;
+    const brick_entity_id_t selected_entity =
+        (brick_entity_id_t)ui_renderer_template_get_selected_entity();
+    const brick_entity_id_t requested_entity = audio_waveform_capture_get_entity();
+    const uint32_t published_generation = audio_waveform_capture_get_generation();
+    const uint8_t snapshot_read = ((cache.valid == 0U)
+            || (cache.generation != published_generation))
+        ? audio_waveform_capture_read(&snapshot) : 0U;
+    if (requested_entity != selected_entity)
+    {
+        cache.valid = 0U;
+        scale_entity = BRICK_ENTITY_INVALID_ID;
+        display_peak = 32U;
+    }
+    else if ((snapshot_read != 0U)
+            && (snapshot.entity_id == selected_entity)
+            && (snapshot.valid != 0U)
+            && ((cache.valid == 0U) || (cache.generation != snapshot.generation)))
+    {
+        uint8_t peak = 0U;
+        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
+        {
+            int8_t column_min;
+            int8_t column_max;
+            if (snapshot.triggered != 0U)
+            {
+                const uint32_t position_q8 =
+                    (((uint32_t)column
+                      * (AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U)) << 8)
+                    / (AUDIO_WAVEFORM_CAPTURE_COLUMNS - 1U)
+                    + snapshot.trigger_fraction_q8;
+                uint32_t source = position_q8 >> 8;
+                const uint16_t fraction = (uint16_t)(position_q8 & 0xffU);
+                if (source >= AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
+                    source = AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U;
+                const uint32_t next = (source + 1U < AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
+                    ? source + 1U : source;
+                const int32_t a = snapshot.samples[source];
+                const int32_t b = snapshot.samples[next];
+                const int8_t value = (int8_t)(a
+                    + (((b - a) * fraction) >> 8));
+                column_min = value;
+                column_max = value;
+            }
+            else
+            {
+                const uint16_t begin = (uint16_t)(column * 16U);
+                const uint16_t end = (uint16_t)(begin + 16U);
+                column_min = INT8_MAX;
+                column_max = INT8_MIN;
+                for (uint16_t sample = begin; sample < end; ++sample)
+                {
+                    const int8_t value = snapshot.samples[sample];
+                    if (value < column_min) column_min = value;
+                    if (value > column_max) column_max = value;
+                }
+            }
+            const uint8_t min_peak = (column_min == INT8_MIN)
+                ? 128U : (uint8_t)((column_min < 0) ? -column_min : column_min);
+            const uint8_t max_peak = (column_max == INT8_MIN)
+                ? 128U : (uint8_t)((column_max < 0) ? -column_max : column_max);
+            if (min_peak > peak) peak = min_peak;
+            if (max_peak > peak) peak = max_peak;
+            cache.y_top[column] = column_max;
+            cache.y_bottom[column] = column_min;
+        }
+        const uint8_t target_peak = (peak > 32U) ? peak : 32U;
+        if (scale_entity != selected_entity)
+        {
+            scale_entity = selected_entity;
+            display_peak = 32U;
+        }
+        if (target_peak > display_peak)
+            display_peak = target_peak;
+        else
+            display_peak = (uint8_t)(((uint16_t)display_peak * 7U + target_peak) / 8U);
+        if (display_peak < 32U) display_peak = 32U;
+        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
+        {
+            const int8_t column_max = cache.y_top[column];
+            const int8_t column_min = cache.y_bottom[column];
+            const int max_height = (column_max >= 0) ? positive_height : negative_height;
+            const int min_height = (column_min >= 0) ? positive_height : negative_height;
+            int32_t max_scaled = ((int32_t)column_max * max_height) / display_peak;
+            int32_t min_scaled = ((int32_t)column_min * min_height) / display_peak;
+            if (max_scaled > positive_height) max_scaled = positive_height;
+            if (max_scaled < -negative_height) max_scaled = -negative_height;
+            if (min_scaled > positive_height) min_scaled = positive_height;
+            if (min_scaled < -negative_height) min_scaled = -negative_height;
+            cache.y_top[column] = (int8_t)(center - (int)max_scaled);
+            cache.y_bottom[column] = (int8_t)(center - (int)min_scaled);
+        }
+        cache.entity_id = selected_entity;
+        cache.generation = snapshot.generation;
+        cache.triggered = snapshot.triggered;
+        cache.valid = 1U;
+    }
+    const uint8_t snapshot_valid = (uint8_t)(
+        (requested_entity == selected_entity)
+        && (cache.valid != 0U)
+        && (cache.entity_id == selected_entity));
+
+    for (int px = x; px < (x + w); px += 2)
+    {
+        drv_display_draw_pixel(px, center, true);
+    }
+
+    if (snapshot_valid == 0U) return 1U;
+    if (cache.triggered != 0U)
+    {
+        int previous_y = cache.y_top[0];
+        for (uint16_t column = 1U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
+        {
+            const int next_y = cache.y_top[column];
+            drv_display_draw_line(x + (int)column - 1,
+                                  previous_y,
+                                  x + (int)column,
+                                  next_y);
+            previous_y = next_y;
+        }
+    }
+    else
+    {
+        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
+        {
+            drv_display_draw_line(x + (int)column,
+                                  cache.y_top[column],
+                                  x + (int)column,
+                                  cache.y_bottom[column]);
+        }
+    }
+    return 1U;
+}
+
 void ui_renderer_template_draw(const ui_template_page_state_t *state)
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
@@ -4843,6 +5021,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
             uint8_t grouped_widget_drawn =
                 (uint8_t)((grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
                         && (ui_renderer_template_prepare_custom_adsr(&plock_frame_ctx, grouped_widget, &grouped_adsr_shape) != 0U));
+            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+            {
+                grouped_widget_drawn = 1U;
+            }
 
             if (ui_renderer_template_filter_curve_group_is_active(state, subpage, &plock_frame_ctx) != 0U)
             {
@@ -4875,6 +5057,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
             {
                 grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
                 grouped_widget_drawn = 1U;
+            }
+            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+            {
+                (void)ui_renderer_template_draw_audio_fx_group(&plock_frame_ctx);
             }
             for (uint8_t i = 0U; i < 4U; i++)
             {
@@ -4910,6 +5096,10 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
                 else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP)
                 {
                     (void)ui_renderer_template_draw_fm_pitch_eg_group(&plock_frame_ctx);
+                }
+                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+                {
+                    /* The live graph is drawn before the parameter values. */
                 }
                 else
                 {

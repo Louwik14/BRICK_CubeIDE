@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "pages/ui_page_template_tone.h"
@@ -7,9 +8,6 @@
 #include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/project_control.h"
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-#include "Core/stream_calibration.h"
-#endif
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Sampler/sample_global_pool.h"
@@ -67,17 +65,30 @@ static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
 }
 
 
-static const ui_template_family_t g_ui_template_tone_family_master_reverb = {
+static ui_template_family_t g_ui_template_tone_family_master_reverb = {
     .family_title = "MASTER 1/3",
-    .nav_labels = { "REVERB 1", "REVERB 2", "-", "-" },
+    .nav_labels = { "REVERB 1", "REVERB 2", "MOD FX 1", "MOD FX 2" },
     .subpages = {
         { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_ROOM_SIZE, PARAM_MIX_REVERB_DAMPING, PARAM_MIX_REVERB_WIDTH } } },
         { .title = "REVERB 2", .param_bank = { .params = { PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_MIX_REVERB_DELAYS, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "MOD FX 1", .param_bank = { .params = { PARAM_MODFX_MODEL, PARAM_MODFX_RATE, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "MOD FX 2", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
+
+static void ui_template_tone_sync_modfx_pages(void)
+{
+    const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+    param_id_t *const p3 = g_ui_template_tone_family_master_reverb.subpages[2].param_bank.params;
+    param_id_t *const p4 = g_ui_template_tone_family_master_reverb.subpages[3].param_bank.params;
+    p3[0] = PARAM_MODFX_MODEL;
+    p3[1] = (model == 8U) ? PARAM_MODFX_OFFSET : ((model == 7U) ? PARAM_MODFX_DEPTH : ((model == 0U) ? PARAM_COUNT : PARAM_MODFX_RATE));
+    p3[2] = ((model == 0U) || (model == 7U) || (model == 8U)) ? PARAM_COUNT : PARAM_MODFX_DEPTH;
+    p3[3] = (model == 5U) ? PARAM_MODFX_FEEDBACK : PARAM_COUNT;
+    p4[0] = ((model == 0U) || (model == 7U) || (model == 8U)) ? PARAM_COUNT : PARAM_MODFX_OFFSET;
+    p4[1] = PARAM_COUNT; p4[2] = PARAM_COUNT; p4[3] = PARAM_COUNT;
+}
 
 static const ui_template_family_t g_ui_template_tone_family_master_delay_classic = {
     .family_title = "MASTER 2/3",
@@ -155,7 +166,7 @@ static const ui_template_family_t g_ui_template_tone_family_group = {
     .family_title = "TONE",
     .nav_labels = { "FILTER", "-", "-", "-" },
     .subpages = {
-        { .title = "FILTER", .param_bank = { .params = { PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_TYPE, PARAM_COUNT } } },
+        { .title = "FILTER", .param_bank = { .params = { PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT, PARAM_FILTER_MORPH } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -190,15 +201,6 @@ static const ui_template_family_t g_ui_template_tone_family_looper = {
 
 static const ui_template_family_t g_ui_template_tone_family_multi = {
     .family_title = "TONE",
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-    .nav_labels = { "INST", "CAL", "-", "-" },
-    .subpages = {
-        { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
-        { .title = "STREAM CAL", .param_bank = { .params = { PARAM_STREAM_CAL_CASE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-#else
     .nav_labels = { "INST", "-", "-", "-" },
     .subpages = {
         { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
@@ -206,7 +208,6 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
-#endif
     .default_subpage = 0U,
 };
 
@@ -327,6 +328,7 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
     {
         if (subset == 0U)
         {
+            ui_template_tone_sync_modfx_pages();
             return &g_ui_template_tone_family_master_reverb;
         }
         if (subset == 1U)
@@ -1277,6 +1279,44 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_lane();
+    if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_OFFSET))
+    {
+        const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+        const char *name = (id==PARAM_MODFX_RATE)?"RATE":((id==PARAM_MODFX_DEPTH)?"DEPTH":((id==PARAM_MODFX_FEEDBACK)?"FEEDBACK":"OFFSET"));
+        const float u=value*(1.0f/127.0f);
+        if ((model == 7U) && (id == PARAM_MODFX_DEPTH)) name = "VOICES";
+        else if ((model == 5U) && (id == PARAM_MODFX_OFFSET)) name = "DELAY";
+        else if ((model == 8U) && (id == PARAM_MODFX_OFFSET)) name = "MODE";
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "%s", name);
+        }
+        if ((out_value != NULL) && (out_value_len > 0U))
+        {
+            if ((model==7U)&&(id==PARAM_MODFX_DEPTH))
+                (void)snprintf(out_value,out_value_len,"%u",1U+(unsigned)(u*7.0f+0.5f));
+            else if ((model==5U)&&(id==PARAM_MODFX_RATE))
+                (void)snprintf(out_value,out_value_len,"%.2fHz",(value<=61.0f)?(.01f*powf(30.0f,value/61.0f)):(.3f*powf(40.0f,(value-61.0f)/66.0f)));
+            else if (id==PARAM_MODFX_RATE)
+                (void)snprintf(out_value,out_value_len,"%.2fHz",.01f+11.99f*u);
+            else if ((model==5U)&&(id==PARAM_MODFX_OFFSET))
+            {
+                const float delay=(value<=95.0f)?(.75f*value/95.0f):(.75f+.25f*(value-95.0f)/32.0f);
+                (void)snprintf(out_value,out_value_len,"%.3fms",.1f+7.9f*delay);
+            }
+            else if ((model==8U)&&(id==PARAM_MODFX_OFFSET))
+                (void)snprintf(out_value,out_value_len,"%ld",(long)(value+0.5f));
+            else
+            {
+                float shown=u;
+                if(model==5U&&id==PARAM_MODFX_DEPTH)shown=(value<=123.0f)?(.9f*value/123.0f):(.9f+.03f*(value-123.0f)/4.0f);
+                else if(model==5U&&id==PARAM_MODFX_FEEDBACK)shown=(value<=25.0f)?(.2f*value/25.0f):(.2f+.8f*(value-25.0f)/102.0f);
+                (void)snprintf(out_value,out_value_len,"%.0f%%",100.0f*shown);
+            }
+        }
+        (void)slot;
+        return 1U;
+    }
     if ((g_ui_template_tone_subset == 0U)
             && (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_FM))
@@ -1311,9 +1351,12 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             {
                 (void)snprintf(out_name, out_name_len, "%s", name);
             }
-            (void)value;
-            (void)out_value;
-            (void)out_value_len;
+            if ((id >= PARAM_FM_PITCH_L1) && (id <= PARAM_FM_PITCH_L4)
+                    && (out_value != NULL) && (out_value_len > 0U))
+            {
+                const long display_value = (long)((value >= 0.0f) ? (value + 0.5f) : (value - 0.5f));
+                (void)snprintf(out_value, out_value_len, "%+ld", display_value);
+            }
             (void)slot;
             return 1U;
         }
@@ -1483,25 +1526,6 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
     {
-#if defined(BRICK6_STREAM_CALIBRATION) && BRICK6_STREAM_CALIBRATION
-        if (id == PARAM_STREAM_CAL_CASE)
-        {
-            if ((out_name != NULL) && (out_name_len > 0U))
-            {
-                (void)snprintf(out_name, out_name_len, "CASE %02u",
-                               (unsigned)brick6_stream_calibration_case_index() + 1U);
-            }
-            if ((out_value != NULL) && (out_value_len > 0U))
-            {
-                (void)snprintf(out_value, out_value_len, "PRE %uK / AHEAD %uK",
-                               (unsigned)(BRICK6_STREAM_CALIBRATION_PAGE_KIB
-                                          * brick6_stream_calibration_current_presocle()),
-                               (unsigned)brick6_stream_calibration_current_ahead_kib());
-            }
-            (void)slot;
-            return 1U;
-        }
-#endif
         if (id == PARAM_SAMPLER_SAMPLE)
         {
             float selector = 0.0f;

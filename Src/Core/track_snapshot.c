@@ -311,31 +311,41 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
-    for (uint8_t i = 0U; i < snapshot->audio_owned_count; ++i)
+    for (uint8_t phase = 0U; phase < 5U; ++phase)
     {
-        const track_snapshot_audio_owned_item_t *const item =
-            &snapshot->audio_owned[i];
-        if ((item->parameter_id >= PARAM_COUNT)
-                || (live_parameter_is_audio_owned((param_id_t)item->parameter_id) == 0U)
-                || (track_runtime_get_effective_param_status(
-                        track, (param_id_t)item->parameter_id)
-                    != TRACK_RUNTIME_PARAM_ALLOWED))
+        for (uint8_t i = 0U; i < snapshot->audio_owned_count; ++i)
         {
-            continue;
+            const track_snapshot_audio_owned_item_t *const item =
+                &snapshot->audio_owned[i];
+            if (item->parameter_id >= PARAM_COUNT)
+                continue;
+            const param_id_t id = (param_id_t)item->parameter_id;
+            uint8_t selected = 0U;
+            if (phase < 4U)
+            {
+                selected = (uint8_t)(param_registry_get_audio_fx_param(phase) == id);
+            }
+            else
+            {
+                selected = (uint8_t)(param_registry_is_audio_fx_param(id) == 0U);
+            }
+            if ((selected == 0U)
+                    || (live_parameter_is_audio_owned(id) == 0U)
+                    || (track_runtime_get_effective_param_status(track, id)
+                        != TRACK_RUNTIME_PARAM_ALLOWED))
+                continue;
+            if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
+                return 0U;
+            live_parameter_audio_bulk_item_t *const target = &bulk.item[bulk.count++];
+            target->parameter_id = item->parameter_id;
+            target->scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
+            target->track = track;
+            target->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
+            target->reserved = 0U;
+            target->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                       | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
+            target->value = live_parameter_event_encode_float(item->value);
         }
-        if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
-        {
-            return 0U;
-        }
-        live_parameter_audio_bulk_item_t *const target = &bulk.item[bulk.count++];
-        target->parameter_id = item->parameter_id;
-        target->scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
-        target->track = track;
-        target->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
-        target->reserved = 0U;
-        target->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                   | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
-        target->value = live_parameter_event_encode_float(item->value);
     }
 
     if ((bulk.count != 0U)

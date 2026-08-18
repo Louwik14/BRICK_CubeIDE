@@ -187,7 +187,7 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
     live_parameter_audio_bulk_t *bulk)
 {
     static const param_id_t k_lane_bound_params[] = {
-        PARAM_FILTER_TYPE,
+        PARAM_FILTER_MORPH,
         PARAM_FILTER_CUTOFF,
         PARAM_FILTER_RESONANCE,
         PARAM_FILTER_EG_AMT,
@@ -198,20 +198,18 @@ static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
         PARAM_FILTER_KEYTRK,
         PARAM_FILTER_ENVRST,
         PARAM_FILTER_ENVDLY,
-        PARAM_FILTER_EQ_LOW,
-        PARAM_FILTER_EQ_MID,
-        PARAM_FILTER_EQ_HIGH,
         PARAM_ENV_RETRIG_FILTER,
         PARAM_MIX_LEVEL,
         PARAM_MIX_PAN,
         PARAM_MIX_SEND1,
         PARAM_MIX_SEND2,
+        PARAM_MIX_SEND3,
         PARAM_MIX_MUTE,
         PARAM_VCA_ATTACK,
         PARAM_VCA_DECAY,
         PARAM_VCA_SUSTAIN,
         PARAM_VCA_RELEASE,
-        PARAM_VCA_ENV_TYPE,
+        PARAM_FILTER_MODE,
         PARAM_ENV_RETRIG_VCA
     };
 

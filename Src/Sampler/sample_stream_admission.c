@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_trace.h"
 
 #define SAMPLE_STREAM_ADMISSION_DEFAULT_BYTES_PER_SECOND (6000000U)
 #define SAMPLE_STREAM_ADMISSION_DEFAULT_FILE_OVERHEAD (32768U)
@@ -27,7 +26,6 @@ static uint8_t sample_stream_admission_source_valid(uint8_t source)
 {
     return (source <= (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI) ? 1U : 0U;
 }
-
 static uint8_t sample_stream_admission_same_owner(
     const sample_stream_admission_demand_t *a,
     const sample_stream_admission_demand_t *b)
@@ -255,19 +253,6 @@ sample_stream_admission_result_t sample_stream_admission_sync_snapshot(
     };
     const sample_stream_admission_result_t result =
         sample_stream_admission_try_reserve(&demand);
-    (void)sample_stream_event_trace_record(
-        (result == SAMPLE_STREAM_ADMISSION_OK)
-            ? SAMPLE_STREAM_EVENT_ADMISSION_ACCEPT
-            : SAMPLE_STREAM_EVENT_ADMISSION_REJECT,
-        snapshot->key,
-        UINT32_MAX,
-        (uint8_t)source,
-        voice_id,
-        snapshot->generation,
-        0U,
-        snapshot->step_q16,
-        demand.block_align,
-        (uint8_t)result);
     return result;
 }
 
@@ -293,17 +278,6 @@ void sample_stream_admission_release_voice(sample_stream_snapshot_source_t sourc
     if (released != 0U)
     {
         sample_stream_admission_refresh_stats();
-        (void)sample_stream_event_trace_record(
-            SAMPLE_STREAM_EVENT_ADMISSION_RELEASE,
-            (sample_audio_key_t){ 0U, 0U },
-            UINT32_MAX,
-            (uint8_t)source,
-            voice_id,
-            0U,
-            0U,
-            0U,
-            0U,
-            0U);
     }
 }
 
