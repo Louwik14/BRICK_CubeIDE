@@ -43,9 +43,9 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
     (void)live_clock_read_audio_sample(&due_sample);
     float voices = 1.0f;
     float spread = 0.0f;
-    (void)param_registry_runtime_cache_get(
+    (void)param_registry_control_shadow_get(
         entity_id, PARAM_CFG_POLY_VOICES, &voices);
-    (void)param_registry_runtime_cache_get(
+    (void)param_registry_control_shadow_get(
         entity_id, PARAM_CFG_POLY_SPREAD, &spread);
     entity_topology_descriptor_t topology;
     uint8_t audio_flags = ctx->flags;

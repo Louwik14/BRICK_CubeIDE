@@ -79,6 +79,11 @@ uint16_t live_parameter_audio_queue_drain(void);
 /* Submit a complete fixed-size transaction.  Conversion, capacity checking
  * and publication are all-or-nothing; the caller retains no queue pointer. */
 bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *bulk);
+bool live_parameter_audio_queue_submit_poly_pair(uint32_t capture_tick,
+                                                 uint8_t track,
+                                                 float voices,
+                                                 float spread);
+uint32_t live_parameter_audio_queue_publish_failure_count(void);
 
 /* Audio-side deadline and due handoff.  The due FIFO is deliberately separate
  * from the note queue and is the application seam for the next pass. */

@@ -1,6 +1,5 @@
 #include "Param/param_registry_backends.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Param/param_registry_runtime_state.h"
 
 #include "Core/track_tone_sound_state.h"
 #include <stddef.h>
@@ -35,10 +34,6 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
             if (param_backend_send_midi_cc(track, id, value) == 0U)
             {
                 return 0U;
-            }
-            if (update_base_state != 0U)
-            {
-                param_registry_runtime_commit_authoritative_write(track, id, value, 0U);
             }
             return 1U;
         }
@@ -84,11 +79,6 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         applied = param_backend_apply_tone_drum(track, ctx, id, effective_value, update_base_state);
-    }
-
-    if ((applied != 0U) && (update_base_state != 0U))
-    {
-        param_registry_runtime_commit_authoritative_write(track, id, effective_value, 0U);
     }
 
     return applied;

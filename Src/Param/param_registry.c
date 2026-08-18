@@ -310,6 +310,16 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
     return live_parameter_audio_queue_submit_bulk(&bulk) ? 1U : 0U;
 }
 
+static uint8_t param_registry_submit_poly_control_snapshot(uint8_t track)
+{
+    float voices = param_registry[PARAM_CFG_POLY_VOICES].default_value;
+    float spread = param_registry[PARAM_CFG_POLY_SPREAD].default_value;
+    (void)param_registry_control_shadow_get(track, PARAM_CFG_POLY_VOICES, &voices);
+    (void)param_registry_control_shadow_get(track, PARAM_CFG_POLY_SPREAD, &spread);
+    return live_parameter_audio_queue_submit_poly_pair(
+        live_clock_capture_tick(), track, voices, spread) ? 1U : 0U;
+}
+
 static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
                                                       uint8_t track,
                                                       float value)
@@ -340,7 +350,7 @@ static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
             *state = previous;
             return 0U;
         }
-        param_registry_runtime_cache_set(track, id, value);
+        param_registry_control_shadow_set(track, id, value);
         return 1U;
     }
 
@@ -380,7 +390,7 @@ static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
     }
     for (uint8_t i = 0U; i < bulk.count; ++i)
     {
-        param_registry_runtime_cache_set(
+        param_registry_control_shadow_set(
             track,
             (param_id_t)bulk.item[i].parameter_id,
             live_parameter_event_decode_float(bulk.item[i].value));
@@ -680,7 +690,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
             return 0U;
         }
 
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
+        param_registry_control_shadow_set(track, id, clamped);
         /* Post-commit notification: MIDI program changes are forwarded after the authoritative write. */
         seq_runtime_on_midi_program_live_change(track, clamped);
         return 1U;
@@ -701,7 +711,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
         return 0U;
     }
 
-    param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
+    param_registry_control_shadow_set(track, id, clamped);
     return 1U;
 }
 
@@ -1418,8 +1428,8 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
                 for (uint8_t slot = 0U; slot < 8U; ++slot)
                 {
                     state->md.slot[slot] = profile->defaults[slot];
-                    param_registry_runtime_commit_authoritative_write(
-                        track, (param_id_t)(PARAM_DRUM_MD_P1 + slot), state->md.slot[slot], 1U);
+                    param_registry_control_shadow_set(
+                        track, (param_id_t)(PARAM_DRUM_MD_P1 + slot), state->md.slot[slot]);
                 }
             }
             return 1U;
@@ -1554,7 +1564,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
         {
             return 0U;
         }
-        param_registry_runtime_commit_authoritative_write(ctx->track, ctx->id, ctx->clamped, 1U);
+        param_registry_control_shadow_set(ctx->track, ctx->id, ctx->clamped);
         seq_runtime_on_midi_program_live_change(ctx->track, ctx->clamped);
         return 1U;
     }
@@ -1569,7 +1579,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
         {
             return 0U;
         }
-        param_registry_runtime_commit_authoritative_write(ctx->track, ctx->id, ctx->clamped, 1U);
+        param_registry_control_shadow_set(ctx->track, ctx->id, ctx->clamped);
         return 1U;
     }
 
@@ -1584,10 +1594,13 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
         }
     }
 
-    return param_backend_apply_track_value(ctx->track,
-                                           ctx->id,
-                                           ctx->clamped,
-                                           update_base_state);
+    const uint8_t applied = param_backend_apply_track_value(ctx->track,
+                                                             ctx->id,
+                                                             ctx->clamped,
+                                                             update_base_state);
+    if ((applied != 0U) && (update_base_state != 0U))
+        param_registry_control_shadow_set(ctx->track, ctx->id, ctx->clamped);
+    return applied;
 }
 
 static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *ctx, uint8_t applied)
@@ -1685,7 +1698,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     if ((param_registry_is_audio_fx_param(id) != 0U)
             && (track < BRICK_ENTITY_CAPACITY))
     {
-        if (param_registry_runtime_cache_get(track, id, out_value) != 0U)
+        if (param_registry_control_shadow_get(track, id, out_value) != 0U)
         {
             return 1U;
         }
@@ -1697,7 +1710,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     if (live_parameter_is_audio_owned(id) != 0U)
     {
         if ((track >= SEQ_LANE_CAPACITY)
-                || (param_registry_runtime_cache_get(track, id, out_value) == 0U))
+                || (param_registry_control_shadow_get(track, id, out_value) == 0U))
         {
             *out_value = param_registry[id].default_value;
         }
@@ -1815,7 +1828,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 return 0U;
             }
 
-            if (param_registry_runtime_cache_get(track, id, out_value) != 0U)
+            if (param_registry_control_shadow_get(track, id, out_value) != 0U)
             {
                 return 1U;
             }
@@ -1880,7 +1893,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
             return 0U;
         }
 
-        param_registry_runtime_commit_authoritative_write(track, id, audio_value, 0U);
         return 1U;
     }
 
@@ -1894,10 +1906,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
                                                           clamped,
                                                           0U,
                                                           0U);
-        if (applied != 0U)
-        {
-            param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
-        }
         return applied;
     }
 
@@ -1906,8 +1914,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         if (param_env3_map(id, &env_param) != 0U)
         {
             const uint8_t applied = mod_env3_audio_apply_track_param(track, env_param, clamped);
-            if (applied != 0U)
-                param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
             return applied;
         }
     }
@@ -1915,7 +1921,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
     if (id == PARAM_ENV_RETRIG_MOD)
     {
         mod_env3_audio_apply_retrigger(track, clamped);
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
         return 1U;
     }
 
@@ -1938,12 +1943,7 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         return 0U;
     }
 
-    const uint8_t applied = param_track_exec_apply_backend(&ctx, 0U);
-    if (applied != 0U)
-    {
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
-    }
-    return applied;
+    return param_track_exec_apply_backend(&ctx, 0U);
 }
 
 uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
@@ -2122,7 +2122,7 @@ void param_registry_clear_track_runtime_state(uint8_t track)
     {
         param_registry_release_track_value_runtime_temp((param_id_t)raw_id, track);
     }
-    param_registry_runtime_cache_clear_track(track);
+    param_registry_control_shadow_clear_track(track);
 }
 
 static uint8_t param_registry_set_env_control_value(param_id_t id, uint8_t track, float value)
@@ -2283,9 +2283,13 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     return 0U;
                 projected_control_env = 1U;
             }
-            param_registry_runtime_cache_set(track, id, clamped);
-            if (param_registry_submit_audio_value(
-                    id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
+            param_registry_control_shadow_set(track, id, clamped);
+            const uint8_t submitted = ((id == PARAM_CFG_POLY_VOICES)
+                                       || (id == PARAM_CFG_POLY_SPREAD))
+                ? param_registry_submit_poly_control_snapshot(track)
+                : param_registry_submit_audio_value(
+                    id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
+            if (submitted == 0U)
             {
                 if (projected_control_tone != 0U)
                 {
@@ -2404,7 +2408,7 @@ void param_registry_init(void)
     param_filter_init();
     mod_lfo_v1_init();
     note_fx_state_init();
-    param_registry_runtime_state_init();
+    param_registry_control_shadow_init();
 }
 
 /**
@@ -2459,13 +2463,15 @@ static void modfx_bank_project_model(uint8_t model)
 {
     const param_id_t ids[4]={PARAM_MODFX_RATE,PARAM_MODFX_DEPTH,PARAM_MODFX_FEEDBACK,PARAM_MODFX_OFFSET};
     param_id_t ab,cd;uint16_t packed[2]={0U,0U};if(modfx_bank_pair_ids(model,&ab,&cd)){packed[0]=(uint16_t)(param_get(ab)+0.5f);packed[1]=(uint16_t)(param_get(cd)+0.5f);}
+    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=4U};
     for(uint8_t slot=0U;slot<4U;++slot)
     {
         const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
         param_store_set_active(ids[slot],value);
-        param_registry_runtime_cache_set(0U,ids[slot],value);
-        (void)param_registry_submit_audio_value(ids[slot],0U,value,LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+        param_registry_control_shadow_set(0U,ids[slot],value);
+        bulk.item[slot]=(live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[slot],.scope=LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,.track=0U,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,.flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET|LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),.value=live_parameter_event_encode_float(value)};
     }
+    (void)live_parameter_audio_queue_submit_bulk(&bulk);
 }
 
 /* Command surface: global canonical write. */
@@ -2478,11 +2484,6 @@ void param_set(param_id_t id, float value)
     const float clamped = clamp_value(value, desc->min, desc->max);
 
     param_store_set_active(id, clamped);
-
-    if((id>=PARAM_MODFX_RATE)&&(id<=PARAM_MODFX_OFFSET))
-    {
-        modfx_bank_store_control(id,clamped);
-    }
 
     {
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -2499,15 +2500,23 @@ void param_set(param_id_t id, float value)
     if ((live_parameter_is_audio_owned(id) != 0U)
             || (id == PARAM_MASTER_GAIN))
     {
-        param_registry_runtime_cache_set(0U, id, clamped);
-        (void)param_registry_submit_audio_value(
-            id, 0U, clamped, LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+        param_registry_control_shadow_set(0U, id, clamped);
+        if(param_registry_submit_audio_value(
+            id, 0U, clamped, LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)==0U)
+        {
+            return;
+        }
+        if((id>=PARAM_MODFX_RATE)&&(id<=PARAM_MODFX_OFFSET))
+            modfx_bank_store_control(id,clamped);
         if(id==PARAM_MODFX_MODEL)
         {
             modfx_bank_project_model((uint8_t)(clamped+0.5f));
         }
         return;
     }
+
+    if((id>=PARAM_MODFX_RATE)&&(id<=PARAM_MODFX_OFFSET))
+        modfx_bank_store_control(id,clamped);
 
     if (desc->apply != NULL)
     {

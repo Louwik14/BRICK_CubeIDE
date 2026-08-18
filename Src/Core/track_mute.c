@@ -114,7 +114,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
         if ((inactive != NULL) && (muted == 0U))
         {
             inactive->mix_mute = 0.0f;
-            param_registry_runtime_cache_set(track, PARAM_MIX_MUTE, 0.0f);
+            param_registry_control_shadow_set(track, PARAM_MIX_MUTE, 0.0f);
             return 1U;
         }
         return 0U;
@@ -143,7 +143,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     track_sound_state_t *const sound_state = track_sound_state_get(track);
     if (sound_state == NULL) return 0U;
     sound_state->mix_mute = (float)muted;
-    param_registry_runtime_cache_set(track, PARAM_MIX_MUTE, (float)muted);
+    param_registry_control_shadow_set(track, PARAM_MIX_MUTE, (float)muted);
 
     for (uint8_t i = 0U; i < affected_count; ++i)
     {

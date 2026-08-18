@@ -332,7 +332,7 @@ static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
      * On non-FILTER/VCA params, a cache miss is not authoritative and must not promote
      * descriptor defaults that would overwrite the freshly rebound runtime values.
      */
-    return param_registry_runtime_cache_get(track, id, out_value);
+    return param_registry_control_shadow_get(track, id, out_value);
 }
 
 static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(

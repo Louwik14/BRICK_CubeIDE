@@ -140,11 +140,11 @@ static uint8_t ui_param_audio_owned_shadow_get(param_id_t param,
     }
 
     float value = 0.0f;
-    if (param_registry_runtime_cache_get(shadow_track, param, &value) == 0U)
+    if (param_registry_control_shadow_get(shadow_track, param, &value) == 0U)
     {
         value = (scoped != 0U) ? param_registry[param].default_value
                                : param_store_get_active(param);
-        param_registry_runtime_cache_set(shadow_track, param, value);
+        param_registry_control_shadow_set(shadow_track, param, value);
     }
 
     *out_value = value;
@@ -228,7 +228,7 @@ static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
         return 0U;
     }
 
-    param_registry_runtime_cache_set(shadow_track, param, value);
+    param_registry_control_shadow_set(shadow_track, param, value);
     if (update_active_mirror != 0U)
     {
         param_store_set_active(param, value);

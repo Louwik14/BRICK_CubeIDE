@@ -5,7 +5,6 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
 #include "memory_layout.h"
 
 typedef struct
@@ -22,6 +21,8 @@ typedef struct
 
 SEQ_STATE_D2 static live_parameter_audio_runtime_slot_t
     g_live_parameter_audio_runtime_slots[LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY];
+SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
+SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
 
 static float live_parameter_audio_runtime_clamp(param_id_t parameter, float value)
 {
@@ -99,22 +100,18 @@ static uint8_t live_parameter_audio_runtime_apply_target(
         if ((event->parameter_id == PARAM_CFG_POLY_VOICES)
                 || (event->parameter_id == PARAM_CFG_POLY_SPREAD))
         {
-            float voices = 1.0f;
-            float spread = 0.0f;
-            (void)param_registry_runtime_cache_get(
-                event->track, PARAM_CFG_POLY_VOICES, &voices);
-            (void)param_registry_runtime_cache_get(
-                event->track, PARAM_CFG_POLY_SPREAD, &spread);
+            if (event->track >= SEQ_LANE_CAPACITY)
+                return 0U;
             if (event->parameter_id == PARAM_CFG_POLY_VOICES)
-                voices = value;
+                g_live_parameter_audio_poly_voices[event->track] = value;
             else
-                spread = value;
+                g_live_parameter_audio_poly_spread[event->track] = value;
             const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
-                event->track, (uint8_t)voices, spread);
+                event->track,
+                (uint8_t)g_live_parameter_audio_poly_voices[event->track],
+                g_live_parameter_audio_poly_spread[event->track]);
             if (applied != 0U)
             {
-                param_registry_runtime_commit_authoritative_write(
-                    event->track, event->parameter_id, value, 0U);
                 audio_mod_matrix_base_update(
                     event->track, event->parameter_id, value);
             }
@@ -182,6 +179,13 @@ void live_parameter_audio_runtime_init(void)
     {
         g_live_parameter_audio_runtime_slots[i] =
             (live_parameter_audio_runtime_slot_t){ 0 };
+    }
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        g_live_parameter_audio_poly_voices[track] =
+            param_registry[PARAM_CFG_POLY_VOICES].default_value;
+        g_live_parameter_audio_poly_spread[track] =
+            param_registry[PARAM_CFG_POLY_SPREAD].default_value;
     }
 }
 

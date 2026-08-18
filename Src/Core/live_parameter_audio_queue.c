@@ -17,6 +17,13 @@ static volatile uint16_t g_live_parameter_audio_due_head;
 static volatile uint16_t g_live_parameter_audio_due_tail;
 static volatile uint16_t g_live_parameter_audio_due_count;
 static volatile uint32_t g_live_parameter_audio_bulk_serial;
+static volatile uint32_t g_live_parameter_audio_publish_failure_count;
+
+static bool live_parameter_audio_publish_failed(void)
+{
+    ++g_live_parameter_audio_publish_failure_count;
+    return false;
+}
 
 static uint32_t live_parameter_audio_enter_critical(void)
 {
@@ -158,6 +165,7 @@ void live_parameter_audio_queue_init(void)
     g_live_parameter_audio_due_tail = 0U;
     g_live_parameter_audio_due_count = 0U;
     g_live_parameter_audio_bulk_serial = 0U;
+    g_live_parameter_audio_publish_failure_count = 0U;
 
     live_parameter_audio_exit_critical(primask);
 }
@@ -202,14 +210,14 @@ bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *b
     if ((bulk == 0) || (bulk->count == 0U)
             || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
     {
-        return false;
+        return live_parameter_audio_publish_failed();
     }
 
     uint64_t effective_sample_time = 0U;
     if (live_parameter_audio_convert_capture(bulk->capture_tick,
                                              &effective_sample_time) == 0U)
     {
-        return false;
+        return live_parameter_audio_publish_failed();
     }
 
     live_parameter_audio_event_t events[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
@@ -223,7 +231,7 @@ bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *b
         const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
         if (item->parameter_id >= PARAM_COUNT)
         {
-            return false;
+            return live_parameter_audio_publish_failed();
         }
 
         for (uint8_t previous = 0U; previous < i; ++previous)
@@ -233,7 +241,7 @@ bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *b
                     && (events[previous].track == item->track)
                     && (events[previous].slot == item->slot))
             {
-                return false;
+                return live_parameter_audio_publish_failed();
             }
         }
 
@@ -253,8 +261,67 @@ bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *b
     }
 
     if (live_parameter_audio_schedule_bulk(events, bulk->count) == 0U)
-        return false;
+        return live_parameter_audio_publish_failed();
     return true;
+}
+
+bool live_parameter_audio_queue_submit_poly_pair(uint32_t capture_tick,
+                                                 uint8_t track,
+                                                 float voices,
+                                                 float spread)
+{
+    uint64_t effective_sample_time = 0U;
+    if ((track >= SEQ_LANE_CAPACITY)
+            || (live_parameter_audio_convert_capture(
+                    capture_tick, &effective_sample_time) == 0U))
+    {
+        return live_parameter_audio_publish_failed();
+    }
+
+    const uint32_t serial_primask = live_parameter_audio_enter_critical();
+    const uint32_t serial_base = 0x80000000U
+                               | g_live_parameter_audio_bulk_serial;
+    g_live_parameter_audio_bulk_serial += 2U;
+    live_parameter_audio_exit_critical(serial_primask);
+
+    live_parameter_audio_event_t events[2] = {
+        {
+            .effective_sample_time = effective_sample_time,
+            .capture_tick = capture_tick,
+            .ingress_serial = serial_base,
+            .parameter_id = PARAM_CFG_POLY_VOICES,
+            .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = live_parameter_event_bulk_flags(
+                (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                           | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS), 0U, 2U),
+            .value = live_parameter_event_encode_float(voices)
+        },
+        {
+            .effective_sample_time = effective_sample_time,
+            .capture_tick = capture_tick,
+            .ingress_serial = serial_base + 1U,
+            .parameter_id = PARAM_CFG_POLY_SPREAD,
+            .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = live_parameter_event_bulk_flags(
+                (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                           | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS), 1U, 2U),
+            .value = live_parameter_event_encode_float(spread)
+        }
+    };
+    if (live_parameter_audio_schedule_bulk(events, 2U) == 0U)
+        return live_parameter_audio_publish_failed();
+    return true;
+}
+
+uint32_t live_parameter_audio_queue_publish_failure_count(void)
+{
+    return g_live_parameter_audio_publish_failure_count;
 }
 
 uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
