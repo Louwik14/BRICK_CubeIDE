@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:18:13:mixer_routing_publish_begin	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:26:13:mixer_routing_publish_end	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:35:6:mixer_routing_control_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:47:9:mixer_routing_control_set_route	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:57:9:mixer_routing_control_set_insert_slot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/mixer_routing_publication.c:69:9:mixer_routing_publication_audio_read	20	static,ignoring_inline_asm

@@ -274,15 +274,15 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
  * - Main loop (boot).
  */
 /**
- * @brief Point d'entrée audio_init.
+ * @brief Point d'entrée AUDIO propriétaire pour le binding et l'I/O de boot.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_init.
+ * - Initialiser dans l'ordre historique les services AUDIO, le binding et l'I/O.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_init(void)
+void audio_boot_init_binding_io(void)
 {
     live_clock_init();
     control_audio_queue_init();

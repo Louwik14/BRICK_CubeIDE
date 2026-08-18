@@ -4,9 +4,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:61:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:136:6:ui_navigation_request_ensemble_page	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:167:6:ui_navigation_request_page_with_availability	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:193:6:ui_navigation_handle_event	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:254:9:ui_navigation_is_ensemble_button_available	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:276:13:ui_navigation_get_button_for_page	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:297:6:ui_navigation_sync_active_track_ensemble	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:325:6:ui_navigation_sync_created_track_destination	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:336:6:ui_navigation_remember_template_subpage	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:350:6:ui_navigation_restore_current_template_subpage	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:250:9:ui_navigation_is_ensemble_button_available	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:272:13:ui_navigation_get_button_for_page	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:293:6:ui_navigation_sync_active_track_ensemble	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:321:6:ui_navigation_sync_created_track_destination	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:332:6:ui_navigation_remember_template_subpage	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_navigation.c:346:6:ui_navigation_restore_current_template_subpage	8	static

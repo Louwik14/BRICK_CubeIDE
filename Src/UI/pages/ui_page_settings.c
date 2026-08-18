@@ -5613,11 +5613,38 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 
 uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
 {
-    if (ui_page_settings_is_open() == 0U)
+    if ((ui_page_settings_is_open() == 0U) || (ev == 0))
     {
         return 0U;
     }
 
-    ui_page_settings_handle_event_internal(ev);
-    return 1U;
+    if (ev->type == UI_EVENT_HALL_PRESS)
+    {
+        const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+        if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
+        {
+            ui_page_settings_handle_event_internal(ev);
+            return 1U;
+        }
+        return 0U;
+    }
+
+    if (ev->type != UI_EVENT_BUTTON_PRESS)
+    {
+        return 0U;
+    }
+
+    switch ((button_id_t)ev->id)
+    {
+        case BTN_PAGE_1:
+        case BTN_PAGE_2:
+        case BTN_PAGE_3:
+        case BTN_PAGE_4:
+        case BTN_SETTINGS:
+            ui_page_settings_handle_event_internal(ev);
+            return 1U;
+
+        default:
+            return 0U;
+    }
 }

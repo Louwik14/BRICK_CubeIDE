@@ -9,6 +9,7 @@ extern "C" {
 void param_filter_init(void);
 uint8_t param_filter_is_param(param_id_t id);
 uint8_t param_filter_get_track_value(param_id_t id, uint8_t track, float *out_value);
+uint8_t param_filter_control_set_value(param_id_t id, uint8_t track, float clamped);
 uint8_t param_filter_apply_value(param_id_t id,
                                  uint8_t track,
                                  float clamped,

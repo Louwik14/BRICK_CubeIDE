@@ -1301,6 +1301,17 @@ La frontiere logique H743 reste identique a la cible H747. Aucun HSEM, CM4, H747
 
 Les chantiers Mixer/Filter/VCA/FX, Looper/Recorder, Sampler/Multi/page-cache, p-lock, streaming, `.sdram_audio_cold` et DJ EQ3 restent hors perimetre.
 
+## 31.3 PASS 3 / PASS 3B - Mixer, Filter, VCA, FX et routing
+
+- Mixer, Filter et VCA conservent leurs valeurs canoniques cote CONTROL et leurs targets, smoothing, enveloppes, gates, coefficients et historiques cote AUDIO.
+- Le FX track separe sa projection parametrique AUDIO locale de son union DSP.
+- Le routing Mixer est publie par un snapshot compact, versionne et pointer-free en D3 IPC, puis copie dans le runtime AUDIO au debut du bloc.
+- Le boot routing utilise la meme publication; les anciens setters routing CONTROL vers runtime ont ete retires.
+- Delta structurel de PASS 3B: DTCM/D1/D2 0 B et D3 +64 B; le delta exact de code ITCM est releve dans les MAP de validation.
+- Le boot Mixer/master, FX globaux, moteurs synth et binding physique initial passe par l'intent compact `brick6_audio_boot_intent_t`, applique aux positions historiques par les phases AUDIO proprietaires `brick6_audio_boot_apply_early()`, `brick6_audio_boot_apply_output_tracks()`, `brick6_audio_boot_apply_drum()`, `brick6_audio_boot_apply_engines()` et `brick6_audio_boot_apply_binding_io()`.
+
+PASS 3 / 3B et la reprise boot AUDIO proprietaire sont fermes statiquement, en attente de validation materielle H743. Le delta DTCM mesure de la reprise est `+32 B`; son origine n'est pas attribuee au payload de 24 B sans preuve MAP independante.
+
 # 32. Instruction au futur pilote
 
 Avant toute passe :

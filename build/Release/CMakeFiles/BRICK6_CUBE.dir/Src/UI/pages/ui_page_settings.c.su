@@ -72,10 +72,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_setti
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:1636:13:ui_page_settings_ram_load_to_slot	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:2126:13:ui_page_settings_ram_request_replace	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:3495:13:ui_page_settings_apply_action	192	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:3858:13:ui_page_settings_handle_event_internal	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5370:6:ui_page_settings_open	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5376:6:ui_page_settings_open_sample_browser	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5384:9:ui_page_settings_is_open	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:3457:6:ui_page_settings_close_to_return_page	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5389:6:ui_page_settings_handle_encoder	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5614:9:ui_page_settings_handle_event	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:5614:9:ui_page_settings_handle_event	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_settings.c:4041:13:ui_page_settings_handle_event_page	8	static

@@ -17,7 +17,7 @@
  * - Les IRQ DMA SAI appellent en interne audio_process_block_int32().
  *
  * Contraintes temps réel:
- * - audio_init()/audio_start(): contexte main loop (non IRQ).
+ * - audio_boot_init_binding_io()/audio_start(): contexte main loop (non IRQ).
  * - Callbacks HAL_SAI_RxHalfCpltCallback / HAL_SAI_RxCpltCallback: contexte IRQ,
  *   budget strict (pas de blocage, pas d'allocation dynamique, pas de logs).
  */
@@ -32,7 +32,7 @@
  * - Mémorise les handles SAI dans l'état statique du module.
  * - Remet à zéro les buffers DMA RX/TX internes.
  */
-void audio_init(void);
+void audio_boot_init_binding_io(void);
 
 /**
  * @brief Initialise le codec et démarre les flux DMA audio vérifiés.

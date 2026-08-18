@@ -200,10 +200,6 @@ void ui_navigation_handle_event(const ui_event_t *event)
     ui_navigation_refresh_active_track_runtime();
 
     const uint8_t current_page = ui_page_get_id();
-    if (current_page == UI_PAGE_SETTINGS)
-    {
-        return;
-    }
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {

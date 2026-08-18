@@ -39,6 +39,7 @@
 #include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
+#include "Core/mixer_routing_publication.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
 
@@ -66,7 +67,7 @@ typedef struct __attribute__((aligned(32))) {
     int8_t insert_slot[MIXER_INSERTS_PER_TRACK];
     float send_level[MIXER_NUM_SENDS];
     float send_level_current[MIXER_NUM_SENDS];
-} mixer_track_t;
+} mixer_audio_track_runtime_t;
 
 typedef enum
 {
@@ -172,7 +173,8 @@ typedef struct
     mixer_lane_exec_kind_t exec_kind;
 } mixer_lane_plan_t;
 
-static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
+static mixer_audio_track_runtime_t g_tracks[MIXER_MAX_TRACKS];
+static uint32_t g_mixer_routing_audio_generation;
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 static AUDIO_HOT mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
 static uint32_t g_mixer_filter_config_version;
@@ -195,6 +197,21 @@ static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
 volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
+
+static __attribute__((noinline)) void mixer_routing_audio_apply_publication(void)
+{
+    mixer_routing_snapshot_t snapshot;
+    if ((mixer_routing_publication_audio_read(&snapshot) == 0U)
+            || (snapshot.generation == g_mixer_routing_audio_generation))
+        return;
+    for (uint32_t track = 0U; track < MIXER_MAX_TRACKS; ++track)
+    {
+        g_tracks[track].route_master = snapshot.route_master[track];
+        for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
+            g_tracks[track].insert_slot[insert] = snapshot.insert_slot[track][insert];
+    }
+    g_mixer_routing_audio_generation = snapshot.generation;
+}
 
 static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
                                                            float *left,
@@ -926,7 +943,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     mixer_track_filter_reset_dsp(filter);
 }
 
-static void mixer_track_state_reset(mixer_track_t *track)
+static void mixer_track_state_reset(mixer_audio_track_runtime_t *track)
 {
     if (track == NULL)
     {
@@ -971,7 +988,7 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
                                const uint8_t *next_mix_tracks,
                                uint32_t track_count)
 {
-    static mixer_track_t previous_tracks[MIXER_MAX_TRACKS];
+    static mixer_audio_track_runtime_t previous_tracks[MIXER_MAX_TRACKS];
     static mixer_track_filter_t previous_filters[MIXER_MAX_TRACKS];
 
     if ((previous_mix_tracks == NULL) || (next_mix_tracks == NULL))
@@ -1007,12 +1024,13 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
         mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix]);
     }
 
+    g_mixer_routing_audio_generation = 0U;
     mixer_external_inputs_clear();
 }
 
 void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track)
 {
-    mixer_track_t previous_track = { 0 };
+    mixer_audio_track_runtime_t previous_track = { 0 };
     mixer_track_filter_t previous_filter = { 0 };
     const uint8_t has_previous = (previous_mix_track < MIXER_MAX_TRACKS) ? 1U : 0U;
     const uint8_t has_next = (next_mix_track < MIXER_MAX_TRACKS) ? 1U : 0U;
@@ -1058,6 +1076,7 @@ void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track
     {
         g_mixer_lane_rebind_count[previous_mix_track]++;
     }
+    g_mixer_routing_audio_generation = 0U;
 }
 
 void mixer_snap_track_runtime_state(uint32_t track_id)
@@ -1067,7 +1086,7 @@ void mixer_snap_track_runtime_state(uint32_t track_id)
         return;
     }
 
-    mixer_track_t *const track = &g_tracks[track_id];
+    mixer_audio_track_runtime_t *const track = &g_tracks[track_id];
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
 
     track->gain_current = track->gain;
@@ -1331,7 +1350,7 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
 }
 
 static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
-                                               const mixer_track_t *track,
+                                               const mixer_audio_track_runtime_t *track,
                                                const mixer_track_filter_t *filter,
                                                uint8_t hw_enabled,
                                                uint8_t ext_enabled,
@@ -1489,7 +1508,7 @@ static void mixer_lane_accumulate_external_source(uint32_t track_id,
 }
 
 static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
-                                                            const mixer_track_t *track,
+                                                            const mixer_audio_track_runtime_t *track,
                                                             mixer_track_filter_t *filter,
                                                             uint32_t frames)
 {
@@ -1507,7 +1526,7 @@ static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
 }
 
 static void mixer_lane_run_stereo_path(uint32_t track_id,
-                                       const mixer_track_t *track,
+                                       const mixer_audio_track_runtime_t *track,
                                        mixer_track_filter_t *filter,
                                        float *left,
                                        float *right,
@@ -2182,6 +2201,7 @@ static void mixer_apply_delay_spectral_window(void)
 
 void mixer_reset_runtime_state(void)
 {
+    g_mixer_routing_audio_generation = 0U;
     mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_reverb_global_set_wet(g_reverb.wet);
@@ -2221,8 +2241,6 @@ void mixer_reset_runtime_state(void)
 
         mixer_track_filter_init(&g_track_filters[t], MIXER_FILTER_SAMPLE_RATE_DEFAULT);
 
-        if(t < MAX_TRACKS)
-            track_set_gain(t, 1.0f);
     }
 
     for (uint32_t i = 0U; i < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET; ++i)
@@ -2309,8 +2327,6 @@ void mixer_set_track_gain(uint32_t track_id, float gain)
         gain = 0.0f;
 
     g_tracks[track_id].gain = gain;
-    if(track_id < MAX_TRACKS)
-        track_set_gain(track_id, gain);
 }
 
 /**
@@ -2383,10 +2399,10 @@ uint8_t mixer_get_track_mute(uint32_t track_id)
 }
 
 /**
- * @brief Point d'entrée mixer_set_track_route.
+ * @brief Frontière de publication du routing track.
  *
  * Role:
- * - Exécuter le traitement associé à mixer_set_track_route.
+ * - Le routing CONTROL est publié puis appliqué côté AUDIO au début du bloc.
  *
  * @param track_id Parametre d'entree de l'API.
  * @param route Paramètre d'entrée de l'API.
@@ -2394,20 +2410,12 @@ uint8_t mixer_get_track_mute(uint32_t track_id)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
-{
-    if(track_id >= MIXER_MAX_TRACKS)
-        return;
-
-    route = ((route & MIXER_ROUTE_MASTER) != 0U) ? MIXER_ROUTE_MASTER : MIXER_ROUTE_NONE;
-    g_tracks[track_id].route_master = ((route & MIXER_ROUTE_MASTER) != 0U) ? 1U : 0U;
-}
 
 /**
- * @brief Point d'entrée mixer_set_track_insert_slot.
+ * @brief Frontière de publication des inserts track.
  *
  * Role:
- * - Exécuter le traitement associé à mixer_set_track_insert_slot.
+ * - Les inserts CONTROL sont publiés puis appliqués côté AUDIO au début du bloc.
  *
  * @param track_id Parametre d'entree de l'API.
  * @param insert_idx Paramètre d'entrée de l'API.
@@ -2416,13 +2424,6 @@ void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t slot)
-{
-    if(track_id >= MIXER_MAX_TRACKS || insert_idx >= MIXER_INSERTS_PER_TRACK)
-        return;
-
-    g_tracks[track_id].insert_slot[insert_idx] = slot;
-}
 
 /**
  * @brief Point d'entrée mixer_set_track_send_level.
@@ -3641,6 +3642,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     AUDIO_HOT ALIGN32 static int32_t sample_capture_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
+    mixer_routing_audio_apply_publication();
+
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
@@ -3760,7 +3763,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     {
         const uint32_t t = (uint32_t)__builtin_ctz(lane_mask);
         lane_mask &= lane_mask - 1U;
-        mixer_track_t *mt = &g_tracks[t];
+        mixer_audio_track_runtime_t *mt = &g_tracks[t];
         uint8_t source_entity = 0xFFU;
         const track_audio_runtime_ctx_t *source_ctx = NULL;
         const uint8_t group_child = (uint8_t)(
@@ -4499,7 +4502,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     if ((group_master_ctx != NULL)
             && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U))
     {
-        mixer_track_t *const group = &g_tracks[MIXER_GROUP_BUS_TRACK];
+        mixer_audio_track_runtime_t *const group = &g_tracks[MIXER_GROUP_BUS_TRACK];
 
         /* AUDIO-owned GROUP order:
          * child sends have already left pre-sum; child dry is summed here,

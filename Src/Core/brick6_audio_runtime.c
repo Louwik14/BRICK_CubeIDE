@@ -691,7 +691,6 @@ static void brick6_render_stack_tracks(uint32_t frames, uint8_t *out_stack_track
 void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
-    brick6_fm_runtime_init();
     synth_polyphony_init();
     metronome_runtime_init();
 }

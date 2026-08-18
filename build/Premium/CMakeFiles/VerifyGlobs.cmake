@@ -13,6 +13,7 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_engine_adapter.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_waveform_capture.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/brick6_audio_boot.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/dsp_engine.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c"

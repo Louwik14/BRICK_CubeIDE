@@ -1906,6 +1906,24 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         return applied;
     }
 
+    {
+        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+        if (param_env3_map(id, &env_param) != 0U)
+        {
+            const uint8_t applied = mod_env3_audio_apply_track_param(track, env_param, clamped);
+            if (applied != 0U)
+                param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+            return applied;
+        }
+    }
+
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        mod_env3_audio_apply_retrigger(track, clamped);
+        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
+        return 1U;
+    }
+
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
             || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
@@ -2102,6 +2120,32 @@ void param_registry_clear_track_runtime_state(uint8_t track)
     param_registry_runtime_cache_clear_track(track);
 }
 
+static uint8_t param_registry_set_env_control_value(param_id_t id, uint8_t track, float value)
+{
+    if (param_filter_is_param(id) != 0U)
+        return param_filter_control_set_value(id, track, value);
+
+    mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+    if (param_env3_map(id, &env_param) != 0U)
+        return mod_env3_control_set_track_param(track, env_param, value);
+    if (id == PARAM_ENV_RETRIG_MOD)
+        return mod_env3_control_set_track_retrigger_hard(track, value);
+
+    track_sound_state_t *const state = track_sound_state_get(track);
+    if (state == NULL) return 0U;
+    switch (id)
+    {
+        case PARAM_VCA_ATTACK: state->vca_attack = value; return 1U;
+        case PARAM_VCA_DECAY: state->vca_decay = value; return 1U;
+        case PARAM_VCA_SUSTAIN: state->vca_sustain = value; return 1U;
+        case PARAM_VCA_RELEASE: state->vca_release = value; return 1U;
+        case PARAM_FILTER_MODE: state->filter_mode = value; return 1U;
+        case PARAM_ENV_RETRIG_FILTER: state->env_retrig_filter = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
+        case PARAM_ENV_RETRIG_VCA: state->env_retrig_vca = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
+        default: return 0U;
+    }
+}
+
 /* Command surface: track-aware apply and post-commit routing. */
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
@@ -2207,6 +2251,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         if (audio_command != 0U)
         {
             uint8_t projected_control_tone = 0U;
+            uint8_t projected_control_env = 0U;
             float previous_control_value = 0.0f;
             /* Non-audio-owned tone values still have a CONTROL canonical
              * owner.  The AUDIO apply seam must not be asked to create that
@@ -2225,6 +2270,14 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     return 0U;
                 projected_control_tone = 1U;
             }
+            if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+            {
+                if (param_registry_get_track_value(id, track, &previous_control_value) == 0U)
+                    return 0U;
+                if (param_registry_set_env_control_value(id, track, clamped) == 0U)
+                    return 0U;
+                projected_control_env = 1U;
+            }
             param_registry_runtime_cache_set(track, id, clamped);
             if (param_registry_submit_audio_value(
                     id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
@@ -2234,6 +2287,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     (void)param_registry_set_track_tone_value(
                         id, track, previous_control_value);
                 }
+                if (projected_control_env != 0U)
+                    (void)param_registry_set_env_control_value(id, track, previous_control_value);
                 return 0U;
             }
             return 1U;

@@ -10,12 +10,11 @@
 #include "sdram.h"
 #include "audio.h"
 #include "audio_float.h"
+#include "Audio/brick6_audio_boot.h"
 #include "Board/board_audio.h"
 #include "Board/board_usb.h"
-#include "mixer.h"
 #include "param_store.h"
 #include "cpu_load.h"
-#include "Audio/drum_synth.h"
 #include "ui_core.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
@@ -30,15 +29,12 @@
 #include "Sampler/sample_global_pool.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
-#include "brick6_braids_runtime.h"
 #include "brick6_looper_runtime.h"
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
-#include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_stream_service_task.h"
-#include "Core/brick6_wave_runtime.h"
 #include "Core/track_mute.h"
 #include "Core/project_control.h"
 #include "brick6_sampler_bootstrap.h"
@@ -101,13 +97,20 @@ void brick6_app_init(void)
 
     board_audio_codec_init();
 
-    mixer_init();
+    static const brick6_audio_boot_intent_t audio_boot = {
+        .sample_rate_hz = 48000.0f,
+        .master_gain = 0.0f,
+        .postgain = 1.0f,
+        .output_compensation = 1.0f,
+        .fx_slot_count = BRICK6_AUDIO_BOOT_FX_SLOT_COUNT,
+        .fx_slots = {
+            { .slot = 0U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_EQ3 },
+            { .slot = 2U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_COMP_LAB },
+        },
+    };
+    (void)brick6_audio_boot_apply_early(&audio_boot);
     brick6_boot_fx_policy_init();
-
-    audio_float_set_postgain(1.0f);
-    audio_float_set_output_compensation(1.0f);
-
-    audio_tracks_init();
+    (void)brick6_audio_boot_apply_output_tracks(&audio_boot);
 
     sd_access_gate_init();
 #if BRICK_TEST_BUILD
@@ -125,19 +128,13 @@ void brick6_app_init(void)
     brick6_sampler_bootstrap_load_pool();
     audio_recorder_init();
 
-    drum_synth_init(48000.0f);
+    (void)brick6_audio_boot_apply_drum(&audio_boot);
     hall_keyboard_bridge_init();
 
     brick6_sampler_runtime_init();
     brick6_looper_runtime_init();
-    brick6_braids_runtime_init();
-    brick6_stack_runtime_init();
-    brick6_wave_runtime_init();
-    mixer_set_master(0.0f);
-
-    brick6_audio_runtime_init();
-
-    audio_init();
+    (void)brick6_audio_boot_apply_engines(&audio_boot);
+    brick6_audio_boot_apply_binding_io();
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);

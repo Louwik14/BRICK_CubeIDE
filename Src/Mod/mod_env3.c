@@ -203,6 +203,24 @@ uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float va
     return ok;
 }
 
+uint8_t mod_env3_control_set_track_param(uint8_t track, mod_env3_param_t param, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    return mod_env3_write_param(mod_env3_track_settings(owner), param, value);
+}
+
+uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    if (mod_env3_write_param(&g_mod_env3_audio_config[owner], param, value) == 0U) return 0U;
+    mod_env3_apply_settings(owner);
+    return 1U;
+}
+
 uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *out_value)
 {
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT) || (out_value == NULL))
@@ -247,6 +265,17 @@ uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value)
 
     sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
     g_mod_env3_audio_retrigger[track] = sound->env_retrig_mod;
+    return 1U;
+}
+
+uint8_t mod_env3_control_set_track_retrigger_hard(uint8_t track, float value)
+{
+    if (track >= SEQ_TRACK_COUNT) return 0U;
+    brick_entity_id_t owner = track;
+    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    track_sound_state_t *const sound = track_sound_state_get(owner);
+    if (sound == NULL) return 0U;
+    sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
     return 1U;
 }
 
