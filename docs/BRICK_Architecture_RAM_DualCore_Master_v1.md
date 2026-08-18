@@ -1275,6 +1275,17 @@ La refonte est réussie si :
 
 ---
 
+# 31.1 PASS 1 — contrats physiques implementes
+
+- D2 is split into SRAM1 DMA non-cacheable (first 12 KiB), SRAM1 cacheable remainder, SRAM2 M4 model contract, and SRAM3 M4 NoteFX contract.
+- Audio RX/TX uses the hardware-proven non-cacheable D2 audio contract; no D-cache maintenance is required for these buffers.
+- The former `.ram_d2_lut` output is no longer used. Sequencer state is linked through the M4 contract sections.
+- `.ram_d1_audio` is no longer swallowed by the `.ram_d1*` wildcard; `.ram_d1_ui` also has a dedicated output section.
+- D3 keeps existing `.ram_d3_ctrl` objects in place. A dedicated `.ram_d3_ipc` contract and physical bound assertion are prepared without moving current objects.
+- The four generated linker variants contain the same physical bank contracts. PASS 1 does not change SDRAM ownership or cold/streaming sections.
+
+---
+
 # 32. Instruction au futur pilote
 
 Avant toute passe :

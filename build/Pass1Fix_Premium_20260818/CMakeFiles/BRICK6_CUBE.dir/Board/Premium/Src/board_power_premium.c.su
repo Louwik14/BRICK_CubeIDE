@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_power_premium.c:5:6:board_power_delay_ms	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_power_premium.c:10:6:board_power_hold_enable_after_boot_press	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_power_premium.c:14:9:board_power_shutdown_request_poll	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_power_premium.c:20:6:board_power_usb_host_off	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_power_premium.c:24:6:board_power_shutdown_cut	0	static

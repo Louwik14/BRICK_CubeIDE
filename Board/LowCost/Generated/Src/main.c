@@ -89,10 +89,16 @@ void MX_USB_DEVICE_Init(void);
 /* USER CODE BEGIN 0 */
 extern uint32_t __ram_d2_dma_start__;
 extern uint32_t __ram_d2_dma_end__;
+extern uint32_t __ram_d2_dma_audio_start__;
+extern uint32_t __ram_d2_dma_audio_end__;
+extern uint32_t __ram_d2_dma_cacheable_start__;
+extern uint32_t __ram_d2_dma_cacheable_end__;
 
 #define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
+#define RAM_D2_DMA_CACHEABLE_BASE         (0x30003000UL)
+#define RAM_D2_DMA_CACHEABLE_END          (0x30020000UL)
 #define BACKUP_SRAM_MPU_BASE               (0x38800000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
 #define SDRAM_RECORDER_MPU_BASE            (0xC1F00000UL)
@@ -221,6 +227,22 @@ int main(void)
 
   if ((dma_start < RAM_D2_DMA_MPU_BASE) ||
       (dma_end > (RAM_D2_DMA_MPU_BASE + RAM_D2_DMA_MPU_COVERED_BYTES)))
+  {
+    Error_Handler();
+  }
+
+  const uintptr_t dma_audio_start = (uintptr_t)&__ram_d2_dma_audio_start__;
+  const uintptr_t dma_audio_end = (uintptr_t)&__ram_d2_dma_audio_end__;
+  if ((dma_audio_start < RAM_D2_DMA_MPU_BASE) ||
+      (dma_audio_end > (RAM_D2_DMA_MPU_BASE + RAM_D2_DMA_MPU_COVERED_BYTES)))
+  {
+    Error_Handler();
+  }
+
+  const uintptr_t dma_cacheable_start = (uintptr_t)&__ram_d2_dma_cacheable_start__;
+  const uintptr_t dma_cacheable_end = (uintptr_t)&__ram_d2_dma_cacheable_end__;
+  if ((dma_cacheable_start < RAM_D2_DMA_CACHEABLE_BASE) ||
+      (dma_cacheable_end > RAM_D2_DMA_CACHEABLE_END))
   {
     Error_Handler();
   }

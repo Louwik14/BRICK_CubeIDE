@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:85:6:board_audio_codec_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:90:6:board_audio_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:94:9:board_audio_start_stream	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:215:6:board_audio_stop_stream	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:224:6:board_audio_get_boot_diag	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:232:9:board_audio_is_rx_callback_handle	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:261:6:board_audio_unpack_input	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_audio_lowcost.c:281:6:board_audio_pack_output	4	static

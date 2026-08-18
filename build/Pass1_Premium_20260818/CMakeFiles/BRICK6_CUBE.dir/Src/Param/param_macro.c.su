@@ -1,0 +1,17 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:45:16:param_macro_target_is_audio_owned	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:61:16:param_macro_bulk_add	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:109:31:param_macro_get_ui_held_scene	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:161:6:param_macro_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:176:7:param_macro_lerp	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:191:9:param_macro_lock_target_is_supported	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:226:16:param_macro_apply_backend_value	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:528:9:param_macro_resolve_lock	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:414:13:param_macro_recompute_sources	856	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:504:16:param_macro_set_source_amount	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:570:9:param_macro_apply_resolution	792	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:607:6:param_macro_sync_scene_sources	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:616:9:param_macro_set_amount	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:635:9:param_macro_adjust_amount	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:648:7:param_macro_get_amount	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:658:9:param_macro_set_scene_source_amount	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_macro.c:668:6:param_macro_release_scene_source	8	static

@@ -36,22 +36,21 @@
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 
-/*
- * DMA/shared buffers:
- * - Any CPU<->DMA shared payload should live here.
- * - Section is intended to become MPU non-cacheable during D-cache rollout.
- */
+/* DMA/shared buffers: hardware-proven non-cacheable D2 contract. */
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 
-
-#define AUDIO_DMA_BUFFER_CACHEABLE SEC_ATTR(".ram_d2_lut") ALIGN32
-#define AUDIO_DMA_BUFFER_IS_CACHEABLE 1U
+/* SAI RX/TX stays in the non-cacheable D2 window used by the GOOD image. */
+#define AUDIO_DMA_BUFFER_NONCACHEABLE SEC_ATTR(".ram_d2_dma_audio") ALIGN32
+#define AUDIO_DMA_BUFFER_IS_CACHEABLE 0U
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
-#define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_lut")
+#define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_local_cacheable")
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
-#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_lut")
+#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
+
+/* Explicit D3 IPC contract. Existing CTRL_STATE objects remain in legacy D3. */
+#define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
 
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")

@@ -75,12 +75,12 @@
  * - TX: CPU écrit, DMA lit
  *
  * Politique des buffers DMA:
- * - RX reste dans la section cacheable existante et est invalidé avant lecture CPU
- * - TX reste dans la section D2 cacheable et est nettoyé avant consommation DMA
+ * - RX/TX restent dans le contrat D2 non-cacheable de l'image matérielle GOOD
+ * - aucune maintenance D-Cache n'est nécessaire pour ces buffers
  * - aucune copie ni changement de format n'est introduit dans le chemin IRQ
  */
-static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
-static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
@@ -221,9 +221,6 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 {
     const uint32_t offset =
         half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
-    const size_t half_bytes = (size_t)AUDIO_FRAMES_PER_HALF
-                            * (size_t)AUDIO_WORDS_PER_FRAME
-                            * sizeof(int32_t);
 
     int32_t *rx = &rx_buffer[offset];
     int32_t *tx = &tx_buffer[offset];
@@ -233,8 +230,10 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
         return;
     }
 
-    /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traite. */
+    /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
+#if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
+#endif
     uint32_t half_cursor = 0U;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {

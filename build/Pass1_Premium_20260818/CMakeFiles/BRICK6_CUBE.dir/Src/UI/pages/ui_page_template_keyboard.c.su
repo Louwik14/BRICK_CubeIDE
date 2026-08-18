@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:44:36:ui_page_template_keyboard_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:148:13:ui_page_template_keyboard_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:153:6:ui_page_template_keyboard_register_families	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_keyboard.c:174:9:ui_page_template_keyboard_handle_encoder	0	static

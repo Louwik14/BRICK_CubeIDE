@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:3:16:io_write	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:4:16:io_read	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:5:16:io_reset	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:6:16:io_size	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:7:9:persistent_fatfs_open_read	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:8:9:persistent_fatfs_open_write	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:9:6:persistent_fatfs_close	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:10:24:persistent_fatfs_source	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_fatfs_io.c:11:22:persistent_fatfs_sink	24	static

@@ -45,7 +45,10 @@ MEMORY
 {
   RAM_EXEC (xrw)  : ORIGIN = 0x24000000, LENGTH = 512K
   DTCMRAM (xrw)   : ORIGIN = 0x20000000, LENGTH = 128K
-  RAM_D2 (xrw)    : ORIGIN = 0x30000000, LENGTH = 288K
+  SRAM1_D2_DMA_NC (xrw) : ORIGIN = 0x30000000, LENGTH = 12K
+  SRAM1_D2_CACHEABLE (xrw) : ORIGIN = 0x30003000, LENGTH = 116K
+  SRAM2_D2 (xrw) : ORIGIN = 0x30020000, LENGTH = 128K
+  SRAM3_D2 (xrw) : ORIGIN = 0x30040000, LENGTH = 32K
   RAM_D3 (xrw)    : ORIGIN = 0x38000000, LENGTH = 64K
   SDRAM (xrw)     : ORIGIN = 0xC0000000, LENGTH = 32M
   ITCMRAM (xrw)   : ORIGIN = 0x00000000, LENGTH = 64K
@@ -170,7 +173,14 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.ram_d1)
-    *(.ram_d1*)
+    . = ALIGN(32);
+  } >RAM_EXEC
+
+  .ram_d1_ui (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d1_ui)
+    *(.ram_d1_ui*)
     . = ALIGN(32);
   } >RAM_EXEC
 
@@ -194,10 +204,89 @@ SECTIONS
   .ram_d2_dma (NOLOAD) :
   {
     . = ALIGN(32);
+    __ram_d2_dma_start__ = .;
     *(.ram_d2_dma)
-    *(.ram_d2_dma*)
     . = ALIGN(32);
-  } >RAM_D2
+    __ram_d2_dma_end__ = .;
+  } >SRAM1_D2_DMA_NC
+  ASSERT((__ram_d2_dma_end__ - __ram_d2_dma_start__) <= LENGTH(SRAM1_D2_DMA_NC),
+         "SRAM1 D2 DMA contract overflow")
+
+  .ram_d2_dma_audio (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __ram_d2_dma_audio_start__ = .;
+    *(.ram_d2_dma_audio)
+    *(.ram_d2_dma_audio*)
+    . = ALIGN(32);
+    __ram_d2_dma_audio_end__ = .;
+  } >SRAM1_D2_DMA_NC
+  ASSERT((__ram_d2_dma_audio_end__ - __ram_d2_dma_audio_start__) <= LENGTH(SRAM1_D2_DMA_NC),
+         "SRAM1 D2 audio DMA contract overflow")
+
+  .ram_d2_dma_cacheable (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __ram_d2_dma_cacheable_start__ = .;
+    *(.ram_d2_dma_cacheable)
+    *(.ram_d2_dma_cacheable*)
+    . = ALIGN(32);
+    __ram_d2_dma_cacheable_end__ = .;
+  } >SRAM1_D2_CACHEABLE
+  ASSERT((__ram_d2_dma_cacheable_end__ - __ram_d2_dma_cacheable_start__) <= LENGTH(SRAM1_D2_CACHEABLE),
+         "SRAM1 D2 cacheable DMA contract overflow")
+
+  .ram_d2_local_cacheable (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_local_cacheable)
+    *(.ram_d2_local_cacheable*)
+    . = ALIGN(32);
+  } >SRAM1_D2_CACHEABLE
+
+  .ram_d2_m4_sram1 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    * (EXCLUDE_FILE (*seq_model.c.obj *note_fx_pipeline.c.obj) .ram_d2_m4)
+    * (EXCLUDE_FILE (*seq_model.c.obj *note_fx_pipeline.c.obj) .ram_d2_m4.*)
+    . = ALIGN(32);
+  } >SRAM1_D2_CACHEABLE
+
+  .ram_d2_m4_sram2 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *seq_model.c.obj(.ram_d2_m4)
+    *seq_model.c.obj(.ram_d2_m4.*)
+    . = ALIGN(32);
+  } >SRAM2_D2
+  ASSERT(SIZEOF(.ram_d2_m4_sram2) <= LENGTH(SRAM2_D2),
+         "SRAM2 D2 M4 contract overflow")
+
+  .ram_d2_m7 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_m7)
+    *(.ram_d2_m7*)
+    . = ALIGN(32);
+  } >SRAM2_D2
+
+  .ram_d2_m4_sram3 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *note_fx_pipeline.c.obj(.ram_d2_m4)
+    *note_fx_pipeline.c.obj(.ram_d2_m4.*)
+    . = ALIGN(32);
+  } >SRAM3_D2
+  ASSERT(SIZEOF(.ram_d2_m4_sram3) <= LENGTH(SRAM3_D2),
+         "SRAM3 D2 M4 contract overflow")
+
+  .ram_d2_ipc (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_ipc)
+    *(.ram_d2_ipc*)
+    . = ALIGN(32);
+  } >SRAM3_D2
 
   .ram_d3_ctrl (NOLOAD) :
   {
@@ -206,6 +295,16 @@ SECTIONS
     *(.ram_d3_ctrl*)
     . = ALIGN(32);
   } >RAM_D3
+
+  .ram_d3_ipc (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d3_ipc)
+    *(.ram_d3_ipc*)
+    . = ALIGN(32);
+  } >RAM_D3
+  ASSERT(SIZEOF(.ram_d3_ctrl) + SIZEOF(.ram_d3_ipc) <= LENGTH(RAM_D3),
+         "SRAM4 D3 contract overflow")
 
   .audio_history_sdram (NOLOAD) :
   {
