@@ -1,7 +1,7 @@
 #include "pages/ui_page_midi_fx.h"
 
 #include "Audio/audio_fx_runtime.h"
-#include "Audio/audio_waveform_capture.h"
+#include "Audio/waveform_control.h"
 #include "Core/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_division_catalog.h"
@@ -139,12 +139,10 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
     if ((ui_page_midi_fx_audio_subpage_active() == 0U)
             || (ui_template_edit_context_resolve_active(&context) == 0U))
     {
-        audio_waveform_capture_disable();
+        waveform_control_publish(BRICK_ENTITY_INVALID_ID, 0U, 0U);
         return;
     }
 
-    audio_waveform_capture_set_entity(
-        (brick_entity_id_t)context.selected_entity);
     uint8_t fast_refresh = 0U;
     for (uint8_t slot = 0U; slot < 3U; ++slot)
     {
@@ -155,7 +153,8 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
             break;
         }
     }
-    audio_waveform_capture_set_fast_refresh(fast_refresh);
+    waveform_control_publish((brick_entity_id_t)context.selected_entity,
+                             1U, fast_refresh);
 }
 
 static ui_template_custom_widget_kind_t ui_page_midi_fx_pick_custom_widget(
@@ -372,7 +371,7 @@ static void ui_page_midi_fx_enter(void)
 
 static void ui_page_midi_fx_leave(void)
 {
-    audio_waveform_capture_disable();
+    waveform_control_publish(BRICK_ENTITY_INVALID_ID, 0U, 0U);
     ui_template_page_leave();
 }
 

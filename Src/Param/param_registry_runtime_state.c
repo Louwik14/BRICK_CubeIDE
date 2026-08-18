@@ -1,7 +1,7 @@
 #include "Param/param_registry_runtime_state.h"
 
-#include "Mod/mod_lfo_v1.h"
 #include "Storage/memory_layout.h"
+#include "Seq/seq_types.h"
 #include <string.h>
 
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_LANE_CAPACITY][PARAM_COUNT];
@@ -72,17 +72,15 @@ void param_registry_runtime_commit_authoritative_write(uint8_t track,
                                                        float value,
                                                        uint8_t resync_lfo)
 {
-    /* Post-commit helper: cache is authoritative, optional LFO resync stays explicit. */
+    /* Post-commit helper: cache remains CONTROL-owned.  AUDIO base updates are
+     * applied at the dated event boundary by live_parameter_audio_runtime. */
     if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
     {
         return;
     }
 
     param_registry_runtime_cache_set(track, id, value);
-    if (resync_lfo != 0U)
-    {
-        param_registry_runtime_resync_lfo(track, id, value);
-    }
+    (void)resync_lfo;
 }
 
 uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
@@ -103,14 +101,4 @@ uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
 
     *out_value = registry[id].default_value;
     return 1U;
-}
-
-void param_registry_runtime_resync_lfo(uint8_t track, param_id_t id, float value)
-{
-    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
-    {
-        return;
-    }
-
-    mod_lfo_v1_resync_base_on_authoritative_write(track, id, value);
 }

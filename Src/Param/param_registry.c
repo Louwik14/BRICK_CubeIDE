@@ -1597,11 +1597,6 @@ static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *c
         return 0U;
     }
 
-    if (ctx->rt_fast == 0U)
-    {
-        param_registry_runtime_resync_lfo(ctx->track, ctx->id, ctx->clamped);
-    }
-
     return applied;
 }
 
@@ -1980,6 +1975,15 @@ uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
 
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
 {
+    return param_registry_apply_track_value_runtime_temp_matrix(
+        id, track, value, LIVE_PARAMETER_MATRIX_OPERATION_NONE);
+}
+
+uint8_t param_registry_apply_track_value_runtime_temp_matrix(param_id_t id,
+                                                              uint8_t track,
+                                                              float value,
+                                                              uint8_t matrix_operation)
+{
     if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
             || (param_id_is_reserved(id) != 0U))
         return 0U;
@@ -1994,6 +1998,7 @@ uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t tra
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .reserved = matrix_operation,
             .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
                                 | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
                                 | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),

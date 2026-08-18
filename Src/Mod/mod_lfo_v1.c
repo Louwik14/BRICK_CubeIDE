@@ -1,6 +1,5 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Audio/audio_mod_matrix.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Storage/memory_layout.h"
 
@@ -881,7 +880,6 @@ void mod_lfo_v1_init(void)
     mod_destination_catalog_init();
     mod_env3_control_publish_from_canonical();
     mod_env3_init();
-    mod_matrix_init();
     g_mod_lfo_control_counter = 0U;
     g_mod_lfo_had_matrix_routes = 0U;
     memset(g_mod_lfo_track_had_matrix_routes, 0, sizeof(g_mod_lfo_track_had_matrix_routes));
@@ -919,54 +917,6 @@ void mod_lfo_v1_init(void)
     }
 
     mod_lfo_v1_invalidate_dest_cache_all();
-}
-
-void mod_lfo_v1_reset_runtime(void)
-{
-    g_mod_lfo_control_counter = 0U;
-    g_mod_lfo_had_matrix_routes = 0U;
-    memset(g_mod_lfo_track_had_matrix_routes, 0, sizeof(g_mod_lfo_track_had_matrix_routes));
-    mod_destination_catalog_reset_runtime();
-    mod_env3_reset_runtime();
-    mod_matrix_reset_runtime();
-    memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
-    memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
-    memset(g_mod_lfo_poly_segment_config,
-           0,
-           sizeof(g_mod_lfo_poly_segment_config));
-    memset(g_mod_lfo_poly_prepared_entries,
-           0,
-           sizeof(g_mod_lfo_poly_prepared_entries));
-    g_mod_lfo_poly_prepared_entry_count = 0U;
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
-        {
-            g_mod_lfo_runtime[track][lfo].phase = 0U;
-            {
-                const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo);
-                const float rate = (s != NULL) ? s->rate : 0.0f;
-                g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(rate);
-            }
-            g_mod_lfo_runtime[track][lfo].current = 0.0f;
-            g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].triggered = 0U;
-            g_mod_lfo_runtime[track][lfo].one_running = 0U;
-            g_mod_lfo_runtime[track][lfo].one_done = 0U;
-            g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].active = 0U;
-            g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].ramp_end = 0.0f;
-            g_mod_lfo_runtime[track][lfo].ramp_discontinuous = 0U;
-            g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
-        }
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        audio_mod_matrix_rebuild_track(track);
-    }
 }
 
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value)
@@ -1190,17 +1140,6 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         default:
             return 0U;
     }
-}
-
-void mod_lfo_v1_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
-    {
-        return;
-    }
-
-    mod_destination_catalog_invalidate_runtime_value(track, id);
-    mod_matrix_resync_base_on_authoritative_write(track, id, value);
 }
 
 void mod_lfo_v1_process_sample_all(void)
@@ -1569,13 +1508,13 @@ uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t 
 void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
 {
     mod_destination_catalog_invalidate_track(track);
-    mod_matrix_rebuild_route_cache_track(track);
+    mod_matrix_publish_control_snapshot_track(track);
 }
 
 void mod_lfo_v1_invalidate_dest_cache_all(void)
 {
     mod_destination_catalog_invalidate_all();
-    mod_matrix_rebuild_route_cache_all();
+    mod_matrix_publish_control_snapshot_all();
 }
 
 uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)

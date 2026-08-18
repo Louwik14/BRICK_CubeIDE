@@ -31,8 +31,10 @@
 #include "Audio/control_audio_queue.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
+#include "Audio/waveform_control.h"
 #include "Audio/audio_note_admission.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_mod_matrix.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
@@ -128,10 +130,6 @@ static void audio_apply_control_events_at_sample(uint64_t sample_time)
             audio_note_admission_close_entity(event.entity_id);
             audio_note_engine_adapter_install_intent(&event);
         }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MOD_MATRIX_SNAPSHOT)
-        {
-            audio_mod_matrix_apply_snapshot(&event);
-        }
         else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START)
         {
             brick6_looper_runtime_on_transport_start();
@@ -162,11 +160,19 @@ static void audio_apply_control_events_at_sample(uint64_t sample_time)
 }
 static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
+    waveform_control_command_t waveform_command;
+    if (waveform_control_audio_consume(&waveform_command) != 0U)
+    {
+        audio_waveform_capture_audio_apply_control(
+            waveform_command.entity_id, waveform_command.enabled,
+            waveform_command.fast_refresh);
+    }
     uint32_t cursor = 0U;
     while (cursor < frames)
     {
         const uint64_t now = sample_time + cursor;
         audio_apply_control_events_at_sample(now);
+        audio_mod_matrix_consume_snapshots();
         (void)live_parameter_audio_queue_consume_due(now);
         (void)live_parameter_audio_runtime_apply_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
@@ -288,6 +294,7 @@ void audio_boot_init_binding_io(void)
     control_audio_queue_init();
     audio_note_admission_init();
     audio_note_engine_adapter_init();
+    audio_mod_matrix_init();
     audio_fx_runtime_init();
     audio_waveform_capture_init();
     board_audio_init();

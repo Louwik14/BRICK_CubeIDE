@@ -34,7 +34,6 @@ void param_registry_runtime_commit_authoritative_write(uint8_t track,
                                                        param_id_t id,
                                                        float value,
                                                        uint8_t resync_lfo);
-void param_registry_runtime_resync_lfo(uint8_t track, param_id_t id, float value);
 
 #ifdef __cplusplus
 }

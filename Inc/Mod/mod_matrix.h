@@ -39,11 +39,24 @@ typedef struct
     float depth;
 } track_mod_matrix_slot_t;
 
-void mod_matrix_init(void);
-void mod_matrix_reset_runtime(void);
+typedef struct
+{
+    track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT];
+    float base_value[MOD_MATRIX_SLOT_COUNT];
+    float min_value[MOD_MATRIX_SLOT_COUNT];
+    float max_value[MOD_MATRIX_SLOT_COUNT];
+    uint8_t multi_source[2][2];
+    uint8_t slew_source[2];
+    float slew_amount[2];
+    uint32_t slew_generation[2];
+} mod_matrix_control_snapshot_t;
+
+_Static_assert(sizeof(mod_matrix_control_snapshot_t) <= 256U,
+               "Matrix CONTROL/AUDIO snapshot must remain bounded and pointer-free");
+
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
-void mod_matrix_rebuild_route_cache_track(uint8_t track);
-void mod_matrix_rebuild_route_cache_all(void);
+void mod_matrix_publish_control_snapshot_track(uint8_t track);
+void mod_matrix_publish_control_snapshot_all(void);
 uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);
@@ -113,13 +126,6 @@ void mod_matrix_process_operators_ramped(uint8_t track,
 uint8_t mod_matrix_get_destination_ramp(uint8_t track,
                                         param_id_t destination,
                                         mod_destination_ramp_t *out_ramp);
-void mod_matrix_release_track(uint8_t track,
-                              ui_track_family_t family,
-                              ui_track_type_t type,
-                              const track_audio_runtime_ctx_t *ctx);
-void mod_matrix_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value);
-void mod_matrix_set_runtime_base_override(uint8_t track, param_id_t id, float value);
-void mod_matrix_clear_runtime_base_override(uint8_t track, param_id_t id, float base_value);
 
 #ifdef __cplusplus
 }

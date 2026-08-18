@@ -26,9 +26,9 @@ typedef struct
 } audio_waveform_capture_snapshot_t;
 
 void audio_waveform_capture_init(void);
-void audio_waveform_capture_set_entity(brick_entity_id_t entity_id);
-void audio_waveform_capture_disable(void);
-void audio_waveform_capture_set_fast_refresh(uint8_t fast);
+void audio_waveform_capture_audio_apply_control(brick_entity_id_t entity_id,
+                                                uint8_t enabled,
+                                                uint8_t fast_refresh);
 brick_entity_id_t audio_waveform_capture_get_entity(void);
 uint8_t audio_waveform_capture_needs_final_samples(void);
 uint32_t audio_waveform_capture_get_generation(void);

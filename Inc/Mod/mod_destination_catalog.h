@@ -24,7 +24,7 @@ uint8_t mod_destination_address_resolve(mod_destination_address_t address,
                                         param_id_t *out_param);
 
 void mod_destination_catalog_init(void);
-void mod_destination_catalog_reset_runtime(void);
+void audio_mod_destination_catalog_reset_runtime(void);
 
 uint8_t mod_destination_catalog_apply_rt(uint8_t track,
                                          param_id_t dest,
@@ -58,7 +58,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
 uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len);
 void mod_destination_catalog_invalidate_track(uint8_t track);
 void mod_destination_catalog_invalidate_all(void);
-void mod_destination_catalog_invalidate_runtime_value(uint8_t track, param_id_t id);
+void audio_mod_destination_catalog_invalidate_runtime_value(uint8_t track, param_id_t id);
 
 #ifdef __cplusplus
 }

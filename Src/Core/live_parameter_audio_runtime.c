@@ -79,8 +79,22 @@ static uint8_t live_parameter_audio_runtime_apply_target(
     {
         if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
         {
-            return param_registry_apply_track_value_runtime_temp_audio(
+            const uint8_t applied = param_registry_apply_track_value_runtime_temp_audio(
                 event->parameter_id, event->track, value);
+            if (applied == 0U)
+                return 0U;
+            if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET)
+            {
+                audio_mod_matrix_set_base_override(
+                    event->track, event->parameter_id, value);
+            }
+            else if (event->matrix_operation
+                     == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
+            {
+                audio_mod_matrix_clear_base_override(
+                    event->track, event->parameter_id, value);
+            }
+            return 1U;
         }
         if ((event->parameter_id == PARAM_CFG_POLY_VOICES)
                 || (event->parameter_id == PARAM_CFG_POLY_SPREAD))
@@ -98,14 +112,22 @@ static uint8_t live_parameter_audio_runtime_apply_target(
             const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
                 event->track, (uint8_t)voices, spread);
             if (applied != 0U)
+            {
                 param_registry_runtime_commit_authoritative_write(
-                    event->track, event->parameter_id, value, 1U);
+                    event->track, event->parameter_id, value, 0U);
+                audio_mod_matrix_base_update(
+                    event->track, event->parameter_id, value);
+            }
             return applied;
         }
         const uint8_t applied = param_registry_apply_track_value_audio(
             event->parameter_id, event->track, value);
         if (applied != 0U)
+        {
+            audio_mod_matrix_base_update(
+                event->track, event->parameter_id, value);
             audio_mod_matrix_rebuild_track(event->track);
+        }
         return applied;
     }
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)

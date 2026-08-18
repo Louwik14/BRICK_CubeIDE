@@ -1,4 +1,5 @@
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_mod_matrix.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -530,6 +531,7 @@ void audio_note_engine_adapter_install_intent(
 
     ctx->audio_binding = installed;
     g_audio_installed_generation[entity_id] = installed.generation;
+    audio_mod_matrix_rebuild_track(entity_id);
     audio_note_engine_adapter_publish_snapshots();
 }
 

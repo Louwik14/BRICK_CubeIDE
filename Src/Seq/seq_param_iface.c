@@ -13,7 +13,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
-#include "Mod/mod_matrix.h"
+#include "Core/live_parameter_audio_queue.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -1093,13 +1093,10 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
-    mod_matrix_set_runtime_base_override(track, param, decoded);
-    if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
+    if (param_registry_apply_track_value_runtime_temp_matrix(
+            param, track, decoded,
+            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET) == 0U)
     {
-        mod_matrix_clear_runtime_base_override(
-            track,
-            param,
-            seq_param_iface_decode_param_value(param, state->base_value));
         return 0U;
     }
 
@@ -1147,13 +1144,14 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, base_value16);
-    if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
+    if (param_registry_apply_track_value_runtime_temp_matrix(
+            param, track, decoded,
+            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR) == 0U)
     {
         return 0U;
     }
 
     param_registry_release_track_value_runtime_temp(param, track);
-    mod_matrix_clear_runtime_base_override(track, param, decoded);
 
     state->base_value = base_value16;
     seq_param_set_base_valid(track, set_id, param_slot, 1U);

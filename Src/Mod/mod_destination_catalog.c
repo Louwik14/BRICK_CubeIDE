@@ -1990,11 +1990,10 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
 
 void mod_destination_catalog_init(void)
 {
-    mod_destination_catalog_reset_runtime();
     mod_destination_catalog_invalidate_all();
 }
 
-void mod_destination_catalog_reset_runtime(void)
+void audio_mod_destination_catalog_reset_runtime(void)
 {
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -2006,7 +2005,7 @@ void mod_destination_catalog_reset_runtime(void)
     }
 }
 
-void mod_destination_catalog_invalidate_runtime_value(uint8_t track, param_id_t id)
+void audio_mod_destination_catalog_invalidate_runtime_value(uint8_t track, param_id_t id)
 {
     if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
     {

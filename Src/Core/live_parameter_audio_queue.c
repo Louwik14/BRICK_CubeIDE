@@ -187,7 +187,8 @@ uint16_t live_parameter_audio_queue_drain(void)
             .track = control_event.track,
             .slot = control_event.slot,
             .flags = control_event.flags,
-            .value = control_event.value
+            .value = control_event.value,
+            .matrix_operation = LIVE_PARAMETER_MATRIX_OPERATION_NONE
         };
         if (live_parameter_audio_schedule(&audio_event) != 0U)
             ++drained;
@@ -246,7 +247,8 @@ bool live_parameter_audio_queue_submit_bulk(const live_parameter_audio_bulk_t *b
             .track = item->track,
             .slot = item->slot,
             .flags = live_parameter_event_bulk_flags(item->flags, i, bulk->count),
-            .value = item->value
+            .value = item->value,
+            .matrix_operation = item->reserved
         };
     }
 

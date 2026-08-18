@@ -105,6 +105,10 @@ uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *c
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
 uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted);
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value);
+uint8_t param_registry_apply_track_value_runtime_temp_matrix(param_id_t id,
+                                                              uint8_t track,
+                                                              float value,
+                                                              uint8_t matrix_operation);
 uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value);
 void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track);
 void param_registry_clear_track_runtime_state(uint8_t track);

@@ -137,19 +137,16 @@ void audio_waveform_capture_init(void)
     __DMB();
 }
 
-void audio_waveform_capture_set_entity(brick_entity_id_t entity_id)
+void audio_waveform_capture_audio_apply_control(brick_entity_id_t entity_id,
+                                                uint8_t enabled,
+                                                uint8_t fast_refresh)
 {
+    if (enabled == 0U) entity_id = BRICK_ENTITY_INVALID_ID;
     if (entity_id >= BRICK_ENTITY_CAPACITY) entity_id = BRICK_ENTITY_INVALID_ID;
     __DMB();
     g_requested_entity = entity_id;
+    g_fast_refresh = (fast_refresh != 0U) ? 1U : 0U;
     __DMB();
-}
-
-void audio_waveform_capture_disable(void) { audio_waveform_capture_set_entity(BRICK_ENTITY_INVALID_ID); }
-
-void audio_waveform_capture_set_fast_refresh(uint8_t fast)
-{
-    g_fast_refresh = (fast != 0U) ? 1U : 0U;
 }
 
 brick_entity_id_t audio_waveform_capture_get_entity(void)

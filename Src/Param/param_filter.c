@@ -310,7 +310,6 @@ uint8_t param_filter_control_set_value(param_id_t id, uint8_t track, float clamp
         return 0U;
     }
     param_filter_update_shadow_state(target.state, id, clamped);
-    mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
     return 1U;
 }
 
@@ -336,10 +335,7 @@ uint8_t param_filter_apply_value(param_id_t id,
         param_filter_update_shadow_state(target.state, id, clamped);
     }
 
-    if (resync_lfo_base != 0U)
-    {
-        mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
-    }
+    (void)resync_lfo_base;
 
     return 1U;
 }

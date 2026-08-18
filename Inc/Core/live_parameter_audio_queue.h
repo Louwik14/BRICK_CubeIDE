@@ -49,7 +49,16 @@ typedef struct
     uint8_t slot;
     uint16_t flags;
     int32_t value;
+    uint8_t matrix_operation;
+    uint8_t reserved[3];
 } live_parameter_audio_event_t;
+
+typedef enum
+{
+    LIVE_PARAMETER_MATRIX_OPERATION_NONE = 0U,
+    LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET = 1U,
+    LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR = 2U
+} live_parameter_matrix_operation_t;
 
 _Static_assert(sizeof(live_parameter_audio_event_t) == 32U,
                "live_parameter_audio_event_t must remain a fixed 32-byte event");

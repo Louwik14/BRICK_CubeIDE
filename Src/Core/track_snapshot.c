@@ -304,7 +304,7 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
     }
 
     track_runtime_refresh_track(track);
-    mod_matrix_rebuild_route_cache_track(track);
+    mod_matrix_publish_control_snapshot_track(track);
 
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
