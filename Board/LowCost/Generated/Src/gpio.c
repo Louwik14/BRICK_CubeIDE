@@ -55,7 +55,10 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, OLED_DC_Pin|OLED_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, OLED_RES_Pin|HOST_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin

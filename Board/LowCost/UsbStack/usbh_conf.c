@@ -473,14 +473,14 @@ USBH_StatusTypeDef USBH_LL_DriverVBUS(USBH_HandleTypeDef *phost, uint8_t state)
     if (state == 0)
     {
       /* USER CODE BEGIN DRIVE_HIGH_CHARGE_FOR_FS */
-      HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
 
       /* USER CODE END DRIVE_HIGH_CHARGE_FOR_FS */
     }
     else
     {
       /* USER CODE BEGIN DRIVE_LOW_CHARGE_FOR_FS */
-      HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_RESET);
 
       /* USER CODE END DRIVE_LOW_CHARGE_FOR_FS */
     }

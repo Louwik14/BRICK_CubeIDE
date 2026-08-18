@@ -212,6 +212,15 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
     return 0U;
 }
 
+void board_audio_stop_stream(void)
+{
+    (void)HAL_SAI_DMAStop(&hsai_BlockB1);
+    (void)HAL_SAI_DMAStop(&hsai_BlockA1);
+    g_board_audio_boot_diag.stream_started = 0U;
+    g_board_audio_boot_diag.tx_started = 0U;
+    g_board_audio_boot_diag.rx_started = 0U;
+}
+
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag)
 {
     if (out_diag != NULL)

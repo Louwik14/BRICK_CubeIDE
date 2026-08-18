@@ -540,3 +540,9 @@ Z0 appelle principalement:
 - La vraie temporisation d'allumage low-cost est `POWER_BOOT_PRESS_MS` dans `Board/LowCost/Src/board_power_lowcost.c`.
 - `board_power_hold_enable_after_boot_press()` maintient `POWER_HOLD` bas tant que `POWER_BUTTON_SENSE` n'a pas ete vu haut en continu pendant 1000 ms, puis met `POWER_HOLD` haut et ne gere plus aucun chemin d'extinction runtime.
 - Aucun watchdog, auto-off firmware ou demande de shutdown n'est active dans cette zone.
+
+## Addendum 2026-08-18 - extinction physique Power low-cost
+
+- PB5 `POWER_BUTTON_SENSE` est actif haut et PD4 `POWER_HOLD` maintient le boost a l'etat haut.
+- Un appui runtime haut continu de 2000 ms arrete l'audio, eteint l'OLED, force `HOST_EN` PC7 haut via le gestionnaire de role USB (AP2161 enable actif bas), puis force immediatement PD4 bas.
+- D5 maintient le boost tant que le bouton reste appuye; au relachement, R575 abaisse `BOOST_EN` et les rails tombent. Aucun service SD, cache, preview ou recorder n'est attendu.

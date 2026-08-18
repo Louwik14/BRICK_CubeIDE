@@ -336,6 +336,12 @@ uint8_t audio_start(void)
     return (g_audio_init_state == AUDIO_INIT_READY) ? 1U : 0U;
 }
 
+void audio_stop(void)
+{
+    board_audio_stop_stream();
+    g_audio_init_state = AUDIO_INIT_NOT_STARTED;
+}
+
 audio_init_state_t audio_get_init_state(void)
 {
     return g_audio_init_state;

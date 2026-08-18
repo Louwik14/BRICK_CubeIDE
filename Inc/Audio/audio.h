@@ -46,5 +46,6 @@ void audio_init(void);
  * - Retourne 1 uniquement lorsque l'état atteint AUDIO_INIT_READY.
  */
 uint8_t audio_start(void);
+void audio_stop(void);
 audio_init_state_t audio_get_init_state(void);
 board_audio_boot_error_t audio_get_boot_error(void);

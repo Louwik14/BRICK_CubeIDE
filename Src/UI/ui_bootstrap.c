@@ -41,36 +41,36 @@ void ui_bootstrap_init(void)
     ui_page_manager_init();
 
     /*
-     * Register pages once at boot. Registration order defines stable page IDs
-     * used by the navigation rule table.
+     * Register pages once at boot against their stable IDs. Registration order
+     * is intentionally irrelevant to the navigation rule table.
      */
-    ui_page_manager_register(&g_ui_page_param_test);
-    ui_page_manager_register(&g_ui_page_debug_hall);
-    ui_page_manager_register(&g_ui_page_calibration);
-    ui_page_manager_register(&g_ui_page_user_calibration);
-    ui_page_manager_register(&g_ui_page_template_env);
-    ui_page_manager_register(&g_ui_page_template_cfg);
-    ui_page_manager_register(&g_ui_page_template_rec_cfg);
-    ui_page_manager_register(&g_ui_page_template_tone);
-    ui_page_manager_register(&g_ui_page_template_mod);
-    ui_page_manager_register(&g_ui_page_template_keyboard);
-    ui_page_manager_register(&g_ui_page_midi_fx);
-    ui_page_manager_register(&g_ui_page_template_seq);
-    ui_page_manager_register(&g_ui_page_template_macro);
-    ui_page_manager_register(&g_ui_page_template_mix);
-    ui_page_manager_register(&g_ui_page_template_play);
-    ui_page_manager_register(&g_ui_page_reserved_slot);
-    ui_page_manager_register(&g_ui_page_audio_rec);
-    ui_page_manager_register(&g_ui_page_rec_edit);
-    ui_page_manager_register(&g_ui_page_patch_assign);
-    ui_page_manager_register(&g_ui_page_name_edit);
-    ui_page_manager_register(&g_ui_page_settings);
+    ui_page_manager_register(UI_PAGE_PARAM_TEST, &g_ui_page_param_test);
+    ui_page_manager_register(UI_PAGE_HALL_KEY_DEBUG, &g_ui_page_debug_hall);
+    ui_page_manager_register(UI_PAGE_CALIBRATION, &g_ui_page_calibration);
+    ui_page_manager_register(UI_PAGE_USER_CALIBRATION, &g_ui_page_user_calibration);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_ENV, &g_ui_page_template_env);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_CFG, &g_ui_page_template_cfg);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_REC_CFG, &g_ui_page_template_rec_cfg);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_TONE, &g_ui_page_template_tone);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_MOD, &g_ui_page_template_mod);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_KEYBOARD, &g_ui_page_template_keyboard);
+    ui_page_manager_register(UI_PAGE_MIDI_FX, &g_ui_page_midi_fx);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_SEQ, &g_ui_page_template_seq);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_MACRO, &g_ui_page_template_macro);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_MIX, &g_ui_page_template_mix);
+    ui_page_manager_register(UI_PAGE_TEMPLATE_PLAY, &g_ui_page_template_play);
+    ui_page_manager_register(UI_PAGE_RESERVED_LEGACY_SLOT, &g_ui_page_reserved_slot);
+    ui_page_manager_register(UI_PAGE_AUDIO_REC, &g_ui_page_audio_rec);
+    ui_page_manager_register(UI_PAGE_REC_EDIT, &g_ui_page_rec_edit);
+    ui_page_manager_register(UI_PAGE_PATCH_ASSIGN, &g_ui_page_patch_assign);
+    ui_page_manager_register(UI_PAGE_NAME_EDIT, &g_ui_page_name_edit);
+    ui_page_manager_register(UI_PAGE_SETTINGS, &g_ui_page_settings);
 #if LOWCOST_BUTTON_TEST_PAGE
-    ui_page_manager_register(&g_ui_page_lowcost_button_test);
+    ui_page_manager_register(UI_PAGE_LOWCOST_BUTTON_TEST, &g_ui_page_lowcost_button_test);
 #else
-    ui_page_manager_register(&g_ui_page_reserved_slot);
+    ui_page_manager_register(UI_PAGE_LOWCOST_BUTTON_TEST, &g_ui_page_reserved_slot);
 #endif
-    ui_page_manager_register(&g_ui_page_reserved_slot);
+    ui_page_manager_register(UI_PAGE_RESERVED_DIAGNOSTIC, &g_ui_page_reserved_slot);
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

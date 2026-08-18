@@ -6,8 +6,8 @@
 #include "ui_page.h"
 
 /*
- * Stable page IDs used by navigation rules and page registration order.
- * Keep these values workflow-agnostic; rules map buttons to page IDs.
+ * Stable page IDs used by navigation rules and persistence.
+ * Registration binds each page explicitly to its ID; registration order is irrelevant.
  */
 enum
 {
@@ -26,7 +26,9 @@ enum
     UI_PAGE_TEMPLATE_MACRO,
     UI_PAGE_TEMPLATE_MIX,
     UI_PAGE_TEMPLATE_PLAY,
-    UI_PAGE_AUDIO_REC = 15U,
+    /* Historical slot retained for stable IDs; no page implementation is attached. */
+    UI_PAGE_RESERVED_LEGACY_SLOT = 15U,
+    UI_PAGE_AUDIO_REC,
     UI_PAGE_REC_EDIT,
     UI_PAGE_PATCH_ASSIGN,
     UI_PAGE_NAME_EDIT,
@@ -41,7 +43,7 @@ enum
 void ui_page_manager_init(void);
 
 /* Register pages during startup (typically from ui_core_init). */
-void ui_page_manager_register(const ui_page_t *page);
+void ui_page_manager_register(uint8_t page_id, const ui_page_t *page);
 /* Switch active page: leave(current) -> set id -> enter(new). */
 void ui_page_set(uint8_t page_id);
 

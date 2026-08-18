@@ -33,7 +33,6 @@
  * - execute leave/enter hooks when switching pages
  */
 static const ui_page_t *g_ui_pages[UI_PAGE_MANAGER_MAX_PAGES];
-static uint8_t g_ui_page_count = 0U;
 static uint8_t g_ui_current_page_id = 0U;
 
 /**
@@ -53,7 +52,6 @@ void ui_page_manager_init(void)
         g_ui_pages[i] = 0;
     }
 
-    g_ui_page_count = 0U;
     g_ui_current_page_id = 0U;
 }
 
@@ -68,15 +66,15 @@ void ui_page_manager_init(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void ui_page_manager_register(const ui_page_t *page)
+void ui_page_manager_register(uint8_t page_id, const ui_page_t *page)
 {
-    if ((page == 0) || (g_ui_page_count >= UI_PAGE_MANAGER_MAX_PAGES))
+    if ((page == 0) || (page_id >= UI_PAGE_MANAGER_MAX_PAGES) ||
+        (g_ui_pages[page_id] != 0))
     {
         return;
     }
 
-    g_ui_pages[g_ui_page_count] = page;
-    g_ui_page_count++;
+    g_ui_pages[page_id] = page;
 }
 
 /**
@@ -92,7 +90,8 @@ void ui_page_manager_register(const ui_page_t *page)
  */
 void ui_page_set(uint8_t page_id)
 {
-    if ((page_id >= g_ui_page_count) || (g_ui_pages[page_id] == 0))
+    if ((page_id >= UI_PAGE_MANAGER_MAX_PAGES) || (g_ui_pages[page_id] == 0) ||
+        (g_ui_current_page_id >= UI_PAGE_MANAGER_MAX_PAGES))
     {
         return;
     }
@@ -118,7 +117,8 @@ void ui_page_set(uint8_t page_id)
 }
 const ui_page_t *ui_page_get(void)
 {
-    if ((g_ui_current_page_id >= g_ui_page_count) || (g_ui_pages[g_ui_current_page_id] == 0))
+    if ((g_ui_current_page_id >= UI_PAGE_MANAGER_MAX_PAGES) ||
+        (g_ui_pages[g_ui_current_page_id] == 0))
     {
         return 0;
     }

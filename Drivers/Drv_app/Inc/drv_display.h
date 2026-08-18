@@ -27,6 +27,7 @@ typedef struct
 } drv_display_stats_t;
 
 void drv_display_init(void);
+void drv_display_off(void);
 void drv_display_clear(void);
 void drv_display_update(void);
 uint8_t* drv_display_get_buffer(void);

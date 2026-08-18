@@ -54,6 +54,7 @@
 #include "ui_renderer_oled.h"
 #include "Board/board_power.h"
 #include "buttons.h"
+#include "Core/power_shutdown.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -292,6 +293,10 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+         if (power_shutdown_service(HAL_GetTick()) != 0U)
+         {
+             continue;
+         }
 
 	     brick6_app_process();
 	     lowcost_bootloader_shift_step16_service();
