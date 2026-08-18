@@ -4,6 +4,7 @@
 
 #include "Param/param_store.h"
 #include "Seq/seq_types.h"
+#include "Mod/modulation_publication.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,6 +56,12 @@ typedef enum
 
 void mod_lfo_v1_init(void);
 void mod_lfo_v1_reset_runtime(void);
+uint8_t mod_lfo_v1_audio_config_get(uint8_t track,
+                                    uint8_t lfo_index,
+                                    modulation_lfo_publication_t *out);
+void mod_lfo_v1_audio_apply_config(uint8_t track,
+                                   uint8_t lfo_index,
+                                   const modulation_lfo_publication_t *config);
 
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value);

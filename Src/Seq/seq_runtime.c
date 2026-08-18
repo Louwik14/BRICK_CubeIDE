@@ -32,6 +32,7 @@
 #include "Seq/seq_runtime_exec.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_transport_fsm.h"
+#include "Core/audio_transport_publication.h"
 #include "Seq/seq_clock_bridge.h"
 #include "main.h"
 
@@ -224,6 +225,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
 {
     seq_edit_note_capture_reset();
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
+    audio_transport_publication_set_running(0U);
     metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
     {
@@ -257,6 +259,8 @@ static void seq_runtime_update_samples_per_step_from_tempo(void)
         bpm_milli = seq_clock_bridge_get_external_tempo_bpm_milli(&g_seq_clock_bridge);
     }
     g_seq_runtime.samples_per_step_q16 = seq_runtime_compute_samples_per_step_q16(bpm_milli);
+    audio_transport_publication_set_tempo(bpm_milli,
+                                          g_seq_runtime.samples_per_step_q16);
     seq_runtime_update_midi_clock_period_from_step_period();
 }
 
@@ -298,6 +302,7 @@ void seq_runtime_init(void)
     g_seq_runtime.step_sample_q16 = 0U;
     seq_runtime_exec_set_midi_clock_enabled(0U);
     seq_runtime_exec_set_midi_clock_period_q16(1U);
+    audio_transport_publication_init();
     seq_runtime_update_samples_per_step_from_tempo();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
@@ -366,6 +371,7 @@ void seq_runtime_start(void)
     {
         seq_runtime_send_transport_start();
     }
+    audio_transport_publication_set_running(g_seq_runtime.running);
 }
 
 void seq_runtime_stop(void)

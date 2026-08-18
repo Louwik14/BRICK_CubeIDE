@@ -1885,8 +1885,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
             return 0U;
         }
 
-        param_registry_audio_fx_set_control(track, id, audio_value);
-        param_registry_runtime_commit_authoritative_write(track, id, audio_value, 0U);
         return 1U;
     }
 
@@ -1898,12 +1896,8 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         const uint8_t applied = param_filter_apply_value(id,
                                                           track,
                                                           clamped,
-                                                          1U,
+                                                          0U,
                                                           0U);
-        if (applied != 0U)
-        {
-            param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
-        }
         return applied;
     }
 
@@ -1926,12 +1920,7 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         return 0U;
     }
 
-    const uint8_t applied = param_track_exec_apply_backend(&ctx, 1U);
-    if (applied != 0U)
-    {
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
-    }
-    return applied;
+    return param_track_exec_apply_backend(&ctx, 0U);
 }
 
 uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)

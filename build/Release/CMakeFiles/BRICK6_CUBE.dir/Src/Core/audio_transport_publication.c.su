@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:9:6:audio_transport_publication_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:16:6:audio_transport_publication_publish	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:26:6:audio_transport_publication_set_running	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:32:6:audio_transport_publication_set_tempo	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:40:6:audio_transport_publication_get	0	static

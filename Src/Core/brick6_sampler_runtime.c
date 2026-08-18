@@ -16,6 +16,7 @@
 #include "Board/board_audio_format.h"
 #include "Core/brick6_clip_shifter.h"
 #include "Core/synth_polyphony.h"
+#include "Core/audio_transport_publication.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Storage/memory_layout.h"
@@ -1966,7 +1967,9 @@ static uint32_t brick6_sampler_runtime_clip_ratio_q16(float source_bpm)
         return BRICK6_SAMPLER_Q16_ONE;
     }
 
-    const float project_bpm = (float)seq_runtime_get_tempo_bpm_milli() * 0.001f;
+    audio_transport_publication_t transport;
+    audio_transport_publication_get(&transport);
+    const float project_bpm = (float)transport.tempo_effective_bpm_milli * 0.001f;
     if (project_bpm <= 0.0f)
     {
         return BRICK6_SAMPLER_Q16_ONE;
@@ -2030,7 +2033,9 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
     {
         uint32_t target_bars = 0U;
         float target_seconds = 0.0f;
-        const float project_bpm = (float)seq_runtime_get_tempo_bpm_milli() * 0.001f;
+        audio_transport_publication_t transport;
+        audio_transport_publication_get(&transport);
+        const float project_bpm = (float)transport.tempo_effective_bpm_milli * 0.001f;
         const uint32_t sample_rate = (desc->sample_rate != 0U) ? desc->sample_rate : 48000U;
         const float source_seconds = (float)(region_end - region_begin) / (float)sample_rate;
 

@@ -5,6 +5,7 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_ramp.h"
 #include "Mod/mod_destination_catalog.h"
+#include "Mod/modulation_publication.h"
 #include "Param/param_store.h"
 #include "Seq/seq_types.h"
 #include "ui_core.h"
@@ -44,6 +45,9 @@ void mod_matrix_reset_runtime(void);
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
 void mod_matrix_rebuild_route_cache_track(uint8_t track);
 void mod_matrix_rebuild_route_cache_all(void);
+void mod_matrix_publish_control_snapshot(uint8_t track);
+void mod_matrix_audio_apply_publication(uint8_t track,
+                                        const modulation_publication_t *publication);
 uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);

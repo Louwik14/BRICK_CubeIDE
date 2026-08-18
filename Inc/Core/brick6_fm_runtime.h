@@ -55,6 +55,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
                                     float value);
 void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
                                       const track_tone_fm_base_voice_t *base);
+uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
+                                         track_tone_fm_base_voice_t *out_base);
+uint8_t brick6_fm_runtime_get_macros(uint8_t instance_id,
+                                     track_tone_fm_macros_t *out_macros);
 void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id);
 void brick6_fm_runtime_sync_voice_if_needed(uint8_t source_instance_id,
                                             uint8_t destination_instance_id);

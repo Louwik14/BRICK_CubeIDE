@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Mod/modulation_publication.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,6 +19,10 @@ typedef enum
 
 void mod_env3_init(void);
 void mod_env3_reset_runtime(void);
+uint8_t mod_env3_audio_config_get(uint8_t track,
+                                  modulation_env3_publication_t *out);
+void mod_env3_audio_apply_config(uint8_t track,
+                                 const modulation_env3_publication_t *config);
 uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float value);
 uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *out_value);
 uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value);

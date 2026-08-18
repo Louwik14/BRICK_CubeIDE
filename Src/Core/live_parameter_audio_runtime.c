@@ -4,6 +4,7 @@
 #include "Core/live_parameter_event.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_runtime_state.h"
 #include "memory_layout.h"
@@ -105,7 +106,9 @@ static uint8_t live_parameter_audio_runtime_apply_target(
         const uint8_t applied = param_registry_apply_track_value_audio(
             event->parameter_id, event->track, value);
         if (applied != 0U)
-            audio_mod_matrix_rebuild_track(event->track);
+            mod_matrix_set_runtime_base_override(event->track,
+                                                  event->parameter_id,
+                                                  value);
         return applied;
     }
     if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)

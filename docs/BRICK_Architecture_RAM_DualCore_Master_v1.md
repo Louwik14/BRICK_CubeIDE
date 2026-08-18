@@ -1275,6 +1275,69 @@ La refonte est réussie si :
 
 ---
 
+# 31.1 PASS 1 — contrats physiques implementes
+
+- D2 is split into SRAM1 DMA non-cacheable (first 12 KiB), SRAM1 cacheable remainder, SRAM2 M4 model contract, and SRAM3 M4 NoteFX contract.
+- Audio RX/TX remains cacheable and keeps the existing cache maintenance policy; its linker contract is now separate from M4 state.
+- The former `.ram_d2_lut` output is no longer used. Sequencer state is linked through the M4 contract sections.
+- `.ram_d1_audio` is no longer swallowed by the `.ram_d1*` wildcard; `.ram_d1_ui` also has a dedicated output section.
+- D3 keeps existing `.ram_d3_ctrl` objects in place. A dedicated `.ram_d3_ipc` contract and physical bound assertion are prepared without moving current objects.
+- The four generated linker variants contain the same physical bank contracts. PASS 1 does not change SDRAM ownership or cold/streaming sections.
+
+---
+
+# 31.2 PASS 2 - frontieres CONTROL -> AUDIO simples appliquees
+
+- LFO et ENV3 sont publies par snapshots compacts, puis copies dans des configurations audio M7. Le traitement DSP, le reset LFO et le bootstrap ENV3 utilisent uniquement ces representations AUDIO, sans relire les etats CONTROL.
+- MULTI/SLEW et les routes Matrix sont resolus cote CONTROL dans une publication pointer-free. Le runtime Matrix audio consomme uniquement cette publication et reconstruit son plan local; il ne consulte plus ParamRegistry, ParamStore, `track_sound_state` ou `track_tone_sound_state` pour reconstruire le plan ou appliquer une destination FM.
+- Chaque publication Matrix est versionnee et transportee par `CONTROL_AUDIO_EVENT_MODULATION_SNAPSHOT`; la validation generationnelle elimine les snapshots obsoletes.
+- Les applications de parametres audio utilisent les backends runtime sans commit inverse dans les etats canoniques CONTROL. Les overrides temporaires de base restent explicitement runtime.
+- LFO, Sampler et Looper consomment le snapshot transport running/tempo/samples-per-step/epoch; le timeline d'execution audio reste une API d'horloge dediee.
+- Couts mesures dans la MAP Release: publication Matrix CONTROL 17 728 B en SDRAM, copie audio 4 416 B en D1, publication transport 16 B en D3. Aucun gros objet existant n'a ete deplace.
+- Builds de validation: LowCost Release et Premium Release OK, sans depassement de region.
+
+PASS 2 est fermee. Les changements H747, HSEM/IPC physique, page-cache, sampler metadata, looper/recorder producer-consumer et placement RAM massif restent differes aux passes dediees.
+
+---
+
+# 31.3 PASS 3 - Mixer / Filter / VCA / FX runtime separes
+
+- Les valeurs canoniques Mixer/Filter/VCA/FX restent CONTROL dans ParamStore,
+  `track_sound_state` et `track_tone_sound_state`. Leur application AUDIO passe
+  par les evenements de parametres et les backends runtime etablis en PASS 2.
+- `g_tracks` est explicitement un `mixer_audio_track_runtime_t`: targets
+  appliquees, valeurs courantes, smoothing, mute effectif, sends et routing
+  physique. L'ancien miroir `track_set_gain()` depuis le runtime Mixer a ete
+  supprime.
+- `g_track_filters` et les filtres polyphoniques restent exclusivement AUDIO:
+  coefficients, historiques, ramps, enveloppes, gates, notes et compteurs. Les
+  configurations recues sont des projections AUDIO locales; aucun `env_adsr_t`
+  ni etat filtre/VCA courant n'est expose au CONTROL.
+- Le FX track distingue maintenant explicitement sa projection parametrique
+  AUDIO locale de son union DSP. Un changement de modele reinitialise seulement
+  l'union runtime; aucun historique ne traverse la frontiere.
+- Reverb, Delay et ModFX globaux conservent leurs backends et buffers AUDIO. Les
+  setters appliques par le consommateur AUDIO ne publient que les consignes et
+  ne committent aucune valeur canonique en retour.
+- PASS 3B ferme le routing Mixer par un snapshot structurel compact, versionne
+  et sans pointeur. CONTROL possede route et slots insert demandes; AUDIO copie
+  une publication coherente dans `mixer_audio_track_runtime_t` au debut du bloc.
+  Le boot utilise exactement cette publication et n'appelle plus de setter
+  runtime Mixer. Le routing Looper/Recorder command/ack reste differe a PASS 5.
+- Le split PASS 3 initial ne dispose pas d'une paire de MAP PASS 2/PASS 3
+  archivee permettant d'annoncer un delta mesure independamment. PASS 3B ajoute
+  uniquement la mailbox routing bornee en D3 IPC; son delta est releve sur les
+  builds de validation PASS 3B.
+- Delta structurel PASS 3B releve sur les builds Release: DTCM 0 B, D1 0 B,
+  D2 0 B et D3 +64 B pour Low-Cost comme Premium. Le call-site Low-Cost ajoute
+  8 B de code ITCM; Premium ITCM est inchange.
+
+PASS 3 est fermee. Aucun placement RAM massif, changement streaming, p-lock,
+Looper/Recorder, Sampler/Multi/page-cache, DJ EQ3 ou chantier H747 physique n'a
+ete commence.
+
+---
+
 # 32. Instruction au futur pilote
 
 Avant toute passe :

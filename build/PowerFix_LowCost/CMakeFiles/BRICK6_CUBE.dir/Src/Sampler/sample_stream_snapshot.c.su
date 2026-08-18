@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:46:6:sample_stream_snapshot_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:57:6:sample_stream_snapshot_registry_reset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:66:9:sample_stream_snapshot_publish	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:99:9:sample_stream_snapshot_read	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:129:6:sample_stream_snapshot_clear	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_snapshot.c:138:9:sample_stream_snapshot_clear_generation	72	static

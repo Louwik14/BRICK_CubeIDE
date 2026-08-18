@@ -1036,6 +1036,73 @@ void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
     mark_parameters_changed(voice);
 }
 
+uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
+                                         track_tone_fm_base_voice_t *out_base)
+{
+    if ((valid_instance(instance_id) == 0U) || (out_base == nullptr))
+        return 0U;
+
+    const fm_voice_t *const voice = &g_fm_voice[instance_id];
+    memset(out_base, 0, sizeof(*out_base));
+    out_base->pitch_rates[0] = voice->pitch_rates[0];
+    out_base->pitch_rates[1] = voice->pitch_rates[1];
+    out_base->pitch_rates[2] = voice->pitch_rates[2];
+    out_base->pitch_rates[3] = voice->pitch_rates[3];
+    out_base->pitch_levels[0] = voice->pitch_levels[0];
+    out_base->pitch_levels[1] = voice->pitch_levels[1];
+    out_base->pitch_levels[2] = voice->pitch_levels[2];
+    out_base->pitch_levels[3] = voice->pitch_levels[3];
+    out_base->transpose = voice->transpose;
+    out_base->algorithm = voice->algorithm;
+    out_base->feedback = voice->feedback_amount;
+    out_base->key_sync = voice->sync;
+
+    for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
+    {
+        const uint8_t op = brick_operator_to_msfa_index(brick_op);
+        track_tone_fm_operator_base_t *const target = &out_base->operators[brick_op];
+        memcpy(target->rates, voice->operator_rates[op], sizeof(target->rates));
+        memcpy(target->levels, voice->operator_levels[op], sizeof(target->levels));
+        target->breakpoint = voice->operator_breakpoint[op];
+        target->left_depth = voice->operator_left_depth[op];
+        target->right_depth = voice->operator_right_depth[op];
+        target->left_curve = voice->operator_left_curve[op];
+        target->right_curve = voice->operator_right_curve[op];
+        target->rate_scaling = voice->operator_rate_scaling[op];
+        target->output_level = voice->operator_level[op];
+        target->mode = voice->operator_mode[op];
+        target->coarse = voice->operator_coarse[op];
+        target->fine = voice->operator_fine[op];
+        target->detune = voice->operator_detune[op];
+        target->velocity_sensitivity = voice->operator_velocity[op];
+        target->enabled = voice->operator_on[op];
+    }
+    return 1U;
+}
+
+uint8_t brick6_fm_runtime_get_macros(uint8_t instance_id,
+                                     track_tone_fm_macros_t *out_macros)
+{
+    if ((valid_instance(instance_id) == 0U) || (out_macros == nullptr))
+        return 0U;
+
+    const fm_voice_t *const voice = &g_fm_voice[instance_id];
+    out_macros->ratio = (voice->ratio - 0.5f) * 2.0f;
+    out_macros->bright = (voice->bright - 0.5f) * 2.0f;
+    out_macros->body = (voice->body - 0.5f) * 2.0f;
+    out_macros->detail = (voice->detail - 0.5f) * 2.0f;
+    out_macros->metal = (voice->metal - 0.5f) * 2.0f;
+    out_macros->env_attack = (voice->env_attack - 0.5f) * 2.0f;
+    out_macros->env_decay = (voice->env_decay - 0.5f) * 2.0f;
+    out_macros->env_sustain = (voice->env_sustain - 0.5f) * 2.0f;
+    out_macros->env_release = (voice->env_release - 0.5f) * 2.0f;
+    out_macros->play_vel = voice->play_velocity;
+    out_macros->play_key = voice->play_key;
+    out_macros->pitch_env = voice->pitch_env_amount;
+    out_macros->pitch_time = voice->pitch_env_time;
+    return 1U;
+}
+
 void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destination_instance_id)
 {
     if ((valid_instance(source_instance_id) == 0U)

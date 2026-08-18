@@ -207,6 +207,7 @@ file(GLOB SRC_CORE_SRC
 )
 
 list(APPEND SRC_CORE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_transport_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/encoder_control_dispatcher.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_runtime.c"

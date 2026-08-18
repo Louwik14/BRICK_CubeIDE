@@ -40,7 +40,7 @@ static uint8_t host_fault_active(void)
 
 static void host_power_off(void)
 {
-    HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
 }
 
 static void stop_active_role(void)
@@ -127,6 +127,23 @@ void usb_role_manager_process(void)
     if ((requested != g_usb_role.requested) || (requested != g_usb_role.active)) {
         apply_role(requested);
     }
+}
+
+void usb_role_manager_shutdown(void)
+{
+    HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
+    host_power_off();
+
+    if (g_usb_role.active == USB_ROLE_MANAGER_HOST) {
+        (void)usb_host_stop();
+    } else if (g_usb_role.active == USB_ROLE_MANAGER_DEVICE) {
+        (void)usb_device_stop();
+    }
+
+    host_power_off();
+    g_usb_role.active = USB_ROLE_MANAGER_NONE;
+    g_usb_role.requested = USB_ROLE_MANAGER_NONE;
+    g_usb_role.initialized = 0U;
 }
 
 usb_role_manager_role_t usb_role_manager_active_role(void)

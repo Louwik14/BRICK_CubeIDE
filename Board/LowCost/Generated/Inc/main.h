@@ -94,6 +94,8 @@ void Error_Handler(void);
 #define MUX_HALL_S0_GPIO_Port GPIOA
 #define SCK_SR_Pin GPIO_PIN_15
 #define SCK_SR_GPIO_Port GPIOA
+#define BOOST_EN_SENSE_Pin GPIO_PIN_3
+#define BOOST_EN_SENSE_GPIO_Port GPIOD
 #define POWER_HOLD_Pin GPIO_PIN_4
 #define POWER_HOLD_GPIO_Port GPIOD
 #define CS_SR_Pin GPIO_PIN_5

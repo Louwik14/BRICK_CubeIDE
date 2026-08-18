@@ -44,14 +44,17 @@
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 
 
-#define AUDIO_DMA_BUFFER_CACHEABLE SEC_ATTR(".ram_d2_lut") ALIGN32
+#define AUDIO_DMA_BUFFER_CACHEABLE SEC_ATTR(".ram_d2_dma_cacheable") ALIGN32
 #define AUDIO_DMA_BUFFER_IS_CACHEABLE 1U
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
-#define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_lut")
+#define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_local_cacheable")
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
-#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_lut")
+#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
+
+/* Explicit D3 IPC contract. Existing CTRL_STATE objects remain in legacy D3. */
+#define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
 
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")

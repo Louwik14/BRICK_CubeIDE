@@ -139,6 +139,12 @@ static uint8_t ssd1309_display_on(void)
     return send_cmd_burst(&k_on_cmd, sizeof(k_on_cmd));
 }
 
+void drv_display_off(void)
+{
+    static const uint8_t k_off_cmd = 0xAEU;
+    (void)send_cmd_burst(&k_off_cmd, sizeof(k_off_cmd));
+}
+
 static uint8_t ssd1309_clear_controller_ram(void)
 {
     for (uint8_t page = 0U; page < 8U; ++page)

@@ -34,6 +34,7 @@
 #include "Audio/audio_note_admission.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Mod/mod_matrix.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
@@ -129,6 +130,10 @@ static void audio_apply_control_events_at_sample(uint64_t sample_time)
             audio_note_engine_adapter_install_intent(&event);
         }
         else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MOD_MATRIX_SNAPSHOT)
+        {
+            audio_mod_matrix_apply_snapshot(&event);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MODULATION_SNAPSHOT)
         {
             audio_mod_matrix_apply_snapshot(&event);
         }
@@ -289,6 +294,7 @@ void audio_init(void)
     control_audio_queue_init();
     audio_note_admission_init();
     audio_note_engine_adapter_init();
+    mod_matrix_rebuild_route_cache_all();
     audio_fx_runtime_init();
     audio_waveform_capture_init();
     board_audio_init();
@@ -334,6 +340,12 @@ uint8_t audio_start(void)
         return 0U;
     }
     return (g_audio_init_state == AUDIO_INIT_READY) ? 1U : 0U;
+}
+
+void audio_stop(void)
+{
+    board_audio_stop_stream();
+    g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 }
 
 audio_init_state_t audio_get_init_state(void)

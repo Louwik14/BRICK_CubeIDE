@@ -68,6 +68,7 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
                                  int32_t *tx_buffer,
                                  uint32_t word_count,
                                  volatile audio_init_state_t *init_state);
+void board_audio_stop_stream(void);
 uint8_t board_audio_is_rx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 
