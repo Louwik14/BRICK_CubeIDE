@@ -4,6 +4,7 @@
 
 #include "Audio/audio_float.h"
 #include "Core/brick6_clip_shifter.h"
+#include "Core/audio_transport_publication.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_transport.h"
@@ -35,6 +36,27 @@
 #define BRICK6_LOOPER_TIMING_NEUTRAL_EPSILON 0.001f
 #define BRICK6_LOOPER_RESYNC_STABLE_BLOCKS 2U
 #define BRICK6_LOOPER_RESYNC_XFADE_FRAMES 96U
+
+static uint8_t looper_transport_running(void)
+{
+    const audio_transport_publication_t *const publication =
+        audio_transport_publication_get();
+    return (publication != NULL) ? publication->running : 0U;
+}
+
+static uint32_t looper_transport_samples_per_step_q16(void)
+{
+    const audio_transport_publication_t *const publication =
+        audio_transport_publication_get();
+    return (publication != NULL) ? publication->samples_per_step_q16 : 1U;
+}
+
+static uint32_t looper_transport_tempo_bpm_milli(void)
+{
+    const audio_transport_publication_t *const publication =
+        audio_transport_publication_get();
+    return (publication != NULL) ? publication->tempo_effective_bpm_milli : 120000U;
+}
 
 #if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_ID_CAPACITY)
 #error "sample_page_cache transient id range is too small for Looper tracks"
@@ -1028,7 +1050,7 @@ static void looper_record_stop_at_boundary(uint64_t sample_time)
         state->stream_registration_pending = 1U;
         state->play_auto = (g_looper_record_boundary.play_auto != 0U) ? 1U : 0U;
         state->want_play_when_ready = ((state->play_auto != 0U)
-            && (seq_runtime_is_running() != 0U)) ? 1U : 0U;
+            && (looper_transport_running() != 0U)) ? 1U : 0U;
         looper_set_scheduled_start(state, 0U);
         state->scheduled_start_sample = 0U;
         state->frames_total = span_frames;
@@ -1072,8 +1094,8 @@ static void looper_record_start_at_boundary(uint64_t sample_time)
     g_looper_record_boundary.start_armed = 0U;
     g_looper_record_boundary.recording = 1U;
     g_looper_record_boundary.actual_start_sample = sample_time;
-    g_looper_record_boundary.source_samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
-    g_looper_record_boundary.source_bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    g_looper_record_boundary.source_samples_per_step_q16 = looper_transport_samples_per_step_q16();
+    g_looper_record_boundary.source_bpm_milli = looper_transport_tempo_bpm_milli();
     g_looper_record_boundary.target_stop_sample =
         (g_looper_record_boundary.expected_frames != 0U)
             ? (sample_time + (uint64_t)g_looper_record_boundary.expected_frames)
@@ -1341,7 +1363,7 @@ void brick6_looper_runtime_arm_record_stop(uint64_t request_sample)
     {
         g_looper_record_boundary.stop_armed = 1U;
         g_looper_record_boundary.request_stop_sample = request_sample;
-        if(seq_runtime_is_running() == 0U)
+        if(looper_transport_running() == 0U)
         {
             looper_record_stop_at_boundary(seq_runtime_exec_get_sample_timeline());
         }
@@ -1435,7 +1457,7 @@ void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto)
         return;
     }
 
-    state->want_play_when_ready = (seq_runtime_is_running() != 0U) ? 1U : 0U;
+    state->want_play_when_ready = (looper_transport_running() != 0U) ? 1U : 0U;
     looper_diag_update_take(track_id, state);
 }
 
@@ -1467,7 +1489,7 @@ void brick6_looper_runtime_set_stretch(uint8_t track_id,
     const uint32_t current_samples_per_step_q16 =
         ((old_mode == BRICK6_LOOPER_STRETCH_SPEED)
             || (mode == BRICK6_LOOPER_STRETCH_SPEED))
-            ? seq_runtime_get_samples_per_step_q16()
+            ? looper_transport_samples_per_step_q16()
             : 0U;
     const uint8_t old_stable =
         looper_effective_ratio_is_stable(state,
@@ -1552,7 +1574,7 @@ void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_ti
             && (state->play_auto != 0U)
             && (state->want_play_when_ready != 0U)
             && (state->scheduled_start_valid == 0U)
-            && (seq_runtime_is_running() != 0U))
+            && (looper_transport_running() != 0U))
     {
         looper_start_playback(state, sample_time, 0U);
     }
@@ -1625,7 +1647,7 @@ void brick6_looper_runtime_on_scheduled_start(uint64_t sample_time)
         if((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
                 && (state->play_auto != 0U)
                 && (state->want_play_when_ready != 0U)
-                && (seq_runtime_is_running() != 0U))
+                && (looper_transport_running() != 0U))
         {
             looper_start_playback(state, sample_time, 0U);
         }
@@ -2130,7 +2152,7 @@ void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
     const uint32_t current_samples_per_step_q16 =
         ((state->stretch_mode == BRICK6_LOOPER_STRETCH_SPEED)
             || (state->stretch_mode == BRICK6_LOOPER_STRETCH_SHIFTER))
-            ? seq_runtime_get_samples_per_step_q16()
+            ? looper_transport_samples_per_step_q16()
             : 0U;
     uint8_t mode = looper_effective_mode(state, current_samples_per_step_q16);
     float stable_ratio = 1.0f;

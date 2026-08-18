@@ -443,7 +443,8 @@ uint8_t param_backend_reapply_tone_prism_runtime(uint8_t track)
 
 uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
-    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    track_tone_sound_state_t *const state = (update_base_state != 0U)
+        ? track_tone_sound_state_get(track) : NULL;
     const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
             || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -454,21 +455,39 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
 
     if ((id >= PARAM_FM_DX7_HIDDEN_FIRST) && (id <= PARAM_FM_DX7_HIDDEN_LAST))
     {
-        if ((update_base_state != 0U)
-                && ((state == NULL) || (param_backend_fm_store_hidden(&state->fm.base, id, value) == 0U)))
-            return 0U;
-        if (state != NULL)
+        if (update_base_state != 0U)
+        {
+            if ((state == NULL) || (param_backend_fm_store_hidden(&state->fm.base, id, value) == 0U))
+                return 0U;
             brick6_fm_runtime_set_base_voice(ctx->audio_binding.instance_id, &state->fm.base);
+        }
+        else
+        {
+            track_tone_fm_base_voice_t base;
+            if ((brick6_fm_runtime_get_base_voice(ctx->audio_binding.instance_id, &base) == 0U)
+                    || (param_backend_fm_store_hidden(&base, id, value) == 0U))
+                return 0U;
+            brick6_fm_runtime_set_base_voice(ctx->audio_binding.instance_id, &base);
+        }
         return 1U;
     }
 
     if ((id >= PARAM_FM_UI_FIRST) && (id <= PARAM_FM_UI_LAST))
     {
-        if ((update_base_state != 0U)
-                && ((state == NULL) || (param_backend_fm_store_ui(&state->fm.base, id, value) == 0U)))
-            return 0U;
-        if (state != NULL)
+        if (update_base_state != 0U)
+        {
+            if ((state == NULL) || (param_backend_fm_store_ui(&state->fm.base, id, value) == 0U))
+                return 0U;
             brick6_fm_runtime_set_base_voice(ctx->audio_binding.instance_id, &state->fm.base);
+        }
+        else
+        {
+            track_tone_fm_base_voice_t base;
+            if ((brick6_fm_runtime_get_base_voice(ctx->audio_binding.instance_id, &base) == 0U)
+                    || (param_backend_fm_store_ui(&base, id, value) == 0U))
+                return 0U;
+            brick6_fm_runtime_set_base_voice(ctx->audio_binding.instance_id, &base);
+        }
         return 1U;
     }
 
@@ -483,10 +502,17 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
 
     if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_PLAY_PITCH_TIME))
     {
-        float velocity = state->fm.macros.play_vel;
-        float key_scaling = state->fm.macros.play_key;
-        float pitch_env = state->fm.macros.pitch_env;
-        float pitch_time = state->fm.macros.pitch_time;
+        track_tone_fm_macros_t local_macros;
+        if ((state == NULL)
+                && (brick6_fm_runtime_get_macros(ctx->audio_binding.instance_id,
+                                                 &local_macros) == 0U))
+            return 0U;
+        const track_tone_fm_macros_t *const macros = (state != NULL)
+            ? &state->fm.macros : &local_macros;
+        float velocity = macros->play_vel;
+        float key_scaling = macros->play_key;
+        float pitch_env = macros->pitch_env;
+        float pitch_time = macros->pitch_time;
         if (id == PARAM_FM_PLAY_VEL) velocity = param_backend_clamp_value(value, 0.0f, 1.0f);
         else if (id == PARAM_FM_PLAY_KEY) key_scaling = param_backend_clamp_value(value, 0.0f, 1.0f);
         else if (id == PARAM_FM_PLAY_PITCH_ENV) pitch_env = param_backend_clamp_value(value, -1.0f, 1.0f);
@@ -510,6 +536,8 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
             (brick6_fm_operator_param_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT);
         if (update_base_state != 0U)
         {
+            if (state == NULL)
+                return 0U;
             track_tone_fm_operator_base_t *const op = &state->fm.base.operators[operator_id];
             switch (operator_param)
             {
@@ -596,10 +624,17 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value, u
         case PARAM_FM_ENV_RELEASE:
         {
             const float macro = param_backend_clamp_value(value, -1.0f, 1.0f);
-            float attack = (state != NULL) ? state->fm.macros.env_attack : 0.0f;
-            float decay = (state != NULL) ? state->fm.macros.env_decay : 0.0f;
-            float sustain = (state != NULL) ? state->fm.macros.env_sustain : 0.0f;
-            float release = (state != NULL) ? state->fm.macros.env_release : 0.0f;
+            track_tone_fm_macros_t local_macros;
+            if ((state == NULL)
+                    && (brick6_fm_runtime_get_macros(ctx->audio_binding.instance_id,
+                                                     &local_macros) == 0U))
+                return 0U;
+            const track_tone_fm_macros_t *const macros = (state != NULL)
+                ? &state->fm.macros : &local_macros;
+            float attack = macros->env_attack;
+            float decay = macros->env_decay;
+            float sustain = macros->env_sustain;
+            float release = macros->env_release;
             if (id == PARAM_FM_ENV_ATTACK) attack = macro;
             else if (id == PARAM_FM_ENV_DECAY) decay = macro;
             else if (id == PARAM_FM_ENV_SUSTAIN) sustain = macro;
@@ -1646,7 +1681,10 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
         }
 
         case PARAM_ENV_RETRIG_MOD:
-            return mod_env3_set_track_retrigger_hard(track, value);
+            if (update_base_state != 0U)
+                return mod_env3_set_track_retrigger_hard(track, value);
+            mod_env3_audio_apply_retrigger(track, value);
+            return 1U;
 
         case PARAM_VCA_ATTACK:
         {

@@ -26,6 +26,43 @@ typedef struct
 } mod_env3_runtime_track_t;
 
 static mod_env3_runtime_track_t g_mod_env3_runtime[SEQ_TRACK_COUNT];
+static track_mod_env3_state_t g_mod_env3_audio_config[SEQ_TRACK_COUNT];
+static float g_mod_env3_audio_retrigger[SEQ_TRACK_COUNT];
+static const track_mod_env3_state_t *mod_env3_track_settings_const(uint8_t track);
+
+static void mod_env3_audio_apply_config(uint8_t track,
+                                        const track_mod_env3_state_t *config,
+                                        float retrigger_hard)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (config == NULL))
+    {
+        return;
+    }
+    g_mod_env3_audio_config[track] = *config;
+    g_mod_env3_audio_retrigger[track] = (retrigger_hard >= 0.5f) ? 1.0f : 0.0f;
+}
+
+void mod_env3_audio_apply_retrigger(uint8_t track, float value)
+{
+    if (track < SEQ_TRACK_COUNT)
+    {
+        g_mod_env3_audio_retrigger[track] = (value >= 0.5f) ? 1.0f : 0.0f;
+    }
+}
+
+void mod_env3_control_publish_from_canonical(void)
+{
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_mod_env3_state_t *const config =
+            mod_env3_track_settings_const(track);
+        const track_sound_state_t *const sound = track_sound_state_get_const(track);
+        if ((config != NULL) && (sound != NULL))
+        {
+            mod_env3_audio_apply_config(track, config, sound->env_retrig_mod);
+        }
+    }
+}
 
 static float mod_env3_clampf(float v, float lo, float hi)
 {
@@ -79,14 +116,9 @@ static void mod_env3_apply_settings(uint8_t track)
         return;
     }
 
-    const track_sound_state_t *const sound = track_sound_state_get_const(track);
-    if (sound == NULL)
-    {
-        return;
-    }
-
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
-    const track_mod_env3_state_t *const s = (rt->temp_valid != 0U) ? &rt->temp : &sound->mod_env3;
+    const track_mod_env3_state_t *const s = (rt->temp_valid != 0U)
+        ? &rt->temp : &g_mod_env3_audio_config[track];
     if (memcmp(&rt->applied, s, sizeof(rt->applied)) == 0)
     {
         return;
@@ -163,7 +195,12 @@ uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float va
         return 0U;
     }
 
-    return mod_env3_write_param(s, param, value);
+    const uint8_t ok = mod_env3_write_param(s, param, value);
+    if (ok != 0U)
+    {
+        mod_env3_audio_apply_config(track, s, g_mod_env3_audio_retrigger[track]);
+    }
+    return ok;
 }
 
 uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *out_value)
@@ -209,6 +246,7 @@ uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value)
     }
 
     sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
+    g_mod_env3_audio_retrigger[track] = sound->env_retrig_mod;
     return 1U;
 }
 
@@ -245,7 +283,7 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
     if (rt->temp_valid == 0U)
     {
-        const track_mod_env3_state_t *const base = mod_env3_track_settings_const(track);
+        const track_mod_env3_state_t *const base = &g_mod_env3_audio_config[track];
         if (base == NULL)
         {
             return 0U;
@@ -290,9 +328,8 @@ void mod_env3_note_on(uint8_t track)
     {
         g_mod_env3_runtime[track].held_notes++;
     }
-    float retrigger_hard = 1.0f;
-    (void)mod_env3_get_track_retrigger_hard(track, &retrigger_hard);
-    env_adsr_retrigger(&g_mod_env3_runtime[track].env, retrigger_hard >= 0.5f);
+    env_adsr_retrigger(&g_mod_env3_runtime[track].env,
+                       g_mod_env3_audio_retrigger[track] >= 0.5f);
 }
 
 void mod_env3_note_off(uint8_t track)

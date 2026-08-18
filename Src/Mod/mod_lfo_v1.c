@@ -1,5 +1,6 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_mod_matrix.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Storage/memory_layout.h"
 
@@ -16,6 +17,7 @@
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_runtime.h"
+#include "Core/audio_transport_publication.h"
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
@@ -75,6 +77,30 @@ typedef struct
 } mod_lfo_runtime_state_t;
 
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+static track_mod_lfo_state_t
+    g_mod_lfo_audio_config[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+
+static const track_mod_lfo_state_t *mod_lfo_audio_settings_const(uint8_t track,
+                                                                  uint8_t lfo_index)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return NULL;
+    }
+    return &g_mod_lfo_audio_config[track][lfo_index];
+}
+
+static void mod_lfo_audio_apply_config(uint8_t track,
+                                       uint8_t lfo_index,
+                                       const track_mod_lfo_state_t *config)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+            || (config == NULL))
+    {
+        return;
+    }
+    g_mod_lfo_audio_config[track][lfo_index] = *config;
+}
 typedef struct
 {
     uint32_t phase;
@@ -373,7 +399,10 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_mi
 
 static uint32_t mod_lfo_phase_inc_from_rate(float rate)
 {
-    return mod_lfo_phase_inc_from_rate_with_bpm(rate, seq_runtime_get_tempo_bpm_milli());
+    const audio_transport_publication_t *const transport =
+        audio_transport_publication_get();
+    return mod_lfo_phase_inc_from_rate_with_bpm(
+        rate, (transport != NULL) ? transport->tempo_effective_bpm_milli : 120000U);
 }
 
 static uint32_t mod_lfo_phase_from_degrees(float degrees)
@@ -568,7 +597,7 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
             }
 
             const track_mod_lfo_state_t *const s =
-                mod_lfo_track_settings_const(track, lfo);
+                mod_lfo_audio_settings_const(track, lfo);
             if (s == NULL)
             {
                 continue;
@@ -699,7 +728,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
 
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
-            const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+            const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo);
             mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
 
             if (s == NULL)
@@ -838,6 +867,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
 
 void mod_lfo_v1_init(void)
 {
+    memset(g_mod_lfo_audio_config, 0, sizeof(g_mod_lfo_audio_config));
     memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
     memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
     memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
@@ -849,6 +879,7 @@ void mod_lfo_v1_init(void)
            sizeof(g_mod_lfo_poly_prepared_entries));
     g_mod_lfo_poly_prepared_entry_count = 0U;
     mod_destination_catalog_init();
+    mod_env3_control_publish_from_canonical();
     mod_env3_init();
     mod_matrix_init();
     g_mod_lfo_control_counter = 0U;
@@ -859,6 +890,12 @@ void mod_lfo_v1_init(void)
     {
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
+            const track_mod_lfo_state_t *const config =
+                mod_lfo_track_settings_const(track, lfo);
+            if (config != NULL)
+            {
+                mod_lfo_audio_apply_config(track, lfo, config);
+            }
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
@@ -907,7 +944,7 @@ void mod_lfo_v1_reset_runtime(void)
         {
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             {
-                const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+                const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo);
                 const float rate = (s != NULL) ? s->rate : 0.0f;
                 g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(rate);
             }
@@ -926,7 +963,10 @@ void mod_lfo_v1_reset_runtime(void)
         }
     }
 
-    mod_lfo_v1_invalidate_dest_cache_all();
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        audio_mod_matrix_rebuild_track(track);
+    }
 }
 
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value)
@@ -962,6 +1002,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             {
                 rt->active = 0U;
             }
+            mod_lfo_audio_apply_config(track, lfo_index, s);
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
@@ -970,6 +1011,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->sh_valid = 0U;
             rt->slew_valid = 0U;
             rt->ramp_valid = 0U;
+            mod_lfo_audio_apply_config(track, lfo_index, s);
             return 1U;
 
         case MOD_LFO_PARAM_TRIG:
@@ -988,6 +1030,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
                                       lfo_index,
                                       old_trig,
                                       (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f)));
+            mod_lfo_audio_apply_config(track, lfo_index, s);
             return 1U;
         }
 
@@ -996,6 +1039,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             s->phase = mod_lfo_clampf(value, 0.0f, 360.0f);
             rt->slew_valid = 0U;
             rt->ramp_valid = 0U;
+            mod_lfo_audio_apply_config(track, lfo_index, s);
             return 1U;
 
         default:
@@ -1013,7 +1057,7 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     brick_entity_id_t owner = track;
     if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
     track = owner;
-    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
     if (s == NULL)
     {
@@ -1087,7 +1131,7 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
     if (entity_topology_mod_owner(track, &owner) == 0U) return;
     track = owner;
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
-    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
     const mod_lfo_trig_mode_t old_trig = (s != NULL)
         ? (mod_lfo_trig_mode_t)((uint8_t)(mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f))
         : MOD_LFO_TRIG_FREE;
@@ -1101,7 +1145,7 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
 
 mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index)
 {
-    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
     if ((s == NULL) || (track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
         return MOD_LFO_TRIG_FREE;
     return (mod_lfo_trig_mode_t)((uint8_t)(mod_lfo_effective_field(
@@ -1171,7 +1215,10 @@ ITCM_AUDIT_32_TEXT void mod_lfo_v1_process_block(uint32_t frames)
         return;
     }
 
-    const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    const audio_transport_publication_t *const transport =
+        audio_transport_publication_get();
+    const uint32_t bpm_milli = (transport != NULL)
+        ? transport->tempo_effective_bpm_milli : 120000U;
     mod_lfo_prepare_poly_segment(frames, bpm_milli);
 
 #if MOD_LFO_WINDOW_RATE_EXPERIMENT
@@ -1198,7 +1245,7 @@ void mod_lfo_v1_note_trigger(uint8_t track)
 
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
-        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+        const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo);
         mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
         if (s == NULL)
         {
@@ -1248,7 +1295,7 @@ void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot)
 
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
-        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+        const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo);
         if (s == NULL) continue;
         const mod_lfo_runtime_state_t *const shared = &g_mod_lfo_runtime[track][lfo];
         const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)
@@ -1458,7 +1505,7 @@ uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)
     brick_entity_id_t owner = track;
     if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
     track = owner;
-    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
     if (s == NULL)
     {
         return 0U;

@@ -18,6 +18,7 @@
 #include "NoteFx/note_fx_pipeline.h"
 #include "Core/engine_tasklet.h"
 #include "Core/live_clock.h"
+#include "Core/audio_transport_publication.h"
 #include "Core/track_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
@@ -299,6 +300,8 @@ void seq_runtime_init(void)
     seq_runtime_exec_set_midi_clock_enabled(0U);
     seq_runtime_exec_set_midi_clock_period_q16(1U);
     seq_runtime_update_samples_per_step_from_tempo();
+    audio_transport_publication_init();
+    audio_transport_publication_refresh();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
 
@@ -360,6 +363,7 @@ void seq_runtime_start(void)
                                                      seq_runtime_get_now_tick(),
                                                      (uint64_t)seq_runtime_get_now_sample() << 16);
     }
+    audio_transport_publication_refresh();
     seq_runtime_exit_critical(primask);
 
     if (begin_running_now != 0U)
@@ -400,6 +404,7 @@ void seq_runtime_stop(void)
     {
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
     }
+    audio_transport_publication_refresh();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -545,6 +550,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     }
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     seq_runtime_update_samples_per_step_from_tempo();
+    audio_transport_publication_refresh();
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
@@ -883,6 +889,7 @@ void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli)
 {
     seq_clock_bridge_set_internal_tempo(&g_seq_clock_bridge, &g_seq_runtime, bpm_milli);
     seq_runtime_update_samples_per_step_from_tempo();
+    audio_transport_publication_refresh();
     if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
     {
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));

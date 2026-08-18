@@ -1885,7 +1885,6 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
             return 0U;
         }
 
-        param_registry_audio_fx_set_control(track, id, audio_value);
         param_registry_runtime_commit_authoritative_write(track, id, audio_value, 0U);
         return 1U;
     }
@@ -1898,11 +1897,11 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         const uint8_t applied = param_filter_apply_value(id,
                                                           track,
                                                           clamped,
-                                                          1U,
+                                                          0U,
                                                           0U);
         if (applied != 0U)
         {
-            param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
+            param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
         }
         return applied;
     }
@@ -1926,10 +1925,10 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         return 0U;
     }
 
-    const uint8_t applied = param_track_exec_apply_backend(&ctx, 1U);
+    const uint8_t applied = param_track_exec_apply_backend(&ctx, 0U);
     if (applied != 0U)
     {
-        param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
+        param_registry_runtime_commit_authoritative_write(track, id, clamped, 0U);
     }
     return applied;
 }
@@ -2207,9 +2206,37 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
         if (audio_command != 0U)
         {
+            uint8_t projected_control_tone = 0U;
+            float previous_control_value = 0.0f;
+            /* Non-audio-owned tone values still have a CONTROL canonical
+             * owner.  The AUDIO apply seam must not be asked to create that
+             * canonical value after PASS 2 removed its write-back. */
+            if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                    && (live_parameter_is_audio_owned(id) == 0U)
+                    && (param_registry_get_track_value(id, track,
+                                                        &previous_control_value) == 0U))
+            {
+                return 0U;
+            }
+            if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                    && (live_parameter_is_audio_owned(id) == 0U))
+            {
+                if (param_registry_set_track_tone_value(id, track, clamped) == 0U)
+                    return 0U;
+                projected_control_tone = 1U;
+            }
             param_registry_runtime_cache_set(track, id, clamped);
-            return param_registry_submit_audio_value(
-                id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
+            if (param_registry_submit_audio_value(
+                    id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
+            {
+                if (projected_control_tone != 0U)
+                {
+                    (void)param_registry_set_track_tone_value(
+                        id, track, previous_control_value);
+                }
+                return 0U;
+            }
+            return 1U;
         }
     }
 

@@ -1286,6 +1286,21 @@ La refonte est réussie si :
 
 ---
 
+## 31.2 PASS 2 - frontieres CONTROL -> AUDIO implementees
+
+PASS 2 est fermee.
+
+- LFO : configuration audio publiee ; le runtime et le reset ne relisent pas l'autorite CONTROL.
+- ENV3 : configuration/retrigger audio publies ; init, note et runtime utilisent la representation AUDIO.
+- MULTI/SLEW : configuration et plans audio publies ; le calcul reste dans le runtime AUDIO.
+- Matrix / ParamRegistry / FM : plans et valeurs de base publies ; le chemin Matrix/FM RT utilise le runtime FM local.
+- Tempo/transport : les consommateurs AUDIO utilisent la publication transport ; la timeline sample reste locale M7.
+- AUDIO -> CONTROL canonical write : zero ; les mises a jour live restent dans les runtimes/caches AUDIO.
+
+La frontiere logique H743 reste identique a la cible H747. Aucun HSEM, CM4, H747 ou deplacement RAM massif n'est introduit dans cette passe.
+
+Les chantiers Mixer/Filter/VCA/FX, Looper/Recorder, Sampler/Multi/page-cache, p-lock, streaming, `.sdram_audio_cold` et DJ EQ3 restent hors perimetre.
+
 # 32. Instruction au futur pilote
 
 Avant toute passe :
