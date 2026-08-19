@@ -2,6 +2,7 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Storage/memory_layout.h"
+#include "stm32h7xx.h"
 
 #include <string.h>
 
@@ -78,6 +79,41 @@ typedef struct
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static track_mod_lfo_state_t
     g_mod_lfo_audio_config[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+
+typedef struct
+{
+    track_mod_lfo_state_t config;
+    uint8_t reset_shared;
+    uint8_t reset_poly;
+    uint8_t clear_temp_mask;
+    uint8_t reserved;
+} mod_lfo_control_snapshot_t;
+
+typedef struct
+{
+    volatile uint32_t sequence;
+    mod_lfo_control_snapshot_t snapshot;
+} mod_lfo_control_mailbox_t;
+
+#define MOD_LFO_SNAPSHOT_RESET_SHAPE  (1U << 0)
+#define MOD_LFO_SNAPSHOT_RESET_TRIGGER (1U << 1)
+#define MOD_LFO_SNAPSHOT_RESET_ALL \
+    (MOD_LFO_SNAPSHOT_RESET_SHAPE | MOD_LFO_SNAPSHOT_RESET_TRIGGER)
+#define MOD_LFO_SNAPSHOT_CLEAR_ALL ((uint8_t)((1U << MOD_LFO_PARAM_COUNT) - 1U))
+
+CTRL_STATE static mod_lfo_control_mailbox_t
+    g_mod_lfo_control_mailbox[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+CTRL_STATE static uint32_t
+    g_mod_lfo_control_pending_sequence[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+CTRL_STATE static uint8_t
+    g_mod_lfo_control_pending_reset_shared[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+CTRL_STATE static uint8_t
+    g_mod_lfo_control_pending_reset_poly[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+CTRL_STATE static uint8_t
+    g_mod_lfo_control_pending_clear_temp[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+static volatile uint32_t
+    g_mod_lfo_audio_mailbox_sequence[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+static uint8_t g_mod_lfo_audio_initialized;
 
 static const track_mod_lfo_state_t *mod_lfo_audio_settings_const(uint8_t track,
                                                                   uint8_t lfo_index)
@@ -333,6 +369,232 @@ static float mod_lfo_effective_field(const mod_lfo_runtime_state_t *rt,
             return source->phase;
         default:
             return 0.0f;
+    }
+}
+
+static void mod_lfo_control_publish(uint8_t track,
+                                    uint8_t lfo_index,
+                                    uint8_t reset_shared,
+                                    uint8_t reset_poly,
+                                    uint8_t clear_temp_mask)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return;
+    }
+
+    const track_mod_lfo_state_t *const config =
+        mod_lfo_track_settings_const(track, lfo_index);
+    if (config == NULL)
+    {
+        return;
+    }
+
+    mod_lfo_control_mailbox_t *const mailbox =
+        &g_mod_lfo_control_mailbox[track][lfo_index];
+    if (g_mod_lfo_audio_mailbox_sequence[track][lfo_index]
+            == g_mod_lfo_control_pending_sequence[track][lfo_index])
+    {
+        g_mod_lfo_control_pending_reset_shared[track][lfo_index] = 0U;
+        g_mod_lfo_control_pending_reset_poly[track][lfo_index] = 0U;
+        g_mod_lfo_control_pending_clear_temp[track][lfo_index] = 0U;
+    }
+    g_mod_lfo_control_pending_reset_shared[track][lfo_index] = (uint8_t)(
+        g_mod_lfo_control_pending_reset_shared[track][lfo_index] | reset_shared);
+    g_mod_lfo_control_pending_reset_poly[track][lfo_index] = (uint8_t)(
+        g_mod_lfo_control_pending_reset_poly[track][lfo_index] | reset_poly);
+    g_mod_lfo_control_pending_clear_temp[track][lfo_index] = (uint8_t)(
+        g_mod_lfo_control_pending_clear_temp[track][lfo_index] | clear_temp_mask);
+
+    mod_lfo_control_snapshot_t snapshot = mailbox->snapshot;
+    snapshot.config = *config;
+    snapshot.reset_shared = g_mod_lfo_control_pending_reset_shared[track][lfo_index];
+    snapshot.reset_poly = g_mod_lfo_control_pending_reset_poly[track][lfo_index];
+    snapshot.clear_temp_mask = g_mod_lfo_control_pending_clear_temp[track][lfo_index];
+
+    uint32_t sequence = mailbox->sequence;
+    if ((sequence & 1U) != 0U)
+    {
+        ++sequence;
+    }
+    mailbox->sequence = sequence + 1U;
+    __DMB();
+    mailbox->snapshot = snapshot;
+    __DMB();
+    mailbox->sequence = sequence + 2U;
+    g_mod_lfo_control_pending_sequence[track][lfo_index] = sequence + 2U;
+}
+
+static void mod_lfo_audio_reset_poly_track_lfo(uint8_t track,
+                                               uint8_t lfo_index,
+                                               uint8_t wait_for_trigger)
+{
+    const mod_lfo_trig_mode_t new_trig = (mod_lfo_trig_mode_t)(
+        (uint8_t)(g_mod_lfo_audio_config[track][lfo_index].trig + 0.5f));
+    const uint8_t wait = (uint8_t)(wait_for_trigger
+        || (mod_lfo_trig_is_poly(new_trig) != 0U));
+    for (uint8_t voice_slot = 0U; voice_slot < MOD_LFO_POLY_SLOT_COUNT; ++voice_slot)
+    {
+        if (g_mod_lfo_poly_owner[voice_slot] == track)
+        {
+            mod_lfo_poly_state_invalidate(
+                &g_mod_lfo_poly_runtime[voice_slot][lfo_index], wait);
+        }
+    }
+}
+
+static void mod_lfo_audio_apply_control_snapshot(
+    uint8_t track,
+    uint8_t lfo_index,
+    const mod_lfo_control_snapshot_t *snapshot)
+{
+    if ((snapshot == NULL) || (track >= SEQ_TRACK_COUNT)
+            || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return;
+    }
+
+    mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    const track_mod_lfo_state_t *const old_config =
+        &g_mod_lfo_audio_config[track][lfo_index];
+    const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)((uint8_t)(
+        mod_lfo_effective_field(rt, old_config, MOD_LFO_PARAM_TRIG) + 0.5f));
+
+    rt->temp_valid_mask = (uint8_t)(
+        rt->temp_valid_mask & (uint8_t)~snapshot->clear_temp_mask);
+    mod_lfo_audio_apply_config(track, lfo_index, &snapshot->config);
+
+    if ((snapshot->reset_shared & MOD_LFO_SNAPSHOT_RESET_SHAPE) != 0U)
+    {
+        rt->sh_valid = 0U;
+        rt->slew_valid = 0U;
+        rt->ramp_valid = 0U;
+    }
+    if ((snapshot->reset_shared & MOD_LFO_SNAPSHOT_RESET_TRIGGER) != 0U)
+    {
+        rt->triggered = 0U;
+        rt->one_running = 0U;
+        rt->one_done = 0U;
+        rt->hold_valid = 0U;
+        rt->active = 0U;
+        rt->ramp_valid = 0U;
+    }
+    if (snapshot->config.rate <= MOD_LFO_RATE_OFF_EPS
+            && snapshot->config.rate >= -MOD_LFO_RATE_OFF_EPS)
+    {
+        rt->active = 0U;
+    }
+
+    const mod_lfo_trig_mode_t new_trig = (mod_lfo_trig_mode_t)((uint8_t)(
+        mod_lfo_effective_field(rt, &snapshot->config, MOD_LFO_PARAM_TRIG) + 0.5f));
+    if (snapshot->reset_poly != 0U)
+    {
+        mod_lfo_audio_reset_poly_track_lfo(
+            track, lfo_index, (uint8_t)(new_trig >= MOD_LFO_TRIG_POLY_TRIG));
+    }
+    else if (old_trig != new_trig)
+    {
+        mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
+    }
+}
+
+void mod_lfo_v1_publish_control_snapshot_track(uint8_t track)
+{
+    brick_entity_id_t owner = track;
+    if ((entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        mod_lfo_control_publish(owner, lfo,
+                                MOD_LFO_SNAPSHOT_RESET_ALL, 1U,
+                                MOD_LFO_SNAPSHOT_CLEAR_ALL);
+    }
+}
+
+void mod_lfo_v1_publish_control_snapshot_all(void)
+{
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        brick_entity_id_t owner = track;
+        if ((entity_topology_mod_owner(track, &owner) != 0U)
+                && (owner == track))
+        {
+            mod_lfo_v1_publish_control_snapshot_track(track);
+        }
+    }
+}
+
+static void mod_lfo_v1_audio_init(void)
+{
+    memset(g_mod_lfo_audio_config, 0, sizeof(g_mod_lfo_audio_config));
+    memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
+    memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
+    memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
+    memset(g_mod_lfo_poly_segment_config,
+           0,
+           sizeof(g_mod_lfo_poly_segment_config));
+    memset(g_mod_lfo_poly_prepared_entries,
+           0,
+           sizeof(g_mod_lfo_poly_prepared_entries));
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+        {
+            g_mod_lfo_audio_mailbox_sequence[track][lfo] = 0U;
+        }
+    }
+    g_mod_lfo_poly_prepared_entry_count = 0U;
+    g_mod_lfo_control_counter = 0U;
+    g_mod_lfo_had_matrix_routes = 0U;
+    memset(g_mod_lfo_track_had_matrix_routes, 0,
+           sizeof(g_mod_lfo_track_had_matrix_routes));
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+        {
+            g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
+            g_mod_lfo_runtime[track][lfo].rng_state =
+                0xA341316CU ^ ((uint32_t)track << 8) ^ (uint32_t)lfo;
+        }
+    }
+    g_mod_lfo_audio_initialized = 1U;
+}
+
+void mod_lfo_v1_audio_consume_snapshots(void)
+{
+    if (g_mod_lfo_audio_initialized == 0U)
+    {
+        mod_lfo_v1_audio_init();
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+        {
+            const mod_lfo_control_mailbox_t *const mailbox =
+                &g_mod_lfo_control_mailbox[track][lfo];
+            const uint32_t before = mailbox->sequence;
+            if (((before & 1U) != 0U)
+                    || (before == g_mod_lfo_audio_mailbox_sequence[track][lfo]))
+            {
+                continue;
+            }
+            __DMB();
+            const mod_lfo_control_snapshot_t snapshot = mailbox->snapshot;
+            __DMB();
+            const uint32_t after = mailbox->sequence;
+            if ((before != after) || ((after & 1U) != 0U))
+            {
+                continue;
+            }
+            mod_lfo_audio_apply_control_snapshot(track, lfo, &snapshot);
+            g_mod_lfo_audio_mailbox_sequence[track][lfo] = after;
+        }
     }
 }
 
@@ -866,56 +1128,20 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
 
 void mod_lfo_v1_init(void)
 {
-    memset(g_mod_lfo_audio_config, 0, sizeof(g_mod_lfo_audio_config));
-    memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
-    memset(g_mod_lfo_poly_runtime, 0, sizeof(g_mod_lfo_poly_runtime));
-    memset(g_mod_lfo_poly_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_mod_lfo_poly_owner));
-    memset(g_mod_lfo_poly_segment_config,
-           0,
-           sizeof(g_mod_lfo_poly_segment_config));
-    memset(g_mod_lfo_poly_prepared_entries,
-           0,
-           sizeof(g_mod_lfo_poly_prepared_entries));
-    g_mod_lfo_poly_prepared_entry_count = 0U;
+    memset(g_mod_lfo_control_mailbox, 0, sizeof(g_mod_lfo_control_mailbox));
+    memset(g_mod_lfo_control_pending_sequence, 0,
+           sizeof(g_mod_lfo_control_pending_sequence));
+    memset(g_mod_lfo_control_pending_reset_shared, 0,
+           sizeof(g_mod_lfo_control_pending_reset_shared));
+    memset(g_mod_lfo_control_pending_reset_poly, 0,
+           sizeof(g_mod_lfo_control_pending_reset_poly));
+    memset(g_mod_lfo_control_pending_clear_temp, 0,
+           sizeof(g_mod_lfo_control_pending_clear_temp));
     mod_destination_catalog_init();
-    mod_env3_control_publish_from_canonical();
     mod_env3_init();
-    g_mod_lfo_control_counter = 0U;
-    g_mod_lfo_had_matrix_routes = 0U;
-    memset(g_mod_lfo_track_had_matrix_routes, 0, sizeof(g_mod_lfo_track_had_matrix_routes));
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
-        {
-            const track_mod_lfo_state_t *const config =
-                mod_lfo_track_settings_const(track, lfo);
-            if (config != NULL)
-            {
-                mod_lfo_audio_apply_config(track, lfo, config);
-            }
-            g_mod_lfo_runtime[track][lfo].phase = 0U;
-            g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
-            g_mod_lfo_runtime[track][lfo].current = 0.0f;
-            g_mod_lfo_runtime[track][lfo].hold_value = 0.0f;
-            g_mod_lfo_runtime[track][lfo].slew_value = 0.0f;
-            g_mod_lfo_runtime[track][lfo].rng_state = 0xA341316CU ^ ((uint32_t)track << 8) ^ (uint32_t)lfo;
-            g_mod_lfo_runtime[track][lfo].sh_value = 0.0f;
-            g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].triggered = 0U;
-            g_mod_lfo_runtime[track][lfo].one_running = 0U;
-            g_mod_lfo_runtime[track][lfo].one_done = 0U;
-            g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].active = 0U;
-            g_mod_lfo_runtime[track][lfo].ramp_valid = 0U;
-            g_mod_lfo_runtime[track][lfo].ramp_end = 0.0f;
-            g_mod_lfo_runtime[track][lfo].ramp_discontinuous = 0U;
-            g_mod_lfo_runtime[track][lfo].temp_valid_mask = 0U;
-            g_mod_lfo_runtime[track][lfo].temp = (track_mod_lfo_state_t){0};
-        }
-    }
-
+    mod_env3_control_publish_snapshot_all(1U);
+    g_mod_lfo_audio_initialized = 0U;
+    mod_lfo_v1_publish_control_snapshot_all();
     mod_lfo_v1_invalidate_dest_cache_all();
 }
 
@@ -930,7 +1156,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
     track = owner;
     track_mod_lfo_state_t *const s = mod_lfo_track_settings_mut(track, lfo_index);
-    mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
 
     if (s == NULL)
     {
@@ -940,56 +1165,35 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     switch (param)
     {
         case MOD_LFO_PARAM_RATE:
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->rate = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT);
             if (s->rate > 0.0f)
             {
                 s->rate = mod_lfo_quantize_sync_rate(s->rate);
             }
-            rt->phase_inc = mod_lfo_phase_inc_from_rate(s->rate);
-            rt->ramp_valid = 0U;
-            if (rt->phase_inc == 0U)
-            {
-                rt->active = 0U;
-            }
-            mod_lfo_audio_apply_config(track, lfo_index, s);
+            mod_lfo_control_publish(track, lfo_index,
+                                    MOD_LFO_SNAPSHOT_RESET_SHAPE, 0U,
+                                    mod_lfo_runtime_param_mask(param));
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
-            rt->sh_valid = 0U;
-            rt->slew_valid = 0U;
-            rt->ramp_valid = 0U;
-            mod_lfo_audio_apply_config(track, lfo_index, s);
+            mod_lfo_control_publish(track, lfo_index,
+                                    MOD_LFO_SNAPSHOT_RESET_SHAPE, 0U,
+                                    mod_lfo_runtime_param_mask(param));
             return 1U;
 
         case MOD_LFO_PARAM_TRIG:
-        {
-            const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)((uint8_t)
-                (mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f));
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
-            rt->triggered = 0U;
-            rt->one_running = 0U;
-            rt->one_done = 0U;
-            rt->hold_valid = 0U;
-            rt->active = 0U;
-            rt->ramp_valid = 0U;
-            mod_lfo_poly_mode_changed(track,
-                                      lfo_index,
-                                      old_trig,
-                                      (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f)));
-            mod_lfo_audio_apply_config(track, lfo_index, s);
+            mod_lfo_control_publish(track, lfo_index,
+                                    MOD_LFO_SNAPSHOT_RESET_TRIGGER, 1U,
+                                    mod_lfo_runtime_param_mask(param));
             return 1U;
-        }
 
         case MOD_LFO_PARAM_PHASE:
-            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->phase = mod_lfo_clampf(value, 0.0f, 360.0f);
-            rt->slew_valid = 0U;
-            rt->ramp_valid = 0U;
-            mod_lfo_audio_apply_config(track, lfo_index, s);
+            mod_lfo_control_publish(track, lfo_index,
+                                    MOD_LFO_SNAPSHOT_RESET_SHAPE, 0U,
+                                    mod_lfo_runtime_param_mask(param));
             return 1U;
 
         default:
@@ -1070,27 +1274,37 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     return 1U;
 }
 
-void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param)
+uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track,
+                                                uint8_t lfo_index,
+                                                mod_lfo_param_t param)
 {
     if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK) || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
     {
-        return;
+        return 0U;
     }
 
     brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    if (entity_topology_mod_owner(track, &owner) == 0U)
+    {
+        return 0U;
+    }
     track = owner;
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
-    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
-    const mod_lfo_trig_mode_t old_trig = (s != NULL)
-        ? (mod_lfo_trig_mode_t)((uint8_t)(mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f))
-        : MOD_LFO_TRIG_FREE;
-    rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-    if ((param == MOD_LFO_PARAM_TRIG) && (s != NULL))
+    rt->temp_valid_mask = (uint8_t)(
+        rt->temp_valid_mask & (uint8_t)~mod_lfo_runtime_param_mask(param));
+    if (param == MOD_LFO_PARAM_TRIG)
     {
-        const mod_lfo_trig_mode_t new_trig = (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f));
-        mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
+        const track_mod_lfo_state_t *const config =
+            mod_lfo_audio_settings_const(track, lfo_index);
+        if (config == NULL)
+        {
+            return 0U;
+        }
+        mod_lfo_audio_reset_poly_track_lfo(
+            track, lfo_index,
+            (uint8_t)(((uint8_t)(config->trig + 0.5f)) >= MOD_LFO_TRIG_POLY_TRIG));
     }
+    return 1U;
 }
 
 mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index)
@@ -1444,7 +1658,7 @@ uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)
     brick_entity_id_t owner = track;
     if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
     track = owner;
-    const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     if (s == NULL)
     {
         return 0U;

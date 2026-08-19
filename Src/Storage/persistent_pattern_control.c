@@ -9,6 +9,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_state.h"
 #include "Mod/mod_destination_catalog.h"
+#include "Mod/mod_env3.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -75,6 +76,8 @@ static void reset_control_defaults(void)
         param_registry_clear_track_runtime_state(e);
         if(sound!=NULL)track_sound_state_make_default(sound);
         if(tone!=NULL)track_tone_sound_state_make_default(tone);
+        mod_lfo_v1_publish_control_snapshot_track(e);
+        mod_env3_control_publish_snapshot_track(e, 1U);
     }
     for(param_id_t id=0U;id<PARAM_COUNT;++id)
     {

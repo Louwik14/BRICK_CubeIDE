@@ -4,11 +4,13 @@
 #include <math.h>
 #include <string.h>
 
+#include "stm32h7xx.h"
 #include "Audio/env_adsr.h"
 #include "Core/track_sound_state.h"
 #include "Core/entity_topology.h"
 #include "Param/param_filter.h"
 #include "Seq/seq_types.h"
+#include "Storage/memory_layout.h"
 
 /* GROUP ENV3 configuration is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
@@ -28,6 +30,26 @@ typedef struct
 static mod_env3_runtime_track_t g_mod_env3_runtime[SEQ_TRACK_COUNT];
 static track_mod_env3_state_t g_mod_env3_audio_config[SEQ_TRACK_COUNT];
 static float g_mod_env3_audio_retrigger[SEQ_TRACK_COUNT];
+
+typedef struct
+{
+    track_mod_env3_state_t config;
+    float retrigger_hard;
+    uint8_t reset_runtime;
+    uint8_t reserved[3];
+} mod_env3_control_snapshot_t;
+
+typedef struct
+{
+    volatile uint32_t sequence;
+    mod_env3_control_snapshot_t snapshot;
+} mod_env3_control_mailbox_t;
+
+CTRL_STATE static mod_env3_control_mailbox_t
+    g_mod_env3_control_mailbox[SEQ_TRACK_COUNT];
+static volatile uint32_t g_mod_env3_audio_mailbox_sequence[SEQ_TRACK_COUNT];
+static uint8_t g_mod_env3_audio_initialized;
+
 static const track_mod_env3_state_t *mod_env3_track_settings_const(uint8_t track);
 
 static void mod_env3_audio_apply_config(uint8_t track,
@@ -47,20 +69,6 @@ void mod_env3_audio_apply_retrigger(uint8_t track, float value)
     if (track < SEQ_TRACK_COUNT)
     {
         g_mod_env3_audio_retrigger[track] = (value >= 0.5f) ? 1.0f : 0.0f;
-    }
-}
-
-void mod_env3_control_publish_from_canonical(void)
-{
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        const track_mod_env3_state_t *const config =
-            mod_env3_track_settings_const(track);
-        const track_sound_state_t *const sound = track_sound_state_get_const(track);
-        if ((config != NULL) && (sound != NULL))
-        {
-            mod_env3_audio_apply_config(track, config, sound->env_retrig_mod);
-        }
     }
 }
 
@@ -109,6 +117,55 @@ static const track_mod_env3_state_t *mod_env3_track_settings_const(uint8_t track
     return &sound->mod_env3;
 }
 
+void mod_env3_control_publish_snapshot_track(uint8_t track, uint8_t reset_runtime)
+{
+    brick_entity_id_t owner = track;
+    if ((track >= SEQ_TRACK_COUNT)
+            || (entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    const track_sound_state_t *const sound = track_sound_state_get_const(owner);
+    if (sound == NULL)
+    {
+        return;
+    }
+
+    mod_env3_control_mailbox_t *const mailbox = &g_mod_env3_control_mailbox[owner];
+    mod_env3_control_snapshot_t snapshot = {
+        .config = sound->mod_env3,
+        .retrigger_hard = sound->env_retrig_mod,
+        .reset_runtime = (reset_runtime != 0U) ? 1U : 0U,
+        .reserved = { 0U, 0U, 0U }
+    };
+
+    uint32_t sequence = mailbox->sequence;
+    if ((sequence & 1U) != 0U)
+    {
+        ++sequence;
+    }
+    mailbox->sequence = sequence + 1U;
+    __DMB();
+    mailbox->snapshot = snapshot;
+    __DMB();
+    mailbox->sequence = sequence + 2U;
+}
+
+void mod_env3_control_publish_snapshot_all(uint8_t reset_runtime)
+{
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        brick_entity_id_t owner = track;
+        if ((entity_topology_mod_owner(track, &owner) != 0U)
+                && (owner == track))
+        {
+            mod_env3_control_publish_snapshot_track(track, reset_runtime);
+        }
+    }
+}
+
 static void mod_env3_apply_settings(uint8_t track)
 {
     if (track >= SEQ_TRACK_COUNT)
@@ -131,34 +188,90 @@ static void mod_env3_apply_settings(uint8_t track)
     rt->applied = *s;
 }
 
-void mod_env3_init(void)
+static void mod_env3_audio_invalidate_applied(uint8_t track)
 {
+    g_mod_env3_runtime[track].applied.attack = -1.0f;
+    g_mod_env3_runtime[track].applied.decay = -1.0f;
+    g_mod_env3_runtime[track].applied.sustain = -1.0f;
+    g_mod_env3_runtime[track].applied.release = -1.0f;
+}
+
+static void mod_env3_audio_reset_track_runtime(uint8_t track)
+{
+    env_adsr_reset(&g_mod_env3_runtime[track].env);
+    g_mod_env3_runtime[track].held_notes = 0U;
+    g_mod_env3_runtime[track].temp_valid = 0U;
+    mod_env3_audio_invalidate_applied(track);
+}
+
+static void mod_env3_audio_apply_control_snapshot(
+    uint8_t track,
+    const mod_env3_control_snapshot_t *snapshot)
+{
+    if ((snapshot == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    if (snapshot->reset_runtime != 0U)
+    {
+        mod_env3_audio_reset_track_runtime(track);
+    }
+    mod_env3_audio_apply_config(track, &snapshot->config,
+                                snapshot->retrigger_hard);
+    mod_env3_apply_settings(track);
+}
+
+static void mod_env3_audio_init(void)
+{
+    memset(g_mod_env3_audio_config, 0, sizeof(g_mod_env3_audio_config));
+    memset(g_mod_env3_audio_retrigger, 0, sizeof(g_mod_env3_audio_retrigger));
+    memset(g_mod_env3_runtime, 0, sizeof(g_mod_env3_runtime));
+    memset((void *)g_mod_env3_audio_mailbox_sequence, 0,
+           sizeof(g_mod_env3_audio_mailbox_sequence));
+
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        env_adsr_init(&g_mod_env3_runtime[track].env, MOD_ENV3_AUDIO_SAMPLE_RATE);
-        g_mod_env3_runtime[track].held_notes = 0U;
-        g_mod_env3_runtime[track].temp_valid = 0U;
-        g_mod_env3_runtime[track].applied.attack = -1.0f;
-        g_mod_env3_runtime[track].applied.decay = -1.0f;
-        g_mod_env3_runtime[track].applied.sustain = -1.0f;
-        g_mod_env3_runtime[track].applied.release = -1.0f;
-        mod_env3_apply_settings(track);
+        env_adsr_init(&g_mod_env3_runtime[track].env,
+                      MOD_ENV3_AUDIO_SAMPLE_RATE);
+        mod_env3_audio_invalidate_applied(track);
+    }
+    g_mod_env3_audio_initialized = 1U;
+}
+
+void mod_env3_audio_consume_snapshots(void)
+{
+    if (g_mod_env3_audio_initialized == 0U)
+    {
+        mod_env3_audio_init();
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const mod_env3_control_mailbox_t *const mailbox =
+            &g_mod_env3_control_mailbox[track];
+        const uint32_t before = mailbox->sequence;
+        if (((before & 1U) != 0U)
+                || (before == g_mod_env3_audio_mailbox_sequence[track]))
+        {
+            continue;
+        }
+        __DMB();
+        const mod_env3_control_snapshot_t snapshot = mailbox->snapshot;
+        __DMB();
+        const uint32_t after = mailbox->sequence;
+        if ((before != after) || ((after & 1U) != 0U))
+        {
+            continue;
+        }
+        mod_env3_audio_apply_control_snapshot(track, &snapshot);
+        g_mod_env3_audio_mailbox_sequence[track] = after;
     }
 }
 
-void mod_env3_reset_runtime(void)
+void mod_env3_init(void)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        env_adsr_reset(&g_mod_env3_runtime[track].env);
-        g_mod_env3_runtime[track].held_notes = 0U;
-        g_mod_env3_runtime[track].temp_valid = 0U;
-        g_mod_env3_runtime[track].applied.attack = -1.0f;
-        g_mod_env3_runtime[track].applied.decay = -1.0f;
-        g_mod_env3_runtime[track].applied.sustain = -1.0f;
-        g_mod_env3_runtime[track].applied.release = -1.0f;
-        mod_env3_apply_settings(track);
-    }
+    memset(g_mod_env3_control_mailbox, 0, sizeof(g_mod_env3_control_mailbox));
 }
 
 static uint8_t mod_env3_write_param(track_mod_env3_state_t *s, mod_env3_param_t param, float value)
@@ -177,30 +290,6 @@ static uint8_t mod_env3_write_param(track_mod_env3_state_t *s, mod_env3_param_t 
         case MOD_ENV3_PARAM_RELEASE: s->release = clamped; return 1U;
         default: return 0U;
     }
-}
-
-uint8_t mod_env3_set_track_param(uint8_t track, mod_env3_param_t param, float value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT))
-    {
-        return 0U;
-    }
-
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    track_mod_env3_state_t *const s = mod_env3_track_settings(track);
-    if (s == NULL)
-    {
-        return 0U;
-    }
-
-    const uint8_t ok = mod_env3_write_param(s, param, value);
-    if (ok != 0U)
-    {
-        mod_env3_audio_apply_config(track, s, g_mod_env3_audio_retrigger[track]);
-    }
-    return ok;
 }
 
 uint8_t mod_env3_control_set_track_param(uint8_t track, mod_env3_param_t param, float value)
@@ -245,27 +334,6 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
         case MOD_ENV3_PARAM_RELEASE: *out_value = s->release; return 1U;
         default: return 0U;
     }
-}
-
-uint8_t mod_env3_set_track_retrigger_hard(uint8_t track, float value)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    track_sound_state_t *const sound = track_sound_state_get(track);
-    if (sound == NULL)
-    {
-        return 0U;
-    }
-
-    sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
-    g_mod_env3_audio_retrigger[track] = sound->env_retrig_mod;
-    return 1U;
 }
 
 uint8_t mod_env3_control_set_track_retrigger_hard(uint8_t track, float value)
@@ -403,14 +471,4 @@ float mod_env3_process_track(uint8_t track, uint32_t elapsed_frames)
         elapsed_frames,
         NULL);
     return (float)value * (1.0f / 32767.0f);
-}
-
-uint8_t mod_env3_is_running(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    return (env_adsr_stage(&g_mod_env3_runtime[track].env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
 }

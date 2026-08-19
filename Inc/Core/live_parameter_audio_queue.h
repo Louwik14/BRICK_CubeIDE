@@ -57,7 +57,9 @@ typedef enum
 {
     LIVE_PARAMETER_MATRIX_OPERATION_NONE = 0U,
     LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET = 1U,
-    LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR = 2U
+    LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR = 2U,
+    /* AUDIO-only temporary LFO release; it must not touch Matrix state. */
+    LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR = 3U
 } live_parameter_matrix_operation_t;
 
 _Static_assert(sizeof(live_parameter_audio_event_t) == 32U,

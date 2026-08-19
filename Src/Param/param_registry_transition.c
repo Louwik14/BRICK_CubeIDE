@@ -298,6 +298,7 @@ static uint8_t param_registry_reapply_track_runtime_params(
     {
         return 0U;
     }
+    mod_lfo_v1_publish_control_snapshot_track(track);
     return 1U;
 }
 

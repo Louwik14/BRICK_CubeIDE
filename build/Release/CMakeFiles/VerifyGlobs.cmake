@@ -43,6 +43,7 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sampler.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/vca_env.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/waveform_control.c"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")

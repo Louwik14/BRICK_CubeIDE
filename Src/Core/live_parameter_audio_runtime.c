@@ -80,8 +80,19 @@ static uint8_t live_parameter_audio_runtime_apply_target(
     {
         if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
         {
-            const uint8_t applied = param_registry_apply_track_value_runtime_temp_audio(
-                event->parameter_id, event->track, value);
+            uint8_t applied;
+            if ((event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR)
+                    || ((event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
+                        && (param_registry_is_lfo_param(event->parameter_id) != 0U)))
+            {
+                applied = param_registry_clear_track_value_runtime_temp_audio(
+                    event->parameter_id, event->track);
+            }
+            else
+            {
+                applied = param_registry_apply_track_value_runtime_temp_audio(
+                    event->parameter_id, event->track, value);
+            }
             if (applied == 0U)
                 return 0U;
             if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET)

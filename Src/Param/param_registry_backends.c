@@ -16,7 +16,6 @@
 #include "Audio/vca_env.h"
 #include "Core/track_mute.h"
 #include "Mod/mod_destination_catalog.h"
-#include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_filter.h"
 #include "Sampler/multi_sample_pool.h"
@@ -1552,12 +1551,6 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
             mixer_set_track_filter_mode(ctx->audio_binding.mix_track_id, mode);
             return 1U;
         }
-
-        case PARAM_ENV_RETRIG_MOD:
-            if (update_base_state != 0U)
-                return mod_env3_set_track_retrigger_hard(track, value);
-            mod_env3_audio_apply_retrigger(track, value);
-            return 1U;
 
         case PARAM_VCA_ATTACK:
         {

@@ -110,6 +110,8 @@ uint8_t param_registry_apply_track_value_runtime_temp_matrix(param_id_t id,
                                                               float value,
                                                               uint8_t matrix_operation);
 uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value);
+uint8_t param_registry_clear_track_value_runtime_temp_audio(param_id_t id, uint8_t track);
+uint8_t param_registry_is_lfo_param(param_id_t id);
 void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track);
 void param_registry_clear_track_runtime_state(uint8_t track);
 /* Fast path reserved for RT modulation, not a general apply entry point. */

@@ -35,6 +35,8 @@
 #include "Audio/audio_note_admission.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_env3.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
@@ -171,6 +173,8 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
     while (cursor < frames)
     {
         const uint64_t now = sample_time + cursor;
+        mod_lfo_v1_audio_consume_snapshots();
+        mod_env3_audio_consume_snapshots();
         audio_apply_control_events_at_sample(now);
         audio_mod_matrix_consume_snapshots();
         (void)live_parameter_audio_queue_consume_due(now);

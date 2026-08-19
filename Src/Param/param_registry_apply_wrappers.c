@@ -14,8 +14,6 @@
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
-#include "Mod/mod_env3.h"
-#include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "UI/ui_track_catalog.h"
 #include <math.h>
@@ -189,24 +187,6 @@ void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control_float_
 void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
 void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
 
-static void apply_lfo_active_track(uint8_t lfo, mod_lfo_param_t param, float v)
-{
-    (void)mod_lfo_v1_set_track_param(ui_get_active_track(), lfo, param, v);
-}
-
-void apply_lfo1_rate(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_RATE, v); }
-void apply_lfo1_shape(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo1_trig(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo1_phase(float v) { apply_lfo_active_track(0U, MOD_LFO_PARAM_PHASE, v); }
-void apply_lfo2_rate(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_RATE, v); }
-void apply_lfo2_shape(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo2_trig(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo2_phase(float v) { apply_lfo_active_track(1U, MOD_LFO_PARAM_PHASE, v); }
-void apply_lfo3_rate(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_RATE, v); }
-void apply_lfo3_shape(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_SHAPE, v); }
-void apply_lfo3_trig(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_TRIG, v); }
-void apply_lfo3_phase(float v) { apply_lfo_active_track(2U, MOD_LFO_PARAM_PHASE, v); }
-
 void apply_mod_matrix_slot(float v)
 {
     (void)mod_matrix_set_selected_slot(ui_get_active_track(), v);
@@ -251,16 +231,6 @@ void apply_mod_slew_1_source(float v) { apply_mod_slew_source_active_track(0U, v
 void apply_mod_slew_1_amount(float v) { apply_mod_slew_amount_active_track(0U, v); }
 void apply_mod_slew_2_source(float v) { apply_mod_slew_source_active_track(1U, v); }
 void apply_mod_slew_2_amount(float v) { apply_mod_slew_amount_active_track(1U, v); }
-
-static void apply_env3_active_track(mod_env3_param_t param, float v)
-{
-    (void)mod_env3_set_track_param(ui_get_active_track(), param, v);
-}
-
-void apply_env3_attack(float v) { apply_env3_active_track(MOD_ENV3_PARAM_ATTACK, v); }
-void apply_env3_decay(float v) { apply_env3_active_track(MOD_ENV3_PARAM_DECAY, v); }
-void apply_env3_sustain(float v) { apply_env3_active_track(MOD_ENV3_PARAM_SUSTAIN, v); }
-void apply_env3_release(float v) { apply_env3_active_track(MOD_ENV3_PARAM_RELEASE, v); }
 
 void apply_cfg_track(float v)
 {

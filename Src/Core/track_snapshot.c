@@ -12,6 +12,7 @@
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
@@ -304,6 +305,8 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
     }
 
     track_runtime_refresh_track(track);
+    mod_lfo_v1_publish_control_snapshot_track(track);
+    mod_env3_control_publish_snapshot_track(track, 1U);
     mod_matrix_publish_control_snapshot_track(track);
 
     live_parameter_audio_bulk_t bulk = {
@@ -320,6 +323,14 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
             if (item->parameter_id >= PARAM_COUNT)
                 continue;
             const param_id_t id = (param_id_t)item->parameter_id;
+            if ((id == PARAM_ENV3_ATTACK)
+                    || (id == PARAM_ENV3_DECAY)
+                    || (id == PARAM_ENV3_SUSTAIN)
+                    || (id == PARAM_ENV3_RELEASE)
+                    || (id == PARAM_ENV_RETRIG_MOD))
+            {
+                continue;
+            }
             uint8_t selected = 0U;
             if (phase < 4U)
             {
