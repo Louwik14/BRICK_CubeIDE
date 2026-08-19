@@ -271,7 +271,7 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
         return param_registry_apply_track_value(param, track, value);
     }
 
-    return param_backend_apply_track_value(track, param, value, 0U);
+    return param_backend_apply_track_value_control(track, param, value);
 }
 
 static uint8_t param_macro_collect_value(live_parameter_audio_bulk_t *bulk,

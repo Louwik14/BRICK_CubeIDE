@@ -382,6 +382,13 @@ static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
     const uint8_t scope = (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
         ? LIVE_PARAMETER_EVENT_SCOPE_GLOBAL : LIVE_PARAMETER_EVENT_SCOPE_TRACK;
     const uint8_t event_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
+    float command_value = value;
+    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+            && (param_registry_prepare_global_audio_command(
+                id, value, &command_value) == 0U))
+    {
+        return 0U;
+    }
     live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
     item->parameter_id = (uint16_t)id;
     item->scope = scope;
@@ -390,7 +397,7 @@ static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
     item->reserved = 0U;
     item->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
                              | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
-    item->value = live_parameter_event_encode_float(value);
+    item->value = live_parameter_event_encode_float(command_value);
     return 1U;
 }
 
@@ -446,8 +453,13 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
                 const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
                 if (live_parameter_is_audio_owned(id) != 0U)
                 {
-                    if (ui_core_clipboard_bulk_add(&bulk, id, track,
-                                                   param_registry[id].min) == 0U)
+                    if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                    {
+                        param_set(id, param_registry[id].min);
+                        direct_applied = 1U;
+                    }
+                    else if (ui_core_clipboard_bulk_add(&bulk, id, track,
+                                                        param_registry[id].min) == 0U)
                     {
                         param_registry_batch_end();
                         return 0U;
@@ -682,7 +694,12 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
             ++common;
             if (live_parameter_is_audio_owned(target) != 0U)
             {
-                if (ui_core_clipboard_bulk_add(&bulk, target, track, value) == 0U)
+                const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
+                if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                {
+                    param_set(target, value);
+                }
+                else if (ui_core_clipboard_bulk_add(&bulk, target, track, value) == 0U)
                 {
                     *out_common_count = common;
                     return 0U;

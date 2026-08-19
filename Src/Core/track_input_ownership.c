@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Core/entity_topology.h"
+#include "Core/audio_input_ownership_projection.h"
 
 static uint8_t g_external_input[UI_TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
@@ -45,6 +46,7 @@ static uint8_t track_input_ownership_build(
 
 void track_input_ownership_init(const ui_track_config_t configs[UI_TRACK_COUNT])
 {
+    audio_input_ownership_projection_init();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
@@ -86,6 +88,7 @@ uint8_t track_input_ownership_apply_bulk(
 
     memcpy(g_external_input, next_selected, sizeof(g_external_input));
     memcpy(g_external_owner, next_owners, sizeof(g_external_owner));
+    audio_input_ownership_projection_publish();
     return 1U;
 }
 

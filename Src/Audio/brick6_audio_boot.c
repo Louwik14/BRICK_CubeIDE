@@ -50,8 +50,6 @@ uint8_t brick6_audio_boot_apply_early(const brick6_audio_boot_intent_t *intent)
 uint8_t brick6_audio_boot_apply_output_tracks(const brick6_audio_boot_intent_t *intent)
 {
     if (brick6_audio_boot_intent_valid(intent) == 0U) return 0U;
-    audio_float_set_postgain(intent->postgain);
-    audio_float_set_output_compensation(intent->output_compensation);
     audio_tracks_init();
     return 1U;
 }
@@ -69,7 +67,6 @@ uint8_t brick6_audio_boot_apply_engines(const brick6_audio_boot_intent_t *intent
     brick6_braids_runtime_init();
     brick6_stack_runtime_init();
     brick6_wave_runtime_init();
-    mixer_set_master(intent->master_gain);
     brick6_fm_runtime_init();
     brick6_audio_runtime_init();
     return 1U;

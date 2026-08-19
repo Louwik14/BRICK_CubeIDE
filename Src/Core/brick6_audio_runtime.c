@@ -31,7 +31,7 @@
 #include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "Core/track_runtime.h"
-#include "Core/track_input_ownership.h"
+#include "Core/audio_input_ownership_projection.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 
@@ -40,8 +40,8 @@ static uint8_t g_runtime_last_drum_processed = 0xFFU;
 
 static void brick6_publish_owned_physical_line(uint32_t frames)
 {
-    uint8_t owner = TRACK_INPUT_OWNER_NONE;
-    if (track_input_ownership_get_external_owner(0U, &owner) == 0U)
+    uint8_t owner = 0U;
+    if (audio_input_ownership_projection_audio_get_owner(0U, &owner) == 0U)
     {
         return;
     }
@@ -699,6 +699,7 @@ ITCM_AUDIT_32_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
+    audio_input_ownership_projection_audio_consume();
     brick6_publish_owned_physical_line(frames);
     uint16_t active_engine_mask = 0U;
     for (brick_entity_id_t entity = 0U;

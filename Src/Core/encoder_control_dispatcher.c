@@ -4,6 +4,7 @@
 #include "Core/live_parameter_audio_runtime.h"
 #include "Core/live_parameter_event.h"
 #include "Core/live_parameter_migration.h"
+#include "Param/param_registry.h"
 #include "encoders.h"
 
 #define ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK ENCODER_DETENT_QUEUE_CAPACITY
@@ -147,6 +148,14 @@ uint8_t encoder_control_dispatcher_service(void)
             continue;
         }
 
+        float command_value = target.value;
+        if ((target.scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+                && (param_registry_prepare_global_audio_command(
+                    target.parameter_id, target.value, &command_value) == 0U))
+        {
+            continue;
+        }
+
         const live_parameter_event_t event = {
             .capture_tick = detent.capture_tick,
             .ingress_serial = detent.ingress_serial,
@@ -158,7 +167,7 @@ uint8_t encoder_control_dispatcher_service(void)
             .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
                                 | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
                                 | ((uint16_t)detent.encoder_id << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)),
-            .value = live_parameter_event_encode_float(target.value)
+            .value = live_parameter_event_encode_float(command_value)
         };
 
         if (live_parameter_event_submit(&event))

@@ -25,6 +25,8 @@
 #include "NoteFx/note_fx_pipeline.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
+#include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Param/param_macro.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
@@ -40,11 +42,13 @@
 #include "Core/track_state.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/live_parameter_audio_queue.h"
+#include "Audio/audio_transition_snapshot.h"
 #include "Core/live_clock.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
+#include "Mod/mod_destination_catalog.h"
 #include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
 #include "Keyboard/keyboard_engine.h"
@@ -60,6 +64,107 @@ static float param_registry_audio_fx_clamp_p3(float value)
 static void param_registry_audio_fx_set_control(uint8_t track,
                                                 param_id_t id,
                                                 float value);
+
+static float param_registry_global_delay_time_seconds(float value)
+{
+    static const float beats[] = {
+        0.125f, 0.1666667f, 0.25f, 0.3333333f, 0.5f, 0.6666667f,
+        0.75f, 1.0f, 1.3333334f, 1.5f, 2.0f, 3.0f, 4.0f
+    };
+    uint32_t bpm_milli = 120000U;
+    const uint8_t index = (uint8_t)(clamp_value(value, 0.0f, 12.0f) + 0.5f);
+
+    if ((seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL)
+            && (seq_runtime_is_external_tempo_valid() != 0U))
+    {
+        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
+    }
+    else
+    {
+        bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    }
+    if (bpm_milli < 40000U)
+        bpm_milli = 40000U;
+    if (bpm_milli > 300000U)
+        bpm_milli = 300000U;
+    return beats[index] * 60000.0f / (float)bpm_milli;
+}
+
+static float param_registry_global_modfx_unit(float value)
+{
+    return clamp_value(value, 0.0f, 127.0f) * (1.0f / 127.0f);
+}
+
+static float param_registry_global_modfx_command(param_id_t id,
+                                                  float value,
+                                                  uint8_t model)
+{
+    const float unit = param_registry_global_modfx_unit(value);
+    if (model == 5U)
+    {
+        switch (id)
+        {
+            case PARAM_MODFX_RATE:
+                return (value <= 61.0f)
+                    ? (0.01f * powf(30.0f, value / 61.0f))
+                    : (0.3f * powf(40.0f, (value - 61.0f) / 66.0f));
+            case PARAM_MODFX_DEPTH:
+                return (value <= 123.0f)
+                    ? (0.9f * value / 123.0f)
+                    : (0.9f + 0.03f * (value - 123.0f) / 4.0f);
+            case PARAM_MODFX_FEEDBACK:
+                return (value <= 25.0f)
+                    ? (0.2f * value / 25.0f)
+                    : (0.2f + 0.8f * (value - 25.0f) / 102.0f);
+            case PARAM_MODFX_OFFSET:
+                return (value <= 95.0f)
+                    ? (0.75f * value / 95.0f)
+                    : (0.75f + 0.25f * (value - 95.0f) / 32.0f);
+            default:
+                break;
+        }
+    }
+    if ((model == 7U) && (id == PARAM_MODFX_DEPTH))
+    {
+        const unsigned voices = 1U + (unsigned)(unit * 7.0f + 0.5f);
+        return (float)(voices - 1U) * (1.0f / 7.0f);
+    }
+    switch (id)
+    {
+        case PARAM_MODFX_RATE: return 0.01f + 11.99f * unit;
+        case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_FEEDBACK:
+        case PARAM_MODFX_OFFSET: return unit;
+        default: return value;
+    }
+}
+
+uint8_t param_registry_prepare_global_audio_command(param_id_t id,
+                                                    float canonical_value,
+                                                    float *out_command_value)
+{
+    if ((out_command_value == NULL) || (id >= PARAM_COUNT))
+        return 0U;
+
+    *out_command_value = canonical_value;
+    switch (id)
+    {
+        case PARAM_MIX_DELAY_TIME:
+        case PARAM_MIX_DELAY_TIME_R:
+            *out_command_value = param_registry_global_delay_time_seconds(canonical_value);
+            break;
+        case PARAM_MODFX_RATE:
+        case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_FEEDBACK:
+        case PARAM_MODFX_OFFSET:
+            *out_command_value = param_registry_global_modfx_command(
+                id, canonical_value, (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f));
+            break;
+        default:
+            break;
+    }
+    return 1U;
+}
 
 static const param_id_t g_audio_fx_param_order[] = {
     PARAM_AUDIO_FX_MODEL,
@@ -1432,6 +1537,8 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
                         track, (param_id_t)(PARAM_DRUM_MD_P1 + slot), state->md.slot[slot]);
                 }
             }
+            mod_destination_catalog_invalidate_track(track);
+            mod_matrix_publish_control_snapshot_track(track);
             return 1U;
         }
         case PARAM_DRUM_MD_P1:
@@ -1450,11 +1557,34 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
     }
 }
 
-static uint8_t param_apply_non_filter_track_value_rt_fast(param_id_t id,
-                                                           uint8_t track,
-                                                           float clamped)
+static uint8_t param_apply_non_filter_track_value_audio(param_id_t id,
+                                                        uint8_t track,
+                                                        float clamped)
 {
-    return param_apply_non_filter_track_value_core(id, track, clamped, 1U);
+    if ((track >= SEQ_LANE_CAPACITY) || (id == PARAM_EXTERNAL_INPUT)
+            || (id == PARAM_MIDI_PROGRAM))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD))
+    {
+        return 0U;
+    }
+
+    const track_audio_runtime_ctx_t *const audio_ctx =
+        audio_note_engine_adapter_audio_ctx(track);
+    if (audio_note_engine_adapter_ctx_is_audio_routable(audio_ctx) == 0U)
+    {
+        return 0U;
+    }
+
+    return param_backend_apply_track_value(track, id, clamped, 0U);
 }
 
 typedef struct param_track_exec_ctx_t
@@ -1487,8 +1617,8 @@ static uint8_t param_track_exec_apply_tone_drum_range(const param_track_exec_ctx
         return 0U;
     }
 
-    return param_backend_apply_track_value(
-        ctx->track, ctx->id, ctx->clamped, 0U);
+    return param_backend_apply_track_value_control(
+        ctx->track, ctx->id, ctx->clamped);
 }
 
 static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
@@ -1594,10 +1724,14 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
         }
     }
 
-    const uint8_t applied = param_backend_apply_track_value(ctx->track,
-                                                             ctx->id,
-                                                             ctx->clamped,
-                                                             update_base_state);
+    const uint8_t applied = (ctx->rt_fast != 0U)
+        ? param_backend_apply_track_value(ctx->track,
+                                          ctx->id,
+                                          ctx->clamped,
+                                          update_base_state)
+        : param_backend_apply_track_value_control(ctx->track,
+                                                  ctx->id,
+                                                  ctx->clamped);
     if ((applied != 0U) && (update_base_state != 0U))
         param_registry_control_shadow_set(ctx->track, ctx->id, ctx->clamped);
     return applied;
@@ -1860,10 +1994,10 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 
     if (param_filter_is_param(id) != 0U)
     {
-        return param_filter_apply_value(id, track, clamped, 0U, 0U);
+        return param_filter_apply_value_audio(id, track, clamped);
     }
 
-    return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
+    return param_apply_non_filter_track_value_audio(id, track, clamped);
 }
 
 uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value)
@@ -1882,7 +2016,8 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
     {
         const float audio_value = (id == PARAM_AUDIO_FX_P3)
             ? param_registry_audio_fx_clamp_p3(clamped) : clamped;
-        if (track_runtime_is_audio_routable(track) == 0U)
+        if (audio_note_engine_adapter_ctx_is_audio_routable(
+                audio_note_engine_adapter_audio_ctx(track)) == 0U)
         {
             return 0U;
         }
@@ -1901,11 +2036,8 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
 
     if (param_filter_is_param(id) != 0U)
     {
-        const uint8_t applied = param_filter_apply_value(id,
-                                                          track,
-                                                          clamped,
-                                                          0U,
-                                                          0U);
+        const uint8_t applied = param_filter_apply_value_audio(
+            id, track, clamped);
         return applied;
     }
 
@@ -1933,44 +2065,7 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
         return 0U;
     }
 
-    param_track_exec_ctx_t ctx;
-    if (param_track_exec_ctx_build(&ctx, track, id, clamped, rule, 1U) == 0U)
-    {
-        return 0U;
-    }
-    if (param_track_exec_authorize(&ctx) == 0U)
-    {
-        return 0U;
-    }
-
-    return param_track_exec_apply_backend(&ctx, 0U);
-}
-
-uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value)
-{
-    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
-    {
-        return 0U;
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
-    {
-        return 0U;
-    }
-
-    const param_desc_t *const desc = &param_registry[id];
-    const float clamped = clamp_value(value, desc->min, desc->max);
-    if (id == PARAM_MASTER_GAIN)
-        return 0U;
-    if (desc->apply == NULL)
-    {
-        return 0U;
-    }
-
-    desc->apply(clamped);
-    return 1U;
+    return param_apply_non_filter_track_value_audio(id, track, clamped);
 }
 
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
@@ -2086,21 +2181,27 @@ uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8
 
     if (param_filter_is_param(id) != 0U)
     {
-        return param_filter_apply_value(id, track, clamped, 0U, 0U);
+        return param_filter_apply_value_audio(id, track, clamped);
     }
 
-    return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
+    return param_apply_non_filter_track_value_audio(id, track, clamped);
 }
 
 uint8_t param_registry_clear_track_value_runtime_temp_audio(param_id_t id, uint8_t track)
 {
     uint8_t lfo_index = 0U;
     mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
-    if (param_lfo_map(id, &lfo_index, &lfo_param) == 0U)
+    if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
     {
-        return 0U;
+        return mod_lfo_v1_clear_track_param_temp_audio(track, lfo_index, lfo_param);
     }
-    return mod_lfo_v1_clear_track_param_temp_audio(track, lfo_index, lfo_param);
+
+    mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
+    if (param_env3_map(id, &env_param) != 0U)
+    {
+        return mod_env3_clear_track_param_temp_audio(track, env_param);
+    }
+    return 0U;
 }
 
 uint8_t param_registry_is_lfo_param(param_id_t id)
@@ -2122,13 +2223,6 @@ void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t trac
         return;
     }
 
-    {
-        mod_env3_param_t env_param = MOD_ENV3_PARAM_ATTACK;
-        if (param_env3_map(id, &env_param) != 0U)
-        {
-            mod_env3_clear_track_param_temp(track, env_param);
-        }
-    }
 }
 
 void param_registry_clear_track_runtime_state(uint8_t track)
@@ -2138,6 +2232,8 @@ void param_registry_clear_track_runtime_state(uint8_t track)
         return;
     }
 
+    /* ENV3 reset/reapply is carried by its snapshot; p-lock restore queues
+     * the audio-owned temporary clear through the live-parameter event path. */
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
     {
         param_registry_release_track_value_runtime_temp((param_id_t)raw_id, track);
@@ -2409,6 +2505,7 @@ void param_registry_sync_filter_ui_for_active_track(void)
 void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
+    audio_transition_snapshot_init();
     param_macro_init();
     param_filter_init();
     mod_lfo_v1_init();
@@ -2474,7 +2571,9 @@ static void modfx_bank_project_model(uint8_t model)
         const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
         param_store_set_active(ids[slot],value);
         param_registry_control_shadow_set(0U,ids[slot],value);
-        bulk.item[slot]=(live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[slot],.scope=LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,.track=0U,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,.flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET|LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),.value=live_parameter_event_encode_float(value)};
+        float command_value = value;
+        (void)param_registry_prepare_global_audio_command(ids[slot], value, &command_value);
+        bulk.item[slot]=(live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[slot],.scope=LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,.track=0U,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,.flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET|LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),.value=live_parameter_event_encode_float(command_value)};
     }
     (void)live_parameter_audio_queue_submit_bulk(&bulk);
 }
@@ -2506,8 +2605,12 @@ void param_set(param_id_t id, float value)
             || (id == PARAM_MASTER_GAIN))
     {
         param_registry_control_shadow_set(0U, id, clamped);
-        if(param_registry_submit_audio_value(
-            id, 0U, clamped, LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)==0U)
+        float command_value = clamped;
+        if ((param_registry_prepare_global_audio_command(
+                id, clamped, &command_value) == 0U)
+                || (param_registry_submit_audio_value(
+                    id, 0U, command_value,
+                    LIVE_PARAMETER_EVENT_SCOPE_GLOBAL) == 0U))
         {
             return;
         }

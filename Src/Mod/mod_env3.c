@@ -8,6 +8,7 @@
 #include "Audio/env_adsr.h"
 #include "Core/track_sound_state.h"
 #include "Core/entity_topology.h"
+#include "Audio/audio_modulation_projection.h"
 #include "Param/param_filter.h"
 #include "Seq/seq_types.h"
 #include "Storage/memory_layout.h"
@@ -52,6 +53,27 @@ static uint8_t g_mod_env3_audio_initialized;
 
 static const track_mod_env3_state_t *mod_env3_track_settings_const(uint8_t track);
 
+/* All public ENV3 entry points accept an entity ID.  Runtime state is owned
+ * by the modulation owner, not by a GROUP child lane. */
+static uint8_t mod_env3_control_resolve_owner(uint8_t track, uint8_t *out_owner)
+{
+    brick_entity_id_t owner = track;
+    if ((out_owner == NULL)
+            || (track >= SEQ_TRACK_COUNT)
+            || (entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+    *out_owner = (uint8_t)owner;
+    return 1U;
+}
+
+static uint8_t mod_env3_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
+{
+    return audio_modulation_projection_audio_resolve_owner(track, out_owner);
+}
+
 static void mod_env3_audio_apply_config(uint8_t track,
                                         const track_mod_env3_state_t *config,
                                         float retrigger_hard)
@@ -66,9 +88,10 @@ static void mod_env3_audio_apply_config(uint8_t track,
 
 void mod_env3_audio_apply_retrigger(uint8_t track, float value)
 {
-    if (track < SEQ_TRACK_COUNT)
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) != 0U)
     {
-        g_mod_env3_audio_retrigger[track] = (value >= 0.5f) ? 1.0f : 0.0f;
+        g_mod_env3_audio_retrigger[owner] = (value >= 0.5f) ? 1.0f : 0.0f;
     }
 }
 
@@ -119,10 +142,8 @@ static const track_mod_env3_state_t *mod_env3_track_settings_const(uint8_t track
 
 void mod_env3_control_publish_snapshot_track(uint8_t track, uint8_t reset_runtime)
 {
-    brick_entity_id_t owner = track;
-    if ((track >= SEQ_TRACK_COUNT)
-            || (entity_topology_mod_owner(track, &owner) == 0U)
-            || (owner >= SEQ_TRACK_COUNT))
+    uint8_t owner = 0U;
+    if (mod_env3_control_resolve_owner(track, &owner) == 0U)
     {
         return;
     }
@@ -295,16 +316,16 @@ static uint8_t mod_env3_write_param(track_mod_env3_state_t *s, mod_env3_param_t 
 uint8_t mod_env3_control_set_track_param(uint8_t track, mod_env3_param_t param, float value)
 {
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_control_resolve_owner(track, &owner) == 0U) return 0U;
     return mod_env3_write_param(mod_env3_track_settings(owner), param, value);
 }
 
 uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, float value)
 {
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     if (mod_env3_write_param(&g_mod_env3_audio_config[owner], param, value) == 0U) return 0U;
     mod_env3_apply_settings(owner);
     return 1U;
@@ -317,8 +338,8 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_control_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     const track_mod_env3_state_t *const s = mod_env3_track_settings_const(track);
     if (s == NULL)
@@ -339,8 +360,8 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
 uint8_t mod_env3_control_set_track_retrigger_hard(uint8_t track, float value)
 {
     if (track >= SEQ_TRACK_COUNT) return 0U;
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_control_resolve_owner(track, &owner) == 0U) return 0U;
     track_sound_state_t *const sound = track_sound_state_get(owner);
     if (sound == NULL) return 0U;
     sound->env_retrig_mod = (value >= 0.5f) ? 1.0f : 0.0f;
@@ -354,8 +375,8 @@ uint8_t mod_env3_get_track_retrigger_hard(uint8_t track, float *out_value)
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_control_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     const track_sound_state_t *const sound = track_sound_state_get_const(track);
     if (sound == NULL)
@@ -374,8 +395,8 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
     if (rt->temp_valid == 0U)
@@ -398,27 +419,30 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
     return 1U;
 }
 
-void mod_env3_clear_track_param_temp(uint8_t track, mod_env3_param_t param)
+uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t param)
 {
     (void)param;
     if (track >= SEQ_TRACK_COUNT)
     {
-        return;
+        return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     g_mod_env3_runtime[track].temp_valid = 0U;
     mod_env3_apply_settings(track);
+    return 1U;
 }
 
 void mod_env3_note_on(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {
         return;
     }
+    track = owner;
 
     mod_env3_apply_settings(track);
     if (g_mod_env3_runtime[track].held_notes < 255U)
@@ -431,10 +455,12 @@ void mod_env3_note_on(uint8_t track)
 
 void mod_env3_note_off(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {
         return;
     }
+    track = owner;
 
     if (g_mod_env3_runtime[track].held_notes > 0U)
     {
@@ -446,23 +472,14 @@ void mod_env3_note_off(uint8_t track)
     }
 }
 
-void mod_env3_all_notes_off(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    g_mod_env3_runtime[track].held_notes = 0U;
-    env_adsr_gate_off(&g_mod_env3_runtime[track].env);
-}
-
 float mod_env3_process_track(uint8_t track, uint32_t elapsed_frames)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {
         return 0.0f;
     }
+    track = owner;
 
     mod_env3_apply_settings(track);
     const int16_t value = env_adsr_value(&g_mod_env3_runtime[track].env);

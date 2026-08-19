@@ -1409,7 +1409,16 @@ void brick6_stack_runtime_process_commands_from_audio(void)
         brick6_stack_runtime_all_notes_off(instance_id);
     }
 
-    for (;;)
+    /* Snapshot the ring occupancy.  Commands published after this point stay
+     * FIFO-ordered in the queue and are handled by the next audio pass. */
+    uint16_t command_budget = (uint8_t)(g_stack_command_head
+                                        - g_stack_command_tail);
+    if (command_budget > (STACK_COMMAND_QUEUE_CAP - 1U))
+    {
+        command_budget = STACK_COMMAND_QUEUE_CAP - 1U;
+    }
+
+    while (command_budget != 0U)
     {
         const uint32_t primask = brick6_stack_enter_critical();
         if (g_stack_command_tail == g_stack_command_head)
@@ -1422,6 +1431,7 @@ void brick6_stack_runtime_process_commands_from_audio(void)
         const brick6_stack_runtime_command_t command = g_stack_command_queue[tail];
         g_stack_command_tail = (uint8_t)((tail + 1U) % STACK_COMMAND_QUEUE_CAP);
         brick6_stack_exit_critical(primask);
+        --command_budget;
 
         switch ((brick6_stack_runtime_command_type_t)command.type)
         {

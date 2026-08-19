@@ -15,9 +15,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1299:16:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:154:16:ui_param_step_value_find	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:998:16:ui_param_resolve_edit_bounds	448	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:962:16:ui_param_track_accepts_relative_param	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1711:14:ui_param_apply_delta_value	448	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1711:14:ui_param_apply_delta_value	456	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1337:16:ui_param_set_track_value	864	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1780:16:ui_param_apply_relative_delta_to_other_tracks	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1788:16:ui_param_apply_relative_delta_to_other_tracks	72	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:239:6:ui_param_publish_encoder_binding	64	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:282:9:ui_param_get_audio_owned_command_value	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:289:9:ui_param_accept_audio_owned_command	8	static
@@ -37,9 +37,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:870:6:ui
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:874:9:ui_param_get_active_bank_param	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:919:6:ui_param_seq_plock_feedback_frame_begin	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1157:7:ui_param_get_active_track_display_value	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2028:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2078:9:ui_param_try_get_seq_plock_feedback	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2104:9:ui_param_handle_encoder_with_context	328	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2097:6:ui_param_handle_encoder	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2215:9:ui_param_resolve_encoder_detent	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2261:9:ui_param_resolve_encoder_detent_from_binding	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2036:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2086:9:ui_param_try_get_seq_plock_feedback	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2112:9:ui_param_handle_encoder_with_context	328	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2105:6:ui_param_handle_encoder	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2223:9:ui_param_resolve_encoder_detent	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:2269:9:ui_param_resolve_encoder_detent_from_binding	72	static

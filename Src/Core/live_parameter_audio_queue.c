@@ -347,9 +347,13 @@ uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
 uint16_t live_parameter_audio_queue_consume_due(uint64_t now)
 {
     const uint32_t primask = live_parameter_audio_enter_critical();
+    /* The schedule is CONTROL-fed.  Consume at most its entry occupancy so
+     * concurrent publications cannot extend the AUDIO deadline. */
     uint16_t consumed = 0U;
+    uint16_t pending = g_live_parameter_audio_scheduled_count;
 
-    while ((g_live_parameter_audio_scheduled_count != 0U)
+    while ((pending != 0U)
+           && (g_live_parameter_audio_scheduled_count != 0U)
            && (g_live_parameter_audio_scheduled[0].effective_sample_time <= now))
     {
         uint8_t group_count = 1U;
@@ -362,6 +366,8 @@ uint16_t live_parameter_audio_queue_consume_due(uint64_t now)
             if ((group_count == 0U) || (group_count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
                 group_count = 1U;
             if (((uint16_t)group_count > g_live_parameter_audio_scheduled_count))
+                break;
+            if (((uint16_t)group_count > pending))
                 break;
             for (uint8_t i = 0U; i < group_count; ++i)
             {
@@ -396,6 +402,7 @@ uint16_t live_parameter_audio_queue_consume_due(uint64_t now)
 
         g_live_parameter_audio_scheduled_count =
             (uint16_t)(g_live_parameter_audio_scheduled_count - group_count);
+        pending = (uint16_t)(pending - group_count);
         for (uint16_t index = 0U;
              index < g_live_parameter_audio_scheduled_count;
              ++index)

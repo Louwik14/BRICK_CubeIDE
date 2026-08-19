@@ -1,5 +1,4 @@
 #include "Core/brick6_wave_runtime.h"
-#include "Core/project_control.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -620,31 +619,17 @@ void brick6_wave_runtime_reset_instance(uint8_t instance_id)
     wave_reset_instance(wave_get_instance_mut(instance_id));
 }
 
-void brick6_wave_runtime_set_osc_table_global(uint8_t instance_id, uint8_t osc, uint16_t global_slot)
+void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot)
 {
-    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
-    if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT))
-    {
-        return;
-    }
-    brick6_wave_runtime_osc_t *const target = &instance->osc[osc];
-    const uint16_t previous_slot = target->table_wavetable_slot;
-    const uint32_t previous_generation = target->table_generation;
-    uint16_t runtime_slot=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    (void)project_control_resolve_wavetable_runtime(global_slot,&runtime_slot);
-    target->table_global_slot = runtime_slot;
-    wave_resolve_table(target);
-    if ((target->table_wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-            && ((target->table_wavetable_slot != previous_slot)
-                || (target->table_generation != previous_generation)))
-    {
-        wave_snap_pos(target);
-    }
-    if ((target->table_wavetable_slot != previous_slot)
-            || (target->table_generation != previous_generation)) wave_touch_config(instance);
+    const wavetable_slot_t *const table = wavetable_pool_get_slot(wavetable_slot);
+    brick6_wave_runtime_set_osc_table_wavetable_generation(
+        instance_id, osc, wavetable_slot,
+        (table != NULL) ? table->generation : 0U);
 }
 
-void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot)
+void brick6_wave_runtime_set_osc_table_wavetable_generation(
+    uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot,
+    uint32_t generation)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT))
@@ -662,10 +647,11 @@ void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t os
             && (table->state == WAVETABLE_SLOT_READY)
             && (table->data != NULL)
             && (table->frame_count != 0U)
-            && (table->frame_sample_count == WAVETABLE_FRAME_SAMPLE_COUNT))
+            && (table->frame_sample_count == WAVETABLE_FRAME_SAMPLE_COUNT)
+            && (table->generation == generation))
     {
         target->table_wavetable_slot = wavetable_slot;
-        target->table_generation = table->generation;
+        target->table_generation = generation;
         (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_WAVETABLE,
                                                  wavetable_slot,
                                                  &target->table_global_slot);

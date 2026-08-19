@@ -183,6 +183,7 @@ void track_tone_sound_state_init(void);
 void track_tone_sound_state_make_default(track_tone_sound_state_t *out_state);
 track_tone_sound_state_t *track_tone_sound_state_get(uint8_t track);
 const track_tone_sound_state_t *track_tone_sound_state_get_const(uint8_t track);
+uint8_t track_tone_sound_state_md_slot_count(uint8_t track);
 
 #ifdef __cplusplus
 }

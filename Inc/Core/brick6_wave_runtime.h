@@ -73,8 +73,10 @@ typedef struct
 void brick6_wave_runtime_init(void);
 void brick6_wave_runtime_reset_instance(uint8_t instance_id);
 
-void brick6_wave_runtime_set_osc_table_global(uint8_t instance_id, uint8_t osc, uint16_t global_slot);
 void brick6_wave_runtime_set_osc_table_wavetable(uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot);
+void brick6_wave_runtime_set_osc_table_wavetable_generation(
+    uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot,
+    uint32_t generation);
 void brick6_wave_runtime_set_osc_level(uint8_t instance_id, uint8_t osc, float level);
 void brick6_wave_runtime_set_osc_tune(uint8_t instance_id, uint8_t osc, float semitones);
 void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos);

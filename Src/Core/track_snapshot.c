@@ -92,7 +92,6 @@ static void track_snapshot_runtime_quiesce_engine(uint8_t track)
 
     note_fx_pipeline_reset_runtime_overrides(track);
     keyboard_engine_all_notes_off_for_track(track);
-    mod_lfo_v1_all_notes_off(track);
     param_registry_clear_track_runtime_state(track);
 }
 
@@ -109,7 +108,6 @@ static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
             SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE) == 0U)
         return;
     keyboard_engine_all_notes_off_for_track(track);
-    mod_lfo_v1_all_notes_off(track);
     param_registry_clear_track_runtime_state(track);
 }
 
@@ -306,7 +304,6 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
 
     track_runtime_refresh_track(track);
     mod_lfo_v1_publish_control_snapshot_track(track);
-    mod_env3_control_publish_snapshot_track(track, 1U);
     mod_matrix_publish_control_snapshot_track(track);
 
     live_parameter_audio_bulk_t bulk = {
@@ -402,6 +399,7 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
         }
     }
     param_registry_batch_end();
+    mod_env3_control_publish_snapshot_track(track, 1U);
     return 1U;
 }
 
@@ -766,6 +764,15 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     apply_ok = 1U;
 
 restore_done:
+    if (apply_ok == 0U)
+    {
+        /* The failure path still resets ENV3 through its AUDIO mailbox. */
+        for (uint8_t i = 0U; i < restore_track_count; ++i)
+        {
+            mod_env3_control_publish_snapshot_track(
+                (uint8_t)restore_tracks[i], 1U);
+        }
+    }
     for (uint8_t i = 0U; i < restore_track_count; ++i)
     {
         track_snapshot_runtime_neutralize_note_state((uint8_t)restore_tracks[i]);

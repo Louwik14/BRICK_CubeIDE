@@ -39,6 +39,12 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
                                                ui_track_family_t family,
                                                ui_track_type_t type,
                                                const track_audio_runtime_ctx_t *ctx);
+uint8_t mod_destination_catalog_supported_audio(uint8_t track,
+                                                param_id_t dest,
+                                                ui_track_family_t family,
+                                                ui_track_type_t type,
+                                                const track_audio_runtime_ctx_t *ctx,
+                                                uint8_t drum_md_slot_count);
 uint8_t mod_destination_catalog_apply_poly_voice_rt(uint8_t track,
                                                     uint8_t voice_slot,
                                                     param_id_t dest,

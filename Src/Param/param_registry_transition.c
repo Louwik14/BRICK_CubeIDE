@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Core/live_clock.h"
+#include "Audio/audio_transition_snapshot.h"
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/track_runtime.h"
@@ -19,6 +20,18 @@
 
 static volatile uint8_t g_param_registry_track_structure_transition_depth = 0U;
 static volatile uint8_t g_param_registry_track_structure_transition_track_depth[SEQ_LANE_CAPACITY];
+
+static void param_registry_publish_transition_audio_snapshot(void)
+{
+    uint8_t track_active[SEQ_LANE_CAPACITY];
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        track_active[track] =
+            (g_param_registry_track_structure_transition_track_depth[track] != 0U)
+                ? 1U : 0U;
+    audio_transition_snapshot_publish(
+        (g_param_registry_track_structure_transition_depth != 0U) ? 1U : 0U,
+        track_active);
+}
 
 static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
                                                                  uint8_t track,
@@ -89,6 +102,7 @@ static void param_registry_track_structure_transition_begin_global(void)
     {
         g_param_registry_track_structure_transition_depth++;
     }
+    param_registry_publish_transition_audio_snapshot();
 }
 
 static void param_registry_track_structure_transition_end_global(void)
@@ -97,6 +111,7 @@ static void param_registry_track_structure_transition_end_global(void)
     {
         g_param_registry_track_structure_transition_depth--;
     }
+    param_registry_publish_transition_audio_snapshot();
 }
 
 uint8_t param_registry_track_structure_transition_is_active(void)
@@ -143,6 +158,7 @@ static void param_registry_track_structure_transition_begin_track(uint8_t track)
     {
         g_param_registry_track_structure_transition_track_depth[track]++;
     }
+    param_registry_publish_transition_audio_snapshot();
 }
 
 static void param_registry_track_structure_transition_end_track(uint8_t track)
@@ -156,6 +172,7 @@ static void param_registry_track_structure_transition_end_track(uint8_t track)
     {
         g_param_registry_track_structure_transition_track_depth[track]--;
     }
+    param_registry_publish_transition_audio_snapshot();
 }
 
 static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)

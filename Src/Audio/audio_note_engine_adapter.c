@@ -117,13 +117,30 @@ uint8_t audio_note_engine_adapter_ctx_supports_vca_gate(
 {
     if (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
         return 0U;
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+    return ctx->supports_vca_gate;
+}
+
+uint8_t audio_note_engine_adapter_ctx_filter_target(
+    const track_audio_runtime_ctx_t *ctx,
+    uint8_t *out_track)
+{
+    if ((ctx == NULL) || (out_track == NULL)
+            || (ctx->has_filter_target == 0U))
         return 0U;
-    return (uint8_t)((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL));
+    *out_track = ctx->filter_track_id;
+    return 1U;
+}
+
+uint8_t audio_note_engine_adapter_audio_midi_channel_zero_based(
+    const track_audio_runtime_ctx_t *ctx,
+    uint8_t *out_channel)
+{
+    if ((ctx == NULL) || (out_channel == NULL)
+            || (ctx->midi_channel_1_16 < 1U)
+            || (ctx->midi_channel_1_16 > 16U))
+        return 0U;
+    *out_channel = (uint8_t)(ctx->midi_channel_1_16 - 1U);
+    return 1U;
 }
 
 uint8_t audio_note_engine_adapter_resolve(
@@ -147,13 +164,9 @@ uint8_t audio_note_engine_adapter_resolve(
         .type = (track_runtime_type_t)ctx->type,
         .has_mix_target = (current->mix_track_id < MIXER_MAX_TRACKS) ? 1U : 0U,
         .mix_track_id = current->mix_track_id,
-        .has_filter_target = ((ctx->flags & 1U) != 0U)
-            && (current->mix_track_id < MIXER_MAX_TRACKS),
-        .filter_track_id = current->mix_track_id,
-        .supports_vca_gate = (uint8_t)(
-            (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))
+        .has_filter_target = ctx->has_filter_target,
+        .filter_track_id = ctx->filter_track_id,
+        .supports_vca_gate = ctx->supports_vca_gate
     };
     return 1U;
 }
@@ -431,6 +444,8 @@ void audio_note_engine_adapter_install_intent(
 
     (void)synth_polyphony_set_track_active(entity_id, 0U, 0U);
     *ctx = (track_audio_runtime_ctx_t){
+        .midi_channel_1_16 = event->velocity,
+        .midi_source = (uint8_t)event->param_value,
         .family = (uint8_t)family,
         .type = (uint8_t)type,
         .flags = event->flags
@@ -530,6 +545,17 @@ void audio_note_engine_adapter_install_intent(
     }
 
     ctx->audio_binding = installed;
+    ctx->has_filter_target = (uint8_t)((installed.bind_state == TRACK_RUNTIME_BIND_BOUND)
+        && ((ctx->flags & AUDIO_RUNTIME_FLAG_CAN_FILTER) != 0U)
+        && (installed.mix_track_id < MIXER_MAX_TRACKS));
+    ctx->filter_track_id = installed.mix_track_id;
+    ctx->supports_vca_gate = (uint8_t)((installed.bind_state == TRACK_RUNTIME_BIND_BOUND)
+        && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+        && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)));
     g_audio_installed_generation[entity_id] = installed.generation;
     audio_mod_matrix_rebuild_track(entity_id);
     audio_note_engine_adapter_publish_snapshots();

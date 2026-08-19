@@ -35,6 +35,9 @@
 #include "Audio/audio_note_admission.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Audio/audio_modulation_projection.h"
+#include "Core/audio_wave_table_projection.h"
+#include "Core/audio_input_ownership_projection.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Audio/audio_mod_matrix.h"
@@ -100,10 +103,15 @@ static uint64_t g_audio_sample_clock;
 static void audio_apply_control_events_at_sample(uint64_t sample_time)
 {
     control_audio_event_t event;
-    while ((control_audio_queue_audio_peek(&event) != 0U)
+    /* Bound this pass to the queue occupancy observed at entry.  CONTROL
+     * publications racing with the drain remain queued for the next pass. */
+    uint16_t pending = control_audio_queue_audio_pending_count();
+    while ((pending != 0U)
+            && (control_audio_queue_audio_peek(&event) != 0U)
             && (event.due_sample <= sample_time))
     {
         (void)control_audio_queue_audio_pop();
+        --pending;
         if (event.kind <= (uint8_t)CONTROL_AUDIO_EVENT_NOTE_ON)
         {
             (void)audio_note_admission_apply(&event);
@@ -173,6 +181,8 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
     while (cursor < frames)
     {
         const uint64_t now = sample_time + cursor;
+        audio_modulation_projection_audio_consume();
+        audio_wave_table_projection_audio_consume();
         mod_lfo_v1_audio_consume_snapshots();
         mod_env3_audio_consume_snapshots();
         audio_apply_control_events_at_sample(now);
@@ -298,6 +308,9 @@ void audio_boot_init_binding_io(void)
     control_audio_queue_init();
     audio_note_admission_init();
     audio_note_engine_adapter_init();
+    audio_input_ownership_projection_audio_init();
+    audio_wave_table_projection_audio_init();
+    audio_modulation_projection_audio_init();
     audio_mod_matrix_init();
     audio_fx_runtime_init();
     audio_waveform_capture_init();

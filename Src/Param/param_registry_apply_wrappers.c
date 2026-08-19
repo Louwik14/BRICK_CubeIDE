@@ -1,13 +1,8 @@
 #include "Param/param_registry_apply_bindings.h"
 #include "Param/param_registry.h"
 #include "Core/track_state.h"
-#include "audio_float.h"
 #include "Audio/metronome_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "fx_comp_lab.h"
-#include "fx_pool.h"
-#include "mixer.h"
-#include "Audio/fx_modfx_global.h"
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -27,124 +22,13 @@ static float clamp_value(float v, float lo, float hi)
     return v;
 }
 
-static int8_t control_float_to_slot(float v)
-{
-    if (v < 0.0f)
-        return -1;
-    return (int8_t)v;
-}
-
-static uint8_t control_float_to_ui127(float v)
-{
-    if (v <= 0.0f)
-        return 0U;
-    if (v >= 1.0f)
-        return 127U;
-    return (uint8_t)(v * 127.0f + 0.5f);
-}
-
 static void apply_tone_live_track(param_id_t id, float value)
 {
     /* Explicit apply seam: live UI edits route to the track-aware mutation surface. */
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
 }
 
-static uint32_t delay_time_get_bpm_milli(void)
-{
-    uint32_t bpm_milli = 120000U;
-    if ((seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL)
-        && (seq_runtime_is_external_tempo_valid() != 0U))
-    {
-        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
-    }
-    else
-    {
-        bpm_milli = seq_runtime_get_tempo_bpm_milli();
-    }
-
-    if (bpm_milli < 40000U)
-        return 40000U;
-    if (bpm_milli > 300000U)
-        return 300000U;
-    return bpm_milli;
-}
-
-static float delay_time_sync_index_to_seconds(float v)
-{
-    static const float beats[] = {
-        0.125f,      /* 1/32 */
-        0.1666667f,  /* 1/16T */
-        0.25f,       /* 1/16 */
-        0.3333333f,  /* 1/8T */
-        0.5f,        /* 1/8 */
-        0.6666667f,  /* 1/4T */
-        0.75f,       /* 1/8D */
-        1.0f,        /* 1/4 */
-        1.3333334f,  /* 1/2T */
-        1.5f,        /* 1/4D */
-        2.0f,        /* 1/2 */
-        3.0f,        /* 1D */
-        4.0f         /* 1 bar */
-    };
-    const uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 12.0f) + 0.5f);
-    return beats[index] * 60000.0f / (float)delay_time_get_bpm_milli();
-}
-
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
-
-void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
-void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
-void apply_modfx_model(float v) { fx_modfx_global_set_model((uint8_t)(clamp_value(v, 0.0f, 8.0f) + 0.5f)); }
-static float modfx_control_unit(float v) { return clamp_value(v,0.0f,127.0f)*(1.0f/127.0f); }
-static float modfx_daisy_rate(float v){v=clamp_value(v,0.0f,127.0f);return(v<=61.0f)?(.01f*powf(30.0f,v/61.0f)):(.3f*powf(40.0f,(v-61.0f)/66.0f));}
-static float modfx_daisy_depth(float v){v=clamp_value(v,0.0f,127.0f);return(v<=123.0f)?(.9f*v/123.0f):(.9f+.03f*(v-123.0f)/4.0f);}
-static float modfx_daisy_feedback(float v){v=clamp_value(v,0.0f,127.0f);return(v<=25.0f)?(.2f*v/25.0f):(.2f+.8f*(v-25.0f)/102.0f);}
-static float modfx_daisy_delay(float v){v=clamp_value(v,0.0f,127.0f);return(v<=95.0f)?(.75f*v/95.0f):(.75f+.25f*(v-95.0f)/32.0f);}
-void apply_modfx_rate(float v)
-{
-    const float u=modfx_control_unit(v);
-    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
-    /* Daisy has no host UI range upstream. Keep BRICK's proven musical
-     * endpoints but use a logarithmic Hz law so its 0.3 Hz Init default is
-     * represented accurately and the native frequency setter receives Hz. */
-    const float hz=(model==5U)?modfx_daisy_rate(v):(.01f+11.99f*u);
-    fx_modfx_global_set_rate(hz);
-}
-void apply_modfx_depth(float v)
-{
-    const float u=modfx_control_unit(v);
-    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
-    if(model==7U)
-    {
-        const unsigned voices=1U+(unsigned)(u*7.0f+0.5f);
-        fx_modfx_global_set_depth((float)(voices-1U)*(1.0f/7.0f));
-    }
-    else fx_modfx_global_set_depth((model==5U)?modfx_daisy_depth(v):u);
-}
-void apply_modfx_feedback(float v) { fx_modfx_global_set_feedback(((uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f)==5U)?modfx_daisy_feedback(v):modfx_control_unit(v)); }
-void apply_modfx_offset(float v) { fx_modfx_global_set_offset(((uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f)==5U)?modfx_daisy_delay(v):modfx_control_unit(v)); }
-
-void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_room_size(float v) { mixer_set_reverb_room_size(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_damping(float v) { mixer_set_reverb_damping(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_width(float v) { mixer_set_reverb_width(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_reverb_delays(float v) { mixer_set_reverb_delays((v >= 0.5f) ? 1U : 0U); }
-void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
-void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
-void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }
-void apply_mix_delay_time_r(float v) { mixer_set_delay_time_r(delay_time_sync_index_to_seconds(v)); }
-void apply_mix_delay_feedback(float v) { mixer_set_delay_feedback(clamp_value(v, 0.0f, 1.20f)); }
-void apply_mix_delay_spectral_position(float v) { mixer_set_delay_spectral_position(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_spectral_width(float v) { mixer_set_delay_spectral_width(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_pingpong(float v) { mixer_set_delay_pingpong((v >= 0.5f) ? 1U : 0U); }
-void apply_mix_delay_rev(float v) { mixer_set_delay_reverb_send(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_width(float v) { mixer_set_delay_width(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_feedback_width(float v) { mixer_set_delay_feedback_width(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_mod(float v) { mixer_set_delay_mod_depth(clamp_value(v, 0.0f, 1.0f)); }
-void apply_mix_delay_mod_rate(float v) { mixer_set_delay_mod_rate(clamp_value(v, 0.01f, 12.0f)); }
-void apply_mix_delay_vol(float v) { mixer_set_delay_volume(clamp_value(v, 0.0f, 1.0f)); }
 
 void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
@@ -177,15 +61,6 @@ void apply_midi_cc3_1(float v) { apply_tone_live_track(PARAM_MIDI_CC3_1, v); }
 void apply_midi_cc3_2(float v) { apply_tone_live_track(PARAM_MIDI_CC3_2, v); }
 void apply_midi_cc3_3(float v) { apply_tone_live_track(PARAM_MIDI_CC3_3, v); }
 void apply_midi_cc3_4(float v) { apply_tone_live_track(PARAM_MIDI_CC3_4, v); }
-
-void apply_eq_low_db(float v) { audio_float_set_dj_eq_low_db(v); }
-void apply_eq_mid_db(float v) { audio_float_set_dj_eq_mid_db(v); }
-void apply_eq_high_db(float v) { audio_float_set_dj_eq_high_db(v); }
-
-void apply_sat_tone(float v) { audio_float_set_saturation_tone_ui(control_float_to_ui127(v)); }
-void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control_float_to_ui127(v)); }
-void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
-void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
 
 void apply_mod_matrix_slot(float v)
 {
@@ -336,8 +211,8 @@ void apply_cfg_tempo(float v)
     /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     bpm_milli = seq_runtime_get_tempo_bpm_milli();
     param_store_set_active(PARAM_CFG_TEMPO, (float)bpm_milli / 1000.0f);
-    apply_mix_delay_time(param_get(PARAM_MIX_DELAY_TIME));
-    apply_mix_delay_time_r(param_get(PARAM_MIX_DELAY_TIME_R));
+    param_set(PARAM_MIX_DELAY_TIME, param_get(PARAM_MIX_DELAY_TIME));
+    param_set(PARAM_MIX_DELAY_TIME_R, param_get(PARAM_MIX_DELAY_TIME_R));
 }
 
 void apply_cfg_sync(float v)
@@ -372,8 +247,8 @@ void apply_cfg_sync(float v)
             break;
     }
     param_store_set_active(PARAM_CFG_SYNC, (float)synced_mode);
-    apply_mix_delay_time(param_get(PARAM_MIX_DELAY_TIME));
-    apply_mix_delay_time_r(param_get(PARAM_MIX_DELAY_TIME_R));
+    param_set(PARAM_MIX_DELAY_TIME, param_get(PARAM_MIX_DELAY_TIME));
+    param_set(PARAM_MIX_DELAY_TIME_R, param_get(PARAM_MIX_DELAY_TIME_R));
 }
 
 void apply_cfg_rec_len(float v)
@@ -442,53 +317,3 @@ void apply_kbd_omnichord(float v) { keyboard_runtime_set_omnichord(v >= 0.5f); }
 void apply_kbd_note_order(float v) { keyboard_runtime_set_note_order((v >= 0.5f) ? NOTE_ORDER_FIFTHS : NOTE_ORDER_NATURAL); }
 void apply_kbd_chord_override(float v) { keyboard_runtime_set_chord_override(v >= 0.5f); }
 void apply_kbd_mono_last(float v) { keyboard_runtime_set_mono_last(v >= 0.5f); }
-
-void apply_master_gain(float v) { (void)v; }
-void apply_post_gain(float v) { audio_float_set_postgain(v); }
-void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
-
-void apply_comp_model(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_model(comp, (uint8_t)(v + 0.5f));
-}
-void apply_comp_detect(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_detector_rms(comp, (v >= 0.5f) ? 1U : 0U);
-}
-void apply_comp_knee(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_knee_db(comp, v);
-}
-void apply_comp_deluge_sat(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_deluge_saturation(comp, (v >= 0.5f) ? 1U : 0U);
-}
-
-void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
-void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
-void apply_bus_comp_attack_index(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_attack_s(comp, v);
-}
-void apply_bus_comp_release_index(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_release_s(comp, v);
-}
-void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
-void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
-void apply_bus_comp_drywet(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_mix(comp, v);
-}
-void apply_bus_comp_hpf(float v)
-{
-    fx_comp_lab_t *comp = fx_comp_lab_get_instance();
-    if (comp != NULL) fx_comp_lab_set_sc_hpf_hz(comp, v);
-}

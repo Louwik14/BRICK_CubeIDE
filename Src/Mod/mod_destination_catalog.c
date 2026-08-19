@@ -5,7 +5,6 @@
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
-#include "Audio/md_model.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/synth_polyphony.h"
@@ -48,6 +47,7 @@ typedef struct
     uint8_t mix_track_id;
     uint8_t audio_routable;
     uint8_t supports_vca_gate;
+    uint8_t drum_md_slot_count;
 } mod_destination_context_view_t;
 
 typedef struct
@@ -933,7 +933,7 @@ static uint8_t mod_destination_apply_midi_cc_rt(uint8_t track,
         return 1U;
     }
 
-    if (param_backend_send_midi_cc(track, dest, (float)cc_value) == 0U)
+    if (param_backend_send_midi_cc_audio(ctx, dest, (float)cc_value) == 0U)
     {
         return 0U;
     }
@@ -1287,13 +1287,10 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 && (dest >= PARAM_DRUM_MD_P1)
                 && (dest <= PARAM_DRUM_MD_P8))
         {
-            const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
-            if (tone == NULL)
-            {
-                return 0U;
-            }
-            const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(tone->md.model));
-            return (uint8_t)((uint8_t)(dest - PARAM_DRUM_MD_P1) < profile->slot_count);
+            if (ctx->drum_md_slot_count != 0U)
+                return (uint8_t)((uint8_t)(dest - PARAM_DRUM_MD_P1)
+                                  < ctx->drum_md_slot_count);
+            return 0U;
         }
         if ((dest == PARAM_PRISM_EDIT)
                 || (dest == PARAM_PRISM_FINE)
@@ -1470,7 +1467,32 @@ uint8_t mod_destination_catalog_supported_fast(uint8_t track,
         .type = ctx->type,
         .mix_track_id = ctx->audio_binding.mix_track_id,
         .audio_routable = audio_note_engine_adapter_ctx_is_audio_routable(ctx),
-        .supports_vca_gate = audio_note_engine_adapter_ctx_supports_vca_gate(ctx)
+        .supports_vca_gate = audio_note_engine_adapter_ctx_supports_vca_gate(ctx),
+        .drum_md_slot_count = track_tone_sound_state_md_slot_count(track)
+    };
+    return mod_destination_catalog_supported_view(
+        track, dest, family, type, &view);
+}
+
+uint8_t mod_destination_catalog_supported_audio(uint8_t track,
+                                                param_id_t dest,
+                                                ui_track_family_t family,
+                                                ui_track_type_t type,
+                                                const track_audio_runtime_ctx_t *ctx,
+                                                uint8_t drum_md_slot_count)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+    const mod_destination_context_view_t view = {
+        .bind_state = ctx->audio_binding.bind_state,
+        .family = ctx->family,
+        .type = ctx->type,
+        .mix_track_id = ctx->audio_binding.mix_track_id,
+        .audio_routable = audio_note_engine_adapter_ctx_is_audio_routable(ctx),
+        .supports_vca_gate = audio_note_engine_adapter_ctx_supports_vca_gate(ctx),
+        .drum_md_slot_count = drum_md_slot_count
     };
     return mod_destination_catalog_supported_view(
         track, dest, family, type, &view);
@@ -1526,7 +1548,8 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
             (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
             && ((snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                 || (snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                || (snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
+                || (snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))),
+        .drum_md_slot_count = track_tone_sound_state_md_slot_count(track)
     };
     mod_destination_cache_t *const cache = &g_mod_destination_cache[track];
 

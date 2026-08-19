@@ -4,6 +4,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_runtime.h"
 #include "Core/track_sound_state.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_lfo_v1.h"
 #include "mixer.h"
 #include <math.h>
@@ -338,6 +339,27 @@ uint8_t param_filter_apply_value(param_id_t id,
     (void)resync_lfo_base;
 
     return 1U;
+}
+
+uint8_t param_filter_apply_value_audio(param_id_t id,
+                                       uint8_t track,
+                                       float clamped)
+{
+    const track_audio_runtime_ctx_t *const ctx =
+        audio_note_engine_adapter_audio_ctx(track);
+    uint8_t target_track = 0U;
+    if ((audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
+            || (audio_note_engine_adapter_ctx_filter_target(
+                    ctx, &target_track) == 0U))
+    {
+        return 0U;
+    }
+
+    param_filter_apply_target_t target = {
+        .target_track = target_track,
+        .state = NULL
+    };
+    return param_filter_apply_runtime(id, clamped, &target);
 }
 
 void param_filter_sync_ui_for_active_track(void)

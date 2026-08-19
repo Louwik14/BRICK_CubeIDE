@@ -113,6 +113,16 @@ uint8_t control_audio_queue_audio_pop(void)
     return 1U;
 }
 
+uint16_t control_audio_queue_audio_pending_count(void)
+{
+    const uint16_t head = g_control_audio_queue.head;
+    const uint16_t tail = g_control_audio_queue.tail;
+    __DMB();
+    return (head >= tail)
+        ? (uint16_t)(head - tail)
+        : (uint16_t)(CONTROL_AUDIO_QUEUE_CAPACITY - tail + head);
+}
+
 uint16_t control_audio_queue_audio_frames_until_due(uint64_t sample_now,
                                                     uint16_t max_frames)
 {

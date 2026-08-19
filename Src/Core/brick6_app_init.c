@@ -139,10 +139,13 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     param_store_init();
-    brick6_boot_apply_param_defaults();
     seq_runtime_init();
     track_mute_init();
     ui_core_init();
+    param_set(PARAM_MASTER_GAIN, audio_boot.master_gain);
+    param_set(PARAM_POST_GAIN, audio_boot.postgain);
+    param_set(PARAM_OUTPUT_COMP, audio_boot.output_compensation);
+    brick6_boot_apply_param_defaults();
     project_control_init();
     pattern_live_init();
     patch_product_init();

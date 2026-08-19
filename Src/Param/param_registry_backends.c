@@ -10,6 +10,7 @@
 #include "Core/project_control.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/audio_wave_table_projection.h"
 #include "Core/track_tone_sound_state.h"
 #include "Audio/md_model.h"
 #include "Core/track_sound_state.h"
@@ -810,7 +811,8 @@ static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, u
 
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
-    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    track_tone_sound_state_t *const state = (update_base_state != 0U)
+        ? track_tone_sound_state_get(track) : NULL;
     const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
     if ((ctx == NULL)
             || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -874,12 +876,16 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         case 0U:
         {
             const uint16_t logical_slot = (uint16_t)(param_backend_clamp_value(value, 0.0f, (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
-            if(project_control_has_wavetable(logical_slot)==0U)return 0U;
+            if (update_base_state != 0U)
+            {
+                if (audio_wave_table_projection_publish_track(
+                        track, osc, logical_slot) == 0U)
+                    return 0U;
+            }
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->wave.table[osc] = (float)logical_slot;
             }
-            brick6_wave_runtime_set_osc_table_global(ctx->audio_binding.instance_id, osc, logical_slot);
             return 1U;
         }
         case 1U:
@@ -1000,6 +1006,30 @@ uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
         midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
     }
 
+    return 1U;
+}
+
+uint8_t param_backend_send_midi_cc_audio(
+    const track_audio_runtime_ctx_t *ctx,
+    param_id_t id,
+    float value)
+{
+    if ((ctx == NULL) || (param_backend_is_midi_cc_id(id) == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t channel = 0U;
+    if (audio_note_engine_adapter_audio_midi_channel_zero_based(
+            ctx, &channel) == 0U)
+    {
+        return 0U;
+    }
+
+    midi_cc(MIDI_DEST_BOTH,
+            channel,
+            param_backend_midi_cc_number_from_id(id),
+            (uint8_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f));
     return 1U;
 }
 

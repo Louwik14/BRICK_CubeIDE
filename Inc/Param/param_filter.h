@@ -15,6 +15,9 @@ uint8_t param_filter_apply_value(param_id_t id,
                                  float clamped,
                                  uint8_t update_shadow_state,
                                  uint8_t resync_lfo_base);
+uint8_t param_filter_apply_value_audio(param_id_t id,
+                                       uint8_t track,
+                                       float clamped);
 void param_filter_sync_ui_for_active_track(void);
 
 float param_filter_ui127_to_attack_s(float v);

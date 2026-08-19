@@ -18,6 +18,27 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_MIX_SEND3:
         case PARAM_MIX_SEND0_FX:
         case PARAM_MIX_SEND1_FX:
+        case PARAM_BUS_COMP_THRESHOLD_DB:
+        case PARAM_BUS_COMP_RATIO:
+        case PARAM_BUS_COMP_ATTACK_INDEX:
+        case PARAM_BUS_COMP_RELEASE_INDEX:
+        case PARAM_BUS_COMP_MAKEUP_DB:
+        case PARAM_BUS_COMP_AUTO_MAKEUP:
+        case PARAM_BUS_COMP_DRYWET:
+        case PARAM_BUS_COMP_HPF_HZ:
+        case PARAM_EQ_LOW_DB:
+        case PARAM_EQ_MID_DB:
+        case PARAM_EQ_HIGH_DB:
+        case PARAM_SAT_TONE:
+        case PARAM_SAT_BIAS:
+        case PARAM_SAT_DRIVE:
+        case PARAM_SAT_MIX:
+        case PARAM_POST_GAIN:
+        case PARAM_OUTPUT_COMP:
+        case PARAM_COMP_MODEL:
+        case PARAM_COMP_DETECT:
+        case PARAM_COMP_KNEE_DB:
+        case PARAM_COMP_DELUGE_SAT:
         case PARAM_AUDIO_FX_P1:
         case PARAM_AUDIO_FX_P2:
         case PARAM_AUDIO_FX_P3:

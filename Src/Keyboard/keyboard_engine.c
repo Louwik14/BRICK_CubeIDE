@@ -151,7 +151,6 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
         .kind = (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ENTITY
     };
     (void)control_audio_queue_publish(&close_entity);
-    mod_lfo_v1_all_notes_off(track);
 }
 
 static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)

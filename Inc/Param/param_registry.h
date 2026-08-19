@@ -119,9 +119,11 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 /* Audio-owner track target path: updates the runtime backend and the
  * audio-authoritative track cache without UI/storage side effects. */
 uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value);
-/* Audio-owner target path: applies a global backend without touching the UI
- * parameter store from the audio IRQ. */
-uint8_t param_registry_apply_global_value_rt_fast(param_id_t id, float value);
+/* Control-side projection: converts a canonical global value into the
+ * complete command payload consumed by AUDIO. */
+uint8_t param_registry_prepare_global_audio_command(param_id_t id,
+                                                    float canonical_value,
+                                                    float *out_command_value);
 
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);

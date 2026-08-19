@@ -2,7 +2,9 @@
 
 #include <string.h>
 
+#include "Core/audio_modulation_projection.h"
 #include "Core/track_input_ownership.h"
+#include "Mod/mod_matrix.h"
 #include "UI/ui_track_catalog.h"
 
 static ui_track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
@@ -99,6 +101,8 @@ void track_state_init(void)
 
     g_track_state_global_revision = 1U;
     track_input_ownership_init(g_track_configs);
+    audio_modulation_projection_init();
+    audio_modulation_projection_publish();
 }
 
 const ui_track_config_t *track_state_get_configs(void)
@@ -203,6 +207,8 @@ bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
                              &next_config,
                              track_state_get_midi_channel(track),
                              track_state_get_midi_source(track));
+    audio_modulation_projection_publish();
+    mod_matrix_publish_control_snapshot_track(track);
     return true;
 }
 
@@ -251,6 +257,8 @@ bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
                              &next_config,
                              track_state_get_midi_channel(track),
                              track_state_get_midi_source(track));
+    audio_modulation_projection_publish();
+    mod_matrix_publish_control_snapshot_track(track);
     return true;
 }
 
@@ -449,6 +457,9 @@ bool track_state_apply_entity_bulk_with_inputs(
     {
         track_state_commit_entry(track, &next_configs[track], next_channels[track], next_sources[track]);
     }
+
+    audio_modulation_projection_publish();
+    mod_matrix_publish_control_snapshot_all();
 
     return true;
 }

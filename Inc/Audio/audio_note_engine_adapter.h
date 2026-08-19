@@ -9,6 +9,7 @@
 
 #define AUDIO_RUNTIME_FLAG_GROUP_MASTER (1U << 6)
 #define AUDIO_RUNTIME_FLAG_GROUP_CHILD  (1U << 7)
+#define AUDIO_RUNTIME_FLAG_CAN_FILTER   (1U << 0)
 
 typedef struct
 {
@@ -29,6 +30,9 @@ typedef struct track_audio_runtime_ctx_s
     uint8_t family;
     uint8_t type;
     uint8_t flags;
+    uint8_t has_filter_target;
+    uint8_t filter_track_id;
+    uint8_t supports_vca_gate;
 } track_audio_runtime_ctx_t;
 
 typedef struct
@@ -64,6 +68,12 @@ uint8_t audio_note_engine_adapter_ctx_is_audio_routable(
     const track_audio_runtime_ctx_t *ctx);
 uint8_t audio_note_engine_adapter_ctx_supports_vca_gate(
     const track_audio_runtime_ctx_t *ctx);
+uint8_t audio_note_engine_adapter_ctx_filter_target(
+    const track_audio_runtime_ctx_t *ctx,
+    uint8_t *out_track);
+uint8_t audio_note_engine_adapter_audio_midi_channel_zero_based(
+    const track_audio_runtime_ctx_t *ctx,
+    uint8_t *out_channel);
 
 uint8_t audio_note_engine_adapter_resolve(
     brick_entity_id_t entity_id,

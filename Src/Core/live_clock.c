@@ -103,19 +103,28 @@ bool live_clock_read_anchor(live_clock_anchor_t *out_anchor)
         return false;
     }
 
-    for (;;)
+    for (uint8_t attempt = 0U; attempt < 2U; ++attempt)
     {
         const uint32_t before = g_live_clock.sequence;
         __DMB();
         if ((before & 1U) != 0U)
             continue;
         const bool valid = (g_live_clock.valid != 0U);
+        live_clock_anchor_t candidate;
         if (valid)
-            *out_anchor = g_live_clock.value;
+            candidate = g_live_clock.value;
         __DMB();
         if (before == g_live_clock.sequence)
+        {
+            if (valid)
+                *out_anchor = candidate;
             return valid;
+        }
     }
+
+    /* The caller keeps its last coherent anchor and retries on the next
+     * control/audio scheduling opportunity. */
+    return false;
 }
 
 bool live_clock_read_audio_sample(uint64_t *out_audio_sample)

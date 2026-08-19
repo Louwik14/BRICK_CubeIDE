@@ -1,6 +1,7 @@
 #include "Mod/mod_matrix.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_modulation_projection.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -8,7 +9,9 @@
 
 #include "Audio/mixer.h"
 #include "Core/track_sound_state.h"
+#include "Core/track_tone_sound_state.h"
 #include "Core/entity_topology.h"
+#include "Core/track_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
@@ -85,6 +88,7 @@ typedef struct
 {
     track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT];
     uint8_t effective[MOD_MATRIX_SLOT_COUNT];
+    uint8_t drum_md_slot_count;
     float base_value[MOD_MATRIX_SLOT_COUNT];
     float min_value[MOD_MATRIX_SLOT_COUNT];
     float max_value[MOD_MATRIX_SLOT_COUNT];
@@ -354,10 +358,8 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
 {
     uint8_t target = 0U;
     param_id_t destination = PARAM_COUNT;
-    entity_topology_descriptor_t topology;
-    const uint8_t is_group_master = (uint8_t)(
-        (entity_topology_get(track, &topology) != 0U)
-        && (topology.role == ENTITY_ROLE_GROUP_MASTER));
+    const uint8_t is_group_master =
+        audio_modulation_projection_audio_is_group_master(track);
     if ((slot == NULL)
             || (slot->enabled == 0U)
             || (slot->source == (uint8_t)MOD_MATRIX_SOURCE_NONE)
@@ -399,7 +401,10 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
             {
                 return 0U;
             }
-            if (track_runtime_get_effective_param_status(track, PARAM_FILTER_ATTACK) != TRACK_RUNTIME_PARAM_ALLOWED)
+            if ((ctx == NULL)
+                    || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
+                    || ((ctx->flags & AUDIO_RUNTIME_FLAG_CAN_FILTER) == 0U)
+                    || (ctx->has_filter_target == 0U))
             {
                 return 0U;
             }
@@ -411,10 +416,11 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
 
     const track_audio_runtime_ctx_t *const target_ctx =
         audio_note_engine_adapter_audio_ctx(target);
-    return mod_destination_catalog_supported_fast(
+    return mod_destination_catalog_supported_audio(
         target, destination,
         mod_matrix_ui_family_from_ctx(target_ctx),
-        mod_matrix_ui_type_from_ctx(target_ctx), target_ctx);
+        mod_matrix_ui_type_from_ctx(target_ctx), target_ctx,
+        g_mod_matrix_audio_publication[target].drum_md_slot_count);
 }
 
 static void mod_matrix_release_destination(uint8_t track,
@@ -598,10 +604,11 @@ static void mod_matrix_restore_destination_value(uint8_t track,
     if ((mod_destination_address_resolve(dst->destination,
                                          &target, &destination) != 0U)
             && ((target_ctx = audio_note_engine_adapter_audio_ctx(target)) != NULL)
-            && (mod_destination_catalog_supported_fast(
+            && (mod_destination_catalog_supported_audio(
                 target, destination,
                 mod_matrix_ui_family_from_ctx(target_ctx),
-                mod_matrix_ui_type_from_ctx(target_ctx), target_ctx) != 0U))
+                mod_matrix_ui_type_from_ctx(target_ctx), target_ctx,
+                g_mod_matrix_audio_publication[target].drum_md_slot_count) != 0U))
     {
         (void)mod_destination_catalog_apply_rt(target,
                                                destination,
@@ -885,6 +892,9 @@ void mod_matrix_publish_control_snapshot_track(uint8_t track)
 
     mod_matrix_control_snapshot_t snapshot;
     memset(&snapshot, 0, sizeof(snapshot));
+    if (track_state_get_type(track) == UI_TRACK_TYPE_DRUM_MD)
+        snapshot.drum_md_slot_count =
+            track_tone_sound_state_md_slot_count(track);
     const track_sound_state_t *const control_state =
         mod_matrix_control_state_const(track);
     if (control_state != NULL)
@@ -962,6 +972,7 @@ void audio_mod_matrix_apply_snapshot(uint8_t track,
         publication->slew_generation[0], publication->slew_generation[1]
     };
     memset(publication, 0, sizeof(*publication));
+    publication->drum_md_slot_count = snapshot->drum_md_slot_count;
     for (uint8_t op = 0U; op < 2U; ++op)
     {
         publication->multi[op].source_a = snapshot->multi_source[op][0];
@@ -1865,8 +1876,8 @@ uint8_t mod_matrix_get_destination_ramp(uint8_t track,
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U)
+    uint8_t owner = 0U;
+    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U)
     {
         return 0U;
     }
@@ -1908,8 +1919,8 @@ void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value)
     }
 
     audio_mod_destination_catalog_invalidate_runtime_value(track, id);
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    uint8_t owner = 0U;
+    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
     const mod_destination_address_t address = mod_destination_address_make(track, id);
     mod_matrix_runtime_destination_t *const dst =
         mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner], address);
@@ -1933,8 +1944,8 @@ void audio_mod_matrix_set_base_override(uint8_t track, param_id_t id, float valu
         return;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    uint8_t owner = 0U;
+    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
     const mod_destination_address_t address = mod_destination_address_make(track, id);
     uint8_t is_matrix_destination = 0U;
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
@@ -1988,8 +1999,8 @@ void audio_mod_matrix_clear_base_override(uint8_t track,
         return;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return;
+    uint8_t owner = 0U;
+    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
     const mod_destination_address_t address = mod_destination_address_make(track, id);
     mod_matrix_base_override_t *const entry =
         mod_matrix_find_base_override(track, id);

@@ -49,6 +49,7 @@ typedef struct
     uint8_t slew_source[2];
     float slew_amount[2];
     uint32_t slew_generation[2];
+    uint8_t drum_md_slot_count;
 } mod_matrix_control_snapshot_t;
 
 _Static_assert(sizeof(mod_matrix_control_snapshot_t) <= 256U,

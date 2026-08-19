@@ -26,10 +26,10 @@ uint8_t mod_env3_get_track_param(uint8_t track, mod_env3_param_t param, float *o
 uint8_t mod_env3_control_set_track_retrigger_hard(uint8_t track, float value);
 uint8_t mod_env3_get_track_retrigger_hard(uint8_t track, float *out_value);
 uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, float value);
-void mod_env3_clear_track_param_temp(uint8_t track, mod_env3_param_t param);
+/* AUDIO-only runtime temporary clear, reached through the audio event path. */
+uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t param);
 void mod_env3_note_on(uint8_t track);
 void mod_env3_note_off(uint8_t track);
-void mod_env3_all_notes_off(uint8_t track);
 float mod_env3_process_track(uint8_t track, uint32_t elapsed_frames);
 
 #ifdef __cplusplus

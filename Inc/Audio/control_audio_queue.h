@@ -66,6 +66,7 @@ uint8_t control_audio_queue_publish_batch(const control_audio_event_t *events,
 /* AUDIO consumer. Peek does not remove the event; pop commits consumption. */
 uint8_t control_audio_queue_audio_peek(control_audio_event_t *out_event);
 uint8_t control_audio_queue_audio_pop(void);
+uint16_t control_audio_queue_audio_pending_count(void);
 uint16_t control_audio_queue_audio_frames_until_due(uint64_t sample_now,
                                                     uint16_t max_frames);
 

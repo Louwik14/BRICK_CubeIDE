@@ -238,3 +238,12 @@ const track_tone_sound_state_t *track_tone_sound_state_get_const(uint8_t track)
 {
     return track_tone_sound_state_get(track);
 }
+
+uint8_t track_tone_sound_state_md_slot_count(uint8_t track)
+{
+    const track_tone_sound_state_t *const state =
+        track_tone_sound_state_get_const(track);
+    return (state != NULL)
+        ? md_model_profile_get(md_model_validate(state->md.model))->slot_count
+        : 0U;
+}

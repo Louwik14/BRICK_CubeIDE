@@ -64,6 +64,7 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
         .kind = (uint8_t)CONTROL_AUDIO_EVENT_BINDING_INTENT,
         .note = ctx->type,
         .velocity = ctx->midi_channel_1_16,
+        .param_value = ctx->midi_source,
         .provenance = ctx->family,
         .flags = audio_flags
     };

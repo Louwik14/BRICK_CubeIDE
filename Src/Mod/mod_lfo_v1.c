@@ -12,6 +12,8 @@
 #include "Core/track_sound_state.h"
 #include "Core/track_runtime.h"
 #include "Audio/mixer.h"
+#include "Audio/audio_transition_snapshot.h"
+#include "Audio/audio_modulation_projection.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -40,6 +42,11 @@
 #define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_CONTROL_RATE_HZ)
 #endif
 #define MOD_LFO_RATE_OFF_EPS 0.0001f
+
+static uint8_t mod_lfo_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
+{
+    return audio_modulation_projection_audio_resolve_owner(track, out_owner);
+}
 
 /* Positive RATE values index this tempo-sync table: 1=8BAR ... 16=1/128. */
 static const float g_mod_lfo_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
@@ -906,7 +913,13 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
 static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
                                           uint32_t bpm_milli)
 {
-    if (param_registry_track_structure_transition_is_global_active() != 0U)
+    uint8_t transition_global_active = 0U;
+    uint8_t transition_track_active[SEQ_TRACK_COUNT] = {0U};
+    (void)audio_transition_snapshot_read_all(
+        &transition_global_active,
+        transition_track_active,
+        SEQ_TRACK_COUNT);
+    if (transition_global_active != 0U)
     {
         return;
     }
@@ -931,7 +944,7 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
     g_mod_lfo_had_matrix_routes = 1U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        if (param_registry_track_structure_transition_is_track_active(track) != 0U)
+        if (transition_track_active[track] != 0U)
         {
             continue;
         }
@@ -1208,8 +1221,8 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+    uint8_t owner = 0U;
+    if (mod_lfo_audio_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     const track_mod_lfo_state_t *const s = mod_lfo_audio_settings_const(track, lfo_index);
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
@@ -1283,8 +1296,8 @@ uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track,
         return 0U;
     }
 
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U)
+    uint8_t owner = 0U;
+    if (mod_lfo_audio_resolve_owner(track, &owner) == 0U)
     {
         return 0U;
     }
@@ -1646,11 +1659,6 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
 void mod_lfo_v1_note_release(uint8_t track)
 {
     mod_env3_note_off(track);
-}
-
-void mod_lfo_v1_all_notes_off(uint8_t track)
-{
-    mod_env3_all_notes_off(track);
 }
 
 uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)

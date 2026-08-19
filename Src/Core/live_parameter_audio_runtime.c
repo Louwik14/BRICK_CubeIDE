@@ -2,6 +2,7 @@
 
 #include "Core/live_parameter_audio_queue.h"
 #include "Core/live_parameter_event.h"
+#include "Audio/audio_global_runtime.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Param/param_registry.h"
@@ -81,12 +82,20 @@ static uint8_t live_parameter_audio_runtime_apply_target(
         if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
         {
             uint8_t applied;
-            if ((event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR)
-                    || ((event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
-                        && (param_registry_is_lfo_param(event->parameter_id) != 0U)))
+            if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR)
             {
                 applied = param_registry_clear_track_value_runtime_temp_audio(
                     event->parameter_id, event->track);
+            }
+            else if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
+            {
+                applied = param_registry_clear_track_value_runtime_temp_audio(
+                    event->parameter_id, event->track);
+                if (applied == 0U)
+                {
+                    applied = param_registry_apply_track_value_runtime_temp_audio(
+                        event->parameter_id, event->track, value);
+                }
             }
             else
             {
@@ -142,7 +151,7 @@ static uint8_t live_parameter_audio_runtime_apply_target(
     {
         if (event->parameter_id == PARAM_MASTER_GAIN)
             return audio_note_engine_adapter_set_master(value);
-        return param_registry_apply_global_value_rt_fast(event->parameter_id, value);
+        return audio_global_runtime_apply(event->parameter_id, value);
     }
     return 0U;
 }
@@ -171,11 +180,11 @@ static uint8_t live_parameter_audio_runtime_apply_event(
         slot->last_sample_time = now;
     }
 
-    const float target = live_parameter_audio_runtime_clamp(
-        event->parameter_id,
-        ((event->flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
-            ? live_parameter_event_decode_float(event->value)
-            : (float)event->value);
+    float target = ((event->flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
+        ? live_parameter_event_decode_float(event->value)
+        : (float)event->value;
+    if (event->scope != LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+        target = live_parameter_audio_runtime_clamp(event->parameter_id, target);
     slot->target = target;
     slot->last_sample_time = now;
 
