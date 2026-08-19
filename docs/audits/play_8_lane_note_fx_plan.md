@@ -54,7 +54,7 @@ Avec ARP, les huit sources peuvent entrer dans le groupe ARP. L’ARP les séria
 | Paramètres | 16 paramètres PLAY : quatre paramètres pour chacune des voix 1 à 4 | `Inc/Param/param_store.h`, `Src/Param/param_registry_catalog.c` |
 | Mapping compact | 16 slots PLAY, offsets compacts et état runtime par slot | `Src/Seq/seq_param_iface.c`, `Inc/Seq/seq_types.h` |
 | Modèle séquence | 64 steps, chaque step porte une liste compacte de p-locks ; aucune note-array dédiée | `Inc/Seq/seq_model.h`, `Src/Seq/seq_model.c` |
-| Pool Play | 8 pools de 1024 entrées ; 32 p-locks PLAY maximum par step | `seq_runtime_project_data_t`, `SEQ_PLAY_STEP_MAX_LOCKS` |
+| Pool Play | 8 pools de 512 entrées ; 32 p-locks PLAY maximum par step | `seq_runtime_project_data_t`, `SEQ_PLAY_STEP_MAX_LOCKS` |
 | Validation | Un slot PLAY devient non supporté si sa voix dépasse `track_runtime_get_play_voice_count()` | `Src/Core/track_runtime.c`, `seq_param_iface_slot_is_supported()` |
 | Scheduler | `SEQ_PLAY_SCHEDULER_VOICE_COUNT == 4`, contexte et identifiants V1–V4 | `Src/Seq/seq_play_scheduler.c` |
 | NoteFx | Événement unitaire sans lane, source, groupe ou multiplicité de notes | `Inc/NoteFx/note_fx_engine.h`, `note_fx_pipeline_submit()` |
@@ -150,7 +150,7 @@ Ne pas réutiliser les IDs réservés existants. Le compteur de paramètres pers
 
 ### 6.2 Modèle et scheduler
 
-Étendre le contexte du scheduler à huit items et ses constantes/identifiants. Garder `seq_step_t`, les pools de 1024 entrées et la limite de 32 p-locks tant que le mapping compact est conservé.
+Étendre le contexte du scheduler à huit items et ses constantes/identifiants. Garder `seq_step_t`, les pools de 512 entrées et la limite de 32 p-locks tant que le mapping compact est conservé.
 
 Le nombre maximal d’événements produits par un step croît linéairement :
 

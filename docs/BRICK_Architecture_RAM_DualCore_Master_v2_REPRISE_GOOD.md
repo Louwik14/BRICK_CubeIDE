@@ -44,7 +44,7 @@ On conserve **les conclusions d’architecture démontrées par les audits**, pa
 - classification de `g_slot`, `g_mod_destination_cache`, `g_sampler_clip_slots`, `.sdram_audio_cold` ;
 - architecture page-cache B, générations et quiescence ;
 - séparation cible Looper/Recorder et Sampler/Multi ;
-- cible p-lock 512 à valider ;
+- pool p-lock 512 appliqué ;
 - nécessité de publications/events/plans pointer-free ;
 - nécessité d’un boot AUDIO propriétaire ;
 - nécessité de router les commandes UI waveform par une frontière CONTROL→AUDIO ;
@@ -279,17 +279,17 @@ Raison : le modèle et le scheduler ont des accès fréquents et aléatoires ; c
 
 ---
 
-# 6. Pool p-lock — CIBLE RETENUE, VALIDATION H743 AVANT PATCH
+# 6. Pool p-lock — CIBLE RETENUE, PASSE 1024 → 512 APPLIQUÉE
 
-État actuel :
+État actuel après la passe p-lock :
 
 - 16 tracks ;
-- 1024 entrées p-lock par track ;
+- 512 entrées p-lock par track ;
 - 6 octets par nœud ;
-- pool total actuel : 98 304 B ;
-- `g_seq_project` actuel : 129 664 B.
+- pool total actuel : 49 152 B ;
+- `g_seq_project` actuel : 80 512 B.
 
-Cible proposée :
+Contrat inchangé :
 
 - **512 entrées p-lock par track** ;
 - limite par step **inchangée à 32 p-locks** ;
@@ -297,18 +297,17 @@ Cible proposée :
 - 512 p-locks simultanés par track ;
 - 16 steps peuvent être saturés à 32 locks ;
 - moyenne maximale sur 64 steps : 8 locks/step ;
-- gain D2 attendu : **49 152 B** ;
-- `g_seq_project` attendu : **80 512 B** avant autres changements.
+- gain D2 réalisé : **49 152 B** ;
+- `g_seq_project` : **80 512 B**.
 
-## Avant implémentation
+## Validation de la passe
 
-Valider :
+Validé :
 
-- comportement de persistence contenant encore une capacité historique 1024 ;
-- projets/corpus réels ou stress synthétiques ;
-- saturation `POOL_EMPTY` ;
-- restauration de projets dépassant 512 ;
-- absence de dépendance cachée des notes au pool.
+- la persistence rejette explicitement au-delà de 512 avant mutation ;
+- la saturation `POOL_EMPTY` ;
+- la restauration et les snapshots restent atomiques ;
+- l’absence de dépendance des notes au pool.
 
 Ne pas réduire :
 
@@ -1415,7 +1414,7 @@ La refonte est réussie si :
 | FX runtime M7 | **FIGÉ** |
 | Séquenceur / PLAY / NoteFX M4 | **FIGÉ** |
 | `g_seq_project` SRAM interne | **FIGÉ** |
-| Pool p-lock 512 | **CIBLE RETENUE — valider avant patch** |
+| Pool p-lock 512 | **APPLIQUÉ — 80 512 B, gain D2 49 152 B** |
 | Tempo/transport snapshot vers M7 | **FIGÉ** |
 | Looper Control M4 / Audio M7 | **FIGÉ** |
 | Recorder producer M7 / writer M4 | **FIGÉ** |

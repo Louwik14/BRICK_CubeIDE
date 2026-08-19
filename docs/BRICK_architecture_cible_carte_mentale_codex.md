@@ -202,9 +202,9 @@ Cible :
 Projection auditée :
 
 ```text
-g_seq_project HEAD    ≈ 127 104 B
-g_seq_project cible   ≈ 129 664 B
-delta                 ≈ +2 560 B
+g_seq_project avant p-lock  ≈ 129 664 B
+g_seq_project actuel        ≈ 80 512 B
+gain D2                     = 49 152 B
 ```
 
 Le dernier audit de fermeture a conclu que le modèle complet tient dans les placements actuels Low-Cost/Premium sans déplacement massif de `g_seq_project`.
@@ -533,7 +533,7 @@ Ne pas refondre ce contrat dans ce chantier global :
 
 ```text
 maximum 32 p-locks par step
-pool fixe 1024 p-locks par track/lane
+pool fixe 512 p-locks par track/lane
 ```
 
 La gestion actuelle de capacité reste un choix produit assumé.

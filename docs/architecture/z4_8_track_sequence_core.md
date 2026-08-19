@@ -2,7 +2,7 @@
 
 Le noyau courant expose huit slots sonores, identifiés uniquement par leur index `0..7`, sur Low-Cost comme sur Premium. `SEQ_TRACK_COUNT`, les tableaux runtime de séquence, mute, stop et panic sont bornés par cette cardinalité.
 
-Chaque slot utilise le même modèle : 64 steps, trig, roll, p-locks complets, 32 locks par step et un pool de 1024 entrées. Le noyau ne possède plus de payload d'action Special ni de pool Special.
+Chaque slot utilise le même modèle : 64 steps, trig, roll, p-locks complets, 32 locks par step et un pool de 512 entrées. Le noyau ne possède plus de payload d'action Special ni de pool Special.
 
 ## Snapshot canonique et clipboard de steps
 

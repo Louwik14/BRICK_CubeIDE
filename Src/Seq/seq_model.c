@@ -35,7 +35,7 @@ typedef struct
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
-_Static_assert(sizeof(seq_runtime_project_data_t) == 129664U,
+_Static_assert(sizeof(seq_runtime_project_data_t) == 80512U,
                "sequencer project storage size changed");
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;

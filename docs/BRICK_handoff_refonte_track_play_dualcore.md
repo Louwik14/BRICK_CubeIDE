@@ -963,7 +963,7 @@ Le prochain architecte doit arbitrer selon simplicité réelle, pas appliquer au
 Actuel :
 
 ```text
-16 lanes × 1024 nodes × 6 B = 98 304 B
+16 lanes × 512 nodes × 6 B = 49 152 B
 ```
 
 Pool fixe par lane.
@@ -972,7 +972,7 @@ PLAY ne doit pas y retourner.
 
 Observation :
 
-- capacité 1024 locks/lane ;
+- capacité 512 locks/lane ;
 - maximum théorique steps×32 = 2048/lane ;
 - contrat actuel à clarifier mais pas forcément à changer dans ce chantier.
 

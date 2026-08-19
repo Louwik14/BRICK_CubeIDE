@@ -13,7 +13,7 @@
 #define SEQ_DEFAULT_LENGTH_STEPS SEQ_STEPS_PER_PAGE
 
 #define SEQ_STEP_MAX_LOCKS 32U
-#define SEQ_PLOCK_POOL_CAP_PER_TRACK 1024U
+#define SEQ_PLOCK_POOL_CAP_PER_TRACK 512U
 
 /* Global per-track memory budget: shared by all steps of the track. */
 #define SEQ_PLOCK_BUDGET_PER_TRACK SEQ_PLOCK_POOL_CAP_PER_TRACK

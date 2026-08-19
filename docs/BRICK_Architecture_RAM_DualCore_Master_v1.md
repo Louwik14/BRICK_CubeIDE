@@ -193,17 +193,17 @@ Raison : le modèle et le scheduler ont des accès fréquents et aléatoires ; c
 
 ---
 
-# 6. Pool p-lock — CIBLE RETENUE, VALIDATION H743 AVANT PATCH
+# 6. Pool p-lock — PASSE 1024 → 512 APPLIQUÉE
 
 État actuel :
 
 - 16 tracks ;
-- 1024 entrées p-lock par track ;
+- 512 entrées p-lock par track ;
 - 6 octets par nœud ;
-- pool total actuel : 98 304 B ;
-- `g_seq_project` actuel : 129 664 B.
+- pool total actuel : 49 152 B ;
+- `g_seq_project` actuel : 80 512 B.
 
-Cible proposée :
+Contrat inchangé :
 
 - **512 entrées p-lock par track** ;
 - limite par step **inchangée à 32 p-locks** ;
@@ -211,15 +211,15 @@ Cible proposée :
 - 512 p-locks simultanés par track ;
 - 16 steps peuvent être saturés à 32 locks ;
 - moyenne maximale sur 64 steps : 8 locks/step ;
-- gain D2 attendu : **49 152 B** ;
-- `g_seq_project` attendu : **80 512 B** avant autres changements.
+- gain D2 réalisé : **49 152 B** ;
+- `g_seq_project` : **80 512 B**.
 
-## Avant implémentation
+## Validation
 
-Valider :
+Validé :
 
-- comportement de persistence contenant encore une capacité historique 1024 ;
-- projets/corpus réels ou stress synthétiques ;
+- comportement de persistence rejetant une capacité historique supérieure à 512 ;
+- projets valides à 512 et rejet avant mutation au-delà de 512 ;
 - saturation `POOL_EMPTY` ;
 - restauration de projets dépassant 512 ;
 - absence de dépendance cachée des notes au pool.
@@ -969,14 +969,14 @@ Ne déplacer aucun historique DSP côté M4.
 
 **Risque : moyen à élevé.**
 
-## PASS 4 — Placement RAM réel + p-lock 512
+## PASS 4 — Placement RAM réel après p-lock 512
 
 Une fois les owners propres :
 
 - déplacer les objets CONTROL hors D1 ;
 - ranger DMA/IPC ;
 - nettoyer D3 ;
-- appliquer éventuellement p-lock 512 après validation ;
+- conserver le pool p-lock 512 ;
 - refaire MAP et budgets.
 
 **Risque : moyen.**
@@ -1256,7 +1256,7 @@ La refonte est réussie si :
 | FX runtime M7 | **FIGÉ** |
 | Séquenceur / PLAY / NoteFX M4 | **FIGÉ** |
 | `g_seq_project` SRAM interne | **FIGÉ** |
-| Pool p-lock 512 | **CIBLE RETENUE — valider avant patch** |
+| Pool p-lock 512 | **APPLIQUÉ — 80 512 B, gain D2 49 152 B** |
 | Tempo/transport snapshot vers M7 | **FIGÉ** |
 | Looper Control M4 / Audio M7 | **FIGÉ** |
 | Recorder producer M7 / writer M4 | **FIGÉ** |
