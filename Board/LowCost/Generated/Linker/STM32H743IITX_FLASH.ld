@@ -560,7 +560,7 @@ SECTIONS
     *(.sdram_audio_cold)
     *(.sdram_audio_cold*)
     . = ALIGN(32);
-  } >RAM_D1
+  } >SDRAM
   ASSERT(__sdram_page_pool_start__ >= __sdram_cacheable_start__,
          "Sample page pool starts outside cacheable SDRAM")
   ASSERT(__sdram_page_pool_end__ <= __sdram_cacheable_end__,

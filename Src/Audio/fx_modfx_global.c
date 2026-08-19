@@ -12,7 +12,7 @@ typedef struct{int32_t l,r;} qst_t; typedef struct{float l,r;} fst_t;
 typedef union{qst_t q[RING];fst_t f[RING];float daisy[2][DAISY_N];int16_t teensy[2][TEENSY_N];float juno[512];} hist_t;
 typedef struct{float ff,fb,z;} jfilter_t;
 typedef struct{uint32_t w,phase,inc,jphase[2];int32_t depth,offset;float rate,feedback,dphase[2],dstep[2],ddelay,damp,jgain[2];jfilter_t jpre,jpost[2];uint16_t dw[2],tw[2];uint8_t model;} state_t;
-AUDIO_HISTORY_SDRAM static hist_t hist; AUDIO_STATE_D3 static state_t st;
+AUDIO_WARM static hist_t hist; AUDIO_WARM static state_t st;
 static inline int32_t addw(int32_t a,int32_t b){return(int32_t)((uint32_t)a+(uint32_t)b);} static inline int32_t shlw(int32_t a,unsigned n){return(int32_t)((uint32_t)a<<n);}
 static inline int32_t mul(int32_t a,int32_t b){return(int32_t)(((int64_t)a*b)>>32);} static inline int32_t mulr(int32_t a,int32_t b){return(int32_t)((((int64_t)a*b)+0x80000000LL)>>32);}
 static int32_t q(float x){if(x>=1)return INT32_MAX;if(x<=-1)return INT32_MIN;return(int32_t)(x*2147483647.f);} static int16_t q16(float x){if(x>=1)return INT16_MAX;if(x<=-1)return INT16_MIN;return(int16_t)(x*32767.f);}

@@ -112,8 +112,8 @@ static uint8_t g_calibration_done = 0U;
 static uint8_t g_calibration_stage = 0U;
 
 static uint32_t g_hold_start_tick[HALL_KEY_COUNT];
-CTRL_STATE static hall_median_buffer_t g_min_buffer[HALL_KEY_COUNT];
-CTRL_STATE static hall_median_buffer_t g_max_buffer[HALL_KEY_COUNT];
+CONTROL_STATE_SDRAM static hall_median_buffer_t g_min_buffer[HALL_KEY_COUNT];
+CONTROL_STATE_SDRAM static hall_median_buffer_t g_max_buffer[HALL_KEY_COUNT];
 static hall_user_calibration_state_t g_user_calibration;
 
 static void hall_median_buffer_reset(hall_median_buffer_t *buffer)

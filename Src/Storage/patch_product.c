@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 static uint8_t g_present[PATCH_PRODUCT_SLOT_COUNT],g_invalid[PATCH_PRODUCT_SLOT_COUNT];
-static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
+STORAGE_STATE_SDRAM static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
 static uint16_t g_current=PATCH_PRODUCT_INVALID_SLOT;
 STORAGE_STATE_SDRAM static persist_codec_patch_staging_t g_stage;
 #define PATCH_PRODUCT_SECTION_BODY 0x3001U
