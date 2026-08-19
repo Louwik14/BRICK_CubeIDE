@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:11:6:board_display_transport_reset	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:19:6:board_display_transport_begin	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:26:6:board_display_transport_end	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:31:27:board_display_transport_tx	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:38:27:board_display_transport_tx_dma	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_display_transport_premium.c:45:9:board_display_transport_is_tx_callback	0	static

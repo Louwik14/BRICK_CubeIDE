@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:53:6:void daisysp::VosimOscillator::SetFreq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:59:6:void daisysp::VosimOscillator::SetForm1Freq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:66:6:void daisysp::VosimOscillator::SetForm2Freq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:73:6:void daisysp::VosimOscillator::SetShape(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:7:6:void daisysp::VosimOscillator::Init(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:78:7:float daisysp::VosimOscillator::Sine(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/vosim.cpp:21:7:float daisysp::VosimOscillator::Process()	32	static

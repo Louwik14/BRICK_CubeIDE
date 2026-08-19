@@ -299,6 +299,18 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d2_m4_sram2) <= LENGTH(SRAM2_D2),
          "SRAM2 D2 M4 contract overflow")
 
+  .ram_control_m4_sram2 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __ram_control_m4_sram2_start__ = .;
+    *(.ram_control_m4_sram2)
+    *(.ram_control_m4_sram2.*)
+    . = ALIGN(32);
+    __ram_control_m4_sram2_end__ = .;
+  } >SRAM2_D2
+  ASSERT(SIZEOF(.ram_control_m4_sram2) <= LENGTH(SRAM2_D2),
+         "SRAM2 D2 CONTROL M4 contract overflow")
+
   .ram_d2_m7 (NOLOAD) :
   {
     . = ALIGN(32);

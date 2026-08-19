@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:3:14:wav_audio_codec_pcm16_to_float_impl	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:9:7:wav_audio_codec_pcm16_to_float	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:14:7:wav_audio_codec_pcm24_to_float	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:24:7:wav_audio_codec_pcm32_to_float	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:33:6:wav_audio_codec_decode_stereo_frame	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_codec.c:85:6:wav_audio_codec_resample_linear	40	static

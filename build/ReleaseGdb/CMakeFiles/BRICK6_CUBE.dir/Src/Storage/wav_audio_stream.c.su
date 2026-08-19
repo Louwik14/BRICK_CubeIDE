@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:7:13:wav_audio_stream_reset_source_state	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:33:6:wav_audio_stream_init	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:53:16:wav_audio_stream_refill_io_buffer	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:111:16:wav_audio_stream_decode_next_source_frame	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:139:16:wav_audio_stream_prepare	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:188:9:wav_audio_stream_start	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:210:16:wav_audio_stream_ensure_source_window	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_audio_stream.c:243:9:wav_audio_stream_next_frame	32	static

@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:71:23:int32_t {anonymous}::asr_i32(int32_t, uint32_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:106:16:int32_t {anonymous}::table_sample_q31(const int16_t*, int32_t, uint32_t)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:118:13:void {anonymous}::get_table_number(uint32_t, int32_t*, int32_t*)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:151:16:int32_t {anonymous}::render_shape_sample(const render_shape_t*, uint32_t)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:160:13:void {anonymous}::render_crude_sync_scalar(deluge_osc_type_t, int32_t*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, int32_t, uint32_t)	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:189:13:void {anonymous}::render_sync_scalar(const render_shape_t*, int32_t*, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, int32_t, uint32_t)	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:257:6:void deluge_oscillator_render(deluge_osc_type_t, int32_t*, uint32_t, uint32_t, uint32_t, uint32_t*)	96	static

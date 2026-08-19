@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:48:6:virtual void plaits::WavetableEngine::Init(stmlib::BufferAllocator*)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:69:6:virtual void plaits::WavetableEngine::Reset()	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:73:6:virtual void plaits::WavetableEngine::LoadUserData(const uint8_t*)	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/wavetable_oscillator.h:75:14:float plaits::InterpolateWaveHermite(const T*, int32_t, float) [with T = short int]	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:101:14:float plaits::WavetableEngine::ReadWave(int, int, int, int, float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:113:6:virtual void plaits::WavetableEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	200	static

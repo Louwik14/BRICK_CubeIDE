@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:30:13:ui_core_pattern_exit_to_previous_mode	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:44:6:ui_core_pattern_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:53:6:ui_core_pattern_abort	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:59:6:ui_core_pattern_enter	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:75:9:ui_core_pattern_handle_mode_event	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:137:23:ui_core_pattern_get_substate	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:142:9:ui_core_pattern_get_selected_bank	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_pattern.c:147:19:ui_core_pattern_get_mode	0	static

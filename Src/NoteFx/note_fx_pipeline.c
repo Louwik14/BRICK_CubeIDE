@@ -88,7 +88,7 @@ typedef struct
     uint32_t occurrence_id;
 } note_fx_source_reservation_t;
 
-static note_fx_command_t g_note_fx_commands[NOTE_FX_COMMAND_CAPACITY];
+CONTROL_M4_SRAM2 static note_fx_command_t g_note_fx_commands[NOTE_FX_COMMAND_CAPACITY];
 static volatile uint8_t g_note_fx_command_head;
 static volatile uint8_t g_note_fx_command_tail;
 SEQ_STATE_D2 static note_fx_source_reservation_t

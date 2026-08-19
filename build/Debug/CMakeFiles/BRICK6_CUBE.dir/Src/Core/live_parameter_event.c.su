@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:12:17:live_parameter_event_enter_critical	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:20:13:live_parameter_event_exit_critical	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:26:6:live_parameter_event_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:37:6:live_parameter_event_submit	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:61:6:live_parameter_event_pop	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:84:10:live_parameter_event_depth	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_event.c:92:10:live_parameter_event_drop_count	0	static

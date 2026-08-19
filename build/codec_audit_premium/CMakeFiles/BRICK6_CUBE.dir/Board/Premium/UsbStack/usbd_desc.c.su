@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:246:11:USBD_FS_DeviceDescriptor	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:259:11:USBD_FS_LangIDStrDescriptor	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:387:13:IntToUnicode	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:304:11:USBD_FS_SerialStrDescriptor	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:272:11:USBD_FS_ProductStrDescriptor	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:291:11:USBD_FS_ManufacturerStrDescriptor	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:324:11:USBD_FS_ConfigStrDescriptor	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/UsbStack/usbd_desc.c:343:11:USBD_FS_InterfaceStrDescriptor	8	static

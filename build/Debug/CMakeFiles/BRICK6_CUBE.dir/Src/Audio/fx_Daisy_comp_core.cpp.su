@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Utility/dsp.h:116:14:float daisysp::fastlog2f(float)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_Daisy_comp_core.h:188:10:void daisysp::Compressor::RecalculateAttack()	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_Daisy_comp_core.h:196:10:void daisysp::Compressor::RecalculateRelease()	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_Daisy_comp_core.cpp:21:6:void daisysp::Compressor::Init(float)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_Daisy_comp_core.cpp:39:7:float daisysp::Compressor::Process(float)	24	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_Daisy_comp_core.cpp:52:6:void daisysp::Compressor::ProcessBlock(float*, float*, float*, size_t)	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_Daisy_comp_core.cpp:62:6:void daisysp::Compressor::ProcessBlock(float**, float**, float*, size_t, size_t)	40	static

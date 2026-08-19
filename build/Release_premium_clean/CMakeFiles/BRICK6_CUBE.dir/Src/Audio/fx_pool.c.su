@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c:50:6:fx_pool_init	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c:79:5:fx_pool_activate_slot	32	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c:130:6:fx_pool_deactivate_slot	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c:161:12:fx_pool_get_slot	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_pool.c:169:7:fx_pool_get_sat_state_for_track	0	static

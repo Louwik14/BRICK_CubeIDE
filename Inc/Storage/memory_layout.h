@@ -49,6 +49,9 @@
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
 #define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
 
+/* CONTROL state local to SRAM2/D2, reserved for the future M4 owner. */
+#define CONTROL_M4_SRAM2 SEC_ATTR(".ram_control_m4_sram2")
+
 /* Explicit D3 IPC contract. Existing CTRL_STATE objects remain in legacy D3. */
 #define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
 

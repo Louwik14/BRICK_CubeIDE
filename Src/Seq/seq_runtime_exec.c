@@ -11,6 +11,7 @@
 
 #include "Seq/seq_runtime_exec.h"
 
+#include "Storage/memory_layout.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
@@ -34,7 +35,7 @@ typedef struct
     uint8_t click_type;
 } seq_runtime_exec_boundary_event_t;
 
-static seq_runtime_state_t g_seq_runtime_exec_state;
+CONTROL_M4_SRAM2 static seq_runtime_state_t g_seq_runtime_exec_state;
 static uint64_t g_seq_runtime_exec_sample_timeline;
 static uint8_t g_seq_runtime_exec_midi_clock_enabled;
 static uint32_t g_seq_runtime_exec_midi_clock_period_q16;

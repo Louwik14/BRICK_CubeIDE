@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/cmake/stm32cubemx/../../Drivers/CMSIS/Include/core_cm7.h:2156:34:__NVIC_SystemReset	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_watchdog.c:27:16:diagnostic_watchdog_wait_lsi	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_watchdog.c:41:16:diagnostic_watchdog_wait_update	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_watchdog.c:55:6:diagnostic_watchdog_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_watchdog.c:63:9:diagnostic_watchdog_arm	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/diagnostic_watchdog.c:103:6:diagnostic_watchdog_main_loop_heartbeat	8	static

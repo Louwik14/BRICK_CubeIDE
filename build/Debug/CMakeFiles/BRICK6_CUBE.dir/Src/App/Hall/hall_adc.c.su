@@ -1,9 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:39:13:hall_mux_select	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:44:13:hall_adc_queue_sample	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:57:13:hall_adc_process_pair	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:104:6:hall_adc_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:143:10:hall_adc_get_raw	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:153:9:hall_adc_get_mux_index	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:159:10:hall_adc_get_mux_raw	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:170:10:hall_adc_get_sample_count	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/App/Hall/hall_adc.c:180:6:HAL_ADC_ConvCpltCallback	8	static

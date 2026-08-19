@@ -1,9 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:22:13:release_slot	72	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:39:6:note_fx_engine_init	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:52:6:note_fx_engine_configure	12	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:63:9:note_fx_engine_source	72	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:109:6:note_fx_engine_process	128	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:151:6:note_fx_engine_cleanup	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:159:6:note_fx_engine_suspend	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:168:16:note_fx_engine_diag	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_engine.c:174:10:note_fx_engine_next_deadline	16	static

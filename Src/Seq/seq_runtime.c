@@ -66,7 +66,7 @@ typedef struct
     uint8_t note;
     uint8_t velocity;
 } seq_runtime_live_rec_event_t;
-static seq_runtime_live_rec_event_t
+CONTROL_M4_SRAM2 static seq_runtime_live_rec_event_t
     g_seq_runtime_live_rec_queue[SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY];
 static volatile uint8_t g_seq_runtime_live_rec_head;
 static volatile uint8_t g_seq_runtime_live_rec_tail;

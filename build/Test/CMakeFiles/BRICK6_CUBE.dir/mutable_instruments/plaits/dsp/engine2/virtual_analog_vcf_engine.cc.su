@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/virtual_analog_vcf_engine.h:47:16:virtual void plaits::VirtualAnalogVCFEngine::LoadUserData(const uint8_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/virtual_analog_vcf_engine.cc:42:6:virtual void plaits::VirtualAnalogVCFEngine::Init(stmlib::BufferAllocator*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/virtual_analog_vcf_engine.cc:56:6:virtual void plaits::VirtualAnalogVCFEngine::Reset()	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/variable_shape_oscillator.h:92:8:void plaits::VariableShapeOscillator::Render(float, float, float, float, float, float*, size_t) [with bool enable_sync = false; bool output_phase = false]	68	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/virtual_analog_vcf_engine.cc:60:6:virtual void plaits::VirtualAnalogVCFEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	80	static

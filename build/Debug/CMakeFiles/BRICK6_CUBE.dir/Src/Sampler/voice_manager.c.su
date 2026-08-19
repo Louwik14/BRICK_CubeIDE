@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:52:14:finite_or_zero	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:68:13:voice_clear	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:188:16:voice_has_valid_sample	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:222:13:voice_manager_process_cache_voice	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:95:6:voice_manager_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:117:6:voice_manager_trigger	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:184:6:voice_manager_service	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/voice_manager.c:288:6:voice_manager_process	64	static

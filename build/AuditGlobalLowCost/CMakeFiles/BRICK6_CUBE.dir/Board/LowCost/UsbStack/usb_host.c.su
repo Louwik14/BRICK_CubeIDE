@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:147:13:USBH_UserProcess	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:53:9:usb_host_start	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:45:6:MX_USB_HOST_Init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:86:9:usb_host_stop	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:100:9:usb_host_is_started	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:108:6:MX_USB_HOST_Process	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/UsbStack/usb_host.c:116:6:usb_host_tasklet_poll_bounded	16	static

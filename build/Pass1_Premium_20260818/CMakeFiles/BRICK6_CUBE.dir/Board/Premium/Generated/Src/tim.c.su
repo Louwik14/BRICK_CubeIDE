@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:89:6:MX_TIM5_Init	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:142:6:MX_TIM6_Init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:175:6:MX_TIM7_Init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:210:6:MX_TIM12_Init	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:252:6:HAL_TIM_Base_MspInit	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:343:6:HAL_TIM_MspPostInit	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:35:6:MX_TIM2_Init	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Generated/Src/tim.c:371:6:HAL_TIM_Base_MspDeInit	8	static

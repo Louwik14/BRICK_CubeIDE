@@ -1,2 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:143:16:int32_t {anonymous}::table_sample_q31(const int16_t*, int32_t, uint32_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/deluge_oscillator.cpp:325:6:void deluge_oscillator_render(deluge_osc_type_t, int32_t*, uint32_t, uint32_t, uint32_t, uint32_t*)	96	static

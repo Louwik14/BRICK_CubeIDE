@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:149:13:sd_scheduler_collect	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:443:13:sd_scheduler_note_accepted	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:47:6:sd_scheduler_default_config	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:62:6:sd_scheduler_init	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:85:9:sd_scheduler_bind_provider	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:502:6:sd_scheduler_service	368	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:562:22:sd_scheduler_owner	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/SD/sd_scheduler.c:567:6:sd_scheduler_metrics_get	8	static

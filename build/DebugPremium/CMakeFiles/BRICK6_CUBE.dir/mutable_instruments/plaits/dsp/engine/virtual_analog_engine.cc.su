@@ -1,9 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.h:47:16:virtual void plaits::VirtualAnalogEngine::LoadUserData(const uint8_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:40:6:virtual void plaits::VirtualAnalogEngine::Init(stmlib::BufferAllocator*)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:53:6:virtual void plaits::VirtualAnalogEngine::Reset()	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/variable_saw_oscillator.h:60:8:void plaits::VariableSawOscillator::Render(float, float, float, float*, size_t)	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:65:7:float plaits::VirtualAnalogEngine::ComputeDetuning(float) const	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/variable_shape_oscillator.h:92:8:void plaits::VariableShapeOscillator::Render(float, float, float, float, float, float*, size_t) [with bool enable_sync = true; bool output_phase = false]	112	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:78:6:virtual void plaits::VirtualAnalogEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	96	static

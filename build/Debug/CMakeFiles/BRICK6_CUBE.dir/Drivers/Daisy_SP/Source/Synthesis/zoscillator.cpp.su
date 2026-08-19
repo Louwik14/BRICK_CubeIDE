@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:97:6:void daisysp::ZOscillator::SetFreq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:104:6:void daisysp::ZOscillator::SetFormantFreq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:111:6:void daisysp::ZOscillator::SetShape(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:116:6:void daisysp::ZOscillator::SetMode(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:7:6:void daisysp::ZOscillator::Init(float)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:121:14:float daisysp::ZOscillator::Z(float, float, float, float, float)	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/zoscillator.cpp:22:7:float daisysp::ZOscillator::Process()	56	static

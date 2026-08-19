@@ -1,6 +1,7 @@
 #include "Mod/mod_destination_catalog.h"
 
 #include <stdio.h>
+#include "Storage/memory_layout.h"
 #include "Audio/audio_note_engine_adapter.h"
 
 #include "Audio/audio_xfade.h"
@@ -56,7 +57,7 @@ typedef struct
     uint8_t value;
 } mod_destination_midi_cc_cache_t;
 
-static mod_destination_cache_t g_mod_destination_cache[SEQ_TRACK_COUNT];
+CONTROL_M4_SRAM2 static mod_destination_cache_t g_mod_destination_cache[SEQ_TRACK_COUNT];
 static mod_destination_midi_cc_cache_t g_mod_destination_midi_cc_cache[SEQ_TRACK_COUNT][12U];
 
 mod_destination_address_t mod_destination_address_make(uint8_t entity_id,

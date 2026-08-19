@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/noise_engine.h:46:16:virtual void plaits::NoiseEngine::LoadUserData(const uint8_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/noise_engine.cc:38:6:virtual void plaits::NoiseEngine::Init(stmlib::BufferAllocator*)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/noise_engine.cc:53:6:virtual void plaits::NoiseEngine::Reset()	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/noise_engine.cc:57:6:virtual void plaits::NoiseEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	96	static,ignoring_inline_asm

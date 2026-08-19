@@ -242,7 +242,7 @@ typedef struct
 #endif
 
 static sample_capture_model_t g_sample_capture;
-UI_HOT_DTCM static sample_capture_line_hot_t g_sample_capture_line_hot;
+CONTROL_M4_SRAM2 static sample_capture_line_hot_t g_sample_capture_line_hot;
 STORAGE_STATE_SDRAM static sample_capture_editor_audio_cache_t g_sample_capture_editor_cache;
 STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;
 EDITOR_AUDIO_CACHE_SDRAM static int16_t

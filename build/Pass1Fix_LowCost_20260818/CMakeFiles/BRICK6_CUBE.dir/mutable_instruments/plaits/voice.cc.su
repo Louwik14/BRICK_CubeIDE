@@ -1,2 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.cc:37:6:void plaits::Voice::Init(stmlib::BufferAllocator*)	88	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.cc:90:6:void plaits::Voice::Render(const plaits::Patch&, const plaits::Modulations&, Frame*, size_t)	104	static,ignoring_inline_asm

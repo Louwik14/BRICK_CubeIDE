@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/bass_drum_engine.h:47:16:virtual void plaits::BassDrumEngine::LoadUserData(const uint8_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/bass_drum_engine.cc:38:6:virtual void plaits::BassDrumEngine::Init(stmlib::BufferAllocator*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/bass_drum_engine.cc:44:6:virtual void plaits::BassDrumEngine::Reset()	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/drums/analog_bass_drum.h:74:8:void plaits::AnalogBassDrum::Render(bool, bool, float, float, float, float, float, float, float*, size_t)	68	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/drums/synthetic_bass_drum.h:129:8:void plaits::SyntheticBassDrum::Render(bool, bool, float, float, float, float, float, float, float, float*, size_t)	92	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/bass_drum_engine.cc:48:6:virtual void plaits::BassDrumEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	64	static

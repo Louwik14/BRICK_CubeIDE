@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:15:17:control_audio_queue_advance	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:21:17:control_audio_queue_free	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:29:6:control_audio_queue_init	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:36:9:control_audio_queue_publish_batch	48	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:88:9:control_audio_queue_publish	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:93:9:control_audio_queue_audio_peek	4	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:105:9:control_audio_queue_audio_pop	8	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_queue.c:116:10:control_audio_queue_audio_frames_until_due	48	static

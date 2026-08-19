@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c:70:16:seq_boundary_engine_midi_fx_slot_param	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c:322:6:seq_boundary_engine_restore_all_active_locks	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c:356:6:seq_boundary_engine_invalidate_track	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c:456:6:seq_boundary_engine_process	560	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c:504:6:seq_boundary_engine_advance_one_step	48	static

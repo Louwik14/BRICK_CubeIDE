@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:28:16:audio_note_admission_find	12	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:46:16:audio_note_admission_find_free	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:22:6:audio_note_admission_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:56:9:audio_note_admission_apply	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:106:6:audio_note_admission_close_entity	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_note_admission.c:125:6:audio_note_admission_close_all	8	static

@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:34:16:counter_advanced	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:39:13:result_note	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:63:13:capture_baselines	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:83:6:monkey_test_monitor_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:90:6:monkey_test_monitor_start	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:99:6:monkey_test_monitor_stop	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:104:9:monkey_test_monitor_poll	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/monkey_test_monitor.c:187:13:monkey_test_issue_label	0	static

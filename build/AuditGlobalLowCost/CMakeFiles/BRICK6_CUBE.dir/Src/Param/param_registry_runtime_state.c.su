@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:22:6:param_registry_runtime_state_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:30:9:param_registry_runtime_ui_value_get	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:51:9:param_registry_runtime_cache_get	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:63:6:param_registry_runtime_cache_set	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:81:6:param_registry_runtime_cache_clear_track	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:111:9:param_registry_runtime_get_or_default	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:131:6:param_registry_runtime_resync_lfo	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:93:6:param_registry_runtime_commit_authoritative_write	24	static

@@ -1,3 +1,0 @@
-note_fx_step1_static_validation 19 0.0333502
-note_fx_step10_consolidation_validation 19 0.0630977
----

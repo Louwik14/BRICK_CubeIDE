@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:76:13:live_parameter_audio_runtime_advance_to	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:226:6:live_parameter_audio_runtime_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:237:10:live_parameter_audio_runtime_apply_due	104	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:251:6:live_parameter_audio_runtime_process	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:268:6:live_parameter_audio_runtime_get_diag	4	static

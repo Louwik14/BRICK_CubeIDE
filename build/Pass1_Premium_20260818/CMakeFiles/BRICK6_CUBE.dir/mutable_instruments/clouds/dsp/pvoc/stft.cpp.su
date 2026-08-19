@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/clouds/dsp/pvoc/stft.cpp:80:6:void clouds::STFT::Reset()	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/clouds/dsp/pvoc/stft.cpp:41:6:void clouds::STFT::Init(clouds::FFT*, size_t, size_t, float*, float*, const float*, short int*, clouds::Modifier*)	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/clouds/dsp/pvoc/stft.cpp:90:6:void clouds::STFT::Process(const clouds::Parameters&, const float*, float*, size_t, size_t)	48	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/clouds/dsp/pvoc/stft.cpp:120:6:void clouds::STFT::Buffer()	112	static,ignoring_inline_asm

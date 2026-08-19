@@ -21,5 +21,6 @@
       "label": "$(debug) Debug",
       "task": "Debug"
     }
-  ]
+  ],
+  "git.ignoreLimitWarning": true
 }

@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.h:46:16:virtual void plaits::StringMachineEngine::LoadUserData(const uint8_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:40:6:virtual void plaits::StringMachineEngine::Init(stmlib::BufferAllocator*)	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:52:6:virtual void plaits::StringMachineEngine::Reset()	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/oscillator/string_synth_oscillator.h:66:15:void plaits::StringSynthOscillator::Render(float, const float*, float, float*, size_t)	128	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/fx/ensemble.h:59:8:void plaits::Ensemble::Process(float*, float*, size_t)	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:72:6:void plaits::StringMachineEngine::ComputeRegistration(float, float*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:85:6:virtual void plaits::StringMachineEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	96	static

@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_trace.c:10:17:sample_stream_event_trace_find_cause	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_trace.c:42:17:sample_stream_event_trace_record_locked	48	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_trace.c:91:6:sample_stream_event_trace_reset	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_trace.c:106:10:sample_stream_event_trace_record	40	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_trace.c:137:10:sample_stream_event_trace_record_miss	56	static,ignoring_inline_asm

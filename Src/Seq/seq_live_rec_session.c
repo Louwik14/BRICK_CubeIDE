@@ -45,7 +45,7 @@ SEQ_STATE_D2 static uint8_t g_seq_live_rec_pattern_target_track;
 SEQ_STATE_D2 static uint8_t g_seq_live_rec_pattern_track;
 SEQ_STATE_D2 static uint32_t g_seq_live_rec_pattern_steps_remaining;
 
-static seq_live_rec_session_pending_note_t g_seq_live_rec_pending[64U];
+CONTROL_M4_SRAM2 static seq_live_rec_session_pending_note_t g_seq_live_rec_pending[64U];
 
 static param_id_t seq_live_rec_session_play_param_note(uint8_t voice)
 {

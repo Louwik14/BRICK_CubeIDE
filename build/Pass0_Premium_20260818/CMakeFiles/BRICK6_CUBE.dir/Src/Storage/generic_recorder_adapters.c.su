@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:5:16:generic_recorder_fatfs_snapshot	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:12:16:generic_recorder_fatfs_resolve	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:24:43:generic_recorder_fatfs_extend	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:31:32:generic_recorder_fatfs_reservation_adapter	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:43:43:generic_recorder_sd_start	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:67:42:generic_recorder_sd_poll	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/generic_recorder_adapters.c:97:30:generic_recorder_sd_block_device_adapter	16	static
