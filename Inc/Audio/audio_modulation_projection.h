@@ -11,6 +11,7 @@ extern "C" {
 
 void audio_modulation_projection_audio_init(void);
 void audio_modulation_projection_audio_consume(void);
+uint8_t audio_modulation_projection_audio_configuration_changed(void);
 uint8_t audio_modulation_projection_audio_resolve_owner(uint8_t entity_id,
                                                         uint8_t *out_owner_id);
 uint8_t audio_modulation_projection_audio_is_group_master(uint8_t entity_id);

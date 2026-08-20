@@ -56,6 +56,52 @@ void param_registry_control_shadow_set(uint8_t track, param_id_t id, float value
     g_param_runtime_track_flags[track][id] = PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID;
 }
 
+void param_registry_control_shadow_set_pending(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
+        return;
+    g_param_runtime_track_values[track][id] = value;
+    g_param_runtime_track_flags[track][id] =
+        (uint8_t)(PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID
+                  | PARAM_REGISTRY_RUNTIME_AUDIO_PENDING);
+}
+
+void param_registry_control_shadow_set_pending_global(param_id_t id, float value)
+{
+    if (id >= PARAM_COUNT)
+        return;
+    g_param_runtime_track_values[0U][id] = value;
+    g_param_runtime_track_flags[0U][id] =
+        (uint8_t)(PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID
+                  | PARAM_REGISTRY_RUNTIME_AUDIO_PENDING
+                  | PARAM_REGISTRY_RUNTIME_AUDIO_PENDING_GLOBAL);
+}
+
+void param_registry_control_shadow_mark_published(uint8_t track, param_id_t id)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
+        return;
+    g_param_runtime_track_flags[track][id] &=
+        (uint8_t)~(PARAM_REGISTRY_RUNTIME_AUDIO_PENDING
+                   | PARAM_REGISTRY_RUNTIME_AUDIO_PENDING_GLOBAL);
+}
+
+uint8_t param_registry_control_shadow_is_pending(uint8_t track, param_id_t id)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
+        return 0U;
+    return (uint8_t)((g_param_runtime_track_flags[track][id]
+                      & PARAM_REGISTRY_RUNTIME_AUDIO_PENDING) != 0U);
+}
+
+uint8_t param_registry_control_shadow_is_pending_global(param_id_t id)
+{
+    if (id >= PARAM_COUNT)
+        return 0U;
+    return (uint8_t)((g_param_runtime_track_flags[0U][id]
+                      & PARAM_REGISTRY_RUNTIME_AUDIO_PENDING_GLOBAL) != 0U);
+}
+
 void param_registry_control_shadow_clear_track(uint8_t track)
 {
     if (track >= SEQ_LANE_CAPACITY)

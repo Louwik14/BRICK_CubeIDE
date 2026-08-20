@@ -45,6 +45,30 @@ bool live_parameter_event_submit(const live_parameter_event_t *event)
     const uint16_t head = g_live_parameter_event_head;
     if ((uint16_t)(head - g_live_parameter_event_tail) >= LIVE_PARAMETER_EVENT_QUEUE_CAPACITY)
     {
+        /* Continuous SET_TARGET traffic is state, not an occurrence.  Under
+         * back-pressure preserve the newest intention for an already queued
+         * target instead of dropping it.  Runtime-temporary/timestamped
+         * events are deliberately never coalesced. */
+        if (((event->flags & LIVE_PARAMETER_EVENT_FLAG_SET_TARGET) != 0U)
+                && ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) == 0U))
+        {
+            for (uint16_t cursor = g_live_parameter_event_tail;
+                 cursor != head; ++cursor)
+            {
+                live_parameter_event_t *const pending =
+                    &g_live_parameter_event_queue[cursor & LIVE_PARAMETER_EVENT_QUEUE_MASK];
+                if ((pending->parameter_id == event->parameter_id)
+                        && (pending->scope == event->scope)
+                        && (pending->track == event->track)
+                        && (pending->slot == event->slot)
+                        && ((pending->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) == 0U))
+                {
+                    *pending = *event;
+                    live_parameter_event_exit_critical(primask);
+                    return true;
+                }
+            }
+        }
         g_live_parameter_event_drop_count++;
         live_parameter_event_exit_critical(primask);
         return false;
@@ -56,6 +80,33 @@ bool live_parameter_event_submit(const live_parameter_event_t *event)
 
     live_parameter_event_exit_critical(primask);
     return true;
+}
+
+bool live_parameter_event_peek(live_parameter_event_t *out_event)
+{
+    if (out_event == 0)
+        return false;
+    const uint32_t primask = live_parameter_event_enter_critical();
+    const uint16_t tail = g_live_parameter_event_tail;
+    if (tail == g_live_parameter_event_head)
+    {
+        live_parameter_event_exit_critical(primask);
+        return false;
+    }
+    *out_event = g_live_parameter_event_queue[tail & LIVE_PARAMETER_EVENT_QUEUE_MASK];
+    live_parameter_event_exit_critical(primask);
+    return true;
+}
+
+void live_parameter_event_consume(void)
+{
+    const uint32_t primask = live_parameter_event_enter_critical();
+    if (g_live_parameter_event_tail != g_live_parameter_event_head)
+    {
+        __DMB();
+        g_live_parameter_event_tail = (uint16_t)(g_live_parameter_event_tail + 1U);
+    }
+    live_parameter_event_exit_critical(primask);
 }
 
 bool live_parameter_event_pop(live_parameter_event_t *out_event)

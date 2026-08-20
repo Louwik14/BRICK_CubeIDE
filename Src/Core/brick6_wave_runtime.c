@@ -926,7 +926,7 @@ uint8_t brick6_wave_runtime_prepare_block(uint8_t instance_id,
     return 1U;
 }
 
-uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames)
+ITCM_TEXT uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
     if ((instance == NULL) || (out_mono == NULL) || (frames == 0U))

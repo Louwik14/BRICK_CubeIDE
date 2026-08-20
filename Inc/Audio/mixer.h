@@ -55,6 +55,7 @@ typedef enum
 
 void mixer_init(void);
 void mixer_reset_runtime_state(void);
+void mixer_rebuild_static_plan(void);
 void mixer_set_master(float gain);
 float mixer_get_master(void);
 void mixer_get_global_diag_state(mixer_global_diag_state_t *out);

@@ -163,6 +163,7 @@ void fx_chain_process_track_inserts_pre_fader(brick_entity_id_t entity_id,
                                               uint32_t legacy_track,
                                               const int8_t *legacy_slots,
                                               size_t legacy_slot_count,
+                                              uint8_t process_audio_fx_comp,
                                               float* L,
                                               float* R,
                                               uint32_t frames)
@@ -173,7 +174,7 @@ void fx_chain_process_track_inserts_pre_fader(brick_entity_id_t entity_id,
                                           L,
                                           R,
                                           frames);
-    if (audio_fx_runtime_is_comp(entity_id) != 0U)
+    if (process_audio_fx_comp != 0U)
     {
         audio_fx_runtime_process(entity_id, L, R, frames);
     }
@@ -184,12 +185,7 @@ void fx_chain_process_audio_fx_post_fader(brick_entity_id_t entity_id,
                                           float* R,
                                           uint32_t frames)
 {
-    if ((audio_fx_runtime_is_comp(entity_id) == 0U)
-            && (audio_fx_runtime_get_placement(entity_id)
-                == AUDIO_FX_PLACEMENT_POST_FILTER))
-    {
-        audio_fx_runtime_process(entity_id, L, R, frames);
-    }
+    audio_fx_runtime_process(entity_id, L, R, frames);
 }
 
 uint8_t fx_chain_track_inserts_require_stereo(brick_entity_id_t entity_id,
@@ -210,10 +206,35 @@ uint8_t fx_chain_track_inserts_require_stereo(brick_entity_id_t entity_id,
     return audio_fx_runtime_requires_stereo(entity_id);
 }
 
+uint8_t fx_chain_track_has_pre_fader_insert(brick_entity_id_t entity_id,
+                                            const int8_t *legacy_slots,
+                                            size_t legacy_slot_count)
+{
+    if (legacy_slots != NULL)
+    {
+        for (size_t insert = 0U; insert < legacy_slot_count; ++insert)
+        {
+            if (legacy_slots[insert] >= 0)
+                return 1U;
+        }
+    }
+    return audio_fx_runtime_is_comp(entity_id);
+}
+
 uint8_t fx_chain_audio_fx_is_pre_filter(brick_entity_id_t entity_id)
 {
     return (uint8_t)(audio_fx_runtime_get_placement(entity_id)
                      == AUDIO_FX_PLACEMENT_PRE_FILTER);
+}
+
+uint8_t fx_chain_audio_fx_is_active(brick_entity_id_t entity_id)
+{
+    return audio_fx_runtime_is_active(entity_id);
+}
+
+uint8_t fx_chain_audio_fx_is_comp(brick_entity_id_t entity_id)
+{
+    return audio_fx_runtime_is_comp(entity_id);
 }
 
 void fx_chain_process_audio_fx_pre_filter_mono(brick_entity_id_t entity_id,
@@ -234,16 +255,14 @@ void fx_chain_process_audio_fx_pre_filter_stereo(brick_entity_id_t entity_id,
 float fx_chain_process_audio_fx_comp_mono_sample(brick_entity_id_t entity_id,
                                                  float sample)
 {
-    return (audio_fx_runtime_is_comp(entity_id) != 0U)
-        ? audio_fx_runtime_process_mono_sample(entity_id, sample) : sample;
+    return audio_fx_runtime_process_mono_sample(entity_id, sample);
 }
 
 void fx_chain_process_audio_fx_comp_stereo_sample(brick_entity_id_t entity_id,
                                                   float *left,
                                                   float *right)
 {
-    if (audio_fx_runtime_is_comp(entity_id) != 0U)
-        audio_fx_runtime_process_stereo_sample(entity_id, left, right);
+    audio_fx_runtime_process_stereo_sample(entity_id, left, right);
 }
 
 void fx_chain_process_audio_fx_post_fader_stereo_sample(
@@ -251,10 +270,5 @@ void fx_chain_process_audio_fx_post_fader_stereo_sample(
     float *left,
     float *right)
 {
-    if ((audio_fx_runtime_is_comp(entity_id) == 0U)
-            && (audio_fx_runtime_get_placement(entity_id)
-                == AUDIO_FX_PLACEMENT_POST_FILTER))
-    {
-        audio_fx_runtime_process_stereo_sample(entity_id, left, right);
-    }
+    audio_fx_runtime_process_stereo_sample(entity_id, left, right);
 }

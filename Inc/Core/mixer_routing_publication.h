@@ -18,4 +18,5 @@ uint8_t mixer_routing_control_set_route(uint32_t track_id, mixer_route_t route);
 uint8_t mixer_routing_control_set_insert_slot(uint32_t track_id,
                                               uint32_t insert_idx,
                                               int8_t slot);
-uint8_t mixer_routing_publication_audio_read(mixer_routing_snapshot_t *out);
+uint8_t mixer_routing_publication_audio_read(uint32_t consumed_generation,
+                                             mixer_routing_snapshot_t *out);

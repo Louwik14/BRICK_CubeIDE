@@ -22,6 +22,7 @@ _Static_assert(sizeof(audio_modulation_topology_entry_t) == 4U,
 
 void audio_modulation_projection_init(void);
 void audio_modulation_projection_publish(void);
+void audio_modulation_configuration_publish(void);
 
 #ifdef __cplusplus
 }

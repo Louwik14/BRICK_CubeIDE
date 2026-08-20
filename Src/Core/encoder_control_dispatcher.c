@@ -191,5 +191,6 @@ uint8_t encoder_control_dispatcher_service(void)
     /* Handoff is bounded and keeps capture conversion out of the encoder/UI
      * resolver.  The converted events belong to the audio-owned schedule. */
     (void)live_parameter_audio_queue_drain();
+    (void)param_registry_service_pending_audio_publications();
     return submitted;
 }

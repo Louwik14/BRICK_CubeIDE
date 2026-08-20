@@ -953,6 +953,7 @@ void mod_matrix_publish_control_snapshot_track(uint8_t track)
     mailbox->snapshot = snapshot;
     __DMB();
     mailbox->sequence = sequence + 2U;
+    audio_modulation_configuration_publish();
 }
 
 void audio_mod_matrix_apply_snapshot(uint8_t track,

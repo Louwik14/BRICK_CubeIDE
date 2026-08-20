@@ -8,20 +8,6 @@
 #include "Param/param_registry.h"
 #include "memory_layout.h"
 
-typedef struct
-{
-    uint8_t valid;
-    uint8_t scope;
-    uint8_t track;
-    uint8_t slot;
-    uint16_t parameter_id;
-    uint16_t reserved;
-    float target;
-    uint64_t last_sample_time;
-} live_parameter_audio_runtime_slot_t;
-
-SEQ_STATE_D2 static live_parameter_audio_runtime_slot_t
-    g_live_parameter_audio_runtime_slots[LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
 
@@ -34,40 +20,6 @@ static float live_parameter_audio_runtime_clamp(param_id_t parameter, float valu
     if (value > param_registry[parameter].max)
         return param_registry[parameter].max;
     return value;
-}
-
-static uint8_t live_parameter_audio_runtime_slot_matches(
-    const live_parameter_audio_runtime_slot_t *slot,
-    const live_parameter_audio_event_t *event)
-{
-    return (uint8_t)((slot->valid != 0U)
-                     && (slot->parameter_id == event->parameter_id)
-                     && (slot->scope == event->scope)
-                     && (slot->track == event->track)
-                     && (slot->slot == event->slot));
-}
-
-static live_parameter_audio_runtime_slot_t *
-live_parameter_audio_runtime_find_slot(const live_parameter_audio_event_t *event)
-{
-    live_parameter_audio_runtime_slot_t *free_slot = 0;
-    live_parameter_audio_runtime_slot_t *reusable_slot = 0;
-    uint64_t reusable_age = UINT64_MAX;
-    for (uint16_t i = 0U; i < LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY; ++i)
-    {
-        live_parameter_audio_runtime_slot_t *const slot =
-            &g_live_parameter_audio_runtime_slots[i];
-        if (live_parameter_audio_runtime_slot_matches(slot, event) != 0U)
-            return slot;
-        if ((free_slot == 0) && (slot->valid == 0U))
-            free_slot = slot;
-        if ((slot->valid != 0U) && (slot->last_sample_time < reusable_age))
-        {
-            reusable_slot = slot;
-            reusable_age = slot->last_sample_time;
-        }
-    }
-    return (free_slot != 0) ? free_slot : reusable_slot;
 }
 
 static uint8_t live_parameter_audio_runtime_apply_target(
@@ -157,37 +109,16 @@ static uint8_t live_parameter_audio_runtime_apply_target(
 }
 
 static uint8_t live_parameter_audio_runtime_apply_event(
-    const live_parameter_audio_event_t *event,
-    uint64_t now)
+    const live_parameter_audio_event_t *event)
 {
     if ((event == 0) || (event->parameter_id >= PARAM_COUNT))
         return 0U;
-
-    live_parameter_audio_runtime_slot_t *const slot =
-        live_parameter_audio_runtime_find_slot(event);
-    if (slot == 0)
-        return 0U;
-
-    const uint8_t new_slot = (slot->valid == 0U) ? 1U : 0U;
-    if ((new_slot != 0U)
-            || (live_parameter_audio_runtime_slot_matches(slot, event) == 0U))
-    {
-        slot->valid = 1U;
-        slot->scope = event->scope;
-        slot->track = event->track;
-        slot->slot = event->slot;
-        slot->parameter_id = event->parameter_id;
-        slot->last_sample_time = now;
-    }
 
     float target = ((event->flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
         ? live_parameter_event_decode_float(event->value)
         : (float)event->value;
     if (event->scope != LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
         target = live_parameter_audio_runtime_clamp(event->parameter_id, target);
-    slot->target = target;
-    slot->last_sample_time = now;
-
     if (live_parameter_audio_runtime_apply_target(event, target) == 0U)
         return 0U;
     return 1U;
@@ -195,11 +126,6 @@ static uint8_t live_parameter_audio_runtime_apply_event(
 
 void live_parameter_audio_runtime_init(void)
 {
-    for (uint16_t i = 0U; i < LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY; ++i)
-    {
-        g_live_parameter_audio_runtime_slots[i] =
-            (live_parameter_audio_runtime_slot_t){ 0 };
-    }
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] =
@@ -211,21 +137,19 @@ void live_parameter_audio_runtime_init(void)
 
 uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
 {
+    const uint16_t claimed = live_parameter_audio_queue_claim_due(now);
+    if (claimed == 0U)
+        return 0U;
+
     uint16_t applied = 0U;
-    for (uint16_t i = 0U; i < LIVE_PARAMETER_AUDIO_RUNTIME_SLOT_CAPACITY; ++i)
+    for (uint16_t index = 0U; index < claimed; ++index)
     {
         live_parameter_audio_event_t event;
-        if (live_parameter_audio_queue_pop_due(&event) == 0U)
+        if (live_parameter_audio_queue_read_claimed(index, &event) == 0U)
             break;
-        if (live_parameter_audio_runtime_apply_event(&event, now) != 0U)
+        if (live_parameter_audio_runtime_apply_event(&event) != 0U)
             ++applied;
     }
+    live_parameter_audio_queue_release_claimed();
     return applied;
-}
-
-void live_parameter_audio_runtime_process(uint64_t block_start,
-                                          uint16_t frames)
-{
-    (void)block_start;
-    (void)frames;
 }

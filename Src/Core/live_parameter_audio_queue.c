@@ -6,16 +6,10 @@
 #include "Seq/seq_runtime_exec.h"
 #include "stm32h7xx_hal.h"
 
-#define LIVE_PARAMETER_AUDIO_QUEUE_MASK (LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY - 1U)
-
 SEQ_STATE_D2 static live_parameter_audio_event_t
     g_live_parameter_audio_scheduled[LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY];
-SEQ_STATE_D2 static live_parameter_audio_event_t
-    g_live_parameter_audio_due[LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY];
 static volatile uint16_t g_live_parameter_audio_scheduled_count;
-static volatile uint16_t g_live_parameter_audio_due_head;
-static volatile uint16_t g_live_parameter_audio_due_tail;
-static volatile uint16_t g_live_parameter_audio_due_count;
+static volatile uint16_t g_live_parameter_audio_claimed_count;
 static volatile uint32_t g_live_parameter_audio_bulk_serial;
 static volatile uint32_t g_live_parameter_audio_publish_failure_count;
 
@@ -60,7 +54,7 @@ static uint8_t live_parameter_audio_schedule(
     {
         /* Coalescing is a saturation-only escape hatch.  It is valid only for
          * successive updates of the same target that are still unapplied. */
-        if ((count != 0U)
+        if ((count > g_live_parameter_audio_claimed_count)
                 && (live_parameter_audio_same_target(
                         &g_live_parameter_audio_scheduled[count - 1U], event) != 0U)
                 && (g_live_parameter_audio_scheduled[count - 1U].ingress_serial
@@ -75,8 +69,9 @@ static uint8_t live_parameter_audio_schedule(
         return 0U;
     }
 
+    const uint16_t insertion_floor = g_live_parameter_audio_claimed_count;
     uint16_t index = count;
-    while ((index != 0U)
+    while ((index > insertion_floor)
            && ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
                 > event->effective_sample_time)
                || ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
@@ -118,8 +113,9 @@ static uint8_t live_parameter_audio_schedule_bulk(
     for (uint8_t item = 0U; item < count; ++item)
     {
         const live_parameter_audio_event_t *const event = &events[item];
+        const uint16_t insertion_floor = g_live_parameter_audio_claimed_count;
         uint16_t index = g_live_parameter_audio_scheduled_count;
-        while ((index != 0U)
+        while ((index > insertion_floor)
                && ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
                     > event->effective_sample_time)
                    || ((g_live_parameter_audio_scheduled[index - 1U].effective_sample_time
@@ -161,9 +157,7 @@ void live_parameter_audio_queue_init(void)
     const uint32_t primask = live_parameter_audio_enter_critical();
 
     g_live_parameter_audio_scheduled_count = 0U;
-    g_live_parameter_audio_due_head = 0U;
-    g_live_parameter_audio_due_tail = 0U;
-    g_live_parameter_audio_due_count = 0U;
+    g_live_parameter_audio_claimed_count = 0U;
     g_live_parameter_audio_bulk_serial = 0U;
     g_live_parameter_audio_publish_failure_count = 0U;
 
@@ -177,13 +171,13 @@ uint16_t live_parameter_audio_queue_drain(void)
     for (uint16_t i = 0U; i < LIVE_PARAMETER_AUDIO_DRAIN_BUDGET; ++i)
     {
         live_parameter_event_t control_event;
-        if (live_parameter_event_pop(&control_event) == 0U)
+        if (live_parameter_event_peek(&control_event) == 0U)
             break;
 
         uint64_t effective_sample_time = 0U;
         if (live_parameter_audio_convert_capture(control_event.capture_tick,
                                                  &effective_sample_time) == 0U)
-            continue;
+            break;
 
         const live_parameter_audio_event_t audio_event = {
             .effective_sample_time = effective_sample_time,
@@ -198,8 +192,10 @@ uint16_t live_parameter_audio_queue_drain(void)
             .value = control_event.value,
             .matrix_operation = LIVE_PARAMETER_MATRIX_OPERATION_NONE
         };
-        if (live_parameter_audio_schedule(&audio_event) != 0U)
-            ++drained;
+        if (live_parameter_audio_schedule(&audio_event) == 0U)
+            break;
+        live_parameter_event_consume();
+        ++drained;
     }
 
     return drained;
@@ -328,12 +324,13 @@ uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
                                                           uint16_t max_frames)
 {
     const uint32_t primask = live_parameter_audio_enter_critical();
+    const uint16_t first = g_live_parameter_audio_claimed_count;
     const uint16_t count = g_live_parameter_audio_scheduled_count;
-    const uint64_t deadline = (count != 0U)
-        ? g_live_parameter_audio_scheduled[0].effective_sample_time : 0U;
+    const uint64_t deadline = (first < count)
+        ? g_live_parameter_audio_scheduled[first].effective_sample_time : 0U;
     live_parameter_audio_exit_critical(primask);
 
-    if ((count == 0U) || (max_frames == 0U))
+    if ((first >= count) || (max_frames == 0U))
         return max_frames;
     if (deadline <= block_start)
         return max_frames;
@@ -344,97 +341,78 @@ uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
     return (uint16_t)until_deadline;
 }
 
-uint16_t live_parameter_audio_queue_consume_due(uint64_t now)
+uint16_t live_parameter_audio_queue_claim_due(uint64_t now)
 {
     const uint32_t primask = live_parameter_audio_enter_critical();
-    /* The schedule is CONTROL-fed.  Consume at most its entry occupancy so
-     * concurrent publications cannot extend the AUDIO deadline. */
-    uint16_t consumed = 0U;
-    uint16_t pending = g_live_parameter_audio_scheduled_count;
+    if (g_live_parameter_audio_claimed_count != 0U)
+    {
+        live_parameter_audio_exit_critical(primask);
+        return 0U;
+    }
 
-    while ((pending != 0U)
-           && (g_live_parameter_audio_scheduled_count != 0U)
-           && (g_live_parameter_audio_scheduled[0].effective_sample_time <= now))
+    const uint16_t available = g_live_parameter_audio_scheduled_count;
+    uint16_t claimed = 0U;
+    while ((claimed < available)
+           && (g_live_parameter_audio_scheduled[claimed].effective_sample_time <= now))
     {
         uint8_t group_count = 1U;
-        if ((g_live_parameter_audio_scheduled[0].source == LIVE_PARAMETER_EVENT_SOURCE_BULK)
-                && ((g_live_parameter_audio_scheduled[0].flags
+        const live_parameter_audio_event_t *const first =
+            &g_live_parameter_audio_scheduled[claimed];
+        if ((first->source == LIVE_PARAMETER_EVENT_SOURCE_BULK)
+                && ((first->flags
                      & LIVE_PARAMETER_EVENT_FLAG_BULK) != 0U))
         {
-            group_count = live_parameter_event_bulk_count(
-                g_live_parameter_audio_scheduled[0].flags);
+            group_count = live_parameter_event_bulk_count(first->flags);
             if ((group_count == 0U) || (group_count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
                 group_count = 1U;
-            if (((uint16_t)group_count > g_live_parameter_audio_scheduled_count))
-                break;
-            if (((uint16_t)group_count > pending))
+            if (((uint32_t)claimed + group_count) > available)
                 break;
             for (uint8_t i = 0U; i < group_count; ++i)
             {
                 const live_parameter_audio_event_t *const event =
-                    &g_live_parameter_audio_scheduled[i];
+                    &g_live_parameter_audio_scheduled[claimed + i];
                 if ((event->source != LIVE_PARAMETER_EVENT_SOURCE_BULK)
                         || (live_parameter_event_bulk_count(event->flags) != group_count)
                         || (live_parameter_event_bulk_index(event->flags) != i)
-                        || (event->effective_sample_time
-                            != g_live_parameter_audio_scheduled[0].effective_sample_time))
+                        || (event->effective_sample_time != first->effective_sample_time))
                 {
                     group_count = 1U;
                     break;
                 }
             }
         }
-
-        if ((uint32_t)g_live_parameter_audio_due_count + group_count
-                > LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY)
-        {
-            break;
-        }
-
-        for (uint8_t item = 0U; item < group_count; ++item)
-        {
-            const uint16_t due_index =
-                (uint16_t)(g_live_parameter_audio_due_head & LIVE_PARAMETER_AUDIO_QUEUE_MASK);
-            g_live_parameter_audio_due[due_index] = g_live_parameter_audio_scheduled[item];
-            g_live_parameter_audio_due_head = (uint16_t)(g_live_parameter_audio_due_head + 1U);
-            g_live_parameter_audio_due_count++;
-        }
-
-        g_live_parameter_audio_scheduled_count =
-            (uint16_t)(g_live_parameter_audio_scheduled_count - group_count);
-        pending = (uint16_t)(pending - group_count);
-        for (uint16_t index = 0U;
-             index < g_live_parameter_audio_scheduled_count;
-             ++index)
-        {
-            g_live_parameter_audio_scheduled[index] =
-                g_live_parameter_audio_scheduled[index + group_count];
-        }
-        consumed = (uint16_t)(consumed + group_count);
+        claimed = (uint16_t)(claimed + group_count);
     }
 
+    g_live_parameter_audio_claimed_count = claimed;
     live_parameter_audio_exit_critical(primask);
-    return consumed;
+    return claimed;
 }
 
-bool live_parameter_audio_queue_pop_due(live_parameter_audio_event_t *out_event)
+bool live_parameter_audio_queue_read_claimed(
+    uint16_t index, live_parameter_audio_event_t *out_event)
 {
-    if (out_event == 0)
+    if ((out_event == 0) || (index >= g_live_parameter_audio_claimed_count))
         return false;
 
-    const uint32_t primask = live_parameter_audio_enter_critical();
-    if (g_live_parameter_audio_due_count == 0U)
-    {
-        live_parameter_audio_exit_critical(primask);
-        return false;
-    }
-
-    const uint16_t due_index =
-        (uint16_t)(g_live_parameter_audio_due_tail & LIVE_PARAMETER_AUDIO_QUEUE_MASK);
-    *out_event = g_live_parameter_audio_due[due_index];
-    g_live_parameter_audio_due_tail = (uint16_t)(g_live_parameter_audio_due_tail + 1U);
-    --g_live_parameter_audio_due_count;
-
-    live_parameter_audio_exit_critical(primask);
+    *out_event = g_live_parameter_audio_scheduled[index];
     return true;
+}
+
+void live_parameter_audio_queue_release_claimed(void)
+{
+    const uint32_t primask = live_parameter_audio_enter_critical();
+    const uint16_t claimed = g_live_parameter_audio_claimed_count;
+    const uint16_t count = g_live_parameter_audio_scheduled_count;
+    const uint16_t remaining = (claimed <= count)
+        ? (uint16_t)(count - claimed) : 0U;
+
+    for (uint16_t index = 0U; index < remaining; ++index)
+    {
+        g_live_parameter_audio_scheduled[index] =
+            g_live_parameter_audio_scheduled[index + claimed];
+    }
+    g_live_parameter_audio_scheduled_count = remaining;
+    g_live_parameter_audio_claimed_count = 0U;
+    live_parameter_audio_exit_critical(primask);
 }

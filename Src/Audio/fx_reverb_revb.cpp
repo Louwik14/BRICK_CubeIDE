@@ -40,7 +40,7 @@ static float filter_cutoff(float value, float min_hz, float scale_hz)
 
 namespace mifx
 {
-ITCM_AUDIT_32_TEXT void Reverb::ProcessStereoWetAdd(const float *in_l,
+ITCM_TEXT void Reverb::ProcessStereoWetAdd(const float *in_l,
                                                     const float *in_r,
                                                     float *out_l,
                                                     float *out_r,

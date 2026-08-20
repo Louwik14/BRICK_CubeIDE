@@ -124,6 +124,9 @@ uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, flo
 uint8_t param_registry_prepare_global_audio_command(param_id_t id,
                                                     float canonical_value,
                                                     float *out_command_value);
+/* CONTROL service: retries latest-wins state publications rejected before
+ * AUDIO had a clock anchor or while its bounded queue was full. */
+uint8_t param_registry_service_pending_audio_publications(void);
 
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);

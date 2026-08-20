@@ -9,6 +9,7 @@
 typedef struct
 {
     volatile uint32_t sequence;
+    volatile uint32_t configuration_generation;
     audio_modulation_topology_entry_t entry[BRICK_ENTITY_CAPACITY];
 } audio_modulation_projection_mailbox_t;
 
@@ -53,5 +54,12 @@ void audio_modulation_projection_publish(void)
            projection, sizeof(projection));
     __DMB();
     g_audio_modulation_projection.sequence = sequence + 2U;
+    __DMB();
+}
+
+void audio_modulation_configuration_publish(void)
+{
+    __DMB();
+    ++g_audio_modulation_projection.configuration_generation;
     __DMB();
 }

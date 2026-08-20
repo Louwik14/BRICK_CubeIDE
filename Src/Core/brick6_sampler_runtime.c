@@ -20,6 +20,7 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Storage/memory_layout.h"
+#include "Audio/audio_note_engine_adapter.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
@@ -3192,6 +3193,10 @@ void brick6_sampler_runtime_reset_track(uint8_t track_id)
         return;
     }
 
+    const uint8_t was_slice_mode_active =
+        brick6_sampler_runtime_ram_slice_mode_active(track_id);
+    const uint8_t previous_multi_voice_count =
+        brick6_sampler_runtime_get_multi_voice_count(track_id);
     brick6_sampler_runtime_begin_declick_tail(track_id, &g_sampler_voice[track_id]);
     brick6_sampler_runtime_multi_stop_track(track_id);
     memset(&g_sampler_voice[track_id], 0, sizeof(g_sampler_voice[track_id]));
@@ -3220,6 +3225,11 @@ void brick6_sampler_runtime_reset_track(uint8_t track_id)
     brick6_sampler_runtime_multi_track_reset(track_id);
     brick6_sampler_runtime_clip_reset(track_id);
     brick6_sampler_runtime_refresh_track_activity(track_id);
+    if ((was_slice_mode_active
+            != brick6_sampler_runtime_ram_slice_mode_active(track_id))
+            || (previous_multi_voice_count
+                != brick6_sampler_runtime_get_multi_voice_count(track_id)))
+        audio_note_engine_adapter_audio_publish_snapshot_entity(track_id);
 }
 
 void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
@@ -3435,7 +3445,10 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
         return;
     }
 
+    const uint8_t was_active = brick6_sampler_runtime_ram_slice_mode_active(track_id);
     g_sampler_voice[track_id].slice_count = brick6_sampler_runtime_resolve_grid_count(slice_count);
+    if (was_active != brick6_sampler_runtime_ram_slice_mode_active(track_id))
+        audio_note_engine_adapter_audio_publish_snapshot_entity(track_id);
 }
 
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm)
@@ -5514,7 +5527,7 @@ static void brick6_sampler_render_sample_mono(const sample_desc_t *desc,
     }
 }
 
-static void brick6_sampler_render_sample(const sample_desc_t *desc,
+static ITCM_TEXT void brick6_sampler_render_sample(const sample_desc_t *desc,
                                          brick6_sampler_voice_t *voice,
                                          float *out_l,
                                          float *out_r,
@@ -7166,7 +7179,7 @@ static uint8_t brick6_sampler_runtime_multi_voice_format_compatible(
 #endif
 }
 
-void brick6_sampler_runtime_render_ram_track(const track_audio_runtime_ctx_t *ctx,
+ITCM_TEXT void brick6_sampler_runtime_render_ram_track(const track_audio_runtime_ctx_t *ctx,
                                              float *out_l,
                                              float *out_r,
                                              uint32_t frames)

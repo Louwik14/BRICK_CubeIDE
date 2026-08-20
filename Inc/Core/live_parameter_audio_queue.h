@@ -87,11 +87,13 @@ bool live_parameter_audio_queue_submit_poly_pair(uint32_t capture_tick,
                                                  float spread);
 uint32_t live_parameter_audio_queue_publish_failure_count(void);
 
-/* Audio-side deadline and due handoff.  The due FIFO is deliberately separate
- * from the note queue and is the application seam for the next pass. */
+/* Audio-side deadline and direct scheduled-prefix handoff.  A claim keeps the
+ * prefix immutable while CONTROL continues to publish into the suffix. */
 uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
                                                           uint16_t max_frames);
-uint16_t live_parameter_audio_queue_consume_due(uint64_t now);
-bool live_parameter_audio_queue_pop_due(live_parameter_audio_event_t *out_event);
+uint16_t live_parameter_audio_queue_claim_due(uint64_t now);
+bool live_parameter_audio_queue_read_claimed(
+    uint16_t index, live_parameter_audio_event_t *out_event);
+void live_parameter_audio_queue_release_claimed(void);
 
 #endif /* BRICK6_LIVE_PARAMETER_AUDIO_QUEUE_H */

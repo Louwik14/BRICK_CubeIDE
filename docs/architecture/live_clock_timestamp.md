@@ -208,3 +208,20 @@ owning DSP state. Category B is an intentional immediate or boundary update;
 category D is latched or structural. There is no generic duplicate lissage in
 the timestamp runtime. The fixed-width target command remains pointer-free and
 preserves the future M4 producer/M7 DSP-owner contract.
+
+## Non-lossy CONTROL to AUDIO state publication
+
+Canonical configuration writes use the existing control shadow as a
+latest-wins pending record. A write is marked published only after the AUDIO
+schedule accepts it. Rejection because the audio clock has no anchor or the
+bounded schedule is full leaves the final canonical value pending; a bounded
+CONTROL service retries it after AUDIO becomes available. Boot therefore
+replays final state instead of retaining every intermediate initialization
+write.
+
+Timestamped occurrences remain FIFO events. The ingress queue now peeks and
+only consumes an occurrence after timestamp conversion and AUDIO scheduling
+succeed. Runtime-temporary events are never coalesced. Continuous SET_TARGET
+events may replace an older queued value for the same target under
+back-pressure, preserving their latest-wins semantics without changing the
+sample-accurate contract of p-locks and automation.

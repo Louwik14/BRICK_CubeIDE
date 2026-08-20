@@ -198,11 +198,73 @@ volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
+enum
+{
+    MIXER_STATIC_GROUP_CHILD = 1U << 0,
+    MIXER_STATIC_LOOPER = 1U << 1,
+    MIXER_STATIC_ROUTE_MAIN = 1U << 2,
+    MIXER_STATIC_AUDIO_FX_ACTIVE = 1U << 3,
+    MIXER_STATIC_AUDIO_FX_PRE_FILTER = 1U << 4,
+    MIXER_STATIC_REQUIRES_STEREO = 1U << 5,
+    MIXER_STATIC_INSERT_STAGE = 1U << 6,
+    MIXER_STATIC_AUDIO_FX_COMP = 1U << 7
+};
+
+static uint8_t g_mixer_static_lane_flags[MIXER_MAX_TRACKS];
+static uint8_t g_mixer_static_group_active;
+
+void mixer_rebuild_static_plan(void)
+{
+    for (uint8_t lane = 0U; lane < MIXER_MAX_TRACKS; ++lane)
+    {
+        uint8_t flags = (g_tracks[lane].route_master != 0U)
+            ? MIXER_STATIC_ROUTE_MAIN : 0U;
+        const brick_entity_id_t entity =
+            audio_note_engine_adapter_entity_for_mix_lane(lane);
+        const track_audio_runtime_ctx_t *const ctx =
+            (entity < BRICK_ENTITY_CAPACITY)
+                ? audio_note_engine_adapter_audio_ctx(entity) : NULL;
+        if ((ctx != NULL)
+                && ((ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U))
+            flags |= MIXER_STATIC_GROUP_CHILD;
+        if ((ctx != NULL)
+                && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+            flags |= MIXER_STATIC_LOOPER;
+        if ((entity < BRICK_ENTITY_CAPACITY)
+                && (fx_chain_audio_fx_is_active(entity) != 0U))
+        {
+            flags |= MIXER_STATIC_AUDIO_FX_ACTIVE;
+            if (fx_chain_audio_fx_is_pre_filter(entity) != 0U)
+                flags |= MIXER_STATIC_AUDIO_FX_PRE_FILTER;
+        }
+        if ((entity < BRICK_ENTITY_CAPACITY)
+                && (fx_chain_audio_fx_is_comp(entity) != 0U))
+            flags |= MIXER_STATIC_AUDIO_FX_COMP;
+        if (fx_chain_track_inserts_require_stereo(
+                entity,
+                g_tracks[lane].insert_slot,
+                MIXER_INSERTS_PER_TRACK) != 0U)
+            flags |= MIXER_STATIC_REQUIRES_STEREO;
+        if (fx_chain_track_has_pre_fader_insert(
+                entity,
+                g_tracks[lane].insert_slot,
+                MIXER_INSERTS_PER_TRACK) != 0U)
+            flags |= MIXER_STATIC_INSERT_STAGE;
+        g_mixer_static_lane_flags[lane] = flags;
+    }
+
+    const track_audio_runtime_ctx_t *const group_master_ctx =
+        audio_note_engine_adapter_audio_ctx(BRICK_ENTITY_GROUP_MASTER_ID);
+    g_mixer_static_group_active = (uint8_t)((group_master_ctx != NULL)
+        && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U));
+}
+
 static __attribute__((noinline)) void mixer_routing_audio_apply_publication(void)
 {
     mixer_routing_snapshot_t snapshot;
-    if ((mixer_routing_publication_audio_read(&snapshot) == 0U)
-            || (snapshot.generation == g_mixer_routing_audio_generation))
+    if (mixer_routing_publication_audio_read(
+            g_mixer_routing_audio_generation, &snapshot) == 0U)
         return;
     for (uint32_t track = 0U; track < MIXER_MAX_TRACKS; ++track)
     {
@@ -211,6 +273,7 @@ static __attribute__((noinline)) void mixer_routing_audio_apply_publication(void
             g_tracks[track].insert_slot[insert] = snapshot.insert_slot[track][insert];
     }
     g_mixer_routing_audio_generation = snapshot.generation;
+    mixer_rebuild_static_plan();
 }
 
 static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
@@ -221,7 +284,7 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float cutoff_mod_start_hz,
                                                            float resonance_start,
                                                            float keytrack_ratio_start);
-static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+static uint8_t ITCM_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
                                                      float *mono,
                                                      uint32_t frames,
                                                      const mixer_poly_cutoff_override_t *poly_cutoff);
@@ -300,7 +363,7 @@ static mixer_track_filter_t *mixer_poly_filter(uint32_t poly_track_id, uint8_t v
         ? &g_poly_filters_hot[index] : NULL;
 }
 
-static void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
+static ITCM_TEXT void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
                                           const mixer_track_filter_t *src)
 {
     if ((dst == NULL) || (src == NULL))
@@ -494,49 +557,18 @@ static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
     return 1U;
 }
 
-static uint8_t mixer_track_is_looper_ctx(const track_audio_runtime_ctx_t *ctx)
-{
-    return (uint8_t)((ctx != 0)
-            && (ctx->audio_binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER));
-}
-
-static uint8_t mixer_track_is_looper(uint8_t logical_track)
-{
-    return mixer_track_is_looper_ctx(audio_note_engine_adapter_audio_ctx(logical_track));
-}
-
-static uint8_t mixer_entity_for_lane(uint8_t mix_track, uint8_t *out_entity)
-{
-    if ((out_entity == NULL) || (mix_track >= MIXER_MAX_TRACKS))
-        return 0U;
-    for (brick_entity_id_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        const track_audio_runtime_ctx_t *const ctx =
-            audio_note_engine_adapter_audio_ctx(entity);
-        const track_audio_binding_t *const binding =
-            (ctx != NULL) ? &ctx->audio_binding : NULL;
-        if ((binding != NULL)
-                && (binding->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (binding->mix_track_id == mix_track))
-        {
-            *out_entity = entity;
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
 static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
                                            uint8_t mix_track)
 {
-    uint8_t source_track = mix_track;
-    (void)mixer_entity_for_lane(mix_track, &source_track);
+    const brick_entity_id_t entity =
+        audio_note_engine_adapter_entity_for_mix_lane(mix_track);
+    const uint8_t source_track = (entity < BRICK_ENTITY_CAPACITY)
+        ? entity : mix_track;
     if ((looper_track >= MIXER_MAX_TRACKS)
             || (source_track >= MIXER_MAX_TRACKS)
             || (source_track == looper_track)
-            || (mixer_track_is_looper(source_track) != 0U))
+            || ((g_mixer_static_lane_flags[mix_track]
+                & MIXER_STATIC_LOOPER) != 0U))
     {
         return 0U;
     }
@@ -1026,6 +1058,7 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
 
     g_mixer_routing_audio_generation = 0U;
     mixer_external_inputs_clear();
+    mixer_rebuild_static_plan();
 }
 
 void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track)
@@ -1077,6 +1110,7 @@ void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track
         g_mixer_lane_rebind_count[previous_mix_track]++;
     }
     g_mixer_routing_audio_generation = 0U;
+    mixer_rebuild_static_plan();
 }
 
 void mixer_snap_track_runtime_state(uint32_t track_id)
@@ -1103,7 +1137,7 @@ void mixer_snap_track_runtime_state(uint32_t track_id)
     mixer_track_filter_apply_core_params(filter);
 }
 
-static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
+static ITCM_TEXT void mixer_track_filter_process_block(mixer_track_filter_t *filter,
                                              float *left,
                                              float *right,
                                              uint32_t frames)
@@ -1476,7 +1510,7 @@ static mixer_lane_buffers_t mixer_lane_prepare_stereo_buffers(uint32_t track_id,
     return buffers;
 }
 
-static void mixer_lane_accumulate_external_source(uint32_t track_id,
+static ITCM_TEXT void mixer_lane_accumulate_external_source(uint32_t track_id,
                                                   const mixer_lane_plan_t *plan,
                                                   float *left,
                                                   float *right)
@@ -1507,7 +1541,7 @@ static void mixer_lane_accumulate_external_source(uint32_t track_id,
     }
 }
 
-static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
+static ITCM_TEXT mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
                                                             const mixer_audio_track_runtime_t *track,
                                                             mixer_track_filter_t *filter,
                                                             uint32_t frames)
@@ -1525,7 +1559,7 @@ static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
     return buffers;
 }
 
-static void mixer_lane_run_stereo_path(uint32_t track_id,
+static ITCM_TEXT void mixer_lane_run_stereo_path(uint32_t track_id,
                                        const mixer_audio_track_runtime_t *track,
                                        mixer_track_filter_t *filter,
                                        float *left,
@@ -1540,7 +1574,7 @@ static void mixer_lane_run_stereo_path(uint32_t track_id,
     mixer_track_filter_process_block(filter, left, right, frames);
 }
 
-static uint8_t ITCM_AUDIT_32_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+static uint8_t ITCM_TEXT mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
                                                      float *mono,
                                                      uint32_t frames,
                                                      const mixer_poly_cutoff_override_t *poly_cutoff)
@@ -2113,7 +2147,7 @@ typedef struct
     uint8_t stable;
 } mixer_track_coefficient_plan_t;
 
-static mixer_track_coefficient_plan_t mixer_prepare_track_coefficients(
+static ITCM_TEXT mixer_track_coefficient_plan_t mixer_prepare_track_coefficients(
     float gain_current,
     float gain_target,
     float pan_current,
@@ -2254,6 +2288,7 @@ void mixer_reset_runtime_state(void)
         g_send_fx_slot[s] = -1;
 
     mixer_external_inputs_clear();
+    mixer_rebuild_static_plan();
 }
 
 void mixer_init(void)
@@ -3318,7 +3353,7 @@ uint8_t mixer_begin_external_poly(uint32_t track_id, uint32_t frames)
     return 1U;
 }
 
-uint8_t mixer_process_external_poly_voice_prepared(uint32_t mix_track_id,
+ITCM_TEXT uint8_t mixer_process_external_poly_voice_prepared(uint32_t mix_track_id,
                                                    uint32_t poly_track_id,
                                                    uint8_t voice,
                                                    float *mono,
@@ -3618,7 +3653,7 @@ void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
+ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
     AUDIO_HOT ALIGN32 static float mono_pan_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float mono_pan_r[AUDIO_BLOCK_SIZE];
@@ -3650,6 +3685,8 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     const brick_entity_id_t waveform_entity = audio_waveform_capture_get_entity();
     audio_waveform_capture_begin_block(waveform_entity);
 
+    const uint8_t group_active = g_mixer_static_group_active;
+
 
     uint8_t send_fx_active = 0U;
     for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
@@ -3674,15 +3711,16 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
-    memset(bus_group_l, 0, sizeof(bus_group_l));
-    memset(bus_group_r, 0, sizeof(bus_group_r));
+    if (group_active != 0U)
+    {
+        memset(bus_group_l, 0, sizeof(bus_group_l));
+        memset(bus_group_r, 0, sizeof(bus_group_r));
+    }
     if(send_bus_active != 0U)
     {
         memset(send_l, 0, sizeof(send_l));
         memset(send_r, 0, sizeof(send_r));
     }
-    memset(looper_output_active, 0, sizeof(looper_output_active));
-
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
     const float looper_xfade_target = audio_xfade_get();
     const uint8_t looper_xfade_process_active =
@@ -3715,6 +3753,10 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     uint8_t looper_playback_mix_active = 0U;
     uint8_t looper_playback_routes_main = 0U;
     uint16_t looper_mask = brick6_looper_runtime_playing_mask();
+    if (looper_mask != 0U)
+    {
+        memset(looper_output_active, 0, sizeof(looper_output_active));
+    }
     while (looper_mask != 0U)
     {
         const uint8_t logical_track = (uint8_t)__builtin_ctz((unsigned)looper_mask);
@@ -3722,13 +3764,15 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(logical_track);
         if((ctx != 0)
                 && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
-                && (mixer_track_is_looper_ctx(ctx) != 0U)
+                && ((g_mixer_static_lane_flags[ctx->audio_binding.mix_track_id]
+                    & MIXER_STATIC_LOOPER) != 0U)
                 && (g_tracks[ctx->audio_binding.mix_track_id].mute == 0U)
                 && (brick6_looper_runtime_is_playing(logical_track) != 0U))
         {
             looper_output_active[logical_track] = 1U;
             looper_playback_active = 1U;
-            if(g_tracks[ctx->audio_binding.mix_track_id].route_master != 0U)
+            if((g_mixer_static_lane_flags[ctx->audio_binding.mix_track_id]
+                    & MIXER_STATIC_ROUTE_MAIN) != 0U)
             {
                 looper_playback_routes_main = 1U;
             }
@@ -3764,18 +3808,28 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         const uint32_t t = (uint32_t)__builtin_ctz(lane_mask);
         lane_mask &= lane_mask - 1U;
         mixer_audio_track_runtime_t *mt = &g_tracks[t];
-        uint8_t source_entity = 0xFFU;
-        const track_audio_runtime_ctx_t *source_ctx = NULL;
+        const uint8_t static_flags = g_mixer_static_lane_flags[t];
+        const brick_entity_id_t source_entity =
+            audio_note_engine_adapter_entity_for_mix_lane((uint8_t)t);
         const uint8_t group_child = (uint8_t)(
-            (mixer_entity_for_lane((uint8_t)t, &source_entity) != 0U)
-            && ((source_ctx = audio_note_engine_adapter_audio_ctx(source_entity)) != NULL)
-            && ((source_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U));
-        const brick_entity_id_t audio_fx_entity =
-            (source_entity < BRICK_ENTITY_CAPACITY)
-                ? (brick_entity_id_t)source_entity
-                : BRICK_ENTITY_INVALID_ID;
-        const uint8_t audio_fx_pre_filter =
-            fx_chain_audio_fx_is_pre_filter(audio_fx_entity);
+            (static_flags & MIXER_STATIC_GROUP_CHILD) != 0U);
+        const brick_entity_id_t audio_fx_entity = source_entity;
+        const uint8_t audio_fx_active = (uint8_t)(
+            (static_flags & MIXER_STATIC_AUDIO_FX_ACTIVE) != 0U);
+        const uint8_t audio_fx_pre_filter = (uint8_t)(
+            (static_flags & MIXER_STATIC_AUDIO_FX_PRE_FILTER) != 0U);
+        const uint8_t route_main = (uint8_t)(
+            (static_flags & MIXER_STATIC_ROUTE_MAIN) != 0U);
+        const uint8_t requires_stereo = (uint8_t)(
+            (static_flags & MIXER_STATIC_REQUIRES_STEREO) != 0U);
+        const uint8_t insert_stage = (uint8_t)(
+            (static_flags & MIXER_STATIC_INSERT_STAGE) != 0U);
+        const uint8_t audio_fx_comp = (uint8_t)(
+            (static_flags & MIXER_STATIC_AUDIO_FX_COMP) != 0U);
+        const uint8_t audio_fx_post = (uint8_t)(
+            (audio_fx_active != 0U)
+            && (audio_fx_pre_filter == 0U)
+            && (audio_fx_comp == 0U));
         float *const dry_bus_l = (group_child != 0U) ? bus_group_l : bus_main_l;
         float *const dry_bus_r = (group_child != 0U) ? bus_group_r : bus_main_r;
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
@@ -3878,11 +3932,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
-            direct_mono_fanout = (fx_chain_track_inserts_require_stereo(
-                (source_entity < BRICK_ENTITY_CAPACITY)
-                    ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
-                mt->insert_slot,
-                MIXER_INSERTS_PER_TRACK) == 0U) ? 1U : 0U;
+            direct_mono_fanout = (requires_stereo == 0U) ? 1U : 0U;
         }
 
         if (direct_mono_fanout != 0U)
@@ -3955,13 +4005,19 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 }
 
                 float sample_pre_fader = mono[i] * vca_gain;
-                sample_pre_fader = fx_chain_process_audio_fx_comp_mono_sample(
-                    audio_fx_entity, sample_pre_fader);
+                if (audio_fx_comp != 0U)
+                {
+                    sample_pre_fader = fx_chain_process_audio_fx_comp_mono_sample(
+                        audio_fx_entity, sample_pre_fader);
+                }
                 const float sample_processed = sample_pre_fader * mono_gain;
                 float left = sample_processed * pan_l;
                 float right = sample_processed * pan_r;
-                fx_chain_process_audio_fx_post_fader_stereo_sample(
-                    audio_fx_entity, &left, &right);
+                if (audio_fx_post != 0U)
+                {
+                    fx_chain_process_audio_fx_post_fader_stereo_sample(
+                        audio_fx_entity, &left, &right);
+                }
                 if (waveform_capture_samples != 0U)
                 {
                     audio_waveform_capture_tap_stereo_sample(left, right);
@@ -3983,7 +4039,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                     }
                 }
 
-                if (mt->route_master != 0U)
+                if (route_main != 0U)
                 {
                     dry_bus_l[i] += left_trimmed;
                     dry_bus_r[i] += right_trimmed;
@@ -4020,15 +4076,11 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 && (sample_capture_active == 0U)
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U)
-                && (mt->route_master != 0U)
+                && (route_main != 0U)
                 && (modfx_active == 0U)
                 )
         {
-            poly_stereo_fanout = (fx_chain_track_inserts_require_stereo(
-                (source_entity < BRICK_ENTITY_CAPACITY)
-                    ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
-                mt->insert_slot,
-                MIXER_INSERTS_PER_TRACK) == 0U) ? 1U : 0U;
+            poly_stereo_fanout = (requires_stereo == 0U) ? 1U : 0U;
         }
 
         if (poly_stereo_fanout != 0U)
@@ -4100,12 +4152,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         float left = L[i];
                         float right = R[i];
-                        fx_chain_process_audio_fx_comp_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_comp != 0U)
+                        {
+                            fx_chain_process_audio_fx_comp_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         left *= gain_l;
                         right *= gain_r;
-                        fx_chain_process_audio_fx_post_fader_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_post != 0U)
+                        {
+                            fx_chain_process_audio_fx_post_fader_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         if (waveform_capture_samples != 0U)
                         {
                             audio_waveform_capture_tap_stereo_sample(left, right);
@@ -4136,12 +4194,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         float left = L[i];
                         float right = R[i];
-                        fx_chain_process_audio_fx_comp_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_comp != 0U)
+                        {
+                            fx_chain_process_audio_fx_comp_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         left *= gain_l;
                         right *= gain_r;
-                        fx_chain_process_audio_fx_post_fader_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_post != 0U)
+                        {
+                            fx_chain_process_audio_fx_post_fader_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         if (waveform_capture_samples != 0U)
                         {
                             audio_waveform_capture_tap_stereo_sample(left, right);
@@ -4175,12 +4239,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         float left = L[i];
                         float right = R[i];
-                        fx_chain_process_audio_fx_comp_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_comp != 0U)
+                        {
+                            fx_chain_process_audio_fx_comp_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         left *= gain_l;
                         right *= gain_r;
-                        fx_chain_process_audio_fx_post_fader_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_post != 0U)
+                        {
+                            fx_chain_process_audio_fx_post_fader_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         if (waveform_capture_samples != 0U)
                         {
                             audio_waveform_capture_tap_stereo_sample(left, right);
@@ -4214,12 +4284,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                     &gain_r);
                         float left = L[i];
                         float right = R[i];
-                        fx_chain_process_audio_fx_comp_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_comp != 0U)
+                        {
+                            fx_chain_process_audio_fx_comp_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         left *= gain_l;
                         right *= gain_r;
-                        fx_chain_process_audio_fx_post_fader_stereo_sample(
-                            audio_fx_entity, &left, &right);
+                        if (audio_fx_post != 0U)
+                        {
+                            fx_chain_process_audio_fx_post_fader_stereo_sample(
+                                audio_fx_entity, &left, &right);
+                        }
                         if (waveform_capture_samples != 0U)
                         {
                             audio_waveform_capture_tap_stereo_sample(left, right);
@@ -4326,14 +4402,18 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                 L = mono_pan_l;
                 R = mono_pan_r;
             }
-            fx_chain_process_track_inserts_pre_fader(
-                audio_fx_entity,
-                t,
-                mt->insert_slot,
-                MIXER_INSERTS_PER_TRACK,
-                L,
-                R,
-                frames);
+            if (insert_stage != 0U)
+            {
+                fx_chain_process_track_inserts_pre_fader(
+                    audio_fx_entity,
+                    t,
+                    mt->insert_slot,
+                    MIXER_INSERTS_PER_TRACK,
+                    audio_fx_comp,
+                    L,
+                    R,
+                    frames);
+            }
 
             gain_cur = mt->gain_current;
             pan_cur = mt->pan_current;
@@ -4387,21 +4467,23 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
         /* engine -> filter -> VCA -> legacy inserts/COMP -> track fader/mute
          * -> pan -> remaining Audio FX -> sends/bus. */
-        fx_chain_process_audio_fx_post_fader(
-            (source_entity < BRICK_ENTITY_CAPACITY)
-                ? (brick_entity_id_t)source_entity : BRICK_ENTITY_INVALID_ID,
-            L,
-            R,
-            frames);
+        if (audio_fx_post != 0U)
+        {
+            fx_chain_process_audio_fx_post_fader(audio_fx_entity,
+                                                 L,
+                                                 R,
+                                                 frames);
+        }
         if (waveform_capture_samples != 0U)
         {
             audio_waveform_capture_tap_stereo_block(L, R, frames);
         }
 
         {
-            uint8_t source_track = (uint8_t)t;
-            (void)mixer_entity_for_lane((uint8_t)t, &source_track);
-            if((source_track < MIXER_MAX_TRACKS) && (mixer_track_is_looper(source_track) != 0U))
+            const uint8_t source_track = (source_entity < BRICK_ENTITY_CAPACITY)
+                ? source_entity : (uint8_t)t;
+            if((source_track < MIXER_MAX_TRACKS)
+                    && ((static_flags & MIXER_STATIC_LOOPER) != 0U))
             {
                 if((sample_capture_active != 0U)
                         && (sample_capture_model_source_track_is_enabled(source_track) != 0U))
@@ -4415,7 +4497,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
 
                 if((looper_playback_mix_active != 0U) && (looper_output_active[source_track] != 0U))
                 {
-                    if(mt->route_master != 0U)
+                    if(route_main != 0U)
                     {
                         for(uint32_t i = 0U; i < frames; ++i)
                         {
@@ -4485,7 +4567,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             }
         }
 
-        if(mt->route_master)
+        if(route_main != 0U)
         {
             for(uint32_t i = 0; i < frames; i++)
             {
@@ -4497,12 +4579,11 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         }
     }
 
-    const track_audio_runtime_ctx_t *const group_master_ctx =
-        audio_note_engine_adapter_audio_ctx(BRICK_ENTITY_GROUP_MASTER_ID);
-    if ((group_master_ctx != NULL)
-            && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U))
+    if (group_active != 0U)
     {
         mixer_audio_track_runtime_t *const group = &g_tracks[MIXER_GROUP_BUS_TRACK];
+        const uint8_t group_static_flags =
+            g_mixer_static_lane_flags[MIXER_GROUP_BUS_TRACK];
 
         /* AUDIO-owned GROUP order:
          * child sends have already left pre-sum; child dry is summed here,
@@ -4514,7 +4595,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                                                bus_group_r,
                                                                frames);
         }
-        if (fx_chain_audio_fx_is_pre_filter(BRICK_ENTITY_GROUP_MASTER_ID) != 0U)
+        if ((group_static_flags & MIXER_STATIC_AUDIO_FX_PRE_FILTER) != 0U)
         {
             fx_chain_process_audio_fx_pre_filter_stereo(
                 BRICK_ENTITY_GROUP_MASTER_ID,
@@ -4529,14 +4610,19 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
                                    bus_group_r,
                                    frames);
 
-        fx_chain_process_track_inserts_pre_fader(
-            BRICK_ENTITY_GROUP_MASTER_ID,
-            MIXER_GROUP_BUS_TRACK,
-            group->insert_slot,
-            MIXER_INSERTS_PER_TRACK,
-            bus_group_l,
-            bus_group_r,
-            frames);
+        if ((group_static_flags & MIXER_STATIC_INSERT_STAGE) != 0U)
+        {
+            fx_chain_process_track_inserts_pre_fader(
+                BRICK_ENTITY_GROUP_MASTER_ID,
+                MIXER_GROUP_BUS_TRACK,
+                group->insert_slot,
+                MIXER_INSERTS_PER_TRACK,
+                (uint8_t)((group_static_flags
+                    & MIXER_STATIC_AUDIO_FX_COMP) != 0U),
+                bus_group_l,
+                bus_group_r,
+                frames);
+        }
 
         float gain_cur = group->gain_current;
         float pan_cur = group->pan_current;
@@ -4574,10 +4660,17 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
         group->pan_current = group->pan;
         group->mute_gain_current = mute_gain_cur;
 
-        fx_chain_process_audio_fx_post_fader(BRICK_ENTITY_GROUP_MASTER_ID,
-                                             bus_group_l,
-                                             bus_group_r,
-                                             frames);
+        if (((group_static_flags & MIXER_STATIC_AUDIO_FX_ACTIVE) != 0U)
+                && ((group_static_flags
+                    & MIXER_STATIC_AUDIO_FX_PRE_FILTER) == 0U)
+                && ((group_static_flags
+                    & MIXER_STATIC_AUDIO_FX_COMP) == 0U))
+        {
+            fx_chain_process_audio_fx_post_fader(BRICK_ENTITY_GROUP_MASTER_ID,
+                                                 bus_group_l,
+                                                 bus_group_r,
+                                                 frames);
+        }
         if ((waveform_entity == BRICK_ENTITY_GROUP_MASTER_ID)
                 && (audio_waveform_capture_needs_final_samples() != 0U))
         {
@@ -4612,7 +4705,7 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
             }
         }
 
-        if (group->route_master != 0U)
+        if ((group_static_flags & MIXER_STATIC_ROUTE_MAIN) != 0U)
         {
             for (uint32_t i = 0U; i < frames; ++i)
             {
@@ -4788,7 +4881,12 @@ ITCM_AUDIT_32_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count,
     }
 
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
-    fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
+    fx_slot_t *const master_slot = fx_pool_get_slot(2U);
+    if ((master_slot != NULL) && (master_slot->active != 0U)
+            && (master_slot->state != NULL))
+    {
+        fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
+    }
 
     if(sample_capture_active != 0U)
     {

@@ -139,6 +139,32 @@ static void synth_polyphony_reset_track_slots(uint8_t track)
     }
 }
 
+static void synth_polyphony_reset_slots_for_voice_count(uint8_t track)
+{
+    synth_poly_track_t *const poly = &g_synth_poly[track];
+    mixer_track_poly_all_notes_off(track);
+    for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
+    {
+        const uint8_t slot = synth_polyphony_find_slot(track, voice);
+        if ((poly->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                && (voice == 0U))
+        {
+            /* Slot zero owns the Stack track configuration.  A voice-count
+             * rebuild may silence it, but must not reset that authority. */
+            brick6_stack_runtime_all_notes_off(slot);
+            brick6_stack_runtime_clear_trigger(slot);
+            mixer_synth_voice_slot_reset(slot);
+            mod_lfo_v1_poly_voice_reset(slot);
+        }
+        else
+        {
+            synth_polyphony_reset_slot(slot);
+        }
+        if (slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+            memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
+    }
+}
+
 void synth_polyphony_init(void)
 {
     memset(g_synth_poly, 0, sizeof(g_synth_poly));
@@ -293,7 +319,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
     g_synth_poly[track].render_voice_count = 0U;
     g_synth_poly[track].renderable_voice_mask = 0U;
     __DMB();
-    synth_polyphony_reset_track_slots(track);
+    synth_polyphony_reset_slots_for_voice_count(track);
     for (uint8_t voice = g_synth_poly[track].voice_count; voice < count; ++voice)
     {
         const uint8_t slot = synth_polyphony_acquire_slot(track);

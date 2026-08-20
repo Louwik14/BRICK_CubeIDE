@@ -100,7 +100,7 @@ static uint64_t g_audio_sample_clock;
    Hardware layer only: calls float engine
    ============================================================ */
 
-static void audio_apply_control_events_at_sample(uint64_t sample_time)
+static __attribute__((noinline)) void audio_apply_control_events_at_sample(uint64_t sample_time)
 {
     control_audio_event_t event;
     /* Bound this pass to the queue occupancy observed at entry.  CONTROL
@@ -168,7 +168,7 @@ static void audio_apply_control_events_at_sample(uint64_t sample_time)
         }
     }
 }
-static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
+static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
     waveform_control_command_t waveform_command;
     if (waveform_control_audio_consume(&waveform_command) != 0U)
@@ -183,11 +183,16 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
         const uint64_t now = sample_time + cursor;
         audio_modulation_projection_audio_consume();
         audio_wave_table_projection_audio_consume();
-        mod_lfo_v1_audio_consume_snapshots();
-        mod_env3_audio_consume_snapshots();
+        const uint8_t modulation_configuration_changed =
+            audio_modulation_projection_audio_configuration_changed();
+        if (modulation_configuration_changed != 0U)
+        {
+            mod_lfo_v1_audio_consume_snapshots();
+            mod_env3_audio_consume_snapshots();
+        }
         audio_apply_control_events_at_sample(now);
-        audio_mod_matrix_consume_snapshots();
-        (void)live_parameter_audio_queue_consume_due(now);
+        if (modulation_configuration_changed != 0U)
+            audio_mod_matrix_consume_snapshots();
         (void)live_parameter_audio_runtime_apply_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = remaining;
@@ -195,7 +200,6 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
         {
             span = 1U;
         }
-        live_parameter_audio_runtime_process(now, span);
         audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
                                   &tx[cursor * AUDIO_WORDS_PER_FRAME], span);
         cursor += span;
@@ -225,7 +229,7 @@ static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void audio_process_event_segment(int32_t *rx,
+static ITCM_TEXT void audio_process_event_segment(int32_t *rx,
                                             int32_t *tx,
                                             uint32_t half_cursor,
                                             uint64_t block_start_sample,
@@ -237,23 +241,8 @@ static void audio_process_event_segment(int32_t *rx,
                           block_start_sample,
                           block_frames);
 }
-ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
+static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx)
 {
-    const uint32_t offset =
-        half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
-
-    int32_t *rx = &rx_buffer[offset];
-    int32_t *tx = &tx_buffer[offset];
-
-    if (half_index > 1U)
-    {
-        return;
-    }
-
-    /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
-#if AUDIO_DMA_BUFFER_IS_CACHEABLE
-    dcache_invalidate_by_addr_aligned(rx, half_bytes);
-#endif
     uint32_t half_cursor = 0U;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {
@@ -270,13 +259,30 @@ ITCM_AUDIT_32_TEXT static void process_half(uint32_t half_index)
 
         const uint64_t block_start_sample = g_audio_sample_clock;
         g_audio_sample_clock += (uint64_t)block_frames;
-        audio_process_event_segment(rx,
-                                        tx,
-                                        half_cursor,
-                                        block_start_sample,
-                                        block_frames);
+        audio_process_event_segment(rx, tx, half_cursor,
+                                    block_start_sample, block_frames);
         half_cursor += block_frames;
     }
+}
+
+static void process_half(uint32_t half_index)
+{
+    const uint32_t offset =
+        half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
+
+    int32_t *rx = &rx_buffer[offset];
+    int32_t *tx = &tx_buffer[offset];
+
+    if (half_index > 1U)
+    {
+        return;
+    }
+
+    /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
+#if AUDIO_DMA_BUFFER_IS_CACHEABLE
+    dcache_invalidate_by_addr_aligned(rx, half_bytes);
+#endif
+    audio_process_half_common_hot(rx, tx);
 
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx, half_bytes);
@@ -409,7 +415,6 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_note_engine_adapter_audio_publish_snapshot();
         live_clock_audio_publish_anchor(
             g_audio_sample_clock);
         cpu_load_irq_begin();
@@ -454,7 +459,6 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_note_engine_adapter_audio_publish_snapshot();
         live_clock_audio_publish_anchor(
             g_audio_sample_clock);
         cpu_load_irq_begin();

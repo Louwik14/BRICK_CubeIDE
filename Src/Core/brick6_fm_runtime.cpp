@@ -1230,7 +1230,7 @@ uint8_t brick6_fm_runtime_voice_is_active(uint8_t instance_id)
     return (valid_instance(instance_id) != 0U) ? g_fm_voice[instance_id].active : 0U;
 }
 
-uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
+ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                           float *out_mono,
                                           uint32_t frames)
 {

@@ -7,6 +7,7 @@
 #include <arm_acle.h>
 #include "stm32h743xx.h"
 #include <string.h>
+#include "Storage/memory_layout.h"
 
 #define BOARD_AUDIO_INIT_ATTEMPTS 3U
 #define BOARD_AUDIO_RETRY_DELAY_MS 10U
@@ -254,7 +255,7 @@ static inline int32_t f2s24_fast_ssat(float x)
     return sat & 0x00FFFFFF;
 }
 
-void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
+ITCM_TEXT void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
                               audio_physical_inputs_t *AUDIO_RESTRICT physical_inputs,
                               uint32_t frames,
                               float in_scale)
@@ -274,7 +275,7 @@ void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
     memset(physical_inputs->mic.mono, 0, frames * sizeof(float));
 }
 
-void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
+ITCM_TEXT void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,
                              const float *AUDIO_RESTRICT main_l,
                              const float *AUDIO_RESTRICT main_r,
                              uint32_t frames)

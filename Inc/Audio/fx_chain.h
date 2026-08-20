@@ -30,6 +30,7 @@ void fx_chain_process_track_inserts_pre_fader(
     uint32_t legacy_track,
     const int8_t *legacy_slots,
     size_t legacy_slot_count,
+    uint8_t process_audio_fx_comp,
     float* in_l,
     float* in_r,
     uint32_t frames
@@ -49,8 +50,15 @@ uint8_t fx_chain_track_inserts_require_stereo(
     const int8_t *legacy_slots,
     size_t legacy_slot_count
 );
+uint8_t fx_chain_track_has_pre_fader_insert(
+    brick_entity_id_t entity_id,
+    const int8_t *legacy_slots,
+    size_t legacy_slot_count
+);
 
 uint8_t fx_chain_audio_fx_is_pre_filter(brick_entity_id_t entity_id);
+uint8_t fx_chain_audio_fx_is_active(brick_entity_id_t entity_id);
+uint8_t fx_chain_audio_fx_is_comp(brick_entity_id_t entity_id);
 
 void fx_chain_process_audio_fx_pre_filter_mono(
     brick_entity_id_t entity_id,

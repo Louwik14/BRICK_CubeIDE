@@ -22,6 +22,7 @@
 #include "Core/fm_dexed/msfa/exp2.h"
 #include "Core/fm_dexed/msfa/fm_op_kernel.h"
 #include "Core/fm_dexed/msfa/fm_core.h"
+#include "Storage/memory_layout.h"
 
 
 //using namespace std;
@@ -90,7 +91,7 @@ void FmCore::dump() {
 #endif
 }
 
-void FmCore::render(int32_t *output, FmOpParams *params, int algorithm,
+ITCM_TEXT void FmCore::render(int32_t *output, FmOpParams *params, int algorithm,
                     int32_t *fb_buf, int32_t feedback_shift, int frames) {
     const int kLevelThresh = 1120;
     const FmAlgorithm alg = algorithms[algorithm];

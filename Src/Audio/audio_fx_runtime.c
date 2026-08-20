@@ -7,6 +7,7 @@
 #include "Audio/fx_audio_sub.h"
 #include "Audio/fx_audio_ring.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
 #include "Storage/memory_layout.h"
 
@@ -56,7 +57,7 @@ static float mono_one(audio_fx_runtime_t*r,float x)
     if(r->config.model==AUDIO_FX_MODEL_RING)return fx_audio_ring_process_mono_sample(&r->dsp.ring,x);
     return x;
 }
-void audio_fx_runtime_init(void){for(brick_entity_id_t e=0;e<BRICK_ENTITY_CAPACITY;++e)g_audio_fx_runtime[e]=(audio_fx_runtime_t){0};}
+void audio_fx_runtime_init(void){for(brick_entity_id_t e=0;e<BRICK_ENTITY_CAPACITY;++e)g_audio_fx_runtime[e]=(audio_fx_runtime_t){0};mixer_rebuild_static_plan();}
 uint8_t audio_fx_runtime_is_param(param_id_t id){return id==PARAM_AUDIO_FX_P1||id==PARAM_AUDIO_FX_P2||id==PARAM_AUDIO_FX_P3||id==PARAM_AUDIO_FX_MODEL;}
 uint8_t audio_fx_runtime_is_active(brick_entity_id_t e){return e<BRICK_ENTITY_CAPACITY&&g_audio_fx_runtime[e].config.model!=AUDIO_FX_MODEL_OFF;}
 uint8_t audio_fx_runtime_is_comp(brick_entity_id_t e){(void)e;return 0U;}
@@ -81,7 +82,7 @@ uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float val
     if(id==PARAM_AUDIO_FX_P1){r->config.p1=clamp01(value);prepare(r);}
     else if(id==PARAM_AUDIO_FX_P2){r->config.p2=clamp01(value);prepare(r);}
     else if(id==PARAM_AUDIO_FX_P3){r->config.p3=clamp127(value);if(r->config.model==AUDIO_FX_MODEL_LOFI||r->config.model==AUDIO_FX_MODEL_FOLD||r->config.model==AUDIO_FX_MODEL_DRIVE||r->config.model==AUDIO_FX_MODEL_POINT||r->config.model==AUDIO_FX_MODEL_SUB||r->config.model==AUDIO_FX_MODEL_SUB_LIGHT||r->config.model==AUDIO_FX_MODEL_RING)prepare(r);}
-    else {const uint8_t m=valid_model(value);if(r->config.model!=m){r->config.model=m;reset_dsp(r);prepare(r);}}return 1U;
+    else {const uint8_t m=valid_model(value);if(r->config.model!=m){r->config.model=m;reset_dsp(r);prepare(r);mixer_rebuild_static_plan();}}return 1U;
 }
 void audio_fx_runtime_process_mono(brick_entity_id_t e,float*b,uint32_t n)
 {

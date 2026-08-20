@@ -101,7 +101,7 @@ extern uint32_t __ram_d2_dma_cacheable_end__;
 #define RAM_D2_DMA_CACHEABLE_END          (0x30020000UL)
 #define BACKUP_SRAM_MPU_BASE               (0x38800000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
-#define SDRAM_RECORDER_MPU_BASE            (0xC1F00000UL)
+#define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
@@ -149,7 +149,7 @@ static void MPU_Config(void)
 
   MPU_InitStruct.Number = MPU_REGION_NUMBER4;
   MPU_InitStruct.BaseAddress = SDRAM_RECORDER_MPU_BASE;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_256KB;
   MPU_InitStruct.SubRegionDisable = 0x00U;
   MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
   MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;

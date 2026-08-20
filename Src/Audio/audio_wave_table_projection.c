@@ -17,6 +17,7 @@ static AUDIO_HOT audio_wave_table_binding_t
     g_audio_wave_table_candidate[AUDIO_WAVE_TABLE_BINDING_COUNT];
 static AUDIO_HOT audio_wave_table_binding_t
     g_audio_wave_table_applied[AUDIO_WAVE_TABLE_BINDING_COUNT];
+static uint32_t g_audio_wave_table_projection_sequence;
 
 typedef struct
 {
@@ -45,6 +46,7 @@ void audio_wave_table_projection_audio_init(void)
         g_audio_wave_table_local[i].wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
         g_audio_wave_table_applied[i].wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
     }
+    g_audio_wave_table_projection_sequence = UINT32_MAX;
 }
 
 void audio_wave_table_projection_audio_consume(void)
@@ -54,6 +56,8 @@ void audio_wave_table_projection_audio_consume(void)
          ++attempt)
     {
         const uint32_t before = g_audio_wave_table_projection.sequence;
+        if (before == g_audio_wave_table_projection_sequence)
+            return;
         __DMB();
         if ((before & 1U) != 0U)
             continue;
@@ -102,6 +106,7 @@ void audio_wave_table_projection_audio_consume(void)
                     g_audio_wave_table_applied[index] = *binding;
                 }
             }
+            g_audio_wave_table_projection_sequence = before;
             return;
         }
     }

@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stddef.h>
+#include "Storage/memory_layout.h"
 
 #define ENV_ADSR_Q15_MAX 32767
 #define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu
@@ -408,7 +409,7 @@ int16_t env_adsr_peaks_process_advance(env_adsr_peaks_t *env,
     return env->value;
 }
 
-uint32_t env_adsr_peaks_process_vca_block(env_adsr_peaks_t *env,
+ITCM_TEXT uint32_t env_adsr_peaks_process_vca_block(env_adsr_peaks_t *env,
                                           float *out_gain,
                                           uint32_t frames)
 {

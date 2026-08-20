@@ -20,8 +20,61 @@
 static uint32_t g_audio_mono_occurrence[BRICK_ENTITY_CAPACITY];
 static uint32_t g_audio_installed_generation[BRICK_ENTITY_CAPACITY];
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
+static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
+static uint8_t g_audio_entity_by_mix_lane[MIXER_MAX_TRACKS];
 static audio_binding_snapshot_t g_audio_binding_snapshot[BRICK_ENTITY_CAPACITY];
 static volatile uint32_t g_audio_binding_snapshot_sequence;
+
+static void audio_note_engine_adapter_rebuild_binding_projections(void)
+{
+    memset(g_audio_entity_mask_by_engine, 0,
+           sizeof(g_audio_entity_mask_by_engine));
+    memset(g_audio_entity_by_mix_lane, BRICK_ENTITY_INVALID_ID,
+           sizeof(g_audio_entity_by_mix_lane));
+    for (brick_entity_id_t entity = 0U;
+         entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const track_audio_binding_t *const binding =
+            &g_audio_track_ctx[entity].audio_binding;
+        if (binding->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            continue;
+        if (binding->engine < (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
+        {
+            g_audio_entity_mask_by_engine[binding->engine] |=
+                (uint16_t)(1U << entity);
+        }
+        if ((binding->mix_track_id < MIXER_MAX_TRACKS)
+                && (g_audio_entity_by_mix_lane[binding->mix_track_id]
+                    == BRICK_ENTITY_INVALID_ID))
+        {
+            g_audio_entity_by_mix_lane[binding->mix_track_id] = entity;
+        }
+    }
+}
+
+static void audio_note_engine_adapter_write_snapshot(
+    brick_entity_id_t entity)
+{
+    const uint8_t is_multi = (uint8_t)(
+        (g_audio_track_ctx[entity].audio_binding.engine
+            == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (g_audio_track_ctx[entity].type
+            == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
+    g_audio_binding_snapshot[entity] = (audio_binding_snapshot_t){
+        .binding = g_audio_track_ctx[entity].audio_binding,
+        .family = g_audio_track_ctx[entity].family,
+        .type = g_audio_track_ctx[entity].type,
+        .flags = g_audio_track_ctx[entity].flags,
+        .configured_voice_count = (is_multi != 0U)
+            ? brick6_sampler_runtime_get_multi_voice_count(entity)
+            : synth_polyphony_get_voice_count(entity),
+        .physical_voice_capacity = (is_multi != 0U)
+            ? SAMPLER_MULTI_MAX_VOICES_PER_TRACK
+            : synth_polyphony_get_available_for_track(entity),
+        .sampler_slice_mode_active =
+            brick6_sampler_runtime_ram_slice_mode_active(entity)
+    };
+}
 
 static void audio_note_engine_adapter_publish_snapshots(void)
 {
@@ -29,27 +82,7 @@ static void audio_note_engine_adapter_publish_snapshots(void)
     __DMB();
     for (brick_entity_id_t entity = 0U;
          entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        const uint8_t is_multi = (uint8_t)(
-            (g_audio_track_ctx[entity].audio_binding.engine
-                == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            && (g_audio_track_ctx[entity].type
-                == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
-        g_audio_binding_snapshot[entity] = (audio_binding_snapshot_t){
-            .binding = g_audio_track_ctx[entity].audio_binding,
-            .family = g_audio_track_ctx[entity].family,
-            .type = g_audio_track_ctx[entity].type,
-            .flags = g_audio_track_ctx[entity].flags,
-            .configured_voice_count = (is_multi != 0U)
-                ? brick6_sampler_runtime_get_multi_voice_count(entity)
-                : synth_polyphony_get_voice_count(entity),
-            .physical_voice_capacity = (is_multi != 0U)
-                ? SAMPLER_MULTI_MAX_VOICES_PER_TRACK
-                : synth_polyphony_get_available_for_track(entity),
-            .sampler_slice_mode_active =
-                brick6_sampler_runtime_ram_slice_mode_active(entity)
-        };
-    }
+        audio_note_engine_adapter_write_snapshot(entity);
     __DMB();
     ++g_audio_binding_snapshot_sequence;
     __DMB();
@@ -58,6 +91,19 @@ static void audio_note_engine_adapter_publish_snapshots(void)
 void audio_note_engine_adapter_audio_publish_snapshot(void)
 {
     audio_note_engine_adapter_publish_snapshots();
+}
+
+void audio_note_engine_adapter_audio_publish_snapshot_entity(
+    brick_entity_id_t entity_id)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return;
+    ++g_audio_binding_snapshot_sequence;
+    __DMB();
+    audio_note_engine_adapter_write_snapshot(entity_id);
+    __DMB();
+    ++g_audio_binding_snapshot_sequence;
+    __DMB();
 }
 
 void audio_note_engine_adapter_init(void)
@@ -75,6 +121,8 @@ void audio_note_engine_adapter_init(void)
         g_audio_track_ctx[entity].audio_binding.mix_track_id = 0xFFU;
         g_audio_track_ctx[entity].audio_binding.instance_id = 0xFFU;
     }
+    audio_note_engine_adapter_rebuild_binding_projections();
+    mixer_rebuild_static_plan();
     audio_note_engine_adapter_publish_snapshots();
 }
 
@@ -83,6 +131,21 @@ const track_audio_runtime_ctx_t *audio_note_engine_adapter_audio_ctx(
 {
     return (entity_id < BRICK_ENTITY_CAPACITY)
         ? &g_audio_track_ctx[entity_id] : NULL;
+}
+
+uint16_t audio_note_engine_adapter_entity_mask(
+    track_runtime_engine_t engine)
+{
+    return ((uint8_t)engine < (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
+        ? g_audio_entity_mask_by_engine[(uint8_t)engine] : 0U;
+}
+
+brick_entity_id_t audio_note_engine_adapter_entity_for_mix_lane(
+    uint8_t mix_track_id)
+{
+    return (mix_track_id < MIXER_MAX_TRACKS)
+        ? g_audio_entity_by_mix_lane[mix_track_id]
+        : BRICK_ENTITY_INVALID_ID;
 }
 
 uint8_t audio_note_engine_adapter_snapshot_read(
@@ -557,6 +620,8 @@ void audio_note_engine_adapter_install_intent(
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)));
     g_audio_installed_generation[entity_id] = installed.generation;
+    audio_note_engine_adapter_rebuild_binding_projections();
+    mixer_rebuild_static_plan();
     audio_mod_matrix_rebuild_track(entity_id);
     audio_note_engine_adapter_publish_snapshots();
 }
@@ -572,9 +637,13 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         return 0U;
     if (binding->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
+        const uint8_t previous_voice_count =
+            brick6_sampler_runtime_get_multi_voice_count(entity_id);
         brick6_sampler_runtime_set_multi_voice_count(entity_id, voice_count);
         brick6_sampler_runtime_set_multi_spread(entity_id, spread);
-        audio_note_engine_adapter_publish_snapshots();
+        if (previous_voice_count
+                != brick6_sampler_runtime_get_multi_voice_count(entity_id))
+            audio_note_engine_adapter_publish_snapshots();
         return 1U;
     }
     if ((binding->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
@@ -585,9 +654,12 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         return 0U;
     if (binding->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         voice_count = 1U;
+    const uint8_t previous_voice_count =
+        synth_polyphony_get_voice_count(entity_id);
     (void)synth_polyphony_set_voice_count(entity_id, voice_count);
     synth_polyphony_set_spread(entity_id, spread);
-    audio_note_engine_adapter_publish_snapshots();
+    if (previous_voice_count != synth_polyphony_get_voice_count(entity_id))
+        audio_note_engine_adapter_publish_snapshots();
     return 1U;
 }
 

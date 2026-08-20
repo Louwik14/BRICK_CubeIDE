@@ -110,6 +110,18 @@ uint8_t vca_env_process(vca_env_t *env, float *out)
 }
 uint32_t vca_env_process_block(vca_env_t *env, float *out, uint32_t frames)
 {
+    if((env == NULL) || (out == NULL) || (frames == 0U)) return 0U;
+
+    /* Historical block fast-path: a stable sustain cannot change until an
+     * event starts a new audio segment, so publish its constant gain once. */
+    if((env->stage == VCA_ENV_SUSTAIN)
+            && (env->sustain_transition_active == false))
+    {
+        env->level = env->sustain;
+        for(uint32_t i = 0U; i < frames; ++i) out[i] = env->level;
+        return frames;
+    }
+
     uint32_t produced = 0U;
     while(produced < frames)
     {

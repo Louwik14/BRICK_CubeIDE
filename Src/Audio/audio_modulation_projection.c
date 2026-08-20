@@ -9,6 +9,8 @@ static AUDIO_HOT audio_modulation_topology_entry_t
     g_audio_modulation_projection_local[BRICK_ENTITY_CAPACITY];
 static AUDIO_HOT audio_modulation_topology_entry_t
     g_audio_modulation_projection_candidate[BRICK_ENTITY_CAPACITY];
+static uint32_t g_audio_modulation_projection_sequence;
+static uint32_t g_audio_modulation_configuration_generation;
 
 #define AUDIO_MODULATION_PROJECTION_CONSUME_ATTEMPTS 2U
 
@@ -17,6 +19,7 @@ static AUDIO_HOT audio_modulation_topology_entry_t
 typedef struct
 {
     volatile uint32_t sequence;
+    volatile uint32_t configuration_generation;
     audio_modulation_topology_entry_t entry[BRICK_ENTITY_CAPACITY];
 } audio_modulation_projection_mailbox_t;
 
@@ -28,6 +31,8 @@ void audio_modulation_projection_audio_init(void)
            sizeof(g_audio_modulation_projection_local));
     memset(g_audio_modulation_projection_candidate, 0,
            sizeof(g_audio_modulation_projection_candidate));
+    g_audio_modulation_projection_sequence = UINT32_MAX;
+    g_audio_modulation_configuration_generation = UINT32_MAX;
 }
 
 void audio_modulation_projection_audio_consume(void)
@@ -37,6 +42,8 @@ void audio_modulation_projection_audio_consume(void)
          ++attempt)
     {
         const uint32_t before = g_audio_modulation_projection.sequence;
+        if (before == g_audio_modulation_projection_sequence)
+            return;
         __DMB();
         if ((before & 1U) != 0U)
             continue;
@@ -49,9 +56,21 @@ void audio_modulation_projection_audio_consume(void)
             memcpy(g_audio_modulation_projection_local,
                    g_audio_modulation_projection_candidate,
                    sizeof(g_audio_modulation_projection_local));
+            g_audio_modulation_projection_sequence = before;
             return;
         }
     }
+}
+
+uint8_t audio_modulation_projection_audio_configuration_changed(void)
+{
+    const uint32_t generation =
+        g_audio_modulation_projection.configuration_generation;
+    if (generation == g_audio_modulation_configuration_generation)
+        return 0U;
+    __DMB();
+    g_audio_modulation_configuration_generation = generation;
+    return 1U;
 }
 
 uint8_t audio_modulation_projection_audio_resolve_owner(uint8_t entity_id,

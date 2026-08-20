@@ -425,6 +425,75 @@ static uint8_t param_registry_submit_poly_control_snapshot(uint8_t track)
         live_clock_capture_tick(), track, voices, spread) ? 1U : 0U;
 }
 
+uint8_t param_registry_service_pending_audio_publications(void)
+{
+    enum { PARAM_PENDING_RETRY_BUDGET = 8U };
+    static uint8_t retry_track;
+    static uint16_t retry_parameter;
+    uint8_t published = 0U;
+
+    for (uint16_t visited = 0U;
+         (visited < 64U)
+             && (published < PARAM_PENDING_RETRY_BUDGET);
+         ++visited)
+    {
+        const uint8_t track = retry_track;
+        const param_id_t id = (param_id_t)retry_parameter;
+        if (++retry_parameter >= (uint16_t)PARAM_COUNT)
+        {
+            retry_parameter = 0U;
+            retry_track = (uint8_t)((retry_track + 1U) % SEQ_LANE_CAPACITY);
+        }
+        if (param_registry_control_shadow_is_pending(track, id) == 0U)
+            continue;
+
+        float value = 0.0f;
+        if (param_registry_control_shadow_get(track, id, &value) == 0U)
+            continue;
+
+        uint8_t accepted = 0U;
+        if (param_registry_control_shadow_is_pending_global(id) != 0U)
+        {
+            if (track != 0U)
+            {
+                param_registry_control_shadow_mark_published(track, id);
+                continue;
+            }
+            float command_value = value;
+            if (param_registry_prepare_global_audio_command(
+                    id, value, &command_value) != 0U)
+            {
+                accepted = param_registry_submit_audio_value(
+                    id, 0U, command_value,
+                    LIVE_PARAMETER_EVENT_SCOPE_GLOBAL);
+            }
+        }
+        else if ((id == PARAM_CFG_POLY_VOICES)
+                 || (id == PARAM_CFG_POLY_SPREAD))
+        {
+            accepted = param_registry_submit_poly_control_snapshot(track);
+            if (accepted != 0U)
+            {
+                param_registry_control_shadow_mark_published(
+                    track, PARAM_CFG_POLY_VOICES);
+                param_registry_control_shadow_mark_published(
+                    track, PARAM_CFG_POLY_SPREAD);
+            }
+        }
+        else
+        {
+            accepted = param_registry_submit_audio_value(
+                id, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
+        }
+
+        if (accepted == 0U)
+            break;
+        param_registry_control_shadow_mark_published(track, id);
+        ++published;
+    }
+    return published;
+}
+
 static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
                                                       uint8_t track,
                                                       float value)
@@ -505,9 +574,13 @@ static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
 
 uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted)
 {
-    return param_registry_submit_audio_value(
-        PARAM_MIX_MUTE, track, (effective_muted != 0U) ? 1.0f : 0.0f,
-        LIVE_PARAMETER_EVENT_SCOPE_TRACK);
+    const float value = (effective_muted != 0U) ? 1.0f : 0.0f;
+    param_registry_control_shadow_set_pending(track, PARAM_MIX_MUTE, value);
+    const uint8_t accepted = param_registry_submit_audio_value(
+        PARAM_MIX_MUTE, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
+    if (accepted != 0U)
+        param_registry_control_shadow_mark_published(track, PARAM_MIX_MUTE);
+    return 1U;
 }
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
 static float clamp_value(float v, float lo, float hi);
@@ -2371,51 +2444,30 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
         if (audio_command != 0U)
         {
-            uint8_t projected_control_tone = 0U;
-            uint8_t projected_control_env = 0U;
-            float previous_control_value = 0.0f;
             /* Non-audio-owned tone values still have a CONTROL canonical
              * owner.  The AUDIO apply seam must not be asked to create that
              * canonical value after PASS 2 removed its write-back. */
-            if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                    && (live_parameter_is_audio_owned(id) == 0U)
-                    && (param_registry_get_track_value(id, track,
-                                                        &previous_control_value) == 0U))
-            {
-                return 0U;
-            }
             if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                     && (live_parameter_is_audio_owned(id) == 0U))
             {
                 if (param_registry_set_track_tone_value(id, track, clamped) == 0U)
                     return 0U;
-                projected_control_tone = 1U;
             }
             if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             {
-                if (param_registry_get_track_value(id, track, &previous_control_value) == 0U)
-                    return 0U;
                 if (param_registry_set_env_control_value(id, track, clamped) == 0U)
                     return 0U;
-                projected_control_env = 1U;
             }
-            param_registry_control_shadow_set(track, id, clamped);
+            param_registry_control_shadow_set_pending(track, id, clamped);
             const uint8_t submitted = ((id == PARAM_CFG_POLY_VOICES)
                                        || (id == PARAM_CFG_POLY_SPREAD))
                 ? param_registry_submit_poly_control_snapshot(track)
                 : param_registry_submit_audio_value(
                     id, track, clamped, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
-            if (submitted == 0U)
-            {
-                if (projected_control_tone != 0U)
-                {
-                    (void)param_registry_set_track_tone_value(
-                        id, track, previous_control_value);
-                }
-                if (projected_control_env != 0U)
-                    (void)param_registry_set_env_control_value(id, track, previous_control_value);
-                return 0U;
-            }
+            if (submitted != 0U)
+                param_registry_control_shadow_mark_published(track, id);
+            /* A rejected state publication remains a valid CONTROL intention
+             * and is retried by the bounded service above. */
             return 1U;
         }
     }
@@ -2570,12 +2622,16 @@ static void modfx_bank_project_model(uint8_t model)
     {
         const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
         param_store_set_active(ids[slot],value);
-        param_registry_control_shadow_set(0U,ids[slot],value);
+        param_registry_control_shadow_set_pending_global(ids[slot],value);
         float command_value = value;
         (void)param_registry_prepare_global_audio_command(ids[slot], value, &command_value);
         bulk.item[slot]=(live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[slot],.scope=LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,.track=0U,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,.flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET|LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),.value=live_parameter_event_encode_float(command_value)};
     }
-    (void)live_parameter_audio_queue_submit_bulk(&bulk);
+    if (live_parameter_audio_queue_submit_bulk(&bulk) != false)
+    {
+        for(uint8_t slot=0U;slot<4U;++slot)
+            param_registry_control_shadow_mark_published(0U,ids[slot]);
+    }
 }
 
 /* Command surface: global canonical write. */
@@ -2604,7 +2660,7 @@ void param_set(param_id_t id, float value)
     if ((live_parameter_is_audio_owned(id) != 0U)
             || (id == PARAM_MASTER_GAIN))
     {
-        param_registry_control_shadow_set(0U, id, clamped);
+        param_registry_control_shadow_set_pending_global(id, clamped);
         float command_value = clamped;
         if ((param_registry_prepare_global_audio_command(
                 id, clamped, &command_value) == 0U)
@@ -2614,6 +2670,7 @@ void param_set(param_id_t id, float value)
         {
             return;
         }
+        param_registry_control_shadow_mark_published(0U, id);
         if((id>=PARAM_MODFX_RATE)&&(id<=PARAM_MODFX_OFFSET))
             modfx_bank_store_control(id,clamped);
         if(id==PARAM_MODFX_MODEL)

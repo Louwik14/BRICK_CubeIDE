@@ -66,12 +66,14 @@ uint8_t mixer_routing_control_set_insert_slot(uint32_t track_id,
     return 1U;
 }
 
-uint8_t mixer_routing_publication_audio_read(mixer_routing_snapshot_t *out)
+uint8_t mixer_routing_publication_audio_read(uint32_t consumed_generation,
+                                             mixer_routing_snapshot_t *out)
 {
     if (out == 0) return 0U;
     for (uint8_t attempt = 0U; attempt < 2U; ++attempt)
     {
         const uint32_t before = g_mixer_routing_mailbox.sequence;
+        if (before == consumed_generation) return 0U;
         __DMB();
         if ((before == 0U) || ((before & 1U) != 0U)) continue;
         for (uint32_t track = 0U; track < MIXER_MAX_TRACKS; ++track)

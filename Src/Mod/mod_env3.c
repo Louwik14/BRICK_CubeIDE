@@ -172,6 +172,7 @@ void mod_env3_control_publish_snapshot_track(uint8_t track, uint8_t reset_runtim
     mailbox->snapshot = snapshot;
     __DMB();
     mailbox->sequence = sequence + 2U;
+    audio_modulation_configuration_publish();
 }
 
 void mod_env3_control_publish_snapshot_all(uint8_t reset_runtime)

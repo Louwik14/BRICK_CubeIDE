@@ -430,6 +430,7 @@ static void mod_lfo_control_publish(uint8_t track,
     __DMB();
     mailbox->sequence = sequence + 2U;
     g_mod_lfo_control_pending_sequence[track][lfo_index] = sequence + 2U;
+    audio_modulation_configuration_publish();
 }
 
 static void mod_lfo_audio_reset_poly_track_lfo(uint8_t track,
@@ -913,17 +914,6 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
 static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
                                           uint32_t bpm_milli)
 {
-    uint8_t transition_global_active = 0U;
-    uint8_t transition_track_active[SEQ_TRACK_COUNT] = {0U};
-    (void)audio_transition_snapshot_read_all(
-        &transition_global_active,
-        transition_track_active,
-        SEQ_TRACK_COUNT);
-    if (transition_global_active != 0U)
-    {
-        return;
-    }
-
     if (mod_matrix_has_any_configured_route() == 0U)
     {
         if (g_mod_lfo_had_matrix_routes != 0U)
@@ -938,6 +928,17 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
             }
             g_mod_lfo_had_matrix_routes = 0U;
         }
+        return;
+    }
+
+    uint8_t transition_global_active = 0U;
+    uint8_t transition_track_active[SEQ_TRACK_COUNT] = {0U};
+    (void)audio_transition_snapshot_read_all(
+        &transition_global_active,
+        transition_track_active,
+        SEQ_TRACK_COUNT);
+    if (transition_global_active != 0U)
+    {
         return;
     }
 
@@ -1374,7 +1375,7 @@ void mod_lfo_v1_process_sample_all(void)
     mod_lfo_v1_process_block(1U);
 }
 
-ITCM_AUDIT_32_TEXT void mod_lfo_v1_process_block(uint32_t frames)
+ITCM_TEXT void mod_lfo_v1_process_block(uint32_t frames)
 {
     if (frames == 0U)
     {
@@ -1505,7 +1506,7 @@ void mod_lfo_v1_poly_note_trigger(uint8_t track, uint8_t voice_slot)
     }
 }
 
-void mod_lfo_v1_process_poly_voice(uint8_t track,
+ITCM_TEXT void mod_lfo_v1_process_poly_voice(uint8_t track,
                                    uint8_t voice_slot,
                                    const track_audio_runtime_ctx_t *ctx,
                                    uint32_t frames)

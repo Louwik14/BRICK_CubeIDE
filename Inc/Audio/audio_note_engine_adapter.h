@@ -59,8 +59,14 @@ typedef struct
 
 void audio_note_engine_adapter_init(void);
 void audio_note_engine_adapter_audio_publish_snapshot(void);
+void audio_note_engine_adapter_audio_publish_snapshot_entity(
+    brick_entity_id_t entity_id);
 const track_audio_runtime_ctx_t *audio_note_engine_adapter_audio_ctx(
     brick_entity_id_t entity_id);
+uint16_t audio_note_engine_adapter_entity_mask(
+    track_runtime_engine_t engine);
+brick_entity_id_t audio_note_engine_adapter_entity_for_mix_lane(
+    uint8_t mix_track_id);
 uint8_t audio_note_engine_adapter_snapshot_read(
     brick_entity_id_t entity_id,
     audio_binding_snapshot_t *out_snapshot);

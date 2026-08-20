@@ -9,23 +9,16 @@
 #include <string.h>
 
 #include "Core/brick6_stack_waveform.h"
+#include "Audio/audio_float.h"
 #include "Audio/deluge_oscillator.h"
 #include "Storage/memory_layout.h"
-#include "stm32h7xx_hal.h"
 
 #define STACK_DEFAULT_RNG_SEED 0x6D2B79F5UL
 #define STACK_DEFAULT_NOTE 60U
 #define STACK_BASE_C4_INC 23428135UL
-#define STACK_COMMAND_QUEUE_CAP 256U
 #define STACK_OSC_DETUNE_MAX_SHIFT 8U
-#define STACK_LEVEL_ENERGY_ONE_Q30 1073676289UL
-#define STACK_LEVEL_ENERGY_TWO_Q30 2147352578UL
-#define STACK_LEVEL_ENERGY_THREE_Q30 3221028867UL
-#define STACK_OUTPUT_GAIN_ONE_Q15 32767U
-#define STACK_OUTPUT_GAIN_TWO_Q15 23170U
-#define STACK_OUTPUT_GAIN_THREE_Q15 18919U
-#define STACK_SOFT_CLIP_LINEAR_Q15 28672L
-#define STACK_SOFT_CLIP_RANGE_Q15 (32767L - STACK_SOFT_CLIP_LINEAR_Q15)
+#define STACK_SQUARE_COMPAT_BLOCK_SIZE 24U
+#define STACK_SOURCE_NOISE_BIT (1U << BRICK6_STACK_SLOT_COUNT)
 
 enum
 {
@@ -38,32 +31,6 @@ enum
     STACK_RENDERER_SILENT,
     STACK_RENDERER_COUNT
 };
-
-typedef enum
-{
-    STACK_COMMAND_NOTE_ON = 0,
-    STACK_COMMAND_NOTE_OFF,
-    STACK_COMMAND_ALL_NOTES_OFF,
-    STACK_COMMAND_RESET,
-    STACK_COMMAND_SET_SLOT_MODEL,
-    STACK_COMMAND_SET_SLOT_LEVEL,
-    STACK_COMMAND_SET_SLOT_TUNE,
-    STACK_COMMAND_SET_SLOT_TIMBRE,
-    STACK_COMMAND_SET_SLOT_COLOR,
-    STACK_COMMAND_SET_NOISE_LEVEL,
-    STACK_COMMAND_SET_OSC_DETUNE,
-    STACK_COMMAND_SET_PHASE_RESET
-} brick6_stack_runtime_command_type_t;
-
-typedef struct
-{
-    uint8_t type;
-    uint8_t instance_id;
-    uint8_t note;
-    uint8_t velocity;
-    int16_t value_i16;
-    uint16_t value_u16;
-} brick6_stack_runtime_command_t;
 
 typedef struct
 {
@@ -93,15 +60,13 @@ typedef struct
     uint16_t osc_detune_q15;
     uint32_t rng;
     int16_t osc_detune_offset_q15[BRICK6_STACK_SLOT_COUNT];
-    uint8_t pending_offset;
-    uint8_t pending_count;
+    uint8_t active_source_mask;
+    uint8_t ramp_mask;
     uint8_t phase_reset;
-    uint8_t reserved0;
     uint32_t config_version;
     uint32_t synced_config_version;
     uint32_t continuous_epoch;
     uint32_t continuous_version[STACK_CONT_COUNT];
-    int16_t pending_mono[BRICK6_STACK_RENDER_BLOCK_SIZE];
 } brick6_stack_runtime_instance_t;
 
 _Static_assert(sizeof(stack_osc_slot_t) <= 192U, "stack_osc_slot_t RAM budget exceeded");
@@ -110,11 +75,9 @@ _Static_assert(sizeof(brick6_stack_runtime_instance_t) <= 768U, "brick6_stack_ru
 AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_runtime[BRICK6_STACK_MAX_INSTANCES];
 enum { STACK_POLY_D2_COUNT = BRICK6_STACK_VOICE_INSTANCE_COUNT - BRICK6_STACK_MAX_INSTANCES };
 AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_poly_runtime_d2[STACK_POLY_D2_COUNT];
-AUDIO_HOT static volatile uint8_t g_stack_command_head;
-AUDIO_HOT static volatile uint8_t g_stack_command_tail;
-AUDIO_HOT static brick6_stack_runtime_command_t g_stack_command_queue[STACK_COMMAND_QUEUE_CAP];
-AUDIO_HOT static volatile uint8_t g_stack_note_cancel_pending_mask;
 static uint32_t g_stack_continuous_version;
+AUDIO_HOT static int32_t g_stack_native_scratch[AUDIO_BLOCK_SIZE];
+AUDIO_HOT static int32_t g_stack_acc_scratch[AUDIO_BLOCK_SIZE];
 
 static const brick6_stack_model_desc_t k_stack_model_catalog[BRICK6_STACK_MODEL_COUNT] = {
     [BRICK6_STACK_MODEL_SINE] = {
@@ -168,82 +131,6 @@ static int16_t brick6_stack_sat16(int32_t value)
     return (int16_t)value;
 }
 
-static int16_t brick6_stack_soft_clip_q15(int32_t value, uint8_t *out_activated)
-{
-    if ((value <= STACK_SOFT_CLIP_LINEAR_Q15) && (value >= -STACK_SOFT_CLIP_LINEAR_Q15))
-    {
-        return (int16_t)value;
-    }
-
-    const uint8_t negative = (value < 0) ? 1U : 0U;
-    uint32_t magnitude = negative ? (uint32_t)(-value) : (uint32_t)value;
-    if (magnitude <= (uint32_t)STACK_SOFT_CLIP_LINEAR_Q15)
-    {
-        return (int16_t)value;
-    }
-    if (out_activated != NULL)
-    {
-        *out_activated = 1U;
-    }
-
-    const uint32_t excess = magnitude - (uint32_t)STACK_SOFT_CLIP_LINEAR_Q15;
-    magnitude = (uint32_t)STACK_SOFT_CLIP_LINEAR_Q15
-            + (uint32_t)((excess * (uint32_t)STACK_SOFT_CLIP_RANGE_Q15)
-                    / (excess + (uint32_t)STACK_SOFT_CLIP_RANGE_Q15));
-    if (magnitude > 32767U)
-    {
-        magnitude = 32767U;
-    }
-    return negative ? (int16_t)-(int32_t)magnitude : (int16_t)magnitude;
-}
-
-static uint32_t brick6_stack_enter_critical(void)
-{
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    return primask;
-}
-
-static void brick6_stack_exit_critical(uint32_t primask)
-{
-    if (primask == 0U)
-    {
-        __enable_irq();
-    }
-}
-
-static uint8_t brick6_stack_runtime_submit_command(uint8_t type,
-                                                   uint8_t instance_id,
-                                                   uint8_t note,
-                                                   uint8_t velocity,
-                                                   int16_t value_i16,
-                                                   uint16_t value_u16)
-{
-    if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
-    {
-        return 0U;
-    }
-
-    const uint32_t primask = brick6_stack_enter_critical();
-    const uint8_t head = g_stack_command_head;
-    const uint8_t next = (uint8_t)((head + 1U) % STACK_COMMAND_QUEUE_CAP);
-    if (next == g_stack_command_tail)
-    {
-        brick6_stack_exit_critical(primask);
-        return 0U;
-    }
-
-    g_stack_command_queue[head].type = type;
-    g_stack_command_queue[head].instance_id = instance_id;
-    g_stack_command_queue[head].note = note;
-    g_stack_command_queue[head].velocity = velocity;
-    g_stack_command_queue[head].value_i16 = value_i16;
-    g_stack_command_queue[head].value_u16 = value_u16;
-    g_stack_command_head = next;
-    brick6_stack_exit_critical(primask);
-    return 1U;
-}
-
 static brick6_stack_model_t brick6_stack_runtime_normalize_model(brick6_stack_model_t model)
 {
     return ((uint8_t)model < (uint8_t)BRICK6_STACK_MODEL_COUNT)
@@ -291,16 +178,6 @@ static void brick6_stack_runtime_touch_continuous(
     if (g_stack_continuous_version == 0U) g_stack_continuous_version = 1U;
     instance->continuous_version[param] = g_stack_continuous_version;
     instance->continuous_epoch = g_stack_continuous_version;
-}
-
-static void brick6_stack_runtime_flush_pending(brick6_stack_runtime_instance_t *instance)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    instance->pending_offset = 0U;
-    instance->pending_count = 0U;
 }
 
 static uint32_t brick6_stack_note_cents_to_phase_inc(int32_t note_cents)
@@ -404,6 +281,9 @@ static uint32_t brick6_stack_apply_osc_detune(uint32_t inc, uint16_t amount_q15,
     return (inc < (0x7FFFFFFFUL - (uint32_t)delta)) ? (inc + (uint32_t)delta) : 0x7FFFFFFFUL;
 }
 
+static void brick6_stack_runtime_prepare_slot(stack_osc_slot_t *slot);
+static void brick6_stack_runtime_refresh_masks(brick6_stack_runtime_instance_t *instance);
+
 static uint8_t brick6_stack_runtime_osc_detune_offsets_are_zero(const brick6_stack_runtime_instance_t *instance)
 {
     if (instance == NULL)
@@ -455,8 +335,9 @@ static void brick6_stack_runtime_update_slot_pitch(brick6_stack_runtime_instance
     const int32_t note_cents = ((int32_t)instance->voice.active_note * 100L)
                              + (int32_t)instance->slots[slot].tune_cents;
     instance->slots[slot].phase_inc = brick6_stack_apply_osc_detune(brick6_stack_note_cents_to_phase_inc(note_cents),
-                                                                    instance->osc_detune_q15,
-                                                                    instance->osc_detune_offset_q15[slot]);
+                                                                     instance->osc_detune_q15,
+                                                                     instance->osc_detune_offset_q15[slot]);
+    brick6_stack_runtime_prepare_slot(&instance->slots[slot]);
 }
 
 static void brick6_stack_runtime_update_all_pitches(brick6_stack_runtime_instance_t *instance)
@@ -524,6 +405,7 @@ static void brick6_stack_runtime_init_instance(brick6_stack_runtime_instance_t *
     }
     brick6_stack_runtime_update_all_pitches(instance);
     instance->config_version = 1U;
+    brick6_stack_runtime_refresh_masks(instance);
 }
 
 static int16_t brick6_stack_phase_saw(uint32_t phase)
@@ -547,28 +429,19 @@ static uint32_t brick6_stack_detune_inc(uint32_t inc, uint16_t detune_q15, int8_
     return (inc < (0x7FFFFFFFUL - delta)) ? (inc + delta) : 0x7FFFFFFFUL;
 }
 
-static void brick6_stack_render_waveform(stack_osc_slot_t *slot,
-                                         int32_t *acc,
-                                         uint8_t frames,
-                                         uint16_t effective_level,
-                                         int16_t (*waveform)(stack_osc_slot_t *slot))
+static void brick6_stack_runtime_prepare_slot(stack_osc_slot_t *slot)
 {
-    if ((slot == NULL) || (acc == NULL) || (waveform == NULL))
+    if (slot == NULL) return;
+    if (slot->renderer_id == STACK_RENDERER_TRIPLE_SAW)
     {
-        return;
+        slot->phase_inc2 = brick6_stack_detune_inc(slot->phase_inc, slot->timbre_q15, -1);
+        slot->phase_inc3 = brick6_stack_detune_inc(slot->phase_inc, slot->color_q15, 1);
     }
-
-    for (uint8_t i = 0U; i < frames; ++i)
+    else
     {
-        slot->phase += slot->phase_inc;
-        const int16_t sample_q15 = waveform(slot);
-        acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
+        slot->phase_inc2 = slot->phase_inc;
+        slot->phase_inc3 = slot->phase_inc;
     }
-}
-
-static int16_t brick6_stack_wave_shape(stack_osc_slot_t *slot)
-{
-    return brick6_stack_waveform_shape(slot->phase, slot->timbre_q15, slot->color_q15);
 }
 
 static uint32_t brick6_stack_deluge_pulse_width(uint16_t timbre_q15)
@@ -578,93 +451,69 @@ static uint32_t brick6_stack_deluge_pulse_width(uint16_t timbre_q15)
 }
 
 static void brick6_stack_runtime_render_deluge(stack_osc_slot_t *slot,
-                                               int32_t *acc,
-                                               uint8_t frames,
-                                               uint16_t effective_level,
+                                               int32_t *out,
+                                               uint32_t frames,
                                                deluge_osc_type_t type,
                                                uint8_t pulse_width_from_timbre)
 {
-    if ((slot == NULL) || (acc == NULL) || (frames == 0U))
+    if ((slot == NULL) || (out == NULL) || (frames == 0U))
     {
         return;
     }
-
-    int32_t samples[BRICK6_STACK_RENDER_BLOCK_SIZE];
     deluge_oscillator_render(type,
-                             samples,
+                             out,
                              frames,
                              slot->phase_inc,
                              (pulse_width_from_timbre != 0U)
                                  ? brick6_stack_deluge_pulse_width(slot->timbre_q15) : 0U,
                              &slot->phase);
-    for (uint8_t i = 0U; i < frames; ++i)
+}
+
+static uint8_t brick6_stack_runtime_render_native(stack_osc_slot_t *slot,
+                                                  int32_t *out,
+                                                  uint32_t frames)
+{
+    if ((slot == NULL) || (out == NULL) || (frames == 0U))
     {
-        const int16_t sample_q15 = brick6_stack_sat16(samples[i] >> 16);
-        acc[i] += ((int32_t)sample_q15 * (int32_t)effective_level) >> 15;
+        return 0U;
     }
-}
-
-static void brick6_stack_runtime_render_deluge_sine(stack_osc_slot_t *slot,
-                                                    int32_t *acc,
-                                                    uint8_t frames,
-                                                    uint16_t effective_level)
-{
-    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_SINE, 0U);
-}
-
-static void brick6_stack_runtime_render_deluge_tri(stack_osc_slot_t *slot,
-                                                   int32_t *acc,
-                                                   uint8_t frames,
-                                                   uint16_t effective_level)
-{
-    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_TRIANGLE, 0U);
-}
-
-static void brick6_stack_runtime_render_deluge_square(stack_osc_slot_t *slot,
-                                                      int32_t *acc,
-                                                      uint8_t frames,
-                                                      uint16_t effective_level)
-{
-    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_ANALOG_SQUARE, 1U);
-}
-
-static void brick6_stack_runtime_render_deluge_saw(stack_osc_slot_t *slot,
-                                                   int32_t *acc,
-                                                   uint8_t frames,
-                                                   uint16_t effective_level)
-{
-    brick6_stack_runtime_render_deluge(slot, acc, frames, effective_level, DELUGE_OSC_ANALOG_SAW, 0U);
-}
-
-static void brick6_stack_runtime_render_shape(stack_osc_slot_t *slot,
-                                                 int32_t *acc,
-                                                 uint8_t frames,
-                                                 uint16_t effective_level)
-{
-    brick6_stack_render_waveform(slot, acc, frames, effective_level, brick6_stack_wave_shape);
-}
-
-static void brick6_stack_runtime_render_triple_saw(stack_osc_slot_t *slot,
-                                                   int32_t *acc,
-                                                   uint8_t frames,
-                                                   uint16_t effective_level)
-{
-    if ((slot == NULL) || (acc == NULL))
+    switch (slot->renderer_id)
     {
-        return;
-    }
-
-    const uint32_t inc2 = brick6_stack_detune_inc(slot->phase_inc, slot->timbre_q15, -1);
-    const uint32_t inc3 = brick6_stack_detune_inc(slot->phase_inc, slot->color_q15, 1);
-    for (uint8_t i = 0U; i < frames; ++i)
-    {
-        slot->phase += slot->phase_inc;
-        slot->phase2 += inc2;
-        slot->phase3 += inc3;
-        const int32_t mixed = brick6_stack_average3_q15(brick6_stack_phase_saw(slot->phase),
-                                                        brick6_stack_phase_saw(slot->phase2),
-                                                        brick6_stack_phase_saw(slot->phase3));
-        acc[i] += (mixed * (int32_t)effective_level) >> 15;
+        case STACK_RENDERER_DELUGE_SINE:
+            brick6_stack_runtime_render_deluge(slot, out, frames, DELUGE_OSC_SINE, 0U);
+            return 1U;
+        case STACK_RENDERER_DELUGE_TRI:
+            brick6_stack_runtime_render_deluge(slot, out, frames, DELUGE_OSC_TRIANGLE, 0U);
+            return 1U;
+        case STACK_RENDERER_DELUGE_SQUARE:
+            brick6_stack_runtime_render_deluge(slot, out, frames, DELUGE_OSC_ANALOG_SQUARE, 1U);
+            return 1U;
+        case STACK_RENDERER_DELUGE_SAW:
+            brick6_stack_runtime_render_deluge(slot, out, frames, DELUGE_OSC_ANALOG_SAW, 0U);
+            return 1U;
+        case STACK_RENDERER_SHAPE:
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                slot->phase += slot->phase_inc;
+                out[i] = brick6_stack_waveform_shape(
+                    slot->phase, slot->timbre_q15, slot->color_q15);
+            }
+            return 0U;
+        case STACK_RENDERER_TRIPLE_SAW:
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                slot->phase += slot->phase_inc;
+                slot->phase2 += slot->phase_inc2;
+                slot->phase3 += slot->phase_inc3;
+                out[i] = brick6_stack_average3_q15(
+                    brick6_stack_phase_saw(slot->phase),
+                    brick6_stack_phase_saw(slot->phase2),
+                    brick6_stack_phase_saw(slot->phase3));
+            }
+            return 0U;
+        default:
+            memset(out, 0, frames * sizeof(*out));
+            return 0U;
     }
 }
 
@@ -687,11 +536,9 @@ static void brick6_stack_runtime_advance_slot_free_running(stack_osc_slot_t *slo
 
         case STACK_RENDERER_TRIPLE_SAW:
         {
-            const uint32_t inc2 = brick6_stack_detune_inc(slot->phase_inc, slot->timbre_q15, -1);
-            const uint32_t inc3 = brick6_stack_detune_inc(slot->phase_inc, slot->color_q15, 1);
             slot->phase += slot->phase_inc * (uint32_t)frames;
-            slot->phase2 += inc2 * (uint32_t)frames;
-            slot->phase3 += inc3 * (uint32_t)frames;
+            slot->phase2 += slot->phase_inc2 * (uint32_t)frames;
+            slot->phase3 += slot->phase_inc3 * (uint32_t)frames;
             break;
         }
 
@@ -711,70 +558,6 @@ static void brick6_stack_runtime_advance_free_running(brick6_stack_runtime_insta
     {
         brick6_stack_runtime_advance_slot_free_running(&instance->slots[slot], frames);
     }
-}
-
-static void brick6_stack_runtime_render_silent(stack_osc_slot_t *slot,
-                                               int32_t *acc,
-                                               uint8_t frames,
-                                               uint16_t effective_level)
-{
-    (void)slot;
-    (void)acc;
-    (void)frames;
-    (void)effective_level;
-}
-
-typedef void (*brick6_stack_slot_renderer_t)(stack_osc_slot_t *slot,
-                                             int32_t *acc,
-                                             uint8_t frames,
-                                             uint16_t effective_level);
-
-static const brick6_stack_slot_renderer_t k_stack_renderers[STACK_RENDERER_COUNT] = {
-    brick6_stack_runtime_render_deluge_sine,
-    brick6_stack_runtime_render_deluge_tri,
-    brick6_stack_runtime_render_deluge_square,
-    brick6_stack_runtime_render_deluge_saw,
-    brick6_stack_runtime_render_shape,
-    brick6_stack_runtime_render_triple_saw,
-    brick6_stack_runtime_render_silent,
-};
-
-static void brick6_stack_runtime_render_slot_chunk(stack_osc_slot_t *slot,
-                                                   int32_t *acc,
-                                                   uint8_t frames,
-                                                   uint16_t effective_level)
-{
-    if ((slot == NULL) || (acc == NULL) || (slot->renderer_id >= STACK_RENDERER_COUNT))
-    {
-        return;
-    }
-
-    k_stack_renderers[slot->renderer_id](slot, acc, frames, effective_level);
-}
-
-static uint16_t brick6_stack_runtime_energy_gain_q15(uint32_t energy_q30)
-{
-    if (energy_q30 <= STACK_LEVEL_ENERGY_ONE_Q30)
-    {
-        return STACK_OUTPUT_GAIN_ONE_Q15;
-    }
-    if (energy_q30 <= STACK_LEVEL_ENERGY_TWO_Q30)
-    {
-        const uint32_t position = energy_q30 - STACK_LEVEL_ENERGY_ONE_Q30;
-        const uint32_t range = STACK_LEVEL_ENERGY_TWO_Q30 - STACK_LEVEL_ENERGY_ONE_Q30;
-        const uint32_t drop = (uint32_t)(((uint64_t)(STACK_OUTPUT_GAIN_ONE_Q15 - STACK_OUTPUT_GAIN_TWO_Q15)
-                * (uint64_t)position) / range);
-        return (uint16_t)(STACK_OUTPUT_GAIN_ONE_Q15 - drop);
-    }
-    if (energy_q30 < STACK_LEVEL_ENERGY_THREE_Q30)
-    {
-        const uint32_t position = energy_q30 - STACK_LEVEL_ENERGY_TWO_Q30;
-        const uint32_t range = STACK_LEVEL_ENERGY_THREE_Q30 - STACK_LEVEL_ENERGY_TWO_Q30;
-        const uint32_t drop = (uint32_t)(((uint64_t)(STACK_OUTPUT_GAIN_TWO_Q15 - STACK_OUTPUT_GAIN_THREE_Q15)
-                * (uint64_t)position) / range);
-        return (uint16_t)(STACK_OUTPUT_GAIN_TWO_Q15 - drop);
-    }
-    return STACK_OUTPUT_GAIN_THREE_Q15;
 }
 
 static int16_t brick6_stack_runtime_render_noise_sample(brick6_stack_runtime_instance_t *instance)
@@ -823,174 +606,223 @@ static int64_t brick6_stack_exact_ramp_next(brick6_stack_exact_ramp_t *ramp)
     return (ramp->sign < 0) ? -(int64_t)ramp->magnitude : (int64_t)ramp->magnitude;
 }
 
-static void brick6_stack_runtime_generate_pending(uint8_t instance_id,
-                                                  brick6_stack_runtime_instance_t *instance,
-                                                  uint8_t frames,
-                                                  uint8_t source_active)
+static uint8_t brick6_stack_runtime_slot_is_ramping(const stack_osc_slot_t *slot)
 {
-    int32_t acc[BRICK6_STACK_RENDER_BLOCK_SIZE];
+    return (uint8_t)((slot->level_current_q15 != slot->level_q15)
+        || (slot->phase_inc_current != slot->phase_inc)
+        || (slot->timbre_current_q15 != slot->timbre_q15)
+        || (slot->color_current_q15 != slot->color_q15));
+}
 
-    if ((instance == NULL) || (frames == 0U))
+static void brick6_stack_runtime_refresh_masks(brick6_stack_runtime_instance_t *instance)
+{
+    if (instance == NULL) return;
+    uint8_t active = 0U;
+    uint8_t ramps = 0U;
+    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
     {
+        const stack_osc_slot_t *const osc = &instance->slots[slot];
+        const uint8_t bit = (uint8_t)(1U << slot);
+        if ((osc->level_q15 != 0U) || (osc->level_current_q15 != 0U)) active |= bit;
+        if (brick6_stack_runtime_slot_is_ramping(osc) != 0U) ramps |= bit;
+    }
+    if ((instance->noise_level_q15 != 0U) || (instance->noise_level_current_q15 != 0U))
+        active |= STACK_SOURCE_NOISE_BIT;
+    if (instance->noise_level_q15 != instance->noise_level_current_q15)
+        ramps |= STACK_SOURCE_NOISE_BIT;
+    instance->active_source_mask = active;
+    instance->ramp_mask = ramps;
+}
+
+static int32_t brick6_stack_runtime_native_to_q15(int32_t sample, uint8_t q31)
+{
+    return (q31 != 0U) ? (sample >> 16) : sample;
+}
+
+static void brick6_stack_runtime_accumulate_constant(
+    brick6_stack_runtime_instance_t *instance,
+    stack_osc_slot_t *osc,
+    uint32_t acc_offset,
+    uint32_t frames)
+{
+    const uint8_t q31 = brick6_stack_runtime_render_native(
+        osc, g_stack_native_scratch, frames);
+    const uint16_t effective_level = (uint16_t)(((uint32_t)osc->level_q15
+        * (uint32_t)instance->voice.velocity_q15) >> 15);
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        const int32_t sample_q15 = brick6_stack_runtime_native_to_q15(
+            g_stack_native_scratch[i], q31);
+        g_stack_acc_scratch[acc_offset + i] +=
+            (sample_q15 * (int32_t)effective_level) >> 15;
+    }
+}
+
+static void brick6_stack_runtime_accumulate_level_ramp(
+    brick6_stack_runtime_instance_t *instance,
+    stack_osc_slot_t *osc,
+    uint32_t acc_offset,
+    uint32_t frames)
+{
+    const uint8_t q31 = brick6_stack_runtime_render_native(
+        osc, g_stack_native_scratch, frames);
+    const int32_t level_start = osc->level_current_q15;
+    brick6_stack_exact_ramp_t level_ramp;
+    brick6_stack_exact_ramp_init(
+        &level_ramp, (int32_t)osc->level_q15 - level_start, frames);
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        const int32_t sample_q15 = brick6_stack_runtime_native_to_q15(
+            g_stack_native_scratch[i], q31);
+        const int32_t velocity_sample =
+            (sample_q15 * (int32_t)instance->voice.velocity_q15) >> 15;
+        const uint16_t level_here = (uint16_t)(level_start
+            + (int32_t)brick6_stack_exact_ramp_next(&level_ramp));
+        g_stack_acc_scratch[acc_offset + i] +=
+            (velocity_sample * (int32_t)level_here) >> 15;
+    }
+    osc->level_current_q15 = osc->level_q15;
+}
+
+static void brick6_stack_runtime_accumulate_control_ramp(
+    brick6_stack_runtime_instance_t *instance,
+    stack_osc_slot_t *osc,
+    uint32_t acc_offset,
+    uint32_t frames)
+{
+    const int32_t level_start = osc->level_current_q15;
+    const uint32_t pitch_start = osc->phase_inc_current;
+    const int32_t timbre_start = osc->timbre_current_q15;
+    const int32_t color_start = osc->color_current_q15;
+    const uint16_t level_target = osc->level_q15;
+    const uint32_t pitch_target = osc->phase_inc;
+    const uint16_t timbre_target = osc->timbre_q15;
+    const uint16_t color_target = osc->color_q15;
+    brick6_stack_exact_ramp_t level_ramp;
+    brick6_stack_exact_ramp_t pitch_ramp;
+    brick6_stack_exact_ramp_t timbre_ramp;
+    brick6_stack_exact_ramp_t color_ramp;
+    brick6_stack_exact_ramp_init(&level_ramp, (int32_t)level_target - level_start, frames);
+    brick6_stack_exact_ramp_init(&pitch_ramp, (int64_t)pitch_target - pitch_start, frames);
+    brick6_stack_exact_ramp_init(&timbre_ramp, (int32_t)timbre_target - timbre_start, frames);
+    brick6_stack_exact_ramp_init(&color_ramp, (int32_t)color_target - color_start, frames);
+
+    for (uint32_t offset = 0U; offset < frames;)
+    {
+        uint32_t chunk = frames - offset;
+        if (chunk > 8U) chunk = 8U;
+        int64_t level_progress = 0;
+        int64_t pitch_progress = 0;
+        int64_t timbre_progress = 0;
+        int64_t color_progress = 0;
+        for (uint32_t i = 0U; i < chunk; ++i)
+        {
+            level_progress = brick6_stack_exact_ramp_next(&level_ramp);
+            pitch_progress = brick6_stack_exact_ramp_next(&pitch_ramp);
+            timbre_progress = brick6_stack_exact_ramp_next(&timbre_ramp);
+            color_progress = brick6_stack_exact_ramp_next(&color_ramp);
+        }
+        osc->phase_inc = (uint32_t)((int64_t)pitch_start + pitch_progress);
+        osc->timbre_q15 = (uint16_t)(timbre_start + (int32_t)timbre_progress);
+        osc->color_q15 = (uint16_t)(color_start + (int32_t)color_progress);
+        brick6_stack_runtime_prepare_slot(osc);
+        const uint8_t q31 = brick6_stack_runtime_render_native(
+            osc, g_stack_native_scratch, chunk);
+        const uint16_t level_here = (uint16_t)(level_start + (int32_t)level_progress);
+        const uint16_t effective_level = (uint16_t)(((uint32_t)level_here
+            * (uint32_t)instance->voice.velocity_q15) >> 15);
+        for (uint32_t i = 0U; i < chunk; ++i)
+        {
+            const int32_t sample_q15 = brick6_stack_runtime_native_to_q15(
+                g_stack_native_scratch[i], q31);
+            g_stack_acc_scratch[acc_offset + offset + i] +=
+                (sample_q15 * (int32_t)effective_level) >> 15;
+        }
+        offset += chunk;
+    }
+    osc->level_q15 = level_target;
+    osc->phase_inc = pitch_target;
+    osc->timbre_q15 = timbre_target;
+    osc->color_q15 = color_target;
+    osc->level_current_q15 = level_target;
+    osc->phase_inc_current = pitch_target;
+    osc->timbre_current_q15 = timbre_target;
+    osc->color_current_q15 = color_target;
+    brick6_stack_runtime_prepare_slot(osc);
+}
+
+static void brick6_stack_runtime_render_slot(
+    brick6_stack_runtime_instance_t *instance,
+    uint8_t slot,
+    uint32_t frames)
+{
+    stack_osc_slot_t *const osc = &instance->slots[slot];
+    uint32_t offset = 0U;
+    while (offset < frames)
+    {
+        uint32_t chunk = frames - offset;
+        if ((osc->renderer_id == STACK_RENDERER_DELUGE_SQUARE)
+                && (chunk > STACK_SQUARE_COMPAT_BLOCK_SIZE))
+            chunk = STACK_SQUARE_COMPAT_BLOCK_SIZE;
+        const uint8_t control_ramp = (uint8_t)(
+            (osc->phase_inc_current != osc->phase_inc)
+            || (osc->timbre_current_q15 != osc->timbre_q15)
+            || (osc->color_current_q15 != osc->color_q15));
+        if (((control_ramp != 0U) || (osc->level_current_q15 != osc->level_q15))
+                && (chunk > STACK_SQUARE_COMPAT_BLOCK_SIZE))
+            chunk = STACK_SQUARE_COMPAT_BLOCK_SIZE;
+        if (control_ramp != 0U)
+            brick6_stack_runtime_accumulate_control_ramp(instance, osc, offset, chunk);
+        else if (osc->level_current_q15 != osc->level_q15)
+            brick6_stack_runtime_accumulate_level_ramp(instance, osc, offset, chunk);
+        else
+            brick6_stack_runtime_accumulate_constant(instance, osc, offset, chunk);
+        offset += chunk;
+    }
+}
+
+static void brick6_stack_runtime_render_noise(
+    brick6_stack_runtime_instance_t *instance,
+    uint32_t frames)
+{
+    if (instance->noise_level_current_q15 == instance->noise_level_q15)
+    {
+        const uint16_t effective = (uint16_t)(((uint32_t)instance->noise_level_q15
+            * (uint32_t)instance->voice.velocity_q15) >> 15);
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            const int32_t sample = brick6_stack_runtime_render_noise_sample(instance);
+            g_stack_acc_scratch[i] += (sample * (int32_t)effective) >> 15;
+        }
         return;
     }
-    if (frames > BRICK6_STACK_RENDER_BLOCK_SIZE)
+    const uint32_t ramp_frames = (frames > STACK_SQUARE_COMPAT_BLOCK_SIZE)
+        ? STACK_SQUARE_COMPAT_BLOCK_SIZE : frames;
+    const int32_t start = instance->noise_level_current_q15;
+    brick6_stack_exact_ramp_t ramp;
+    brick6_stack_exact_ramp_init(
+        &ramp, (int32_t)instance->noise_level_q15 - start, ramp_frames);
+    for (uint32_t i = 0U; i < ramp_frames; ++i)
     {
-        frames = BRICK6_STACK_RENDER_BLOCK_SIZE;
+        const uint16_t level = (uint16_t)(start
+            + (int32_t)brick6_stack_exact_ramp_next(&ramp));
+        const uint16_t effective = (uint16_t)(((uint32_t)level
+            * (uint32_t)instance->voice.velocity_q15) >> 15);
+        const int32_t sample = brick6_stack_runtime_render_noise_sample(instance);
+        g_stack_acc_scratch[i] += (sample * (int32_t)effective) >> 15;
     }
-
-    memset(acc, 0, sizeof(acc));
-    uint32_t level_energy_q30 = 0U;
-    if (source_active != 0U)
+    instance->noise_level_current_q15 = instance->noise_level_q15;
+    const uint16_t effective = (uint16_t)(((uint32_t)instance->noise_level_q15
+        * (uint32_t)instance->voice.velocity_q15) >> 15);
+    for (uint32_t i = ramp_frames; i < frames; ++i)
     {
-        for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
-        {
-            stack_osc_slot_t *const osc = &instance->slots[slot];
-            if ((osc->level_q15 == 0U) && (osc->level_current_q15 == 0U))
-            {
-                continue;
-            }
-
-            const uint16_t effective_level = (uint16_t)(((uint32_t)osc->level_q15
-                    * (uint32_t)instance->voice.velocity_q15) >> 15);
-            level_energy_q30 += (uint32_t)effective_level * (uint32_t)effective_level;
-            if ((osc->level_current_q15 == osc->level_q15)
-                    && (osc->phase_inc_current == osc->phase_inc)
-                    && (osc->timbre_current_q15 == osc->timbre_q15)
-                    && (osc->color_current_q15 == osc->color_q15))
-            {
-                brick6_stack_runtime_render_slot_chunk(osc,
-                                                       acc,
-                                                       frames,
-                                                       effective_level);
-            }
-            else if ((osc->phase_inc_current == osc->phase_inc)
-                    && (osc->timbre_current_q15 == osc->timbre_q15)
-                    && (osc->color_current_q15 == osc->color_q15))
-            {
-                int32_t slot_acc[BRICK6_STACK_RENDER_BLOCK_SIZE] = {0};
-                const int32_t level_delta =
-                    (int32_t)osc->level_q15 - (int32_t)osc->level_current_q15;
-                brick6_stack_exact_ramp_t level_ramp;
-                brick6_stack_exact_ramp_init(&level_ramp, level_delta, frames);
-                brick6_stack_runtime_render_slot_chunk(
-                    osc,
-                    slot_acc,
-                    frames,
-                    instance->voice.velocity_q15);
-                for (uint8_t i = 0U; i < frames; ++i)
-                {
-                    const uint16_t level_here = (uint16_t)(
-                        (int32_t)osc->level_current_q15
-                        + (int32_t)brick6_stack_exact_ramp_next(&level_ramp));
-                    acc[i] += ((int32_t)slot_acc[i] * (int32_t)level_here) >> 15;
-                }
-                osc->level_current_q15 = osc->level_q15;
-            }
-            else
-            {
-                const int32_t level_delta =
-                    (int32_t)osc->level_q15 - (int32_t)osc->level_current_q15;
-                const int64_t pitch_delta =
-                    (int64_t)osc->phase_inc - (int64_t)osc->phase_inc_current;
-                const int32_t timbre_delta =
-                    (int32_t)osc->timbre_q15 - (int32_t)osc->timbre_current_q15;
-                const int32_t color_delta =
-                    (int32_t)osc->color_q15 - (int32_t)osc->color_current_q15;
-                const uint32_t pitch_start = osc->phase_inc_current;
-                brick6_stack_exact_ramp_t level_ramp;
-                brick6_stack_exact_ramp_t pitch_ramp;
-                brick6_stack_exact_ramp_t timbre_ramp;
-                brick6_stack_exact_ramp_t color_ramp;
-                brick6_stack_exact_ramp_init(&level_ramp, level_delta, frames);
-                brick6_stack_exact_ramp_init(&pitch_ramp, pitch_delta, frames);
-                brick6_stack_exact_ramp_init(&timbre_ramp, timbre_delta, frames);
-                brick6_stack_exact_ramp_init(&color_ramp, color_delta, frames);
-                for (uint8_t offset = 0U; offset < frames;)
-                {
-                    uint8_t chunk = (uint8_t)(frames - offset);
-                    if (chunk > 8U) chunk = 8U;
-                    int64_t level_progress = 0;
-                    int64_t pitch_progress = 0;
-                    int64_t timbre_progress = 0;
-                    int64_t color_progress = 0;
-                    for (uint8_t i = 0U; i < chunk; ++i)
-                    {
-                        level_progress = brick6_stack_exact_ramp_next(&level_ramp);
-                        pitch_progress = brick6_stack_exact_ramp_next(&pitch_ramp);
-                        timbre_progress = brick6_stack_exact_ramp_next(&timbre_ramp);
-                        color_progress = brick6_stack_exact_ramp_next(&color_ramp);
-                    }
-                    const uint16_t level_here = (uint16_t)(
-                        (int32_t)osc->level_current_q15 + (int32_t)level_progress);
-                    osc->phase_inc = (uint32_t)((int64_t)pitch_start + pitch_progress);
-                    osc->timbre_q15 = (uint16_t)((int32_t)osc->timbre_current_q15
-                        + (int32_t)timbre_progress);
-                    osc->color_q15 = (uint16_t)((int32_t)osc->color_current_q15
-                        + (int32_t)color_progress);
-                    const uint16_t effective_here = (uint16_t)(
-                        ((uint32_t)level_here
-                            * (uint32_t)instance->voice.velocity_q15) >> 15);
-                    brick6_stack_runtime_render_slot_chunk(
-                        osc, &acc[offset], chunk, effective_here);
-                    offset = (uint8_t)(offset + chunk);
-                }
-                osc->phase_inc =
-                    (uint32_t)((int64_t)pitch_start + pitch_delta);
-                osc->level_current_q15 = osc->level_q15;
-                osc->phase_inc_current = osc->phase_inc;
-                osc->timbre_current_q15 = osc->timbre_q15;
-                osc->color_current_q15 = osc->color_q15;
-            }
-        }
+        const int32_t sample = brick6_stack_runtime_render_noise_sample(instance);
+        g_stack_acc_scratch[i] += (sample * (int32_t)effective) >> 15;
     }
-    else
-    {
-        brick6_stack_runtime_advance_free_running(instance, frames);
-    }
-
-    if ((source_active != 0U)
-            && ((instance->noise_level_q15 != 0U)
-                || (instance->noise_level_current_q15 != 0U)))
-    {
-        const uint16_t effective_noise = (uint16_t)(((uint32_t)instance->noise_level_q15
-                * (uint32_t)instance->voice.velocity_q15) >> 15);
-        if (level_energy_q30 == 0U)
-        {
-            level_energy_q30 = (uint32_t)effective_noise * (uint32_t)effective_noise;
-        }
-        const int32_t noise_delta = (int32_t)instance->noise_level_q15
-            - (int32_t)instance->noise_level_current_q15;
-        brick6_stack_exact_ramp_t noise_ramp;
-        brick6_stack_exact_ramp_init(&noise_ramp, noise_delta, frames);
-        for (uint8_t i = 0U; i < frames; ++i)
-        {
-            const int16_t sample_q15 = brick6_stack_runtime_render_noise_sample(instance);
-            const uint16_t noise_here = (uint16_t)(
-                (int32_t)instance->noise_level_current_q15
-                + (int32_t)brick6_stack_exact_ramp_next(&noise_ramp));
-            const uint16_t effective_here = (uint16_t)(
-                ((uint32_t)noise_here * (uint32_t)instance->voice.velocity_q15) >> 15);
-            acc[i] += ((int32_t)sample_q15 * (int32_t)effective_here) >> 15;
-        }
-        instance->noise_level_current_q15 = instance->noise_level_q15;
-    }
-
-    const uint16_t output_gain_q15 = brick6_stack_runtime_energy_gain_q15(level_energy_q30);
-    for (uint8_t i = 0U; i < frames; ++i)
-    {
-        const int32_t post_gain = (acc[i] * (int32_t)output_gain_q15) >> 15;
-        instance->pending_mono[i] = brick6_stack_soft_clip_q15(post_gain, NULL);
-    }
-    instance->pending_offset = 0U;
-    instance->pending_count = frames;
 }
 
 void brick6_stack_runtime_init(void)
 {
-    g_stack_command_head = 0U;
-    g_stack_command_tail = 0U;
-    g_stack_note_cancel_pending_mask = 0U;
     for (uint8_t instance = 0U; instance < BRICK6_STACK_VOICE_INSTANCE_COUNT; ++instance)
     {
         brick6_stack_runtime_init_instance(
@@ -1014,6 +846,7 @@ void brick6_stack_runtime_set_slot_level(uint8_t instance_id, uint8_t slot, floa
     if (instance->slots[slot].level_q15 == next) return;
     instance->slots[slot].level_q15 = next;
     instance->slots[slot].level = (uint8_t)((instance->slots[slot].level_q15 * 127U) / 32767U);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_continuous(instance, (uint8_t)(STACK_CONT_LEVEL_BASE + slot));
 }
 
@@ -1041,7 +874,8 @@ void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, bric
     osc->phase2 = 0x55555555UL;
     osc->phase3 = 0xAAAAAAAAUL;
     brick6_stack_runtime_update_slot_pitch(instance, slot);
-    brick6_stack_runtime_flush_pending(instance);
+    brick6_stack_runtime_prepare_slot(osc);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_config(instance);
 }
 
@@ -1056,6 +890,7 @@ void brick6_stack_runtime_set_slot_tune(uint8_t instance_id, uint8_t slot, float
     if (instance->slots[slot].tune_cents == next) return;
     instance->slots[slot].tune_cents = next;
     brick6_stack_runtime_update_slot_pitch(instance, slot);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_continuous(instance, (uint8_t)(STACK_CONT_TUNE_BASE + slot));
 }
 
@@ -1070,6 +905,8 @@ void brick6_stack_runtime_set_slot_timbre(uint8_t instance_id, uint8_t slot, flo
     if (instance->slots[slot].timbre_q15 == next) return;
     instance->slots[slot].timbre_q15 = next;
     instance->slots[slot].timbre = (uint8_t)((instance->slots[slot].timbre_q15 * 127U) / 32767U);
+    brick6_stack_runtime_prepare_slot(&instance->slots[slot]);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_continuous(instance, (uint8_t)(STACK_CONT_TIMBRE_BASE + slot));
 }
 
@@ -1084,6 +921,8 @@ void brick6_stack_runtime_set_slot_color(uint8_t instance_id, uint8_t slot, floa
     if (instance->slots[slot].color_q15 == next) return;
     instance->slots[slot].color_q15 = next;
     instance->slots[slot].color = (uint8_t)((instance->slots[slot].color_q15 * 127U) / 32767U);
+    brick6_stack_runtime_prepare_slot(&instance->slots[slot]);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_continuous(instance, (uint8_t)(STACK_CONT_COLOR_BASE + slot));
 }
 
@@ -1097,6 +936,7 @@ void brick6_stack_runtime_set_noise_level(uint8_t instance_id, float level)
     const uint16_t next = brick6_stack_float_to_q15(level);
     if (instance->noise_level_q15 == next) return;
     instance->noise_level_q15 = next;
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_continuous(instance, STACK_CONT_NOISE);
 }
 
@@ -1115,6 +955,7 @@ void brick6_stack_runtime_set_osc_detune(uint8_t instance_id, float detune)
         brick6_stack_runtime_generate_osc_detune_offsets(instance);
     }
     brick6_stack_runtime_update_all_pitches(instance);
+    brick6_stack_runtime_refresh_masks(instance);
     brick6_stack_runtime_touch_config(instance);
 }
 
@@ -1180,7 +1021,7 @@ void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t vel
     {
         instance->slots[slot].phase_inc_current = instance->slots[slot].phase_inc;
     }
-    brick6_stack_runtime_flush_pending(instance);
+    brick6_stack_runtime_refresh_masks(instance);
 }
 
 void brick6_stack_runtime_note_off(uint8_t instance_id, uint8_t note)
@@ -1209,320 +1050,6 @@ void brick6_stack_runtime_all_notes_off(uint8_t instance_id)
     instance->voice.has_active_note = 0U;
     instance->voice.trigger = 0U;
     instance->release_source_active = 0U;
-    brick6_stack_runtime_flush_pending(instance);
-}
-
-uint8_t brick6_stack_runtime_submit_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_NOTE_ON,
-                                               instance_id,
-                                               note,
-                                               velocity,
-                                               0,
-                                               0U);
-}
-
-uint8_t brick6_stack_runtime_submit_note_off(uint8_t instance_id, uint8_t note)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_NOTE_OFF,
-                                               instance_id,
-                                               note,
-                                               0U,
-                                               0,
-                                               0U);
-}
-
-uint8_t brick6_stack_runtime_submit_all_notes_off(uint8_t instance_id)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_ALL_NOTES_OFF,
-                                               instance_id,
-                                               0U,
-                                               0U,
-                                               0,
-                                               0U);
-}
-
-uint8_t brick6_stack_runtime_submit_reset_instance(uint8_t instance_id)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_RESET,
-                                               instance_id,
-                                               0U,
-                                               0U,
-                                               0,
-                                               0U);
-}
-
-void brick6_stack_runtime_cancel_note_state(uint8_t instance_id)
-{
-    if (instance_id >= BRICK6_STACK_MAX_INSTANCES)
-    {
-        return;
-    }
-
-    const uint32_t primask = brick6_stack_enter_critical();
-    uint8_t read = g_stack_command_tail;
-    uint8_t write = read;
-    const uint8_t head = g_stack_command_head;
-    while (read != head)
-    {
-        const brick6_stack_runtime_command_t command = g_stack_command_queue[read];
-        read = (uint8_t)((read + 1U) % STACK_COMMAND_QUEUE_CAP);
-
-        const uint8_t is_note_command =
-            ((command.type == (uint8_t)STACK_COMMAND_NOTE_ON)
-                || (command.type == (uint8_t)STACK_COMMAND_NOTE_OFF)
-                || (command.type == (uint8_t)STACK_COMMAND_ALL_NOTES_OFF)
-                || (command.type == (uint8_t)STACK_COMMAND_RESET)) ? 1U : 0U;
-        if ((command.instance_id == instance_id) && (is_note_command != 0U))
-        {
-            continue;
-        }
-
-        g_stack_command_queue[write] = command;
-        write = (uint8_t)((write + 1U) % STACK_COMMAND_QUEUE_CAP);
-    }
-    g_stack_command_head = write;
-    g_stack_note_cancel_pending_mask |= (uint8_t)(1U << instance_id);
-    brick6_stack_exit_critical(primask);
-}
-
-uint8_t brick6_stack_runtime_submit_slot_model(uint8_t instance_id, uint8_t slot, brick6_stack_model_t model)
-{
-    if (slot >= BRICK6_STACK_SLOT_COUNT)
-    {
-        return 0U;
-    }
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_SLOT_MODEL,
-                                               instance_id,
-                                               slot,
-                                               (uint8_t)model,
-                                               0,
-                                               0U);
-}
-
-uint8_t brick6_stack_runtime_submit_slot_level(uint8_t instance_id, uint8_t slot, float level)
-{
-    if (slot >= BRICK6_STACK_SLOT_COUNT)
-    {
-        return 0U;
-    }
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_SLOT_LEVEL,
-                                               instance_id,
-                                               slot,
-                                               0U,
-                                               0,
-                                               brick6_stack_float_to_q15(level));
-}
-
-uint8_t brick6_stack_runtime_submit_slot_tune(uint8_t instance_id, uint8_t slot, float semitones)
-{
-    if (slot >= BRICK6_STACK_SLOT_COUNT)
-    {
-        return 0U;
-    }
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_SLOT_TUNE,
-                                               instance_id,
-                                               slot,
-                                               0U,
-                                               brick6_stack_tune_to_cents(semitones),
-                                               0U);
-}
-
-uint8_t brick6_stack_runtime_submit_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre)
-{
-    if (slot >= BRICK6_STACK_SLOT_COUNT)
-    {
-        return 0U;
-    }
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_SLOT_TIMBRE,
-                                               instance_id,
-                                               slot,
-                                               0U,
-                                               0,
-                                               brick6_stack_float_to_q15(timbre));
-}
-
-uint8_t brick6_stack_runtime_submit_slot_color(uint8_t instance_id, uint8_t slot, float color)
-{
-    if (slot >= BRICK6_STACK_SLOT_COUNT)
-    {
-        return 0U;
-    }
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_SLOT_COLOR,
-                                               instance_id,
-                                               slot,
-                                               0U,
-                                               0,
-                                               brick6_stack_float_to_q15(color));
-}
-
-uint8_t brick6_stack_runtime_submit_noise_level(uint8_t instance_id, float level)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_NOISE_LEVEL,
-                                               instance_id,
-                                               0U,
-                                               0U,
-                                               0,
-                                               brick6_stack_float_to_q15(level));
-}
-
-uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_OSC_DETUNE,
-                                               instance_id,
-                                               0U,
-                                               0U,
-                                               0,
-                                               brick6_stack_float_to_q15(detune));
-}
-
-uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled)
-{
-    return brick6_stack_runtime_submit_command((uint8_t)STACK_COMMAND_SET_PHASE_RESET,
-                                               instance_id,
-                                               0U,
-                                               (enabled != 0U) ? 1U : 0U,
-                                               0,
-                                               0U);
-}
-
-void brick6_stack_runtime_process_commands_from_audio(void)
-{
-    uint8_t cancel_mask;
-    const uint32_t pending_primask = brick6_stack_enter_critical();
-    if ((g_stack_note_cancel_pending_mask == 0U)
-            && (g_stack_command_tail == g_stack_command_head))
-    {
-        brick6_stack_exit_critical(pending_primask);
-        return;
-    }
-    cancel_mask = g_stack_note_cancel_pending_mask;
-    g_stack_note_cancel_pending_mask = 0U;
-    brick6_stack_exit_critical(pending_primask);
-
-    for (uint8_t instance_id = 0U; cancel_mask != 0U; ++instance_id)
-    {
-        const uint8_t bit = (uint8_t)(1U << instance_id);
-        if ((cancel_mask & bit) == 0U)
-            continue;
-        cancel_mask &= (uint8_t)~bit;
-        brick6_stack_runtime_all_notes_off(instance_id);
-    }
-
-    /* Snapshot the ring occupancy.  Commands published after this point stay
-     * FIFO-ordered in the queue and are handled by the next audio pass. */
-    uint16_t command_budget = (uint8_t)(g_stack_command_head
-                                        - g_stack_command_tail);
-    if (command_budget > (STACK_COMMAND_QUEUE_CAP - 1U))
-    {
-        command_budget = STACK_COMMAND_QUEUE_CAP - 1U;
-    }
-
-    while (command_budget != 0U)
-    {
-        const uint32_t primask = brick6_stack_enter_critical();
-        if (g_stack_command_tail == g_stack_command_head)
-        {
-            brick6_stack_exit_critical(primask);
-            break;
-        }
-
-        const uint8_t tail = g_stack_command_tail;
-        const brick6_stack_runtime_command_t command = g_stack_command_queue[tail];
-        g_stack_command_tail = (uint8_t)((tail + 1U) % STACK_COMMAND_QUEUE_CAP);
-        brick6_stack_exit_critical(primask);
-        --command_budget;
-
-        switch ((brick6_stack_runtime_command_type_t)command.type)
-        {
-            case STACK_COMMAND_NOTE_ON:
-                brick6_stack_runtime_note_on(command.instance_id, command.note, command.velocity);
-                break;
-            case STACK_COMMAND_NOTE_OFF:
-                brick6_stack_runtime_note_off(command.instance_id, command.note);
-                break;
-            case STACK_COMMAND_ALL_NOTES_OFF:
-                brick6_stack_runtime_all_notes_off(command.instance_id);
-                break;
-            case STACK_COMMAND_RESET:
-                brick6_stack_runtime_reset_instance(command.instance_id);
-                break;
-            case STACK_COMMAND_SET_SLOT_MODEL:
-                brick6_stack_runtime_set_slot_model(command.instance_id,
-                                                    command.note,
-                                                    (brick6_stack_model_t)command.velocity);
-                break;
-            case STACK_COMMAND_SET_SLOT_LEVEL:
-            {
-                brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(command.instance_id);
-                if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
-                {
-                    instance->slots[command.note].level_q15 = command.value_u16;
-                    instance->slots[command.note].level = (uint8_t)((command.value_u16 * 127U) / 32767U);
-                    brick6_stack_runtime_touch_continuous(instance,
-                        (uint8_t)(STACK_CONT_LEVEL_BASE + command.note));
-                }
-                break;
-            }
-            case STACK_COMMAND_SET_SLOT_TUNE:
-            {
-                brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(command.instance_id);
-                if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
-                {
-                    instance->slots[command.note].tune_cents = command.value_i16;
-                    brick6_stack_runtime_update_slot_pitch(instance, command.note);
-                    brick6_stack_runtime_touch_continuous(instance,
-                        (uint8_t)(STACK_CONT_TUNE_BASE + command.note));
-                }
-                break;
-            }
-            case STACK_COMMAND_SET_SLOT_TIMBRE:
-            {
-                brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(command.instance_id);
-                if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
-                {
-                    instance->slots[command.note].timbre_q15 = command.value_u16;
-                    instance->slots[command.note].timbre = (uint8_t)((command.value_u16 * 127U) / 32767U);
-                    brick6_stack_runtime_touch_continuous(instance,
-                        (uint8_t)(STACK_CONT_TIMBRE_BASE + command.note));
-                }
-                break;
-            }
-            case STACK_COMMAND_SET_SLOT_COLOR:
-            {
-                brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(command.instance_id);
-                if ((instance != NULL) && (command.note < BRICK6_STACK_SLOT_COUNT))
-                {
-                    instance->slots[command.note].color_q15 = command.value_u16;
-                    instance->slots[command.note].color = (uint8_t)((command.value_u16 * 127U) / 32767U);
-                    brick6_stack_runtime_touch_continuous(instance,
-                        (uint8_t)(STACK_CONT_COLOR_BASE + command.note));
-                }
-                break;
-            }
-            case STACK_COMMAND_SET_NOISE_LEVEL:
-            {
-                brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(command.instance_id);
-                if (instance != NULL)
-                {
-                    instance->noise_level_q15 = command.value_u16;
-                    brick6_stack_runtime_touch_continuous(instance, STACK_CONT_NOISE);
-                }
-                break;
-            }
-            case STACK_COMMAND_SET_OSC_DETUNE:
-            {
-                brick6_stack_runtime_set_osc_detune(command.instance_id,
-                                                    (float)command.value_u16 * (1.0f / 32767.0f));
-                break;
-            }
-            case STACK_COMMAND_SET_PHASE_RESET:
-                brick6_stack_runtime_set_phase_reset(command.instance_id, command.velocity);
-                break;
-            default:
-                break;
-        }
-    }
 }
 
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id)
@@ -1605,12 +1132,14 @@ void brick6_stack_runtime_sync_voice(uint8_t track_instance, uint8_t voice_insta
         {
             brick6_stack_runtime_update_slot_pitch(dst, slot);
         }
+        brick6_stack_runtime_prepare_slot(out);
     }
     if (full != 0U) dst->synced_config_version = src->config_version;
     dst->continuous_epoch = src->continuous_epoch;
+    brick6_stack_runtime_refresh_masks(dst);
 }
 
-uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
+ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
                                              float *out_mono,
                                              uint32_t frames,
                                              uint8_t downstream_source_required)
@@ -1630,7 +1159,6 @@ uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
             && (downstream_source_required == 0U))
     {
         instance->release_source_active = 0U;
-        brick6_stack_runtime_flush_pending(instance);
     }
     const uint8_t source_active =
         (uint8_t)((instance->voice.gate != 0U)
@@ -1649,29 +1177,30 @@ uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
         return 0U;
     }
 
-    uint32_t rendered = 0U;
-    while (rendered < frames)
+    if (frames > AUDIO_BLOCK_SIZE)
     {
-        if (instance->pending_count == 0U)
-        {
-            const uint32_t remaining = frames - rendered;
-            const uint8_t chunk = (remaining > BRICK6_STACK_RENDER_BLOCK_SIZE)
-                ? BRICK6_STACK_RENDER_BLOCK_SIZE
-                : (uint8_t)remaining;
-            brick6_stack_runtime_generate_pending(instance_id,
-                                                  instance,
-                                                  chunk,
-                                                  source_active);
-        }
-
-        while ((rendered < frames) && (instance->pending_count > 0U))
-        {
-            const int16_t sample = instance->pending_mono[instance->pending_offset];
-            out_mono[rendered] = (float)sample * (1.0f / 32768.0f);
-            rendered++;
-            instance->pending_offset++;
-            instance->pending_count--;
-        }
+        frames = AUDIO_BLOCK_SIZE;
+    }
+    memset(g_stack_acc_scratch, 0, frames * sizeof(*g_stack_acc_scratch));
+    uint8_t active = (uint8_t)(instance->active_source_mask
+        & (uint8_t)((1U << BRICK6_STACK_SLOT_COUNT) - 1U));
+    while (active != 0U)
+    {
+        const uint8_t slot = (uint8_t)__builtin_ctz((unsigned int)active);
+        active &= (uint8_t)(active - 1U);
+        brick6_stack_runtime_render_slot(instance, slot, frames);
+    }
+    if ((instance->active_source_mask & STACK_SOURCE_NOISE_BIT) != 0U)
+    {
+        brick6_stack_runtime_render_noise(instance, frames);
+    }
+    if (instance->ramp_mask != 0U)
+    {
+        brick6_stack_runtime_refresh_masks(instance);
+    }
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        out_mono[i] = (float)g_stack_acc_scratch[i] * (1.0f / 32768.0f);
     }
     return 1U;
 }

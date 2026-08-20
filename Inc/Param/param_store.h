@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -557,13 +556,8 @@ PARAM_STORE_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 293, "Persistent parameter 
 
 
 void param_store_init(void);
-void param_store_set_staging(param_id_t id, float v);
 void param_store_set_active(param_id_t id, float v);
-bool param_store_commit_if_block_advanced(void);
 float param_store_get_active(param_id_t id);
-
-uint32_t param_store_get_commit_count(void);
-uint32_t param_store_get_last_commit_block(void);
 
 #ifdef __cplusplus
 }

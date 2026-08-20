@@ -9,6 +9,7 @@ static AUDIO_HOT audio_input_ownership_entry_t
     g_audio_input_ownership_local[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
 static AUDIO_HOT audio_input_ownership_entry_t
     g_audio_input_ownership_candidate[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+static uint32_t g_audio_input_ownership_projection_sequence;
 
 #define AUDIO_INPUT_OWNERSHIP_CONSUME_ATTEMPTS 2U
 
@@ -27,6 +28,7 @@ void audio_input_ownership_projection_audio_init(void)
            sizeof(g_audio_input_ownership_local));
     memset(g_audio_input_ownership_candidate, 0,
            sizeof(g_audio_input_ownership_candidate));
+    g_audio_input_ownership_projection_sequence = UINT32_MAX;
 }
 
 void audio_input_ownership_projection_audio_consume(void)
@@ -36,6 +38,8 @@ void audio_input_ownership_projection_audio_consume(void)
          ++attempt)
     {
         const uint32_t before = g_audio_input_ownership_projection.sequence;
+        if (before == g_audio_input_ownership_projection_sequence)
+            return;
         __DMB();
         if ((before & 1U) != 0U)
             continue;
@@ -48,6 +52,7 @@ void audio_input_ownership_projection_audio_consume(void)
             memcpy(g_audio_input_ownership_local,
                    g_audio_input_ownership_candidate,
                    sizeof(g_audio_input_ownership_local));
+            g_audio_input_ownership_projection_sequence = before;
             return;
         }
     }

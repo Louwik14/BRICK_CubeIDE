@@ -15,7 +15,6 @@ extern "C" {
 #define BRICK6_STACK_MAX_INSTANCES 8U
 #define BRICK6_STACK_VOICE_INSTANCE_COUNT 16U
 #define BRICK6_STACK_SLOT_COUNT 3U
-#define BRICK6_STACK_RENDER_BLOCK_SIZE 24U
 
 typedef enum
 {
@@ -64,6 +63,8 @@ typedef struct
     uint32_t phase_inc_current;
     uint32_t phase2;
     uint32_t phase3;
+    uint32_t phase_inc2;
+    uint32_t phase_inc3;
 } stack_osc_slot_t;
 
 typedef struct
@@ -95,20 +96,6 @@ brick6_stack_kernel_id_t brick6_stack_runtime_model_kernel(brick6_stack_model_t 
 void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
 void brick6_stack_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_stack_runtime_all_notes_off(uint8_t instance_id);
-uint8_t brick6_stack_runtime_submit_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
-uint8_t brick6_stack_runtime_submit_note_off(uint8_t instance_id, uint8_t note);
-uint8_t brick6_stack_runtime_submit_all_notes_off(uint8_t instance_id);
-uint8_t brick6_stack_runtime_submit_reset_instance(uint8_t instance_id);
-void brick6_stack_runtime_cancel_note_state(uint8_t instance_id);
-uint8_t brick6_stack_runtime_submit_slot_model(uint8_t instance_id, uint8_t slot, brick6_stack_model_t model);
-uint8_t brick6_stack_runtime_submit_slot_level(uint8_t instance_id, uint8_t slot, float level);
-uint8_t brick6_stack_runtime_submit_slot_tune(uint8_t instance_id, uint8_t slot, float semitones);
-uint8_t brick6_stack_runtime_submit_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
-uint8_t brick6_stack_runtime_submit_slot_color(uint8_t instance_id, uint8_t slot, float color);
-uint8_t brick6_stack_runtime_submit_noise_level(uint8_t instance_id, float level);
-uint8_t brick6_stack_runtime_submit_osc_detune(uint8_t instance_id, float detune);
-uint8_t brick6_stack_runtime_submit_phase_reset(uint8_t instance_id, uint8_t enabled);
-void brick6_stack_runtime_process_commands_from_audio(void);
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id);
 uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
                                              float *out_mono,

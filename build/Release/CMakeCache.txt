@@ -20,6 +20,9 @@ BRICK6_AUDIO_POLY_DIAG:BOOL=ON
 //Capture bounded poly render/sum snapshots for GDB
 BRICK6_AUDIO_RENDER_DIAG:BOOL=ON
 
+//No help, variable specified on the command line.
+BRICK6_BOARD:UNINITIALIZED=LOWCOST
+
 //Value Computed by CMake
 BRICK6_CUBE_BINARY_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release
 
@@ -28,9 +31,6 @@ BRICK6_CUBE_IS_TOP_LEVEL:STATIC=ON
 
 //Value Computed by CMake
 BRICK6_CUBE_SOURCE_DIR:STATIC=C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6
-
-//Place the 32 KiB I-cache audit candidate set in ITCM
-BRICK6_ITCM_AUDIT_32:BOOL=ON
 
 //LOFI engine: FLOAT canonical or Q31 explicit comparison reference
 BRICK6_LOFI_ENGINE:STRING=FLOAT

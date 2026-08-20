@@ -673,12 +673,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         {
             state->stack.noise_level = clamped;
         }
-        if (update_base_state == 0U)
-        {
-            brick6_stack_runtime_set_noise_level(ctx->audio_binding.instance_id, clamped);
-            return 1U;
-        }
-        return brick6_stack_runtime_submit_noise_level(ctx->audio_binding.instance_id, clamped);
+        brick6_stack_runtime_set_noise_level(ctx->audio_binding.instance_id, clamped);
+        return 1U;
     }
     if (id == PARAM_STACK_OSC_DETUNE)
     {
@@ -687,12 +683,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         {
             state->stack.osc_detune = clamped;
         }
-        if (update_base_state == 0U)
-        {
-            brick6_stack_runtime_set_osc_detune(ctx->audio_binding.instance_id, clamped);
-            return 1U;
-        }
-        return brick6_stack_runtime_submit_osc_detune(ctx->audio_binding.instance_id, clamped);
+        brick6_stack_runtime_set_osc_detune(ctx->audio_binding.instance_id, clamped);
+        return 1U;
     }
     if (id == PARAM_STACK_PHASE_RESET)
     {
@@ -701,12 +693,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
         {
             state->stack.phase_reset = (float)enabled;
         }
-        if (update_base_state == 0U)
-        {
-            brick6_stack_runtime_set_phase_reset(ctx->audio_binding.instance_id, enabled);
-            return 1U;
-        }
-        return brick6_stack_runtime_submit_phase_reset(ctx->audio_binding.instance_id, enabled);
+        brick6_stack_runtime_set_phase_reset(ctx->audio_binding.instance_id, enabled);
+        return 1U;
     }
 
     uint8_t slot = 0U;
@@ -725,12 +713,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             {
                 state->stack.level[slot] = clamped;
             }
-            if (update_base_state == 0U)
-            {
-                brick6_stack_runtime_set_slot_level(ctx->audio_binding.instance_id, slot, clamped);
-                return 1U;
-            }
-            return brick6_stack_runtime_submit_slot_level(ctx->audio_binding.instance_id, slot, clamped);
+            brick6_stack_runtime_set_slot_level(ctx->audio_binding.instance_id, slot, clamped);
+            return 1U;
         }
         case 1U:
         {
@@ -740,12 +724,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             {
                 state->stack.model[slot] = (float)(uint8_t)model;
             }
-            if (update_base_state == 0U)
-            {
-                brick6_stack_runtime_set_slot_model(ctx->audio_binding.instance_id, slot, model);
-                return 1U;
-            }
-            return brick6_stack_runtime_submit_slot_model(ctx->audio_binding.instance_id, slot, model);
+            brick6_stack_runtime_set_slot_model(ctx->audio_binding.instance_id, slot, model);
+            return 1U;
         }
         case 2U:
         {
@@ -754,12 +734,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             {
                 state->stack.tune[slot] = clamped;
             }
-            if (update_base_state == 0U)
-            {
-                brick6_stack_runtime_set_slot_tune(ctx->audio_binding.instance_id, slot, clamped);
-                return 1U;
-            }
-            return brick6_stack_runtime_submit_slot_tune(ctx->audio_binding.instance_id, slot, clamped);
+            brick6_stack_runtime_set_slot_tune(ctx->audio_binding.instance_id, slot, clamped);
+            return 1U;
         }
         case 3U:
         {
@@ -768,12 +744,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             {
                 state->stack.timbre[slot] = clamped;
             }
-            if (update_base_state == 0U)
-            {
-                brick6_stack_runtime_set_slot_timbre(ctx->audio_binding.instance_id, slot, clamped);
-                return 1U;
-            }
-            return brick6_stack_runtime_submit_slot_timbre(ctx->audio_binding.instance_id, slot, clamped);
+            brick6_stack_runtime_set_slot_timbre(ctx->audio_binding.instance_id, slot, clamped);
+            return 1U;
         }
         case 4U:
         {
@@ -782,12 +754,8 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
             {
                 state->stack.color[slot] = clamped;
             }
-            if (update_base_state == 0U)
-            {
-                brick6_stack_runtime_set_slot_color(ctx->audio_binding.instance_id, slot, clamped);
-                return 1U;
-            }
-            return brick6_stack_runtime_submit_slot_color(ctx->audio_binding.instance_id, slot, clamped);
+            brick6_stack_runtime_set_slot_color(ctx->audio_binding.instance_id, slot, clamped);
+            return 1U;
         }
         default:
             return 0U;

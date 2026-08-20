@@ -112,6 +112,8 @@ static inline float live_parameter_event_decode_float(int32_t value)
 
 void live_parameter_event_init(void);
 bool live_parameter_event_submit(const live_parameter_event_t *event);
+bool live_parameter_event_peek(live_parameter_event_t *out_event);
+void live_parameter_event_consume(void);
 bool live_parameter_event_pop(live_parameter_event_t *out_event);
 uint16_t live_parameter_event_depth(void);
 uint32_t live_parameter_event_drop_count(void);

@@ -1783,7 +1783,7 @@ static void looper_advance_playhead_q16(brick6_looper_track_state_t *state,
     state->playhead_frac_q16 = (uint32_t)(pos_q16 & 0xFFFFU);
 }
 
-static void looper_render_varispeed(brick6_looper_track_state_t *state,
+static ITCM_TEXT void looper_render_varispeed(brick6_looper_track_state_t *state,
                                     uint8_t track,
                                     float *out_l,
                                     float *out_r,
